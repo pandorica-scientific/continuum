@@ -5,6 +5,7 @@ export const SHELVES = [
 	{ key: 'tax', label: 'Tax' },
 	{ key: 'identity', label: 'Identity' },
 	{ key: 'family', label: 'Family' },
+	{ key: 'health', label: 'Health & wellbeing' },
 	{ key: 'property', label: 'Property' },
 	{ key: 'tenancy', label: 'Tenancy' },
 	{ key: 'loans', label: 'Loans' },
@@ -13,4 +14,4 @@ export const SHELVES = [
 
 export type ShelfKey = (typeof SHELVES)[number]['key'];
 
-export const EXPIRY_VERBS = ['expires', 'ends', 'renews'] as const;
+export const EXPIRY_VERBS = ['expires', 'ends', 'renews', 'due'] as const;

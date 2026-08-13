@@ -8,6 +8,7 @@
 
 	let fileInput: HTMLInputElement | undefined = $state();
 	let uploading = $state(false);
+	let dragOver = $state(false);
 
 	async function upload(file: File) {
 		const body = new FormData();
@@ -40,8 +41,9 @@
 				})
 				.filter(Boolean)
 				.join(' ');
+		// dots mark only hard market values from reports, not reconstruction
 		const actualPoints = data.series
-			.map((p, i) => (p.actual === null ? null : { x: x(i), y: y(p.actual) }))
+			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
 		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))];
 		// One unit for the whole axis: millions when the top gridline reaches
@@ -151,7 +153,7 @@
 					stroke-dasharray="6 4"
 					vector-effect="non-scaling-stroke"
 				/>
-				{#if chart.actualPoints.length > 1}
+				{#if chart.actualPoints.length > 0}
 					<polyline
 						points={chart.actual}
 						fill="none"
@@ -182,55 +184,101 @@
 			<span class="l"
 				><span class="swatch" style="border-top: 2px dashed var(--purple);"></span>at 10% a year</span
 			>
-			<span class="l-note">the actual line fills in as you upload reports over time</span>
+			<span class="l-note">market value at report dates · at cost + realised between</span>
 		</div>
 	</section>
 {/if}
 
-<section class="card holdings">
-	<div class="eyebrow-row" style="padding-bottom: 8px;">
-		<Eyebrow emoji="📋" label="Holdings" />
-		<span class="eyebrow-caption">duplicates dropped by operation id</span>
-	</div>
-	{#if data.holdings.length}
-		<div class="h-head">
-			<span>Holding</span><span class="r">Units</span><span class="r">Value</span><span class="r"
-				>In {data.unit}</span
-			><span class="r">Gain</span>
-		</div>
-		{#each data.holdings as h (h.id)}
-			<div class="h-row">
-				<div class="h-name">
-					<span class="mono ticker">{h.ticker}</span>
-					<span class="name">{h.name}</span>
+<div class="own-row">
+	{#if data.donut.length}
+		<section class="card own">
+			<Eyebrow emoji="🥧" label="What you own" />
+			<div class="donut-wrap">
+				<div
+					class="donut"
+					style:background={`conic-gradient(${data.donut.map((s) => `${s.color} ${s.from}% ${s.to}%`).join(', ')})`}
+				>
+					<div class="hole"><span class="mono">{data.donut.length}</span></div>
 				</div>
-				<span class="mono r muted">{h.units}</span>
-				<span class="mono r">{h.value}</span>
-				<span class="mono r muted">{h.base}</span>
-				<span class="mono r" style:color={h.gainColor}>{h.gain}</span>
+				<div class="legend-col">
+					{#each data.donut as s (s.label)}
+						<div class="legend-row">
+							<span class="dot" style:background={s.color}></span>
+							<span class="mono l-ticker">{s.label}</span>
+							<span class="l-name">{s.name}</span>
+							<span class="mono l-pct">{s.pct.toFixed(1)}%</span>
+						</div>
+					{/each}
+				</div>
 			</div>
-		{/each}
-	{:else}
-		<p class="quiet">No holdings yet — upload a report below.</p>
+		</section>
 	{/if}
 
-	<button type="button" class="drop" onclick={() => fileInput?.click()}>
-		{uploading ? 'Reading the report…' : '📥 Upload XTB account statement (XLSX)'}
-	</button>
-	<input
-		bind:this={fileInput}
-		type="file"
-		accept=".xlsx"
-		style="display: none"
-		onchange={() => fileInput?.files?.[0] && upload(fileInput.files[0])}
-	/>
-	{#if form?.result}
-		<span class="quiet">
-			{form.result.operationsAdded} operations added, {form.result.operationsKnown} already known ·
-			{form.result.holdings} holdings as of {form.result.snapshotDay}
-		</span>
-	{/if}
-</section>
+	<section class="card holdings">
+		<div class="eyebrow-row" style="padding-bottom: 8px;">
+			<Eyebrow emoji="📋" label="Holdings" />
+			<span class="eyebrow-caption">duplicates dropped by operation id</span>
+		</div>
+		{#if data.holdings.length}
+			<div class="h-head">
+				<span>Holding</span><span class="r">Units</span><span class="r">Value</span><span class="r"
+					>In {data.unit}</span
+				><span class="r">Gain</span>
+			</div>
+			{#each data.holdings as h (h.id)}
+				<div class="h-row">
+					<div class="h-name">
+						<span class="mono ticker">{h.ticker}</span>
+						<span class="name">{h.name}</span>
+					</div>
+					<span class="mono r muted">{h.units}</span>
+					<span class="mono r">{h.value}</span>
+					<span class="mono r muted">{h.base}</span>
+					<span class="mono r" style:color={h.gainColor}>{h.gain}</span>
+				</div>
+			{/each}
+		{:else}
+			<p class="quiet">No holdings yet — upload a report below.</p>
+		{/if}
+
+		<div
+			class="drop"
+			class:drag={dragOver}
+			role="button"
+			tabindex="0"
+			onclick={() => fileInput?.click()}
+			onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
+			ondragover={(e) => {
+				e.preventDefault();
+				dragOver = true;
+			}}
+			ondragleave={() => (dragOver = false)}
+			ondrop={(e) => {
+				e.preventDefault();
+				dragOver = false;
+				const file = e.dataTransfer?.files?.[0];
+				if (file) upload(file);
+			}}
+		>
+			{uploading
+				? 'Reading the report…'
+				: '📥 Drop the XTB account statement here, or click to browse'}
+		</div>
+		<input
+			bind:this={fileInput}
+			type="file"
+			accept=".xlsx"
+			style="display: none"
+			onchange={() => fileInput?.files?.[0] && upload(fileInput.files[0])}
+		/>
+		{#if form?.result}
+			<span class="quiet">
+				{form.result.operationsAdded} operations added, {form.result.operationsKnown} already known ·
+				{form.result.holdings} holdings as of {form.result.snapshotDay}
+			</span>
+		{/if}
+	</section>
+</div>
 
 <style>
 	.error {
@@ -299,6 +347,75 @@
 		color: var(--fg3);
 		font-size: 11.5px;
 	}
+	.own-row {
+		display: grid;
+		grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
+		gap: 16px;
+		align-items: start;
+	}
+	@media (max-width: 1100px) {
+		.own-row {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	.own {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.donut-wrap {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 18px;
+	}
+	.donut {
+		width: 148px;
+		height: 148px;
+		border-radius: 148px;
+		flex: 0 0 148px;
+		display: grid;
+		place-items: center;
+	}
+	.hole {
+		width: 88px;
+		height: 88px;
+		border-radius: 88px;
+		background: var(--bg2);
+		display: grid;
+		place-items: center;
+		font-size: 13.5px;
+	}
+	.legend-col {
+		flex: 1 1 240px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.legend-row {
+		display: grid;
+		grid-template-columns: 11px 90px minmax(0, 1fr) auto;
+		gap: 9px;
+		align-items: center;
+		font-size: 12.5px;
+	}
+	.dot {
+		width: 9px;
+		height: 9px;
+		border-radius: 3px;
+	}
+	.l-ticker {
+		color: var(--fg1);
+	}
+	.l-name {
+		color: var(--fg3);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.l-pct {
+		color: var(--fg3);
+	}
 	.holdings {
 		display: flex;
 		flex-direction: column;
@@ -356,9 +473,14 @@
 		color: var(--fg2);
 		font-size: 13px;
 		cursor: pointer;
+		text-align: center;
 	}
-	.drop:hover {
+	.drop:hover,
+	.drop.drag {
 		border-color: var(--blue);
+	}
+	.drop.drag {
+		background: var(--blue-tint);
 	}
 	@media (max-width: 720px) {
 		.h-head,

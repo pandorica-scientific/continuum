@@ -16,9 +16,12 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/drizzle ./drizzle
 
 # Uploaded files (property photos, documents, statements) live on this volume
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /data /backups && chown node:node /data /backups
 VOLUME /data
 ENV UPLOAD_DIR=/data
+# Default backup destination; mount a host (cloud-synced) folder here to have
+# backups leave the machine — see compose.yaml
+ENV BACKUP_DIR=/backups
 
 USER node
 EXPOSE 3000

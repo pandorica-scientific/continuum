@@ -11,10 +11,13 @@ import {
 import { convertMinor } from '$lib/server/fx';
 import { getBaseCurrency } from '$lib/server/settings';
 
-export interface NetWorthComponent {
+export interface NetWorthGroup {
 	key: string;
 	label: string;
-	valueMinor: bigint; // base currency; negative for debts
+	/** gross asset value in base minor units (0 for pure debt) */
+	assetMinor: bigint;
+	/** what is owed against this asset (0 for unencumbered assets) */
+	liabilityMinor: bigint;
 	colorVar: string;
 	detail: string;
 }
@@ -22,15 +25,17 @@ export interface NetWorthComponent {
 export interface NetWorth {
 	baseCurrency: string;
 	totalMinor: bigint;
-	components: NetWorthComponent[];
+	/** paired components: each asset beside what is owed against it */
+	groups: NetWorthGroup[];
+	assetsMinor: bigint;
+	liabilitiesMinor: bigint;
 	/** change since the first snapshot of this calendar month, if known */
 	deltaThisMonthMinor: bigint | null;
 }
 
 /**
- * Net worth = cash + (property values − mortgages) + portfolio − other loans.
- * Mortgages secured by a property fold into that property's equity; loans
- * without a property count as their own negative component.
+ * A true statement: gross assets (flats at value, portfolio, cash) minus
+ * liabilities (mortgages, other loans) = net worth.
  */
 export async function computeNetWorth(): Promise<NetWorth> {
 	const baseCurrency = await getBaseCurrency();
@@ -52,20 +57,16 @@ export async function computeNetWorth(): Promise<NetWorth> {
 		cash += await toBase(a.balanceMinor, a.currency);
 	}
 
-	let flatsEquity = 0n;
-	let mortgagesOwed = 0n;
+	let flatsGross = 0n;
 	for (const p of properties) {
-		flatsEquity += await toBase(p.valueMinor, p.currency);
+		flatsGross += await toBase(p.valueMinor, p.currency);
 	}
+	let mortgagesOwed = 0n;
 	let otherLoans = 0n;
 	for (const l of loans) {
 		const owedBase = await toBase(l.owedMinor, l.currency);
-		if (securedLoanIds.has(l.id)) {
-			flatsEquity -= owedBase;
-			mortgagesOwed += owedBase;
-		} else {
-			otherLoans += owedBase;
-		}
+		if (securedLoanIds.has(l.id)) mortgagesOwed += owedBase;
+		else otherLoans += owedBase;
 	}
 
 	let portfolio = 0n;
@@ -73,43 +74,49 @@ export async function computeNetWorth(): Promise<NetWorth> {
 		portfolio = await toBase(snapshots[0].valueMinor, snapshots[0].currency);
 	}
 
-	const components: NetWorthComponent[] = [];
+	const groups: NetWorthGroup[] = [];
 	if (properties.length > 0) {
-		components.push({
+		groups.push({
 			key: 'flats',
-			label: 'Flats, net of mortgage',
-			valueMinor: flatsEquity,
+			label: 'Flats',
+			assetMinor: flatsGross,
+			liabilityMinor: mortgagesOwed,
 			colorVar: '--blue',
-			detail: `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'}${mortgagesOwed > 0n ? ' after mortgages' : ''}`
+			detail: `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} at latest valuation${mortgagesOwed > 0n ? ', net of the mortgage owed' : ''}`
 		});
 	}
 	if (snapshots[0]) {
-		components.push({
+		groups.push({
 			key: 'investments',
 			label: 'Investments',
-			valueMinor: portfolio,
+			assetMinor: portfolio,
+			liabilityMinor: 0n,
 			colorVar: '--teal',
 			detail: `broker report of ${snapshots[0].day}`
 		});
 	}
-	components.push({
+	groups.push({
 		key: 'cash',
 		label: 'Cash across accounts',
-		valueMinor: cash,
+		assetMinor: cash,
+		liabilityMinor: 0n,
 		colorVar: '--green',
 		detail: `${accounts.filter((a) => a.kind !== 'brokerage').length} accounts, statement balances`
 	});
 	if (otherLoans > 0n) {
-		components.push({
+		groups.push({
 			key: 'loans',
 			label: 'Other loans',
-			valueMinor: -otherLoans,
-			colorVar: '--red',
+			assetMinor: 0n,
+			liabilityMinor: otherLoans,
+			colorVar: '--orange',
 			detail: 'car and consumer debt'
 		});
 	}
 
-	const totalMinor = components.reduce((s, c) => s + c.valueMinor, 0n);
+	const assetsMinor = groups.reduce((s, g) => s + g.assetMinor, 0n);
+	const liabilitiesMinor = groups.reduce((s, g) => s + g.liabilityMinor, 0n);
+	const totalMinor = assetsMinor - liabilitiesMinor;
 
 	// Persist today's figure and read the month baseline.
 	const today = new Date().toISOString().slice(0, 10);
@@ -134,5 +141,5 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	const deltaThisMonthMinor =
 		earliest && earliest.day !== today ? totalMinor - earliest.valueMinor : null;
 
-	return { baseCurrency, totalMinor, components, deltaThisMonthMinor };
+	return { baseCurrency, totalMinor, groups, assetsMinor, liabilitiesMinor, deltaThisMonthMinor };
 }

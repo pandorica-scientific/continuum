@@ -3,6 +3,11 @@ import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { createSession, verifyPassword } from '$lib/server/auth';
+import {
+	loginBlockedForSeconds,
+	recordLoginFailure,
+	recordLoginSuccess
+} from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -14,7 +19,15 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, getClientAddress }) => {
+		const address = getClientAddress();
+		const wait = loginBlockedForSeconds(address);
+		if (wait > 0) {
+			return fail(429, {
+				message: `Too many failed attempts — try again in ${Math.ceil(wait / 60)} minute${wait > 60 ? 's' : ''}.`
+			});
+		}
+
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 		const password = String(form.get('password') ?? '');
@@ -22,9 +35,11 @@ export const actions: Actions = {
 		const rows = await db.select().from(person).where(eq(person.id, personId));
 		const row = rows[0];
 		if (!row || !(await verifyPassword(row.passwordHash, password))) {
+			recordLoginFailure(address);
 			return fail(400, { message: 'Wrong person or password.' });
 		}
 
+		recordLoginSuccess(address);
 		await createSession(cookies, row.id);
 		redirect(303, '/overview');
 	}

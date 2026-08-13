@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
+	document,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
@@ -10,10 +12,12 @@ import {
 	propertyBill,
 	tenancy
 } from '$lib/server/db/schema';
+import { SHELVES } from '$lib/documents';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { saveUpload } from '$lib/server/files';
-import { periodForMonth } from '$lib/server/loans/amortise';
+import { periodForMonth } from '$lib/loans/amortise';
 import { formatMinor, parseAmountToMinor } from '$lib/money';
+import { validateDrawing } from '$lib/plan';
 import type { Actions, PageServerLoad } from './$types';
 
 function daysUntil(date: string): number {
@@ -21,13 +25,14 @@ function daysUntil(date: string): number {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const [properties, tenancies, bills, loans, periods, links] = await Promise.all([
+	const [properties, tenancies, bills, loans, periods, links, docs] = await Promise.all([
 		db.select().from(property).orderBy(property.createdAt),
 		db.select().from(tenancy),
 		db.select().from(propertyBill).orderBy(propertyBill.sort),
 		db.select().from(loan),
 		db.select().from(loanFixationPeriod),
-		db.select().from(loanProperty)
+		db.select().from(loanProperty),
+		db.select().from(document).orderBy(document.addedOn)
 	]);
 
 	const selectedId = url.searchParams.get('p') ?? properties[0]?.id ?? null;
@@ -144,11 +149,15 @@ export const load: PageServerLoad = async ({ url }) => {
 
 		const propertyBills = bills
 			.filter((b) => b.propertyId === current.id)
-			.map((b) => ({
-				id: b.id,
-				label: b.label,
-				value: formatMinor(b.amountMinor, current.currency)
-			}));
+			.map((b) => {
+				const doc = b.documentId ? docs.find((d) => d.id === b.documentId) : undefined;
+				return {
+					id: b.id,
+					label: b.label,
+					value: formatMinor(b.amountMinor, current.currency),
+					file: doc?.storedName ?? null
+				};
+			});
 		const billsTotal = formatMinor(
 			bills.filter((b) => b.propertyId === current.id).reduce((s, b) => s + b.amountMinor, 0n),
 			current.currency
@@ -209,17 +218,40 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		}
 
+		// Documents are linked by subject — the same emergent link the documents
+		// screen builds its columns from, so a contract filed "about" this flat
+		// shows up here with no second bookkeeping field.
+		const today2 = new Date().toISOString().slice(0, 10);
+		const subjectKey = current.name.trim().toLowerCase();
+		const propertyDocs = docs
+			.filter((d) => d.subject.trim().toLowerCase() === subjectKey)
+			.sort((a, b) => (a.addedOn < b.addedOn ? 1 : -1))
+			.map((d) => ({
+				id: d.id,
+				name: d.name,
+				ext: d.ext,
+				file: d.storedName,
+				shelfLabel: SHELVES.find((s) => s.key === d.shelf)?.label ?? d.shelf,
+				meta: d.expiresOn ? `${d.expiryVerb} ${d.expiresOn}` : `added ${d.addedOn}`,
+				amber: d.expiresOn !== null,
+				expired: d.expiresOn !== null && d.expiresOn < today2
+			}));
+
 		detail = {
 			id: current.id,
 			name: current.name,
 			sizeLabel: current.sizeLabel,
 			kind: current.kind,
-			images: current.images,
+			// old fixed-slot uploads could leave holes; the strip wants a dense list
+			images: { ...current.images, photos: current.images.photos.filter(Boolean) },
 			metrics,
 			bills: propertyBills,
 			billsTotal,
 			lease,
-			mortgage: mortgageCard
+			mortgage: mortgageCard,
+			documents: propertyDocs,
+			// a rented flat's paperwork lands on the Tenancy shelf by default
+			addDocumentHref: `/documents?add=1&addShelf=${current.kind === 'rented' ? 'tenancy' : 'property'}&subject=${encodeURIComponent(current.name)}`
 		};
 	}
 
@@ -280,14 +312,40 @@ export const actions: Actions = {
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 		}
-		const images = { photos: [...row.images.photos], plan: row.images.plan };
+		// compact away holes from the old fixed-slot days so indices stay in
+		// step with the photo strip the user sees
+		const images = { ...row.images, photos: row.images.photos.filter(Boolean) };
 		if (slot === 'plan') {
 			images.plan = name;
 		} else {
 			const index = Number(slot.replace('photo', ''));
+			if (!Number.isInteger(index) || index < 0 || index > images.photos.length) {
+				return fail(400, { message: 'Unknown image slot.' });
+			}
 			images.photos[index] = name;
 		}
 		await db.update(property).set({ images }).where(eq(property.id, propertyId));
+		return { ok: true };
+	},
+
+	savePlan: async ({ request }) => {
+		const form = await request.formData();
+		const propertyId = String(form.get('propertyId') ?? '');
+		const rows = await db.select().from(property).where(eq(property.id, propertyId));
+		const row = rows[0];
+		if (!row) return fail(404, { message: 'Property not found.' });
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(String(form.get('drawing') ?? ''));
+		} catch {
+			return fail(400, { message: 'The plan did not parse.' });
+		}
+		const drawing = validateDrawing(parsed);
+		if (!drawing) return fail(400, { message: 'The plan did not validate.' });
+		await db
+			.update(property)
+			.set({ images: { ...row.images, drawing: drawing.rooms.length ? drawing : undefined } })
+			.where(eq(property.id, propertyId));
 		return { ok: true };
 	},
 
@@ -334,9 +392,34 @@ export const actions: Actions = {
 		} catch {
 			return fail(400, { message: 'The amount must be a number.' });
 		}
+
+		// An attached bill file becomes a document about this flat — one upload,
+		// visible both next to the bill and in the Documents archive.
+		let documentId: string | null = null;
+		const file = form.get('file');
+		if (file instanceof File && file.size > 0) {
+			let storedName: string;
+			try {
+				storedName = await saveUpload(file);
+			} catch (err) {
+				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
+			}
+			documentId = randomUUID();
+			await db.insert(document).values({
+				id: documentId,
+				name: `${label} · ${rows[0].name}`,
+				shelf: 'property',
+				subject: rows[0].name,
+				storedName,
+				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
+				addedOn: new Date().toISOString().slice(0, 10),
+				tags: ['bill']
+			});
+		}
+
 		await db
 			.insert(propertyBill)
-			.values({ id: randomUUID(), propertyId, label, amountMinor: amount });
+			.values({ id: randomUUID(), propertyId, label, amountMinor: amount, documentId });
 		return { ok: true };
 	}
 };

@@ -1,6 +1,8 @@
 import { redirect, type Handle, type ServerInit } from '@sveltejs/kit';
 import { building } from '$app/environment';
+import { env } from '$env/dynamic/private';
 import { validateSession } from '$lib/server/auth';
+import { maybeRunScheduledBackup } from '$lib/server/backup';
 import { seedCategories } from '$lib/server/categorize';
 import { runMigrations } from '$lib/server/db/migrate';
 import { refreshRates } from '$lib/server/fx';
@@ -13,12 +15,30 @@ async function boot(): Promise<void> {
 	await runMigrations();
 	await seedCategories();
 
+	// DEMO=1 fills a pristine instance with the fictional Novák household so
+	// screenshots and first impressions need no real data. Never touches an
+	// instance that has people.
+	if (env.DEMO && !(await isSetUp())) {
+		const { seedDemo } = await import('$lib/server/demo');
+		await seedDemo();
+		console.log('Demo data seeded (DEMO=1).');
+	}
+
 	// Daily FX fixing; failures are logged, never fatal — a home server may be
 	// offline and the app keeps working with the last known rates.
 	const refresh = () =>
 		refreshRates().catch((err) => console.warn('FX refresh failed:', err.message ?? err));
 	void refresh();
 	setInterval(refresh, 6 * 60 * 60 * 1000);
+
+	// Scheduled backups: the hourly check is cheap; whether one actually runs
+	// is decided by the configured cadence (weekly / monthly).
+	const backup = () =>
+		maybeRunScheduledBackup().catch((err) =>
+			console.warn('Scheduled backup failed:', err.message ?? err)
+		);
+	void backup();
+	setInterval(backup, 60 * 60 * 1000);
 }
 
 export const init: ServerInit = async () => {

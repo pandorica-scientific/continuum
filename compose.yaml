@@ -7,7 +7,9 @@
 
 services:
   app:
-    image: ghcr.io/robertkiewisz/continuum:latest
+    # Docker Hub is the primary registry (private for now — `docker login`
+    # before pulling); ghcr.io/robertkiewisz/continuum mirrors it.
+    image: kerth92/continuum:latest
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -17,8 +19,16 @@ services:
     environment:
       DATABASE_URL: postgres://continuum:${POSTGRES_PASSWORD:-continuum}@db:5432/continuum
       ORIGIN: ${ORIGIN:-http://localhost:3000}
+      # DEMO=1 seeds a fictional household on a pristine instance
+      # (sign in as Jana Nováková / demo-demo-demo)
+      DEMO: ${DEMO:-}
     volumes:
       - continuum-data:/data
+      # Backups land here (configure cadence in Settings → Backups). Point
+      # CONTINUUM_BACKUPS at a cloud-synced folder on the host to have them
+      # carried off-machine, e.g. in .env:
+      #   CONTINUUM_BACKUPS=/Users/you/Library/CloudStorage/GoogleDrive-you@gmail.com/My Drive
+      - ${CONTINUUM_BACKUPS:-continuum-backups}:/backups
     depends_on:
       db:
         condition: service_healthy
@@ -41,3 +51,4 @@ services:
 volumes:
   continuum-data:
   continuum-db:
+  continuum-backups:

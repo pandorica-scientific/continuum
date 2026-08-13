@@ -1,0 +1,2 @@
+ALTER TABLE "property_bill" ADD COLUMN "document_id" text;--> statement-breakpoint
+ALTER TABLE "property_bill" ADD CONSTRAINT "property_bill_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;

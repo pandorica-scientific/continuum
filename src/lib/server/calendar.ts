@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { document, loan, loanFixationPeriod, property, tenancy } from '$lib/server/db/schema';
-import { periodForMonth } from '$lib/server/loans/amortise';
+import { periodForMonth } from '$lib/loans/amortise';
 import { getSetting, setSetting } from '$lib/server/settings';
 import { formatMinor } from '$lib/money';
 import { randomBytes } from 'node:crypto';

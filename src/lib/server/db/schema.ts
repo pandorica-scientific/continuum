@@ -212,9 +212,14 @@ export const property = pgTable('property', {
 		.default(sql`0`),
 	boughtYear: integer('bought_year'),
 	ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
-	// uploaded images on the data volume: {plan?: string, photos: string[]}
+	// uploaded images on the data volume, plus the drawn floor plan:
+	// {plan?, photos, drawing?: {cellCm, rooms: [{name, cells: [[x,y],…]}]}}
 	images: jsonb('images')
-		.$type<{ plan?: string; photos: string[] }>()
+		.$type<{
+			plan?: string;
+			photos: string[];
+			drawing?: { cellCm: number; rooms: { name: string; cells: [number, number][] }[] };
+		}>()
 		.notNull()
 		.default({ photos: [] }),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -248,7 +253,9 @@ export const propertyBill = pgTable('property_bill', {
 	amountMinor: bigint('amount_minor', { mode: 'bigint' })
 		.notNull()
 		.default(sql`0`),
-	sort: integer('sort').notNull().default(0)
+	sort: integer('sort').notNull().default(0),
+	// the uploaded bill itself, filed in Documents about this property
+	documentId: text('document_id').references(() => document.id, { onDelete: 'set null' })
 });
 
 // ---- Loans ----
@@ -369,7 +376,12 @@ export const document = pgTable(
 		expiresOn: date('expires_on'),
 		// how the expiry reads: expires | ends | renews
 		expiryVerb: text('expiry_verb').notNull().default('expires'),
-		tags: jsonb('tags').$type<string[]>().notNull().default([])
+		tags: jsonb('tags').$type<string[]>().notNull().default([]),
+		// money documents (payslips, bills) can carry the amount they are about
+		// and the month they cover — the salary tracker derives from these
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
+		amountCurrency: text('amount_currency'),
+		periodMonth: text('period_month')
 	},
 	(table) => [index('document_shelf_idx').on(table.shelf)]
 );
@@ -385,7 +397,23 @@ export const brokerOperation = pgTable('broker_operation', {
 	happenedAt: timestamp('happened_at', { withTimezone: true }).notNull(),
 	amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 	currency: text('currency').notNull(),
-	comment: text('comment')
+	comment: text('comment'),
+	// the broker position this cash movement belongs to — links purchases and
+	// sells to holding periods for the reconstructed value curve
+	positionId: text('position_id')
+});
+
+// A broker position's holding interval, from the report's Closed Positions
+// sheet (authoritative purchase/sale values and times) and the open lots.
+// This is what turns a single report into a value history.
+export const brokerPosition = pgTable('broker_position', {
+	id: text('id').primaryKey(), // XTB position ID
+	ticker: text('ticker').notNull(),
+	purchaseValueMinor: bigint('purchase_value_minor', { mode: 'bigint' }),
+	saleValueMinor: bigint('sale_value_minor', { mode: 'bigint' }),
+	currency: text('currency').notNull(),
+	openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
+	closedAt: timestamp('closed_at', { withTimezone: true })
 });
 
 // Current holdings — a snapshot replaced wholesale by each newer report.

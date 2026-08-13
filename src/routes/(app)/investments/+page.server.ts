@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit';
 import { asc, desc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { brokerOperation, holding, portfolioSnapshot } from '$lib/server/db/schema';
-import { ingestXtbReport } from '$lib/server/invest/ingest';
+import { brokerOperation, brokerPosition, holding, portfolioSnapshot } from '$lib/server/db/schema';
+import { ingestBrokerFile } from '$lib/server/invest/ingest';
 import { annualisedReturn, buildSeries } from '$lib/server/invest/series';
 import { convertMinor } from '$lib/server/fx';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -11,10 +11,11 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const [holdings, operations, snapshots] = await Promise.all([
+	const [holdings, operations, snapshots, positions] = await Promise.all([
 		db.select().from(holding).orderBy(desc(holding.valueMinor)),
 		db.select().from(brokerOperation).orderBy(asc(brokerOperation.happenedAt)),
-		db.select().from(portfolioSnapshot).orderBy(asc(portfolioSnapshot.day))
+		db.select().from(portfolioSnapshot).orderBy(asc(portfolioSnapshot.day)),
+		db.select().from(brokerPosition)
 	]);
 
 	const contributionOps = operations
@@ -32,8 +33,43 @@ export const load: PageServerLoad = async () => {
 
 	const series = buildSeries(
 		contributionOps,
-		snapshots.map((s) => ({ day: s.day, valueMinor: s.valueMinor }))
+		snapshots.map((s) => ({ day: s.day, valueMinor: s.valueMinor })),
+		operations.map((o) => ({
+			at: o.happenedAt.toISOString(),
+			amountMinor: o.amountMinor,
+			type: o.type,
+			positionId: o.positionId
+		})),
+		positions.map((p) => ({
+			id: p.id,
+			openedAt: p.openedAt.toISOString(),
+			closedAt: p.closedAt ? p.closedAt.toISOString() : null,
+			purchaseValueMinor: p.purchaseValueMinor
+		}))
 	);
+
+	// Allocation donut: share of portfolio by holding, series colours in order.
+	const donutColors = ['--teal', '--blue', '--purple', '--orange', '--yellow', '--green', '--red'];
+	const positiveTotal = holdings.reduce(
+		(sum, h) => sum + (h.valueMinor > 0n ? h.valueMinor : 0n),
+		0n
+	);
+	let donutAcc = 0;
+	const donut = holdings
+		.filter((h) => h.valueMinor > 0n)
+		.map((h, i) => {
+			const pct = positiveTotal > 0n ? Number((h.valueMinor * 10000n) / positiveTotal) / 100 : 0;
+			const from = donutAcc;
+			donutAcc += pct;
+			return {
+				label: h.ticker,
+				name: h.name,
+				pct,
+				from,
+				to: donutAcc,
+				color: `var(${donutColors[i % donutColors.length]})`
+			};
+		});
 
 	const rows = [];
 	for (const h of holdings) {
@@ -78,6 +114,7 @@ export const load: PageServerLoad = async () => {
 				annualised !== null ? `${annualised >= 0 ? '+' : ''}${annualised.toFixed(1)}%` : null
 		},
 		series,
+		donut,
 		holdings: rows
 	};
 };
@@ -87,10 +124,10 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const file = form.get('report');
 		if (!(file instanceof File) || file.size === 0) {
-			return fail(400, { message: 'Choose an XTB account-statement XLSX.' });
+			return fail(400, { message: 'Choose a broker report file.' });
 		}
 		try {
-			const result = await ingestXtbReport(new Uint8Array(await file.arrayBuffer()));
+			const result = await ingestBrokerFile(file.name, new Uint8Array(await file.arrayBuffer()));
 			return { result };
 		} catch (err) {
 			return fail(400, {

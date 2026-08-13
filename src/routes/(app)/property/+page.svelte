@@ -5,14 +5,17 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import ImageSlot from '$lib/components/ImageSlot.svelte';
+	import Lightbox from '$lib/components/Lightbox.svelte';
+	import FloorPlan from '$lib/components/FloorPlan.svelte';
+	import FloorPlanEditor from '$lib/components/FloorPlanEditor.svelte';
 
 	let { data, form } = $props();
 
 	let addingProperty = $state(false);
+	let editingPlan = $state(false);
 	let addingTenancy = $state(false);
 	let addingBill = $state(false);
-
-	const photoLabels = ['Living room', 'Kitchen', 'Building'];
+	let lightbox = $state<string | null>(null);
 </script>
 
 <ScreenHeader
@@ -110,28 +113,56 @@
 		<div class="card stack">
 			<div class="eyebrow-row">
 				<Eyebrow emoji="📐" label="Floor plan" />
-				<span class="eyebrow-caption">{data.detail.sizeLabel}</span>
+				<button type="button" class="btn plan-edit" onclick={() => (editingPlan = !editingPlan)}>
+					{editingPlan
+						? 'Close editor'
+						: data.detail.images.drawing
+							? '✏️ Edit plan'
+							: '✏️ Draw plan'}
+				</button>
 			</div>
-			<div class="plan">
-				<ImageSlot
+			{#if editingPlan}
+				<FloorPlanEditor
 					propertyId={data.detail.id}
-					slot="plan"
-					image={data.detail.images.plan}
-					placeholder="Drop the floor plan"
-					fit="contain"
+					initial={data.detail.images.drawing ?? null}
+					onclose={() => (editingPlan = false)}
 				/>
-			</div>
+			{:else if data.detail.images.drawing}
+				<div class="plan drawn">
+					<FloorPlan drawing={data.detail.images.drawing} />
+				</div>
+			{:else}
+				<div class="plan">
+					<ImageSlot
+						propertyId={data.detail.id}
+						slot="plan"
+						image={data.detail.images.plan}
+						placeholder="Drop the floor plan — or draw one"
+						fit="contain"
+						onview={(img) => (lightbox = img)}
+					/>
+				</div>
+			{/if}
 			<div class="photos">
-				{#each photoLabels as label, i (label)}
+				{#each data.detail.images.photos as photo, i (photo)}
 					<div class="photo">
 						<ImageSlot
 							propertyId={data.detail.id}
 							slot={`photo${i}`}
-							image={data.detail.images.photos[i]}
-							placeholder={label}
+							image={photo}
+							placeholder={`Photo ${i + 1}`}
+							onview={(img) => (lightbox = img)}
 						/>
 					</div>
 				{/each}
+				<div class="photo">
+					<ImageSlot
+						propertyId={data.detail.id}
+						slot={`photo${data.detail.images.photos.length}`}
+						image={undefined}
+						placeholder="➕ Add photo"
+					/>
+				</div>
 			</div>
 		</div>
 
@@ -225,18 +256,33 @@
 				</div>
 				{#each data.detail.bills as bill (bill.id)}
 					<div class="bill">
-						<span class="b-label">{bill.label}</span>
+						<span class="b-label">
+							{bill.label}
+							{#if bill.file}
+								<a href="/files/{bill.file}" target="_blank" rel="noopener" class="b-file">📎</a>
+							{/if}
+						</span>
 						<span class="mono">{bill.value}</span>
 					</div>
 				{:else}
 					<span class="quiet">No bills on record yet.</span>
 				{/each}
 				{#if addingBill}
-					<form method="POST" action="?/addBill" use:enhance class="bill-form">
+					<form
+						method="POST"
+						action="?/addBill"
+						use:enhance
+						enctype="multipart/form-data"
+						class="bill-form"
+					>
 						<input type="hidden" name="propertyId" value={data.detail.id} />
 						<input name="label" placeholder="SVJ fee & repair fund" />
 						<input name="amount" inputmode="decimal" placeholder="4 850" />
 						<button type="submit" class="btn">Add</button>
+						<label class="bill-file">
+							<span>Bill file (optional) — it is filed in Documents about this flat</span>
+							<input name="file" type="file" />
+						</label>
 					</form>
 				{:else}
 					<button
@@ -275,12 +321,50 @@
 					</span>
 				</div>
 			{/if}
+
+			<div class="card stack">
+				<div class="eyebrow-row">
+					<Eyebrow emoji="🗂️" label="Documents" />
+					<a href="/documents?q={encodeURIComponent(data.detail.name)}" class="eyebrow-caption">
+						Open in Documents →
+					</a>
+				</div>
+				{#each data.detail.documents as d (d.id)}
+					<div class="doc">
+						<span class="mono ext">{d.ext}</span>
+						<div class="doc-names">
+							{#if d.file}
+								<a href="/files/{d.file}" target="_blank" class="doc-name">{d.name}</a>
+							{:else}
+								<span class="doc-name">{d.name}</span>
+							{/if}
+							<span
+								class="doc-meta"
+								style:color={d.expired ? 'var(--red)' : d.amber ? 'var(--yellow)' : 'var(--fg3)'}
+							>
+								{d.shelfLabel} · {d.meta}
+							</span>
+						</div>
+					</div>
+				{:else}
+					<span class="quiet">
+						Nothing filed about this flat yet — the renting contract belongs here.
+					</span>
+				{/each}
+				<a href={data.detail.addDocumentHref} class="btn" style="align-self: flex-start;">
+					➕ Add a document about this flat
+				</a>
+			</div>
 		</div>
 	</section>
 {:else}
 	<section class="card">
 		<span class="quiet">No properties yet — add the first one above.</span>
 	</section>
+{/if}
+
+{#if lightbox}
+	<Lightbox image={lightbox} alt="Property photo" onclose={() => (lightbox = null)} />
 {/if}
 
 <style>
@@ -372,12 +456,22 @@
 		overflow: hidden;
 		border: 1px solid var(--bd);
 	}
+	.plan.drawn {
+		background: var(--card);
+		padding: 8px;
+	}
+	.plan-edit {
+		padding: 5px 11px;
+		font-size: 12px;
+	}
 	.photos {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		display: flex;
 		gap: 10px;
+		overflow-x: auto;
+		padding-bottom: 4px;
 	}
 	.photo {
+		flex: 0 0 200px;
 		height: 144px;
 		border-radius: 8px;
 		overflow: hidden;
@@ -435,6 +529,38 @@
 		gap: 12px;
 		font-size: 13px;
 	}
+	.doc {
+		display: grid;
+		grid-template-columns: 38px minmax(0, 1fr);
+		gap: 11px;
+		align-items: center;
+		padding: 4px 0;
+	}
+	.ext {
+		font-size: 9.5px;
+		letter-spacing: 0.04em;
+		color: var(--fg3);
+		border: 1px solid var(--bd);
+		border-radius: 5px;
+		padding: 4px 0;
+		text-align: center;
+	}
+	.doc-names {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+	.doc-name {
+		font-size: 13px;
+		color: var(--fg1);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.doc-meta {
+		font-size: 11px;
+	}
 	.b-label {
 		color: var(--fg2);
 	}
@@ -442,6 +568,19 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 110px auto;
 		gap: 8px;
+	}
+	.b-file {
+		text-decoration: none;
+		font-size: 12px;
+		margin-left: 4px;
+	}
+	.bill-file {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: 11.5px;
+		color: var(--fg3);
 	}
 	.quiet {
 		font-size: 12.5px;

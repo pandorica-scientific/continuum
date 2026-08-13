@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
+import { and, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { loan, loanFixationPeriod, loanProperty, property } from '$lib/server/db/schema';
+import { loan, loanEvent, loanFixationPeriod, loanProperty, property } from '$lib/server/db/schema';
 import {
 	amortise,
 	DAY_COUNTS,
@@ -10,7 +11,8 @@ import {
 	periodForMonth,
 	type DayCount,
 	type FixationPeriod
-} from '$lib/server/loans/amortise';
+} from '$lib/loans/amortise';
+import { project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertMinor } from '$lib/server/fx';
@@ -36,13 +38,22 @@ function fixationPill(regime: string, periods: FixationPeriod[], paidOff: boolea
 	return { label: 'no fixation on record', hue: 'grey' as const };
 }
 
+const EVENT_LABELS: Record<string, string> = {
+	payment: 'payment',
+	extra_payment: 'extra repayment',
+	refix: 're-fix',
+	fee: 'fee',
+	balance: 'balance statement'
+};
+
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const [loans, allPeriods, properties, links] = await Promise.all([
+	const [loans, allPeriods, properties, links, allEvents] = await Promise.all([
 		db.select().from(loan).orderBy(loan.createdAt),
 		db.select().from(loanFixationPeriod),
 		db.select({ id: property.id, name: property.name }).from(property),
-		db.select().from(loanProperty)
+		db.select().from(loanProperty),
+		db.select().from(loanEvent).orderBy(loanEvent.happenedOn)
 	]);
 
 	const year = new Date().getFullYear();
@@ -109,6 +120,37 @@ export const load: PageServerLoad = async () => {
 		const rate = currentPeriod?.annualRatePct ?? null;
 		const schedule = amortise(terms, periods, monthNow()).slice(0, 1);
 
+		// Full projected schedule, aggregated per year, for the interest vs
+		// principal chart.
+		const { rows: fullSchedule, years } = project(terms, periods);
+		const chart = years.map((y) => ({
+			year: y.year,
+			interest: Number(y.interestMinor),
+			principal: Number(y.principalMinor),
+			interestLabel: formatMinor(y.interestMinor, l.currency),
+			principalLabel: formatMinor(y.principalMinor, l.currency)
+		}));
+		// Beyond the last fixation the engine carries the last known terms
+		// forward (documented re-fix-gap behaviour) — say so on the chart.
+		const lastKnown = periods.reduce<string | null>(
+			(max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max),
+			null
+		);
+		const lastMonth = fullSchedule.at(-1)?.month ?? null;
+		const scheduleEnds =
+			lastKnown && lastMonth && lastMonth > lastKnown.slice(0, 7) ? lastKnown.slice(0, 7) : null;
+
+		const events = allEvents
+			.filter((e) => e.loanId === l.id)
+			.sort((a, b) => (a.happenedOn < b.happenedOn ? 1 : -1))
+			.map((e) => ({
+				id: e.id,
+				date: e.happenedOn,
+				label: EVENT_LABELS[e.kind] ?? e.kind,
+				amount: formatMinor(e.amountMinor, l.currency),
+				note: e.note ?? ''
+			}));
+
 		cards.push({
 			id: l.id,
 			name: l.name,
@@ -132,7 +174,32 @@ export const load: PageServerLoad = async () => {
 			],
 			paidPct: Math.max(0, Math.min(paidPct, 100)),
 			paidNote: `${formatMinor(repaid, l.currency)} of ${formatMinor(l.principalMinor, l.currency)} repaid`,
-			monthInterest: schedule[0] ? formatMinor(schedule[0].interestMinor, l.currency) : null
+			monthInterest: schedule[0] ? formatMinor(schedule[0].interestMinor, l.currency) : null,
+			chart,
+			chartNote: [
+				`projected from ${terms.owedAsOfMonth}`,
+				scheduleEnds ? `after ${scheduleEnds} at the last known rate` : null
+			]
+				.filter(Boolean)
+				.join(' · '),
+			events,
+			currency: l.currency,
+			// raw inputs for the browser-side what-if engine (bigints as strings)
+			sim: {
+				terms: {
+					owedMinor: String(terms.owedMinor),
+					owedAsOfMonth: terms.owedAsOfMonth,
+					dayCount: terms.dayCount,
+					accrualStyle: terms.accrualStyle,
+					paymentDay: terms.paymentDay
+				},
+				periods: periods.map((p) => ({
+					startDate: p.startDate,
+					endDate: p.endDate,
+					annualRatePct: p.annualRatePct,
+					paymentMinor: String(p.paymentMinor)
+				}))
+			}
 		});
 	}
 
@@ -158,6 +225,92 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
+	addRepayment: async ({ request }) => {
+		const form = await request.formData();
+		const loanId = String(form.get('loanId') ?? '');
+		const rows = await db.select().from(loan).where(eq(loan.id, loanId));
+		const l = rows[0];
+		if (!l) return fail(404, { message: 'Loan not found.' });
+
+		const date = String(form.get('date') ?? '').trim() || new Date().toISOString().slice(0, 10);
+		let amount: bigint;
+		let balanceAfter: bigint | null = null;
+		try {
+			amount = parseAmountToMinor(String(form.get('amount') ?? ''), l.currency);
+			if (amount <= 0n) throw new Error('amount');
+			const balanceRaw = String(form.get('balanceAfter') ?? '').trim();
+			if (balanceRaw) balanceAfter = parseAmountToMinor(balanceRaw, l.currency);
+		} catch {
+			return fail(400, { message: 'The repayment amount must be a positive number.' });
+		}
+
+		// The bank's post-repayment balance is the best anchor when known;
+		// otherwise the repayment simply comes off the current balance.
+		let newOwed = balanceAfter ?? l.owedMinor - amount;
+		if (newOwed < 0n) newOwed = 0n;
+
+		await db.insert(loanEvent).values({
+			id: randomUUID(),
+			loanId,
+			happenedOn: date,
+			kind: 'extra_payment',
+			amountMinor: amount,
+			note: String(form.get('note') ?? '').trim() || null
+		});
+		await db.update(loan).set({ owedMinor: newOwed, owedAsOf: date }).where(eq(loan.id, loanId));
+		return { ok: true };
+	},
+
+	addFixation: async ({ request }) => {
+		const form = await request.formData();
+		const loanId = String(form.get('loanId') ?? '');
+		const rows = await db.select().from(loan).where(eq(loan.id, loanId));
+		const l = rows[0];
+		if (!l) return fail(404, { message: 'Loan not found.' });
+
+		const startDate = String(form.get('startDate') ?? '').trim();
+		if (!startDate) return fail(400, { message: 'The new fixation needs its start date.' });
+		const endDate = String(form.get('endDate') ?? '').trim() || null;
+		let payment: bigint;
+		const rate = Number(String(form.get('rate') ?? '').replace(',', '.'));
+		try {
+			payment = parseAmountToMinor(String(form.get('payment') ?? ''), l.currency);
+			if (!Number.isFinite(rate) || rate < 0 || rate > 100) throw new Error('rate');
+		} catch {
+			return fail(400, { message: 'Rate and payment must be numbers.' });
+		}
+
+		// The new period takes over from its start date: any period still open
+		// (or reaching past the start) is closed there — history stays intact.
+		await db
+			.update(loanFixationPeriod)
+			.set({ endDate: startDate })
+			.where(
+				and(
+					eq(loanFixationPeriod.loanId, loanId),
+					lt(loanFixationPeriod.startDate, startDate),
+					or(isNull(loanFixationPeriod.endDate), gt(loanFixationPeriod.endDate, startDate))
+				)
+			);
+		await db.insert(loanFixationPeriod).values({
+			id: randomUUID(),
+			loanId,
+			startDate,
+			endDate,
+			annualRatePct: String(rate),
+			paymentMinor: payment
+		});
+		await db.insert(loanEvent).values({
+			id: randomUUID(),
+			loanId,
+			happenedOn: startDate,
+			kind: 'refix',
+			amountMinor: payment,
+			note: `${rate.toFixed(2)}%${endDate ? ` to ${endDate}` : ''}`
+		});
+		return { ok: true };
+	},
+
 	addLoan: async ({ request }) => {
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();

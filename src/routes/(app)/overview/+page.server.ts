@@ -17,20 +17,38 @@ export const load: PageServerLoad = async ({ url }) => {
 		next30Days()
 	]);
 
-	const largest = netWorth.components.reduce(
-		(max, c) => (c.valueMinor > max ? c.valueMinor : max),
-		1n
-	);
-	const composition = netWorth.components.map((c) => ({
-		label: c.label,
-		value: `${formatMinor(c.valueMinor, netWorth.baseCurrency)} ${displayCurrency(netWorth.baseCurrency)}`,
-		colorVar: c.valueMinor < 0n ? '--red' : c.colorVar,
-		width: Math.max(
-			2,
-			Math.round((Number(c.valueMinor < 0n ? -c.valueMinor : c.valueMinor) / Number(largest)) * 100)
-		),
-		detail: c.detail
-	}));
+	const unit = displayCurrency(netWorth.baseCurrency);
+	const money = (v: bigint) => `${formatMinor(v, netWorth.baseCurrency)} ${unit}`;
+	// bars scale against the largest gross exposure (asset or pure debt)
+	const largestGross = netWorth.groups.reduce((max, g) => {
+		const gross = g.assetMinor > g.liabilityMinor ? g.assetMinor : g.liabilityMinor;
+		return gross > max ? gross : max;
+	}, 1n);
+	const groups = netWorth.groups.map((g) => {
+		const gross = g.assetMinor > g.liabilityMinor ? g.assetMinor : g.liabilityMinor;
+		const netMinor = g.assetMinor - g.liabilityMinor;
+		return {
+			label: g.label,
+			asset: g.assetMinor > 0n ? money(g.assetMinor) : null,
+			liability: g.liabilityMinor > 0n ? `− ${money(g.liabilityMinor)}` : null,
+			net: money(netMinor),
+			netNegative: netMinor < 0n,
+			colorVar: g.colorVar,
+			width: Math.max(2, Math.round((Number(gross) / Number(largestGross)) * 100)),
+			owedPct:
+				g.liabilityMinor > 0n && gross > 0n
+					? Math.min(100, Math.round((Number(g.liabilityMinor) / Number(gross)) * 100))
+					: 0,
+			detail: g.detail
+		};
+	});
+	const composition = {
+		groups,
+		assetsTotal: money(netWorth.assetsMinor),
+		liabilitiesTotal: `− ${money(netWorth.liabilitiesMinor)}`,
+		net: money(netWorth.totalMinor),
+		netPositive: netWorth.totalMinor >= 0n
+	};
 
 	return { period, briefing, flow, baseCurrency, composition, upcoming };
 };

@@ -1,9 +1,0 @@
-Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
-Card Payment,Current,2026-06-30 09:32:29,2026-07-01 05:51:53,Fresh Point,-53.91,0.00,CZK,COMPLETED,991.68
-Card Payment,Current,2026-07-03 03:44:49,2026-07-03 09:21:05,Netflix,-339.00,0.00,CZK,COMPLETED,652.68
-Card Payment,Current,2026-07-03 06:44:16,2026-07-03 13:57:52,EasyPark,-11.90,0.00,CZK,COMPLETED,640.78
-Card Payment,Current,2026-07-03 14:53:40,2026-07-04 03:20:01,Coffee Corner,-30.00,0.00,CZK,COMPLETED,610.78
-Card Payment,Current,2026-07-05 10:00:00,2026-07-05 10:10:00,Coffee Corner,-30.00,0.00,CZK,COMPLETED,580.78
-Topup,Current,2026-07-04 10:54:46,2026-07-04 10:54:47,Apple Pay top-up by *8000,5000.00,0.00,CZK,COMPLETED,5610.78
-Transfer,Current,2026-06-30 08:00:00,2026-07-05 09:00:00,To Robert Kiewisz,-56.60,21.17,CZK,COMPLETED,5532.01
-Card Payment,Current,2026-07-06 10:00:00,2026-07-06 12:00:00,Pending Shop,-99.00,0.00,CZK,REVERTED,5511.78

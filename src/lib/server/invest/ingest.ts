@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { desc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { brokerOperation, holding, portfolioSnapshot } from '$lib/server/db/schema';
-import { parseXtb } from './xtb';
+import { brokerOperation, brokerPosition, holding, portfolioSnapshot } from '$lib/server/db/schema';
+import { brokerAdapters, detectBroker, type BrokerReport } from './adapter';
+import './xtb'; // adapters register themselves on import
 
-export interface XtbIngestResult {
+export interface BrokerIngestResult {
+	broker: string;
 	operationsAdded: number;
 	operationsKnown: number;
 	holdings: number;
@@ -12,13 +14,31 @@ export interface XtbIngestResult {
 	replacedHoldings: boolean;
 }
 
-export async function ingestXtbReport(buffer: Uint8Array): Promise<XtbIngestResult> {
-	const report = parseXtb(buffer);
+/** Detect which broker's report this is and ingest it. */
+export async function ingestBrokerFile(
+	fileName: string,
+	buffer: Uint8Array
+): Promise<BrokerIngestResult> {
+	const adapter = detectBroker(fileName, buffer);
+	if (!adapter) {
+		const known = brokerAdapters()
+			.map((a) => a.label)
+			.join(', ');
+		throw new Error(`Not a recognised broker report. Supported: ${known}.`);
+	}
+	return { broker: adapter.label, ...(await ingestReport(adapter.parse(buffer))) };
+}
 
+async function ingestReport(report: BrokerReport): Promise<Omit<BrokerIngestResult, 'broker'>> {
+	const existingOps = new Set(
+		(await db.select({ id: brokerOperation.id }).from(brokerOperation)).map((r) => r.id)
+	);
 	let added = 0;
 	let known = 0;
 	for (const op of report.operations) {
-		const inserted = await db
+		if (existingOps.has(op.id)) known++;
+		else added++;
+		await db
 			.insert(brokerOperation)
 			.values({
 				id: op.id,
@@ -27,12 +47,44 @@ export async function ingestXtbReport(buffer: Uint8Array): Promise<XtbIngestResu
 				happenedAt: new Date(op.happenedAt),
 				amountMinor: op.amountMinor,
 				currency: report.accountCurrency,
-				comment: op.comment
+				comment: op.comment,
+				positionId: op.positionId
 			})
-			.onConflictDoNothing()
-			.returning({ id: brokerOperation.id });
-		if (inserted.length > 0) added++;
-		else known++;
+			// re-uploads backfill fields older ingests did not know about
+			.onConflictDoUpdate({
+				target: brokerOperation.id,
+				set: { positionId: op.positionId }
+			});
+	}
+
+	// Holding intervals. Closed rows are authoritative and may update an
+	// earlier open lot; an open lot must never erase a recorded close (a stale
+	// report re-uploaded after the position closed).
+	for (const position of report.positions) {
+		const values = {
+			id: position.id,
+			ticker: position.ticker,
+			purchaseValueMinor: position.purchaseValueMinor,
+			saleValueMinor: position.saleValueMinor,
+			currency: report.accountCurrency,
+			openedAt: new Date(position.openedAt),
+			closedAt: position.closedAt ? new Date(position.closedAt) : null
+		};
+		if (position.closedAt) {
+			await db
+				.insert(brokerPosition)
+				.values(values)
+				.onConflictDoUpdate({
+					target: brokerPosition.id,
+					set: {
+						purchaseValueMinor: position.purchaseValueMinor,
+						saleValueMinor: position.saleValueMinor,
+						closedAt: new Date(position.closedAt)
+					}
+				});
+		} else {
+			await db.insert(brokerPosition).values(values).onConflictDoNothing();
+		}
 	}
 
 	// Holdings are a snapshot: replace only when this report is newer than

@@ -8,12 +8,13 @@
 	let { data, form } = $props();
 
 	let query = $state(data.query);
-	let adding = $state(false);
+	let adding = $state(data.prefill.open);
 
-	function navigate(shelf: string, q: string) {
+	function navigate(shelf: string, q: string, tag = '') {
 		const parts: string[] = [];
 		if (shelf !== 'all') parts.push(`shelf=${encodeURIComponent(shelf)}`);
 		if (q) parts.push(`q=${encodeURIComponent(q)}`);
+		if (tag) parts.push(`tag=${encodeURIComponent(tag)}`);
 		goto(`?${parts.join('&')}`, { keepFocus: true, noScroll: true });
 	}
 </script>
@@ -63,32 +64,35 @@
 			<label
 				><span>Shelf</span>
 				<select name="shelf">
-					{#each SHELVES as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
+					{#each SHELVES as s (s.key)}
+						<option value={s.key} selected={s.key === data.prefill.shelf}>{s.label}</option>
+					{/each}
 				</select></label
 			>
 			<label
 				><span>About (person, flat, …)</span>
-				<input name="subject" list="subjects" placeholder="Robert" />
+				<input name="subject" list="subjects" placeholder="Robert" value={data.prefill.subject} />
 				<datalist id="subjects">
 					{#each data.subjectSuggestions as s (s)}<option value={s}></option>{/each}
 				</datalist></label
 			>
 			<label><span>File (optional)</span><input name="file" type="file" /></label>
-			<label
-				><span>Expiry (optional)</span>
+			<div class="field">
+				<span>Expiry (optional)</span>
 				<div class="expiry">
-					<select name="expiryVerb">
+					<select name="expiryVerb" aria-label="Expiry kind">
 						<option value="expires">expires</option>
 						<option value="ends">ends</option>
 						<option value="renews">renews</option>
+						<option value="due">due</option>
 					</select>
-					<input name="expiresOn" type="date" />
-				</div></label
-			>
+					<input name="expiresOn" type="date" aria-label="Expiry date" />
+				</div>
+			</div>
 			<label
 				><span>Tags (comma separated)</span><input
 					name="tags"
-					placeholder="2026, official"
+					placeholder="e.g. vaccination, lab, dentist"
 				/></label
 			>
 		</div>
@@ -128,6 +132,20 @@
 					: `${data.total} document${data.total === 1 ? '' : 's'} · columns derive from who they are about`}
 			</span>
 		</div>
+		{#if data.tags.length}
+			<div class="tag-chips">
+				{#each data.tags as t (t.name)}
+					<button
+						type="button"
+						class="tag-chip"
+						class:active={t.active}
+						onclick={() => navigate(data.shelf, query, t.active ? '' : t.name)}
+					>
+						{t.name} <span class="mono t-count">{t.count}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 		<div class="columns">
 			{#each data.columns as col (col.label)}
 				<div class="col">
@@ -250,6 +268,33 @@
 		gap: 16px;
 		min-width: 0;
 	}
+	.tag-chips {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.tag-chip {
+		border: 1px solid var(--bd);
+		background: var(--card);
+		color: var(--fg2);
+		border-radius: 20px;
+		padding: 5px 12px;
+		font-size: 12px;
+		cursor: pointer;
+	}
+	.tag-chip:hover {
+		border-color: var(--bd2);
+	}
+	.tag-chip.active {
+		border-color: var(--blue);
+		background: var(--blue-tint);
+		color: var(--blue);
+	}
+	.t-count {
+		font-size: 10.5px;
+		color: var(--fg3);
+		margin-left: 3px;
+	}
 	.columns {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
@@ -322,7 +367,8 @@
 		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 		gap: 12px;
 	}
-	label {
+	label,
+	.field {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
@@ -339,9 +385,18 @@
 		font-size: 13.5px;
 	}
 	.expiry {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
+		display: flex;
 		gap: 8px;
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+	.expiry select {
+		min-width: 0;
+		flex: 0 1 auto;
+	}
+	.expiry input {
+		flex: 1 1 130px;
+		min-width: 0;
 	}
 	.row {
 		display: flex;

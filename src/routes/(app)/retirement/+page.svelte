@@ -1,10 +1,24 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import SalaryCharts from '$lib/charts/SalaryCharts.svelte';
 	import { retModel, type RetireConfig } from '$lib/retire';
 	import { displayCurrency } from '$lib/money';
 
-	let { data } = $props();
+	let { data, form } = $props();
+
+	const salaryColors = ['--teal', '--purple', '--yellow', '--blue'];
+	const salaryPeople = $derived(
+		data.salary.map((s, i) => ({
+			name: s.name,
+			colorVar: salaryColors[i % salaryColors.length],
+			points: s.years
+				.slice()
+				.reverse() // ascending by year for the lines
+				.map((y) => ({ year: y.year, age: y.age, avgMajor: y.avgMajor, deltaPct: y.deltaPct }))
+		}))
+	);
 
 	// Local assumptions recompute the model instantly; saving is fire-and-forget.
 	let cfg: RetireConfig = $state({ ...data.config });
@@ -225,7 +239,212 @@
 	</div>
 </section>
 
+<section class="card stack">
+	<div class="eyebrow-row">
+		<Eyebrow emoji="💼" label="Salary history" />
+		<span class="eyebrow-caption">
+			from payslips — upload one and the amount reads itself, corrections teach it
+		</span>
+	</div>
+
+	{#if form?.message}
+		<div class="error">{form.message}</div>
+	{/if}
+
+	<SalaryCharts people={salaryPeople} {unit} />
+
+	<div class="salary-grid">
+		{#each data.salary as s (s.name)}
+			<div class="person-block">
+				<span class="p-name">{s.name}</span>
+				{#if s.years.length}
+					<table class="salary-table">
+						<thead>
+							<tr>
+								<th>Year</th>
+								<th>Age</th>
+								<th class="num">Avg monthly</th>
+								<th class="num">vs prev. year</th>
+								<th class="num">slips</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each s.years as y (y.year)}
+								<tr>
+									<td class="mono">{y.year}</td>
+									<td class="mono">{y.age ?? '—'}</td>
+									<td class="mono num">{y.avg}</td>
+									<td
+										class="mono num"
+										style:color={y.deltaPct === null
+											? 'var(--fg3)'
+											: y.deltaPct >= 0
+												? 'var(--green)'
+												: 'var(--red)'}
+									>
+										{y.deltaPct === null
+											? '—'
+											: `${y.deltaPct > 0 ? '+' : ''}${y.deltaPct.toFixed(1)}%`}
+									</td>
+									<td class="mono num quiet-cell">{y.months}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+					<div class="recent">
+						{#each s.recent as slip (slip.id)}
+							<form method="POST" action="?/setPayslipAmount" use:enhance class="slip">
+								<input type="hidden" name="id" value={slip.id} />
+								<span class="mono slip-month">{slip.periodMonth}</span>
+								<input name="amount" value={slip.amount} aria-label="Payslip amount" />
+								{#if slip.file}
+									<a href="/files/{slip.file}" target="_blank" rel="noopener" class="slip-file"
+										>📎</a
+									>
+								{/if}
+								<button type="submit" class="btn slip-save">Fix</button>
+							</form>
+						{/each}
+					</div>
+				{:else}
+					<span class="quiet">No payslips with amounts yet.</span>
+				{/if}
+			</div>
+		{/each}
+	</div>
+
+	<form
+		method="POST"
+		action="?/addPayslip"
+		use:enhance
+		enctype="multipart/form-data"
+		class="payslip-form"
+	>
+		<label
+			><span>Whose</span>
+			<select name="subject">
+				{#each data.peopleList as name (name)}<option value={name}>{name}</option>{/each}
+			</select></label
+		>
+		<label><span>Month</span><input name="periodMonth" type="month" /></label>
+		<label
+			><span>Amount (blank = read from the PDF)</span><input
+				name="amount"
+				inputmode="decimal"
+				placeholder="45 231"
+			/></label
+		>
+		<label><span>Payslip file (optional)</span><input name="file" type="file" /></label>
+		<button type="submit" class="btn btn-primary">Add payslip</button>
+	</form>
+	<span class="quiet">
+		Payslips land on the Documents → Payslips shelf. Month and amount read themselves from a PDF
+		when they can; whatever you type wins — and a typed amount that matches a line on the slip
+		teaches the reader which line to trust for {data.peopleList.join(' and ')}.
+	</span>
+</section>
+
 <style>
+	.error {
+		border: 1px solid var(--red);
+		background: var(--red-tint);
+		color: var(--red);
+		border-radius: 12px;
+		padding: 9px 14px;
+		font-size: 13px;
+	}
+	.salary-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+		gap: 22px;
+	}
+	.person-block {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		min-width: 0;
+	}
+	.p-name {
+		font-size: 13.5px;
+		font-weight: 600;
+	}
+	.salary-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 12.5px;
+	}
+	.salary-table th {
+		text-align: left;
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg3);
+		padding: 4px 8px 6px 0;
+		border-bottom: 1px solid var(--bd);
+	}
+	.salary-table td {
+		padding: 6px 8px 6px 0;
+		border-bottom: 1px solid var(--bd);
+	}
+	.salary-table .num {
+		text-align: right;
+	}
+	.quiet-cell {
+		color: var(--fg3);
+	}
+	.recent {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.slip {
+		display: grid;
+		grid-template-columns: 64px minmax(0, 1fr) auto auto;
+		gap: 8px;
+		align-items: center;
+	}
+	.slip-month {
+		font-size: 11.5px;
+		color: var(--fg3);
+	}
+	.slip input {
+		border: 1px solid var(--bd2);
+		background: var(--card);
+		color: var(--fg1);
+		border-radius: 8px;
+		padding: 5px 9px;
+		font-size: 12.5px;
+		font-family: var(--font-mono);
+	}
+	.slip-file {
+		text-decoration: none;
+		font-size: 12px;
+	}
+	.slip-save {
+		padding: 5px 10px;
+		font-size: 11.5px;
+	}
+	.payslip-form {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 12px;
+		align-items: end;
+	}
+	.payslip-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: 12px;
+		color: var(--fg3);
+	}
+	.payslip-form input,
+	.payslip-form select {
+		border: 1px solid var(--bd2);
+		background: var(--card);
+		color: var(--fg1);
+		border-radius: 8px;
+		padding: 8px 11px;
+		font-size: 13.5px;
+	}
 	.verdict {
 		background: var(--blue-tint);
 		border: 1px solid var(--blue);

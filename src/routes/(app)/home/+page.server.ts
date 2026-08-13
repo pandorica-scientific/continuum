@@ -1,0 +1,179 @@
+import { fail } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { property, propertyBill } from '$lib/server/db/schema';
+import {
+	availableHomeProviders,
+	configuredHomeProvider,
+	getHomeConfig,
+	haMeterCandidates
+} from '$lib/server/home';
+import { generateEvents } from '$lib/server/calendar';
+import { getBaseCurrency, setSetting } from '$lib/server/settings';
+import { parseAmountToMinor } from '$lib/money';
+import type { Actions, PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async () => {
+	const [config, providers, properties] = await Promise.all([
+		getHomeConfig(),
+		Promise.resolve(availableHomeProviders()),
+		db.select().from(property)
+	]);
+	const livedIn = properties.find((p) => p.kind === 'lived') ?? null;
+
+	if (!config) {
+		return {
+			configured: false as const,
+			providers,
+			livedInName: livedIn?.name ?? null
+		};
+	}
+
+	const provider = await configuredHomeProvider();
+	if (!provider) {
+		return { configured: false as const, providers, livedInName: livedIn?.name ?? null };
+	}
+
+	const probe = await provider.probe();
+	if (!probe.ok) {
+		return {
+			configured: true as const,
+			unreachable: probe.detail,
+			providerLabel: provider.label,
+			providers,
+			livedInName: livedIn?.name ?? null
+		};
+	}
+
+	const [snapshot, energyDays, week] = await Promise.all([
+		provider.snapshot(),
+		provider.energyHistory(14),
+		generateEvents(
+			new Date().toISOString().slice(0, 10),
+			new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+		)
+	]);
+
+	// Meter readings replace the estimated energy line on the lived-in flat's
+	// bills, so the budget follows what the meter actually did.
+	let billNote: string | null = null;
+	const price = Number(config.pricePerKwh);
+	if (livedIn && snapshot.monthKwh !== null && Number.isFinite(price) && price > 0) {
+		const baseCurrency = await getBaseCurrency();
+		const amountMinor = BigInt(Math.round(snapshot.monthKwh * price));
+		const bills = await db
+			.select()
+			.from(propertyBill)
+			.where(eq(propertyBill.propertyId, livedIn.id));
+		const energyBill = bills.find((b) => b.label.toLowerCase().includes('energy'));
+		if (energyBill) {
+			await db
+				.update(propertyBill)
+				.set({ amountMinor, label: 'Energy · from meter' })
+				.where(eq(propertyBill.id, energyBill.id));
+		} else {
+			const { randomUUID } = await import('node:crypto');
+			await db.insert(propertyBill).values({
+				id: randomUUID(),
+				propertyId: livedIn.id,
+				label: 'Energy · from meter',
+				amountMinor,
+				sort: 1
+			});
+		}
+		billNote = `These readings replace the estimated energy line on ${livedIn.name}'s bills, so the budget follows what the meter actually did. (${baseCurrency})`;
+	}
+
+	const maxKwh = Math.max(...energyDays.map((d) => d.kwh), 1);
+	const threshold = maxKwh * 0.75;
+
+	return {
+		configured: true as const,
+		providerLabel: provider.label,
+		providers,
+		livedInName: livedIn?.name ?? null,
+		snapshot,
+		energyDays: energyDays.map((d) => ({
+			...d,
+			pct: Math.round((d.kwh / maxKwh) * 100),
+			high: d.kwh >= threshold
+		})),
+		billNote,
+		week: week.slice(0, 6).map((e) => ({ date: e.date.slice(5), label: e.label }))
+	};
+};
+
+export const actions: Actions = {
+	configure: async ({ request }) => {
+		const form = await request.formData();
+		const kind = String(form.get('kind') ?? '');
+		const provider = availableHomeProviders().find((p) => p.id === kind);
+		if (!provider) return fail(400, { message: 'Pick a platform.' });
+
+		// Generic: the provider's own field description drives validation, so
+		// a new platform never adds code here.
+		const config: Record<string, string> = { kind };
+		for (const field of provider.fields) {
+			let value = String(form.get(field.key) ?? '').trim();
+			if (!value) {
+				if (field.required) return fail(400, { message: `${field.label} is required.` });
+				continue;
+			}
+			if (field.kind === 'url') {
+				value = value.replace(/\/$/, '');
+				if (!/^https?:\/\//.test(value)) {
+					return fail(400, { message: `${field.label} must start with http(s)://.` });
+				}
+			} else if (field.kind === 'amount') {
+				try {
+					value = String(parseAmountToMinor(value, await getBaseCurrency()));
+				} catch {
+					return fail(400, { message: `${field.label} must be a number.` });
+				}
+			}
+			config[field.key] = value;
+		}
+		await setSetting('home', config);
+		return { ok: true };
+	},
+
+	disconnect: async () => {
+		await setSetting('home', null);
+		return { ok: true };
+	},
+
+	toggleDevice: async ({ request }) => {
+		const form = await request.formData();
+		const deviceId = String(form.get('deviceId') ?? '');
+		const on = String(form.get('on')) === 'true';
+		const provider = await configuredHomeProvider();
+		if (!provider) return fail(400, { message: 'No platform connected.' });
+		try {
+			await provider.setDevice(deviceId, on);
+		} catch (err) {
+			return fail(502, {
+				message: err instanceof Error ? err.message : 'The device did not respond.'
+			});
+		}
+		return { ok: true };
+	},
+
+	// Entity pickers for the HA form: probe the given credentials and list
+	// candidate sensors per meter slot.
+	discover: async ({ request }) => {
+		const form = await request.formData();
+		const url = String(form.get('url') ?? '')
+			.trim()
+			.replace(/\/$/, '');
+		const token = String(form.get('token') ?? '').trim();
+		if (!url || !token) return fail(400, { message: 'URL and token first.' });
+		try {
+			const candidates = await haMeterCandidates(url, token);
+			return { candidates };
+		} catch (err) {
+			return fail(502, {
+				message: err instanceof Error ? err.message : 'Home Assistant did not answer.'
+			});
+		}
+	}
+};

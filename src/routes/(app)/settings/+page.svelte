@@ -2,21 +2,10 @@
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
-	import { MODULE_KEYS } from '$lib/modules/registry';
+	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
 	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
-
-	const moduleLabels: Record<string, { emoji: string; label: string; note: string }> = {
-		import: { emoji: '📥', label: 'Import', note: 'statement upload and the review queue' },
-		property: { emoji: '🏢', label: 'Property', note: 'flats, tenancies and bills' },
-		investments: { emoji: '📈', label: 'Investments', note: 'holdings from broker reports' },
-		loans: { emoji: '💳', label: 'Loans', note: 'mortgages and fixation periods' },
-		retirement: { emoji: '🎯', label: 'Retirement', note: 'the projection model' },
-		home: { emoji: '🏠', label: 'Home Assistant', note: 'devices and meter readings' },
-		calendar: { emoji: '📅', label: 'Calendar', note: 'two-way sync and generated events' },
-		documents: { emoji: '🗂️', label: 'Documents', note: 'the archive with expiry dates' }
-	};
 
 	let addingPerson = $state(false);
 </script>
@@ -39,7 +28,7 @@
 	/>
 	<div class="card modules">
 		{#each MODULE_KEYS as key (key)}
-			{@const m = moduleLabels[key]}
+			{@const m = MODULES[key]}
 			<form method="POST" action="?/toggleModule" use:enhance class="module-row">
 				<input type="hidden" name="key" value={key} />
 				<span class="emoji">{m.emoji}</span>
@@ -116,14 +105,123 @@
 </section>
 
 <section class="section">
-	<Eyebrow emoji="🐳" label="Self-hosting" />
-	<div class="card">
+	<Eyebrow
+		emoji="🛟"
+		label="Backups"
+		caption="One restorable database dump, overwritten each run, plus every uploaded file — point it at a cloud-sync folder and the copy leaves the machine by itself (the sync client keeps the file's version history)."
+	/>
+	<div class="card stack-card">
+		<form method="POST" action="?/saveBackup" use:enhance class="backup-form">
+			<label class="field dest">
+				<span>Destination folder</span>
+				<input
+					name="dir"
+					list="backup-destinations"
+					value={data.backup.dir}
+					placeholder="e.g. a Google Drive or Dropbox folder"
+				/>
+				<datalist id="backup-destinations">
+					{#each data.backupDestinations as d (d.path)}
+						<option value={d.path}>{d.label}</option>
+					{/each}
+				</datalist>
+			</label>
+			<label class="field">
+				<span>How often</span>
+				<select name="cadence" value={data.backup.cadence}>
+					<option value="off">Off</option>
+					<option value="weekly">Weekly</option>
+					<option value="monthly">Monthly</option>
+				</select>
+			</label>
+			<button type="submit" class="btn">Save</button>
+		</form>
+		<div class="backup-status">
+			<form method="POST" action="?/runBackupNow" use:enhance>
+				<button type="submit" class="btn">Back up now</button>
+			</form>
+			{#if data.lastBackup}
+				<span class="note" style:color={data.lastBackup.ok ? 'var(--green)' : 'var(--red)'}>
+					{data.lastBackup.ok ? 'Last backup' : 'Last attempt failed'}
+					· {data.lastBackup.at.slice(0, 16).replace('T', ' ')} · {data.lastBackup.note}
+				</span>
+			{:else}
+				<span class="note">No backup has run yet.</span>
+			{/if}
+		</div>
+		{#if data.backupDestinations.length}
+			<span class="note">
+				Detected sync folders on this machine: {data.backupDestinations
+					.map((d) => d.label)
+					.join(', ')}. Backups land in a “Continuum backups” subfolder.
+			</span>
+		{/if}
+	</div>
+</section>
+
+<section class="section">
+	<Eyebrow
+		emoji="🐳"
+		label="Self-hosting"
+		caption="Live facts about this installation — nothing here calls home."
+	/>
+	<div class="card stack-card">
+		<div class="status-grid">
+			<div class="status">
+				<span class="s-label">Version</span>
+				<span class="mono s-value">{data.status.version}</span>
+				<span class="note">{data.status.migrations} migrations applied</span>
+			</div>
+			<div class="status">
+				<span class="s-label">Database</span>
+				<span class="mono s-value">{data.status.databaseSize}</span>
+				<span class="note">PostgreSQL, on its own volume</span>
+			</div>
+			{#each data.status.storage as s (s.label)}
+				<div class="status">
+					<span class="s-label">{s.label}</span>
+					<span class="mono s-value" style:color={s.writable ? 'var(--fg1)' : 'var(--red)'}>
+						{s.size ?? '—'}
+					</span>
+					<span class="note" style:color={s.writable ? '' : 'var(--red)'}>
+						{s.path} · {s.writable ? 'writable' : 'NOT WRITABLE'}
+					</span>
+				</div>
+			{/each}
+			<div class="status">
+				<span class="s-label">Uptime</span>
+				<span class="mono s-value">{data.status.uptime}</span>
+				<span class="note">node {data.status.node}</span>
+			</div>
+			<div class="status">
+				<span class="s-label">Base URL</span>
+				<span class="mono s-value origin">{data.status.origin}</span>
+				<span class="note">what the server believes it is (ORIGIN)</span>
+			</div>
+		</div>
 		<p class="prose">
-			This server is yours. Every label, currency, person, module and integration on it is
-			configuration stored in your own database — nothing calls home. Back up the
-			<span class="mono">continuum-db</span> and <span class="mono">continuum-data</span> Docker volumes
-			and you have backed up everything.
+			Everything on this server — people, currencies, modules, integrations — is configuration in
+			your own database. Restoring elsewhere is booting a fresh instance and feeding it the backup
+			dump.
 		</p>
+		<div class="config-row">
+			<a href="/settings/export" class="btn" download>⬇️ Export settings</a>
+			<form method="POST" action="?/importConfig" use:enhance enctype="multipart/form-data">
+				<label class="import-label">
+					<input
+						name="file"
+						type="file"
+						accept="application/json"
+						onchange={(e) => e.currentTarget.form?.requestSubmit()}
+					/>
+					<span class="btn">⬆️ Import settings…</span>
+				</label>
+			</form>
+			<span class="note">
+				ledger.config.json — configuration only (name, currency, modules, backup, learned labels),
+				never data or passwords
+			</span>
+		</div>
 	</div>
 </section>
 
@@ -242,6 +340,63 @@
 		font-size: 13.5px;
 		color: var(--fg2);
 		line-height: 1.55;
+	}
+	.stack-card {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.backup-form {
+		display: flex;
+		align-items: flex-end;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.backup-form .dest {
+		flex: 1 1 320px;
+	}
+	.backup-status {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.status-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 14px;
+	}
+	.status {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+	.s-label {
+		font-size: 11.5px;
+		color: var(--fg3);
+	}
+	.s-value {
+		font-size: 16px;
+		font-weight: 600;
+	}
+	.s-value.origin {
+		font-size: 13px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.config-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.import-label input[type='file'] {
+		display: none;
+	}
+	.import-label {
+		cursor: pointer;
 	}
 	@media (max-width: 640px) {
 		.add-form {

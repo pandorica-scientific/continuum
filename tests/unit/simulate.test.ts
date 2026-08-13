@@ -1,0 +1,95 @@
+import { describe, expect, it } from 'vitest';
+import type { FixationPeriod, LoanTerms } from '$lib/loans/amortise';
+import {
+	aggregateByYear,
+	applyFixation,
+	applyRepayment,
+	project,
+	summarize
+} from '$lib/loans/simulate';
+
+const terms: LoanTerms = {
+	owedMinor: 100_000_00n,
+	owedAsOfMonth: '2026-01',
+	dayCount: '30/360',
+	accrualStyle: 'payment',
+	paymentDay: 15
+};
+const periods: FixationPeriod[] = [
+	{ startDate: '2026-01-01', endDate: null, annualRatePct: 6, paymentMinor: 20_000_00n }
+];
+
+describe('applyRepayment', () => {
+	it('re-anchors the balance at the repayment month', () => {
+		const t = applyRepayment(terms, { date: '2026-06-10', amountMinor: 30_000_00n });
+		expect(t.owedMinor).toBe(70_000_00n);
+		expect(t.owedAsOfMonth).toBe('2026-06');
+	});
+
+	it("prefers the bank's stated balance and never goes negative", () => {
+		expect(
+			applyRepayment(terms, {
+				date: '2026-06-10',
+				amountMinor: 30_000_00n,
+				balanceAfterMinor: 68_500_00n
+			}).owedMinor
+		).toBe(68_500_00n);
+		expect(applyRepayment(terms, { date: '2026-06-10', amountMinor: 999_999_00n }).owedMinor).toBe(
+			0n
+		);
+	});
+});
+
+describe('applyFixation', () => {
+	it('closes the running period at the new start and appends the new one', () => {
+		const next = applyFixation(periods, {
+			startDate: '2027-01-01',
+			endDate: '2032-01-01',
+			annualRatePct: 4,
+			paymentMinor: 25_000_00n
+		});
+		expect(next).toHaveLength(2);
+		expect(next[0].endDate).toBe('2027-01-01');
+		expect(next[1].annualRatePct).toBe(4);
+	});
+
+	it('leaves periods that already ended untouched', () => {
+		const closed: FixationPeriod[] = [
+			{ startDate: '2020-01-01', endDate: '2025-01-01', annualRatePct: 2, paymentMinor: 1n }
+		];
+		const next = applyFixation(closed, {
+			startDate: '2026-01-01',
+			endDate: null,
+			annualRatePct: 5,
+			paymentMinor: 2n
+		});
+		expect(next[0].endDate).toBe('2025-01-01');
+	});
+});
+
+describe('project and summarize', () => {
+	it('a repayment brings the debt-free month forward and cuts total interest', () => {
+		const before = project(terms, periods);
+		const after = project(
+			applyRepayment(terms, { date: '2026-02-01', amountMinor: 50_000_00n }),
+			periods
+		);
+		expect(before.summary.debtFreeMonth).not.toBeNull();
+		expect(after.summary.debtFreeMonth! < before.summary.debtFreeMonth!).toBe(true);
+		expect(after.summary.totalInterestMinor < before.summary.totalInterestMinor).toBe(true);
+	});
+
+	it('yearly aggregation preserves the monthly totals', () => {
+		const { rows, years } = project(terms, periods);
+		const monthly = summarize(rows).totalInterestMinor;
+		const yearly = years.reduce((s, y) => s + y.interestMinor, 0n);
+		expect(yearly).toBe(monthly);
+		expect(aggregateByYear([]).length).toBe(0);
+	});
+
+	it('a paid-off loan projects to an empty schedule', () => {
+		const { rows, summary } = project({ ...terms, owedMinor: 0n }, periods);
+		expect(rows).toHaveLength(0);
+		expect(summary.debtFreeMonth).toBeNull();
+	});
+});

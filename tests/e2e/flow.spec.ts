@@ -1,3 +1,5 @@
+import { readdir, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 // One ordered journey through Phase 1: wizard → import → review → cash flow →
@@ -90,6 +92,29 @@ test.describe('signed in', () => {
 		await expect(page.locator('.col-label', { hasText: 'Jana Nováková' })).toBeVisible();
 	});
 
+	test('property: documents filed about a flat appear on its card', async ({ page }) => {
+		await page.goto('/property');
+		await page.getByRole('button', { name: '➕ Add property' }).click();
+		await page.getByPlaceholder('Karlín, Praha 8').fill('Flat Žižkov');
+		await page.getByRole('button', { name: 'Add property', exact: true }).click();
+		await expect(page.locator('.tab', { hasText: 'Flat Žižkov' })).toBeVisible();
+
+		// the card's add link opens the documents form pre-addressed to this flat
+		await page.getByRole('link', { name: '➕ Add a document about this flat' }).click();
+		await expect(page.locator('input[name=subject]')).toHaveValue('Flat Žižkov');
+		await expect(page.locator('select[name=shelf]')).toHaveValue('property');
+		await page.getByPlaceholder('Passport · Robert').fill('Renting contract · Žižkov');
+		await page.locator('select[name=shelf]').selectOption('tenancy');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect(page.getByText('Renting contract · Žižkov')).toBeVisible();
+
+		// …and the document shows on the property's own card
+		await page.goto('/property');
+		await page.locator('.tab', { hasText: 'Flat Žižkov' }).click();
+		await expect(page.getByText('Renting contract · Žižkov')).toBeVisible();
+		await expect(page.getByText(/Tenancy · added/)).toBeVisible();
+	});
+
 	test('calendar renders the month grid and the published feed path', async ({ page }) => {
 		await page.goto('/calendar');
 		await expect(page.locator('.day').first()).toBeVisible();
@@ -107,6 +132,39 @@ test.describe('signed in', () => {
 		const before = await page.locator('.chip').first().innerText();
 		await page.locator('.seg button', { hasText: '4.0%' }).click();
 		await expect(page.locator('.chip').first()).not.toHaveText(before);
+	});
+
+	test('backups: back up now writes a restorable dump to the chosen folder', async ({ page }) => {
+		const dest = 'scratch-workspace/e2e-backups';
+		await rm(dest, { recursive: true, force: true });
+		await page.goto('/settings');
+		await page.locator('input[name=dir]').fill(dest);
+		await page.locator('select[name=cadence]').selectOption('weekly');
+		await page.locator('.backup-form').getByRole('button', { name: 'Save' }).click();
+		await page.getByRole('button', { name: 'Back up now' }).click();
+		// the dump itself can take a while
+		await expect(page.getByText(/Database dumped/)).toBeVisible({ timeout: 20000 });
+		await expect(page.getByText(/Last backup/)).toBeVisible();
+
+		const files = await readdir(join(dest, 'Continuum backups'));
+		expect(files).toContain('continuum-backup.sql');
+		const sql = await readFile(join(dest, 'Continuum backups', 'continuum-backup.sql'), 'utf8');
+		expect(sql).toContain('copy "person"');
+		expect(sql).toContain('truncate');
+		expect(sql.trim().endsWith('commit;')).toBe(true);
+	});
+
+	test('settings export produces a config file with only whitelisted keys', async ({ page }) => {
+		await page.goto('/settings');
+		const resp = await page.request.get('/settings/export');
+		expect(resp.status()).toBe(200);
+		expect(resp.headers()['content-disposition']).toContain('ledger.config.json');
+		const json = await resp.json();
+		expect(json.continuum).toBe(1);
+		expect(json.settings.baseCurrency).toBe('CZK');
+		// secrets and state never leave: no calendar token, no backup status
+		expect(json.settings.icsToken).toBeUndefined();
+		expect(json.settings.backupLastRun).toBeUndefined();
 	});
 
 	test('theme choice persists across reloads', async ({ page }) => {

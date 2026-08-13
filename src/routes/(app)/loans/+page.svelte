@@ -4,12 +4,18 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 	import Pill from '$lib/components/Pill.svelte';
+	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
+	import RepayDialog from '$lib/components/RepayDialog.svelte';
+	import RefixDialog from '$lib/components/RefixDialog.svelte';
 	import { DAY_COUNTS, DAY_COUNT_LABELS } from '$lib/loans';
 
 	let { data, form } = $props();
 
 	let adding = $state(false);
 	let regime = $state('fixed_period');
+	let open = $state<string | null>(null);
+	let repayFor = $state<string | null>(null);
+	let refixFor = $state<string | null>(null);
 </script>
 
 <ScreenHeader
@@ -78,6 +84,61 @@
 					>{l.paidNote}{l.monthInterest ? ` · ${l.monthInterest} interest this month` : ''}</span
 				>
 			</div>
+			<button
+				type="button"
+				class="detail-toggle"
+				onclick={() => (open = open === l.id ? null : l.id)}
+			>
+				{open === l.id ? 'Hide schedule & changes ▴' : 'Schedule & changes ▾'}
+			</button>
+			{#if open === l.id}
+				<div class="detail">
+					{#if l.chart.length}
+						<div class="eyebrow-row">
+							<Eyebrow emoji="📊" label="Interest vs principal" />
+							<span class="eyebrow-caption">{l.chartNote}</span>
+						</div>
+						<LoanSchedule years={l.chart} currency={l.currency} />
+					{/if}
+					<div class="actions-row">
+						<button type="button" class="btn" onclick={() => (repayFor = l.id)}>
+							💸 Record a repayment…
+						</button>
+						<button type="button" class="btn" onclick={() => (refixFor = l.id)}>
+							🔁 New fixation…
+						</button>
+						<span class="mini-note">both preview their effect on the chart before saving</span>
+					</div>
+					{#if l.events.length}
+						<div class="events">
+							<span class="mini-title">📜 What happened on this loan</span>
+							{#each l.events as e (e.id)}
+								<div class="event">
+									<span class="mono e-date">{e.date}</span>
+									<span class="e-label">{e.label}{e.note ? ` · ${e.note}` : ''}</span>
+									<span class="mono e-amount">{e.amount}</span>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+			{#if repayFor === l.id}
+				<RepayDialog
+					loanId={l.id}
+					currency={l.currency}
+					sim={l.sim}
+					onclose={() => (repayFor = null)}
+				/>
+			{/if}
+			{#if refixFor === l.id}
+				<RefixDialog
+					loanId={l.id}
+					currency={l.currency}
+					sim={l.sim}
+					onclose={() => (refixFor = null)}
+				/>
+			{/if}
 		</div>
 	{/each}
 
@@ -280,6 +341,61 @@
 	.note {
 		font-size: 11.5px;
 		color: var(--fg3);
+	}
+	.detail-toggle {
+		align-self: flex-start;
+		border: 0;
+		background: transparent;
+		color: var(--blue);
+		font-size: 12.5px;
+		cursor: pointer;
+		padding: 0;
+	}
+	.detail {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		border-top: 1px solid var(--bd);
+		padding-top: 14px;
+	}
+	.actions-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.mini-title {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg1);
+	}
+	.mini-note {
+		font-size: 11.5px;
+		color: var(--fg3);
+	}
+	.events {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.event {
+		display: grid;
+		grid-template-columns: 86px minmax(0, 1fr) auto;
+		gap: 12px;
+		align-items: baseline;
+		padding: 7px 0;
+		border-bottom: 1px solid var(--bd);
+		font-size: 13px;
+	}
+	.e-date {
+		font-size: 11.5px;
+		color: var(--fg3);
+	}
+	.e-label {
+		color: var(--fg2);
+	}
+	.e-amount {
+		font-size: 12.5px;
 	}
 	.add-tile {
 		border: 1.5px dashed var(--bd2);

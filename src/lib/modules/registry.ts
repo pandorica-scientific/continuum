@@ -2,18 +2,23 @@
 // which screens exist. Settings toggles modules on and off; a disabled module's
 // screens disappear from the sidebar and 404 their routes.
 
-export const MODULE_KEYS = [
-	'import',
-	'property',
-	'investments',
-	'loans',
-	'retirement',
-	'home',
-	'calendar',
-	'documents'
-] as const;
+// One declaration per module: key, how the Settings toggle presents it, and
+// (below, in NAV_GROUPS) where it sits in the sidebar. Adding a module means
+// one entry here, one nav item, and its route directory — nothing else.
+export const MODULES = {
+	import: { emoji: '📥', label: 'Import', note: 'statement upload and the review queue' },
+	property: { emoji: '🏢', label: 'Property', note: 'flats, tenancies and bills' },
+	investments: { emoji: '📈', label: 'Investments', note: 'holdings from broker reports' },
+	loans: { emoji: '💳', label: 'Loans', note: 'mortgages and fixation periods' },
+	retirement: { emoji: '🎯', label: 'Retirement', note: 'the projection model and salary history' },
+	home: { emoji: '🏠', label: 'Home Assistant', note: 'devices and meter readings' },
+	calendar: { emoji: '📅', label: 'Calendar', note: 'generated events and the ics feed' },
+	documents: { emoji: '🗂️', label: 'Documents', note: 'the archive with expiry dates' }
+} as const;
 
-export type ModuleKey = (typeof MODULE_KEYS)[number];
+export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
+
+export type ModuleKey = keyof typeof MODULES;
 
 export type ModuleToggles = Record<ModuleKey, boolean>;
 
@@ -68,16 +73,9 @@ export const NAV_GROUPS: NavGroup[] = [
 	}
 ];
 
-export const DEFAULT_MODULES: ModuleToggles = {
-	import: true,
-	property: true,
-	investments: true,
-	loans: true,
-	retirement: true,
-	home: true,
-	calendar: true,
-	documents: true
-};
+export const DEFAULT_MODULES: ModuleToggles = Object.fromEntries(
+	MODULE_KEYS.map((key) => [key, true])
+) as ModuleToggles;
 
 /** Nav groups with disabled modules' items removed; empty groups collapse away. */
 export function visibleNavGroups(modules: ModuleToggles): NavGroup[] {

@@ -4,7 +4,7 @@ import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { document, person, property } from '$lib/server/db/schema';
 import { saveUpload } from '$lib/server/files';
-import { SHELVES, type ShelfKey } from '$lib/documents';
+import { EXPIRY_VERBS, SHELVES, type ShelfKey } from '$lib/documents';
 import type { Actions, PageServerLoad } from './$types';
 
 function matchesQuery(doc: typeof document.$inferSelect, query: string): boolean {
@@ -28,6 +28,16 @@ function matchesQuery(doc: typeof document.$inferSelect, query: string): boolean
 export const load: PageServerLoad = async ({ url }) => {
 	const shelf = url.searchParams.get('shelf') ?? 'all';
 	const query = url.searchParams.get('q') ?? '';
+	const tag = url.searchParams.get('tag') ?? '';
+
+	// Other screens (e.g. a property's documents card) open the add form
+	// pre-addressed: ?add=1&addShelf=tenancy&subject=Flat Karlín
+	const addShelf = url.searchParams.get('addShelf') ?? '';
+	const prefill = {
+		open: url.searchParams.get('add') === '1',
+		shelf: SHELVES.some((s) => s.key === addShelf) ? addShelf : '',
+		subject: url.searchParams.get('subject') ?? ''
+	};
 
 	const [docs, people, properties] = await Promise.all([
 		db.select().from(document).orderBy(document.addedOn),
@@ -38,10 +48,20 @@ export const load: PageServerLoad = async ({ url }) => {
 	const shelfCounts = new Map<string, number>();
 	for (const d of docs) shelfCounts.set(d.shelf, (shelfCounts.get(d.shelf) ?? 0) + 1);
 
-	const visible = docs
-		.filter((d) => shelf === 'all' || d.shelf === shelf)
+	const onShelf = docs.filter((d) => shelf === 'all' || d.shelf === shelf);
+	const visible = onShelf
 		.filter((d) => matchesQuery(d, query))
+		.filter((d) => !tag || d.tags.includes(tag))
 		.sort((a, b) => (a.addedOn < b.addedOn ? 1 : -1));
+
+	// The sub-taxonomy is emergent: whatever tags exist on this shelf become
+	// filter chips — no configured category tree to outgrow.
+	const tagCounts = new Map<string, number>();
+	for (const d of onShelf) for (const t of d.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+	const tags = [...tagCounts.entries()]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.slice(0, 14)
+		.map(([name, count]) => ({ name, count, active: name === tag }));
 
 	// Columns derive from the subjects actually present: one per person, flat
 	// or other subject, plus a final column for the unassigned.
@@ -70,6 +90,9 @@ export const load: PageServerLoad = async ({ url }) => {
 	return {
 		shelf,
 		query,
+		tag,
+		tags,
+		prefill,
 		shelves: [
 			{ key: 'all', label: 'Everything', count: docs.length },
 			...SHELVES.map((s) => ({ ...s, count: shelfCounts.get(s.key) ?? 0 }))
@@ -117,7 +140,7 @@ export const actions: Actions = {
 			ext,
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn,
-			expiryVerb: ['expires', 'ends', 'renews'].includes(verb) ? verb : 'expires',
+			expiryVerb: (EXPIRY_VERBS as readonly string[]).includes(verb) ? verb : 'expires',
 			tags: String(form.get('tags') ?? '')
 				.split(',')
 				.map((t) => t.trim())

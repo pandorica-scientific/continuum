@@ -4,6 +4,9 @@ bank_data_examples_do_not_share/
 # Local scratch work
 scratch-workspace/
 
+# Uploaded user files (statements, photos, documents) — live on the data volume
+data/
+
 # Dependencies and build output
 node_modules/
 .svelte-kit/

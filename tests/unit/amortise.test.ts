@@ -7,7 +7,7 @@ import {
 	rateForMonth,
 	type FixationPeriod,
 	type LoanTerms
-} from '$lib/server/loans/amortise';
+} from '$lib/loans/amortise';
 
 // A Karlín-like mortgage: 4 120 000 CZK owed, 4.29% fixed to March 2029 at
 // 35 000/month, then a re-fix at 5.5% where the bank re-quotes 37 500.

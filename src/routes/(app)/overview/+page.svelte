@@ -60,17 +60,48 @@
 
 <section class="grid-2">
 	<div class="card stack">
-		<Eyebrow emoji="🧩" label="What it is made of" />
-		{#each data.composition as c (c.label)}
+		<div class="eyebrow-row">
+			<Eyebrow emoji="🧩" label="What it is made of" />
+			<span class="eyebrow-caption">red is what the bank still owns</span>
+		</div>
+		{#each data.composition.groups as g (g.label)}
 			<div class="comp">
-				<span class="c-label">{c.label}</span>
-				<span class="mono c-value" style:color="var({c.colorVar})">{c.value}</span>
+				<span class="c-label">{g.label}</span>
+				<span class="mono c-numbers">
+					{#if g.asset && g.liability}
+						<span style="color: var(--fg2);">{g.asset}</span>
+						<span style="color: var(--red);">{g.liability}</span>
+						<span style:color="var({g.colorVar})">= {g.net}</span>
+					{:else if g.liability}
+						<span style="color: var(--red);">{g.liability}</span>
+					{:else}
+						<span style:color="var({g.colorVar})">{g.net}</span>
+					{/if}
+				</span>
 				<div class="c-track">
-					<div class="c-fill" style:width="{c.width}%" style:background="var({c.colorVar})"></div>
+					<div class="c-bar" style:width="{g.width}%">
+						<div class="c-net" style:background="var({g.colorVar})"></div>
+						{#if g.owedPct > 0}
+							<div class="c-owed" style:width="{g.owedPct}%"></div>
+						{/if}
+					</div>
 				</div>
-				<span class="c-detail">{c.detail}</span>
+				<span class="c-detail">{g.detail}</span>
 			</div>
 		{/each}
+		<div class="net-line">
+			<span class="c-label">Net worth</span>
+			<span class="mono c-numbers">
+				<span style="color: var(--fg2);">{data.composition.assetsTotal}</span>
+				<span style="color: var(--red);">{data.composition.liabilitiesTotal}</span>
+				<span
+					class="net-value"
+					style:color={data.composition.netPositive ? 'var(--green)' : 'var(--red)'}
+				>
+					= {data.composition.net}
+				</span>
+			</span>
+		</div>
 	</div>
 
 	<div class="card stack">
@@ -163,9 +194,13 @@
 		font-size: 13.5px;
 		color: var(--fg2);
 	}
-	.c-value {
-		font-size: 13.5px;
+	.c-numbers {
+		font-size: 12.5px;
 		text-align: right;
+		display: flex;
+		gap: 10px;
+		justify-content: flex-end;
+		flex-wrap: wrap;
 	}
 	.c-track {
 		grid-column: 1 / -1;
@@ -174,9 +209,37 @@
 		border-radius: 4px;
 		overflow: hidden;
 	}
-	.c-fill {
+	.c-bar {
+		position: relative;
 		height: 100%;
 		border-radius: 4px;
+		overflow: hidden;
+	}
+	.c-net {
+		position: absolute;
+		inset: 0;
+	}
+	.c-owed {
+		position: absolute;
+		top: 0;
+		right: 0;
+		height: 100%;
+		background: var(--red);
+		opacity: 0.85;
+	}
+	.net-line {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 4px 12px;
+		border-top: 1px solid var(--bd);
+		padding-top: 12px;
+	}
+	.net-line .c-label {
+		font-weight: 600;
+		color: var(--fg1);
+	}
+	.net-value {
+		font-weight: 600;
 	}
 	.c-detail {
 		grid-column: 1 / -1;
