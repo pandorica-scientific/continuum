@@ -1,17 +1,373 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import MetricTile from '$lib/components/MetricTile.svelte';
+
+	let { data, form } = $props();
+
+	let fileInput: HTMLInputElement | undefined = $state();
+	let uploading = $state(false);
+
+	async function upload(file: File) {
+		const body = new FormData();
+		body.set('report', file);
+		uploading = true;
+		try {
+			await fetch('?/upload', { method: 'POST', body });
+			await invalidateAll();
+		} finally {
+			uploading = false;
+		}
+	}
+
+	// Chart geometry: 800×200 viewBox, HTML axis labels outside the SVG.
+	const CW = 800;
+	const CH = 200;
+	const chart = $derived.by(() => {
+		if (data.series.length < 2) return null;
+		const max = Math.max(
+			...data.series.map((p) => Math.max(p.moneyIn, p.bench10, p.actual ?? 0)),
+			1
+		);
+		const x = (i: number) => (i / (data.series.length - 1)) * CW;
+		const y = (v: number) => CH - (v / max) * CH;
+		const line = (pick: (p: (typeof data.series)[number]) => number | null) =>
+			data.series
+				.map((p, i) => {
+					const v = pick(p);
+					return v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+				})
+				.filter(Boolean)
+				.join(' ');
+		const actualPoints = data.series
+			.map((p, i) => (p.actual === null ? null : { x: x(i), y: y(p.actual) }))
+			.filter((p): p is { x: number; y: number } => p !== null);
+		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))];
+		// One unit for the whole axis: millions when the top gridline reaches
+		// them, thousands otherwise.
+		const inMillions = max >= 1e6;
+		const axis = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
+			top: `${f * 100}%`,
+			label: inMillions
+				? (((1 - f) * max) / 1e6).toFixed(1)
+				: `${Math.round(((1 - f) * max) / 1000)}k`
+		}));
+		return {
+			moneyIn: line((p) => p.moneyIn),
+			bench5: line((p) => p.bench5),
+			bench10: line((p) => p.bench10),
+			actual: line((p) => p.actual),
+			actualPoints,
+			years,
+			axis
+		};
+	});
 </script>
 
-<ScreenHeader emoji="📈" title="Investments" caption="Coming in a later step of the build." />
+<ScreenHeader
+	emoji="📈"
+	title="Investments"
+	caption="Updated by uploading the XTB account statement. Duplicates are dropped by operation id."
+/>
+
+{#if form?.message}
+	<div class="error">{form.message}</div>
+{/if}
 
 <section class="section">
 	<div class="eyebrow-row">
-		<span class="eyebrow">Not built yet</span>
-		<span class="eyebrow-caption">this screen lands in a later phase step</span>
-	</div>
-	<div class="card">
-		<span style="font-size: 13.5px; color: var(--fg3);">
-			The Investments screen from the design handoff will be implemented here.
+		<Eyebrow emoji="💼" label="Portfolio" />
+		<span class="eyebrow-caption">
+			{data.asOf ? `from the report of ${data.asOf}` : 'upload the first report below'}
 		</span>
 	</div>
+	<div class="tiles">
+		<MetricTile
+			label="Portfolio"
+			value={data.metrics.portfolio}
+			unit={data.accountUnit}
+			note={data.metrics.portfolioBase ? `≈ ${data.metrics.portfolioBase} ${data.unit}` : undefined}
+		/>
+		<MetricTile
+			label="Money in"
+			value={data.metrics.moneyIn}
+			unit={data.accountUnit}
+			note={data.metrics.since ? `since ${data.metrics.since}` : undefined}
+		/>
+		<MetricTile
+			label="Gain"
+			value={data.metrics.gain}
+			unit={data.accountUnit}
+			color={data.metrics.gainPositive ? 'var(--green)' : 'var(--red)'}
+			note={data.metrics.gainPct ?? undefined}
+		/>
+		<MetricTile
+			label="Annualised"
+			value={data.metrics.annualised ?? '—'}
+			note="nominal, on money in"
+		/>
+	</div>
 </section>
+
+{#if chart}
+	<section class="card chart-card">
+		<div class="eyebrow-row">
+			<Eyebrow emoji="📈" label="Value against money in" />
+			<span class="eyebrow-caption">
+				{data.accountUnit} · benchmarks use the same contribution dates
+			</span>
+		</div>
+		<div class="chart">
+			{#each chart.axis as a (a.top)}
+				<span class="axis mono" style:top={a.top}>{a.label}</span>
+			{/each}
+			<svg viewBox="0 0 800 200" preserveAspectRatio="none">
+				{#each [0, 50, 100, 150] as gy (gy)}
+					<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+				{/each}
+				<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
+				<polyline
+					points={chart.bench5}
+					fill="none"
+					stroke="var(--orange)"
+					stroke-width="2"
+					stroke-dasharray="3 4"
+					vector-effect="non-scaling-stroke"
+				/>
+				<polyline
+					points={chart.bench10}
+					fill="none"
+					stroke="var(--purple)"
+					stroke-width="2"
+					stroke-dasharray="3 4"
+					vector-effect="non-scaling-stroke"
+				/>
+				<polyline
+					points={chart.moneyIn}
+					fill="none"
+					stroke="var(--fg3)"
+					stroke-width="2"
+					stroke-dasharray="6 4"
+					vector-effect="non-scaling-stroke"
+				/>
+				{#if chart.actualPoints.length > 1}
+					<polyline
+						points={chart.actual}
+						fill="none"
+						stroke="var(--teal)"
+						stroke-width="2.5"
+						stroke-linejoin="round"
+						vector-effect="non-scaling-stroke"
+					/>
+				{/if}
+				{#each chart.actualPoints as p (p.x)}
+					<circle cx={p.x} cy={p.y} r="4" fill="var(--teal)" />
+				{/each}
+			</svg>
+		</div>
+		<div class="years mono">
+			{#each chart.years as y (y)}<span>{y}</span>{/each}
+		</div>
+		<div class="legend">
+			<span class="l"
+				><span class="swatch" style="border-top: 2.5px solid var(--teal);"></span>actual</span
+			>
+			<span class="l"
+				><span class="swatch" style="border-top: 2px dashed var(--fg3);"></span>money in</span
+			>
+			<span class="l"
+				><span class="swatch" style="border-top: 2px dashed var(--orange);"></span>at 5% a year</span
+			>
+			<span class="l"
+				><span class="swatch" style="border-top: 2px dashed var(--purple);"></span>at 10% a year</span
+			>
+			<span class="l-note">the actual line fills in as you upload reports over time</span>
+		</div>
+	</section>
+{/if}
+
+<section class="card holdings">
+	<div class="eyebrow-row" style="padding-bottom: 8px;">
+		<Eyebrow emoji="📋" label="Holdings" />
+		<span class="eyebrow-caption">duplicates dropped by operation id</span>
+	</div>
+	{#if data.holdings.length}
+		<div class="h-head">
+			<span>Holding</span><span class="r">Units</span><span class="r">Value</span><span class="r"
+				>In {data.unit}</span
+			><span class="r">Gain</span>
+		</div>
+		{#each data.holdings as h (h.id)}
+			<div class="h-row">
+				<div class="h-name">
+					<span class="mono ticker">{h.ticker}</span>
+					<span class="name">{h.name}</span>
+				</div>
+				<span class="mono r muted">{h.units}</span>
+				<span class="mono r">{h.value}</span>
+				<span class="mono r muted">{h.base}</span>
+				<span class="mono r" style:color={h.gainColor}>{h.gain}</span>
+			</div>
+		{/each}
+	{:else}
+		<p class="quiet">No holdings yet — upload a report below.</p>
+	{/if}
+
+	<button type="button" class="drop" onclick={() => fileInput?.click()}>
+		{uploading ? 'Reading the report…' : '📥 Upload XTB account statement (XLSX)'}
+	</button>
+	<input
+		bind:this={fileInput}
+		type="file"
+		accept=".xlsx"
+		style="display: none"
+		onchange={() => fileInput?.files?.[0] && upload(fileInput.files[0])}
+	/>
+	{#if form?.result}
+		<span class="quiet">
+			{form.result.operationsAdded} operations added, {form.result.operationsKnown} already known ·
+			{form.result.holdings} holdings as of {form.result.snapshotDay}
+		</span>
+	{/if}
+</section>
+
+<style>
+	.error {
+		border: 1px solid var(--red);
+		background: var(--red-tint);
+		color: var(--red);
+		border-radius: 12px;
+		padding: 9px 14px;
+		font-size: 13px;
+	}
+	.tiles {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+		gap: 12px;
+	}
+	.chart-card {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.chart {
+		position: relative;
+		padding-left: 46px;
+	}
+	.axis {
+		position: absolute;
+		left: 0;
+		width: 36px;
+		text-align: right;
+		transform: translateY(-50%);
+		font-size: 11px;
+		color: var(--fg3);
+	}
+	svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+	.years {
+		display: flex;
+		justify-content: space-between;
+		margin-left: 46px;
+		font-size: 11px;
+		color: var(--fg3);
+	}
+	.legend {
+		display: flex;
+		gap: 14px 18px;
+		flex-wrap: wrap;
+		font-size: 12.5px;
+		color: var(--fg2);
+		border-top: 1px solid var(--bd);
+		padding-top: 12px;
+	}
+	.l {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+	}
+	.swatch {
+		width: 16px;
+		display: inline-block;
+	}
+	.l-note {
+		margin-left: auto;
+		color: var(--fg3);
+		font-size: 11.5px;
+	}
+	.holdings {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.h-head,
+	.h-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) repeat(4, minmax(84px, auto));
+		gap: 10px 14px;
+		align-items: baseline;
+	}
+	.h-head {
+		padding: 0 0 8px;
+		font-size: 11px;
+		letter-spacing: 0.07em;
+		text-transform: uppercase;
+		color: var(--fg3);
+		border-bottom: 1px solid var(--bd);
+	}
+	.h-row {
+		padding: 11px 0;
+		border-bottom: 1px solid var(--bd);
+	}
+	.h-name {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	.ticker {
+		font-size: 13.5px;
+	}
+	.name {
+		font-size: 11.5px;
+		color: var(--fg3);
+	}
+	.r {
+		text-align: right;
+		font-size: 13px;
+	}
+	.muted {
+		color: var(--fg3);
+	}
+	.quiet {
+		font-size: 12.5px;
+		color: var(--fg3);
+	}
+	.drop {
+		margin-top: 12px;
+		border: 1.5px dashed var(--bd2);
+		background: transparent;
+		border-radius: 10px;
+		padding: 14px;
+		color: var(--fg2);
+		font-size: 13px;
+		cursor: pointer;
+	}
+	.drop:hover {
+		border-color: var(--blue);
+	}
+	@media (max-width: 720px) {
+		.h-head,
+		.h-row {
+			grid-template-columns: minmax(0, 1fr) repeat(2, minmax(70px, auto));
+		}
+		.h-head span:nth-child(2),
+		.h-row .muted:first-of-type {
+			display: none;
+		}
+	}
+</style>

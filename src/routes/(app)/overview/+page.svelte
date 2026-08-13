@@ -71,7 +71,6 @@
 				<span class="c-detail">{c.detail}</span>
 			</div>
 		{/each}
-		<span class="quiet">Flats, investments and loans join this card as their modules land.</span>
 	</div>
 
 	<div class="card stack">

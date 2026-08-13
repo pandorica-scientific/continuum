@@ -10,12 +10,13 @@ is our net worth right now, and is it going up?_
 
 ## Status
 
-Phase 1 (the money core) is functional: setup wizard, per-person sign-in,
-statement import for five banks, automatic categorisation that learns from
-your corrections, transfer pairing across your own accounts, the cash-flow
-waterfall, and multi-currency accounts with daily CNB rates. Property, loans,
-investments, retirement, calendar, documents and Home Assistant are on the
-roadmap (Phases 2–4).
+Phases 1 and 2 are functional: setup wizard, per-person sign-in, statement
+import for five banks, automatic categorisation that learns from your
+corrections, transfer pairing across your own accounts, the cash-flow
+waterfall, multi-currency accounts with daily CNB rates, property with
+tenancies and image slots, loans with fixation-period interest bookkeeping,
+and investments fed by XTB report uploads. Retirement, calendar, documents
+and Home Assistant are on the roadmap (Phases 3–4).
 
 ### Supported statement formats
 
