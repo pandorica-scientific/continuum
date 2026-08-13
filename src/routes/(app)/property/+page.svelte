@@ -56,7 +56,8 @@
 			>
 			<label
 				><span>Currency</span>
-				<select name="currency"><option>CZK</option><option>EUR</option><option>PLN</option></select
+				<select name="currency"
+					>{#each data.currencies as c (c)}<option>{c}</option>{/each}</select
 				></label
 			>
 			<label

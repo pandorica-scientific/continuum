@@ -51,6 +51,7 @@ export function parseMbank(text: string): ParsedStatement {
 		const accountRaw = cells[5]?.trim().replace(/^'+|'+$/g, '');
 		rows.push({
 			bookedAt: cells[0],
+			valueDate: /^\d{4}-\d{2}-\d{2}$/.test(cells[1]) ? cells[1] : undefined,
 			amountMinor: parseAmountToMinor(cells[6], currency),
 			currency,
 			counterparty: party && party !== '' ? party : title || undefined,

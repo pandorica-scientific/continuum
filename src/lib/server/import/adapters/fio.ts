@@ -56,7 +56,9 @@ export function parseFio(text: string): ParsedStatement {
 	const cAccount = col('Protiúčet');
 	const cAccountName = col('Název protiúčtu');
 	const cBankCode = col('Kód banky');
+	const cKs = col('KS');
 	const cVs = col('VS');
+	const cSs = col('SS');
 	const cNote = col('Poznámka');
 	const cMessage = col('Zpráva pro příjemce');
 	const cType = col('Typ');
@@ -80,6 +82,8 @@ export function parseFio(text: string): ParsedStatement {
 			counterpartyAccount:
 				counterAccount && bankCode ? `${counterAccount}/${bankCode}` : counterAccount || undefined,
 			variableSymbol: cells[cVs]?.trim() || undefined,
+			constantSymbol: cells[cKs]?.trim() || undefined,
+			specificSymbol: cells[cSs]?.trim() || undefined,
 			description:
 				[cells[cType]?.trim(), cells[cMessage]?.trim()].filter(Boolean).join(' · ') || undefined,
 			bankRef: cells[cId]?.trim() || undefined

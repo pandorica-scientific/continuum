@@ -86,6 +86,9 @@ export const importFile = pgTable('import_file', {
 	accountId: text('account_id').references(() => account.id, { onDelete: 'set null' }),
 	// sha256 of the file body; the same file uploaded twice is skipped whole
 	contentHash: text('content_hash').notNull().unique(),
+	// the original bytes, kept on the data volume — parser improvements can
+	// re-parse history instead of asking for seven years of re-uploads
+	storedName: text('stored_name'),
 	rowsRead: integer('rows_read').notNull().default(0),
 	rowsAdded: integer('rows_added').notNull().default(0),
 	rowsDuplicate: integer('rows_duplicate').notNull().default(0),
@@ -110,15 +113,33 @@ export const transaction = pgTable(
 			.notNull()
 			.references(() => account.id, { onDelete: 'cascade' }),
 		bookedAt: date('booked_at').notNull(),
-		// minor units of `currency`; negative = money out
+		// the value date (valuta / data operacji / started date) when the bank
+		// prints one — cashflow prefers it so month-boundary spending lands in
+		// the month the money actually moved
+		valueDate: date('value_date'),
+		// minor units of `currency`; negative = money out. Gross of any fee.
 		amount: bigint('amount', { mode: 'bigint' }).notNull(),
+		// separate bank fee on this movement (positive minor units)
+		feeMinor: bigint('fee_minor', { mode: 'bigint' }),
 		currency: text('currency').notNull(),
+		// account balance after this movement, when the statement prints it —
+		// the column that lets the ledger reconcile against the bank
+		balanceAfterMinor: bigint('balance_after_minor', { mode: 'bigint' }),
+		// original amount for foreign-currency card payments billed in the
+		// account currency
+		originalAmountMinor: bigint('original_amount_minor', { mode: 'bigint' }),
+		originalCurrency: text('original_currency'),
 		counterparty: text('counterparty'),
 		counterpartyAccount: text('counterparty_account'),
 		variableSymbol: text('variable_symbol'),
+		constantSymbol: text('constant_symbol'),
+		specificSymbol: text('specific_symbol'),
 		description: text('description'),
 		bankRef: text('bank_ref'),
 		dedupFingerprint: text('dedup_fingerprint').notNull(),
+		// which fingerprint algorithm produced dedupFingerprint — parser
+		// changes bump this and re-parse from stored files
+		fingerprintVersion: integer('fingerprint_version').notNull().default(1),
 		categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),
 		// auto = categorised by rule, needs_review = ambiguous, confirmed = user decided
 		reviewState: text('review_state').notNull().default('needs_review'),
@@ -134,12 +155,18 @@ export const transaction = pgTable(
 );
 
 // A matched pair of legs moving money between the household's own accounts.
-// Both legs point back via transaction.transferPairId.
+// Confirmed/auto legs point back via transaction.transferPairId (a soft
+// pointer, to avoid an FK cycle); proposed pairs exist only here until the
+// user confirms them.
 export const transferPair = pgTable('transfer_pair', {
 	id: text('id').primaryKey(),
-	outTransactionId: text('out_transaction_id').notNull(),
-	inTransactionId: text('in_transaction_id').notNull(),
-	state: text('state').notNull().default('auto'), // auto | confirmed
+	outTransactionId: text('out_transaction_id')
+		.notNull()
+		.references(() => transaction.id, { onDelete: 'cascade' }),
+	inTransactionId: text('in_transaction_id')
+		.notNull()
+		.references(() => transaction.id, { onDelete: 'cascade' }),
+	state: text('state').notNull().default('auto'), // auto | proposed | confirmed | rejected
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -184,6 +211,7 @@ export const property = pgTable('property', {
 		.notNull()
 		.default(sql`0`),
 	boughtYear: integer('bought_year'),
+	ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 	// uploaded images on the data volume: {plan?: string, photos: string[]}
 	images: jsonb('images')
 		.$type<{ plan?: string; photos: string[] }>()
@@ -231,26 +259,53 @@ export const loan = pgTable('loan', {
 	lender: text('lender').notNull().default(''),
 	kind: text('kind').notNull().default('mortgage'), // mortgage | car | consumer | family
 	currency: text('currency').notNull().default('CZK'),
-	securedByPropertyId: text('secured_by_property_id').references(() => property.id, {
-		onDelete: 'set null'
-	}),
 	principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
 	owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
 	owedAsOf: date('owed_as_of'),
-	paymentMinor: bigint('payment_minor', { mode: 'bigint' }).notNull(),
+	ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 	startDate: date('start_date'),
 	endDate: date('end_date'),
 	// fixed_period: rate fixed until a date, then re-fixed (mortgages)
 	// fixed_term:   rate fixed for the whole life of the loan
 	// floating:     rate tracks a reference
 	regime: text('regime').notNull().default('fixed_period'),
+	// how the bank accrues interest — per loan, because banks differ:
+	// 30/360 (rate ÷ 12), act/365, act/360
+	dayCount: text('day_count').notNull().default('30/360'),
+	// payment: accrues payment-date to payment-date on one balance
+	// calendar: accrues daily over the calendar month, charged on its last
+	//           day and collected with the next instalment (Česká spořitelna)
+	accrualStyle: text('accrual_style').notNull().default('payment'),
+	// day of month the payment falls on; actual-day conventions accrue from
+	// payment date to payment date
+	paymentDay: integer('payment_day'),
 	// czech mortgage interest on owner-occupied housing is tax deductible
 	interestDeductible: integer('interest_deductible').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+// One mortgage agreement can secure several properties (the flats entered at
+// different values with different shares owed) — the share is explicit, never
+// derived. sharePct null = split proportionally to current property values.
+export const loanProperty = pgTable(
+	'loan_property',
+	{
+		id: text('id').primaryKey(),
+		loanId: text('loan_id')
+			.notNull()
+			.references(() => loan.id, { onDelete: 'cascade' }),
+		propertyId: text('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' }),
+		sharePct: numeric('share_pct', { precision: 6, scale: 3 })
+	},
+	(table) => [uniqueIndex('loan_property_idx').on(table.loanId, table.propertyId)]
+);
+
 // Interest is booked per fixation period so a later re-fix never rewrites
 // history. endDate null = open-ended (fixed_term / floating current period).
+// The monthly payment lives here too: when a fixation ends the bank re-quotes
+// the payment together with the rate.
 export const loanFixationPeriod = pgTable(
 	'loan_fixation_period',
 	{
@@ -260,9 +315,63 @@ export const loanFixationPeriod = pgTable(
 			.references(() => loan.id, { onDelete: 'cascade' }),
 		startDate: date('start_date').notNull(),
 		endDate: date('end_date'),
-		annualRatePct: numeric('annual_rate_pct', { precision: 6, scale: 3 }).notNull()
+		annualRatePct: numeric('annual_rate_pct', { precision: 6, scale: 3 }).notNull(),
+		paymentMinor: bigint('payment_minor', { mode: 'bigint' }).notNull()
 	},
-	(table) => [index('loan_fixation_loan_idx').on(table.loanId)]
+	(table) => [
+		index('loan_fixation_loan_idx').on(table.loanId),
+		uniqueIndex('loan_fixation_start_idx').on(table.loanId, table.startDate)
+	]
+);
+
+// What actually happened on a loan: payments, extra repayments, re-fixes,
+// fees, and balance statements. This is the booked history the projections
+// anchor to, and the natural link between a loan and the transaction that
+// carried the money out of an account.
+export const loanEvent = pgTable(
+	'loan_event',
+	{
+		id: text('id').primaryKey(),
+		loanId: text('loan_id')
+			.notNull()
+			.references(() => loan.id, { onDelete: 'cascade' }),
+		happenedOn: date('happened_on').notNull(),
+		// payment | extra_payment | refix | fee | balance
+		kind: text('kind').notNull(),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+		// interest portion of a payment, when the statement splits it
+		interestMinor: bigint('interest_minor', { mode: 'bigint' }),
+		note: text('note'),
+		transactionId: text('transaction_id').references(() => transaction.id, {
+			onDelete: 'set null'
+		})
+	},
+	(table) => [index('loan_event_loan_idx').on(table.loanId)]
+);
+
+// ---- Documents ----
+
+export const document = pgTable(
+	'document',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		// payslips | tax | identity | family | property | tenancy | loans | insurance
+		shelf: text('shelf').notNull(),
+		// free-text subject; the documents screen derives its columns from the
+		// subjects actually present (a third flat or a new child creates a
+		// column by itself — no configuration)
+		subject: text('subject').notNull().default(''),
+		// uploaded file on the data volume; a document may be metadata-only
+		storedName: text('stored_name'),
+		ext: text('ext').notNull().default('PDF'),
+		addedOn: date('added_on').notNull(),
+		expiresOn: date('expires_on'),
+		// how the expiry reads: expires | ends | renews
+		expiryVerb: text('expiry_verb').notNull().default('expires'),
+		tags: jsonb('tags').$type<string[]>().notNull().default([])
+	},
+	(table) => [index('document_shelf_idx').on(table.shelf)]
 );
 
 // ---- Investments (XTB report snapshots) ----

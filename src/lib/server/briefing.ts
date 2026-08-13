@@ -1,6 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { loan, loanFixationPeriod, property, tenancy, transaction } from '$lib/server/db/schema';
+import {
+	category,
+	document,
+	loan,
+	loanFixationPeriod,
+	property,
+	tenancy,
+	transaction
+} from '$lib/server/db/schema';
 
 export interface BriefingItem {
 	emoji: string;
@@ -107,7 +115,80 @@ const fixationHorizon: Source = async () => {
 	return items;
 };
 
-const SOURCES: Source[] = [unreviewedImports, leaseExpiry, fixationHorizon];
+const documentExpiry: Source = async () => {
+	const today = new Date().toISOString().slice(0, 10);
+	const docs = await db.select().from(document);
+	const items: BriefingItem[] = [];
+	for (const d of docs) {
+		if (!d.expiresOn || d.expiresOn < today) continue;
+		const days = Math.ceil((new Date(d.expiresOn).getTime() - Date.now()) / 86400000);
+		if (days > 210) continue;
+		const months = Math.round(days / 30.44);
+		items.push({
+			emoji: '🗂️',
+			kind: 'Document',
+			pill: days <= 45 ? `${days} days` : `${months} month${months === 1 ? '' : 's'}`,
+			hue: days <= 60 ? 'yellow' : 'grey',
+			title: `${d.name} ${d.expiryVerb} ${d.expiresOn}`,
+			detail: d.subject ? `Filed under ${d.shelf}, about ${d.subject}.` : `Filed under ${d.shelf}.`,
+			href: '/documents',
+			rank: days + 5
+		});
+	}
+	return items;
+};
+
+const overspend: Source = async () => {
+	// A category group running well past its twelve-month average this month.
+	const rows = await db
+		.select({
+			groupKey: category.groupKey,
+			month: sql<string>`to_char(coalesce(${transaction.valueDate}, ${transaction.bookedAt}), 'YYYY-MM')`,
+			spent: sql<string>`sum(-(${transaction.amount} - coalesce(${transaction.feeMinor}, 0)))`
+		})
+		.from(transaction)
+		.innerJoin(category, sql`${transaction.categoryId} = ${category.id}`)
+		.where(
+			sql`${transaction.transferPairId} is null and ${transaction.amount} < 0 and ${category.groupKey} not in ('income', 'savings')`
+		)
+		.groupBy(category.groupKey, sql`2`);
+
+	const thisMonth = new Date().toISOString().slice(0, 7);
+	const items: BriefingItem[] = [];
+	const groups = [...new Set(rows.map((r) => r.groupKey))];
+	for (const groupKey of groups) {
+		const history = rows.filter((r) => r.groupKey === groupKey && r.month !== thisMonth);
+		const current = rows.find((r) => r.groupKey === groupKey && r.month === thisMonth);
+		if (!current || history.length < 3) continue; // not enough record to judge
+		const average = history.reduce((s, r) => s + Number(r.spent), 0) / history.length;
+		const spent = Number(current.spent);
+		if (average <= 0 || spent < average * 1.35 || spent - average < 300000) continue;
+		const pct = Math.round((spent / average - 1) * 100);
+		items.push({
+			emoji: '📊',
+			kind: 'Spending',
+			pill: `+${pct}%`,
+			hue: 'yellow',
+			title: `${groupKey === 'living' ? 'Food & lifestyle' : groupKey} is running ${pct}% over its average`,
+			detail: `${Math.round(spent / 100)
+				.toLocaleString('en')
+				.replace(/,/g, ' ')} so far this month against a typical ${Math.round(average / 100)
+				.toLocaleString('en')
+				.replace(/,/g, ' ')}.`,
+			href: '/cashflow',
+			rank: 15
+		});
+	}
+	return items;
+};
+
+const SOURCES: Source[] = [
+	unreviewedImports,
+	leaseExpiry,
+	fixationHorizon,
+	documentExpiry,
+	overspend
+];
 
 export async function buildBriefing(): Promise<{ items: BriefingItem[]; caption: string }> {
 	const all = (await Promise.all(SOURCES.map((s) => s()))).flat();

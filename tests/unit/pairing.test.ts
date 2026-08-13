@@ -20,7 +20,7 @@ const accounts = [
 
 const baseCtx: PairingContext = {
 	accounts,
-	personNames: ['jana', 'novakova'],
+	personNames: ['Jana Nováková'],
 	convert: (amount, from, to) => {
 		// fixed test rates: 1 PLN = 5.842 CZK
 		if (from === 'CZK' && to === 'PLN') return BigInt(Math.round(Number(amount) / 5.842));
@@ -69,7 +69,7 @@ describe('proposePairs', () => {
 		expect(pairs).toEqual([{ outId: 'out1', inId: 'in1', confidence: 'auto' }]);
 	});
 
-	it('tier 2: pairs same-amount legs when a household name appears', () => {
+	it('tier 2: same-amount legs with a household name become a review proposal', () => {
 		const pairs = proposePairs(
 			[
 				tx({ id: 'out1', accountId: 'fio', amountMinor: -500000n, counterparty: 'Nováková, Jana' }),
@@ -77,7 +77,7 @@ describe('proposePairs', () => {
 			],
 			baseCtx
 		);
-		expect(pairs).toEqual([{ outId: 'out1', inId: 'in1', confidence: 'auto' }]);
+		expect(pairs).toEqual([{ outId: 'out1', inId: 'in1', confidence: 'review' }]);
 	});
 
 	it('tier 3: proposes cross-currency pairs for review within tolerance', () => {

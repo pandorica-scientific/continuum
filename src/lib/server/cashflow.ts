@@ -1,4 +1,4 @@
-import { and, gte, isNull, lte } from 'drizzle-orm';
+import { and, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { category, transaction } from '$lib/server/db/schema';
 import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
@@ -56,6 +56,10 @@ export async function flowData(period: Period): Promise<FlowData> {
 	const rates = await loadRateTable();
 	const { start, end, caption } = periodRange(period);
 
+	// The value date decides which month a movement belongs to when the bank
+	// provides one — card payments started in June and booked in July count in
+	// June, where the money actually moved.
+	const effectiveDate = sql`coalesce(${transaction.valueDate}, ${transaction.bookedAt})`;
 	const [rows, categories] = await Promise.all([
 		db
 			.select()
@@ -63,8 +67,8 @@ export async function flowData(period: Period): Promise<FlowData> {
 			.where(
 				and(
 					isNull(transaction.transferPairId),
-					gte(transaction.bookedAt, start),
-					lte(transaction.bookedAt, end)
+					sql`${effectiveDate} >= ${start}`,
+					sql`${effectiveDate} <= ${end}`
 				)
 			),
 		db.select().from(category)
@@ -76,8 +80,10 @@ export async function flowData(period: Period): Promise<FlowData> {
 	let uncategorisedIn = 0;
 	let uncategorisedOut = 0;
 	for (const t of rows) {
-		const converted = convertMinorSync(rates, t.amount, t.currency, base, t.bookedAt);
-		const major = Number(converted ?? t.amount) / 100;
+		// Net of the bank's own fee: the fee also left the account.
+		const net = t.amount - (t.feeMinor ?? 0n);
+		const converted = convertMinorSync(rates, net, t.currency, base, t.valueDate ?? t.bookedAt);
+		const major = Number(converted ?? net) / 100;
 		if (t.categoryId) {
 			byCategory.set(t.categoryId, (byCategory.get(t.categoryId) ?? 0) + major);
 		} else if (major > 0) {
@@ -176,9 +182,11 @@ export async function monthlyHistory(): Promise<MonthBar[]> {
 
 	const byMonth = new Map<string, { earned: number; spent: number }>();
 	for (const t of rows) {
-		const month = t.bookedAt.slice(0, 7);
-		const converted = convertMinorSync(rates, t.amount, t.currency, base, t.bookedAt);
-		const major = Number(converted ?? t.amount) / 100;
+		const effective = t.valueDate ?? t.bookedAt;
+		const month = effective.slice(0, 7);
+		const net = t.amount - (t.feeMinor ?? 0n);
+		const converted = convertMinorSync(rates, net, t.currency, base, effective);
+		const major = Number(converted ?? net) / 100;
 		if (!byMonth.has(month)) byMonth.set(month, { earned: 0, spent: 0 });
 		const bucket = byMonth.get(month)!;
 		if (major > 0) bucket.earned += major;

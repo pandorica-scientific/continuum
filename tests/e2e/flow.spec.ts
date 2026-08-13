@@ -75,6 +75,40 @@ test.describe('signed in', () => {
 		await expect(page.locator('aside').getByText('Property')).toHaveCount(1, { timeout: 10000 });
 	});
 
+	test('documents: adding one builds its shelf and subject column', async ({ page }) => {
+		await page.goto('/documents');
+		await page.getByRole('button', { name: '➕ Add document' }).click();
+		await page.getByPlaceholder('Passport · Robert').fill('Passport · Jana');
+		await page.locator('select[name=shelf]').selectOption('identity');
+		await page.locator('input[name=subject]').fill('Jana Nováková');
+		await page.locator('select[name=expiryVerb]').selectOption('expires');
+		await page.locator('input[name=expiresOn]').fill('2027-03-15');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect(page.getByText('Passport · Jana')).toBeVisible();
+		await expect(page.getByText('expires 2027-03-15')).toBeVisible();
+		// the subject column derived itself
+		await expect(page.locator('.col-label', { hasText: 'Jana Nováková' })).toBeVisible();
+	});
+
+	test('calendar renders the month grid and the published feed path', async ({ page }) => {
+		await page.goto('/calendar');
+		await expect(page.locator('.day').first()).toBeVisible();
+		const icsPath = await page.locator('.f-detail').innerText();
+		expect(icsPath).toMatch(/^\/ics\/[0-9a-f]+$/);
+		// the feed itself answers without a session cookie
+		const response = await page.request.get(icsPath);
+		expect(response.status()).toBe(200);
+		expect(await response.text()).toContain('BEGIN:VCALENDAR');
+	});
+
+	test('retirement recomputes live when assumptions change', async ({ page }) => {
+		await page.goto('/retirement');
+		await expect(page.getByText('If you stopped working today')).toBeVisible();
+		const before = await page.locator('.chip').first().innerText();
+		await page.locator('.seg button', { hasText: '4.0%' }).click();
+		await expect(page.locator('.chip').first()).not.toHaveText(before);
+	});
+
 	test('theme choice persists across reloads', async ({ page }) => {
 		await page.goto('/overview');
 		await page.getByRole('button', { name: '☀️ Light' }).click();

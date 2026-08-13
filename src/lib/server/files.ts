@@ -9,7 +9,21 @@ import { env } from '$env/dynamic/private';
 // (`/data` in Docker, `./data` in development) and are served through an
 // authenticated route — never from `static/`.
 
-const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.pdf']);
+const ALLOWED_EXT = new Set([
+	'.png',
+	'.jpg',
+	'.jpeg',
+	'.webp',
+	'.gif',
+	'.svg',
+	'.pdf',
+	// original statement files, kept for re-parsing
+	'.csv',
+	'.xml',
+	'.ofx',
+	'.abo',
+	'.xlsx'
+]);
 
 function uploadDir(): string {
 	return env.UPLOAD_DIR || 'data';
@@ -31,7 +45,12 @@ const CONTENT_TYPES: Record<string, string> = {
 	'.webp': 'image/webp',
 	'.gif': 'image/gif',
 	'.svg': 'image/svg+xml',
-	'.pdf': 'application/pdf'
+	'.pdf': 'application/pdf',
+	'.csv': 'text/csv',
+	'.xml': 'application/xml',
+	'.ofx': 'application/octet-stream',
+	'.abo': 'application/octet-stream',
+	'.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 };
 
 export async function openUpload(name: string): Promise<Response | null> {

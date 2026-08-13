@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, person, transaction, transferPair } from '$lib/server/db/schema';
 import { convertMinor } from '$lib/server/fx';
+import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
@@ -82,8 +83,14 @@ export const load: PageServerLoad = async () => {
 			return { label: r.name, pct, from, to: acc, color: colors[i % colors.length] };
 		});
 
-	// Recent matched transfer pairs with their legs.
-	const pairs = await db.select().from(transferPair).orderBy(desc(transferPair.createdAt)).limit(8);
+	// Recent matched transfer pairs with their legs (proposals and rejections
+	// belong to the review queue, not here).
+	const pairs = await db
+		.select()
+		.from(transferPair)
+		.where(sql`${transferPair.state} in ('auto', 'confirmed')`)
+		.orderBy(desc(transferPair.createdAt))
+		.limit(8);
 	const legIds = pairs.flatMap((p) => [p.outTransactionId, p.inTransactionId]);
 	const legs = legIds.length
 		? await db.select().from(transaction).where(inArray(transaction.id, legIds))
@@ -103,6 +110,7 @@ export const load: PageServerLoad = async () => {
 	});
 
 	return {
+		currencies: await availableCurrencies(),
 		accounts: rows.map((r) => ({ ...r, balanceMinorBase: undefined })),
 		cashTotalFormatted: formatMinor(cashTotal, baseCurrency),
 		baseCurrencyDisplay: displayCurrency(baseCurrency),

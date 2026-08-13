@@ -5,7 +5,10 @@ import { person } from '$lib/server/db/schema';
 import { createSession, hashPassword } from '$lib/server/auth';
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
-import type { Actions } from './$types';
+import { availableCurrencies } from '$lib/server/fx/currencies';
+import type { Actions, PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async () => ({ currencies: await availableCurrencies() });
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {

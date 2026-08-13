@@ -10,10 +10,12 @@
 	let fileInput: HTMLInputElement | undefined = $state();
 	let uploading = $state(false);
 	let dragOver = $state(false);
+	let assignAccountId = $state('');
 
 	async function uploadFiles(files: FileList | File[]) {
 		const body = new FormData();
 		for (const f of files) body.append('statements', f);
+		if (assignAccountId) body.set('accountId', assignAccountId);
 		uploading = true;
 		try {
 			await fetch('?/upload', { method: 'POST', body });
@@ -71,6 +73,22 @@
 			onchange={() => fileInput?.files?.length && uploadFiles(fileInput.files)}
 		/>
 	</div>
+
+	{#if data.accounts.length > 1}
+		<label class="assign">
+			<span>Assign to account</span>
+			<select bind:value={assignAccountId} onclick={(e) => e.stopPropagation()}>
+				<option value="">detect from the statement</option>
+				{#each data.accounts as a (a.id)}
+					<option value={a.id}>{a.name} · {a.currency}</option>
+				{/each}
+			</select>
+			<span class="assign-note">
+				needed when several accounts share a bank and currency — the statement cannot say which one
+				it belongs to
+			</span>
+		</label>
+	{/if}
 
 	{#if form?.results}
 		<div class="card results">
@@ -191,6 +209,25 @@
 		color: var(--fg3);
 		max-width: 560px;
 		line-height: 1.5;
+	}
+	.assign {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		flex-wrap: wrap;
+		font-size: 12.5px;
+		color: var(--fg3);
+	}
+	.assign select {
+		border: 1px solid var(--bd2);
+		background: var(--card);
+		color: var(--fg1);
+		border-radius: 8px;
+		padding: 7px 11px;
+		font-size: 13px;
+	}
+	.assign-note {
+		font-size: 11.5px;
 	}
 	.results {
 		display: flex;

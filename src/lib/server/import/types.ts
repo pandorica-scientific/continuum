@@ -3,13 +3,22 @@ export type BankId = 'fio' | 'revolut' | 'mbank' | 'rb' | 'cs';
 export interface ParsedRow {
 	/** ISO date the bank booked the movement. */
 	bookedAt: string;
-	/** Minor units of `currency`; negative = money out. */
+	/** The value date (valuta / operation date), when the format provides it. */
+	valueDate?: string;
+	/** Minor units of `currency`; negative = money out. Gross of any fee. */
 	amountMinor: bigint;
+	/** Separate bank fee on this movement, positive minor units. */
+	feeMinor?: bigint;
 	currency: string;
+	/** Original amount for FX card payments billed in the account currency. */
+	originalAmountMinor?: bigint;
+	originalCurrency?: string;
 	counterparty?: string;
 	/** Counter-account in the bank's own printed form, e.g. "93531803/5500". */
 	counterpartyAccount?: string;
 	variableSymbol?: string;
+	constantSymbol?: string;
+	specificSymbol?: string;
 	description?: string;
 	/** Bank-unique reference for this movement, when the format provides one. */
 	bankRef?: string;

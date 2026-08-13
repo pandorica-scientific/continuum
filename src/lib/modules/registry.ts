@@ -30,15 +30,16 @@ export interface NavGroup {
 	items: NavItem[];
 }
 
-// Cash flow and Accounts live under the Import module: without statement
-// import there are no transactions to show on either screen.
+// Cash flow and Accounts are core money screens — they stay even when the
+// Import module is off (accounts can be maintained by hand). The Import
+// toggle governs only the statement-import screen itself.
 export const NAV_GROUPS: NavGroup[] = [
 	{
 		label: 'Money',
 		items: [
 			{ path: '/overview', label: 'Overview', emoji: '🧭' },
-			{ path: '/cashflow', label: 'Cash flow', emoji: '💸', module: 'import' },
-			{ path: '/accounts', label: 'Accounts', emoji: '🏦', module: 'import' },
+			{ path: '/cashflow', label: 'Cash flow', emoji: '💸' },
+			{ path: '/accounts', label: 'Accounts', emoji: '🏦' },
 			{ path: '/import', label: 'Import', emoji: '📥', module: 'import' }
 		]
 	},

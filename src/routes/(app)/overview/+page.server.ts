@@ -1,4 +1,5 @@
 import { buildBriefing } from '$lib/server/briefing';
+import { next30Days } from '$lib/server/calendar';
 import { flowData, type Period } from '$lib/server/cashflow';
 import { computeNetWorth } from '$lib/server/networth';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -9,10 +10,11 @@ export const load: PageServerLoad = async ({ url }) => {
 	const period: Period = url.searchParams.get('period') === 'month' ? 'month' : 'ytd';
 	const baseCurrency = await getBaseCurrency();
 
-	const [briefing, flow, netWorth] = await Promise.all([
+	const [briefing, flow, netWorth, upcoming] = await Promise.all([
 		buildBriefing(),
 		flowData(period),
-		computeNetWorth()
+		computeNetWorth(),
+		next30Days()
 	]);
 
 	const largest = netWorth.components.reduce(
@@ -30,5 +32,5 @@ export const load: PageServerLoad = async ({ url }) => {
 		detail: c.detail
 	}));
 
-	return { period, briefing, flow, baseCurrency, composition };
+	return { period, briefing, flow, baseCurrency, composition, upcoming };
 };

@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, eq, gte, isNull } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, importFile, person, transaction, transferPair } from '$lib/server/db/schema';
 import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
 import { decide } from '$lib/server/categorize';
 import { categoryRule } from '$lib/server/db/schema';
+import { saveUpload } from '$lib/server/files';
 import { detectAndParse } from './detect';
-import { fingerprintAll } from './fingerprint';
+import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
 import { normaliseAccountKey, proposePairs, type PairableTx } from './pairing';
 import type { ParsedStatement } from './types';
 
@@ -17,6 +18,9 @@ export interface IngestResult {
 	rowsAdded: number;
 	rowsDuplicate: number;
 	rowsPaired: number;
+	/** set when the statement could not be assigned to an account — the user
+	 * must pick one and re-upload with it */
+	needsAccount?: boolean;
 	error?: string;
 }
 
@@ -28,19 +32,45 @@ const BANK_LABEL: Record<string, string> = {
 	cs: 'Česká spořitelna'
 };
 
-async function resolveAccount(statement: ParsedStatement) {
+type Resolution =
+	{ kind: 'ok'; account: typeof account.$inferSelect } | { kind: 'ambiguous'; reason: string };
+
+/**
+ * Match the statement to an account. When the statement carries no account
+ * number (Revolut) and more than one candidate exists, refuse and ask —
+ * silently creating a fresh account would fragment the ledger and defeat
+ * dedup, since the unique index is scoped per account.
+ */
+async function resolveAccount(
+	statement: ParsedStatement,
+	explicitAccountId?: string
+): Promise<Resolution> {
 	const accounts = await db.select().from(account);
+
+	if (explicitAccountId) {
+		const chosen = accounts.find((a) => a.id === explicitAccountId);
+		if (!chosen) return { kind: 'ambiguous', reason: 'The selected account no longer exists.' };
+		return { kind: 'ok', account: chosen };
+	}
+
 	if (statement.accountNumber) {
 		const key = normaliseAccountKey(statement.accountNumber);
 		const byNumber = accounts.find((a) =>
 			a.numbers.some((n) => normaliseAccountKey(n) === key || key.includes(normaliseAccountKey(n)))
 		);
-		if (byNumber) return byNumber;
+		if (byNumber) return { kind: 'ok', account: byNumber };
+	} else {
+		const byBank = accounts.filter(
+			(a) => a.bank === statement.bank && a.currency === statement.currency
+		);
+		if (byBank.length === 1) return { kind: 'ok', account: byBank[0] };
+		if (byBank.length > 1) {
+			return {
+				kind: 'ambiguous',
+				reason: `Several ${BANK_LABEL[statement.bank] ?? statement.bank} ${statement.currency} accounts exist and this statement does not say which it belongs to — pick the account and upload again.`
+			};
+		}
 	}
-	const byBank = accounts.filter(
-		(a) => a.bank === statement.bank && a.currency === statement.currency
-	);
-	if (byBank.length === 1) return byBank[0];
 
 	// First statement from this account: create it.
 	const id = randomUUID();
@@ -58,11 +88,15 @@ async function resolveAccount(statement: ParsedStatement) {
 			numbers: statement.accountNumber ? [statement.accountNumber] : []
 		})
 		.returning();
-	return created;
+	return { kind: 'ok', account: created };
 }
 
 /** Ingest one uploaded statement file end to end. */
-export async function ingestFile(filename: string, buffer: Uint8Array): Promise<IngestResult> {
+export async function ingestFile(
+	filename: string,
+	buffer: Uint8Array,
+	explicitAccountId?: string
+): Promise<IngestResult> {
 	const contentHash = createHash('sha256').update(buffer).digest('hex');
 
 	const existing = await db
@@ -92,11 +126,33 @@ export async function ingestFile(filename: string, buffer: Uint8Array): Promise<
 			rowsDuplicate: 0,
 			rowsPaired: 0,
 			error: err instanceof Error ? err.message : String(err)
-		} as IngestResult;
+		};
 	}
 
-	const acct = await resolveAccount(statement);
+	const resolution = await resolveAccount(statement, explicitAccountId);
+	if (resolution.kind === 'ambiguous') {
+		return {
+			filename,
+			bank: statement.bank,
+			rowsRead: statement.rows.length,
+			rowsAdded: 0,
+			rowsDuplicate: 0,
+			rowsPaired: 0,
+			needsAccount: true,
+			error: resolution.reason
+		};
+	}
+	const acct = resolution.account;
 	const fileId = randomUUID();
+
+	// Keep the original bytes on the data volume: parser improvements re-parse
+	// stored files instead of asking for years of statements again.
+	let storedName: string | null;
+	try {
+		storedName = await saveUpload(new File([buffer as BlobPart], filename));
+	} catch {
+		storedName = null; // unexpected extension — the import still proceeds
+	}
 
 	const fingerprints = fingerprintAll(statement.rows);
 	let added = 0;
@@ -109,37 +165,40 @@ export async function ingestFile(filename: string, buffer: Uint8Array): Promise<
 		format: statement.format,
 		accountId: acct.id,
 		contentHash,
+		storedName,
 		rowsRead: statement.rows.length
 	});
 
-	const newIds: string[] = [];
 	for (let i = 0; i < statement.rows.length; i++) {
 		const row = statement.rows[i];
-		const id = randomUUID();
 		const inserted = await db
 			.insert(transaction)
 			.values({
-				id,
+				id: randomUUID(),
 				accountId: acct.id,
 				bookedAt: row.bookedAt,
+				valueDate: row.valueDate,
 				amount: row.amountMinor,
+				feeMinor: row.feeMinor,
 				currency: row.currency,
+				balanceAfterMinor: row.balanceAfterMinor,
+				originalAmountMinor: row.originalAmountMinor,
+				originalCurrency: row.originalCurrency,
 				counterparty: row.counterparty,
 				counterpartyAccount: row.counterpartyAccount,
 				variableSymbol: row.variableSymbol,
+				constantSymbol: row.constantSymbol,
+				specificSymbol: row.specificSymbol,
 				description: row.description,
 				bankRef: row.bankRef,
 				dedupFingerprint: fingerprints[i],
+				fingerprintVersion: FINGERPRINT_VERSION,
 				importFileId: fileId
 			})
 			.onConflictDoNothing({ target: [transaction.accountId, transaction.dedupFingerprint] })
 			.returning({ id: transaction.id });
-		if (inserted.length > 0) {
-			added++;
-			newIds.push(inserted[0].id);
-		} else {
-			duplicate++;
-		}
+		if (inserted.length > 0) added++;
+		else duplicate++;
 	}
 
 	// Statement closing balance is authoritative when it is the newest we have.
@@ -174,18 +233,27 @@ export async function ingestFile(filename: string, buffer: Uint8Array): Promise<
 /**
  * Pair transfers and categorise every not-yet-decided transaction. Runs after
  * each file so cross-file pairs appear as soon as the second leg arrives.
+ *
+ * Only auto pairs (hard evidence) are excluded from the figures immediately;
+ * review proposals stay in income/spending until the user confirms them.
  */
 export async function pairAndCategorise(): Promise<number> {
 	const accounts = await db.select().from(account);
 	const people = await db.select({ name: person.name }).from(person);
 	const rates = await loadRateTable();
 
-	// Candidate legs: recent, unpaired.
+	// Candidate legs: recent, unpaired, and not already part of a pending
+	// proposal (else every run would re-propose the same pairs).
 	const horizon = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
-	const candidates = await db
-		.select()
-		.from(transaction)
-		.where(and(isNull(transaction.transferPairId), gte(transaction.bookedAt, horizon)));
+	const pendingPairs = await db.select().from(transferPair);
+	const legsInPairs = new Set(pendingPairs.flatMap((p) => [p.outTransactionId, p.inTransactionId]));
+	const candidates = (
+		await db
+			.select()
+			.from(transaction)
+			.where(and(isNull(transaction.transferPairId), gte(transaction.bookedAt, horizon)))
+			.orderBy(asc(transaction.bookedAt), asc(transaction.id))
+	).filter((t) => !legsInPairs.has(t.id));
 
 	const proposals = proposePairs(
 		candidates.map((t): PairableTx => ({
@@ -203,7 +271,7 @@ export async function pairAndCategorise(): Promise<number> {
 				currency: a.currency,
 				numberKeys: a.numbers.map(normaliseAccountKey)
 			})),
-			personNames: people.flatMap((p) => p.name.toLowerCase().split(/\s+/)),
+			personNames: people.map((p) => p.name),
 			convert: (amount, from, to, day) => convertMinorSync(rates, amount, from, to, day)
 		}
 	);
@@ -211,32 +279,61 @@ export async function pairAndCategorise(): Promise<number> {
 	let paired = 0;
 	for (const proposal of proposals) {
 		const pairId = randomUUID();
-		await db.insert(transferPair).values({
-			id: pairId,
-			outTransactionId: proposal.outId,
-			inTransactionId: proposal.inId,
-			state: proposal.confidence === 'auto' ? 'auto' : 'proposed'
-		});
-		const reviewState = proposal.confidence === 'auto' ? 'auto' : 'needs_review';
-		const reviewReason =
-			proposal.confidence === 'auto' ? null : 'looks like a transfer between your own accounts';
-		for (const id of [proposal.outId, proposal.inId]) {
-			await db
-				.update(transaction)
-				.set({ transferPairId: pairId, reviewState, reviewReason, categoryId: null })
-				.where(eq(transaction.id, id));
+		if (proposal.confidence === 'auto') {
+			await db.insert(transferPair).values({
+				id: pairId,
+				outTransactionId: proposal.outId,
+				inTransactionId: proposal.inId,
+				state: 'auto'
+			});
+			for (const id of [proposal.outId, proposal.inId]) {
+				await db
+					.update(transaction)
+					.set({
+						transferPairId: pairId,
+						reviewState: 'auto',
+						reviewReason: null,
+						categoryId: null
+					})
+					.where(eq(transaction.id, id));
+			}
+			paired += 2;
+		} else {
+			// Held proposal: no transferPairId, so the legs stay in the figures
+			// and in the review queue until confirmed.
+			await db.insert(transferPair).values({
+				id: pairId,
+				outTransactionId: proposal.outId,
+				inTransactionId: proposal.inId,
+				state: 'proposed'
+			});
+			for (const id of [proposal.outId, proposal.inId]) {
+				await db
+					.update(transaction)
+					.set({
+						reviewState: 'needs_review',
+						reviewReason: 'looks like a transfer between your own accounts'
+					})
+					.where(eq(transaction.id, id));
+			}
 		}
-		paired += 2;
 	}
 
-	// Categorise whatever is new and not a transfer.
+	// Categorise whatever is new and not a transfer (held proposals included —
+	// a categorisation would resolve them as "not a transfer").
 	const rules = await db.select().from(categoryRule);
+	const proposedLegs = new Set(
+		pendingPairs
+			.filter((p) => p.state === 'proposed')
+			.flatMap((p) => [p.outTransactionId, p.inTransactionId])
+	);
 	const undecided = await db
 		.select()
 		.from(transaction)
 		.where(and(isNull(transaction.categoryId), isNull(transaction.transferPairId)));
 	for (const t of undecided) {
 		if (t.reviewState === 'confirmed') continue;
+		if (proposedLegs.has(t.id)) continue; // waiting on the transfer decision
 		const decision = decide(
 			{
 				counterparty: t.counterparty,

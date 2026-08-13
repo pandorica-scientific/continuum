@@ -23,13 +23,15 @@ describe('Fio adapter', () => {
 		expect(statement.closingBalanceMinor).toBe(2298438n);
 	});
 
-	it('reads every row with bank references', () => {
+	it('reads every row with bank references and payment symbols', () => {
 		expect(statement.rows).toHaveLength(5);
 		const first = statement.rows[0];
 		expect(first.bookedAt).toBe('2026-07-04');
 		expect(first.amountMinor).toBe(-5000n);
 		expect(first.counterpartyAccount).toBe('98765432/5500');
 		expect(first.bankRef).toBe('27721834815');
+		const symbols = statement.rows.find((r) => r.specificSymbol === '224')!;
+		expect(symbols.variableSymbol).toBe('9353181662');
 	});
 
 	it('reconciles: opening + sum of rows = closing', () => {
@@ -42,9 +44,21 @@ describe('Revolut adapter', () => {
 	const statement = parseRevolut(readFileSync(fixture('revolut.csv'), 'utf-8'));
 
 	it('keeps only completed rows and reads amounts', () => {
-		expect(statement.rows).toHaveLength(6);
+		expect(statement.rows).toHaveLength(7);
 		expect(statement.rows[0].amountMinor).toBe(-5391n);
 		expect(statement.rows[0].counterparty).toBe('Fresh Point');
+	});
+
+	it('keeps the fee separate and gross amounts intact', () => {
+		const withFee = statement.rows.find((r) => r.feeMinor !== undefined)!;
+		expect(withFee.amountMinor).toBe(-5660n);
+		expect(withFee.feeMinor).toBe(2117n);
+	});
+
+	it('records the started date as the value date', () => {
+		const boundary = statement.rows.find((r) => r.counterparty === 'Fresh Point')!;
+		expect(boundary.bookedAt).toBe('2026-07-01');
+		expect(boundary.valueDate).toBe('2026-06-30');
 	});
 
 	it('tells identical same-day payments apart via the running balance', () => {
@@ -68,6 +82,12 @@ describe('mBank adapter', () => {
 		expect(statement.rows).toHaveLength(5);
 		expect(statement.rows[2].description).toContain('ZAKUP PRZY UŻYCIU KARTY');
 		expect(statement.rows[0].balanceAfterMinor).toBe(22293n);
+	});
+
+	it('keeps the operation date as the value date', () => {
+		const feeRow = statement.rows[4]; // booked 07-21, operation 07-20
+		expect(feeRow.bookedAt).toBe('2026-07-21');
+		expect(feeRow.valueDate).toBe('2026-07-20');
 	});
 
 	it('identical express transfers get distinct fingerprints', () => {

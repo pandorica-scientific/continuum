@@ -4,6 +4,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 	import Pill from '$lib/components/Pill.svelte';
+	import { DAY_COUNTS, DAY_COUNT_LABELS } from '$lib/loans';
 
 	let { data, form } = $props();
 
@@ -43,7 +44,7 @@
 			value={data.metrics.interestThisYear}
 			unit={data.unit}
 			color="var(--orange)"
-			note={`deductible: ${data.metrics.deductible}`}
+			note={data.metrics.interestNote}
 		/>
 		<MetricTile
 			label="Debt-free"
@@ -97,7 +98,7 @@
 				<label
 					><span>Currency</span>
 					<select name="currency"
-						><option>CZK</option><option>EUR</option><option>PLN</option></select
+						>{#each data.currencies as c (c)}<option>{c}</option>{/each}</select
 					></label
 				>
 				<label
@@ -139,20 +140,51 @@
 				{#if regime === 'fixed_period'}
 					<label><span>Fixation ends</span><input name="fixedUntil" type="date" /></label>
 				{/if}
-				{#if data.properties.length}
-					<label
-						><span>Secured by</span>
-						<select name="securedBy">
-							<option value="">—</option>
-							{#each data.properties as p (p.id)}
-								<option value={p.id}>{p.name}</option>
-							{/each}
-						</select></label
-					>
-				{/if}
+				<label
+					><span>Interest charged</span>
+					<select name="accrualStyle">
+						<option value="payment">with each payment (payment period)</option>
+						<option value="calendar">at month end (calendar month, e.g. Česká spořitelna)</option>
+					</select></label
+				>
+				<label
+					><span>Interest accrual</span>
+					<select name="dayCount">
+						{#each DAY_COUNTS as dc (dc)}
+							<option value={dc}>{DAY_COUNT_LABELS[dc]}</option>
+						{/each}
+					</select></label
+				>
+				<label
+					><span>Payment day of month</span><input
+						name="paymentDay"
+						inputmode="numeric"
+						placeholder="15"
+					/></label
+				>
 				<label><span>Started</span><input name="startDate" type="date" /></label>
 				<label><span>Ends (contract)</span><input name="endDate" type="date" /></label>
 			</div>
+			{#if data.properties.length}
+				<fieldset class="secured">
+					<legend
+						>Secured by — one agreement can cover several flats; give each its share of the debt</legend
+					>
+					{#each data.properties as p (p.id)}
+						<div class="secured-row">
+							<label class="toggle">
+								<input type="checkbox" name={`secured_${p.id}`} />
+								<span>{p.name}</span>
+							</label>
+							<input
+								name={`share_${p.id}`}
+								inputmode="decimal"
+								placeholder="share % (blank = by value)"
+							/>
+						</div>
+					{/each}
+				</fieldset>
+			{/if}
 			<label class="toggle">
 				<input type="checkbox" name="deductible" />
 				<span>Interest is tax deductible (owner-occupied mortgage)</span>
@@ -305,6 +337,25 @@
 		gap: 10px;
 		font-size: 13px;
 		color: var(--fg2);
+	}
+	.secured {
+		border: 0;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.secured legend {
+		font-size: 12px;
+		color: var(--fg3);
+		padding-bottom: 4px;
+	}
+	.secured-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 200px;
+		gap: 10px;
+		align-items: center;
 	}
 	.row {
 		display: flex;

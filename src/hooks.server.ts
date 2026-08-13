@@ -27,7 +27,9 @@ export const init: ServerInit = async () => {
 	await ready;
 };
 
-const PUBLIC_PATHS = ['/login', '/setup'];
+// /ics/<token> is public by design: calendar apps subscribe without a session,
+// authenticated by the secret token in the URL.
+const PUBLIC_PATHS = ['/login', '/setup', '/ics'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	await (ready ??= boot());

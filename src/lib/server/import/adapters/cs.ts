@@ -69,6 +69,7 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 
 		let bankRef: string | undefined;
 		let counterparty: string | undefined;
+		let valueDate: string | undefined;
 		const detail: string[] = [];
 		for (let j = i + 1; j < end; j++) {
 			const text = lines[j].cells.join(' ');
@@ -80,6 +81,8 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 			const card = lines[j].cells;
 			if (card[0]?.startsWith('XXXXXXXXXXXX') && card.length >= 2) {
 				counterparty = card[card.length - 1];
+				const tran = card[0].match(/d\.tran\.(\d{2})\.(\d{2})\.(\d{4})/);
+				if (tran) valueDate = `${tran[3]}-${tran[2]}-${tran[1]}`;
 				continue;
 			}
 			if (text && !text.startsWith('CZK') && !/^Číslo instrukce/.test(text)) {
@@ -89,6 +92,7 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 
 		rows.push({
 			bookedAt,
+			valueDate,
 			amountMinor,
 			currency,
 			counterparty: counterparty ?? (detail[0] || undefined),

@@ -3,11 +3,12 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { MODULE_KEYS } from '$lib/modules/registry';
+	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
 
 	const moduleLabels: Record<string, { emoji: string; label: string; note: string }> = {
-		import: { emoji: '📥', label: 'Import', note: 'statements, cash flow and accounts' },
+		import: { emoji: '📥', label: 'Import', note: 'statement upload and the review queue' },
 		property: { emoji: '🏢', label: 'Property', note: 'flats, tenancies and bills' },
 		investments: { emoji: '📈', label: 'Investments', note: 'holdings from broker reports' },
 		loans: { emoji: '💳', label: 'Loans', note: 'mortgages and fixation periods' },
@@ -72,10 +73,9 @@
 			<label class="field">
 				<span>Base currency</span>
 				<select name="baseCurrency" value={data.baseCurrency}>
-					<option value="CZK">CZK — Czech koruna</option>
-					<option value="EUR">EUR — Euro</option>
-					<option value="PLN">PLN — Polish złoty</option>
-					<option value="USD">USD — US dollar</option>
+					{#each data.currencies as c (c)}
+						<option value={c}>{currencyLabel(c)}</option>
+					{/each}
 				</select>
 			</label>
 			<button type="submit" class="btn">Save</button>

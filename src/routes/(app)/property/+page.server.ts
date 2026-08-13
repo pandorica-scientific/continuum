@@ -2,9 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { loan, loanFixationPeriod, property, propertyBill, tenancy } from '$lib/server/db/schema';
+import {
+	loan,
+	loanFixationPeriod,
+	loanProperty,
+	property,
+	propertyBill,
+	tenancy
+} from '$lib/server/db/schema';
+import { availableCurrencies } from '$lib/server/fx/currencies';
 import { saveUpload } from '$lib/server/files';
-import { rateForMonth } from '$lib/server/loans/amortise';
+import { periodForMonth } from '$lib/server/loans/amortise';
 import { formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -13,12 +21,13 @@ function daysUntil(date: string): number {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const [properties, tenancies, bills, loans, periods] = await Promise.all([
+	const [properties, tenancies, bills, loans, periods, links] = await Promise.all([
 		db.select().from(property).orderBy(property.createdAt),
 		db.select().from(tenancy),
 		db.select().from(propertyBill).orderBy(propertyBill.sort),
 		db.select().from(loan),
-		db.select().from(loanFixationPeriod)
+		db.select().from(loanFixationPeriod),
+		db.select().from(loanProperty)
 	]);
 
 	const selectedId = url.searchParams.get('p') ?? properties[0]?.id ?? null;
@@ -26,17 +35,39 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	let detail = null;
 	if (current) {
-		const mortgage = loans.find((l) => l.securedByPropertyId === current.id) ?? null;
+		const link = links.find((lp) => lp.propertyId === current.id) ?? null;
+		const mortgage = link ? (loans.find((l) => l.id === link.loanId) ?? null) : null;
+		// This flat's share of a mortgage that may secure several flats:
+		// explicit percentage when set, else proportional to linked values.
+		let shareFraction = 1;
+		if (mortgage && link) {
+			if (link.sharePct !== null) {
+				shareFraction = Number(link.sharePct) / 100;
+			} else {
+				const linkedIds = links
+					.filter((lp) => lp.loanId === mortgage.id)
+					.map((lp) => lp.propertyId);
+				const totalValue = properties
+					.filter((pr) => linkedIds.includes(pr.id))
+					.reduce((sum, pr) => sum + Number(pr.valueMinor), 0);
+				shareFraction = totalValue > 0 ? Number(current.valueMinor) / totalValue : 1;
+			}
+		}
 		const mortgagePeriods = mortgage
 			? periods
 					.filter((p) => p.loanId === mortgage.id)
 					.map((p) => ({
 						startDate: p.startDate,
 						endDate: p.endDate,
-						annualRatePct: Number(p.annualRatePct)
+						annualRatePct: Number(p.annualRatePct),
+						paymentMinor: p.paymentMinor
 					}))
 			: [];
-		const owed = mortgage?.owedMinor ?? 0n;
+		const currentMortgagePeriod = periodForMonth(
+			mortgagePeriods,
+			new Date().toISOString().slice(0, 7)
+		);
+		const owed = mortgage ? BigInt(Math.round(Number(mortgage.owedMinor) * shareFraction)) : 0n;
 		const equity = current.valueMinor - owed;
 		const currentTenancy =
 			tenancies.find(
@@ -56,7 +87,9 @@ export const load: PageServerLoad = async ({ url }) => {
 				label: 'Mortgage owed',
 				value: mortgage ? formatMinor(owed, mortgage.currency) : '—',
 				color: 'var(--red)',
-				note: mortgage?.lender || 'no linked loan'
+				note: mortgage
+					? `${mortgage.lender || mortgage.name}${shareFraction < 1 ? ` · ${(shareFraction * 100).toFixed(0)}% share` : ''}`
+					: 'no linked loan'
 			},
 			{
 				label: 'Equity',
@@ -80,7 +113,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			const monthlyBills = bills
 				.filter((b) => b.propertyId === current.id)
 				.reduce((s, b) => s + b.amountMinor, 0n);
-			const mortgagePayment = mortgage?.paymentMinor ?? 0n;
+			const mortgagePayment = currentMortgagePeriod?.paymentMinor ?? 0n;
 			const cashFlow = currentTenancy.rentMinor - monthlyBills - mortgagePayment;
 			metrics.push({
 				label: 'Cash flow',
@@ -158,7 +191,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		let mortgageCard = null;
 		if (mortgage) {
 			const repaid = mortgage.principalMinor - mortgage.owedMinor;
-			const rate = rateForMonth(mortgagePeriods, new Date().toISOString().slice(0, 7));
+			const rate = currentMortgagePeriod?.annualRatePct ?? null;
 			const fix = mortgagePeriods.find(
 				(p) => p.endDate !== null && p.endDate > new Date().toISOString().slice(0, 10)
 			);
@@ -191,6 +224,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	}
 
 	return {
+		currencies: await availableCurrencies(),
 		tabs: properties.map((p) => ({
 			id: p.id,
 			name: p.name,

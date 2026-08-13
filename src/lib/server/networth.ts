@@ -3,6 +3,7 @@ import { db } from '$lib/server/db';
 import {
 	account,
 	loan,
+	loanProperty,
 	netWorthSnapshot,
 	portfolioSnapshot,
 	property
@@ -33,12 +34,14 @@ export interface NetWorth {
  */
 export async function computeNetWorth(): Promise<NetWorth> {
 	const baseCurrency = await getBaseCurrency();
-	const [accounts, properties, loans, snapshots] = await Promise.all([
+	const [accounts, properties, loans, links, snapshots] = await Promise.all([
 		db.select().from(account),
 		db.select().from(property),
 		db.select().from(loan),
+		db.select({ loanId: loanProperty.loanId }).from(loanProperty),
 		db.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
 	]);
+	const securedLoanIds = new Set(links.map((l) => l.loanId));
 
 	const toBase = async (amount: bigint, currency: string) =>
 		(await convertMinor(amount, currency, baseCurrency)) ?? amount;
@@ -57,7 +60,7 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	let otherLoans = 0n;
 	for (const l of loans) {
 		const owedBase = await toBase(l.owedMinor, l.currency);
-		if (l.securedByPropertyId) {
+		if (securedLoanIds.has(l.id)) {
 			flatsEquity -= owedBase;
 			mortgagesOwed += owedBase;
 		} else {

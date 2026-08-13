@@ -75,12 +75,22 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 		let counterparty: string | undefined;
 		let bankRef: string | undefined;
 		let merchant: string | undefined;
+		let valueDate: string | undefined;
+		let originalAmountMinor: bigint | undefined;
+		let originalCurrency: string | undefined;
 
-		// Second line: valuta date + counter-account.
+		// Second line: valuta date + counter-account, and for FX card payments
+		// the original amount in the foreign currency as its last cell.
 		const second = lines[i + 1]?.cells ?? [];
-		if (second.length >= 2 && rbDate(second[0])) {
+		if (second.length >= 1 && rbDate(second[0])) {
+			valueDate = rbDate(second[0]) ?? undefined;
 			const acc = second.find((c) => /^[\d-]+\/\d{4}$/.test(c));
 			if (acc) counterpartyAccount = acc;
+			const original = second[second.length - 1]?.match(AMOUNT);
+			if (original && original[2] !== rowCurrency) {
+				originalAmountMinor = parseAmountToMinor(original[1].replace('−', '-'), original[2]);
+				originalCurrency = original[2];
+			}
 		}
 		// Third line: 10-digit transaction code, optional counterparty name.
 		const third = lines[i + 2]?.cells ?? [];
@@ -101,8 +111,11 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 
 		rows.push({
 			bookedAt,
+			valueDate,
 			amountMinor: parseAmountToMinor(amountMatch[1].replace('−', '-'), rowCurrency),
 			currency: rowCurrency,
+			originalAmountMinor,
+			originalCurrency,
 			counterparty: merchant ?? counterparty,
 			counterpartyAccount,
 			variableSymbol: vs,

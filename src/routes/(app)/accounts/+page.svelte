@@ -67,7 +67,7 @@
 					<option value="other">Other</option>
 				</select>
 				<select name="currency">
-					<option>CZK</option><option>EUR</option><option>USD</option><option>PLN</option>
+					{#each data.currencies as c (c)}<option>{c}</option>{/each}
 				</select>
 				<select name="kind">
 					<option value="current">Current</option>

@@ -48,7 +48,7 @@ describe.skipIf(!present)('real statement files', () => {
 					statement.openingBalanceMinor !== undefined &&
 					statement.closingBalanceMinor !== undefined
 				) {
-					const sum = statement.rows.reduce((s, r) => s + r.amountMinor, 0n);
+					const sum = statement.rows.reduce((s, r) => s + r.amountMinor - (r.feeMinor ?? 0n), 0n);
 					expect(statement.openingBalanceMinor + sum).toBe(statement.closingBalanceMinor);
 				}
 			}, 30000);

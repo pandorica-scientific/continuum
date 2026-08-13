@@ -2,10 +2,12 @@
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import { MODULE_KEYS } from '$lib/modules/registry';
 
-	let { form } = $props();
+	import { currencyLabel } from '$lib/currencies';
+
+	let { data, form } = $props();
 
 	const moduleLabels: Record<string, string> = {
-		import: 'Import — statements, cash flow and accounts',
+		import: 'Import — statement upload and review',
 		property: 'Property',
 		investments: 'Investments',
 		loans: 'Loans',
@@ -44,9 +46,9 @@
 		<label class="field">
 			<span>Base currency — totals convert to this; balances keep their own currency</span>
 			<select name="baseCurrency">
-				<option value="CZK">CZK — Czech koruna</option>
-				<option value="EUR">EUR — Euro</option>
-				<option value="PLN">PLN — Polish złoty</option>
+				{#each data.currencies as c (c)}
+					<option value={c}>{currencyLabel(c)}</option>
+				{/each}
 			</select>
 		</label>
 

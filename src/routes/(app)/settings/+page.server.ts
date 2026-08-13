@@ -3,14 +3,16 @@ import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { hashPassword } from '$lib/server/auth';
+import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const [modules, baseCurrency, people] = await Promise.all([
+	const [modules, baseCurrency, currencies, people] = await Promise.all([
 		getModules(),
 		getBaseCurrency(),
+		availableCurrencies(),
 		db
 			.select({
 				id: person.id,
@@ -22,7 +24,7 @@ export const load: PageServerLoad = async () => {
 			.from(person)
 			.orderBy(person.createdAt)
 	]);
-	return { moduleToggles: modules, baseCurrency, people };
+	return { moduleToggles: modules, baseCurrency, currencies, people };
 };
 
 export const actions: Actions = {

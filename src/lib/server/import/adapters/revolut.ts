@@ -6,6 +6,10 @@ import type { ParsedRow, ParsedStatement } from '../types';
  * Revolut account-statement CSV: comma-separated with a fixed header. There is
  * no bank-side reference, so the running Balance column joins the dedup
  * fingerprint to tell identical same-day payments apart.
+ *
+ * Fees are kept separate from the amount: the balance moves by amount − fee,
+ * the counterparty sees the amount, and "what did Revolut charge me" stays
+ * answerable. Started Date is the value date, Completed Date the booking date.
  */
 export function parseRevolut(text: string): ParsedStatement {
 	const lines = csvLines(text.replace(/^\ufeff/, '')).filter((l) => l.trim());
@@ -22,24 +26,30 @@ export function parseRevolut(text: string): ParsedStatement {
 	const cBalance = col('Balance');
 	if (cAmount === -1 || cCurrency === -1) throw new Error('Revolut: unexpected header');
 
-	let currency = 'CZK';
+	// The statement's currency comes from the first completed row, not the
+	// last — a stray row must not decide what account this file belongs to.
+	let currency = '';
 	const rows: ParsedRow[] = [];
 	for (const line of lines.slice(1)) {
 		const cells = splitCsvLine(line, ',');
 		if (cells.length < header.length) continue;
 		if (cState !== -1 && cells[cState] !== 'COMPLETED') continue;
-		currency = cells[cCurrency] || currency;
-		const when = (cells[cCompleted] || cells[cStarted] || '').slice(0, 10);
-		const amount = parseAmountToMinor(cells[cAmount], currency);
-		const fee = cells[cFee] ? parseAmountToMinor(cells[cFee], currency) : 0n;
+		const rowCurrency = cells[cCurrency] || currency || 'CZK';
+		if (!currency) currency = rowCurrency;
+		const started = (cells[cStarted] || '').slice(0, 10);
+		const completed = (cells[cCompleted] || started).slice(0, 10);
+		const fee = cells[cFee] ? parseAmountToMinor(cells[cFee], rowCurrency) : 0n;
 		rows.push({
-			bookedAt: when,
-			// Revolut reports fees separately; the balance moves by amount − fee.
-			amountMinor: amount - fee,
-			currency,
+			bookedAt: completed,
+			valueDate: started || undefined,
+			amountMinor: parseAmountToMinor(cells[cAmount], rowCurrency),
+			feeMinor: fee !== 0n ? (fee < 0n ? -fee : fee) : undefined,
+			currency: rowCurrency,
 			counterparty: cells[cDescription]?.trim() || undefined,
 			description: cells[cType]?.trim() || undefined,
-			balanceAfterMinor: cells[cBalance] ? parseAmountToMinor(cells[cBalance], currency) : undefined
+			balanceAfterMinor: cells[cBalance]
+				? parseAmountToMinor(cells[cBalance], rowCurrency)
+				: undefined
 		});
 	}
 
@@ -47,7 +57,7 @@ export function parseRevolut(text: string): ParsedStatement {
 	return {
 		bank: 'revolut',
 		format: 'csv',
-		currency,
+		currency: currency || 'CZK',
 		periodStart: rows[0]?.bookedAt,
 		periodEnd: last?.bookedAt,
 		closingBalanceMinor: last?.balanceAfterMinor,

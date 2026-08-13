@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 import { eq } from 'drizzle-orm';
+import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import { person, session } from '$lib/server/db/schema';
 import type { Cookies } from '@sveltejs/kit';
@@ -28,7 +29,10 @@ export async function createSession(cookies: Cookies, personId: string): Promise
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		secure: false, // home servers commonly run plain HTTP on the LAN
+		// Home servers commonly run plain HTTP on the LAN; when the instance is
+		// served over HTTPS (reverse proxy, Tailscale cert), the cookie locks
+		// to it automatically via ORIGIN.
+		secure: (env.ORIGIN ?? '').startsWith('https://'),
 		expires: expiresAt
 	});
 }
