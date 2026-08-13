@@ -1,0 +1,33 @@
+mBank S.A. Bankowoœæ Detaliczna;
+		Skrytka Pocztowa 2108;
+
+#Klient;
+JAN NOWAK;
+
+Elektroniczne zestawienie operacji;
+
+#Za okres:;
+01.07.2026;31.07.2026;
+#Rodzaj rachunku;
+EKONTO;
+#Waluta;
+PLN;
+#Numer rachunku;
+89 1140 2004 0000 3502 9999 0193;
+
+#Podsumowanie obrotów na rachunku;#Liczba operacji;#Wartoœæ operacji
+Uznania;2;310,00 PLN;
+Obci¹¿enia;3;271,34 PLN;
+£¹cznie;5;38,66 PLN;
+
+#Saldo pocz¹tkowe;67,93 PLN;
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Tytu³;#Nadawca/Odbiorca;#Numer konta;#Kwota;#Saldo po operacji;
+2026-07-04;2026-07-04;PRZELEW EXPRESS ELIXIR PRZYCH.;"/OPF/AN/PL46291000060000000005639999/Jan Nowak/1/.PL/Jan Nowak Sent from Revolut";"Revolut";'PL46291000060000000005639999';155,00;222,93;
+2026-07-04;2026-07-04;PRZELEW EXPRESS ELIXIR PRZYCH.;"/OPF/AN/PL46291000060000000005639999/Jan Nowak/1/.PL/Jan Nowak Sent from Revolut";"Revolut";'PL46291000060000000005639999';155,00;377,93;
+2026-07-05;2026-07-05;ZAKUP PRZY U¯YCIU KARTY;"ALIMAR             /WROCLAW";"  ";'';-240,00;137,93;
+2026-07-20;2026-07-20;BLIK ZAKUP E-COMMERCE;"HTTPS://SKLEP.PRZYKLAD";"  ";'';-21,34;116,59;
+2026-07-21;2026-07-20;OP£ATA ZA KARTÊ;"5575 XXXX XXXX 9999";"  ";'';-10,00;106,59;
+
+
+;;;;;;#Saldo koñcowe;106,59 PLN;

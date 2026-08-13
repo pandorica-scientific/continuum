@@ -1,0 +1,137 @@
+[
+	{
+		"page": 1,
+		"y": 804,
+		"cells": ["Výpis z běžného účtu č. 98765432 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 788,
+		"cells": ["Pořadové č. výpisu:", "7", "za období:", "1. 7. 2026 - 31. 7. 2026"]
+	},
+	{
+		"page": 1,
+		"y": 724,
+		"cells": ["Číslo účtu:", "98765432/5500 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 708,
+		"cells": ["Název účtu:", "Dr. Jana Nováková"]
+	},
+	{
+		"page": 1,
+		"y": 650,
+		"cells": ["Počáteční zůstatek:", "31 242.43"]
+	},
+	{
+		"page": 1,
+		"y": 636,
+		"cells": ["Příjmy celkem:", "54 650.00"]
+	},
+	{
+		"page": 1,
+		"y": 622,
+		"cells": ["Výdaje celkem:", "42 389.48"]
+	},
+	{
+		"page": 1,
+		"y": 606,
+		"cells": ["Konečný zůstatek:", "43 502.95"]
+	},
+	{
+		"page": 1,
+		"y": 510,
+		"cells": ["Datum", "Kategorie transakce", "Typ transakce", "VS", "Poplatek", "Částka"]
+	},
+	{
+		"page": 1,
+		"y": 464,
+		"cells": ["2. 7. 2026", "Platba", "Odchozí okamžitá úhrada", "4150999576", "-1 000.00 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 452,
+		"cells": ["2. 7. 2026", "6850057/2700", "VS:4150999576"]
+	},
+	{
+		"page": 1,
+		"y": 442,
+		"cells": ["9181392568"]
+	},
+	{
+		"page": 1,
+		"y": 426,
+		"cells": ["2. 7. 2026", "Platba", "Jednorázová úhrada", "1032122213", "-4 574.00 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 416,
+		"cells": ["2. 7. 2026", "1011097041/5500", "VS:1032122213"]
+	},
+	{
+		"page": 1,
+		"y": 404,
+		"cells": ["9181393932", "Společenství vlastní"]
+	},
+	{
+		"page": 1,
+		"y": 204,
+		"cells": ["6. 7. 2026", "Platba kartou", "Platba kartou", "-2 499.00 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 192,
+		"cells": ["2. 7. 2026", "KS:1178", "1178"]
+	},
+	{
+		"page": 1,
+		"y": 182,
+		"cells": ["9193915420", "DR. JANA NOVÁKOVÁ", "PK: 516872XXXXXX9999"]
+	},
+	{
+		"page": 1,
+		"y": 174,
+		"cells": ["ZOOPLUS; MUNCHEN; DEU"]
+	},
+	{
+		"page": 2,
+		"y": 706,
+		"cells": ["7. 7. 2026", "Platba kartou", "Platba kartou Apple Pay", "-44.44 CZK"]
+	},
+	{
+		"page": 2,
+		"y": 694,
+		"cells": ["5. 7. 2026", "KS:1178", "1178"]
+	},
+	{
+		"page": 2,
+		"y": 684,
+		"cells": ["PK: 516872XXXXXX9999"]
+	},
+	{
+		"page": 2,
+		"y": 682,
+		"cells": ["9198541942", "DR. JANA NOVÁKOVÁ"]
+	},
+	{
+		"page": 2,
+		"y": 674,
+		"cells": ["ALBERT VAM DEKUJE; HR. KRALOVE; CZE"]
+	},
+	{
+		"page": 2,
+		"y": 500,
+		"cells": ["15. 7. 2026", "Platba", "Příchozí úhrada", "+10 000.00 CZK"]
+	},
+	{
+		"page": 2,
+		"y": 488,
+		"cells": ["15. 7. 2026", "1234567890/2010"]
+	},
+	{
+		"page": 2,
+		"y": 476,
+		"cells": ["9210000001", "NOVÁKOVÁ JANA"]
+	}
+]

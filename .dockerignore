@@ -1,0 +1,13 @@
+node_modules
+.svelte-kit
+build
+.git
+.env
+.env.*
+bank_data_examples_do_not_share
+scratch-workspace
+design_system
+.remember
+playwright-report
+test-results
+coverage

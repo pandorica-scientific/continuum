@@ -1,0 +1,53 @@
+# Personal bank statements — never commit
+bank_data_examples_do_not_share/
+
+# Local scratch work
+scratch-workspace/
+
+# Dependencies and build output
+node_modules/
+.svelte-kit/
+build/
+dist/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Session tooling
+.remember/
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

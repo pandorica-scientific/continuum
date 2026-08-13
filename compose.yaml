@@ -1,0 +1,43 @@
+# Continuum — self-hosted household ledger
+#
+# Quick start:
+#   1. Set POSTGRES_PASSWORD below (or in a .env file next to this file)
+#   2. docker compose up -d
+#   3. Open http://localhost:3000 and follow the setup wizard
+
+services:
+  app:
+    image: ghcr.io/robertkiewisz/continuum:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgres://continuum:${POSTGRES_PASSWORD:-continuum}@db:5432/continuum
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
+    volumes:
+      - continuum-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: continuum
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-continuum}
+      POSTGRES_DB: continuum
+    volumes:
+      - continuum-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U continuum -d continuum']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  continuum-data:
+  continuum-db:
