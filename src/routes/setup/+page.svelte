@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import { MODULE_KEYS } from '$lib/modules/registry';
+	import { PASSWORD_HINT } from '$lib/password-policy';
 
 	import { currencyLabel } from '$lib/currencies';
 
@@ -58,7 +59,11 @@
 				<div class="person-row">
 					<input name="personName" placeholder="Name" required={i === 0} />
 					<input name="personBirthYear" placeholder="Birth year" inputmode="numeric" />
-					<input name="personPassword" type="password" placeholder="Password (8+ characters)" />
+					<input
+						name="personPassword"
+						type="password"
+						placeholder={`Password (${PASSWORD_HINT})`}
+					/>
 				</div>
 			{/each}
 			<button type="button" class="btn" onclick={() => (peopleCount += 1)}>➕ Add a person</button>

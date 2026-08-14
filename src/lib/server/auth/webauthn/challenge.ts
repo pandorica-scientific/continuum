@@ -2,7 +2,7 @@
 // httpOnly cookie rather than a table that would need a cleanup job. The
 // cookie is read once and cleared, so a challenge cannot be replayed.
 
-import { env } from '$env/dynamic/private';
+import { cookieSecure } from '$lib/server/auth/cookies';
 import type { Cookies } from '@sveltejs/kit';
 
 const CHALLENGE_COOKIE = 'continuum_webauthn_challenge';
@@ -13,7 +13,7 @@ export function storeChallenge(cookies: Cookies, challenge: string): void {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		secure: (env.ORIGIN ?? '').startsWith('https://'),
+		secure: cookieSecure(),
 		maxAge: TTL_SECONDS
 	});
 }

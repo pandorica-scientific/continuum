@@ -5,6 +5,8 @@ import { person } from '$lib/server/db/schema';
 import { createSession, hashPassword } from '$lib/server/auth';
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
+import { PASSWORD_MIN_LENGTH } from '$lib/password-policy';
+import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -31,10 +33,19 @@ export const actions: Actions = {
 		if (people.length === 0) {
 			return fail(400, { message: 'Add at least one person.' });
 		}
+		const now = new Date();
+		const validated: { name: string; password: string; birthYear: number | null }[] = [];
 		for (const p of people) {
-			if (p.password.length < 8) {
-				return fail(400, { message: `${p.name}'s password needs at least 8 characters.` });
+			if (p.password.length < PASSWORD_MIN_LENGTH) {
+				return fail(400, {
+					message: `${p.name}'s password needs at least ${PASSWORD_MIN_LENGTH} characters.`
+				});
 			}
+			const birthYear = parseBirthYear(p.birthYear, now);
+			if (birthYear === 'invalid') {
+				return fail(400, { message: `${p.name}: ${BIRTH_YEAR_ERROR.toLowerCase()}` });
+			}
+			validated.push({ name: p.name, password: p.password, birthYear });
 		}
 
 		const modules = Object.fromEntries(
@@ -42,22 +53,17 @@ export const actions: Actions = {
 		) as ModuleToggles;
 
 		let firstId = '';
-		for (const p of people) {
+		for (const p of validated) {
 			const id = randomUUID();
 			if (!firstId) firstId = id;
 			await db.insert(person).values({
 				id,
 				name: p.name,
-				initials: p.name
-					.split(/\s+/)
-					.map((w) => w[0] ?? '')
-					.join('')
-					.slice(0, 2)
-					.toUpperCase(),
+				initials: initialsFor(p.name),
 				// The person who runs the wizard administers the instance; anyone
 				// else added here is an ordinary member.
 				role: firstId === id ? 'admin' : 'member',
-				birthYear: p.birthYear ? Number(p.birthYear) : null,
+				birthYear: p.birthYear,
 				passwordHash: await hashPassword(p.password)
 			});
 		}

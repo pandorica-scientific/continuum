@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { startRegistration } from '@simplewebauthn/browser';
+	import { problemMessage } from '$lib/http';
 
 	interface PersonRow {
 		id: string;
@@ -39,13 +40,20 @@
 	let registering = $state(false);
 	const isAdmin = $derived(me?.role === 'admin');
 
+	const problem = (response: Response) =>
+		problemMessage(response, 'That passkey was not accepted.');
+
 	async function addPasskey() {
 		passkeyError = '';
 		registering = true;
 		try {
-			const options = await (
-				await fetch('/auth/passkey/register/options', { method: 'POST' })
-			).json();
+			// Both endpoints answer with a JSON problem message, including the 401
+			// when a session has quietly expired. Reading it beats parsing whatever
+			// the response happens to be and reporting "Unexpected token <".
+			const optionsResponse = await fetch('/auth/passkey/register/options', { method: 'POST' });
+			if (!optionsResponse.ok) throw new Error(await problem(optionsResponse));
+			const options = await optionsResponse.json();
+
 			const response = await startRegistration({ optionsJSON: options });
 			const label = window.prompt('Name this passkey', 'This device') ?? 'Passkey';
 			const verify = await fetch('/auth/passkey/register/verify', {
@@ -53,7 +61,7 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ response, label })
 			});
-			if (!verify.ok) throw new Error('That passkey was not accepted.');
+			if (!verify.ok) throw new Error(await problem(verify));
 			await invalidateAll();
 		} catch (err) {
 			// Cancelling the system prompt is deliberate, not a failure.

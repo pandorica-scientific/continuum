@@ -123,7 +123,10 @@ search), so `.local` or your router's suffix is the practical spelling.
 
 The setup wizard makes its first person an **administrator**; everyone added
 later is a **member**. Only administrators can add or deactivate people, change
-roles, or manage API tokens.
+roles, manage API tokens, switch modules on and off, set the base currency, or
+configure and run backups. A member's Settings page holds their own password and
+their own passkeys and nothing else — the administrative sections are not merely
+hidden from them, they are never sent.
 
 Adding someone in Settings → Household produces a **one-time enrollment link**,
 valid for seven days, which you pass to them however you like. They open it and
@@ -154,6 +157,12 @@ Browsers refuse the passkey API outside a secure context, so the passkey
 controls appear only when `ORIGIN` is `https://` (or `localhost` during
 development). On a plain-HTTP LAN address they are simply absent rather than
 broken.
+
+A passkey here always requires **user verification** — the face, the
+fingerprint, or the device PIN. That is what keeps it a second factor rather
+than a bearer token, and it means a roaming security key with no PIN configured
+cannot be registered. Platform authenticators (Face ID, Touch ID, Windows Hello)
+verify by nature and need nothing extra.
 
 The simplest way to get HTTPS on a home server is [Tailscale](https://tailscale.com),
 a WireGuard mesh that is **private by default**: only devices you have added to

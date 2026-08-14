@@ -23,10 +23,14 @@ Accounts you can actually manage, and a way in that is not a password.
   live sessions but keeps their password, passkeys and history, so reactivating
   is a clean undo. People are never deleted — six tables reference them.
 - **Administrator role.** `person.role` finally means something: exactly
-  `admin` or `member`. Only administrators can add or deactivate people, change
-  roles, or manage API tokens. You cannot deactivate yourself, and the last
-  administrator can be neither deactivated nor demoted, so an instance can never
-  be left with nobody in charge.
+  `admin` or `member`. Administrators alone can add or deactivate people, change
+  roles, manage API tokens, switch modules, set the base currency, and configure
+  or run backups. A member's Settings page holds their own password and their
+  own passkeys and nothing else — the rest is never sent to them. You cannot
+  deactivate yourself, and the last administrator can be neither deactivated nor
+  demoted, so an instance can never be left with nobody in charge. Those two
+  guards now hold under concurrent edits: the check and the write share one
+  transaction with the administrator rows locked.
 - **A sign-out control** in the sidebar. `/logout` had existed since the first
   release with nothing linking to it.
 - **Optional Tailscale sidecar** (`docker compose --profile tailscale up -d`)
@@ -43,6 +47,22 @@ Accounts you can actually manage, and a way in that is not a password.
 - The end-to-end suite now builds the app before running. It previously served
   whatever was last compiled, so it could pass against code no longer in the
   repository.
+- Passkeys now require user verification — the biometric or PIN — rather than
+  merely preferring it. The server already enforced it, so asking for less than
+  that meant an authenticator which skipped the prompt was rejected afterwards
+  with an error nobody could act on. A security key with no PIN configured will
+  no longer register; Face ID, Touch ID and Windows Hello are unaffected.
+- Signing in now ends whatever session the browser arrived with, instead of
+  leaving the previous person's session row alive for its full thirty days.
+
+### Upgrading from 0.2.x
+
+Your existing people carry `role = 'adult'`, the old column default, which is
+neither `admin` nor `member`. Migration `0020` runs on first boot and turns
+every such row into an administrator — before 0.3.0 anyone who could sign in
+could do anything, so this takes no capability away from anyone. Demote whoever
+should be a member in Settings → Household afterwards. Nothing else is needed:
+`docker compose pull && docker compose up -d` is the whole upgrade.
 
 ## 0.2.1 — 2026-08-14
 

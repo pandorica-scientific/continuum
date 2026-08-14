@@ -5,6 +5,7 @@ import { person } from '$lib/server/db/schema';
 import { createSession, hashPassword } from '$lib/server/auth';
 import { consumeEnrollmentToken, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
+import { PASSWORD_MIN_LENGTH } from '$lib/password-policy';
 import {
 	loginBlockedForSeconds,
 	recordLoginFailure,
@@ -36,8 +37,10 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const password = String(form.get('password') ?? '');
 		const confirm = String(form.get('confirmPassword') ?? '');
-		if (password.length < 8) {
-			return fail(400, { message: 'Password needs at least 8 characters.' });
+		if (password.length < PASSWORD_MIN_LENGTH) {
+			return fail(400, {
+				message: `Password needs at least ${PASSWORD_MIN_LENGTH} characters.`
+			});
 		}
 		if (password !== confirm) {
 			return fail(400, { message: 'The two passwords do not match.' });

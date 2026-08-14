@@ -25,7 +25,13 @@ export const POST: RequestHandler = async ({ locals, cookies }) => {
 		// No reason for a household ledger to identify authenticator models.
 		attestationType: 'none',
 		// Discoverable, so the sign-in screen can skip the person picker.
-		authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+		//
+		// 'required' rather than 'preferred' because the verifier enforces user
+		// verification either way (SimpleWebAuthn defaults requireUserVerification
+		// to true). Asking for less than we enforce meant an authenticator that
+		// legitimately skipped the biometric — a security key with no PIN — was
+		// rejected after the fact with an error nobody could act on.
+		authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
 		// Stops one device silently registering itself twice.
 		excludeCredentials: existing.map((c) => ({
 			id: c.id,

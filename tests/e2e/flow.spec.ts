@@ -1,6 +1,7 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { PASSWORD_HINT } from '../../src/lib/password-policy';
 
 // One ordered journey through Phase 1: wizard → import → review → cash flow →
 // settings module toggle → theme persistence. Auth is carried between tests
@@ -20,7 +21,7 @@ test('the wizard creates the household and signs in', async ({ page }) => {
 	await page.goto('/setup');
 	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');
 	await page.getByPlaceholder('Name').first().fill('Jana Nováková');
-	await page.getByPlaceholder('Password (8+ characters)').first().fill('correct-horse-battery');
+	await page.getByPlaceholder(`Password (${PASSWORD_HINT})`).first().fill('correct-horse-battery');
 	await page.getByRole('button', { name: 'Create household' }).click();
 	await expect(page).toHaveURL(/\/overview/);
 	await expect(page.getByText('Jana & Jan')).toBeVisible();

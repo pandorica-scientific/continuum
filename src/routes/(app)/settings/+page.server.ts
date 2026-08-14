@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, type Db } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword, revokeOtherSessions } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
+import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import {
 	BACKUP_CADENCES,
 	detectDestinations,
@@ -25,17 +26,47 @@ import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
 import type { Actions, PageServerLoad } from './$types';
 
-/** Admins who could still sign in, for the last-administrator guards. */
-async function activeAdminCount(): Promise<number> {
-	const rows = await db
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+/**
+ * Admins who could still sign in, with those rows locked for the rest of the
+ * transaction. The lock is the whole point: the guard and the write have to see
+ * the same count, or two administrators demoting each other in the same moment
+ * both read "2", both pass, and the instance is left with nobody in charge.
+ *
+ * Postgres refuses FOR UPDATE alongside an aggregate, so this returns the rows
+ * and measures them. A household has a handful of administrators, and ordering
+ * by id keeps two concurrent transactions from taking the locks in opposite
+ * orders and deadlocking.
+ */
+async function lockActiveAdminCount(tx: Tx): Promise<number> {
+	const rows = await tx
 		.select({ id: person.id })
 		.from(person)
-		.where(and(eq(person.role, 'admin'), isNull(person.deactivatedAt)));
+		.where(and(eq(person.role, 'admin'), isNull(person.deactivatedAt)))
+		.orderBy(person.id)
+		.for('update');
 	return rows.length;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const [modules, baseCurrency, currencies, people, backup, lastBackup] = await Promise.all([
+	// Members reach this page for their own password and passkeys. Everything
+	// else on it — backup destinations on the host filesystem, server status,
+	// the API token list — is administrator business and is not fetched at all
+	// for anyone else, so it cannot leak through the payload.
+	const isAdmin = locals.person?.role === 'admin';
+
+	const [
+		modules,
+		baseCurrency,
+		currencies,
+		people,
+		backup,
+		lastBackup,
+		myPasskeys,
+		status,
+		tokens
+	] = await Promise.all([
 		getModules(),
 		getBaseCurrency(),
 		availableCurrencies(),
@@ -52,20 +83,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			})
 			.from(person)
 			.orderBy(person.createdAt),
-		getBackupConfig(),
-		getLastBackupRun()
-	]);
-	return {
-		moduleToggles: modules,
-		baseCurrency,
-		currencies,
-		people,
-		// The component needs to know who you are to decide which controls are
-		// yours and whether you may administer anyone.
-		me: locals.person,
-		passkeys: passkeysAvailable(),
-		myPasskeys: locals.person
-			? await db
+		isAdmin ? getBackupConfig() : null,
+		isAdmin ? getLastBackupRun() : null,
+		locals.person
+			? db
 					.select({
 						id: credential.id,
 						label: credential.label,
@@ -75,11 +96,26 @@ export const load: PageServerLoad = async ({ locals }) => {
 					.from(credential)
 					.where(eq(credential.personId, locals.person.id))
 			: [],
+		isAdmin ? serverStatus() : null,
+		isAdmin ? listTokens() : []
+	]);
+
+	return {
+		isAdmin,
+		moduleToggles: modules,
+		baseCurrency,
+		currencies,
+		people,
+		// The component needs to know who you are to decide which controls are
+		// yours and whether you may administer anyone.
+		me: locals.person,
+		passkeys: passkeysAvailable(),
+		myPasskeys,
 		backup,
 		lastBackup,
-		backupDestinations: detectDestinations(),
-		status: await serverStatus(),
-		apiTokens: (await listTokens()).map((t) => ({
+		backupDestinations: isAdmin ? detectDestinations() : [],
+		status,
+		apiTokens: tokens.map((t) => ({
 			id: t.id,
 			label: t.label,
 			created: t.createdAt.toISOString().slice(0, 10),
@@ -104,7 +140,8 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	toggleModule: async ({ request }) => {
+	toggleModule: async ({ request, locals }) => {
+		requireAdmin(locals.person);
 		const form = await request.formData();
 		const key = String(form.get('key') ?? '') as ModuleKey;
 		if (!MODULE_KEYS.includes(key)) return fail(400, { message: 'Unknown module.' });
@@ -114,7 +151,8 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	setBaseCurrency: async ({ request }) => {
+	setBaseCurrency: async ({ request, locals }) => {
+		requireAdmin(locals.person);
 		const form = await request.formData();
 		const code = String(form.get('baseCurrency') ?? '').toUpperCase();
 		if (!/^[A-Z]{3}$/.test(code)) return fail(400, { message: 'Use a three-letter code.' });
@@ -122,7 +160,10 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	saveBackup: async ({ request }) => {
+	saveBackup: async ({ request, locals }) => {
+		// `dir` is a path on the host that the server will later write a full
+		// database dump to. Nobody but an administrator gets to choose it.
+		requireAdmin(locals.person);
 		const form = await request.formData();
 		const cadence = String(form.get('cadence') ?? '') as BackupCadence;
 		if (!BACKUP_CADENCES.includes(cadence)) return fail(400, { message: 'Unknown cadence.' });
@@ -130,7 +171,8 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	importConfig: async ({ request }) => {
+	importConfig: async ({ request, locals }) => {
+		requireAdmin(locals.person);
 		const form = await request.formData();
 		const file = form.get('file');
 		if (!(file instanceof File) || file.size === 0) {
@@ -147,7 +189,8 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	runBackupNow: async () => {
+	runBackupNow: async ({ locals }) => {
+		requireAdmin(locals.person);
 		const run = await runBackup();
 		if (!run.ok) return fail(500, { message: `Backup failed: ${run.note}` });
 		return { ok: true };
@@ -173,22 +216,19 @@ export const actions: Actions = {
 		requireAdmin(locals.person);
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();
-		const birthYear = String(form.get('birthYear') ?? '').trim();
 		const role = form.get('role') === 'admin' ? 'admin' : 'member';
 		if (!name) return fail(400, { message: 'A person needs a name.' });
+
+		const birthYear = parseBirthYear(String(form.get('birthYear') ?? ''), new Date());
+		if (birthYear === 'invalid') return fail(400, { message: BIRTH_YEAR_ERROR });
 
 		const id = randomUUID();
 		await db.insert(person).values({
 			id,
 			name,
-			initials: name
-				.split(/\s+/)
-				.map((w) => w[0] ?? '')
-				.join('')
-				.slice(0, 2)
-				.toUpperCase(),
+			initials: initialsFor(name),
 			role,
-			birthYear: birthYear ? Number(birthYear) : null,
+			birthYear,
 			// No password: they choose their own through the enrollment link, so
 			// the administrator creating them never knows it.
 			passwordHash: null
@@ -213,6 +253,20 @@ export const actions: Actions = {
 		requireAdmin(locals.person);
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
+		const rows = await db
+			.select({ id: person.id, passwordHash: person.passwordHash })
+			.from(person)
+			.where(eq(person.id, personId));
+		const target = rows[0];
+		if (!target) return fail(404, { message: 'No such person.' });
+		// An enrollment link overwrites a password and signs its visitor in. Minting
+		// one for somebody who has already enrolled is an account takeover, so the
+		// "still pending" condition has to hold here and not only in the markup
+		// that decides whether to draw the button.
+		if (target.passwordHash !== null) {
+			return fail(400, { message: 'That person has already enrolled.' });
+		}
+
 		const { raw } = await createEnrollmentToken(personId);
 		return { ok: true, enrollmentLink: `${url.origin}/enroll/${raw}` };
 	},
@@ -221,28 +275,36 @@ export const actions: Actions = {
 		requireAdmin(locals.person);
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
-		const rows = await db
-			.select({ id: person.id, role: person.role })
-			.from(person)
-			.where(eq(person.id, personId));
-		const target = rows[0];
-		if (!target) return fail(404, { message: 'No such person.' });
 
-		const verdict = canDeactivate(locals.person!, target, await activeAdminCount());
-		if (!verdict.ok) return fail(400, { message: verdict.reason });
+		return db.transaction(async (tx) => {
+			const rows = await tx
+				.select({ id: person.id, role: person.role })
+				.from(person)
+				.where(eq(person.id, personId));
+			const target = rows[0];
+			if (!target) return fail(404, { message: 'No such person.' });
 
-		await db.update(person).set({ deactivatedAt: new Date() }).where(eq(person.id, personId));
-		// Credentials and the password hash are left intact so reactivation is a
-		// clean undo; only live sessions are cut.
-		await db.delete(session).where(eq(session.personId, personId));
-		return { ok: true };
+			const verdict = canDeactivate(locals.person!, target, await lockActiveAdminCount(tx));
+			if (!verdict.ok) return fail(400, { message: verdict.reason });
+
+			await tx.update(person).set({ deactivatedAt: new Date() }).where(eq(person.id, personId));
+			// Credentials and the password hash are left intact so reactivation is a
+			// clean undo; only live sessions are cut.
+			await tx.delete(session).where(eq(session.personId, personId));
+			return { ok: true };
+		});
 	},
 
 	reactivatePerson: async ({ request, locals }) => {
 		requireAdmin(locals.person);
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
-		await db.update(person).set({ deactivatedAt: null }).where(eq(person.id, personId));
+		const updated = await db
+			.update(person)
+			.set({ deactivatedAt: null })
+			.where(eq(person.id, personId))
+			.returning({ id: person.id });
+		if (!updated[0]) return fail(404, { message: 'No such person.' });
 		return { ok: true };
 	},
 
@@ -251,17 +313,20 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 		const next = form.get('role') === 'admin' ? 'admin' : 'member';
-		const rows = await db
-			.select({ id: person.id, role: person.role })
-			.from(person)
-			.where(eq(person.id, personId));
-		const target = rows[0];
-		if (!target) return fail(404, { message: 'No such person.' });
 
-		const verdict = canChangeRole(locals.person!, target, next, await activeAdminCount());
-		if (!verdict.ok) return fail(400, { message: verdict.reason });
+		return db.transaction(async (tx) => {
+			const rows = await tx
+				.select({ id: person.id, role: person.role })
+				.from(person)
+				.where(eq(person.id, personId));
+			const target = rows[0];
+			if (!target) return fail(404, { message: 'No such person.' });
 
-		await db.update(person).set({ role: next }).where(eq(person.id, personId));
-		return { ok: true };
+			const verdict = canChangeRole(locals.person!, target, next, await lockActiveAdminCount(tx));
+			if (!verdict.ok) return fail(400, { message: verdict.reason });
+
+			await tx.update(person).set({ role: next }).where(eq(person.id, personId));
+			return { ok: true };
+		});
 	}
 };

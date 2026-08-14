@@ -5,9 +5,8 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person, session } from '$lib/server/db/schema';
+import { PASSWORD_MIN_LENGTH } from '$lib/password-policy';
 import { hashPassword, verifyPassword } from './index';
-
-const MIN_LENGTH = 8;
 
 export async function revokeOtherSessions(personId: string, keepSessionId: string): Promise<void> {
 	await db
@@ -20,8 +19,8 @@ export async function changeOwnPassword(
 	current: string,
 	next: string
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-	if (next.length < MIN_LENGTH) {
-		return { ok: false, message: `New password needs at least ${MIN_LENGTH} characters.` };
+	if (next.length < PASSWORD_MIN_LENGTH) {
+		return { ok: false, message: `New password needs at least ${PASSWORD_MIN_LENGTH} characters.` };
 	}
 	const rows = await db
 		.select({ passwordHash: person.passwordHash })

@@ -12,7 +12,10 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		// Empty: credentials are discoverable, so the authenticator tells us who
 		// the person is via the user handle. That is what removes the picker.
 		allowCredentials: [],
-		userVerification: 'preferred'
+		// Matches what the verifier enforces — see the note in register/options.
+		// A passkey that authenticated on possession alone would be a bearer
+		// token with extra steps.
+		userVerification: 'required'
 	});
 
 	storeChallenge(cookies, options.challenge);

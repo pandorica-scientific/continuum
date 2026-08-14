@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 import { eq } from 'drizzle-orm';
-import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import { person, session } from '$lib/server/db/schema';
+import { cookieSecure } from './cookies';
 import type { Cookies } from '@sveltejs/kit';
 import type { PersonRole } from './policy';
 
@@ -30,6 +30,14 @@ function hashToken(token: string): string {
 }
 
 export async function createSession(cookies: Cookies, personId: string): Promise<void> {
+	// Signing in replaces whatever session the caller arrived with. The cookie is
+	// overwritten either way, so leaving the old row behind would strand a fully
+	// valid 30-day session for the previous person — reachable by anyone who
+	// still had that cookie value, and invisible to revokeOtherSessions because
+	// it belongs to a different account.
+	const previous = currentSessionId(cookies);
+	if (previous) await db.delete(session).where(eq(session.id, previous));
+
 	const token = randomBytes(32).toString('base64url');
 	const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
 	await db.insert(session).values({ id: hashToken(token), personId, expiresAt });
@@ -37,10 +45,7 @@ export async function createSession(cookies: Cookies, personId: string): Promise
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		// Home servers commonly run plain HTTP on the LAN; when the instance is
-		// served over HTTPS (reverse proxy, Tailscale cert), the cookie locks
-		// to it automatically via ORIGIN.
-		secure: (env.ORIGIN ?? '').startsWith('https://'),
+		secure: cookieSecure(),
 		expires: expiresAt
 	});
 }
