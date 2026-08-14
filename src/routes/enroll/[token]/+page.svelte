@@ -1,6 +1,6 @@
 <script lang="ts">
 	import BrandMark from '$lib/components/BrandMark.svelte';
-	import { PASSWORD_HINT } from '$lib/password-policy';
+	import { passwordHint } from '$lib/password-policy';
 
 	let { data, form } = $props();
 </script>
@@ -23,7 +23,7 @@
 			<input
 				name="password"
 				type="password"
-				placeholder={`Password (${PASSWORD_HINT})`}
+				placeholder={`Password (${passwordHint(data.passwordMinLength)})`}
 				autocomplete="new-password"
 			/>
 			<input

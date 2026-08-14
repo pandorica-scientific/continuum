@@ -4,11 +4,10 @@
 // same handling sessions and API tokens already use.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { and, eq, gt, isNull } from 'drizzle-orm';
+import { db, type Queryable } from '$lib/server/db';
 import { enrollmentToken } from '$lib/server/db/schema';
-
-const LIFETIME_DAYS = 7;
+import { enrollmentLinkDays } from '$lib/server/policy';
 
 export type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
 
@@ -36,7 +35,7 @@ function hashToken(raw: string): string {
 
 export async function createEnrollmentToken(personId: string): Promise<{ raw: string }> {
 	const raw = randomBytes(32).toString('base64url');
-	const expiresAt = new Date(Date.now() + LIFETIME_DAYS * 24 * 60 * 60 * 1000);
+	const expiresAt = new Date(Date.now() + enrollmentLinkDays() * 24 * 60 * 60 * 1000);
 	// One live link per person: reissuing invalidates the previous one.
 	await db.delete(enrollmentToken).where(eq(enrollmentToken.personId, personId));
 	await db.insert(enrollmentToken).values({ id: hashToken(raw), personId, expiresAt });
@@ -60,18 +59,35 @@ export async function lookupEnrollmentToken(
 
 /**
  * Marks the token used and returns its person, or null when it was not valid.
- * The update is conditional on usedAt still being null, so two simultaneous
- * submissions cannot both succeed.
+ *
+ * Every condition lives in the UPDATE's own predicate. Two simultaneous
+ * submissions therefore cannot both succeed, and — the reason expiry is checked
+ * here rather than on the returned row — submitting an expired link no longer
+ * stamps `usedAt` on it on the way to being rejected. That would have flipped
+ * its status from `expired` to `used`, the one distinction enrollmentStatus
+ * draws, on a route any unauthenticated visitor can reach.
  */
 export async function consumeEnrollmentToken(raw: string): Promise<{ personId: string } | null> {
-	const id = hashToken(raw);
+	const now = new Date();
 	const updated = await db
 		.update(enrollmentToken)
-		.set({ usedAt: new Date() })
-		.where(and(eq(enrollmentToken.id, id), isNull(enrollmentToken.usedAt)))
-		.returning({ personId: enrollmentToken.personId, expiresAt: enrollmentToken.expiresAt });
+		.set({ usedAt: now })
+		.where(
+			and(
+				eq(enrollmentToken.id, hashToken(raw)),
+				isNull(enrollmentToken.usedAt),
+				gt(enrollmentToken.expiresAt, now)
+			)
+		)
+		.returning({ personId: enrollmentToken.personId });
 	const row = updated[0];
-	if (!row) return null;
-	if (row.expiresAt <= new Date()) return null;
-	return { personId: row.personId };
+	return row ? { personId: row.personId } : null;
+}
+
+/**
+ * Voids any outstanding link for a person. Deactivation calls this: the account
+ * is closed, so a link minted before it must not still be spendable.
+ */
+export async function revokeEnrollmentTokens(personId: string, on: Queryable = db): Promise<void> {
+	await on.delete(enrollmentToken).where(eq(enrollmentToken.personId, personId));
 }

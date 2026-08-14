@@ -22,11 +22,26 @@ export function relyingPartyId(origin: string): string {
 }
 
 /**
- * `env.ORIGIN` is `string | undefined`, and every WebAuthn call needs a definite
- * string. Narrowing here once keeps the null handling out of four endpoints.
+ * `env.ORIGIN` normalised into the form a browser reports: lowercase scheme and
+ * host, no port when it is the default, no trailing slash, no path.
+ *
+ * WebAuthn verification compares `clientDataJSON.origin` to this by exact
+ * string equality. Passing `env.ORIGIN` through verbatim meant that an ORIGIN
+ * written as `https://Continuum.example.ts.net/` parsed fine, reported itself
+ * secure, rendered both passkey buttons — and then failed every registration
+ * and every sign-in with "could not be verified", naming nothing useful. The
+ * relying-party ID is derived from this too, so the same normalisation covers
+ * the hostname the credential is bound to.
+ *
+ * Empty when ORIGIN is unset or unparseable, which `passkeysAvailable()` then
+ * reads as "no passkeys here".
  */
 export function currentOrigin(): string {
-	return env.ORIGIN ?? '';
+	try {
+		return new URL(env.ORIGIN ?? '').origin;
+	} catch {
+		return '';
+	}
 }
 
 /** False on a plain-HTTP LAN deployment, where the passkey UI must be absent. */

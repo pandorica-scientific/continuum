@@ -70,7 +70,14 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 			credential: {
 				id: row.id,
 				publicKey: new Uint8Array(Buffer.from(row.publicKey, 'base64url')),
-				counter: row.counter
+				// Deliberately zero. The library refuses any counter that does not
+				// increase, including the 0 that synced passkeys always report — so a
+				// credential that once reported a real value and then moved to iCloud
+				// Keychain could never sign in again. Clone detection here is
+				// isCloneSignal's job precisely because it has to tolerate that, and
+				// handing the library a zero is what lets it run at all: its check
+				// fires first and covers every case isCloneSignal would have caught.
+				counter: 0
 			}
 		});
 	} catch {

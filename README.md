@@ -133,8 +133,13 @@ valid for seven days, which you pass to them however you like. They open it and
 choose their own password — you never see it. Until they do, they show as "not
 enrolled yet" and cannot sign in.
 
-Deactivating a person blocks sign-in and cuts their live sessions, but keeps
-their password, passkeys and all their history, so reactivating is a clean undo.
+Two knobs, both optional, in `.env`: `PASSWORD_MIN_LENGTH` (default 8) and
+`ENROLLMENT_LINK_DAYS` (default 7). The password hints in the interface are fed
+by the same value the server enforces, so they cannot disagree.
+
+Deactivating a person blocks sign-in and cuts their live sessions, and voids any
+enrollment link they never opened — but it keeps their password, passkeys and
+all their history, so reactivating is a clean undo.
 People are never deleted: accounts, properties, loans, documents and tax
 statements reference them.
 
@@ -194,7 +199,9 @@ calendar needs Tailscale connected for it to refresh.
 your existing `.ts.net` name and run, on the host:
 
 ```sh
-tailscale serve --bg 3000
+# 80 is the host port compose publishes by default; use your CONTINUUM_PORT if
+# you overrode it. 3000 is the port *inside* the container and is not published.
+tailscale serve --bg 80
 ```
 
 Any other route to a trusted certificate works equally well — a reverse proxy

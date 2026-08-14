@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.3.1 — 2026-08-14
+
+Hardening the accounts work in 0.3.0. Two rounds of review over that release
+found gaps between what the code did and what the README promised; this closes
+them.
+
+### Fixed
+
+- **Settings export needed no administrator.** `?/importConfig` was restricted
+  when roles landed but its read counterpart, `GET /settings/export`, was not —
+  so any signed-in member could download `ledger.config.json`, which names the
+  host filesystem path backups are written to. It now requires an administrator,
+  and an end-to-end test signs in as a member and checks for the 403.
+- **The household roster told members too much.** Administrative sections were
+  withheld from members, but the list of people still carried everyone's role,
+  birth year, deactivation state, and which accounts had no password set yet —
+  that last one naming exactly the people with a live enrollment link. Members
+  now see names and nothing else.
+- **Deactivation left enrollment links live.** Deactivating someone cut their
+  sessions but not the one-time link they had never opened, so whoever held that
+  URL could still set a password on a closed account. Deactivation now voids the
+  link, and enrollment independently refuses a deactivated person — previously
+  they would have been handed a session and bounced straight back out at the
+  next request with nothing explaining why.
+- **An expired enrollment link could be marked used.** Submitting the form on an
+  eight-day-old link stamped `used_at` on the way to rejecting it, flipping its
+  status from expired to used. Every condition now lives in the update's own
+  predicate, so an expired link is refused without being written to.
+- **A trailing slash in `ORIGIN` broke every passkey.** `ORIGIN` was passed to
+  WebAuthn verbatim while everything else parsed it, so a value written as
+  `https://Continuum.example.ts.net/` reported itself secure, drew both passkey
+  buttons, and then failed every registration and sign-in with an error that
+  named nothing. It is now normalised the way a browser reports an origin.
+- **Cloned-authenticator detection never ran.** The library's own counter rule
+  fired first, which made the check unreachable — and that rule would have
+  locked out a synced passkey that once reported a real counter and later
+  reported zero, which is exactly the case the check exists to permit.
+- **A refused role change or deactivation committed its transaction.** `fail()`
+  returns rather than throws, so Drizzle saw a normal completion. Nothing was
+  written either way, but the locks were held to COMMIT and the pattern would
+  have silently persisted partial work the day a write moved above a guard.
+- The end-to-end suite builds inside its web-server command, whose timeout
+  defaults to sixty seconds — enough for a cold build to abort the whole run
+  before a single test started. It now gets five minutes.
+- The README's Tailscale instructions proxied port 3000, which is the port
+  inside the container. Compose publishes 80.
+
+### Changed
+
+- **`PASSWORD_MIN_LENGTH` and `ENROLLMENT_LINK_DAYS` are configurable**, with
+  the previous values as defaults. Both are household policy rather than facts,
+  and the interface hints are fed by the same numbers the server enforces so the
+  two cannot disagree. The WebAuthn challenge lifetime stays fixed on purpose:
+  it bounds one ceremony, and a knob there would only widen a replay window.
+- **Changing your password says so.** It was the one action on the page with a
+  real security consequence and no feedback at all — the form now clears and
+  confirms that other devices were signed out. It also has its own layout
+  instead of borrowing the add-person grid, whose second column is sized for a
+  birth year and left the new-password field a third the width of its
+  neighbours.
+- The two passkey buttons share one ceremony helper. The fragile part is the
+  list of exception names that mean "the person cancelled", and it was written
+  out twice.
+
 ## 0.3.0 — 2026-08-14
 
 Accounts you can actually manage, and a way in that is not a password.

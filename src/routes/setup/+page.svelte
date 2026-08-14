@@ -1,7 +1,7 @@
 <script lang="ts">
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import { MODULE_KEYS } from '$lib/modules/registry';
-	import { PASSWORD_HINT } from '$lib/password-policy';
+	import { passwordHint } from '$lib/password-policy';
 
 	import { currencyLabel } from '$lib/currencies';
 
@@ -62,7 +62,7 @@
 					<input
 						name="personPassword"
 						type="password"
-						placeholder={`Password (${PASSWORD_HINT})`}
+						placeholder={`Password (${passwordHint(data.passwordMinLength)})`}
 					/>
 				</div>
 			{/each}

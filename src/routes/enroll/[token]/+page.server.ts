@@ -5,7 +5,7 @@ import { person } from '$lib/server/db/schema';
 import { createSession, hashPassword } from '$lib/server/auth';
 import { consumeEnrollmentToken, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
-import { PASSWORD_MIN_LENGTH } from '$lib/password-policy';
+import { passwordMinLength } from '$lib/server/policy';
 import {
 	loginBlockedForSeconds,
 	recordLoginFailure,
@@ -17,11 +17,34 @@ import type { Actions, PageServerLoad } from './$types';
 // from "never existed" would confirm whether a guessed token was ever real.
 const UNUSABLE = 'This link is not valid. Ask whoever invited you for a new one.';
 
+const INVALID = { valid: false as const, name: '', passkeys: false, passwordMinLength: 0 };
+
+/** The person a live link belongs to, or null when they cannot enrol after all. */
+async function enrollableePerson(token: string): Promise<{ id: string; name: string } | null> {
+	const { personId, status } = await lookupEnrollmentToken(token);
+	if (status !== 'valid') return null;
+	const rows = await db
+		.select({ id: person.id, name: person.name, deactivatedAt: person.deactivatedAt })
+		.from(person)
+		.where(eq(person.id, personId));
+	const row = rows[0];
+	// Deactivation revokes outstanding links, so this is a backstop for one
+	// minted and deactivated in the same breath. Without it the visitor sets a
+	// password, is handed a session, and is bounced straight back out at
+	// /overview by validateSession with nothing explaining why.
+	if (!row || row.deactivatedAt) return null;
+	return { id: row.id, name: row.name };
+}
+
 export const load: PageServerLoad = async ({ params }) => {
-	const { personId, status } = await lookupEnrollmentToken(params.token);
-	if (status !== 'valid') return { valid: false as const, name: '', passkeys: false };
-	const rows = await db.select({ name: person.name }).from(person).where(eq(person.id, personId));
-	return { valid: true as const, name: rows[0]?.name ?? '', passkeys: passkeysAvailable() };
+	const target = await enrollableePerson(params.token);
+	if (!target) return INVALID;
+	return {
+		valid: true as const,
+		name: target.name,
+		passkeys: passkeysAvailable(),
+		passwordMinLength: passwordMinLength()
+	};
 };
 
 export const actions: Actions = {
@@ -37,13 +60,19 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const password = String(form.get('password') ?? '');
 		const confirm = String(form.get('confirmPassword') ?? '');
-		if (password.length < PASSWORD_MIN_LENGTH) {
-			return fail(400, {
-				message: `Password needs at least ${PASSWORD_MIN_LENGTH} characters.`
-			});
+		const minLength = passwordMinLength();
+		if (password.length < minLength) {
+			return fail(400, { message: `Password needs at least ${minLength} characters.` });
 		}
 		if (password !== confirm) {
 			return fail(400, { message: 'The two passwords do not match.' });
+		}
+
+		// Checked before the token is spent, so a link for a closed account is not
+		// burned on the way to being refused.
+		if (!(await enrollableePerson(params.token))) {
+			recordLoginFailure(address);
+			return fail(400, { message: UNUSABLE });
 		}
 
 		const consumed = await consumeEnrollmentToken(params.token);

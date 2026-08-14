@@ -4,7 +4,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
 	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
-	import { PASSWORD_HINT } from '$lib/password-policy';
+	import { passwordHint } from '$lib/password-policy';
 	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
@@ -84,21 +84,35 @@
 		people={data.people}
 		me={data.me}
 		enrollmentLink={form?.enrollmentLink ?? null}
+		enrollmentLinkDays={data.enrollmentLinkDays}
 		passkeys={data.passkeys}
 		myPasskeys={data.myPasskeys}
 	/>
 
-	<form method="POST" action="?/changePassword" use:enhance class="card add-form">
+	<form
+		method="POST"
+		action="?/changePassword"
+		use:enhance={() =>
+			async ({ update }) => {
+				// reset:true clears the three password fields on success, which is
+				// half the confirmation that anything happened.
+				await update({ reset: true });
+			}}
+		class="card password-form"
+	>
 		<input name="currentPassword" type="password" placeholder="Current password" required />
 		<input
 			name="newPassword"
 			type="password"
-			placeholder={`New password (${PASSWORD_HINT})`}
+			placeholder={`New password (${passwordHint(data.passwordMinLength)})`}
 			required
 		/>
 		<input name="confirmPassword" type="password" placeholder="Repeat new password" required />
 		<button type="submit" class="btn">Change password</button>
 	</form>
+	{#if form?.passwordChanged}
+		<p class="ok-note">Password changed. Every other signed-in device has been signed out.</p>
+	{/if}
 </section>
 
 {#if data.backup}
@@ -421,12 +435,21 @@
 		padding: 8px 11px;
 		font-size: 13.5px;
 	}
-	.add-form {
+	/* Three equal password fields and a button. This used to borrow .add-form,
+	   whose second column is 90px wide for a birth year — which left the
+	   new-password input a third the width of its neighbours. That rule now
+	   lives only in PeopleSettings, next to the form it was written for. */
+	.password-form {
 		display: grid;
-		grid-template-columns: minmax(0, 1.2fr) 90px minmax(0, 1fr) auto;
+		grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
 		gap: 8px;
 		padding-top: 11px;
 		border-top: 1px solid var(--bd);
+	}
+	.ok-note {
+		margin: 8px 0 0;
+		font-size: 12.5px;
+		color: var(--green);
 	}
 	.prose {
 		margin: 0;
@@ -492,7 +515,7 @@
 		cursor: pointer;
 	}
 	@media (max-width: 640px) {
-		.add-form {
+		.password-form {
 			grid-template-columns: minmax(0, 1fr);
 		}
 	}

@@ -36,6 +36,11 @@ export default defineConfig({
 		// is no longer in the repository.
 		command: 'npm run build && node tests/e2e/reset-db.mjs && node build',
 		port: 4173,
+		// The build is part of this command, and webServer.timeout defaults to 60
+		// seconds — which a cold Vite build of this project (pdfjs, drizzle,
+		// argon2) will exceed, aborting the whole suite before a test runs. The
+		// top-level `timeout` above is the per-test one and does not apply here.
+		timeout: 300_000,
 		reuseExistingServer: false,
 		env: {
 			DATABASE_URL,

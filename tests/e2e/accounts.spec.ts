@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD_HINT } from '../../src/lib/password-policy';
+import { DEFAULT_PASSWORD_MIN_LENGTH, passwordHint } from '../../src/lib/password-policy';
+
+const HINT = passwordHint(DEFAULT_PASSWORD_MIN_LENGTH);
 
 // One ordered journey through account management: invite → enrol → deactivate.
 // Runs as its own Playwright project that depends on `desktop`, so the wizard
@@ -46,7 +48,7 @@ test('the enrollment link sets a password and signs the person in', async ({ bro
 	const page = await context.newPage();
 	await page.goto(enrollmentLink);
 	await expect(page.getByText('Welcome, Tomáš Dvořák')).toBeVisible();
-	await page.getByPlaceholder(`Password (${PASSWORD_HINT})`).fill('parallel-anchor-tin');
+	await page.getByPlaceholder(`Password (${HINT})`).fill('parallel-anchor-tin');
 	await page.getByPlaceholder('Repeat password').fill('parallel-anchor-tin');
 	await page.getByRole('button', { name: 'Set password' }).click();
 	await expect(page).toHaveURL(/\/overview/);
@@ -77,6 +79,19 @@ test.describe('what a member may do', () => {
 		await expect(page.getByText('Destination folder')).toHaveCount(0);
 		await expect(page.getByText('Self-hosting')).toHaveCount(0);
 		await expect(page.getByRole('button', { name: '➕ Add a person' })).toHaveCount(0);
+
+		// The roster names the household, and stops there. "admin" would say who
+		// runs the instance; "not enrolled yet" would name every account with a
+		// live enrollment link.
+		await expect(page.getByText('Jana Nováková')).toBeVisible();
+		await expect(page.locator('.person-row .note')).toHaveCount(0);
+	});
+
+	test('the settings export refuses them', async ({ page }) => {
+		// The read counterpart of importConfig: it returns the backup destination
+		// on the host filesystem.
+		const response = await page.request.get('/settings/export');
+		expect(response.status()).toBe(403);
 	});
 
 	// The controls are absent from their page, so these post directly. A member

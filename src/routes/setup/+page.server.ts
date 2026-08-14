@@ -5,12 +5,15 @@ import { person } from '$lib/server/db/schema';
 import { createSession, hashPassword } from '$lib/server/auth';
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
-import { PASSWORD_MIN_LENGTH } from '$lib/password-policy';
+import { passwordMinLength } from '$lib/server/policy';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => ({ currencies: await availableCurrencies() });
+export const load: PageServerLoad = async () => ({
+	currencies: await availableCurrencies(),
+	passwordMinLength: passwordMinLength()
+});
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {
@@ -34,11 +37,12 @@ export const actions: Actions = {
 			return fail(400, { message: 'Add at least one person.' });
 		}
 		const now = new Date();
+		const minLength = passwordMinLength();
 		const validated: { name: string; password: string; birthYear: number | null }[] = [];
 		for (const p of people) {
-			if (p.password.length < PASSWORD_MIN_LENGTH) {
+			if (p.password.length < minLength) {
 				return fail(400, {
-					message: `${p.name}'s password needs at least ${PASSWORD_MIN_LENGTH} characters.`
+					message: `${p.name}'s password needs at least ${minLength} characters.`
 				});
 			}
 			const birthYear = parseBirthYear(p.birthYear, now);

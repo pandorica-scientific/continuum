@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { db, type Db } from '$lib/server/db';
+import { db, type Tx } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword, revokeOtherSessions } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, requireAdmin } from '$lib/server/auth/policy';
-import { createEnrollmentToken } from '$lib/server/auth/enrollment';
+import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
+import { enrollmentLinkDays, passwordMinLength } from '$lib/server/policy';
 import {
 	BACKUP_CADENCES,
 	detectDestinations,
@@ -26,7 +27,31 @@ import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
 import type { Actions, PageServerLoad } from './$types';
 
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+/**
+ * Refusing from inside a transaction has to throw. `fail()` only returns a
+ * value, which Drizzle reads as a normal completion and commits — harmless
+ * while every guard sits above every write, but a trap the day one does not,
+ * and it holds the FOR UPDATE locks until COMMIT even for a rejected request.
+ */
+class Refused extends Error {
+	constructor(
+		readonly status: number,
+		readonly reason: string
+	) {
+		super(reason);
+	}
+}
+
+/** Runs `work` in a transaction, turning a `Refused` into an action failure. */
+async function transactional(work: (tx: Tx) => Promise<void>) {
+	try {
+		await db.transaction(work);
+		return { ok: true };
+	} catch (err) {
+		if (err instanceof Refused) return fail(err.status, { message: err.reason });
+		throw err;
+	}
+}
 
 /**
  * Admins who could still sign in, with those rows locked for the rest of the
@@ -54,6 +79,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// else on it — backup destinations on the host filesystem, server status,
 	// the API token list — is administrator business and is not fetched at all
 	// for anyone else, so it cannot leak through the payload.
+	//
+	// The household roster is the one thing in between. Members see who lives
+	// here, because that is not a secret in a household; they do not see who
+	// administers it, anyone's birth year, who is deactivated, or which accounts
+	// have no password set yet — that last one names exactly the people with a
+	// live enrollment link outstanding.
 	const isAdmin = locals.person?.role === 'admin';
 
 	const [
@@ -75,11 +106,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 				id: person.id,
 				name: person.name,
 				initials: person.initials,
-				role: person.role,
-				birthYear: person.birthYear,
-				deactivatedAt: person.deactivatedAt,
+				role: isAdmin ? person.role : sql<null>`null`,
+				birthYear: isAdmin ? person.birthYear : sql<null>`null`,
+				deactivatedAt: isAdmin ? person.deactivatedAt : sql<null>`null`,
 				// Created but never enrolled: no password chosen yet.
-				pending: sql<boolean>`${person.passwordHash} is null`
+				pending: isAdmin ? sql<boolean>`${person.passwordHash} is null` : sql<boolean>`false`
 			})
 			.from(person)
 			.orderBy(person.createdAt),
@@ -102,6 +133,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		isAdmin,
+		passwordMinLength: passwordMinLength(),
+		enrollmentLinkDays: enrollmentLinkDays(),
 		moduleToggles: modules,
 		baseCurrency,
 		currencies,
@@ -209,7 +242,9 @@ export const actions: Actions = {
 
 		const keep = currentSessionId(cookies);
 		if (keep) await revokeOtherSessions(locals.person.id, keep);
-		return { ok: true };
+		// Named rather than a bare ok, so the page can confirm the one action here
+		// with a real security consequence instead of appearing to do nothing.
+		return { passwordChanged: true };
 	},
 
 	addPerson: async ({ request, locals, url }) => {
@@ -276,22 +311,24 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 
-		return db.transaction(async (tx) => {
+		return transactional(async (tx) => {
 			const rows = await tx
 				.select({ id: person.id, role: person.role })
 				.from(person)
 				.where(eq(person.id, personId));
 			const target = rows[0];
-			if (!target) return fail(404, { message: 'No such person.' });
+			if (!target) throw new Refused(404, 'No such person.');
 
 			const verdict = canDeactivate(locals.person!, target, await lockActiveAdminCount(tx));
-			if (!verdict.ok) return fail(400, { message: verdict.reason });
+			if (!verdict.ok) throw new Refused(400, verdict.reason);
 
 			await tx.update(person).set({ deactivatedAt: new Date() }).where(eq(person.id, personId));
 			// Credentials and the password hash are left intact so reactivation is a
-			// clean undo; only live sessions are cut.
+			// clean undo; live sessions are cut, and so is any enrollment link they
+			// never got round to opening — a closed account must not still be
+			// claimable by whoever holds that URL.
 			await tx.delete(session).where(eq(session.personId, personId));
-			return { ok: true };
+			await revokeEnrollmentTokens(personId, tx);
 		});
 	},
 
@@ -314,19 +351,18 @@ export const actions: Actions = {
 		const personId = String(form.get('personId') ?? '');
 		const next = form.get('role') === 'admin' ? 'admin' : 'member';
 
-		return db.transaction(async (tx) => {
+		return transactional(async (tx) => {
 			const rows = await tx
 				.select({ id: person.id, role: person.role })
 				.from(person)
 				.where(eq(person.id, personId));
 			const target = rows[0];
-			if (!target) return fail(404, { message: 'No such person.' });
+			if (!target) throw new Refused(404, 'No such person.');
 
 			const verdict = canChangeRole(locals.person!, target, next, await lockActiveAdminCount(tx));
-			if (!verdict.ok) return fail(400, { message: verdict.reason });
+			if (!verdict.ok) throw new Refused(400, verdict.reason);
 
 			await tx.update(person).set({ role: next }).where(eq(person.id, personId));
-			return { ok: true };
 		});
 	}
 };
