@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import TagInput from '$lib/components/TagInput.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
@@ -69,6 +70,20 @@
 					<span class="sub">{l.sub}</span>
 				</div>
 				<Pill hue={l.pill.hue}>{l.pill.label}</Pill>
+			</div>
+			<div class="l-tags">
+				{#each l.tags as t (t)}
+					<form method="POST" action="?/tags" use:enhance class="tag-chip">
+						<input type="hidden" name="id" value={l.id} />
+						<input type="hidden" name="removeTag" value={t} />
+						<span>{t}</span>
+						<button type="submit" aria-label="Remove tag {t}">✕</button>
+					</form>
+				{/each}
+				<form method="POST" action="?/tags" use:enhance>
+					<input type="hidden" name="id" value={l.id} />
+					<TagInput transactionId={l.id} known={data.knownTags ?? []} />
+				</form>
 			</div>
 			<div class="facts">
 				{#each l.facts as f (f.label)}
@@ -476,5 +491,29 @@
 	.row {
 		display: flex;
 		gap: 8px;
+	}
+	.l-tags {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+	}
+	.tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		border: 1px solid var(--bd2);
+		border-radius: 999px;
+		padding: 3px 5px 3px 10px;
+		font-size: 12px;
+		color: var(--fg2);
+	}
+	.tag-chip button {
+		border: 0;
+		background: none;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: 11px;
+		padding: 0 3px;
 	}
 </style>

@@ -29,6 +29,15 @@
 	{#each data.tags as t (t.id)}
 		<a class="card tag-row" href="/transactions?tag={t.id}">
 			<span class="t-name">{t.name}</span>
+			{#if t.documents.length || t.properties.length}
+				<span class="t-linked">
+					{#each t.properties as p (p.id)}<span class="t-item">🏢 {p.name}</span>{/each}
+					{#each t.documents as d (d.id)}<span class="t-item">🗂️ {d.name}</span>{/each}
+					{#if t.documentsMore + t.propertiesMore > 0}
+						<span class="t-more">+{t.documentsMore + t.propertiesMore} more</span>
+					{/if}
+				</span>
+			{/if}
 			<span class="t-figures">
 				{#if t.empty}
 					<span class="t-quiet">nothing tagged yet</span>
@@ -62,6 +71,17 @@
 	.t-name {
 		font-size: 13.5px;
 		font-weight: 500;
+	}
+	.t-linked {
+		flex-basis: 100%;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 14px;
+		font-size: 12px;
+		color: var(--fg3);
+	}
+	.t-more {
+		color: var(--fg3);
 	}
 	.t-figures {
 		display: flex;

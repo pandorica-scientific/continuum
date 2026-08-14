@@ -5,16 +5,21 @@ import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	document,
+	documentProperty,
+	documentTag,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
 	property,
 	propertyBill,
+	propertyTag,
+	tag,
 	tenancy
 } from '$lib/server/db/schema';
 import { SHELVES } from '$lib/documents';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { saveUpload } from '$lib/server/files';
+import { normaliseTagName, setPropertyTags, upsertTag } from '$lib/server/tags';
 import { periodForMonth } from '$lib/loans/amortise';
 import { formatMinor, parseAmountToMinor } from '$lib/money';
 import { validateDrawing } from '$lib/plan';
@@ -218,13 +223,16 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		}
 
-		// Documents are linked by subject — the same emergent link the documents
-		// screen builds its columns from, so a contract filed "about" this flat
-		// shows up here with no second bookkeeping field.
+		// Documents are linked by document_property — a real key, so renaming the
+		// flat cannot orphan its contracts.
 		const today2 = new Date().toISOString().slice(0, 10);
-		const subjectKey = current.name.trim().toLowerCase();
+		const docLinks = await db
+			.select()
+			.from(documentProperty)
+			.where(eq(documentProperty.propertyId, current.id));
+		const linkedDocIds = new Set(docLinks.map((l) => l.documentId));
 		const propertyDocs = docs
-			.filter((d) => d.subject.trim().toLowerCase() === subjectKey)
+			.filter((d) => linkedDocIds.has(d.id))
 			.sort((a, b) => (a.addedOn < b.addedOn ? 1 : -1))
 			.map((d) => ({
 				id: d.id,
@@ -237,9 +245,15 @@ export const load: PageServerLoad = async ({ url }) => {
 				expired: d.expiresOn !== null && d.expiresOn < today2
 			}));
 
+		const flatTagRows = await db
+			.select({ name: tag.name })
+			.from(propertyTag)
+			.innerJoin(tag, eq(propertyTag.tagId, tag.id))
+			.where(eq(propertyTag.propertyId, current.id));
 		detail = {
 			id: current.id,
 			name: current.name,
+			tags: flatTagRows.map((r) => r.name),
 			sizeLabel: current.sizeLabel,
 			kind: current.kind,
 			// old fixed-slot uploads could leave holes; the strip wants a dense list
@@ -251,7 +265,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			mortgage: mortgageCard,
 			documents: propertyDocs,
 			// a rented flat's paperwork lands on the Tenancy shelf by default
-			addDocumentHref: `/documents?add=1&addShelf=${current.kind === 'rented' ? 'tenancy' : 'property'}&subject=${encodeURIComponent(current.name)}`
+			addDocumentHref: `/documents?add=1&addShelf=${current.kind === 'rented' ? 'tenancy' : 'property'}&propertyId=${current.id}`
 		};
 	}
 
@@ -268,6 +282,24 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
+	tags: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		if (!id) return fail(400, { message: 'Missing property.' });
+		const existing = await db
+			.select({ name: tag.name })
+			.from(propertyTag)
+			.innerJoin(tag, eq(propertyTag.tagId, tag.id))
+			.where(eq(propertyTag.propertyId, id));
+		const added = String(form.get('tagName') ?? '').trim();
+		const removed = String(form.get('removeTag') ?? '').trim();
+		const names = existing.map((r) => r.name).filter((n) => n !== removed);
+		if (added && !names.some((n) => normaliseTagName(n) === normaliseTagName(added)))
+			names.push(added);
+		await setPropertyTags(id, names);
+		return { ok: true };
+	},
+
 	addProperty: async ({ request }) => {
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();
@@ -409,12 +441,16 @@ export const actions: Actions = {
 				id: documentId,
 				name: `${label} · ${rows[0].name}`,
 				shelf: 'property',
-				subject: rows[0].name,
 				storedName,
 				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
-				addedOn: new Date().toISOString().slice(0, 10),
-				tags: ['bill']
+				addedOn: new Date().toISOString().slice(0, 10)
 			});
+			await db
+				.insert(documentProperty)
+				.values({ documentId, propertyId: rows[0].id })
+				.onConflictDoNothing();
+			const billTag = await upsertTag('bill');
+			await db.insert(documentTag).values({ documentId, tagId: billTag.id }).onConflictDoNothing();
 		}
 
 		await db

@@ -12,17 +12,24 @@ is our net worth right now, and is it going up?_
 
 ## Status
 
-All four phases are functional: setup wizard and per-person sign-in; statement
-import for five banks with automatic, correction-learning categorisation and
-transfer pairing across your own accounts; the cash-flow waterfall;
+All five phases are functional: setup wizard and per-person sign-in; statement
+import for five banks with automatic categorisation and transfer pairing
+across your own accounts; a searchable transaction register where a receipt
+can be split between categories and anything can be tagged into projects with
+running totals; a rules engine whose rules earn (and lose) trust from whether
+their suggestions survive your corrections; the cash-flow waterfall;
 multi-currency accounts with daily CNB rates; property with tenancies,
 drawable floor plans and bills with attached documents; loans with
 fixation-period interest bookkeeping and what-if repayment/re-fix previews;
 investments fed by broker report uploads (XTB first, behind an adapter seam);
-retirement projection with a payslip-fed salary tracker; documents with
-shelves and expiry dates; a generated calendar with an ics feed; Home
-Assistant behind a pluggable provider interface; and scheduled backups
-straight into a cloud-synced folder.
+retirement projection with a payslip-fed salary tracker; yearly tax statements
+per person and country, pre-filled from the payslips and charted over time;
+documents that always belong to something real — a person, a flat, an
+investment, the household — so columns follow renames and a typo cannot mint a
+phantom subject; a generated calendar with an ics feed; a read-only JSON API
+behind bearer tokens for dashboards and Home Assistant; Home Assistant itself
+behind a pluggable provider interface; and scheduled backups straight into a
+cloud-synced folder.
 
 |                                             |                                      |
 | ------------------------------------------- | ------------------------------------ |
@@ -83,6 +90,49 @@ fictional household — six months of categorised cash flow, two flats on one
 shared mortgage, payslips, a portfolio — so you can look around before
 importing anything real. Sign in as Jana Nováková with `demo-demo-demo`. An
 instance that already has people is never touched.
+
+## Reaching it by name
+
+Typing `ip:port` stops working the moment the router hands the server a new
+address. Two steps fix it for every device on the network, no cloud involved:
+
+1. **Pin the address.** In the router's DHCP settings, give the server a
+   reservation (a fixed lease for its MAC address). This is the actual cure
+   for the rotating IP — do it even if you skip step 2.
+2. **Name it.** Either set the server machine's hostname to `continuum`, and
+   mDNS makes it reachable as **`http://continuum.local`** from macOS, iOS,
+   Windows and recent Android with zero configuration — or, if your router
+   offers local DNS names, give the reservation a name there (`continuum.lan`
+   on most). A Pi-hole or AdGuard Home works too, with a custom DNS record.
+
+To lose the port as well, put the app on 80 and tell it its own address:
+
+```sh
+# .env
+CONTINUUM_PORT=80
+ORIGIN=http://continuum.local
+```
+
+`ORIGIN` must match whatever address you actually browse to — form
+submissions are origin-checked and will be refused otherwise. A bare
+`continuum` without a suffix is not reliable in browsers (it reads as a
+search), so `.local` or your router's suffix is the practical spelling.
+
+## API
+
+Settings → API tokens creates a bearer token (shown once) that grants
+read-only access to the whole ledger under `/api/v1` — accounts, transactions
+(accepting the register's filter params), categories, tags, net worth and
+cash-flow totals. Every amount crosses the wire as integer minor units plus a
+currency code, never a float:
+
+```sh
+curl -H "Authorization: Bearer <token>" http://your-server:3000/api/v1/networth
+# { "total": { "amountMinor": 646055100, "currency": "CZK" }, … }
+```
+
+There are no write endpoints and no webhooks — a household produces a handful
+of events a week, so a dashboard polls.
 
 ## Development
 

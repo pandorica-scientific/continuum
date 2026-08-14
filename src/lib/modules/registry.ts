@@ -13,6 +13,7 @@ export const MODULES = {
 	retirement: { emoji: '🎯', label: 'Retirement', note: 'the projection model and salary history' },
 	home: { emoji: '🏠', label: 'Home Assistant', note: 'devices and meter readings' },
 	calendar: { emoji: '📅', label: 'Calendar', note: 'generated events and the ics feed' },
+	tax: { emoji: '🧾', label: 'Tax', note: 'yearly statements per person and country' },
 	documents: { emoji: '🗂️', label: 'Documents', note: 'the archive with expiry dates' }
 } as const;
 
@@ -47,6 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
 			{ path: '/transactions', label: 'Transactions', emoji: '📒' },
 			{ path: '/tags', label: 'Tags', emoji: '🏷️' },
 			{ path: '/rules', label: 'Rules', emoji: '⚙️' },
+			{ path: '/tax', label: 'Tax', emoji: '🧾', module: 'tax' },
 			{ path: '/accounts', label: 'Accounts', emoji: '🏦' },
 			{ path: '/import', label: 'Import', emoji: '📥', module: 'import' }
 		]

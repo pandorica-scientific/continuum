@@ -62,6 +62,7 @@ configured in the app and stored in your own database. Nothing calls home.
 ## Tags
 
 - `latest` — current build from `main` (amd64 + arm64)
+- `0.2.0` — transaction register, splits & tags, self-correcting rules engine, read-only API, tax statements, entity-linked documents
 - `0.1.0` — first published version
 
 ## License

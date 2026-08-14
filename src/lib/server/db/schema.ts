@@ -364,10 +364,6 @@ export const document = pgTable(
 		name: text('name').notNull(),
 		// payslips | tax | identity | family | property | tenancy | loans | insurance
 		shelf: text('shelf').notNull(),
-		// free-text subject; the documents screen derives its columns from the
-		// subjects actually present (a third flat or a new child creates a
-		// column by itself — no configuration)
-		subject: text('subject').notNull().default(''),
 		// uploaded file on the data volume; a document may be metadata-only
 		storedName: text('stored_name'),
 		ext: text('ext').notNull().default('PDF'),
@@ -375,7 +371,6 @@ export const document = pgTable(
 		expiresOn: date('expires_on'),
 		// how the expiry reads: expires | ends | renews
 		expiryVerb: text('expiry_verb').notNull().default('expires'),
-		tags: jsonb('tags').$type<string[]>().notNull().default([]),
 		// money documents (payslips, bills) can carry the amount they are about
 		// and the month they cover — the salary tracker derives from these
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
@@ -520,6 +515,115 @@ export const ruleTag = pgTable(
 	(table) => [primaryKey({ columns: [table.ruleId, table.tagId] })]
 );
 
+// ---- Subjects and entity links ----
+
+// What a document can belong to when it is not a person, flat or investment:
+// the household, the car, the dog. A record created once and linked to — never
+// a name retyped and hoped to match. Seeded with one row for the household.
+export const subject = pgTable(
+	'subject',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull().unique(),
+		emoji: text('emoji').notNull().default('🏠'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	// "Car" and "car" are the same thing; two records differing only in case
+	// would be the phantom-column problem sneaking back in.
+	(table) => [uniqueIndex('subject_name_ci_idx').on(sql`lower(${table.name})`)]
+);
+
+export const documentPerson = pgTable(
+	'document_person',
+	{
+		documentId: text('document_id')
+			.notNull()
+			.references(() => document.id, { onDelete: 'cascade' }),
+		personId: text('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.documentId, t.personId] })]
+);
+
+export const documentProperty = pgTable(
+	'document_property',
+	{
+		documentId: text('document_id')
+			.notNull()
+			.references(() => document.id, { onDelete: 'cascade' }),
+		propertyId: text('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.documentId, t.propertyId] })]
+);
+
+export const documentAccount = pgTable(
+	'document_account',
+	{
+		documentId: text('document_id')
+			.notNull()
+			.references(() => document.id, { onDelete: 'cascade' }),
+		accountId: text('account_id')
+			.notNull()
+			.references(() => account.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.documentId, t.accountId] })]
+);
+
+export const documentSubject = pgTable(
+	'document_subject',
+	{
+		documentId: text('document_id')
+			.notNull()
+			.references(() => document.id, { onDelete: 'cascade' }),
+		subjectId: text('subject_id')
+			.notNull()
+			.references(() => subject.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.documentId, t.subjectId] })]
+);
+
+export const documentTag = pgTable(
+	'document_tag',
+	{
+		documentId: text('document_id')
+			.notNull()
+			.references(() => document.id, { onDelete: 'cascade' }),
+		tagId: text('tag_id')
+			.notNull()
+			.references(() => tag.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.documentId, t.tagId] })]
+);
+
+export const propertyTag = pgTable(
+	'property_tag',
+	{
+		propertyId: text('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' }),
+		tagId: text('tag_id')
+			.notNull()
+			.references(() => tag.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.propertyId, t.tagId] })]
+);
+
+export const loanTag = pgTable(
+	'loan_tag',
+	{
+		loanId: text('loan_id')
+			.notNull()
+			.references(() => loan.id, { onDelete: 'cascade' }),
+		tagId: text('tag_id')
+			.notNull()
+			.references(() => tag.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.loanId, t.tagId] })]
+);
+
 export const transactionSplitTag = pgTable(
 	'transaction_split_tag',
 	{
@@ -532,3 +636,40 @@ export const transactionSplitTag = pgTable(
 	},
 	(table) => [primaryKey({ columns: [table.splitId, table.tagId] })]
 );
+
+// ---- Tax statements ----
+
+// What a yearly tax statement said, per person per country. Nothing here is
+// computed: no brackets, no allowances, no residency. The two canonical figures
+// exist in every country, so the charts always have something to draw; anything
+// a particular country itemises separately is a labelled line.
+export const taxStatement = pgTable(
+	'tax_statement',
+	{
+		id: text('id').primaryKey(),
+		personId: text('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		year: integer('year').notNull(),
+		// free text on purpose — a validated country list would need maintaining
+		country: text('country').notNull(),
+		// the statement's own currency, so a series never mixes currencies
+		currency: text('currency').notNull(),
+		grossIncomeMinor: bigint('gross_income_minor', { mode: 'bigint' }).notNull(),
+		taxPaidMinor: bigint('tax_paid_minor', { mode: 'bigint' }).notNull(),
+		documentId: text('document_id').references(() => document.id, { onDelete: 'set null' }),
+		note: text('note'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [uniqueIndex('tax_statement_unique_idx').on(table.personId, table.year, table.country)]
+);
+
+export const taxStatementLine = pgTable('tax_statement_line', {
+	id: text('id').primaryKey(),
+	statementId: text('statement_id')
+		.notNull()
+		.references(() => taxStatement.id, { onDelete: 'cascade' }),
+	label: text('label').notNull(),
+	amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+	sort: integer('sort').notNull().default(0)
+});

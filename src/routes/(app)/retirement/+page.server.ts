@@ -5,6 +5,7 @@ import { db } from '$lib/server/db';
 import {
 	account,
 	document,
+	documentPerson,
 	loan,
 	loanFixationPeriod,
 	person,
@@ -108,14 +109,17 @@ export const load: PageServerLoad = async () => {
 
 	// ---- Salary history from payslips ----
 	// A payslip is a document on the Payslips shelf carrying an amount and the
-	// month it covers; the subject says whose it is. Amounts come from the PDF
-	// (learned per person) or the user's own entry.
+	// month it covers; document_person says whose it is — a real link, so a
+	// rename cannot orphan it. Amounts come from the PDF (learned per person)
+	// or the user's own entry.
 	const slips = (await db.select().from(document).where(eq(document.shelf, 'payslips'))).filter(
 		(d) => d.amountMinor !== null && d.periodMonth !== null
 	);
+	const slipOwners = await db.select().from(documentPerson);
+	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
 	const salary = people.map((p) => {
 		const own = slips
-			.filter((d) => d.subject.trim().toLowerCase() === p.name.trim().toLowerCase())
+			.filter((d) => ownerOf.get(d.id) === p.id)
 			.map((d) => ({
 				id: d.id,
 				periodMonth: d.periodMonth!,
@@ -154,6 +158,7 @@ export const load: PageServerLoad = async () => {
 		inputs,
 		config: { ...RETIRE_DEFAULTS, ...stored },
 		personNames: [people[0]?.name ?? 'Person one', people[1]?.name ?? 'Person two'],
+		peopleOptions: people.map((p) => ({ id: p.id, name: p.name })),
 		peopleList: people.map((p) => p.name),
 		salary,
 		baseCurrency
@@ -163,8 +168,11 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	addPayslip: async ({ request }) => {
 		const form = await request.formData();
-		const subject = String(form.get('subject') ?? '').trim();
-		if (!subject) return fail(400, { message: 'Pick whose payslip this is.' });
+		const personId = String(form.get('personId') ?? '').trim();
+		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
+		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
+		// The reader's learned labels stay keyed by name; the link is by id.
+		const subject = owner.name;
 		const baseCurrency = await getBaseCurrency();
 
 		const file = form.get('file');
@@ -208,11 +216,11 @@ export const actions: Actions = {
 		// a stated amount that matches a line on the slip teaches the reader
 		if (amountRaw && reading) await learnAmountLabel(subject, amountMinor, reading.candidates);
 
+		const documentId = randomUUID();
 		await db.insert(document).values({
-			id: randomUUID(),
+			id: documentId,
 			name: `Payslip ${periodMonth} · ${subject}`,
 			shelf: 'payslips',
-			subject,
 			storedName,
 			ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
 			addedOn: new Date().toISOString().slice(0, 10),
@@ -220,6 +228,7 @@ export const actions: Actions = {
 			amountCurrency: baseCurrency,
 			periodMonth
 		});
+		await db.insert(documentPerson).values({ documentId, personId }).onConflictDoNothing();
 		return { ok: true };
 	},
 
@@ -239,8 +248,16 @@ export const actions: Actions = {
 		}
 		// a correction against the stored file teaches the reader for next time
 		if (doc.storedName) {
-			const reading = await readStoredPayslip(doc.storedName, doc.subject);
-			await learnAmountLabel(doc.subject, amountMinor, reading.candidates);
+			const link = (
+				await db.select().from(documentPerson).where(eq(documentPerson.documentId, doc.id))
+			)[0];
+			const owner = link
+				? (await db.select().from(person).where(eq(person.id, link.personId)))[0]
+				: null;
+			if (owner) {
+				const reading = await readStoredPayslip(doc.storedName, owner.name);
+				await learnAmountLabel(owner.name, amountMinor, reading.candidates);
+			}
 		}
 		await db
 			.update(document)

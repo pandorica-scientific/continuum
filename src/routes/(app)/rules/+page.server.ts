@@ -7,7 +7,7 @@ import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/ingest';
 import { upsertTag } from '$lib/server/tags';
 import { confidence } from '$lib/rules/confidence';
-import { type Condition } from '$lib/rules/match';
+import { DEFAULT_RULE_PRIOR, type Condition } from '$lib/rules/match';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -54,6 +54,11 @@ export const load: PageServerLoad = async () => {
 		rules: rows
 			.map((r) => {
 				const score = confidence(r.acceptedCount, r.correctedCount);
+				// Seeded and learned rules carry a starter prior inside acceptedCount
+				// so they file from day one. Confidence uses the raw counts; the
+				// numbers *shown* are only what a human actually did — presenting
+				// the prior as "6 kept" would claim a history nobody has.
+				const priorShare = r.provenance === 'manual' ? 0 : DEFAULT_RULE_PRIOR;
 				return {
 					id: r.id,
 					name: r.name,
@@ -65,8 +70,9 @@ export const load: PageServerLoad = async () => {
 						.filter((t) => t.ruleId === r.id)
 						.map((t) => tagName.get(t.tagId) ?? '')
 						.filter(Boolean),
-					accepted: r.acceptedCount,
+					accepted: Math.max(0, r.acceptedCount - priorShare),
 					corrected: r.correctedCount,
+					startsTrusted: priorShare > 0,
 					confidencePct: Math.round(score * 100),
 					trusted: score >= threshold
 				};

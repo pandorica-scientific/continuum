@@ -202,7 +202,10 @@ E2E, extending the existing serial journey:
 
 - Add a document ticking both people; it shows under both.
 - Create a new subject from within the add form and file a document under it.
-- Rename a person in Settings; the document is still theirs.
+- ~~Rename a person in Settings; the document is still theirs.~~ No rename
+  mechanism exists anywhere in the app, so this cannot run as E2E. The property
+  is structural once links store ids rather than names, and is covered at unit
+  level: column derivation reads the linked record's current name.
 - A flat's card lists the documents referencing it, as items rather than a count.
 
 ## Build order

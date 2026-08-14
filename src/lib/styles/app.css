@@ -105,6 +105,25 @@ input::placeholder {
 	color: var(--fg3);
 }
 
+/* The base look every screen's controls share. Component-scoped rules always
+   win on specificity, so existing screens keep their (identical) declarations
+   and a new screen no longer has to restate these six properties — the drift
+   this prevents bit two screens in one day. */
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+	border: 1px solid var(--bd2);
+	background: var(--card);
+	color: var(--fg1);
+	border-radius: 8px;
+	padding: 8px 11px;
+	font-size: 13.5px;
+}
+input[type='checkbox'],
+input[type='radio'] {
+	accent-color: var(--blue);
+}
+
 ::-webkit-scrollbar {
 	width: 10px;
 	height: 10px;

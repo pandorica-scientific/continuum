@@ -2,7 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { and, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { loan, loanEvent, loanFixationPeriod, loanProperty, property } from '$lib/server/db/schema';
+import {
+	loan,
+	loanEvent,
+	loanFixationPeriod,
+	loanProperty,
+	loanTag,
+	property,
+	tag
+} from '$lib/server/db/schema';
 import {
 	amortise,
 	DAY_COUNTS,
@@ -14,6 +22,7 @@ import {
 } from '$lib/loans/amortise';
 import { project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
+import { normaliseTagName, setLoanTags } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertMinor } from '$lib/server/fx';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
@@ -64,6 +73,11 @@ export const load: PageServerLoad = async () => {
 	let interestFromMonth: string | null = null;
 	let latestDebtFree: number | null = null;
 
+	const [loanTagRows, allTags] = await Promise.all([
+		db.select().from(loanTag),
+		db.select().from(tag)
+	]);
+	const tagName = new Map(allTags.map((t) => [t.id, t.name]));
 	const cards = [];
 	for (const l of loans) {
 		const periods: FixationPeriod[] = allPeriods
@@ -154,6 +168,10 @@ export const load: PageServerLoad = async () => {
 		cards.push({
 			id: l.id,
 			name: l.name,
+			tags: loanTagRows
+				.filter((r) => r.loanId === l.id)
+				.map((r) => tagName.get(r.tagId) ?? '')
+				.filter(Boolean),
 			sub: [
 				l.lender,
 				rate !== null ? `${rate.toFixed(2)}%` : null,
@@ -219,12 +237,33 @@ export const load: PageServerLoad = async () => {
 			debtFree: latestDebtFree
 		},
 		loans: cards,
+		knownTags: allTags.map((t) => ({ id: t.id, name: t.name })),
 		properties,
 		currencies: await availableCurrencies()
 	};
 };
 
 export const actions: Actions = {
+	tags: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		if (!id) return fail(400, { message: 'Missing loan.' });
+		const existing = await db
+			.select({ loanId: loanTag.loanId, name: tag.name })
+			.from(loanTag)
+			.innerJoin(tag, eq(loanTag.tagId, tag.id));
+		const added = String(form.get('tagName') ?? '').trim();
+		const removed = String(form.get('removeTag') ?? '').trim();
+		const names = existing
+			.filter((r) => r.loanId === id)
+			.map((r) => r.name)
+			.filter((n) => n !== removed);
+		if (added && !names.some((n) => normaliseTagName(n) === normaliseTagName(added)))
+			names.push(added);
+		await setLoanTags(id, names);
+		return { ok: true };
+	},
+
 	addRepayment: async ({ request }) => {
 		const form = await request.formData();
 		const loanId = String(form.get('loanId') ?? '');

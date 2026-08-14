@@ -5,8 +5,11 @@ import { effectiveLines } from '$lib/transactions/lines';
 import {
 	category,
 	document,
+	documentPerson,
+	documentProperty,
 	loan,
 	loanFixationPeriod,
+	person,
 	property,
 	tenancy,
 	transaction
@@ -120,6 +123,23 @@ const fixationHorizon: Source = async () => {
 const documentExpiry: Source = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 	const docs = await db.select().from(document);
+	// What each document belongs to, by current name, for the detail line.
+	const [dp, dr, people, properties] = await Promise.all([
+		db.select().from(documentPerson),
+		db.select().from(documentProperty),
+		db.select().from(person),
+		db.select().from(property)
+	]);
+	const personName = new Map(people.map((x) => [x.id, x.name]));
+	const propertyName = new Map(properties.map((x) => [x.id, x.name]));
+	const about = new Map<string, string[]>();
+	for (const r of dp)
+		about.set(r.documentId, [...(about.get(r.documentId) ?? []), personName.get(r.personId) ?? '']);
+	for (const r of dr)
+		about.set(r.documentId, [
+			...(about.get(r.documentId) ?? []),
+			propertyName.get(r.propertyId) ?? ''
+		]);
 	const items: BriefingItem[] = [];
 	for (const d of docs) {
 		if (!d.expiresOn || d.expiresOn < today) continue;
@@ -132,7 +152,9 @@ const documentExpiry: Source = async () => {
 			pill: days <= 45 ? `${days} days` : `${months} month${months === 1 ? '' : 's'}`,
 			hue: days <= 60 ? 'yellow' : 'grey',
 			title: `${d.name} ${d.expiryVerb} ${d.expiresOn}`,
-			detail: d.subject ? `Filed under ${d.shelf}, about ${d.subject}.` : `Filed under ${d.shelf}.`,
+			detail: about.get(d.id)?.length
+				? `Filed under ${d.shelf}, about ${about.get(d.id)!.filter(Boolean).join(' and ')}.`
+				: `Filed under ${d.shelf}.`,
 			href: '/documents',
 			rank: days + 5
 		});

@@ -9,6 +9,8 @@ import { db } from '$lib/server/db';
 import {
 	account,
 	document,
+	documentPerson,
+	documentProperty,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
@@ -17,6 +19,8 @@ import {
 	property,
 	propertyBill,
 	rule,
+	taxStatement,
+	taxStatementLine,
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
@@ -261,21 +265,75 @@ export async function seedDemo(): Promise<void> {
 			id: randomUUID(),
 			name: `Payslip ${m} · Jana Nováková`,
 			shelf: 'payslips',
-			subject: 'Jana Nováková',
 			addedOn: today,
 			amountMinor: base,
 			amountCurrency: 'CZK',
 			periodMonth: m
 		});
 	}
+	const contractId = randomUUID();
 	payslips.push({
-		id: randomUUID(),
+		id: contractId,
 		name: 'Renting contract · Karlín',
 		shelf: 'tenancy',
-		subject: 'Flat Karlín',
 		addedOn: today,
 		expiresOn: monthShift(thisMonth, 10) + '-01',
 		expiryVerb: 'ends'
 	});
 	await db.insert(document).values(payslips);
+	// Real links, not names: payslips belong to Jana, the contract to the flat.
+	await db
+		.insert(documentPerson)
+		.values(
+			payslips
+				.filter((d) => d.shelf === 'payslips')
+				.map((d) => ({ documentId: d.id, personId: jana }))
+		)
+		.onConflictDoNothing();
+	await db
+		.insert(documentProperty)
+		.values({ documentId: contractId, propertyId: flatB })
+		.onConflictDoNothing();
+
+	// Tax statements: two Czech years for Jana (the payslips diverge from the
+	// declared figure on purpose — bonuses exist), one Polish year for Petr so
+	// the charts show the two-country case and a rate that is comparable
+	// across currencies that are not.
+	const janaCz2024 = randomUUID();
+	await db.insert(taxStatement).values([
+		{
+			id: janaCz2024,
+			personId: jana,
+			year: 2024,
+			country: 'CZ',
+			currency: 'CZK',
+			grossIncomeMinor: 129000000n,
+			taxPaidMinor: 18100000n
+		},
+		{
+			id: randomUUID(),
+			personId: jana,
+			year: 2025,
+			country: 'CZ',
+			currency: 'CZK',
+			grossIncomeMinor: 138500000n,
+			taxPaidMinor: 20800000n
+		},
+		{
+			id: randomUUID(),
+			personId: petr,
+			year: 2025,
+			country: 'PL',
+			currency: 'PLN',
+			grossIncomeMinor: 21600000n,
+			taxPaidMinor: 2600000n
+		}
+	]);
+	await db.insert(taxStatementLine).values({
+		id: randomUUID(),
+		statementId: janaCz2024,
+		label: 'Social insurance',
+		amountMinor: 9100000n,
+		sort: 0
+	});
 }

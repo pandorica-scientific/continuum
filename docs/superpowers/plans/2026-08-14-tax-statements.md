@@ -23,13 +23,7 @@
 
 ## Context the implementer needs
 
-**Payslips are documents, not a table.** A payslip is a row in `document` with `shelf = 'payslips'`, an `amountMinor`, a `periodMonth` (`yyyy-mm`) and a free-text `subject` naming whose it is. There is no `personId`. The retirement screen matches them with a case-insensitive trimmed comparison against `person.name`:
-
-```ts
-.filter((d) => d.subject.trim().toLowerCase() === p.name.trim().toLowerCase())
-```
-
-Prefill must use exactly that comparison, so the two screens agree about whose payslip is whose.
+**Payslips are documents, not a table** — a row in `document` with `shelf = 'payslips'`, an `amountMinor` and a `periodMonth` (`yyyy-mm`). Since the entity-links refactor, whose payslip it is comes from the `document_person` join, keyed by `personId`. There is no name matching anywhere: prefill joins `document_person` exactly as the retirement screen now does, so the two screens cannot disagree about ownership.
 
 ---
 
@@ -80,8 +74,8 @@ Prefill must use exactly that comparison, so the two screens agree about whose p
   }
   function effectiveRatePct(grossMinor: bigint, taxMinor: bigint): number | null;
   function payslipYearTotal(
-  	slips: { subject: string; periodMonth: string; amountMinor: bigint | null }[],
-  	personName: string,
+  	slips: { personId: string; periodMonth: string; amountMinor: bigint | null }[],
+  	personId: string,
   	year: number
   ): { totalMinor: bigint; months: number };
   function taxSeries(statements: StatementLike[]): Series[];

@@ -12,6 +12,7 @@ import { loadSplits } from '$lib/server/splits';
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { matchingLineTotal } from '$lib/transactions/lines';
+import { minorDigits } from '$lib/money';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 
 /** Rows per page. Enough that a month of a busy account fits in one or two. */
@@ -30,9 +31,18 @@ function searchable(term: string): SQL {
 	) as SQL;
 }
 
-/** The filter as a single predicate; every clause is independent of the rest. */
-export function registerWhere(filter: RegisterFilter): SQL | undefined {
+/**
+ * The filter as a single predicate; every clause is independent of the rest.
+ *
+ * `rowFactor` is 10^(minor digits) for the row's own currency, as SQL. Amount
+ * bounds are typed in the base currency, so the comparison cross-multiplies:
+ * abs(amount)·baseFactor against bound·rowFactor — all integers, no floats,
+ * and a zero-digit currency is never compared a hundred times too small.
+ * Omitted, it falls back to the base factor and the factors cancel.
+ */
+export function registerWhere(filter: RegisterFilter, rowFactor?: SQL): SQL | undefined {
 	const clauses: SQL[] = [];
+	const factor = rowFactor ?? sql`${filter.baseFactor}::bigint`;
 
 	if (filter.search) clauses.push(searchable(filter.search));
 	if (filter.from) clauses.push(gte(transaction.bookedAt, filter.from));
@@ -63,9 +73,13 @@ export function registerWhere(filter: RegisterFilter): SQL | undefined {
 
 	// Bounds are magnitudes, so they read the same either side of zero.
 	if (filter.minMinor !== null)
-		clauses.push(sql`abs(${transaction.amount}) >= ${filter.minMinor.toString()}::bigint`);
+		clauses.push(
+			sql`abs(${transaction.amount}) * ${filter.baseFactor}::bigint >= ${filter.minMinor.toString()}::bigint * (${factor})`
+		);
 	if (filter.maxMinor !== null)
-		clauses.push(sql`abs(${transaction.amount}) <= ${filter.maxMinor.toString()}::bigint`);
+		clauses.push(
+			sql`abs(${transaction.amount}) * ${filter.baseFactor}::bigint <= ${filter.maxMinor.toString()}::bigint * (${factor})`
+		);
 
 	if (filter.reviewState) clauses.push(eq(transaction.reviewState, filter.reviewState));
 
@@ -109,8 +123,19 @@ export interface RegisterPage {
 	pageCount: number;
 }
 
+/** 10^(minor digits) per row, derived from the currencies actually present. */
+async function currencyRowFactor(): Promise<SQL> {
+	const rows = await db.selectDistinct({ currency: transaction.currency }).from(transaction);
+	if (rows.length === 0) return sql`100::bigint`;
+	const whens = rows.map(
+		(r) => sql`when ${r.currency} then ${(10 ** minorDigits(r.currency)).toString()}::bigint`
+	);
+	return sql`case ${transaction.currency} ${sql.join(whens, sql` `)} else 100::bigint end`;
+}
+
 export async function registerPage(filter: RegisterFilter): Promise<RegisterPage> {
-	const where = registerWhere(filter);
+	const needsScale = filter.minMinor !== null || filter.maxMinor !== null;
+	const where = registerWhere(filter, needsScale ? await currencyRowFactor() : undefined);
 
 	const [rows, matching] = await Promise.all([
 		db

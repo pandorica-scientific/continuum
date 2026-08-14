@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
+	loanTag,
+	propertyTag,
 	tag,
 	transaction,
 	transactionSplit,
@@ -111,6 +113,32 @@ export async function addTagsToTransaction(transactionId: string, tagIds: string
 		.insert(transactionTag)
 		.values(tagIds.map((tagId) => ({ transactionId, tagId })))
 		.onConflictDoNothing();
+}
+
+/** Same wholesale-replace contract as transactions, for loans. */
+export async function setLoanTags(loanId: string, names: string[]): Promise<void> {
+	const wanted = names.map((n) => n.trim()).filter(Boolean);
+	const tags = [];
+	for (const name of wanted) tags.push(await upsertTag(name));
+	await db.delete(loanTag).where(eq(loanTag.loanId, loanId));
+	if (tags.length > 0)
+		await db
+			.insert(loanTag)
+			.values(tags.map((t) => ({ loanId, tagId: t.id })))
+			.onConflictDoNothing();
+}
+
+/** Same wholesale-replace contract as transactions, for properties. */
+export async function setPropertyTags(propertyId: string, names: string[]): Promise<void> {
+	const wanted = names.map((n) => n.trim()).filter(Boolean);
+	const tags = [];
+	for (const name of wanted) tags.push(await upsertTag(name));
+	await db.delete(propertyTag).where(eq(propertyTag.propertyId, propertyId));
+	if (tags.length > 0)
+		await db
+			.insert(propertyTag)
+			.values(tags.map((t) => ({ propertyId, tagId: t.id })))
+			.onConflictDoNothing();
 }
 
 export async function setSplitTags(splitId: string, names: string[]): Promise<void> {

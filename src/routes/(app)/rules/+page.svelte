@@ -69,7 +69,13 @@
 			</div>
 			<div class="r-score">
 				<span class="mono r-confidence" class:trusted={r.trusted}>{r.confidencePct}%</span>
-				<span class="r-counts">{r.accepted} kept · {r.corrected} overridden</span>
+				<span class="r-counts">
+					{#if r.startsTrusted && r.accepted === 0 && r.corrected === 0}
+						starts trusted · nothing decided yet
+					{:else}
+						{r.accepted} kept · {r.corrected} overridden
+					{/if}
+				</span>
 			</div>
 			<div class="r-buttons">
 				<form method="POST" action="?/toggle" use:enhance>

@@ -15,7 +15,10 @@ services:
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     ports:
-      - '3000:3000'
+      # Host port is configurable so the server can sit on plain port 80 —
+      # with a DHCP reservation and a LAN name (see README), the address
+      # becomes http://continuum.local with no port to remember.
+      - '${CONTINUUM_PORT:-3000}:3000'
     environment:
       DATABASE_URL: postgres://continuum:${POSTGRES_PASSWORD:-continuum}@db:5432/continuum
       ORIGIN: ${ORIGIN:-http://localhost:3000}

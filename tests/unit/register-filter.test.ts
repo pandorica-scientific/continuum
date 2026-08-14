@@ -22,6 +22,7 @@ describe('parseFilter', () => {
 			maxMinor: null,
 			reviewState: null,
 			tagId: null,
+			baseFactor: '100',
 			includeTransfers: false,
 			page: 1
 		});

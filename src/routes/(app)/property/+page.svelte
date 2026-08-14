@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import TagInput from '$lib/components/TagInput.svelte';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
@@ -97,6 +98,20 @@
 		<div class="eyebrow-row">
 			<Eyebrow emoji="🏢" label="This flat" />
 			<span class="eyebrow-caption">{data.detail.sizeLabel || data.detail.name}</span>
+			<span class="p-tags">
+				{#each data.detail.tags as t (t)}
+					<form method="POST" action="?/tags" use:enhance class="tag-chip">
+						<input type="hidden" name="id" value={data.detail.id} />
+						<input type="hidden" name="removeTag" value={t} />
+						<span>{t}</span>
+						<button type="submit" aria-label="Remove tag {t}">✕</button>
+					</form>
+				{/each}
+				<form method="POST" action="?/tags" use:enhance>
+					<input type="hidden" name="id" value={data.detail.id} />
+					<TagInput transactionId={data.detail.id} known={[]} placeholder="tag…" />
+				</form>
+			</span>
 		</div>
 		<div class="tiles">
 			{#each data.detail.metrics as m (m.label)}
@@ -651,5 +666,29 @@
 	.row {
 		display: flex;
 		gap: 8px;
+	}
+	.p-tags {
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+	}
+	.tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		border: 1px solid var(--bd2);
+		border-radius: 999px;
+		padding: 3px 5px 3px 10px;
+		font-size: 12px;
+		color: var(--fg2);
+	}
+	.tag-chip button {
+		border: 0;
+		background: none;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: 11px;
+		padding: 0 3px;
 	}
 </style>

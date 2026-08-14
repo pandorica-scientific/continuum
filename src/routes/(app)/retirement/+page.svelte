@@ -322,8 +322,8 @@
 	>
 		<label
 			><span>Whose</span>
-			<select name="subject">
-				{#each data.peopleList as name (name)}<option value={name}>{name}</option>{/each}
+			<select name="personId">
+				{#each data.peopleOptions as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 			</select></label
 		>
 		<label><span>Month</span><input name="periodMonth" type="month" /></label>

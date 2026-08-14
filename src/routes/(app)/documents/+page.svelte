@@ -9,6 +9,7 @@
 
 	let query = $state(data.query);
 	let adding = $state(data.prefill.open);
+	let newSubjectOpen = $state(false);
 
 	function navigate(shelf: string, q: string, tag = '') {
 		const parts: string[] = [];
@@ -69,13 +70,62 @@
 					{/each}
 				</select></label
 			>
-			<label
-				><span>About (person, flat, …)</span>
-				<input name="subject" list="subjects" placeholder="Robert" value={data.prefill.subject} />
-				<datalist id="subjects">
-					{#each data.subjectSuggestions as s (s)}<option value={s}></option>{/each}
-				</datalist></label
-			>
+			<div class="field belongs">
+				<span>Belongs to</span>
+				<div class="belong-groups">
+					{#each data.people as p (p.id)}
+						<label class="tick">
+							<input
+								type="checkbox"
+								name="personIds"
+								value={p.id}
+								checked={data.prefill.personId === p.id}
+							/>
+							{p.name}
+						</label>
+					{/each}
+					{#each data.properties as pr (pr.id)}
+						<label class="tick">
+							<input
+								type="checkbox"
+								name="propertyIds"
+								value={pr.id}
+								checked={data.prefill.propertyId === pr.id}
+							/>
+							{pr.name}
+						</label>
+					{/each}
+					{#each data.accounts as a (a.id)}
+						<label class="tick">
+							<input type="checkbox" name="accountIds" value={a.id} />
+							{a.name}
+						</label>
+					{/each}
+					{#each data.subjects as s (s.id)}
+						<label class="tick">
+							<input type="checkbox" name="subjectIds" value={s.id} />
+							{s.name}
+						</label>
+					{/each}
+					{#if newSubjectOpen}
+						<input
+							class="new-subject"
+							name="newSubject"
+							placeholder="Car, Dog, …"
+							aria-label="New subject name"
+						/>
+					{:else}
+						<button
+							type="button"
+							class="btn tick-add"
+							onclick={() => (newSubjectOpen = true)}
+							aria-label="New subject"
+						>
+							＋ new subject
+						</button>
+					{/if}
+				</div>
+			</div>
 			<label><span>File (optional)</span><input name="file" type="file" /></label>
 			<div class="field">
 				<span>Expiry (optional)</span>
@@ -368,6 +418,40 @@
 		gap: 12px;
 	}
 	label,
+	/* Checkboxes, not autocomplete: at household scale every possible owner
+	   fits on one row and the "both of us" case is two visible ticks. */
+	.belongs {
+		grid-column: 1 / -1;
+	}
+	.belong-groups {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 14px;
+		align-items: center;
+	}
+	.tick {
+		flex-direction: row !important;
+		align-items: center;
+		gap: 6px;
+		font-size: 13px !important;
+		color: var(--fg1) !important;
+	}
+	.tick input {
+		width: auto;
+	}
+	.tick-add {
+		padding: 5px 10px;
+		font-size: 12px;
+	}
+	.new-subject {
+		border: 1px solid var(--bd2);
+		background: var(--card);
+		color: var(--fg1);
+		border-radius: 8px;
+		padding: 7px 10px;
+		font-size: 13px;
+		width: 140px;
+	}
 	.field {
 		display: flex;
 		flex-direction: column;

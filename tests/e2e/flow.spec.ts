@@ -265,6 +265,89 @@ test.describe('signed in', () => {
 		expect(after.status()).toBe(401);
 	});
 
+	test('a document ticking both people appears under both columns', async ({ page }) => {
+		await page.goto('/documents');
+		await page.getByRole('button', { name: '➕ Add document' }).click();
+		await page.getByPlaceholder('Passport · Robert').fill('Mortgage statement 2026');
+		await page.locator('select[name=shelf]').selectOption('loans');
+		// Several links: one document, both people, two visible ticks.
+		await page.locator('.tick', { hasText: 'Jana Nováková' }).locator('input').check();
+		await page.locator('.tick', { hasText: 'Household' }).locator('input').check();
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+
+		const janaCol = page.locator('.col', {
+			has: page.locator('.col-label', { hasText: 'Jana Nováková' })
+		});
+		const householdCol = page.locator('.col', {
+			has: page.locator('.col-label', { hasText: 'Household' })
+		});
+		await expect(janaCol.getByText('Mortgage statement 2026')).toBeVisible();
+		await expect(householdCol.getByText('Mortgage statement 2026')).toBeVisible();
+	});
+
+	test('a new subject is created in the add form and gets its own column', async ({ page }) => {
+		await page.goto('/documents');
+		await page.getByRole('button', { name: '➕ Add document' }).click();
+		await page.getByPlaceholder('Passport · Robert').fill('Service book · Car');
+		await page.locator('select[name=shelf]').selectOption('property');
+		await page.getByRole('button', { name: 'New subject' }).click();
+		await page.locator('input[name=newSubject]').fill('Car');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+
+		// The record now exists and derived its own column.
+		await expect(page.locator('.col-label', { hasText: 'Car' })).toBeVisible();
+		// And it is a record, not a string: the still-open form now offers it as
+		// a tick alongside the people and flats.
+		await expect(page.locator('.tick', { hasText: 'Car' })).toBeVisible();
+	});
+
+	test('a document belonging to nothing is refused', async ({ page }) => {
+		await page.goto('/documents');
+		await page.getByRole('button', { name: '➕ Add document' }).click();
+		await page.getByPlaceholder('Passport · Robert').fill('Orphan attempt');
+		await page.locator('select[name=shelf]').selectOption('identity');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect(page.getByText(/has to belong to something/)).toBeVisible();
+	});
+
+	test('a tax statement prefills its gross from the payslips and can be corrected', async ({
+		page
+	}) => {
+		// The prefill needs a payslip to read, so add one first.
+		await page.goto('/retirement');
+		await page.locator('.payslip-form select[name=personId]').selectOption({ index: 0 });
+		await page.locator('.payslip-form input[name=periodMonth]').fill('2026-05');
+		await page.locator('.payslip-form input[name=amount]').fill('120000');
+		await page.getByRole('button', { name: 'Add payslip' }).click();
+		await page.waitForTimeout(600);
+
+		await page.goto('/tax');
+		await page.getByRole('button', { name: 'Add statement' }).click();
+		await page.locator('.tax-person').selectOption({ index: 0 });
+		await page.locator('.tax-year').fill('2026');
+		await page.locator('.tax-country').fill('CZ');
+
+		// Prefilled from the payslip history rather than left empty.
+		await expect(page.locator('.tax-gross')).toHaveValue(/120/);
+
+		// And correctable: the saved figure is the typed one, not the derived one.
+		await page.locator('.tax-gross').fill('1305000');
+		await page.locator('.tax-paid').fill('195750');
+		await page.getByRole('button', { name: 'Save statement' }).click();
+
+		const row = page.locator('.tax-row', { hasText: '2026' });
+		await expect(row).toBeVisible({ timeout: 10000 });
+		// 195 750 / 1 305 000 = exactly 15% effective.
+		await expect(row).toContainText('15.00');
+		// The divergence note: payslips say one thing, the statement another.
+		await expect(row.locator('.t-diverges')).toContainText('120 000');
+	});
+
+	test('the saved tax figure survives a reload rather than being re-derived', async ({ page }) => {
+		await page.goto('/tax');
+		await expect(page.locator('.tax-row', { hasText: '2026' })).toContainText('1 305 000');
+	});
+
 	test('switching a module off removes it from the sidebar and 404s its routes', async ({
 		page
 	}) => {
@@ -279,18 +362,19 @@ test.describe('signed in', () => {
 		await expect(page.locator('aside').getByText('Property')).toHaveCount(1, { timeout: 10000 });
 	});
 
-	test('documents: adding one builds its shelf and subject column', async ({ page }) => {
+	test('documents: adding one builds its shelf and person column', async ({ page }) => {
 		await page.goto('/documents');
 		await page.getByRole('button', { name: '➕ Add document' }).click();
 		await page.getByPlaceholder('Passport · Robert').fill('Passport · Jana');
 		await page.locator('select[name=shelf]').selectOption('identity');
-		await page.locator('input[name=subject]').fill('Jana Nováková');
+		// A real link, not a typed name: tick the person the document belongs to.
+		await page.locator('.tick', { hasText: 'Jana Nováková' }).locator('input').check();
 		await page.locator('select[name=expiryVerb]').selectOption('expires');
 		await page.locator('input[name=expiresOn]').fill('2027-03-15');
 		await page.getByRole('button', { name: 'Add', exact: true }).click();
 		await expect(page.getByText('Passport · Jana')).toBeVisible();
 		await expect(page.getByText('expires 2027-03-15')).toBeVisible();
-		// the subject column derived itself
+		// the column derived itself from the link
 		await expect(page.locator('.col-label', { hasText: 'Jana Nováková' })).toBeVisible();
 	});
 
@@ -301,9 +385,10 @@ test.describe('signed in', () => {
 		await page.getByRole('button', { name: 'Add property', exact: true }).click();
 		await expect(page.locator('.tab', { hasText: 'Flat Žižkov' })).toBeVisible();
 
-		// the card's add link opens the documents form pre-addressed to this flat
+		// the card's add link opens the documents form pre-addressed to this flat:
+		// its checkbox arrives already ticked, by id rather than by name
 		await page.getByRole('link', { name: '➕ Add a document about this flat' }).click();
-		await expect(page.locator('input[name=subject]')).toHaveValue('Flat Žižkov');
+		await expect(page.locator('.tick', { hasText: 'Flat Žižkov' }).locator('input')).toBeChecked();
 		await expect(page.locator('select[name=shelf]')).toHaveValue('property');
 		await page.getByPlaceholder('Passport · Robert').fill('Renting contract · Žižkov');
 		await page.locator('select[name=shelf]').selectOption('tenancy');

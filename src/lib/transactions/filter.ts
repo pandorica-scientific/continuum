@@ -3,7 +3,7 @@
 // knows how those params map onto a filter — pure, so it is testable without
 // a database, in keeping with the src/lib split.
 
-import { parseAmountToMinor } from '$lib/money';
+import { minorDigits, parseAmountToMinor } from '$lib/money';
 
 export type Direction = 'any' | 'in' | 'out';
 
@@ -19,6 +19,13 @@ export interface RegisterFilter {
 	/** Absolute bounds in minor units of the base currency. */
 	minMinor: bigint | null;
 	maxMinor: bigint | null;
+	/**
+	 * 10^(base currency's minor digits), as text for SQL. Amount bounds are
+	 * compared by exact cross-multiplication — abs(amount)·baseFactor against
+	 * bound·rowFactor — so a currency with a different scale (JPY's 0 digits)
+	 * is never compared at the wrong magnitude.
+	 */
+	baseFactor: string;
 	reviewState: string | null;
 	/** Matches a transaction tagged directly or through any of its splits. */
 	tagId: string | null;
@@ -76,6 +83,7 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		direction: direction && DIRECTIONS.includes(direction) ? direction : 'any',
 		minMinor: bound(params, 'min', baseCurrency),
 		maxMinor: bound(params, 'max', baseCurrency),
+		baseFactor: (10 ** minorDigits(baseCurrency)).toString(),
 		reviewState: review && REVIEW_STATES.includes(review as never) ? review : null,
 		tagId: text(params, 'tag'),
 		includeTransfers: params.get('transfers') === '1',
