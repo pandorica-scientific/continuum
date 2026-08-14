@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.3.0 — 2026-08-14
+
+Accounts you can actually manage, and a way in that is not a password.
+
+### Added
+
+- **Passkeys**: sign in with Face ID, Touch ID or Windows Hello alongside the
+  existing passwords, which are staying — a device without a passkey still
+  works, and there is no lockout risk. Credentials are discoverable, so the
+  sign-in screen needs no person picker: one tap and you are in. Manage them in
+  Settings → Household, where each device is listed with its last-used date and
+  can be removed on its own.
+- **Enrollment links**: adding a person produces a one-time link, valid seven
+  days, that lets them choose their own password. The administrator who created
+  the account never knows it. Until they enrol they show as "not enrolled yet"
+  and cannot sign in.
+- **Change your own password**, from Settings. Every other session for that
+  person is revoked on success, so changing it after a scare actually ejects
+  the other device.
+- **Deactivate and reactivate a person.** Deactivation blocks sign-in and cuts
+  live sessions but keeps their password, passkeys and history, so reactivating
+  is a clean undo. People are never deleted — six tables reference them.
+- **Administrator role.** `person.role` finally means something: exactly
+  `admin` or `member`. Only administrators can add or deactivate people, change
+  roles, or manage API tokens. You cannot deactivate yourself, and the last
+  administrator can be neither deactivated nor demoted, so an instance can never
+  be left with nobody in charge.
+- **A sign-out control** in the sidebar. `/logout` had existed since the first
+  release with nothing linking to it.
+- **Optional Tailscale sidecar** (`docker compose --profile tailscale up -d`)
+  that terminates HTTPS for the app, which is what makes passkeys possible.
+  Private by default: it publishes to your tailnet, never the public internet.
+
+### Changed
+
+- `person.role` was previously incoherent — the schema defaulted to `adult`,
+  the demo seeder wrote `admin`/`member`, the setup wizard never set it, and
+  nothing read it. It is now the permission field. **On upgrade the earliest
+  person by creation date becomes the administrator and everyone else a
+  member**; the README documents a one-line database command if that is not who
+  you wanted.
+- `person.password_hash` is now nullable, so a person can exist between being
+  created and choosing a password.
+- The end-to-end suite now builds the app before running. It previously served
+  whatever was last compiled, so it could pass against code no longer in the
+  repository.
+
 ## 0.2.1 — 2026-08-14
 
 Reachable by name.

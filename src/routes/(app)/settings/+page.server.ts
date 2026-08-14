@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { person, session } from '$lib/server/db/schema';
+import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword, revokeOtherSessions } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken } from '$lib/server/auth/enrollment';
+import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import {
 	BACKUP_CADENCES,
 	detectDestinations,
@@ -62,6 +63,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// The component needs to know who you are to decide which controls are
 		// yours and whether you may administer anyone.
 		me: locals.person,
+		passkeys: passkeysAvailable(),
+		myPasskeys: locals.person
+			? await db
+					.select({
+						id: credential.id,
+						label: credential.label,
+						createdAt: credential.createdAt,
+						lastUsedAt: credential.lastUsedAt
+					})
+					.from(credential)
+					.where(eq(credential.personId, locals.person.id))
+			: [],
 		backup,
 		lastBackup,
 		backupDestinations: detectDestinations(),
@@ -183,6 +196,17 @@ export const actions: Actions = {
 
 		const { raw } = await createEnrollmentToken(id);
 		return { ok: true, enrollmentLink: `${url.origin}/enroll/${raw}` };
+	},
+
+	removePasskey: async ({ request, locals }) => {
+		if (!locals.person) return fail(401, { message: 'Sign in first.' });
+		const form = await request.formData();
+		const id = String(form.get('credentialId') ?? '');
+		// Scoped to the signed-in person, so one person cannot remove another's.
+		await db
+			.delete(credential)
+			.where(and(eq(credential.id, id), eq(credential.personId, locals.person.id)));
+		return { ok: true };
 	},
 
 	reissueEnrollment: async ({ request, locals, url }) => {

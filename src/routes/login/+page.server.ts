@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { eq, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { person } from '$lib/server/db/schema';
 import { createSession, verifyPassword } from '$lib/server/auth';
 import {
@@ -18,7 +19,7 @@ export const load: PageServerLoad = async () => {
 		// attempt, which reads as a broken password rather than a closed account.
 		.where(isNull(person.deactivatedAt))
 		.orderBy(person.createdAt);
-	return { people };
+	return { people, passkeys: passkeysAvailable() };
 };
 
 export const actions: Actions = {

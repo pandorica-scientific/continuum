@@ -32,6 +32,12 @@
 				autocomplete="new-password"
 			/>
 			<button type="submit" class="btn btn-primary">Set password</button>
+			{#if data.passkeys}
+				<p class="lead">
+					Once you are in, add a passkey from Settings to sign in with your face or fingerprint
+					instead.
+				</p>
+			{/if}
 		</form>
 	{:else}
 		<div class="error">This link is not valid. Ask whoever invited you for a new one.</div>

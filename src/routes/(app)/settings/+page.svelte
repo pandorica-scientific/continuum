@@ -77,7 +77,13 @@
 		label="Household"
 		caption="People can sign in and own accounts and documents."
 	/>
-	<PeopleSettings people={data.people} me={data.me} enrollmentLink={form?.enrollmentLink ?? null} />
+	<PeopleSettings
+		people={data.people}
+		me={data.me}
+		enrollmentLink={form?.enrollmentLink ?? null}
+		passkeys={data.passkeys}
+		myPasskeys={data.myPasskeys}
+	/>
 
 	<form method="POST" action="?/changePassword" use:enhance class="card add-form">
 		<input name="currentPassword" type="password" placeholder="Current password" required />

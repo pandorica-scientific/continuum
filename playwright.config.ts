@@ -16,15 +16,15 @@ export default defineConfig({
 		{
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
-			testIgnore: /accounts/
+			testIgnore: /accounts|passkey/
 		},
-		// Account management builds on the household the wizard creates in
-		// flow.spec.ts, so it waits for `desktop` rather than relying on the
-		// alphabetical file order — which would otherwise run it first.
+		// Account management and passkeys build on the household the wizard
+		// creates in flow.spec.ts, so they wait for `desktop` rather than relying
+		// on the alphabetical file order — which would otherwise run them first.
 		{
 			name: 'accounts',
 			use: { viewport: { width: 1440, height: 900 } },
-			testMatch: /accounts/,
+			testMatch: /accounts|passkey/,
 			dependencies: ['desktop']
 		},
 		{ name: 'tablet', use: { viewport: { width: 900, height: 1200 } }, testMatch: /smoke/ },

@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { createSession, hashPassword } from '$lib/server/auth';
 import { consumeEnrollmentToken, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
+import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import {
 	loginBlockedForSeconds,
 	recordLoginFailure,
@@ -17,9 +18,9 @@ const UNUSABLE = 'This link is not valid. Ask whoever invited you for a new one.
 
 export const load: PageServerLoad = async ({ params }) => {
 	const { personId, status } = await lookupEnrollmentToken(params.token);
-	if (status !== 'valid') return { valid: false as const, name: '' };
+	if (status !== 'valid') return { valid: false as const, name: '', passkeys: false };
 	const rows = await db.select({ name: person.name }).from(person).where(eq(person.id, personId));
-	return { valid: true as const, name: rows[0]?.name ?? '' };
+	return { valid: true as const, name: rows[0]?.name ?? '', passkeys: passkeysAvailable() };
 };
 
 export const actions: Actions = {

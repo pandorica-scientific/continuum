@@ -56,7 +56,9 @@ export const init: ServerInit = async () => {
 // This exempts them from the redirect to /login, NOT from authentication —
 // every /api route calls requireToken itself, and one that forgets to would be
 // wide open. The E2E journey asserts an unauthenticated request gets a 401.
-const PUBLIC_PATHS = ['/login', '/setup', '/ics', '/api', '/enroll'];
+// Note /auth/passkey/login specifically, not all of /auth: the registration
+// endpoints under /auth/passkey/register must stay behind a session.
+const PUBLIC_PATHS = ['/login', '/setup', '/ics', '/api', '/enroll', '/auth/passkey/login'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	await (ready ??= boot());

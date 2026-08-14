@@ -119,6 +119,80 @@ submissions are origin-checked and will be refused otherwise. A bare
 `continuum` without a suffix is not reliable in browsers (it reads as a
 search), so `.local` or your router's suffix is the practical spelling.
 
+## Accounts
+
+The setup wizard makes its first person an **administrator**; everyone added
+later is a **member**. Only administrators can add or deactivate people, change
+roles, or manage API tokens.
+
+Adding someone in Settings → Household produces a **one-time enrollment link**,
+valid for seven days, which you pass to them however you like. They open it and
+choose their own password — you never see it. Until they do, they show as "not
+enrolled yet" and cannot sign in.
+
+Deactivating a person blocks sign-in and cuts their live sessions, but keeps
+their password, passkeys and all their history, so reactivating is a clean undo.
+People are never deleted: accounts, properties, loans, documents and tax
+statements reference them.
+
+Two guards mean an instance can never be left without an administrator: you
+cannot deactivate yourself, and the last administrator can be neither
+deactivated nor demoted. If you somehow lock yourself out, promote someone
+directly in the database:
+
+```sh
+docker compose exec db psql -U continuum -d continuum \
+  -c "UPDATE person SET role = 'admin', deactivated_at = NULL WHERE name = 'Your Name';"
+```
+
+## Passkeys and Tailscale
+
+Continuum supports **passkeys** — Face ID, Touch ID, Windows Hello — alongside
+passwords. Passwords never go away, so a device without a passkey still works.
+
+Browsers refuse the passkey API outside a secure context, so the passkey
+controls appear only when `ORIGIN` is `https://` (or `localhost` during
+development). On a plain-HTTP LAN address they are simply absent rather than
+broken.
+
+The simplest way to get HTTPS on a home server is [Tailscale](https://tailscale.com),
+a WireGuard mesh that is **private by default**: only devices you have added to
+your tailnet can reach the machine. `tailscale serve` publishes to the tailnet;
+the command that would expose the app to the public internet is `tailscale
+funnel`, which nothing here runs. The one thing that does become public is the
+hostname — Tailscale's certificate comes from Let's Encrypt, and every Let's
+Encrypt certificate is listed in public Certificate Transparency logs. Nothing
+is reachable at that name; only the name is visible.
+
+Generate an auth key in the Tailscale admin console, then:
+
+```sh
+# .env
+TS_AUTHKEY=tskey-auth-…
+ORIGIN=https://continuum.<your-tailnet>.ts.net
+
+docker compose --profile tailscale up -d
+```
+
+**Do not remove the LAN port mapping yet.** Sign in over the tailnet address,
+register a passkey in Settings → Household, and confirm it signs you in. Only
+then delete the `ports:` block from the `app` service in `compose.yaml`, which
+makes Tailscale the only way in. Note that this also puts the `/ics` calendar
+feed and the `/api` tokens behind the tailnet, so a phone subscribed to the
+calendar needs Tailscale connected for it to refresh.
+
+**Already running Tailscale on the host?** Skip the sidecar. Set `ORIGIN` to
+your existing `.ts.net` name and run, on the host:
+
+```sh
+tailscale serve --bg 3000
+```
+
+Any other route to a trusted certificate works equally well — a reverse proxy
+with Let's Encrypt, or your own internal certificate authority via `mkcert` if
+you would rather nothing appear in a public log. Continuum only cares that
+`ORIGIN` is `https://` and matches the address you browse to.
+
 ## API
 
 Settings → API tokens creates a bearer token (shown once) that grants

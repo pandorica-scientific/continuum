@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { startRegistration } from '@simplewebauthn/browser';
 
 	interface PersonRow {
 		id: string;
@@ -11,18 +13,58 @@
 		pending: boolean;
 	}
 
+	interface PasskeyRow {
+		id: string;
+		label: string;
+		createdAt: Date;
+		lastUsedAt: Date | null;
+	}
+
 	let {
 		people,
 		me,
-		enrollmentLink = null
+		enrollmentLink = null,
+		passkeys = false,
+		myPasskeys = []
 	}: {
 		people: PersonRow[];
 		me: { id: string; role: 'admin' | 'member' } | null;
 		enrollmentLink?: string | null;
+		passkeys?: boolean;
+		myPasskeys?: PasskeyRow[];
 	} = $props();
 
 	let adding = $state(false);
+	let passkeyError = $state('');
+	let registering = $state(false);
 	const isAdmin = $derived(me?.role === 'admin');
+
+	async function addPasskey() {
+		passkeyError = '';
+		registering = true;
+		try {
+			const options = await (
+				await fetch('/auth/passkey/register/options', { method: 'POST' })
+			).json();
+			const response = await startRegistration({ optionsJSON: options });
+			const label = window.prompt('Name this passkey', 'This device') ?? 'Passkey';
+			const verify = await fetch('/auth/passkey/register/verify', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ response, label })
+			});
+			if (!verify.ok) throw new Error('That passkey was not accepted.');
+			await invalidateAll();
+		} catch (err) {
+			// Cancelling the system prompt is deliberate, not a failure.
+			const name = (err as { name?: string }).name;
+			if (name !== 'NotAllowedError' && name !== 'AbortError') {
+				passkeyError = err instanceof Error ? err.message : 'Could not add that passkey.';
+			}
+		} finally {
+			registering = false;
+		}
+	}
 
 	function note(p: PersonRow): string {
 		const bits: string[] = [p.role];
@@ -95,6 +137,31 @@
 	{/if}
 </div>
 
+{#if passkeys}
+	<div class="card people">
+		{#each myPasskeys as k (k.id)}
+			<div class="person-row passkey-row">
+				<span class="mod-label">
+					<span>{k.label}</span>
+					<span class="note">
+						{k.lastUsedAt
+							? `last used ${new Date(k.lastUsedAt).toLocaleDateString()}`
+							: 'never used'}
+					</span>
+				</span>
+				<form method="POST" action="?/removePasskey" use:enhance class="row-actions">
+					<input type="hidden" name="credentialId" value={k.id} />
+					<button type="submit" class="btn">Remove</button>
+				</form>
+			</div>
+		{/each}
+		<button type="button" class="btn" onclick={addPasskey} disabled={registering}>
+			{registering ? 'Waiting for your device…' : '🔑 Add a passkey'}
+		</button>
+		{#if passkeyError}<p class="note">{passkeyError}</p>{/if}
+	</div>
+{/if}
+
 <style>
 	/* Mirrors the module list on the same screen: a bordered row per entry. */
 	.people {
@@ -112,6 +179,9 @@
 	}
 	.person-row:first-child {
 		border-top: 0;
+	}
+	.passkey-row {
+		grid-template-columns: minmax(0, 1fr) auto;
 	}
 	.person-row.dimmed {
 		opacity: 0.55;
