@@ -37,10 +37,7 @@ Accounts you can actually manage, and a way in that is not a password.
 
 - `person.role` was previously incoherent — the schema defaulted to `adult`,
   the demo seeder wrote `admin`/`member`, the setup wizard never set it, and
-  nothing read it. It is now the permission field. **On upgrade the earliest
-  person by creation date becomes the administrator and everyone else a
-  member**; the README documents a one-line database command if that is not who
-  you wanted.
+  nothing read it. It is now the permission field, with exactly two values.
 - `person.password_hash` is now nullable, so a person can exist between being
   created and choosing a password.
 - The end-to-end suite now builds the app before running. It previously served
