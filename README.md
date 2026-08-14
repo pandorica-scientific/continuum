@@ -58,7 +58,8 @@ docker login   # the kerth92/continuum image is private for now
 POSTGRES_PASSWORD=change-me docker compose up -d
 ```
 
-Open `http://your-server:3000` and follow the setup wizard. Everything —
+Open `http://your-server` (port 80 by default; set `CONTINUUM_PORT` in `.env`
+if something else already owns it) and follow the setup wizard. Everything —
 people, base currency (CZK, EUR or PLN), modules — is configured there, not in
 files.
 
@@ -105,11 +106,11 @@ address. Two steps fix it for every device on the network, no cloud involved:
    offers local DNS names, give the reservation a name there (`continuum.lan`
    on most). A Pi-hole or AdGuard Home works too, with a custom DNS record.
 
-To lose the port as well, put the app on 80 and tell it its own address:
+The app sits on plain port 80 by default, so the name alone is the whole
+address — just tell it what that address is:
 
 ```sh
 # .env
-CONTINUUM_PORT=80
 ORIGIN=http://continuum.local
 ```
 
@@ -127,7 +128,7 @@ cash-flow totals. Every amount crosses the wire as integer minor units plus a
 currency code, never a float:
 
 ```sh
-curl -H "Authorization: Bearer <token>" http://your-server:3000/api/v1/networth
+curl -H "Authorization: Bearer <token>" http://your-server/api/v1/networth
 # { "total": { "amountMinor": 646055100, "currency": "CZK" }, … }
 ```
 

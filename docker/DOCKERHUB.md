@@ -42,7 +42,7 @@ curl -O https://raw.githubusercontent.com/robertkiewisz/continuum/main/compose.y
 POSTGRES_PASSWORD=change-me docker compose up -d
 ```
 
-Open `http://your-server:3000` and follow the setup wizard. Want to look around
+Open `http://your-server` and follow the setup wizard. Want to look around
 first? `DEMO=1 docker compose up -d` on a pristine instance seeds a fictional
 household — sign in as _Jana Nováková_ / `demo-demo-demo`.
 
@@ -62,6 +62,7 @@ configured in the app and stored in your own database. Nothing calls home.
 ## Tags
 
 - `latest` — current build from `main` (amd64 + arm64)
+- `0.2.1` — port 80 by default; reachable as `http://continuum.local` behind a LAN name
 - `0.2.0` — transaction register, splits & tags, self-correcting rules engine, read-only API, tax statements, entity-linked documents
 - `0.1.0` — first published version
 

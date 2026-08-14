@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.1 — 2026-08-14
+
+Reachable by name.
+
+### Changed
+
+- The server sits on plain port 80 by default (`CONTINUUM_PORT` in `.env`
+  overrides it), so with a DHCP reservation and a LAN hostname the whole
+  address is `http://continuum.local` — no port to remember. Compose fails
+  loudly if 80 is already taken, never silently.
+- README documents the local-name setup end to end: the DHCP reservation, the
+  mDNS / router-DNS name, and the `ORIGIN` value that must match the address
+  you browse to.
+
 ## 0.2.0 — 2026-08-14
 
 The ledger grew from watching money to working with it.
@@ -49,8 +63,6 @@ The ledger grew from watching money to working with it.
   gone; both migrations are automatic and lossless.
 - Base control styling now lives once in `app.css` instead of being restated
   per screen.
-- The host port is configurable (`CONTINUUM_PORT`), so the server can sit on
-  plain port 80 behind a LAN name.
 
 ### Fixed
 
