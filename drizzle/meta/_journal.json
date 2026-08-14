@@ -78,6 +78,34 @@
       "when": 1786641012363,
       "tag": "0010_natural_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786701683381,
+      "tag": "0011_worried_dorian_gray",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786710864760,
+      "tag": "0012_massive_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786711305733,
+      "tag": "0013_wide_wonder_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786716498330,
+      "tag": "0014_silly_kylun",
+      "breakpoints": true
     }
   ]
 }

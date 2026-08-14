@@ -17,6 +17,7 @@ import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { serverStatus } from '$lib/server/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
+import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -45,11 +46,30 @@ export const load: PageServerLoad = async () => {
 		backup,
 		lastBackup,
 		backupDestinations: detectDestinations(),
-		status: await serverStatus()
+		status: await serverStatus(),
+		apiTokens: (await listTokens()).map((t) => ({
+			id: t.id,
+			label: t.label,
+			created: t.createdAt.toISOString().slice(0, 10),
+			lastUsed: t.lastUsedAt ? t.lastUsedAt.toISOString().slice(0, 10) : null
+		}))
 	};
 };
 
 export const actions: Actions = {
+	createApiToken: async ({ request }) => {
+		const form = await request.formData();
+		const { raw } = await createToken(String(form.get('label') ?? ''));
+		// Returned once and never stored: only its hash is in the database.
+		return { createdToken: raw };
+	},
+
+	revokeApiToken: async ({ request }) => {
+		const form = await request.formData();
+		await revokeToken(String(form.get('id') ?? ''));
+		return { ok: true };
+	},
+
 	toggleModule: async ({ request }) => {
 		const form = await request.formData();
 		const key = String(form.get('key') ?? '') as ModuleKey;

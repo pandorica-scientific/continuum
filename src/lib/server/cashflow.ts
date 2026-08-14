@@ -3,6 +3,8 @@ import { db } from '$lib/server/db';
 import { category, transaction } from '$lib/server/db/schema';
 import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
+import { loadSplits } from '$lib/server/splits';
+import { effectiveLines } from '$lib/transactions/lines';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import type { WaterfallInput } from '$lib/charts/waterfall';
 
@@ -74,22 +76,31 @@ export async function flowData(period: Period): Promise<FlowData> {
 		db.select().from(category)
 	]);
 	const categoryById = new Map(categories.map((c) => [c.id, c]));
+	const splitsByTxn = await loadSplits(rows.map((r) => r.id));
 
 	// Base-currency major units per category id, plus uncategorised buckets.
 	const byCategory = new Map<string, number>();
 	let uncategorisedIn = 0;
 	let uncategorisedOut = 0;
 	for (const t of rows) {
-		// Net of the bank's own fee: the fee also left the account.
-		const net = t.amount - (t.feeMinor ?? 0n);
-		const converted = convertMinorSync(rates, net, t.currency, base, t.valueDate ?? t.bookedAt);
-		const major = Number(converted ?? net) / 100;
-		if (t.categoryId) {
-			byCategory.set(t.categoryId, (byCategory.get(t.categoryId) ?? 0) + major);
-		} else if (major > 0) {
-			uncategorisedIn += major;
-		} else {
-			uncategorisedOut += major;
+		// effectiveLines is the only thing that knows whether this is split, and
+		// it has already netted the bank's own fee out of the first line.
+		for (const line of effectiveLines(t, splitsByTxn.get(t.id) ?? [])) {
+			const converted = convertMinorSync(
+				rates,
+				line.amountMinor,
+				t.currency,
+				base,
+				t.valueDate ?? t.bookedAt
+			);
+			const major = Number(converted ?? line.amountMinor) / 100;
+			if (line.categoryId) {
+				byCategory.set(line.categoryId, (byCategory.get(line.categoryId) ?? 0) + major);
+			} else if (major > 0) {
+				uncategorisedIn += major;
+			} else {
+				uncategorisedOut += major;
+			}
 		}
 	}
 

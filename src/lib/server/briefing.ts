@@ -1,5 +1,7 @@
-import { sql } from 'drizzle-orm';
+import { isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { loadSplits } from '$lib/server/splits';
+import { effectiveLines } from '$lib/transactions/lines';
 import {
 	category,
 	document,
@@ -140,18 +142,32 @@ const documentExpiry: Source = async () => {
 
 const overspend: Source = async () => {
 	// A category group running well past its twelve-month average this month.
-	const rows = await db
-		.select({
-			groupKey: category.groupKey,
-			month: sql<string>`to_char(coalesce(${transaction.valueDate}, ${transaction.bookedAt}), 'YYYY-MM')`,
-			spent: sql<string>`sum(-(${transaction.amount} - coalesce(${transaction.feeMinor}, 0)))`
-		})
-		.from(transaction)
-		.innerJoin(category, sql`${transaction.categoryId} = ${category.id}`)
-		.where(
-			sql`${transaction.transferPairId} is null and ${transaction.amount} < 0 and ${category.groupKey} not in ('income', 'savings')`
-		)
-		.groupBy(category.groupKey, sql`2`);
+	// Aggregated in JavaScript rather than SQL because a transaction may be
+	// split across categories, and effectiveLines is the only thing that knows.
+	const [txns, categories] = await Promise.all([
+		db.select().from(transaction).where(isNull(transaction.transferPairId)),
+		db.select().from(category)
+	]);
+	const groupByCategory = new Map(categories.map((c) => [c.id, c.groupKey]));
+	const splitsByTxn = await loadSplits(txns.map((t) => t.id));
+
+	// Spending per group per month, as a positive number of minor units — the
+	// same shape the loop below has always consumed.
+	const tally = new Map<string, number>();
+	for (const t of txns) {
+		const month = (t.valueDate ?? t.bookedAt).slice(0, 7);
+		for (const line of effectiveLines(t, splitsByTxn.get(t.id) ?? [])) {
+			if (line.amountMinor >= 0n || !line.categoryId) continue;
+			const groupKey = groupByCategory.get(line.categoryId);
+			if (!groupKey || groupKey === 'income' || groupKey === 'savings') continue;
+			const key = `${groupKey} ${month}`;
+			tally.set(key, (tally.get(key) ?? 0) + Number(-line.amountMinor));
+		}
+	}
+	const rows = [...tally].map(([key, spent]) => {
+		const [groupKey, month] = key.split(' ');
+		return { groupKey, month, spent: String(spent) };
+	});
 
 	const thisMonth = new Date().toISOString().slice(0, 7);
 	const items: BriefingItem[] = [];

@@ -225,7 +225,109 @@
 	</div>
 </section>
 
+<section class="section">
+	<div class="eyebrow-row">
+		<Eyebrow emoji="🔌" label="API tokens" />
+		<span class="eyebrow-caption">read-only access to the whole ledger</span>
+	</div>
+
+	{#if form?.createdToken}
+		<div class="card token-new">
+			<span class="tn-label">Copy this now — it is not shown again.</span>
+			<code class="api-token-raw mono">{form.createdToken}</code>
+		</div>
+	{/if}
+
+	<form method="POST" action="?/createApiToken" use:enhance class="card token-add">
+		<label>
+			<span>Label</span>
+			<input class="api-token-label" name="label" placeholder="Home Assistant" />
+		</label>
+		<button type="submit" class="btn btn-primary">Create token</button>
+	</form>
+
+	{#each data.apiTokens as t (t.id)}
+		<div class="card token-row">
+			<div class="tr-main">
+				<span class="tr-label">{t.label}</span>
+				<span class="tr-meta">created {t.created} · last used {t.lastUsed ?? 'never'}</span>
+			</div>
+			<form method="POST" action="?/revokeApiToken" use:enhance>
+				<input type="hidden" name="id" value={t.id} />
+				<button type="submit" class="btn">Revoke</button>
+			</form>
+		</div>
+	{/each}
+
+	<p class="quiet-note">
+		A token grants read access to every transaction, account and figure in this ledger. It cannot
+		change anything.
+	</p>
+</section>
+
 <style>
+	.token-new {
+		border-color: var(--blue);
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.tn-label {
+		font-size: 12px;
+		color: var(--fg3);
+	}
+	.api-token-raw {
+		font-size: 13px;
+		word-break: break-all;
+		color: var(--fg1);
+	}
+	.token-add {
+		display: flex;
+		gap: 10px;
+		align-items: flex-end;
+		flex-wrap: wrap;
+	}
+	.token-add label {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: 12px;
+		color: var(--fg3);
+		flex: 1 1 220px;
+	}
+	.token-add input {
+		border: 1px solid var(--bd2);
+		background: var(--card);
+		color: var(--fg1);
+		border-radius: 8px;
+		padding: 8px 11px;
+		font-size: 13.5px;
+	}
+	.token-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.tr-main {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.tr-label {
+		font-size: 13.5px;
+		font-weight: 500;
+	}
+	.tr-meta {
+		font-size: 12px;
+		color: var(--fg3);
+	}
+	.quiet-note {
+		font-size: 12px;
+		color: var(--fg3);
+		margin: 0;
+	}
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);

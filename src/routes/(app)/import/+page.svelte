@@ -156,10 +156,13 @@
 					<form method="POST" action="?/categorize" use:enhance class="cat-form">
 						<input type="hidden" name="id" value={r.id} />
 						<select name="categoryId">
+							<!-- Without a suggestion the prompt holds the selection, so an
+							     unguessed row never looks as though it were already filed. -->
+							<option value="" disabled selected={r.suggestedCategoryId === null}>File as…</option>
 							{#each data.categories as group (group.key)}
 								<optgroup label={group.label}>
 									{#each group.items as c (c.id)}
-										<option value={c.id}>{c.name}</option>
+										<option value={c.id} selected={r.suggestedCategoryId === c.id}>{c.name}</option>
 									{/each}
 								</optgroup>
 							{/each}

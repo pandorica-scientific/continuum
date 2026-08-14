@@ -44,6 +44,9 @@ export const NAV_GROUPS: NavGroup[] = [
 		items: [
 			{ path: '/overview', label: 'Overview', emoji: '🧭' },
 			{ path: '/cashflow', label: 'Cash flow', emoji: '💸' },
+			{ path: '/transactions', label: 'Transactions', emoji: '📒' },
+			{ path: '/tags', label: 'Tags', emoji: '🏷️' },
+			{ path: '/rules', label: 'Rules', emoji: '⚙️' },
 			{ path: '/accounts', label: 'Accounts', emoji: '🏦' },
 			{ path: '/import', label: 'Import', emoji: '📥', module: 'import' }
 		]

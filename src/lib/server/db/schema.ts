@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
 	bigint,
+	boolean,
 	date,
 	index,
 	integer,
@@ -32,6 +33,16 @@ export const session = pgTable('session', {
 		.notNull()
 		.references(() => person.id, { onDelete: 'cascade' }),
 	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+});
+
+// A bearer token for the read-only API. Only the hash is stored — the raw
+// token is shown once at creation, exactly as session tokens are handled.
+export const apiToken = pgTable('api_token', {
+	// sha256 hex of the bearer token
+	id: text('id').primaryKey(),
+	label: text('label').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	lastUsedAt: timestamp('last_used_at', { withTimezone: true })
 });
 
 // App-level configuration owned by the Settings screen (module toggles, base
@@ -141,6 +152,11 @@ export const transaction = pgTable(
 		// changes bump this and re-parse from stored files
 		fingerprintVersion: integer('fingerprint_version').notNull().default(1),
 		categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),
+		// What the engine would file this as, shown in the review queue so a
+		// contested or unproven row arrives with a guess rather than nothing.
+		suggestedCategoryId: text('suggested_category_id').references(() => category.id, {
+			onDelete: 'set null'
+		}),
 		// auto = categorised by rule, needs_review = ambiguous, confirmed = user decided
 		reviewState: text('review_state').notNull().default('needs_review'),
 		reviewReason: text('review_reason'),
@@ -169,23 +185,6 @@ export const transferPair = pgTable('transfer_pair', {
 	state: text('state').notNull().default('auto'), // auto | proposed | confirmed | rejected
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
-
-export const categoryRule = pgTable(
-	'category_rule',
-	{
-		id: text('id').primaryKey(),
-		// counterparty | counterparty_account | variable_symbol
-		matcherType: text('matcher_type').notNull(),
-		// normalised pattern the matcher compares against
-		pattern: text('pattern').notNull(),
-		categoryId: text('category_id')
-			.notNull()
-			.references(() => category.id, { onDelete: 'cascade' }),
-		provenance: text('provenance').notNull().default('learned'), // seeded | learned
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-	},
-	(table) => [uniqueIndex('category_rule_matcher_idx').on(table.matcherType, table.pattern)]
-);
 
 export const markTransferRule = pgTable('mark_transfer_rule', {
 	id: text('id').primaryKey(),
@@ -444,3 +443,92 @@ export const netWorthSnapshot = pgTable('networth_snapshot', {
 	valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
 	currency: text('currency').notNull()
 });
+
+// ---- Splits and tags ----
+
+// A transaction divided between categories. Absent for the ordinary case: an
+// unsplit transaction has no rows here and keeps its own categoryId.
+export const transactionSplit = pgTable(
+	'transaction_split',
+	{
+		id: text('id').primaryKey(),
+		transactionId: text('transaction_id')
+			.notNull()
+			.references(() => transaction.id, { onDelete: 'cascade' }),
+		// minor units of the parent transaction's currency, same sign as the parent
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+		categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),
+		note: text('note'),
+		sort: integer('sort').notNull().default(0)
+	},
+	(table) => [index('transaction_split_txn_idx').on(table.transactionId)]
+);
+
+// Cross-cutting groupings: a renovation, a holiday. Every tag has a running
+// total, which is why no kind column is needed.
+export const tag = pgTable('tag', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	// trimmed, lowercased, inner whitespace collapsed — carries the uniqueness
+	normalisedName: text('normalised_name').notNull().unique(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const transactionTag = pgTable(
+	'transaction_tag',
+	{
+		transactionId: text('transaction_id')
+			.notNull()
+			.references(() => transaction.id, { onDelete: 'cascade' }),
+		tagId: text('tag_id')
+			.notNull()
+			.references(() => tag.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.transactionId, table.tagId] })]
+);
+
+// ---- Rules ----
+
+// An unordered rule: every condition must hold. Category is exclusive and can
+// contest with another rule; tags are additive and always apply. There is
+// deliberately no unique index on the conditions — two rules claiming the same
+// counterparty is what makes a contested row possible.
+export const rule = pgTable('rule', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	enabled: boolean('enabled').notNull().default(true),
+	provenance: text('provenance').notNull().default('learned'), // seeded | learned | manual
+	// [{ field, op, value }], ANDed. Read only ever as a set with its rule.
+	conditions: jsonb('conditions').notNull(),
+	categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),
+	// Evidence, not a tuned weight: confidence is derived from these.
+	acceptedCount: integer('accepted_count').notNull().default(0),
+	correctedCount: integer('corrected_count').notNull().default(0),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const ruleTag = pgTable(
+	'rule_tag',
+	{
+		ruleId: text('rule_id')
+			.notNull()
+			.references(() => rule.id, { onDelete: 'cascade' }),
+		tagId: text('tag_id')
+			.notNull()
+			.references(() => tag.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.ruleId, table.tagId] })]
+);
+
+export const transactionSplitTag = pgTable(
+	'transaction_split_tag',
+	{
+		splitId: text('split_id')
+			.notNull()
+			.references(() => transactionSplit.id, { onDelete: 'cascade' }),
+		tagId: text('tag_id')
+			.notNull()
+			.references(() => tag.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.splitId, table.tagId] })]
+);

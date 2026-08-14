@@ -16,9 +16,12 @@ import {
 	portfolioSnapshot,
 	property,
 	propertyBill,
+	rule,
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
+import { saveSplits } from '$lib/server/splits';
+import { setTransactionTags } from '$lib/server/tags';
 import { hashPassword } from '$lib/server/auth';
 import { setSetting } from '$lib/server/settings';
 
@@ -115,6 +118,35 @@ export async function seedDemo(): Promise<void> {
 		add(m, '25', -1000000n, 'brokerage', 'XTB deposit');
 	}
 	await db.insert(transaction).values(rows);
+
+	// One Alza purchase divided between a gadget and materials for a project,
+	// and a tag over the project's spending — so demo mode shows both features
+	// rather than an empty tags screen.
+	const alza = rows.find((r) => r.counterparty === 'Alza.cz');
+	if (alza) {
+		await saveSplits(alza.id, [
+			{ amountMinor: 79000n, categoryId: 'everything-else', note: 'Kettle' },
+			{ amountMinor: 40000n, categoryId: 'everything-else', note: 'Shelving' }
+		]);
+		await setTransactionTags(alza.id, ['Renovation 2026']);
+	}
+	const cez = rows.filter((r) => r.counterparty === 'ČEZ Prodej').slice(0, 2);
+	for (const row of cez) await setTransactionTags(row.id, ['Renovation 2026']);
+
+	// A hand-written rule that the old single-matcher categoriser could not have
+	// expressed: a counterparty *and* an amount floor. It starts from no
+	// evidence, so the rules screen shows it earning trust rather than assuming
+	// it — unlike the seeded rules beside it.
+	await db.insert(rule).values({
+		id: randomUUID(),
+		name: 'Big Alza purchases',
+		provenance: 'manual',
+		conditions: [
+			{ field: 'counterparty', op: 'contains', value: 'alza' },
+			{ field: 'amount', op: 'between', min: '100000', max: null }
+		],
+		categoryId: 'everything-else'
+	});
 
 	// Two flats, one mortgage over both at explicit shares.
 	const flatA = randomUUID();

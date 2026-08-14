@@ -3,8 +3,9 @@ import { and, asc, eq, gte, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, importFile, person, transaction, transferPair } from '$lib/server/db/schema';
 import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
-import { decide } from '$lib/server/categorize';
-import { categoryRule } from '$lib/server/db/schema';
+import { decideWithRules } from '$lib/rules/match';
+import { autoThreshold, loadRules } from '$lib/server/rules';
+import { addTagsToTransaction } from '$lib/server/tags';
 import { saveUpload } from '$lib/server/files';
 import { detectAndParse } from './detect';
 import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
@@ -321,7 +322,7 @@ export async function pairAndCategorise(): Promise<number> {
 
 	// Categorise whatever is new and not a transfer (held proposals included —
 	// a categorisation would resolve them as "not a transfer").
-	const rules = await db.select().from(categoryRule);
+	const [rules, threshold] = await Promise.all([loadRules(), autoThreshold()]);
 	const proposedLegs = new Set(
 		pendingPairs
 			.filter((p) => p.state === 'proposed')
@@ -334,26 +335,43 @@ export async function pairAndCategorise(): Promise<number> {
 	for (const t of undecided) {
 		if (t.reviewState === 'confirmed') continue;
 		if (proposedLegs.has(t.id)) continue; // waiting on the transfer decision
-		const decision = decide(
+		const decision = decideWithRules(
 			{
 				counterparty: t.counterparty,
 				counterpartyAccount: t.counterpartyAccount,
 				variableSymbol: t.variableSymbol,
+				description: t.description,
 				amountMinor: t.amount
 			},
-			rules
+			rules,
+			threshold
 		);
 		if (decision.kind === 'auto') {
 			await db
 				.update(transaction)
-				.set({ categoryId: decision.categoryId, reviewState: 'auto', reviewReason: null })
+				.set({
+					categoryId: decision.categoryId,
+					suggestedCategoryId: null,
+					reviewState: 'auto',
+					reviewReason: null
+				})
 				.where(eq(transaction.id, t.id));
-		} else if (t.reviewState !== 'needs_review' || t.reviewReason !== decision.reason) {
+		} else if (
+			t.reviewState !== 'needs_review' ||
+			t.reviewReason !== decision.reason ||
+			t.suggestedCategoryId !== decision.categoryId
+		) {
 			await db
 				.update(transaction)
-				.set({ reviewState: 'needs_review', reviewReason: decision.reason })
+				.set({
+					reviewState: 'needs_review',
+					reviewReason: decision.reason,
+					suggestedCategoryId: decision.categoryId
+				})
 				.where(eq(transaction.id, t.id));
 		}
+		// Tags are additive: every matching rule contributes, no conflict possible.
+		if (decision.tagIds.length > 0) await addTagsToTransaction(t.id, decision.tagIds);
 	}
 
 	return paired;

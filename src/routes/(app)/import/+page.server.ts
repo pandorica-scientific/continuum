@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { and, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, category, importFile, transaction, transferPair } from '$lib/server/db/schema';
-import { learnRule } from '$lib/server/categorize';
+import { fileTransaction } from '$lib/server/transactions';
 import { ingestFile, pairAndCategorise, type IngestResult } from '$lib/server/import/ingest';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import { displayCurrency, formatMinor } from '$lib/money';
@@ -44,6 +44,7 @@ export const load: PageServerLoad = async () => {
 				counterparty: transaction.counterparty,
 				description: transaction.description,
 				reviewReason: transaction.reviewReason,
+				suggestedCategoryId: transaction.suggestedCategoryId,
 				transferPairId: transaction.transferPairId,
 				accountName: account.name
 			})
@@ -77,7 +78,10 @@ export const load: PageServerLoad = async () => {
 			amount: `${formatMinor(r.amount, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
 			negative: r.amount < 0n,
 			isTransfer: proposedLegIds.has(r.id),
-			account: r.accountName
+			account: r.accountName,
+			// The engine's best guess, pre-selected below so a contested or
+			// unproven row arrives with a suggestion rather than nothing.
+			suggestedCategoryId: r.suggestedCategoryId
 		})),
 		accounts,
 		categories: CATEGORY_GROUPS.map((group) => ({
@@ -108,31 +112,13 @@ export const actions: Actions = {
 
 	categorize: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
-		const categoryId = String(form.get('categoryId') ?? '');
-		if (!id || !categoryId) return fail(400, { message: 'Missing transaction or category.' });
-
-		const rows = await db.select().from(transaction).where(eq(transaction.id, id));
-		const row = rows[0];
-		if (!row) return fail(404, { message: 'Transaction not found.' });
-
-		await db
-			.update(transaction)
-			.set({ categoryId, reviewState: 'confirmed', reviewReason: null })
-			.where(eq(transaction.id, id));
-
-		// The correction becomes a rule, and the rule immediately files
-		// everything else that was waiting on the same counterparty.
-		await learnRule(
-			{
-				counterparty: row.counterparty,
-				counterpartyAccount: row.counterpartyAccount,
-				variableSymbol: row.variableSymbol,
-				amountMinor: row.amount
-			},
-			categoryId
+		// Shared with the register, so a correction teaches the categoriser the
+		// same way wherever it is made.
+		const result = await fileTransaction(
+			String(form.get('id') ?? ''),
+			String(form.get('categoryId') ?? '')
 		);
-		await pairAndCategorise();
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
 

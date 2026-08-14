@@ -48,8 +48,13 @@ export const init: ServerInit = async () => {
 };
 
 // /ics/<token> is public by design: calendar apps subscribe without a session,
-// authenticated by the secret token in the URL.
-const PUBLIC_PATHS = ['/login', '/setup', '/ics'];
+// authenticated by the secret token in the URL. /api authenticates itself the
+// same way, with a bearer token instead of a cookie.
+//
+// This exempts them from the redirect to /login, NOT from authentication —
+// every /api route calls requireToken itself, and one that forgets to would be
+// wide open. The E2E journey asserts an unauthenticated request gets a 401.
+const PUBLIC_PATHS = ['/login', '/setup', '/ics', '/api'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	await (ready ??= boot());

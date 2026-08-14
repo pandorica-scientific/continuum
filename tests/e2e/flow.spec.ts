@@ -63,6 +63,208 @@ test.describe('signed in', () => {
 		await expect(page.getByText('Saved & invested').first()).toBeVisible();
 	});
 
+	test('the register finds a transaction by text, direction and amount', async ({ page }) => {
+		await page.goto('/transactions');
+		// The fio fixture's five rows; nothing is a paired own-account transfer
+		// yet, so all of them are in scope.
+		await expect(page.locator('.txn-row')).toHaveCount(5);
+
+		// Searching narrows to the one payment from ACME BIOTECH, and the filter
+		// lands in the URL so the view is linkable.
+		await page.locator('input[name=q]').fill('ACME');
+		await page.getByRole('button', { name: 'Apply' }).click();
+		await expect(page).toHaveURL(/q=ACME/);
+		await expect(page.locator('.txn-row')).toHaveCount(1);
+		await expect(page.locator('.txn-row').first()).toContainText('ACME BIOTECH');
+
+		// Money out alone is three of the five rows.
+		await page.goto('/transactions?dir=out');
+		await expect(page.locator('.txn-row')).toHaveCount(3);
+
+		// Two of those three are the 20 000 CZK payments; the 50 CZK one drops
+		// out, which proves the bound is read as a magnitude.
+		await page.goto('/transactions?dir=out&min=1000');
+		await expect(page.locator('.txn-row')).toHaveCount(2);
+
+		// An unfiled row must not look filed: its picker sits on the prompt
+		// rather than on whichever category happens to sort first.
+		await page.goto('/transactions?review=needs_review');
+		const unfiled = page.locator('.txn-row').first();
+		await expect(unfiled).toBeVisible();
+		await expect(unfiled.locator('select[name=categoryId]')).toHaveValue('');
+	});
+
+	test('the register totals the filtered set and recategorises a row', async ({ page }) => {
+		await page.goto('/transactions?dir=out&min=1000');
+		await expect(page.locator('.filter-total')).toContainText('2');
+
+		// Filing the ACME payment from the register moves it into the category,
+		// exactly as filing it from the review queue would.
+		await page.goto('/transactions?q=ACME');
+		const row = page.locator('.txn-row').first();
+		await row.locator('select[name=categoryId]').selectOption('groceries');
+		await row.getByRole('button', { name: 'File' }).click();
+
+		await page.goto('/transactions?q=ACME&category=groceries');
+		await expect(page.locator('.txn-row')).toHaveCount(1);
+	});
+
+	test('splitting a transaction divides it between two categories', async ({ page }) => {
+		await page.goto('/transactions?q=ACME');
+		await page.getByRole('button', { name: 'Split' }).first().click();
+
+		// Lines that do not add up: the dialog must refuse to save.
+		await page.locator('.split-line input[name=amount]').first().fill('10000');
+		await page.locator('.split-line input[name=amount]').nth(1).fill('10000');
+		await expect(page.getByRole('button', { name: 'Save split' })).toBeDisabled();
+
+		// Balanced: 32 892 split as 20 000 + 12 892. Amounts are magnitudes; the
+		// direction comes from the transaction itself.
+		await page.locator('.split-line input[name=amount]').first().fill('20000');
+		await page.locator('.split-line input[name=amount]').nth(1).fill('12892');
+		await page.locator('.split-line select[name=categoryId]').first().selectOption('groceries');
+		await page.locator('.split-line select[name=categoryId]').nth(1).selectOption('salary');
+		await expect(page.getByRole('button', { name: 'Save split' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Save split' }).click();
+
+		await expect(page.locator('.txn-row .split-line')).toHaveCount(2, { timeout: 10000 });
+	});
+
+	test('filtering by one category shows only that share of a split', async ({ page }) => {
+		await page.goto('/transactions?q=ACME&category=groceries');
+		await expect(page.locator('.txn-row')).toHaveCount(1);
+		// The groceries share, not the whole 32 892 — the line-summed total.
+		await expect(page.locator('.filter-total')).toContainText('20 000');
+	});
+
+	test('a tag rolls its transactions up into a running total', async ({ page }) => {
+		await page.goto('/transactions?q=ACME');
+		await page.locator('.txn-row .tag-input').first().fill('Renovation 2026');
+		await page.locator('.txn-row .tag-input').first().press('Enter');
+		await expect(page.locator('.txn-row .tag-chip')).toContainText('Renovation 2026', {
+			timeout: 10000
+		});
+
+		await page.goto('/tags');
+		const row = page.locator('.tag-row', { hasText: 'Renovation 2026' });
+		await expect(row).toBeVisible();
+		// Tagged at transaction level, so the whole transaction counts.
+		await expect(row).toContainText('32 892');
+	});
+
+	test('the rules screen lists the seeded rules with their confidence', async ({ page }) => {
+		await page.goto('/rules');
+		await expect(page.locator('.rule-row').first()).toBeVisible();
+		// Seeded rules start at the prior, which clears the filing threshold.
+		await expect(
+			page.locator('.rule-row', { hasText: 'cssz' }).locator('.r-confidence')
+		).toHaveText('61%');
+	});
+
+	test('a hand-written rule previews its matches before it is saved', async ({ page }) => {
+		await page.goto('/rules');
+		await page.getByRole('button', { name: 'New rule' }).click();
+		await page.locator('.rule-name').fill('Outgoing to Jan');
+		await page.locator('.condition-value').first().fill('novák');
+		await page.locator('.rule-category').selectOption('everything-else');
+
+		await page.getByRole('button', { name: 'Preview matches' }).click();
+		await expect(page.locator('.preview-count')).toContainText('matches', { timeout: 10000 });
+
+		await page.getByRole('button', { name: 'Save rule' }).click();
+		await expect(page.locator('.rule-row', { hasText: 'Outgoing to Jan' })).toBeVisible({
+			timeout: 10000
+		});
+		// A hand-written rule starts from no evidence, so it does not file yet.
+		await expect(
+			page.locator('.rule-row', { hasText: 'Outgoing to Jan' }).locator('.r-confidence')
+		).toHaveText('0%');
+	});
+
+	test('overriding a rule-filed transaction is recorded against that rule', async ({ page }) => {
+		// The seeded cssz rule filed this row automatically; overriding it is the
+		// signal that should cost the rule some confidence.
+		await page.goto('/transactions?q=SSZ');
+		const row = page.locator('.txn-row').first();
+		await expect(row).toContainText('SSZ');
+		await row.locator('select[name=categoryId]').selectOption('groceries');
+		await row.getByRole('button', { name: 'File' }).click();
+		await page.waitForTimeout(800);
+
+		await page.goto('/rules');
+		const cssz = page.locator('.rule-row', { hasText: 'cssz' });
+		await expect(cssz.locator('.r-counts')).toContainText('1 overridden');
+		// One correction takes a rule at the prior below the threshold.
+		await expect(cssz.locator('.r-confidence')).toHaveText('49%');
+	});
+
+	test('an api token is shown once and then reads the ledger', async ({ page, request }) => {
+		await page.goto('/settings');
+		await page.locator('.api-token-label').fill('E2E dashboard');
+		await page.getByRole('button', { name: 'Create token' }).click();
+
+		const token = (await page.locator('.api-token-raw').innerText()).trim();
+		expect(token.length).toBeGreaterThan(20);
+
+		// Unauthenticated and wrongly authenticated are both refused — with a 401,
+		// not a redirect to the login screen.
+		expect((await request.get('/api/v1/accounts')).status()).toBe(401);
+		const wrong = await request.get('/api/v1/accounts', {
+			headers: { Authorization: 'Bearer not-a-real-token' }
+		});
+		expect(wrong.status()).toBe(401);
+
+		const ok = await request.get('/api/v1/accounts', {
+			headers: { Authorization: `Bearer ${token}` }
+		});
+		expect(ok.status()).toBe(200);
+		const body = await ok.json();
+		expect(body.accounts.length).toBeGreaterThan(0);
+		// Money is minor units and a code, never a float or a formatted string.
+		expect(typeof body.accounts[0].balance.amountMinor).toBe('number');
+		expect(body.accounts[0].balance.currency).toBe('CZK');
+	});
+
+	test('the api applies the register filters the same way the screen does', async ({
+		page,
+		request
+	}) => {
+		await page.goto('/settings');
+		await page.locator('.api-token-label').fill('E2E filters');
+		await page.getByRole('button', { name: 'Create token' }).click();
+		const token = (await page.locator('.api-token-raw').innerText()).trim();
+		const headers = { Authorization: `Bearer ${token}` };
+
+		const all = await (await request.get('/api/v1/transactions', { headers })).json();
+		const out = await (
+			await request.get('/api/v1/transactions?dir=out&min=1000', { headers })
+		).json();
+		expect(out.total).toBeLessThan(all.total);
+		// The same two rows the register screen shows for this filter.
+		expect(out.total).toBe(2);
+	});
+
+	test('revoking a token refuses the request it used to allow', async ({ page, request }) => {
+		await page.goto('/settings');
+		await page.locator('.api-token-label').fill('E2E doomed');
+		await page.getByRole('button', { name: 'Create token' }).click();
+		const token = (await page.locator('.api-token-raw').innerText()).trim();
+
+		expect(
+			(
+				await request.get('/api/v1/accounts', { headers: { Authorization: `Bearer ${token}` } })
+			).status()
+		).toBe(200);
+
+		await page.locator('.token-row', { hasText: 'E2E doomed' }).getByRole('button').click();
+		await page.waitForTimeout(600);
+
+		const after = await request.get('/api/v1/accounts', {
+			headers: { Authorization: `Bearer ${token}` }
+		});
+		expect(after.status()).toBe(401);
+	});
+
 	test('switching a module off removes it from the sidebar and 404s its routes', async ({
 		page
 	}) => {
