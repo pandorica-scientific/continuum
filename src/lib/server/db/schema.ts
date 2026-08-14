@@ -20,9 +20,15 @@ export const person = pgTable('person', {
 	id: text('id').primaryKey(),
 	name: text('name').notNull(),
 	initials: text('initials').notNull(),
-	role: text('role').notNull().default('adult'),
+	// Permission, not household relationship: 'admin' may manage people and API
+	// tokens, 'member' may not. These are the only two valid values.
+	role: text('role').$type<'admin' | 'member'>().notNull().default('member'),
 	birthYear: integer('birth_year'),
-	passwordHash: text('password_hash').notNull(),
+	// Null between "created by an admin" and "enrolled via the one-time link".
+	// A null hash can never satisfy a sign-in — see verifyPassword.
+	passwordHash: text('password_hash'),
+	// Set to suspend sign-in without deleting a person other tables reference.
+	deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -40,6 +46,36 @@ export const session = pgTable('session', {
 export const apiToken = pgTable('api_token', {
 	// sha256 hex of the bearer token
 	id: text('id').primaryKey(),
+	label: text('label').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	lastUsedAt: timestamp('last_used_at', { withTimezone: true })
+});
+
+// A one-time link letting a new person set their own password, so the admin
+// who created them never knows it. Only the hash is stored — the raw token
+// appears once, exactly as sessions and API tokens are handled.
+export const enrollmentToken = pgTable('enrollment_token', {
+	// sha256 hex of the raw token
+	id: text('id').primaryKey(),
+	personId: text('person_id')
+		.notNull()
+		.references(() => person.id, { onDelete: 'cascade' }),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	usedAt: timestamp('used_at', { withTimezone: true })
+});
+
+// A registered passkey. The public key is public by construction — the private
+// half never leaves the authenticator, which is the whole point.
+export const credential = pgTable('credential', {
+	// base64url credential ID as the authenticator reports it
+	id: text('id').primaryKey(),
+	personId: text('person_id')
+		.notNull()
+		.references(() => person.id, { onDelete: 'cascade' }),
+	publicKey: text('public_key').notNull(),
+	// See webauthn/counter.ts: 0 means "not reported", not "never used".
+	counter: bigint('counter', { mode: 'number' }).notNull().default(0),
+	transports: jsonb('transports').$type<string[]>().notNull().default([]),
 	label: text('label').notNull(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	lastUsedAt: timestamp('last_used_at', { withTimezone: true })

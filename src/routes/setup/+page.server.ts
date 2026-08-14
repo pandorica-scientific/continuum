@@ -54,6 +54,9 @@ export const actions: Actions = {
 					.join('')
 					.slice(0, 2)
 					.toUpperCase(),
+				// The person who runs the wizard administers the instance; anyone
+				// else added here is an ordinary member.
+				role: firstId === id ? 'admin' : 'member',
 				birthYear: p.birthYear ? Number(p.birthYear) : null,
 				passwordHash: await hashPassword(p.password)
 			});

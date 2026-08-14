@@ -5,6 +5,7 @@ import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import { person, session } from '$lib/server/db/schema';
 import type { Cookies } from '@sveltejs/kit';
+import type { PersonRole } from './policy';
 
 const SESSION_COOKIE = 'continuum_session';
 const SESSION_DAYS = 30;
@@ -13,7 +14,14 @@ export async function hashPassword(password: string): Promise<string> {
 	return argonHash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
 }
 
-export async function verifyPassword(passwordHash: string, password: string): Promise<boolean> {
+export async function verifyPassword(
+	passwordHash: string | null,
+	password: string
+): Promise<boolean> {
+	// A person created by an administrator has no hash until they enrol. Argon2
+	// would throw on null; returning false keeps "not yet enrolled" a plain
+	// failed sign-in rather than a 500.
+	if (!passwordHash) return false;
 	return argonVerify(passwordHash, password);
 }
 
@@ -41,6 +49,13 @@ export interface SessionPerson {
 	id: string;
 	name: string;
 	initials: string;
+	role: PersonRole;
+}
+
+/** The current session's row id, or null when there is no session cookie. */
+export function currentSessionId(cookies: Cookies): string | null {
+	const token = cookies.get(SESSION_COOKIE);
+	return token ? hashToken(token) : null;
 }
 
 export async function validateSession(cookies: Cookies): Promise<SessionPerson | null> {
@@ -52,7 +67,9 @@ export async function validateSession(cookies: Cookies): Promise<SessionPerson |
 			expiresAt: session.expiresAt,
 			id: person.id,
 			name: person.name,
-			initials: person.initials
+			initials: person.initials,
+			role: person.role,
+			deactivatedAt: person.deactivatedAt
 		})
 		.from(session)
 		.innerJoin(person, eq(session.personId, person.id))
@@ -63,7 +80,12 @@ export async function validateSession(cookies: Cookies): Promise<SessionPerson |
 		await db.delete(session).where(eq(session.id, row.sessionId));
 		return null;
 	}
-	return { id: row.id, name: row.name, initials: row.initials };
+	// A person deactivated mid-session loses access on their next request.
+	if (row.deactivatedAt) {
+		await db.delete(session).where(eq(session.id, row.sessionId));
+		return null;
+	}
+	return { id: row.id, name: row.name, initials: row.initials, role: row.role };
 }
 
 export async function destroySession(cookies: Cookies): Promise<void> {

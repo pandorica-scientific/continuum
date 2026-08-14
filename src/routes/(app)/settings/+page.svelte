@@ -2,12 +2,11 @@
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
 	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
 	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
-
-	let addingPerson = $state(false);
 </script>
 
 <ScreenHeader
@@ -78,30 +77,14 @@
 		label="Household"
 		caption="People can sign in and own accounts and documents."
 	/>
-	<div class="card people">
-		{#each data.people as p (p.id)}
-			<div class="person-row">
-				<span class="avatar">{p.initials}</span>
-				<span class="mod-label">
-					<span>{p.name}</span>
-					<span class="note">{p.role}{p.birthYear ? ` · born ${p.birthYear}` : ''}</span>
-				</span>
-			</div>
-		{/each}
+	<PeopleSettings people={data.people} me={data.me} enrollmentLink={form?.enrollmentLink ?? null} />
 
-		{#if addingPerson}
-			<form method="POST" action="?/addPerson" use:enhance class="add-form">
-				<input name="name" placeholder="Name" />
-				<input name="birthYear" placeholder="Birth year" inputmode="numeric" />
-				<input name="password" type="password" placeholder="Password (8+ characters)" />
-				<button type="submit" class="btn">Add</button>
-			</form>
-		{:else}
-			<button type="button" class="btn" onclick={() => (addingPerson = true)}
-				>➕ Add a person</button
-			>
-		{/if}
-	</div>
+	<form method="POST" action="?/changePassword" use:enhance class="card add-form">
+		<input name="currentPassword" type="password" placeholder="Current password" required />
+		<input name="newPassword" type="password" placeholder="New password (8+ characters)" required />
+		<input name="confirmPassword" type="password" placeholder="Repeat new password" required />
+		<button type="submit" class="btn">Change password</button>
+	</form>
 </section>
 
 <section class="section">
@@ -336,14 +319,12 @@
 		padding: 9px 14px;
 		font-size: 13px;
 	}
-	.modules,
-	.people {
+	.modules {
 		display: flex;
 		flex-direction: column;
 		gap: 0;
 	}
-	.module-row,
-	.person-row {
+	.module-row {
 		display: grid;
 		grid-template-columns: 26px minmax(0, 1fr) auto;
 		align-items: center;
@@ -351,8 +332,7 @@
 		padding: 11px 0;
 		border-top: 1px solid var(--bd);
 	}
-	.module-row:first-child,
-	.person-row:first-child {
+	.module-row:first-child {
 		border-top: 0;
 	}
 	.emoji {
@@ -420,15 +400,6 @@
 		border-radius: 8px;
 		padding: 8px 11px;
 		font-size: 13.5px;
-	}
-	.avatar {
-		width: 26px;
-		height: 26px;
-		border-radius: 26px;
-		background: var(--card3);
-		display: grid;
-		place-items: center;
-		font-size: 11px;
 	}
 	.add-form {
 		display: grid;

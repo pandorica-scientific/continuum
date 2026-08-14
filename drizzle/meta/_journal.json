@@ -127,6 +127,20 @@
       "when": 1786727622060,
       "tag": "0017_white_darwin",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786734715087,
+      "tag": "0018_high_fantastic_four",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786735495374,
+      "tag": "0019_giant_expediter",
+      "breakpoints": true
     }
   ]
 }

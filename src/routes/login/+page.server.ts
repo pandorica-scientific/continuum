@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { createSession, verifyPassword } from '$lib/server/auth';
@@ -14,6 +14,9 @@ export const load: PageServerLoad = async () => {
 	const people = await db
 		.select({ id: person.id, name: person.name, initials: person.initials })
 		.from(person)
+		// Deactivated people would otherwise sit in the picker failing every
+		// attempt, which reads as a broken password rather than a closed account.
+		.where(isNull(person.deactivatedAt))
 		.orderBy(person.createdAt);
 	return { people };
 };
@@ -34,7 +37,8 @@ export const actions: Actions = {
 
 		const rows = await db.select().from(person).where(eq(person.id, personId));
 		const row = rows[0];
-		if (!row || !(await verifyPassword(row.passwordHash, password))) {
+		// A deactivated account must not be distinguishable from a wrong password.
+		if (!row || row.deactivatedAt || !(await verifyPassword(row.passwordHash, password))) {
 			recordLoginFailure(address);
 			return fail(400, { message: 'Wrong person or password.' });
 		}
