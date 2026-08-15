@@ -31,6 +31,7 @@
 		enrollmentLink = null,
 		enrollmentLinkDays = DEFAULT_ENROLLMENT_LINK_DAYS,
 		passkeys = false,
+		origin = '',
 		myPasskeys = []
 	}: {
 		people: PersonRow[];
@@ -38,6 +39,8 @@
 		enrollmentLink?: string | null;
 		enrollmentLinkDays?: number;
 		passkeys?: boolean;
+		/** The configured ORIGIN, named on screen when passkeys are unavailable. */
+		origin?: string;
 		myPasskeys?: PasskeyRow[];
 	} = $props();
 
@@ -168,14 +171,43 @@
 {:else}
 	<!-- Hiding the passkey card on a plain-HTTP deployment is correct — browsers
 	     refuse WebAuthn outside a secure context — but hiding it silently reads as
-	     "this build has no passkeys". Say why, and what turns them on. -->
+	     "this build has no passkeys". Say why, name the address in force, and give
+	     the administrator the actual steps rather than a variable to look up. -->
 	<div class="card people">
 		<p class="note">
-			Passwords are the only sign-in here because passkeys need a secure address: browsers refuse
-			them over plain HTTP. Point <code>ORIGIN</code> at an <code>https://</code> URL — a Tailscale name
-			is the least painful route on a home network — and the passkey controls appear on this screen and
-			on the sign-in page.
+			Passwords are the only sign-in here: passkeys need a secure address, and browsers refuse them
+			over plain HTTP.
+			{#if origin}
+				This instance is configured as <code>{origin}</code>.
+			{:else}
+				This instance has no <code>ORIGIN</code> configured.
+			{/if}
 		</p>
+		{#if isAdmin}
+			<ol class="steps note">
+				<li>
+					Authenticate the bundled Tailscale sidecar — <code>docker compose logs tailscale</code> prints
+					a login URL to open once.
+				</li>
+				<li>
+					Put the name it issues in <code>.env</code>:
+					<code>ORIGIN=https://continuum.&lt;your-tailnet&gt;.ts.net</code>
+				</li>
+				<li>
+					Restart with <code>docker compose up -d</code> and reopen this page at that address.
+				</li>
+			</ol>
+			<p class="note">
+				Any other route to a trusted certificate does just as well — a reverse proxy, or your own
+				certificate authority. Continuum only needs <code>ORIGIN</code> to be
+				<code>https://</code> and to match the address you actually browse to.
+			</p>
+		{:else}
+			<p class="note">
+				An administrator can move the household to an https address; the passkey controls then
+				appear here on their own.
+			</p>
+		{/if}
 	</div>
 {/if}
 
@@ -221,6 +253,29 @@
 	.note {
 		color: var(--fg2);
 		font-size: 12px;
+	}
+	/* The passkey explanation is prose, not a row: it needs the line height and
+	   the breathing room the bordered rows above deliberately do without. */
+	.steps {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin: 10px 0;
+		padding-left: 18px;
+		line-height: 1.5;
+	}
+	.steps li::marker {
+		color: var(--fg3);
+	}
+	code {
+		font-family: var(--font-mono);
+		font-size: 11.5px;
+		background: var(--card2);
+		border-radius: 4px;
+		padding: 1px 5px;
+		/* A tailnet name or a compose command should wrap inside the card rather
+		   than push it wider on a phone. */
+		overflow-wrap: anywhere;
 	}
 	.row-actions {
 		display: flex;

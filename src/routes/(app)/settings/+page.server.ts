@@ -10,7 +10,7 @@ import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
-import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
+import { currentOrigin, passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { enrollmentLinkDays, passwordMinLength } from '$lib/server/policy';
 import { env } from '$env/dynamic/private';
@@ -187,6 +187,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// yours and whether you may administer anyone.
 		me: locals.person,
 		passkeys: passkeysAvailable(),
+		// Named on screen when passkeys are unavailable, so the explanation points
+		// at the value actually in force rather than at a variable name.
+		origin: currentOrigin(),
 		myPasskeys,
 		backup,
 		lastBackup,

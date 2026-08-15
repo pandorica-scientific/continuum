@@ -24,12 +24,25 @@ database release, take a backup before replacing the image.
   a dark card on the payslip, document, bill and restore forms. It now takes the
   same look as every other control, from one rule in the shared stylesheet.
 - **Nothing explained why passkeys were missing on a plain-HTTP deployment.**
-  Settings now says that browsers refuse WebAuthn outside a secure context and
-  that pointing `ORIGIN` at an `https://` address brings the controls back,
-  instead of hiding the whole section without a word.
+  The whole section was hidden without a word, which reads as a build that has
+  no passkeys at all. Settings now says that browsers refuse WebAuthn outside a
+  secure context, names the `ORIGIN` actually in force, and — for an
+  administrator, who is the only person who can act on it — gives the three
+  steps that turn passkeys on: authenticate the Tailscale sidecar, put the name
+  it issues in `.env`, restart. A member is told an administrator can do it
+  rather than being handed shell commands.
 
 ### Changed
 
+- **The Tailscale sidecar now runs by default.** It was behind a compose
+  profile, so the out-of-the-box install was plain HTTP and therefore had no
+  passkeys — the feature was present but unreachable unless you already knew to
+  ask for it. `docker compose up -d` now brings it up alongside the app. It
+  stays tailnet-only; `tailscale funnel`, the command that would publish to the
+  open internet, is still run nowhere. Without `TS_AUTHKEY` the sidecar idles
+  and prints a login URL to its logs rather than failing, so an install that
+  never authenticates it behaves exactly as it did before. Naming the two
+  services (`app db`) on the `up` command leaves it out entirely.
 - **An install no longer ships 42 starter rules.** A fresh household begins with
   the category taxonomy and no rules at all; every rule is earned from a
   correction someone actually made, which is what the confidence score claims to

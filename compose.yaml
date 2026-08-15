@@ -49,27 +49,37 @@ services:
       db:
         condition: service_healthy
 
-  # Optional, and off unless you run `docker compose --profile tailscale up -d`.
+  # On by default. Joins your tailnet and terminates HTTPS for the app, which is
+  # what makes passkeys possible — browsers refuse WebAuthn outside a secure
+  # context, so on a plain-HTTP address the passkey controls are simply absent.
   #
-  # Joins your tailnet and terminates HTTPS for the app, which is what makes
-  # passkeys possible — browsers refuse WebAuthn outside a secure context.
-  # This publishes to your tailnet only; the command that would expose the app
-  # to the public internet is `tailscale funnel`, which nothing here runs.
+  # Tailnet-only, never public: the serve config below publishes to devices you
+  # have added to your tailnet. The command that would expose the app to the
+  # open internet is `tailscale funnel`, which nothing here runs.
   #
-  # Set TS_AUTHKEY in .env, then point ORIGIN at the name Tailscale issues:
-  #   ORIGIN=https://continuum.<your-tailnet>.ts.net
+  # First run, in this order:
+  #   1. docker compose up -d
+  #   2. docker compose logs tailscale   → visit the authentication URL it prints
+  #   3. put the name Tailscale issues in .env and restart:
+  #        ORIGIN=https://continuum.<your-tailnet>.ts.net
+  # Setting TS_AUTHKEY in .env instead skips steps 1-2 and authenticates
+  # unattended.
+  #
+  # Not using Tailscale at all? `docker compose up -d app db` brings up the app
+  # and the database on their own; the app stays reachable on the port above and
+  # simply has no passkeys.
   #
   # Keep the app's port mapping above until a passkey sign-in over the tailnet
   # works, then remove it to make Tailscale the only way in.
   tailscale:
-    profiles: ['tailscale']
     image: tailscale/tailscale:latest
     hostname: continuum
     restart: unless-stopped
     environment:
-      # A plain default, not `:?`: compose interpolates every service even when
-      # its profile is inactive, so a required-variable guard here would break
-      # `docker compose up -d` for anyone not using Tailscale at all.
+      # A plain default, not `:?`. Empty is a supported state, not a
+      # misconfiguration: the container comes up and prints a login URL to its
+      # logs, which is the interactive path above. A required-variable guard
+      # here would instead break `docker compose up -d` before anything runs.
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_STATE_DIR: /var/lib/tailscale
       TS_SERVE_CONFIG: /config/serve.json

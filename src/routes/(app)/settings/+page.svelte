@@ -86,6 +86,7 @@
 		enrollmentLink={form?.enrollmentLink ?? null}
 		enrollmentLinkDays={data.enrollmentLinkDays}
 		passkeys={data.passkeys}
+		origin={data.origin}
 		myPasskeys={data.myPasskeys}
 	/>
 

@@ -66,6 +66,18 @@ if something else already owns it) and follow the setup wizard. Everything —
 people, base currency (CZK, EUR or PLN), modules — is configured there, not in
 files.
 
+That brings up a **Tailscale sidecar** alongside the app, because HTTPS is what
+makes passkeys possible and a home server has no other easy route to a trusted
+certificate. It is tailnet-only — see [Passkeys and
+Tailscale](#passkeys-and-tailscale) for the one-time authentication step and
+the `ORIGIN` it needs. Until you complete it the sidecar simply idles, and the
+app is reachable on the port above exactly as before. To leave Tailscale out
+altogether, start the two services you need:
+
+```sh
+docker compose up -d app db
+```
+
 Three optional knobs live in `.env`. `CONTINUUM_MAX_UPLOAD` sets the largest
 accepted upload (`32M` by default — a phone photo does not fit in the server's
 own 512 KB default). `ADDRESS_HEADER=x-forwarded-for` makes the app read the
@@ -196,22 +208,43 @@ verify by nature and need nothing extra.
 
 The simplest way to get HTTPS on a home server is [Tailscale](https://tailscale.com),
 a WireGuard mesh that is **private by default**: only devices you have added to
-your tailnet can reach the machine. `tailscale serve` publishes to the tailnet;
-the command that would expose the app to the public internet is `tailscale
-funnel`, which nothing here runs. The one thing that does become public is the
-hostname — Tailscale's certificate comes from Let's Encrypt, and every Let's
-Encrypt certificate is listed in public Certificate Transparency logs. Nothing
-is reachable at that name; only the name is visible.
+your tailnet can reach the machine. That is why the sidecar ships **on by
+default** — passkeys are the point, and they need a secure origin. `tailscale
+serve` publishes to the tailnet; the command that would expose the app to the
+public internet is `tailscale funnel`, which nothing here runs. The one thing
+that does become public is the hostname — Tailscale's certificate comes from
+Let's Encrypt, and every Let's Encrypt certificate is listed in public
+Certificate Transparency logs. Nothing is reachable at that name; only the name
+is visible.
 
-Generate an auth key in the Tailscale admin console, then:
+The sidecar needs authenticating once. Either read the login URL out of its
+logs:
+
+```sh
+docker compose logs tailscale     # visit the https://login.tailscale.com/… URL
+```
+
+or generate an auth key in the Tailscale admin console and let it authenticate
+unattended:
 
 ```sh
 # .env
 TS_AUTHKEY=tskey-auth-…
+```
+
+Either way, finish by telling the app the name Tailscale issued — passkeys are
+verified against it exactly:
+
+```sh
+# .env
 ORIGIN=https://continuum.<your-tailnet>.ts.net
 
-docker compose --profile tailscale up -d
+docker compose up -d
 ```
+
+Until that is done the sidecar sits unauthenticated and nothing else changes:
+the app answers on its LAN address, and the passkey controls stay absent
+because the origin is still plain HTTP.
 
 **Do not remove the LAN port mapping yet.** Sign in over the tailnet address,
 register a passkey in Settings → Household, and confirm it signs you in. Only
