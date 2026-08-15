@@ -68,12 +68,16 @@ export function csvLines(text: string): string[] {
 	// delimiter differs per bank) after any character that is not part of a
 	// value we are already reading.
 	let atFieldStart = true;
-	for (const ch of normalised) {
+	for (let i = 0; i < normalised.length; i++) {
+		const ch = normalised[i];
 		if (ch === '"') {
 			if (inQuotes) {
-				// Inside a quoted field, a quote closes it — or is the first half
-				// of an escaped "" pair, in which case the second half reopens it,
-				// which leaves the state exactly where it needs to be.
+				if (normalised[i + 1] === '"') {
+					// An RFC 4180 escaped quote is data, not the end of the field.
+					current += '""';
+					i++;
+					continue;
+				}
 				inQuotes = false;
 			} else if (atFieldStart) {
 				inQuotes = true;

@@ -13,12 +13,12 @@ export interface RetireInputs {
 	contribution: number;
 	/** total property value today */
 	propertyValue: number;
-	/** total mortgage owed today */
-	mortgageOwed: number;
-	/** yearly mortgage payments */
-	mortgageYearlyPayment: number;
-	/** weighted mortgage rate, e.g. 0.0444 */
-	mortgageRate: number;
+	/**
+	 * Total mortgage balance sampled at yearly horizons by the shared
+	 * month-by-month loan engine. The final value carries forward if the
+	 * supplied horizon is shorter than the retirement model's.
+	 */
+	mortgageOwedByYear: number[];
 	/** monthly rent currently received (used for the "rent out" plan) */
 	monthlyRent: number;
 	/** birth years of the two people (second may equal first) */
@@ -35,6 +35,10 @@ export interface RetireConfig {
 	swr: number;
 	/** real annual return in percent (0–8) */
 	realReturn: number;
+	/** real annual growth of contributions in percent */
+	contributionGrowth: number;
+	/** real annual property appreciation in percent */
+	propertyGrowth: number;
 	/** what happens to the flats: keep | rent | sell */
 	plan: 'keep' | 'rent' | 'sell';
 	pensionOne: number;
@@ -43,10 +47,32 @@ export interface RetireConfig {
 	ageTwo: number;
 }
 
+// The form and the save action share these, so an input cannot offer a value
+// the server will refuse. The page autosaves, which makes a rejected snapshot
+// far more costly than a normal submit: it stays in the form and refuses every
+// later edit until it is corrected.
+export const MIN_RETIREMENT_AGE = 50;
+export const MAX_RETIREMENT_AGE = 100;
+
+/** Field names as the person sees them, so a refusal can name the right one. */
+export const RETIRE_LABELS = {
+	spend: 'Monthly spending',
+	swr: 'Withdrawal rate',
+	realReturn: 'Real return',
+	contributionGrowth: 'Contribution growth',
+	propertyGrowth: 'Property growth',
+	pensionOne: 'Pension',
+	pensionTwo: 'Pension',
+	ageOne: 'Retirement age',
+	ageTwo: 'Retirement age'
+} as const;
+
 export const RETIRE_DEFAULTS: RetireConfig = {
 	spend: 60000,
 	swr: 3.5,
 	realReturn: 4,
+	contributionGrowth: 2,
+	propertyGrowth: 2,
 	plan: 'keep',
 	pensionOne: 18000,
 	pensionTwo: 18000,
@@ -75,21 +101,18 @@ export interface RetireModel {
 
 export function retModel(inputs: RetireInputs, cfg: RetireConfig): RetireModel {
 	const r = cfg.realReturn / 100;
+	const contributionGrowth = cfg.contributionGrowth / 100;
+	const propertyGrowth = cfg.propertyGrowth / 100;
 
 	const at = (t: number): RetireRow => {
 		let capital = inputs.liquid;
 		let contribution = inputs.contribution;
 		for (let k = 0; k < t; k++) {
 			capital = capital * (1 + r) + contribution;
-			contribution *= 1.02; // contributions grow slightly in real terms
+			contribution *= 1 + contributionGrowth;
 		}
-		// The mortgage amortises at its own nominal rate against the payments.
-		let mortgage = inputs.mortgageOwed;
-		for (let k = 0; k < t; k++) {
-			mortgage = Math.max(0, mortgage * (1 + inputs.mortgageRate) - inputs.mortgageYearlyPayment);
-		}
-		// Flats appreciate ~2% a year in real terms.
-		const equity = inputs.propertyValue * Math.pow(1.02, t) - mortgage;
+		const mortgage = inputs.mortgageOwedByYear[t] ?? inputs.mortgageOwedByYear.at(-1) ?? 0;
+		const equity = inputs.propertyValue * Math.pow(1 + propertyGrowth, t) - mortgage;
 		const pot = capital + (cfg.plan === 'sell' ? equity : 0);
 		const draw = (pot * (cfg.swr / 100)) / 12;
 		const rent = cfg.plan === 'rent' ? inputs.monthlyRent : 0;

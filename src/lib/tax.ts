@@ -2,6 +2,8 @@
 // owed — no brackets, no allowances, no residency. The only calculation is a
 // ratio of two figures the user recorded, and grouping them into chart series.
 
+import { toMajor } from '$lib/money';
+
 export interface StatementLike {
 	personId: string;
 	personName: string;
@@ -16,11 +18,13 @@ export interface SeriesPoint {
 	year: number;
 	grossMinor: bigint;
 	taxMinor: bigint;
+	grossMajor: number;
+	taxMajor: number;
 	ratePct: number | null;
 }
 
 export interface Series {
-	/** `${personId}|${country}` */
+	/** `${personId}|${country}|${currency}` */
 	key: string;
 	/** "Jana · CZ" */
 	label: string;
@@ -58,11 +62,39 @@ export function payslipYearTotal(
 	};
 }
 
-/** One series per person per country — never merged, never converted. */
+export function payslipYearTotalConverted(
+	slips: {
+		personId: string;
+		periodMonth: string;
+		amountMinor: bigint | null;
+		currency: string;
+	}[],
+	personId: string,
+	year: number,
+	targetCurrency: string,
+	convert: (amount: bigint, from: string, to: string, day: string) => bigint
+): { totalMinor: bigint; months: number } {
+	const own = slips.filter(
+		(s) =>
+			s.personId === personId &&
+			s.amountMinor !== null &&
+			Number(s.periodMonth.slice(0, 4)) === year
+	);
+	return {
+		totalMinor: own.reduce(
+			(sum, slip) =>
+				sum + convert(slip.amountMinor!, slip.currency, targetCurrency, `${slip.periodMonth}-01`),
+			0n
+		),
+		months: own.length
+	};
+}
+
+/** One series per person, country and currency — never merged or converted. */
 export function taxSeries(statements: StatementLike[]): Series[] {
 	const byKey = new Map<string, Series>();
 	for (const s of statements) {
-		const key = `${s.personId}|${s.country}`;
+		const key = `${s.personId}|${s.country}|${s.currency}`;
 		const series = byKey.get(key) ?? {
 			key,
 			label: `${s.personName} · ${s.country}`,
@@ -73,6 +105,8 @@ export function taxSeries(statements: StatementLike[]): Series[] {
 			year: s.year,
 			grossMinor: s.grossIncomeMinor,
 			taxMinor: s.taxPaidMinor,
+			grossMajor: toMajor(s.grossIncomeMinor, s.currency),
+			taxMajor: toMajor(s.taxPaidMinor, s.currency),
 			ratePct: effectiveRatePct(s.grossIncomeMinor, s.taxPaidMinor)
 		});
 		byKey.set(key, series);

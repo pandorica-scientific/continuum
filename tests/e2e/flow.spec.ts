@@ -2,6 +2,7 @@ import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_PASSWORD_MIN_LENGTH, passwordHint } from '../../src/lib/password-policy';
+import { MODULE_KEYS, MODULES } from '../../src/lib/modules/registry';
 
 // The suite runs with no PASSWORD_MIN_LENGTH in the environment, so the pages
 // advertise the default — and this selector fails loudly if the two ever part.
@@ -19,6 +20,37 @@ test('first visit redirects to the setup wizard', async ({ page }) => {
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/setup/);
 	await expect(page.getByRole('heading', { name: 'Set up your household ledger' })).toBeVisible();
+});
+
+test('a rejected wizard submission names every module and keeps what was typed', async ({
+	page
+}) => {
+	await page.goto('/setup');
+
+	// Every module in the registry is named on screen. The wizard used to hold its
+	// own label map beside the registry, so a module present in one and not the
+	// other — Tax — rendered a checkbox with nothing next to it.
+	const toggles = page.locator('label.toggle');
+	await expect(toggles).toHaveCount(MODULE_KEYS.length);
+	for (const key of MODULE_KEYS) {
+		await expect(toggles.filter({ hasText: MODULES[key].label })).toHaveCount(1);
+	}
+
+	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');
+	await page.getByPlaceholder('Name').first().fill('Jana Nováková');
+	await page.getByPlaceholder('Birth year').first().fill('1988');
+	await toggles.first().locator('input').uncheck();
+	await page.getByPlaceholder(`Password (${HINT})`).first().fill('short');
+	await page.getByRole('button', { name: 'Create household' }).click();
+
+	// Rejected for the password — and everything else the person typed survives.
+	await expect(page.locator('.error')).toBeVisible();
+	await expect(page.getByPlaceholder('e.g. Robert & Tereza')).toHaveValue('Jana & Jan');
+	await expect(page.getByPlaceholder('Name').first()).toHaveValue('Jana Nováková');
+	await expect(page.getByPlaceholder('Birth year').first()).toHaveValue('1988');
+	await expect(toggles.first().locator('input')).not.toBeChecked();
+	// Except the password, which is never echoed back into the page.
+	await expect(page.getByPlaceholder(`Password (${HINT})`).first()).toHaveValue('');
 });
 
 test('the wizard creates the household and signs in', async ({ page }) => {
@@ -109,6 +141,9 @@ test.describe('signed in', () => {
 		const row = page.locator('.txn-row').first();
 		await row.locator('select[name=categoryId]').selectOption('groceries');
 		await row.getByRole('button', { name: 'File' }).click();
+		// `use:enhance` submits asynchronously. Wait for the server result to be
+		// applied before navigating, otherwise the filtered GET can race the commit.
+		await expect(row.locator('.r-state')).toHaveText('confirmed');
 
 		await page.goto('/transactions?q=ACME&category=groceries');
 		await expect(page.locator('.txn-row')).toHaveCount(1);
@@ -301,8 +336,9 @@ test.describe('signed in', () => {
 
 		// The record now exists and derived its own column.
 		await expect(page.locator('.col-label', { hasText: 'Car' })).toBeVisible();
-		// And it is a record, not a string: the still-open form now offers it as
-		// a tick alongside the people and flats.
+		// A successful save closes the form. Reopen it to prove the subject is a
+		// reusable record, not just the string rendered in that document's column.
+		await page.getByRole('button', { name: '➕ Add document' }).click();
 		await expect(page.locator('.tick', { hasText: 'Car' })).toBeVisible();
 	});
 

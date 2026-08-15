@@ -105,6 +105,28 @@ describe('applyFixation', () => {
 		});
 		expect(next[0].endDate).toBe('2025-01-01');
 	});
+
+	// The 2029 row is a follow-on the bank has already agreed. Dropping it made
+	// the preview hide the fact that saving would destroy it.
+	it('keeps a later agreed period and closes the new one where it begins', () => {
+		const scheduled: FixationPeriod[] = [
+			{ startDate: '2026-01-01', endDate: '2029-01-01', annualRatePct: 2, paymentMinor: 1n },
+			{ startDate: '2029-01-01', endDate: null, annualRatePct: 8, paymentMinor: 3n }
+		];
+
+		const next = applyFixation(scheduled, {
+			startDate: '2027-01-01',
+			endDate: null,
+			annualRatePct: 4,
+			paymentMinor: 2n
+		});
+
+		expect(next).toEqual([
+			{ startDate: '2026-01-01', endDate: '2027-01-01', annualRatePct: 2, paymentMinor: 1n },
+			{ startDate: '2027-01-01', endDate: '2029-01-01', annualRatePct: 4, paymentMinor: 2n },
+			{ startDate: '2029-01-01', endDate: null, annualRatePct: 8, paymentMinor: 3n }
+		]);
+	});
 });
 
 describe('project and summarize', () => {

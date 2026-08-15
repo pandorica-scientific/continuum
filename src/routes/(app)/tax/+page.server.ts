@@ -3,13 +3,14 @@ import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { document, documentPerson, person } from '$lib/server/db/schema';
 import { deleteStatement, loadStatements, saveStatement } from '$lib/server/tax';
-import { effectiveRatePct, payslipYearTotal, taxSeries } from '$lib/tax';
+import { effectiveRatePct, payslipYearTotalConverted, taxSeries } from '$lib/tax';
 import { getBaseCurrency } from '$lib/server/settings';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const [statements, people, payslipDocs, slipOwners, taxDocs, base] = await Promise.all([
+	const [statements, people, payslipDocs, slipOwners, taxDocs, base, rates] = await Promise.all([
 		loadStatements(),
 		db.select({ id: person.id, name: person.name }).from(person).orderBy(person.createdAt),
 		db.select().from(document).where(eq(document.shelf, 'payslips')),
@@ -18,8 +19,11 @@ export const load: PageServerLoad = async () => {
 			.select({ id: document.id, name: document.name })
 			.from(document)
 			.where(eq(document.shelf, 'tax')),
-		getBaseCurrency()
+		getBaseCurrency(),
+		loadRateTable()
 	]);
+	const convert = (amount: bigint, from: string, to: string, day: string) =>
+		convertOrFace(rates, amount, from, to, day);
 
 	// Whose payslip is whose comes from document_person — a real link, exactly
 	// as the retirement screen reads it, so the two screens cannot disagree.
@@ -29,7 +33,8 @@ export const load: PageServerLoad = async () => {
 		.map((d) => ({
 			personId: ownerOf.get(d.id) ?? '',
 			periodMonth: d.periodMonth!,
-			amountMinor: d.amountMinor
+			amountMinor: d.amountMinor,
+			currency: d.amountCurrency ?? base
 		}));
 
 	// Prefill totals for every person × payslip-year, as editable major-unit
@@ -38,7 +43,7 @@ export const load: PageServerLoad = async () => {
 	const prefillTotals: Record<string, { amount: string; months: number }> = {};
 	for (const p of people) {
 		for (const year of years) {
-			const t = payslipYearTotal(slips, p.id, year);
+			const t = payslipYearTotalConverted(slips, p.id, year, base, convert);
 			if (t.months > 0)
 				prefillTotals[`${p.id}|${year}`] = {
 					amount: formatMinor(t.totalMinor, base),
@@ -50,7 +55,9 @@ export const load: PageServerLoad = async () => {
 	const taxDocName = new Map(taxDocs.map((d) => [d.id, d.name]));
 
 	return {
-		baseCurrency: displayCurrency(base),
+		// Form values carry the ISO code. Display symbols belong only in labels;
+		// sending "Kč" back through the currency input stored a non-currency.
+		baseCurrency: base,
 		people,
 		taxDocs,
 		prefillTotals,
@@ -61,7 +68,7 @@ export const load: PageServerLoad = async () => {
 				// The divergence note is recomputed here, every load. A statement's
 				// declared figure legitimately differs from the payslip sum (bonuses,
 				// corrections) — that is information, not an error.
-				const payslips = payslipYearTotal(slips, s.personId, s.year);
+				const payslips = payslipYearTotalConverted(slips, s.personId, s.year, s.currency, convert);
 				const diverges =
 					payslips.months > 0 && payslips.totalMinor !== s.grossIncomeMinor
 						? `payslips total ${formatMinor(payslips.totalMinor, s.currency)} — this statement says ${formatMinor(s.grossIncomeMinor, s.currency)}`
@@ -95,8 +102,8 @@ export const load: PageServerLoad = async () => {
 				year: p.year,
 				// Display-grade numbers for the charts; the exact figures stay in
 				// the statements themselves.
-				gross: Number(p.grossMinor) / 100,
-				tax: Number(p.taxMinor) / 100,
+				gross: p.grossMajor,
+				tax: p.taxMajor,
 				ratePct: p.ratePct
 			}))
 		}))
@@ -106,7 +113,10 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	save: async ({ request }) => {
 		const form = await request.formData();
-		const currency = String(form.get('currency') ?? '').trim() || 'CZK';
+		const currency = (String(form.get('currency') ?? '').trim() || 'CZK').toUpperCase();
+		if (!/^[A-Z]{3}$/.test(currency)) {
+			return fail(400, { message: 'Use a three-letter currency code.' });
+		}
 
 		let gross: bigint;
 		let taxPaid: bigint;

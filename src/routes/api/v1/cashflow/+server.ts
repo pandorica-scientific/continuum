@@ -1,4 +1,4 @@
-import { apiError, json, requireToken } from '$lib/server/api/respond';
+import { apiError, json } from '$lib/server/api/respond';
 import { flowData, type Period } from '$lib/server/cashflow';
 import { money } from '$lib/api/serialise';
 import { fromMajor } from '$lib/money';
@@ -7,10 +7,7 @@ import type { RequestHandler } from './$types';
 
 const PERIODS: Period[] = ['ytd', 'month'];
 
-export const GET: RequestHandler = async ({ request, url, getClientAddress }) => {
-	const refused = await requireToken(request, getClientAddress());
-	if (refused) return refused;
-
+export const GET: RequestHandler = async ({ url }) => {
 	// The screen's own vocabulary rather than a second one invented here.
 	const raw = (url.searchParams.get('period') ?? 'ytd') as Period;
 	if (!PERIODS.includes(raw)) return apiError(`Unknown period "${raw}".`, 400);

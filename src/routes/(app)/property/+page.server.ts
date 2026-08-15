@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	document,
 	documentProperty,
-	documentTag,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
@@ -20,11 +19,20 @@ import { SHELVES } from '$lib/documents';
 import { initialsFor } from '$lib/people';
 import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
-import { saveUpload } from '$lib/server/files';
-import { normaliseTagName, setPropertyTags, upsertTag } from '$lib/server/tags';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { removeUpload, saveUpload } from '$lib/server/files';
+import {
+	createPropertyBill,
+	createTenancy,
+	setPropertyBillSource,
+	setPropertyDrawing,
+	setPropertyImage
+} from '$lib/server/property/mutations';
+import { updatePropertyTags } from '$lib/server/tags';
 import { periodForMonth } from '$lib/loans/amortise';
-import { formatMinor, parseAmountToMinor } from '$lib/money';
-import { validateDrawing } from '$lib/plan';
+import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
+import { propertyFinancials, sharesForLoan } from '$lib/property/finance';
+import { activeTenanciesByProperty } from '$lib/property/tenancy';
 import type { Actions, PageServerLoad } from './$types';
 
 function daysUntil(date: string): number {
@@ -32,61 +40,113 @@ function daysUntil(date: string): number {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const [properties, tenancies, bills, loans, periods, links, docs] = await Promise.all([
+	const [properties, tenancies, bills, loans, periods, links, docs, rates] = await Promise.all([
 		db.select().from(property).orderBy(property.createdAt),
 		db.select().from(tenancy),
 		db.select().from(propertyBill).orderBy(propertyBill.sort),
 		db.select().from(loan),
 		db.select().from(loanFixationPeriod),
 		db.select().from(loanProperty),
-		db.select().from(document).orderBy(document.addedOn)
+		db.select().from(document).orderBy(document.addedOn),
+		loadRateTable()
 	]);
+	const today = new Date().toISOString().slice(0, 10);
+	const month = today.slice(0, 7);
+	const convert = (amount: bigint, from: string, to: string, day: string) =>
+		convertOrFace(rates, amount, from, to, day);
+	const activeTenancies = activeTenanciesByProperty(tenancies, today);
+	const loansById = new Map(loans.map((candidate) => [candidate.id, candidate]));
+	const propertiesById = new Map(properties.map((candidate) => [candidate.id, candidate]));
+	// Allocation boundaries depend on the order of a loan's secured links, so
+	// fix that order by property id rather than inheriting database row order.
+	const linksByLoan = new Map<string, typeof links>();
+	for (const link of links) {
+		const secured = linksByLoan.get(link.loanId) ?? [];
+		secured.push(link);
+		linksByLoan.set(link.loanId, secured);
+	}
+	for (const secured of linksByLoan.values()) {
+		secured.sort((a, b) =>
+			a.propertyId < b.propertyId ? -1 : a.propertyId > b.propertyId ? 1 : 0
+		);
+	}
 
 	const selectedId = url.searchParams.get('p') ?? properties[0]?.id ?? null;
 	const current = properties.find((p) => p.id === selectedId) ?? properties[0] ?? null;
 
 	let detail = null;
 	if (current) {
-		const link = links.find((lp) => lp.propertyId === current.id) ?? null;
-		const mortgage = link ? (loans.find((l) => l.id === link.loanId) ?? null) : null;
-		// This flat's share of a mortgage that may secure several flats:
-		// explicit percentage when set, else proportional to linked values.
-		let shareFraction = 1;
-		if (mortgage && link) {
-			if (link.sharePct !== null) {
-				shareFraction = Number(link.sharePct) / 100;
-			} else {
-				const linkedIds = links
-					.filter((lp) => lp.loanId === mortgage.id)
-					.map((lp) => lp.propertyId);
-				const totalValue = properties
-					.filter((pr) => linkedIds.includes(pr.id))
-					.reduce((sum, pr) => sum + Number(pr.valueMinor), 0);
-				shareFraction = totalValue > 0 ? Number(current.valueMinor) / totalValue : 1;
-			}
-		}
-		const mortgagePeriods = mortgage
-			? periods
-					.filter((p) => p.loanId === mortgage.id)
-					.map((p) => ({
-						startDate: p.startDate,
-						endDate: p.endDate,
-						annualRatePct: Number(p.annualRatePct),
-						paymentMinor: p.paymentMinor
-					}))
-			: [];
-		const currentMortgagePeriod = periodForMonth(
-			mortgagePeriods,
-			new Date().toISOString().slice(0, 7)
+		const loanLabel = (linkedLoan: (typeof loans)[number]) =>
+			linkedLoan.lender ? `${linkedLoan.name} · ${linkedLoan.lender}` : linkedLoan.name;
+		// Refinancing and parallel secured facilities may leave several active
+		// loan links. Resolve and allocate every non-zero balance; `find` here used
+		// to make the metrics depend on database row order and omit the rest.
+		const linkedLoans = links
+			.filter((link) => link.propertyId === current.id)
+			.flatMap((link) => {
+				const linkedLoan = loansById.get(link.loanId);
+				if (!linkedLoan || linkedLoan.owedMinor <= 0n) return [];
+				// Resolve every share securing this loan, not just this property's:
+				// each part is allocated as the gap between cumulative boundaries,
+				// so the sibling shares decide where this one's rounding falls.
+				const secured = (linksByLoan.get(linkedLoan.id) ?? []).flatMap((sibling) => {
+					const candidate = propertiesById.get(sibling.propertyId);
+					if (!candidate) return [];
+					return [
+						{
+							propertyId: sibling.propertyId,
+							sharePct: sibling.sharePct,
+							valueMinor: convert(candidate.valueMinor, candidate.currency, current.currency, today)
+						}
+					];
+				});
+				const shareIndex = secured.findIndex((entry) => entry.propertyId === current.id);
+				if (shareIndex < 0) return [];
+				const shares = sharesForLoan(secured);
+				const share = shares[shareIndex];
+				const loanPeriods = periods
+					.filter((period) => period.loanId === linkedLoan.id)
+					.map((period) => ({
+						startDate: period.startDate,
+						endDate: period.endDate,
+						annualRatePct: Number(period.annualRatePct),
+						paymentMinor: period.paymentMinor
+					}));
+				return [
+					{
+						loan: linkedLoan,
+						shares,
+						shareIndex,
+						sharePct: Number((share.numerator * 10000n) / share.denominator) / 100,
+						currentPeriod: periodForMonth(loanPeriods, month)
+					}
+				];
+			});
+		const currentTenancy = activeTenancies.get(current.id) ?? null;
+		const monthlyBills = bills
+			.filter((b) => b.propertyId === current.id)
+			.reduce((sum, bill) => sum + bill.amountMinor, 0n);
+		const financials = propertyFinancials(
+			{
+				day: today,
+				propertyValueMinor: current.valueMinor,
+				propertyCurrency: current.currency,
+				loans: linkedLoans.map(({ loan: linkedLoan, shares, shareIndex, currentPeriod }) => ({
+					id: linkedLoan.id,
+					principalMinor: linkedLoan.principalMinor,
+					owedMinor: linkedLoan.owedMinor,
+					paymentMinor: currentPeriod?.paymentMinor ?? 0n,
+					currency: linkedLoan.currency,
+					shares,
+					shareIndex
+				})),
+				rentMinor: currentTenancy?.rentMinor ?? 0n,
+				billsMinor: monthlyBills
+			},
+			convert
 		);
-		const owed = mortgage ? BigInt(Math.round(Number(mortgage.owedMinor) * shareFraction)) : 0n;
-		const equity = current.valueMinor - owed;
-		const currentTenancy =
-			tenancies.find(
-				(t) =>
-					t.propertyId === current.id &&
-					(!t.endDate || t.endDate >= new Date().toISOString().slice(0, 10))
-			) ?? null;
+		const owed = financials.owedPropertyMinor;
+		const equity = financials.equityMinor;
 
 		const metrics = [
 			{
@@ -97,11 +157,17 @@ export const load: PageServerLoad = async ({ url }) => {
 			},
 			{
 				label: 'Mortgage owed',
-				value: mortgage ? formatMinor(owed, mortgage.currency) : '—',
+				value: linkedLoans.length > 0 ? formatMinor(owed, current.currency) : '—',
 				color: 'var(--red)',
-				note: mortgage
-					? `${mortgage.lender || mortgage.name}${shareFraction < 1 ? ` · ${(shareFraction * 100).toFixed(0)}% share` : ''}`
-					: 'no linked loan'
+				note:
+					linkedLoans.length > 0
+						? linkedLoans
+								.map(
+									({ loan: linkedLoan, sharePct }) =>
+										`${loanLabel(linkedLoan)}${sharePct < 100 ? ` · ${sharePct.toFixed(2).replace(/\.00$/, '')}% share` : ''}`
+								)
+								.join(' + ')
+						: 'no linked loan'
 			},
 			{
 				label: 'Equity',
@@ -122,11 +188,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				color: 'var(--teal)',
 				note: 'gross, on value'
 			});
-			const monthlyBills = bills
-				.filter((b) => b.propertyId === current.id)
-				.reduce((s, b) => s + b.amountMinor, 0n);
-			const mortgagePayment = currentMortgagePeriod?.paymentMinor ?? 0n;
-			const cashFlow = currentTenancy.rentMinor - monthlyBills - mortgagePayment;
+			const cashFlow = financials.cashFlowMinor;
 			metrics.push({
 				label: 'Cash flow',
 				value: formatMinor(cashFlow, current.currency, { signed: true }),
@@ -185,10 +247,13 @@ export const load: PageServerLoad = async ({ url }) => {
 								? ('yellow' as const)
 								: ('green' as const),
 				facts: [
-					{ label: 'Rent', value: `${formatMinor(currentTenancy.rentMinor, current.currency)} Kč` },
+					{
+						label: 'Rent',
+						value: `${formatMinor(currentTenancy.rentMinor, current.currency)} ${displayCurrency(current.currency)}`
+					},
 					{
 						label: 'Deposit held',
-						value: `${formatMinor(currentTenancy.depositMinor, current.currency)} Kč`
+						value: `${formatMinor(currentTenancy.depositMinor, current.currency)} ${displayCurrency(current.currency)}`
 					},
 					{ label: 'Lease ends', value: currentTenancy.endDate ?? 'open-ended' },
 					{ label: 'Since', value: currentTenancy.startDate ?? '—' }
@@ -198,23 +263,31 @@ export const load: PageServerLoad = async ({ url }) => {
 		}
 
 		let mortgageCard = null;
-		if (mortgage) {
-			const repaid = mortgage.principalMinor - mortgage.owedMinor;
-			const rate = currentMortgagePeriod?.annualRatePct ?? null;
-			const fix = mortgagePeriods.find(
-				(p) => p.endDate !== null && p.endDate > new Date().toISOString().slice(0, 10)
+		if (linkedLoans.length > 0) {
+			const allocatedById = new Map(
+				financials.loans.map((allocation) => [allocation.id, allocation])
 			);
+			const principal = financials.loans.reduce(
+				(sum, allocation) => sum + allocation.principalPropertyMinor,
+				0n
+			);
+			const repaid = principal - financials.owedPropertyMinor;
 			mortgageCard = {
-				fixation: fix
-					? `fixed ${rate?.toFixed(2)}% to ${fix.endDate!.slice(0, 7)}`
-					: rate !== null
-						? `${rate.toFixed(2)}%`
-						: '',
-				paidPct:
-					mortgage.principalMinor > 0n
-						? Number((repaid * 1000n) / mortgage.principalMinor) / 10
-						: 0,
-				paidNote: `${formatMinor(repaid, mortgage.currency)} of ${formatMinor(mortgage.principalMinor, mortgage.currency)} repaid · ${formatMinor(mortgage.owedMinor, mortgage.currency)} owed`
+				fixation: linkedLoans
+					.map(({ loan: linkedLoan, currentPeriod }) => {
+						const label = loanLabel(linkedLoan);
+						if (!currentPeriod) return `${label}: rate not set`;
+						const rate = `${currentPeriod.annualRatePct.toFixed(2)}%`;
+						return `${label}: ${currentPeriod.endDate ? `fixed ${rate} to ${currentPeriod.endDate.slice(0, 7)}` : rate}`;
+					})
+					.join(' · '),
+				paidPct: principal > 0n ? Number((repaid * 1000n) / principal) / 10 : 0,
+				paidNote: linkedLoans
+					.map(({ loan: linkedLoan }) => {
+						const allocation = allocatedById.get(linkedLoan.id)!;
+						return `${loanLabel(linkedLoan)}: ${formatMinor(allocation.principalPropertyMinor - allocation.owedPropertyMinor, current.currency)} of ${formatMinor(allocation.principalPropertyMinor, current.currency)} repaid · ${formatMinor(allocation.owedPropertyMinor, current.currency)} owed`;
+					})
+					.join(' · ')
 			};
 		}
 
@@ -281,17 +354,12 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
 		if (!id) return fail(400, { message: 'Missing property.' });
-		const existing = await db
-			.select({ name: tag.name })
-			.from(propertyTag)
-			.innerJoin(tag, eq(propertyTag.tagId, tag.id))
-			.where(eq(propertyTag.propertyId, id));
 		const added = String(form.get('tagName') ?? '').trim();
 		const removed = String(form.get('removeTag') ?? '').trim();
-		const names = existing.map((r) => r.name).filter((n) => n !== removed);
-		if (added && !names.some((n) => normaliseTagName(n) === normaliseTagName(added)))
-			names.push(added);
-		await setPropertyTags(id, names);
+		await updatePropertyTags(id, {
+			add: added || undefined,
+			remove: removed || undefined
+		});
 		return { ok: true };
 	},
 
@@ -328,51 +396,40 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const propertyId = String(form.get('propertyId') ?? '');
 		const slot = String(form.get('slot') ?? ''); // plan | photo0 | photo1 | photo2
+		const expectedImage = String(form.get('expectedImage') ?? '') || null;
 		const file = form.get('file');
 		if (!(file instanceof File) || file.size === 0) return fail(400, { message: 'Pick a file.' });
-		const rows = await db.select().from(property).where(eq(property.id, propertyId));
-		const row = rows[0];
-		if (!row) return fail(404, { message: 'Property not found.' });
 		let name: string;
 		try {
 			name = await saveUpload(file);
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 		}
-		// compact away holes from the old fixed-slot days so indices stay in
-		// step with the photo strip the user sees
-		const images = { ...row.images, photos: row.images.photos.filter(Boolean) };
-		if (slot === 'plan') {
-			images.plan = name;
-		} else {
-			const index = Number(slot.replace('photo', ''));
-			if (!Number.isInteger(index) || index < 0 || index > images.photos.length) {
-				return fail(400, { message: 'Unknown image slot.' });
-			}
-			images.photos[index] = name;
+		let result;
+		try {
+			result = await setPropertyImage({ propertyId, slot, storedName: name, expectedImage });
+		} catch (error) {
+			await removeUpload(name);
+			throw error;
 		}
-		await db.update(property).set({ images }).where(eq(property.id, propertyId));
+		if (!result.ok) {
+			await removeUpload(name);
+			return fail(result.status, { message: result.message });
+		}
 		return { ok: true };
 	},
 
 	savePlan: async ({ request }) => {
 		const form = await request.formData();
 		const propertyId = String(form.get('propertyId') ?? '');
-		const rows = await db.select().from(property).where(eq(property.id, propertyId));
-		const row = rows[0];
-		if (!row) return fail(404, { message: 'Property not found.' });
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(String(form.get('drawing') ?? ''));
 		} catch {
 			return fail(400, { message: 'The plan did not parse.' });
 		}
-		const drawing = validateDrawing(parsed);
-		if (!drawing) return fail(400, { message: 'The plan did not validate.' });
-		await db
-			.update(property)
-			.set({ images: { ...row.images, drawing: drawing.rooms.length ? drawing : undefined } })
-			.where(eq(property.id, propertyId));
+		const result = await setPropertyDrawing({ propertyId, drawing: parsed });
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
 
@@ -392,7 +449,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(400, { message: 'Rent and deposit must be numbers.' });
 		}
-		await db.insert(tenancy).values({
+		const result = await createTenancy({
 			id: randomUUID(),
 			propertyId,
 			tenantName,
@@ -403,6 +460,7 @@ export const actions: Actions = {
 			endDate: String(form.get('endDate') ?? '').trim() || null,
 			renewalNoticeDate: String(form.get('renewalNoticeDate') ?? '').trim() || null
 		});
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
 
@@ -419,24 +477,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const billId = String(form.get('billId') ?? '');
 		const fromMeter = String(form.get('fromMeter')) === 'true';
-		const rows = await db.select().from(propertyBill).where(eq(propertyBill.id, billId));
-		const bill = rows[0];
-		if (!bill) return fail(404, { message: 'Bill not found.' });
-
-		await db.transaction(async (tx) => {
-			if (fromMeter) {
-				await tx
-					.update(propertyBill)
-					.set({ source: 'manual' })
-					.where(
-						and(eq(propertyBill.propertyId, bill.propertyId), eq(propertyBill.source, 'meter'))
-					);
-			}
-			await tx
-				.update(propertyBill)
-				.set({ source: fromMeter ? 'meter' : 'manual' })
-				.where(eq(propertyBill.id, billId));
-		});
+		const result = await setPropertyBillSource(billId, fromMeter);
+		if (!result.ok) return fail(result.status, { message: result.message });
 		// Fill the newly pointed-at line straight away rather than leaving a
 		// stale figure until the next hourly tick.
 		if (fromMeter) {
@@ -464,34 +506,35 @@ export const actions: Actions = {
 		// An attached bill file becomes a document about this flat — one upload,
 		// visible both next to the bill and in the Documents archive.
 		let documentId: string | null = null;
+		let storedName: string | null = null;
+		let extension = 'PDF';
 		const file = form.get('file');
 		if (file instanceof File && file.size > 0) {
-			let storedName: string;
 			try {
 				storedName = await saveUpload(file);
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
 			documentId = randomUUID();
-			await db.insert(document).values({
-				id: documentId,
-				name: `${label} · ${rows[0].name}`,
-				shelf: 'property',
-				storedName,
-				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
-				addedOn: new Date().toISOString().slice(0, 10)
-			});
-			await db
-				.insert(documentProperty)
-				.values({ documentId, propertyId: rows[0].id })
-				.onConflictDoNothing();
-			const billTag = await upsertTag('bill');
-			await db.insert(documentTag).values({ documentId, tagId: billTag.id }).onConflictDoNothing();
+			extension = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
 		}
 
-		await db
-			.insert(propertyBill)
-			.values({ id: randomUUID(), propertyId, label, amountMinor: amount, documentId });
+		await createPropertyBill({
+			id: randomUUID(),
+			propertyId,
+			label,
+			amountMinor: amount,
+			document:
+				documentId && storedName
+					? {
+							id: documentId,
+							name: `${label} · ${rows[0].name}`,
+							storedName,
+							ext: extension,
+							addedOn: new Date().toISOString().slice(0, 10)
+						}
+					: null
+		});
 		return { ok: true };
 	}
 };

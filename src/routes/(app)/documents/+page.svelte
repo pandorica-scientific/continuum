@@ -4,12 +4,19 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { SHELVES } from '$lib/documents';
+	import { syncedDocumentState } from '$lib/ui/state';
 
 	let { data, form } = $props();
 
 	let query = $state(data.query);
 	let adding = $state(data.prefill.open);
 	let newSubjectOpen = $state(false);
+	$effect(() => {
+		const state = syncedDocumentState({ query: data.query, prefillOpen: data.prefill.open });
+		query = state.query;
+		adding = state.adding;
+		newSubjectOpen = false;
+	});
 
 	function navigate(shelf: string, q: string, tag = '') {
 		const parts: string[] = [];

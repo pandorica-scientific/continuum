@@ -1,28 +1,31 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 
 	let { data, form } = $props();
 
-	let fileInput: HTMLInputElement | undefined = $state();
-	let uploading = $state(false);
-	let dragOver = $state(false);
 	let assignAccountId = $state('');
 
-	async function uploadFiles(files: FileList | File[]) {
+	// The choice disambiguates the upload it was made for. Holding it across
+	// uploads forced every later batch into the same account, and resolveAccount
+	// now validates the statement's bank, currency and number against it — so an
+	// unrelated statement came back needsAccount with nothing imported, asking
+	// again for the very choice that caused it. Keep it only while some file
+	// still needs an answer.
+	$effect(() => {
+		const results = form?.results;
+		if (results && !results.some((result) => result.needsAccount)) assignAccountId = '';
+	});
+
+	async function uploadFiles(files: FileList) {
 		const body = new FormData();
 		for (const f of files) body.append('statements', f);
 		if (assignAccountId) body.set('accountId', assignAccountId);
-		uploading = true;
-		try {
-			await fetch('?/upload', { method: 'POST', body });
-			await invalidateAll();
-		} finally {
-			uploading = false;
-		}
+		return submitAction('?/upload', body);
 	}
 </script>
 
@@ -37,42 +40,14 @@
 {/if}
 
 <section class="section">
-	<div
-		class="dropzone"
-		class:drag={dragOver}
-		role="button"
-		tabindex="0"
-		onclick={() => fileInput?.click()}
-		onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
-		ondragover={(e) => {
-			e.preventDefault();
-			dragOver = true;
-		}}
-		ondragleave={() => (dragOver = false)}
-		ondrop={(e) => {
-			e.preventDefault();
-			dragOver = false;
-			if (e.dataTransfer?.files?.length) uploadFiles(e.dataTransfer.files);
-		}}
-	>
-		<span class="dz-emoji">📥</span>
-		<span class="dz-title">
-			{uploading ? 'Reading statements…' : 'Drop statements here, or click to browse'}
-		</span>
-		<span class="dz-note">
-			CSV or PDF from any of the five banks, several files at once. The layout is detected,
-			transfers between your own accounts are paired and dropped, and categories come from what you
-			corrected last time.
-		</span>
-		<input
-			bind:this={fileInput}
-			type="file"
-			multiple
-			accept=".csv,.pdf,.xml,.ofx,.abo"
-			style="display: none"
-			onchange={() => fileInput?.files?.length && uploadFiles(fileInput.files)}
-		/>
-	</div>
+	<UploadDropzone
+		accept=".csv,.pdf,.xml,.ofx,.abo"
+		multiple={true}
+		idleText="Drop statements here, or click to browse"
+		busyText="Reading statements…"
+		description="CSV or PDF from any of the five banks, several files at once. The layout is detected, transfers between your own accounts are paired and dropped, and categories come from what you corrected last time."
+		onfiles={uploadFiles}
+	/>
 
 	{#if data.accounts.length > 1}
 		<label class="assign">
@@ -184,9 +159,7 @@
 		padding: 9px 14px;
 		font-size: 13px;
 	}
-	.dropzone {
-		border: 1.5px dashed var(--bd2);
-		border-radius: 12px;
+	:global(.dropzone) {
 		padding: 34px 24px;
 		display: flex;
 		flex-direction: column;
@@ -194,24 +167,6 @@
 		gap: 7px;
 		text-align: center;
 		background: var(--card);
-		cursor: pointer;
-	}
-	.dropzone.drag {
-		background: var(--card2);
-		border-color: var(--blue);
-	}
-	.dz-emoji {
-		font-size: 24px;
-	}
-	.dz-title {
-		font-size: 14.5px;
-		font-weight: 500;
-	}
-	.dz-note {
-		font-size: 12.5px;
-		color: var(--fg3);
-		max-width: 560px;
-		line-height: 1.5;
 	}
 	.assign {
 		display: flex;

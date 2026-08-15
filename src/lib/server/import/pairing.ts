@@ -18,7 +18,7 @@ export interface PairableTx {
 export interface OwnAccount {
 	id: string;
 	currency: string;
-	/** normalised digit/letter-only forms of the account's numbers */
+	/** normalised account-number forms, retaining Czech prefix/bank separators */
 	numberKeys: string[];
 }
 
@@ -30,27 +30,97 @@ export interface PairProposal {
 }
 
 export function normaliseAccountKey(raw: string): string {
-	return raw.toUpperCase().replace(/[^A-Z0-9/]/g, '');
+	return raw.toUpperCase().replace(/[^A-Z0-9/-]/g, '');
 }
 
-/**
- * The identity core of an account number: for the local Czech "number/bank"
- * form the number part, otherwise all digits — leading zeros stripped so the
- * zero-padded middle of an IBAN still contains it.
- */
-function accountCore(key: string): string {
-	const local = key.includes('/') ? key.slice(0, key.indexOf('/')) : key;
-	return local.replace(/\D/g, '').replace(/^0+/, '');
+interface CzechAccountIdentity {
+	bank: string;
+	prefix: string;
+	number: string;
+}
+
+function stripLeadingZeroes(value: string): string {
+	return value.replace(/^0+/, '') || '0';
+}
+
+function czechAccountIdentity(raw: string): CzechAccountIdentity | null {
+	const key = normaliseAccountKey(raw);
+	const local = /^(?:(\d{1,6})-)?(\d{1,10})\/(\d{4})$/.exec(key);
+	if (local) {
+		return {
+			bank: local[3],
+			prefix: stripLeadingZeroes(local[1] ?? '0'),
+			number: stripLeadingZeroes(local[2])
+		};
+	}
+
+	// Czech IBAN: country/check digits, bank code, six-digit prefix and
+	// ten-digit account number.
+	const iban = /^CZ\d{2}(\d{4})(\d{6})(\d{10})$/.exec(key);
+	if (!iban) return null;
+	return {
+		bank: iban[1],
+		prefix: stripLeadingZeroes(iban[2]),
+		number: stripLeadingZeroes(iban[3])
+	};
+}
+
+/** Stable lock/dedup key; Czech local and IBAN forms collapse to one identity. */
+export function canonicalAccountIdentity(raw: string): string {
+	const identity = czechAccountIdentity(raw);
+	return identity
+		? `CZ:${identity.bank}:${identity.prefix}:${identity.number}`
+		: normaliseAccountKey(raw);
+}
+
+function isIban(key: string): boolean {
+	return /^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(key);
+}
+
+/** Digits only, leading zeros dropped, for comparing the same account written
+ *  as an IBAN and as a national number. */
+function digitCore(key: string): string {
+	return stripLeadingZeroes(key.replace(/\D/g, ''));
 }
 
 /** "93531803/5500" matches "CZ6955000000000093531803" and vice versa. */
 export function accountKeysMatch(a: string, b: string): boolean {
 	if (!a || !b) return false;
-	if (a === b) return true;
-	const coreA = accountCore(a);
-	const coreB = accountCore(b);
-	if (coreA.length < 6 || coreB.length < 6) return false;
-	return coreA.includes(coreB) || coreB.includes(coreA);
+	const keyA = normaliseAccountKey(a);
+	const keyB = normaliseAccountKey(b);
+	if (keyA === keyB) return true;
+
+	const identityA = czechAccountIdentity(keyA);
+	const identityB = czechAccountIdentity(keyB);
+	if (identityA && identityB) {
+		return (
+			identityA.bank === identityB.bank &&
+			identityA.prefix === identityB.prefix &&
+			identityA.number === identityB.number
+		);
+	}
+	// A Czech reference is structural: its local form reorders the IBAN's
+	// fields, so comparing it as a flat run of digits would be wrong both ways.
+	if (identityA || identityB) return false;
+
+	// Everywhere else the national number is the IBAN's own body, so the same
+	// account written both ways differs only by country and check digits.
+	// Requiring a Czech identity on both sides meant a Polish or Revolut account
+	// could never match its own IBAN: own-account transfers stopped pairing and
+	// kept counting as real income and real spending, and resolveAccount saw no
+	// match and minted a duplicate account that every row was re-imported under.
+	const aIsIban = isIban(keyA);
+	const bIsIban = isIban(keyB);
+	// Two different IBANs are two different accounts, and two national forms
+	// have already been compared exactly.
+	if (aIsIban === bIsIban) return false;
+	const ibanKey = aIsIban ? keyA : keyB;
+	const local = digitCore(aIsIban ? keyB : keyA);
+	if (local.length < 8) return false;
+	// Some countries' national form is the IBAN body; others — Poland's NRB
+	// among them — keep the check digits in it. Accept either reading rather
+	// than encoding a per-country table for a household ledger.
+	return local === digitCore(ibanKey.slice(4)) || local === digitCore(ibanKey.slice(2));
 }
 
 /**

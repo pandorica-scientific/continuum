@@ -1,4 +1,4 @@
-import { json, requireToken, apiError } from '$lib/server/api/respond';
+import { json, apiError } from '$lib/server/api/respond';
 import { money } from '$lib/api/serialise';
 import { getBaseCurrency } from '$lib/server/settings';
 import { parseFilter } from '$lib/transactions/filter';
@@ -7,10 +7,7 @@ import { loadSplits } from '$lib/server/splits';
 import { loadTagsFor } from '$lib/server/tags';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ request, url, getClientAddress }) => {
-	const refused = await requireToken(request, getClientAddress());
-	if (refused) return refused;
-
+export const GET: RequestHandler = async ({ url }) => {
 	// The same pair the register screen calls, so a filter cannot mean one thing
 	// on the screen and another over the wire.
 	const baseCurrency = await getBaseCurrency();

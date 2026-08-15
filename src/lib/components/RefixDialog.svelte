@@ -1,54 +1,34 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
-	import type { DayCount } from '$lib/loans';
-	import { applyFixation, project, type YearAgg } from '$lib/loans/simulate';
-	import { formatMinor, parseAmountToMinor } from '$lib/money';
-
-	interface SimPayload {
-		terms: {
-			owedMinor: string;
-			owedAsOfMonth: string;
-			dayCount: string;
-			accrualStyle: string;
-			paymentDay: number;
-		};
-		periods: {
-			startDate: string;
-			endDate: string | null;
-			annualRatePct: number;
-			paymentMinor: string;
-		}[];
-	}
+	import LoanScenarioPreview from '$lib/components/LoanScenarioPreview.svelte';
+	import { applyFixation, project } from '$lib/loans/simulate';
+	import {
+		decodeScenarioPayload,
+		defaultFixationStart,
+		type ScenarioPayload
+	} from '$lib/loans/scenario';
+	import { parseAmountToMinor } from '$lib/money';
 	let {
 		loanId,
 		currency,
 		sim,
 		onclose
-	}: { loanId: string; currency: string; sim: SimPayload; onclose: () => void } = $props();
+	}: { loanId: string; currency: string; sim: ScenarioPayload; onclose: () => void } = $props();
 
-	// sensible default: the day the current fixation ends, else today
-	const lastEnd = sim.periods.reduce<string | null>(
-		(max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max),
-		null
-	);
-	let startDate = $state(lastEnd ?? new Date().toISOString().slice(0, 10));
+	// The parent keys this draft by loan. This is intentionally the boundary of
+	// the period in force today, never a maximum historical end date.
+	// svelte-ignore state_referenced_locally
+	let startDate = $state(defaultFixationStart(sim.periods, new Date().toISOString().slice(0, 10)));
 	let rate = $state('');
 	let payment = $state('');
 	let endDate = $state('');
+	let actionError = $state<string | null>(null);
 
-	const terms = $derived({
-		owedMinor: BigInt(sim.terms.owedMinor),
-		owedAsOfMonth: sim.terms.owedAsOfMonth,
-		dayCount: sim.terms.dayCount as DayCount,
-		accrualStyle: sim.terms.accrualStyle as 'payment' | 'calendar',
-		paymentDay: sim.terms.paymentDay
-	});
-	const periods = $derived(
-		sim.periods.map((p) => ({ ...p, paymentMinor: BigInt(p.paymentMinor) }))
-	);
-	const base = $derived(project(terms, periods));
+	const scenario = $derived(decodeScenarioPayload(sim));
+	const base = $derived(project(scenario.terms, scenario.periods));
 
 	const whatIf = $derived.by(() => {
 		try {
@@ -57,30 +37,17 @@
 			if (!Number.isFinite(annualRatePct) || annualRatePct < 0 || annualRatePct > 100) return null;
 			const paymentMinor = parseAmountToMinor(payment, currency);
 			if (paymentMinor <= 0n) return null;
-			const next = applyFixation(periods, {
+			const next = applyFixation(scenario.periods, {
 				startDate,
 				endDate: endDate || null,
 				annualRatePct,
 				paymentMinor
 			});
-			return project(terms, next);
+			return project(scenario.terms, next);
 		} catch {
 			return null;
 		}
 	});
-
-	const bars = (years: YearAgg[]) =>
-		years.map((y) => ({
-			year: y.year,
-			interest: Number(y.interestMinor),
-			principal: Number(y.principalMinor),
-			interestLabel: formatMinor(y.interestMinor, currency),
-			principalLabel: formatMinor(y.principalMinor, currency)
-		}));
-	const shown = $derived(whatIf ?? base);
-	const savings = $derived(
-		whatIf ? base.summary.totalInterestMinor - whatIf.summary.totalInterestMinor : null
-	);
 </script>
 
 <Modal title="🔁 New fixation — try the offer before saving it" {onclose}>
@@ -89,12 +56,14 @@
 		action="?/addFixation"
 		use:enhance={() =>
 			async ({ update, result }) => {
+				actionError = messageFromActionResult(result);
 				await update();
-				if (result.type === 'success') onclose();
+				if (shouldCloseAfterAction(result.type)) onclose();
 			}}
 		class="body"
 	>
 		<input type="hidden" name="loanId" value={loanId} />
+		<ActionError message={actionError} />
 		<div class="fields">
 			<label><span>From</span><input name="startDate" type="date" bind:value={startDate} /></label>
 			<label
@@ -122,27 +91,14 @@
 			>
 		</div>
 
-		<div class="preview">
-			<div class="p-head">
-				<span class="p-title">{whatIf ? 'With this fixation' : 'Current schedule'}</span>
-				<span class="p-note">
-					{#if whatIf}
-						debt-free {base.summary.debtFreeMonth ?? '—'} →
-						<b>{whatIf.summary.debtFreeMonth ?? '—'}</b>
-						· interest {formatMinor(base.summary.totalInterestMinor, currency)} →
-						<b>{formatMinor(whatIf.summary.totalInterestMinor, currency)}</b>
-						{#if savings !== null && savings > 0n}
-							· <span class="saves">saves {formatMinor(savings, currency)} {currency}</span>
-						{:else if savings !== null && savings < 0n}
-							· <span class="costs">costs {formatMinor(-savings, currency)} {currency} more</span>
-						{/if}
-					{:else}
-						fill in rate and payment to preview the offer
-					{/if}
-				</span>
-			</div>
-			<LoanSchedule years={bars(shown.years)} {currency} />
-		</div>
+		<LoanScenarioPreview
+			{base}
+			alternative={whatIf}
+			{currency}
+			alternativeTitle="With this fixation"
+			emptyText="fill in rate and payment to preview the offer"
+			showCost={true}
+		/>
 
 		<div class="row">
 			<button type="submit" class="btn btn-primary" disabled={!whatIf}>Add fixation</button>
@@ -177,41 +133,6 @@
 		border-radius: 8px;
 		padding: 8px 11px;
 		font-size: 13.5px;
-	}
-	.preview {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		background: var(--card2);
-		border: 1px solid var(--bd);
-		border-radius: 10px;
-		padding: 13px 15px;
-	}
-	.p-head {
-		display: flex;
-		align-items: baseline;
-		gap: 12px;
-		flex-wrap: wrap;
-	}
-	.p-title {
-		font-size: 13px;
-		font-weight: 500;
-	}
-	.p-note {
-		font-size: 12px;
-		color: var(--fg3);
-	}
-	.p-note b {
-		color: var(--fg1);
-		font-weight: 600;
-	}
-	.saves {
-		color: var(--green);
-		font-weight: 600;
-	}
-	.costs {
-		color: var(--red);
-		font-weight: 600;
 	}
 	.row {
 		display: flex;

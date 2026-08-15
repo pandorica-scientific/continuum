@@ -2,10 +2,10 @@ import { eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
-import { createSession, hashPassword } from '$lib/server/auth';
-import { consumeEnrollmentToken, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
+import { completeEnrollment, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { passwordMinLength } from '$lib/server/policy';
+import { passwordLengthError } from '$lib/password-policy';
 import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -69,23 +69,15 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const password = String(form.get('password') ?? '');
 		const confirm = String(form.get('confirmPassword') ?? '');
-		const minLength = passwordMinLength();
-		if (password.length < minLength) {
-			return fail(400, { message: `Password needs at least ${minLength} characters.` });
-		}
+		const passwordError = passwordLengthError(password, passwordMinLength());
+		if (passwordError) return fail(400, { message: passwordError });
 		if (password !== confirm) {
 			return fail(400, { message: 'The two passwords do not match.' });
 		}
 
-		// Checked before the token is spent, so a link for a closed account is not
-		// burned on the way to being refused.
-		if (!(await enrollableePerson(params.token))) {
-			recordFailure('enroll', address);
-			return fail(400, { message: UNUSABLE });
-		}
-
-		const consumed = await consumeEnrollmentToken(params.token);
-		if (!consumed) {
+		// completeEnrollment rechecks the token, active person and pending-password
+		// state in one transaction, so a closed account never burns its link.
+		if (!(await completeEnrollment(params.token, password, cookies))) {
 			recordFailure('enroll', address);
 			return fail(400, { message: UNUSABLE });
 		}
@@ -93,11 +85,6 @@ export const actions: Actions = {
 		// No recordSuccess: spending a valid link does not clear the failure
 		// budget, the same rule the API gate documents — a caller holding one
 		// good link must not be able to reset their guessing allowance with it.
-		await db
-			.update(person)
-			.set({ passwordHash: await hashPassword(password) })
-			.where(eq(person.id, consumed.personId));
-		await createSession(cookies, consumed.personId);
 		redirect(303, '/overview');
 	}
 };

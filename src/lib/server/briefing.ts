@@ -1,5 +1,9 @@
 import { isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { groupMonthlySpending } from '$lib/briefing';
+import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { getBaseCurrency } from '$lib/server/settings';
 import { loadSplits } from '$lib/server/splits';
 import { effectiveLines } from '$lib/transactions/lines';
 import {
@@ -166,30 +170,29 @@ const overspend: Source = async () => {
 	// A category group running well past its twelve-month average this month.
 	// Aggregated in JavaScript rather than SQL because a transaction may be
 	// split across categories, and effectiveLines is the only thing that knows.
-	const [txns, categories] = await Promise.all([
+	const [txns, categories, rates, baseCurrency] = await Promise.all([
 		db.select().from(transaction).where(isNull(transaction.transferPairId)),
-		db.select().from(category)
+		db.select().from(category),
+		loadRateTable(),
+		getBaseCurrency()
 	]);
 	const groupByCategory = new Map(categories.map((c) => [c.id, c.groupKey]));
 	const splitsByTxn = await loadSplits(txns.map((t) => t.id));
 
-	// Spending per group per month, as a positive number of minor units — the
-	// same shape the loop below has always consumed.
-	const tally = new Map<string, number>();
-	for (const t of txns) {
-		const month = (t.valueDate ?? t.bookedAt).slice(0, 7);
-		for (const line of effectiveLines(t, splitsByTxn.get(t.id) ?? [])) {
-			if (line.amountMinor >= 0n || !line.categoryId) continue;
-			const groupKey = groupByCategory.get(line.categoryId);
-			if (!groupKey || groupKey === 'income' || groupKey === 'savings') continue;
-			const key = `${groupKey} ${month}`;
-			tally.set(key, (tally.get(key) ?? 0) + Number(-line.amountMinor));
-		}
-	}
-	const rows = [...tally].map(([key, spent]) => {
-		const [groupKey, month] = key.split(' ');
-		return { groupKey, month, spent: String(spent) };
-	});
+	const rows = groupMonthlySpending(
+		txns.flatMap((t) => {
+			const day = t.valueDate ?? t.bookedAt;
+			return effectiveLines(t, splitsByTxn.get(t.id) ?? []).map((line) => ({
+				day,
+				currency: t.currency,
+				amountMinor: line.amountMinor,
+				categoryId: line.categoryId
+			}));
+		}),
+		groupByCategory,
+		baseCurrency,
+		(amount, from, to, day) => convertOrFace(rates, amount, from, to, day)
+	);
 
 	const thisMonth = new Date().toISOString().slice(0, 7);
 	const items: BriefingItem[] = [];
@@ -198,21 +201,22 @@ const overspend: Source = async () => {
 		const history = rows.filter((r) => r.groupKey === groupKey && r.month !== thisMonth);
 		const current = rows.find((r) => r.groupKey === groupKey && r.month === thisMonth);
 		if (!current || history.length < 3) continue; // not enough record to judge
-		const average = history.reduce((s, r) => s + Number(r.spent), 0) / history.length;
-		const spent = Number(current.spent);
-		if (average <= 0 || spent < average * 1.35 || spent - average < 300000) continue;
-		const pct = Math.round((spent / average - 1) * 100);
+		const average = history.reduce((sum, row) => sum + row.spentMinor, 0n) / BigInt(history.length);
+		const spent = current.spentMinor;
+		if (
+			average <= 0n ||
+			spent * 100n < average * 135n ||
+			spent - average < fromMajor(3000, baseCurrency)
+		)
+			continue;
+		const pct = Number(((spent - average) * 100n + average / 2n) / average);
 		items.push({
 			emoji: '📊',
 			kind: 'Spending',
 			pill: `+${pct}%`,
 			hue: 'yellow',
 			title: `${groupKey === 'living' ? 'Food & lifestyle' : groupKey} is running ${pct}% over its average`,
-			detail: `${Math.round(spent / 100)
-				.toLocaleString('en')
-				.replace(/,/g, ' ')} so far this month against a typical ${Math.round(average / 100)
-				.toLocaleString('en')
-				.replace(/,/g, ' ')}.`,
+			detail: `${formatMinor(spent, baseCurrency)} ${displayCurrency(baseCurrency)} so far this month against a typical ${formatMinor(average, baseCurrency)} ${displayCurrency(baseCurrency)}.`,
 			href: '/cashflow',
 			rank: 15
 		});

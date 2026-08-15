@@ -4,11 +4,11 @@ import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { db } from '$lib/server/db';
 import { credential, person } from '$lib/server/db/schema';
 import { createSession } from '$lib/server/auth';
-import { takeChallenge } from '$lib/server/auth/webauthn/challenge';
-import { isCloneSignal } from '$lib/server/auth/webauthn/counter';
+import { challengeGenerationMatches, takeChallenge } from '$lib/server/auth/webauthn/challenge';
+import { advanceCredentialCounter, isCloneSignal } from '$lib/server/auth/webauthn/counter';
 import { readWebAuthnBody } from '$lib/server/auth/webauthn/payload';
 import { currentOrigin, passkeysAvailable, relyingPartyId } from '$lib/server/auth/webauthn/origin';
-import { blockedForSeconds, recordFailure, recordSuccess } from '$lib/server/auth/ratelimit';
+import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import type { RequestHandler } from './$types';
 
@@ -29,8 +29,8 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 		error(429, `Too many failed attempts — try again in ${minutes} minute${wait > 60 ? 's' : ''}.`);
 	}
 
-	const expectedChallenge = await takeChallenge(cookies);
-	if (!expectedChallenge) error(400, 'That took too long — try again.');
+	const storedChallenge = await takeChallenge(cookies);
+	if (!storedChallenge) error(400, 'That took too long — try again.');
 
 	const body = await readWebAuthnBody<AuthenticationResponseJSON>(request);
 	if (!body) {
@@ -44,6 +44,8 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 			publicKey: credential.publicKey,
 			counter: credential.counter,
 			personId: credential.personId,
+			authGeneration: credential.authGeneration,
+			personAuthGeneration: person.authGeneration,
 			deactivatedAt: person.deactivatedAt
 		})
 		.from(credential)
@@ -53,16 +55,20 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 	const row = rows[0];
 	// A deactivated person's credentials are kept so reactivation is a clean
 	// undo, so the check has to happen here rather than by deleting them.
-	if (!row || row.deactivatedAt) {
+	if (!row || row.deactivatedAt || row.authGeneration !== row.personAuthGeneration) {
 		recordFailure('login', address);
 		error(400, 'That passkey is not recognised.');
+	}
+	if (!challengeGenerationMatches(storedChallenge, row.personId, row.authGeneration)) {
+		recordFailure('login', address);
+		error(400, 'Authentication changed during passkey verification — try again.');
 	}
 
 	let verification;
 	try {
 		verification = await verifyAuthenticationResponse({
 			response: body.response,
-			expectedChallenge,
+			expectedChallenge: storedChallenge.challenge,
 			expectedOrigin: currentOrigin(),
 			expectedRPID: relyingPartyId(currentOrigin()),
 			credential: {
@@ -97,12 +103,14 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 		error(400, 'That passkey looks cloned and has been refused.');
 	}
 
-	await db
-		.update(credential)
-		.set({ counter: incoming, lastUsedAt: new Date() })
-		.where(eq(credential.id, row.id));
+	if (!(await advanceCredentialCounter(db, row.id, row.counter, incoming, row.authGeneration))) {
+		recordFailure('login', address);
+		error(400, 'Authentication changed during passkey verification — try again.');
+	}
 
-	recordSuccess('login', address);
-	await createSession(cookies, row.personId);
+	if (!(await createSession(cookies, row.personId, row.authGeneration))) {
+		recordFailure('login', address);
+		error(400, 'Authentication changed during passkey verification — try again.');
+	}
 	return json({ ok: true });
 };

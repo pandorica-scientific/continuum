@@ -1,0 +1,195 @@
+/* ============================================================
+   Stock Watcher — Design tokens
+   Dark-only Streamlit dashboard. Flat-UI traffic-light palette.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600&display=swap");
+
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter-VariableFont_opsz_wght.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ---------- Backgrounds ----------
+     Streamlit's default dark canvas is a vertical gradient #0e1117 → #11161f */
+  --bg-base:       #0e1117;       /* canvas top */
+  --bg-base-2:     #11161f;       /* canvas bottom (gradient end) */
+  --bg-elev-1:     rgba(255,255,255,0.03);  /* cards, metric tiles */
+  --bg-elev-2:     rgba(255,255,255,0.06);  /* hovered card / popover */
+  --bg-sidebar:    #0a0d13;       /* sidebar */
+  --bg-treemap-tile-neutral: #1f2937;  /* sector heatmap mid */
+
+  /* ---------- Borders & dividers ---------- */
+  --border-soft:   rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.18);
+  --border-divider: rgba(255,255,255,0.10);
+
+  /* ---------- Foreground / text ---------- */
+  --fg-1:          #e6e9ef;       /* primary copy, ticker labels */
+  --fg-2:          #c5ccd6;       /* body */
+  --fg-3:          #8a96a6;       /* small-muted, captions */
+  --fg-inverse:    #0e1117;       /* on bright accent fills */
+  --fg-link:       #3498db;       /* anchors */
+
+  /* ---------- Brand / accent ----------
+     Stock Watcher leans on the flat-UI traffic-light palette:
+     green/yellow/red are SEMANTIC (regime, risk, P/L) — not decorative.
+     The blues + purple are used as data-series accents in Plotly. */
+  --green:         #2ecc71;       /* bullish, calm, low risk */
+  --green-deep:    #16a085;       /* extreme greed / strong bullish */
+  --green-soft:    rgba(46,204,113,0.18);
+  --green-bg-25:   rgba(46,204,113,0.25);
+
+  --yellow:        #f1c40f;       /* watchful / Tenkan / composite line */
+  --yellow-soft:   rgba(241,196,15,0.18);
+  --yellow-bg-25:  rgba(241,196,15,0.25);
+
+  --red:           #e74c3c;       /* bearish, recession, overbought sell */
+  --red-soft:      rgba(231,76,60,0.18);
+  --red-bg-25:     rgba(231,76,60,0.25);
+
+  --orange:        #e67e22;       /* StochRSI %D, fear */
+  --blue:          #3498db;       /* Kijun, 10Y yield, %K, links */
+  --teal:          #1abc9c;       /* RSI line, commodity, sparkline default */
+  --purple:        #9b59b6;       /* Chikou, NFCI sparkline */
+
+  /* Candle colors — Plotly defaults baked into Ichimoku panel */
+  --candle-up:     #26a69a;
+  --candle-down:   #ef5350;
+
+  /* ---------- Spacing scale (px) ---------- */
+  --space-1:  4px;
+  --space-2:  6px;
+  --space-3:  8px;
+  --space-4:  10px;
+  --space-5:  12px;
+  --space-6:  14px;
+  --space-7:  18px;
+  --space-8:  24px;
+  --space-9:  32px;
+  --space-10: 48px;
+
+  /* ---------- Radii ----------
+     Streamlit defaults: 8–10px on everything. Pills go bigger (12px+). */
+  --radius-sm:  6px;       /* code blocks, tags */
+  --radius-md:  8px;       /* buttons, inputs */
+  --radius-lg:  10px;      /* metric tiles, cards */
+  --radius-xl:  12px;      /* traffic-light pills */
+  --radius-pill: 999px;
+
+  /* ---------- Shadows ----------
+     The dashboard barely uses shadows — depth comes from
+     background tints + borders. One subtle ring for popovers. */
+  --shadow-none:    none;
+  --shadow-popover: 0 8px 24px rgba(0,0,0,0.45);
+  --ring-focus:     0 0 0 2px rgba(52,152,219,0.55);
+
+  /* ---------- Type ---------- */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Streamlit headings reflow at narrower widths but base sizes are: */
+  --type-display:    2.25rem;   /* st.title — 36px */
+  --type-h1:         1.75rem;   /* page subheader — 28px */
+  --type-h2:         1.375rem;  /* section #### — 22px */
+  --type-h3:         1.125rem;  /* small heading — 18px */
+  --type-body:       1rem;      /* 16px */
+  --type-small:      0.875rem;  /* 14px */
+  --type-caption:    0.85rem;   /* small-muted — 13.6px */
+  --type-mono:       0.95rem;
+
+  --leading-tight:   1.2;
+  --leading-snug:    1.35;
+  --leading-normal:  1.55;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+}
+
+/* ============================================================
+   Semantic primitives — apply to bare HTML where useful.
+   ============================================================ */
+
+html, body {
+  background:
+    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-base-2) 100%);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, .h1 {
+  font-size: var(--type-display);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-5);
+}
+h2, .h2 {
+  font-size: var(--type-h1);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-4);
+}
+h3, .h3 {
+  font-size: var(--type-h2);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-3);
+}
+h4, .h4 {
+  font-size: var(--type-h3);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-3);
+}
+p { margin: 0 0 var(--space-5); color: var(--fg-2); }
+a { color: var(--fg-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: var(--type-mono);
+  background: var(--bg-elev-1);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+}
+.small-muted { color: var(--fg-3); font-size: var(--type-caption); }
+
+/* ============================================================
+   Component primitives (kept minimal — full versions in ui_kits/)
+   ============================================================ */
+
+.sw-card {
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+}
+
+.sw-metric {
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+}
+
+/* Traffic-light pill — the brand's most distinctive element */
+.traffic-light {
+  font-size: 1.5rem;
+  padding: 10px 18px;
+  border-radius: var(--radius-xl);
+  display: inline-block;
+  line-height: 1.2;
+  font-weight: var(--weight-semibold);
+}
+.light-green  { background: var(--green-soft);  border: 1px solid var(--green); }
+.light-yellow { background: var(--yellow-soft); border: 1px solid var(--yellow); }
+.light-red    { background: var(--red-soft);    border: 1px solid var(--red); }

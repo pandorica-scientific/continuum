@@ -5,10 +5,10 @@ import './homeassistant';
 import './demo';
 
 import { and, eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { property, propertyBill } from '$lib/server/db/schema';
-import { getBaseCurrency, getSetting } from '$lib/server/settings';
-import { convertOrFace } from '$lib/server/fx';
+import { db, type Db, type Queryable } from '$lib/server/db';
+import { property, settings } from '$lib/server/db/schema';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { updateMeterBillAmount } from '$lib/server/property/mutations';
 import {
 	homeProviderKinds,
 	makeHomeProvider,
@@ -24,25 +24,41 @@ export interface HomeConfig {
 	[key: string]: string;
 }
 
-export async function getHomeConfig(): Promise<HomeConfig | null> {
-	const stored = await getSetting<HomeConfig | null>('home', null);
+export function configuredMeterProperty<T extends { id: string; kind: string }>(
+	config: HomeConfig | null,
+	properties: T[]
+): T | null {
+	if (!config?.meterPropertyId) return null;
+	return (
+		properties.find(
+			(candidate) => candidate.id === config.meterPropertyId && candidate.kind === 'lived'
+		) ?? null
+	);
+}
+
+export async function getHomeConfig(handle: Queryable = db): Promise<HomeConfig | null> {
+	const rows = await handle
+		.select({ value: settings.value })
+		.from(settings)
+		.where(eq(settings.key, 'home'));
+	const stored = (rows[0]?.value ?? null) as HomeConfig | null;
 	return stored && stored.kind ? stored : null;
 }
 
-export async function configuredHomeProvider(): Promise<HomeProvider | null> {
-	const config = await getHomeConfig();
-	if (!config) return null;
+function providerForConfig(config: HomeConfig): HomeProvider | null {
 	const { kind, ...rest } = config;
-	// Configs saved before the currency was recorded beside each amount get
-	// today's base currency, which is what they were typed in at the time.
-	for (const key of Object.keys(rest)) {
-		if (!key.endsWith('Currency') || rest[key]) continue;
-		rest[key] = await getBaseCurrency();
-	}
-	if (rest.pricePerKwh && !rest.pricePerKwhCurrency) {
-		rest.pricePerKwhCurrency = await getBaseCurrency();
-	}
 	return makeHomeProvider(kind, rest);
+}
+
+function sameHomeConfig(left: HomeConfig, right: HomeConfig | null): boolean {
+	if (!right) return false;
+	const keys = Object.keys(left);
+	return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
+}
+
+export async function configuredHomeProvider(handle: Queryable = db): Promise<HomeProvider | null> {
+	const config = await getHomeConfig(handle);
+	return config ? providerForConfig(config) : null;
 }
 
 export function availableHomeProviders(): ProviderKind[] {
@@ -61,39 +77,61 @@ export function availableHomeProviders(): ProviderKind[] {
  *
  * Returns the bill note for the page, or null when there is nothing to write.
  */
-export async function syncMeterBill(): Promise<string | null> {
-	const config = await getHomeConfig();
+export async function syncMeterBill(handle: Db = db): Promise<string | null> {
+	const config = await getHomeConfig(handle);
 	if (!config) return null;
 	const price = Number(config.pricePerKwh);
 	if (!Number.isFinite(price) || price <= 0) return null;
+	const priceCurrency = config.pricePerKwhCurrency;
+	const meterPropertyId = config.meterPropertyId;
+	if (!priceCurrency || !meterPropertyId) return null;
 
-	const provider = await configuredHomeProvider();
+	// Build from the same immutable snapshot used for price/property decisions.
+	// Re-reading here could combine credentials from a new configuration with
+	// the old configuration's billing target.
+	const provider = providerForConfig(config);
 	if (!provider) return null;
 
-	const properties = await db.select().from(property).where(eq(property.kind, 'lived'));
-	const livedIn = properties[0];
-	if (!livedIn) return null;
-
 	const snapshot = await provider.snapshot();
-	if (snapshot.monthKwh === null) return null;
+	const monthKwh = snapshot.monthKwh;
+	if (monthKwh === null) return null;
 
-	// The price is in minor units of the currency it was typed in; the bill is
-	// denominated in the property's. Converting was not optional the moment
-	// those two could differ.
-	const priceCurrency = config.pricePerKwhCurrency ?? (await getBaseCurrency());
-	const inPriceCurrency = BigInt(Math.round(snapshot.monthKwh * price));
-	const amountMinor = await convertOrFace(inPriceCurrency, priceCurrency, livedIn.currency);
+	return handle.transaction(async (tx) => {
+		// Serialize this final check with configure/disconnect. If either committed
+		// while the provider was doing network I/O, discard the stale reading. If
+		// it starts now, the settings-row lock makes it wait until this write ends.
+		const configRows = await tx
+			.select({ value: settings.value })
+			.from(settings)
+			.where(eq(settings.key, 'home'))
+			.for('update');
+		const currentConfig = (configRows[0]?.value ?? null) as HomeConfig | null;
+		if (!sameHomeConfig(config, currentConfig)) return null;
 
-	// Bound by the typed source column, and only ever to a bill the household
-	// pointed at the meter. Creating one unasked is what made the flat's total
-	// count electricity twice — the estimate the household already had stayed
-	// exactly where it was, beside the new line.
-	const existing = await db
-		.select()
-		.from(propertyBill)
-		.where(and(eq(propertyBill.propertyId, livedIn.id), eq(propertyBill.source, 'meter')));
-	if (!existing[0]) return null;
+		const properties = await tx
+			.select()
+			.from(property)
+			.where(and(eq(property.id, meterPropertyId), eq(property.kind, 'lived')));
+		const livedIn = properties[0];
+		if (!livedIn) return null;
 
-	await db.update(propertyBill).set({ amountMinor }).where(eq(propertyBill.id, existing[0].id));
-	return `“${existing[0].label}” on ${livedIn.name} is read from the meter, so the budget follows what it actually did.`;
+		// The price is in minor units of the currency it was typed in; the bill is
+		// denominated in the property's. Migration 0031 binds legacy prices to the
+		// base currency in force at upgrade, so malformed unbound configs fail
+		// closed above instead of being silently redenominated.
+		const inPriceCurrency = BigInt(Math.round(monthKwh * price));
+		const amountMinor = convertOrFace(
+			await loadRateTable(tx),
+			inPriceCurrency,
+			priceCurrency,
+			livedIn.currency,
+			new Date().toISOString().slice(0, 10)
+		);
+
+		// Bound by the typed source column, and only ever to a bill the household
+		// pointed at the meter. Creating one unasked duplicates energy spending.
+		const updated = await updateMeterBillAmount(livedIn.id, amountMinor, tx);
+		if (!updated) return null;
+		return `“${updated.label}” on ${livedIn.name} is read from the meter, so the budget follows what it actually did.`;
+	});
 }

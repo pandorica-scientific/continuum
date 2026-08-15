@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { env } from '$env/dynamic/private';
@@ -29,6 +29,10 @@ function uploadDir(): string {
 	return env.UPLOAD_DIR || 'data';
 }
 
+function isUploadName(name: string): boolean {
+	return /^[0-9a-f-]{36}\.[a-z0-9]+$/.test(name);
+}
+
 export async function saveUpload(file: File): Promise<string> {
 	const ext = extname(file.name).toLowerCase();
 	if (!ALLOWED_EXT.has(ext)) throw new Error(`File type ${ext || 'unknown'} is not allowed.`);
@@ -36,6 +40,17 @@ export async function saveUpload(file: File): Promise<string> {
 	const name = `${randomUUID()}${ext}`;
 	await writeFile(join(uploadDir(), name), new Uint8Array(await file.arrayBuffer()));
 	return name;
+}
+
+/** Remove a just-saved orphan after a later database mutation fails. */
+export async function removeUpload(name: string): Promise<boolean> {
+	if (!isUploadName(name)) return false;
+	try {
+		await unlink(join(uploadDir(), name));
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -84,7 +99,7 @@ const DOWNLOAD_ONLY = new Set(['.csv', '.xml', '.ofx', '.abo', '.xlsx']);
 
 export async function openUpload(name: string): Promise<Response | null> {
 	// The name is always a uuid + extension we generated; reject anything else.
-	if (!/^[0-9a-f-]{36}\.[a-z0-9]+$/.test(name)) return null;
+	if (!isUploadName(name)) return null;
 	const path = join(uploadDir(), name);
 	const ext = extname(name);
 	try {

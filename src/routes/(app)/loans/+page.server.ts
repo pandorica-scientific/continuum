@@ -1,6 +1,4 @@
-import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
-import { and, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	loan,
@@ -22,10 +20,12 @@ import {
 } from '$lib/loans/amortise';
 import { anchorMonthFor, project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
-import { normaliseTagName, setLoanTags } from '$lib/server/tags';
+import { updateLoanTags } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace } from '$lib/server/fx';
-import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
+import { createLoan, recordRepayment, replaceFixation } from '$lib/server/loans/mutations';
+import { securedPropertiesFromForm } from '$lib/loans/form';
+import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
 function monthNow(): string {
@@ -252,184 +252,73 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
 		if (!id) return fail(400, { message: 'Missing loan.' });
-		const existing = await db
-			.select({ loanId: loanTag.loanId, name: tag.name })
-			.from(loanTag)
-			.innerJoin(tag, eq(loanTag.tagId, tag.id));
 		const added = String(form.get('tagName') ?? '').trim();
 		const removed = String(form.get('removeTag') ?? '').trim();
-		const names = existing
-			.filter((r) => r.loanId === id)
-			.map((r) => r.name)
-			.filter((n) => n !== removed);
-		if (added && !names.some((n) => normaliseTagName(n) === normaliseTagName(added)))
-			names.push(added);
-		await setLoanTags(id, names);
+		await updateLoanTags(id, {
+			add: added || undefined,
+			remove: removed || undefined
+		});
 		return { ok: true };
 	},
 
 	addRepayment: async ({ request }) => {
 		const form = await request.formData();
-		const loanId = String(form.get('loanId') ?? '');
-		const rows = await db.select().from(loan).where(eq(loan.id, loanId));
-		const l = rows[0];
-		if (!l) return fail(404, { message: 'Loan not found.' });
-
-		const date = String(form.get('date') ?? '').trim() || new Date().toISOString().slice(0, 10);
-		let amount: bigint;
-		let balanceAfter: bigint | null = null;
-		try {
-			amount = parseAmountToMinor(String(form.get('amount') ?? ''), l.currency);
-			if (amount <= 0n) throw new Error('amount');
-			const balanceRaw = String(form.get('balanceAfter') ?? '').trim();
-			if (balanceRaw) balanceAfter = parseAmountToMinor(balanceRaw, l.currency);
-		} catch {
-			return fail(400, { message: 'The repayment amount must be a positive number.' });
-		}
-
-		// The bank's post-repayment balance is the best anchor when known;
-		// otherwise the repayment simply comes off the current balance.
-		let newOwed = balanceAfter ?? l.owedMinor - amount;
-		if (newOwed < 0n) newOwed = 0n;
-
-		await db.insert(loanEvent).values({
-			id: randomUUID(),
-			loanId,
-			happenedOn: date,
-			kind: 'extra_payment',
-			amountMinor: amount,
-			note: String(form.get('note') ?? '').trim() || null
+		const result = await recordRepayment({
+			loanId: String(form.get('loanId') ?? ''),
+			date: String(form.get('date') ?? ''),
+			amount: String(form.get('amount') ?? ''),
+			balanceAfter: String(form.get('balanceAfter') ?? ''),
+			note: String(form.get('note') ?? '')
 		});
-		await db.update(loan).set({ owedMinor: newOwed, owedAsOf: date }).where(eq(loan.id, loanId));
-		return { ok: true };
+		return result.ok ? result : fail(result.status, { message: result.message });
 	},
 
 	addFixation: async ({ request }) => {
 		const form = await request.formData();
-		const loanId = String(form.get('loanId') ?? '');
-		const rows = await db.select().from(loan).where(eq(loan.id, loanId));
-		const l = rows[0];
-		if (!l) return fail(404, { message: 'Loan not found.' });
-
-		const startDate = String(form.get('startDate') ?? '').trim();
-		if (!startDate) return fail(400, { message: 'The new fixation needs its start date.' });
-		const endDate = String(form.get('endDate') ?? '').trim() || null;
-		let payment: bigint;
-		const rate = Number(String(form.get('rate') ?? '').replace(',', '.'));
-		try {
-			payment = parseAmountToMinor(String(form.get('payment') ?? ''), l.currency);
-			if (!Number.isFinite(rate) || rate < 0 || rate > 100) throw new Error('rate');
-		} catch {
-			return fail(400, { message: 'Rate and payment must be numbers.' });
-		}
-
-		// The new period takes over from its start date: any period still open
-		// (or reaching past the start) is closed there — history stays intact.
-		await db
-			.update(loanFixationPeriod)
-			.set({ endDate: startDate })
-			.where(
-				and(
-					eq(loanFixationPeriod.loanId, loanId),
-					lt(loanFixationPeriod.startDate, startDate),
-					or(isNull(loanFixationPeriod.endDate), gt(loanFixationPeriod.endDate, startDate))
-				)
-			);
-		await db.insert(loanFixationPeriod).values({
-			id: randomUUID(),
-			loanId,
-			startDate,
-			endDate,
-			annualRatePct: String(rate),
-			paymentMinor: payment
+		const result = await replaceFixation({
+			loanId: String(form.get('loanId') ?? ''),
+			startDate: String(form.get('startDate') ?? ''),
+			endDate: String(form.get('endDate') ?? '') || null,
+			rate: String(form.get('rate') ?? ''),
+			payment: String(form.get('payment') ?? '')
 		});
-		await db.insert(loanEvent).values({
-			id: randomUUID(),
-			loanId,
-			happenedOn: startDate,
-			kind: 'refix',
-			amountMinor: payment,
-			note: `${rate.toFixed(2)}%${endDate ? ` to ${endDate}` : ''}`
-		});
-		return { ok: true };
+		return result.ok ? result : fail(result.status, { message: result.message });
 	},
 
 	addLoan: async ({ request }) => {
 		const form = await request.formData();
-		const name = String(form.get('name') ?? '').trim();
-		const currency = String(form.get('currency') ?? 'CZK').toUpperCase();
-		if (!name) return fail(400, { message: 'The loan needs a name.' });
-
-		let principal: bigint, owed: bigint, payment: bigint, rate: number;
-		try {
-			principal = parseAmountToMinor(String(form.get('principal') ?? ''), currency);
-			owed = parseAmountToMinor(String(form.get('owed') ?? ''), currency);
-			payment = parseAmountToMinor(String(form.get('payment') ?? ''), currency);
-			rate = Number(String(form.get('rate') ?? '').replace(',', '.'));
-			if (!Number.isFinite(rate) || rate < 0 || rate > 100) throw new Error('rate');
-		} catch {
-			return fail(400, { message: 'Principal, owed, payment and rate must be numbers.' });
-		}
-
-		const regime = String(form.get('regime') ?? 'fixed_period');
-		const accrualStyle = String(form.get('accrualStyle')) === 'calendar' ? 'calendar' : 'payment';
-		const dayCountRaw = String(form.get('dayCount') ?? '30/360');
-		const dayCount = (DAY_COUNTS as readonly string[]).includes(dayCountRaw)
-			? dayCountRaw
-			: '30/360';
 		const paymentDayRaw = Number(form.get('paymentDay'));
 		const paymentDay =
 			Number.isInteger(paymentDayRaw) && paymentDayRaw >= 1 && paymentDayRaw <= 31
 				? paymentDayRaw
 				: null;
-		const fixedUntil = String(form.get('fixedUntil') ?? '').trim() || null;
-		if (regime === 'fixed_period' && !fixedUntil) {
-			return fail(400, { message: 'A fixed-period loan needs the date the fixation ends.' });
-		}
 
-		const loanId = randomUUID();
-		await db.insert(loan).values({
-			id: loanId,
-			name,
-			lender: String(form.get('lender') ?? '').trim(),
-			kind: String(form.get('kind') ?? 'mortgage'),
-			currency,
-			principalMinor: principal,
-			owedMinor: owed,
-			owedAsOf: new Date().toISOString().slice(0, 10),
-			startDate: String(form.get('startDate') ?? '').trim() || null,
-			endDate: String(form.get('endDate') ?? '').trim() || null,
-			regime,
-			dayCount,
-			accrualStyle,
-			paymentDay,
-			interestDeductible: form.get('deductible') === 'on' ? 1 : 0
-		});
 		// One agreement can secure several flats, each with its own share.
 		const propertiesAll = await db.select({ id: property.id }).from(property);
-		for (const prop of propertiesAll) {
-			if (form.get(`secured_${prop.id}`) !== 'on') continue;
-			const shareRaw = String(form.get(`share_${prop.id}`) ?? '')
-				.replace(',', '.')
-				.trim();
-			const share = Number(shareRaw);
-			await db.insert(loanProperty).values({
-				id: randomUUID(),
-				loanId,
-				propertyId: prop.id,
-				sharePct:
-					shareRaw && Number.isFinite(share) && share > 0 && share <= 100 ? String(share) : null
-			});
-		}
-		await db.insert(loanFixationPeriod).values({
-			id: randomUUID(),
-			loanId,
-			startDate:
-				String(form.get('startDate') ?? '').trim() || new Date().toISOString().slice(0, 10),
-			endDate: regime === 'fixed_period' ? fixedUntil : null,
-			annualRatePct: String(rate),
-			paymentMinor: payment
+		const secured = securedPropertiesFromForm(
+			form,
+			propertiesAll.map((property) => property.id)
+		);
+
+		const result = await createLoan({
+			name: String(form.get('name') ?? ''),
+			lender: String(form.get('lender') ?? ''),
+			kind: String(form.get('kind') ?? 'mortgage'),
+			currency: String(form.get('currency') ?? 'CZK'),
+			principal: String(form.get('principal') ?? ''),
+			owed: String(form.get('owed') ?? ''),
+			payment: String(form.get('payment') ?? ''),
+			rate: String(form.get('rate') ?? ''),
+			regime: String(form.get('regime') ?? 'fixed_period'),
+			dayCount: String(form.get('dayCount') ?? '30/360'),
+			accrualStyle: String(form.get('accrualStyle') ?? 'payment'),
+			paymentDay,
+			fixedUntil: String(form.get('fixedUntil') ?? '') || null,
+			startDate: String(form.get('startDate') ?? '') || null,
+			endDate: String(form.get('endDate') ?? '') || null,
+			interestDeductible: form.get('deductible') === 'on',
+			secured
 		});
-		return { ok: true };
+		return result.ok ? result : fail(result.status, { message: result.message });
 	}
 };

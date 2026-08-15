@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { fromMajor } from '$lib/money';
+	import { formatMinor, parseAmountToMinor } from '$lib/money';
+	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import { enhance } from '$app/forms';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
 	interface CategoryGroup {
@@ -14,6 +16,7 @@
 		id?: string | null;
 		amountMajor: string;
 		categoryId: string | null;
+		tagNames: string;
 	}
 
 	let {
@@ -23,6 +26,7 @@
 		currency,
 		categories,
 		existing,
+		knownTags,
 		onclose
 	}: {
 		transactionId: string;
@@ -31,19 +35,23 @@
 		currency: string;
 		categories: CategoryGroup[];
 		existing: SplitLine[];
+		knownTags: { id: string; name: string }[];
 		onclose: () => void;
 	} = $props();
 
 	// Editing an existing split starts from its lines; a fresh split starts
-	// from two empty ones, since one line is not a split.
+	// from two empty ones, since one line is not a split. The parent keys this
+	// component by transaction id, so this intentionally is a one-time draft.
+	// svelte-ignore state_referenced_locally
 	let lines = $state<SplitLine[]>(
 		existing.length > 0
 			? existing.map((l) => ({ ...l }))
 			: [
-					{ amountMajor: '', categoryId: null },
-					{ amountMajor: '', categoryId: null }
+					{ amountMajor: '', categoryId: null, tagNames: '' },
+					{ amountMajor: '', categoryId: null, tagNames: '' }
 				]
 	);
+	let actionError = $state<string | null>(null);
 
 	/**
 	 * Decimal string to a number of minor units, tolerating "1 234,56" and the
@@ -51,25 +59,23 @@
 	 * that, the target for any money-out transaction would parse as zero and the
 	 * dialog could never balance.
 	 */
-	function toMinor(raw: string): number | null {
-		const cleaned = raw
-			.replace(/[\s\u00a0\u202f]/gu, '')
-			.replace(/\u2212/gu, '-')
-			.replace(',', '.');
-		if (!/^[+-]?\d+(\.\d*)?$/.test(cleaned)) return null;
-		return Number(fromMajor(Number(cleaned), currency));
+	function toMinor(raw: string): bigint | null {
+		try {
+			return parseAmountToMinor(raw, currency);
+		} catch {
+			return null;
+		}
 	}
 
-	const targetMinor = $derived(toMinor(amountMajor) ?? 0);
+	const targetMinor = $derived(toMinor(amountMajor) ?? 0n);
 	const filled = $derived(lines.filter((l) => l.amountMajor.trim() !== ''));
 	const anyInvalid = $derived(filled.some((l) => toMinor(l.amountMajor) === null));
-	const sumMinor = $derived(filled.reduce((sum, l) => sum + (toMinor(l.amountMajor) ?? 0), 0));
+	const sumMinor = $derived(filled.reduce((sum, l) => sum + (toMinor(l.amountMajor) ?? 0n), 0n));
 	const remainderMinor = $derived(targetMinor - sumMinor);
-	const balanced = $derived(remainderMinor === 0 && filled.length >= 2 && !anyInvalid);
+	const balanced = $derived(remainderMinor === 0n && filled.length >= 2 && !anyInvalid);
 
-	const remainder = $derived(
-		(remainderMinor / 100).toLocaleString('en', { minimumFractionDigits: 2 }).replace(/,/g, ' ')
-	);
+	const remainder = $derived(formatMinor(remainderMinor, currency));
+	const tagListId = $derived(`split-tags-${transactionId}`);
 </script>
 
 <Modal title="Split {merchant}" {onclose}>
@@ -78,14 +84,16 @@
 		method="POST"
 		action="?/split"
 		use:enhance={() =>
-			async ({ update }) => {
+			async ({ update, result }) => {
+				actionError = messageFromActionResult(result);
 				await update();
-				onclose();
+				if (shouldCloseAfterAction(result.type)) onclose();
 			}}
 		class="split-form"
 	>
 		<input type="hidden" name="id" value={transactionId} />
 		<input type="hidden" name="currency" value={currency} />
+		<ActionError message={actionError} />
 
 		<p class="target">
 			Dividing <strong>{amountMajor} {currency}</strong>. The lines have to add up to it exactly.
@@ -113,6 +121,14 @@
 						</optgroup>
 					{/each}
 				</select>
+				<input
+					name="splitTags"
+					bind:value={line.tagNames}
+					list={tagListId}
+					placeholder="tags, comma separated"
+					aria-label="Line {i + 1} tags"
+					autocomplete="off"
+				/>
 				{#if lines.length > 2}
 					<button
 						type="button"
@@ -130,7 +146,7 @@
 			<button
 				type="button"
 				class="btn"
-				onclick={() => (lines = [...lines, { amountMajor: '', categoryId: null }])}
+				onclick={() => (lines = [...lines, { amountMajor: '', categoryId: null, tagNames: '' }])}
 			>
 				＋ Add line
 			</button>
@@ -148,6 +164,11 @@
 			</span>
 			<button type="submit" class="btn btn-primary" disabled={!balanced}>Save split</button>
 		</div>
+		<datalist id={tagListId}>
+			{#each knownTags as tag (tag.id)}
+				<option value={tag.name}></option>
+			{/each}
+		</datalist>
 	</form>
 </Modal>
 
@@ -164,7 +185,7 @@
 	}
 	.split-line {
 		display: grid;
-		grid-template-columns: 130px minmax(0, 1fr) auto;
+		grid-template-columns: 130px minmax(0, 1fr) minmax(150px, 0.8fr) auto;
 		gap: 8px;
 		align-items: center;
 	}

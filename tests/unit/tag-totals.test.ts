@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseTagName, rollUpTagTotals } from '$lib/server/tags';
+import {
+	applyTagDelta,
+	convertedTagTotal,
+	normaliseTagName,
+	rollUpTaggedAmounts,
+	rollUpTagTotals
+} from '$lib/server/tags';
+
+describe('applyTagDelta', () => {
+	it('applies additions and removals by normalized identity without duplicating a tag', () => {
+		expect(
+			applyTagDelta(['Base', 'Trip'], {
+				add: ' base ',
+				remove: 'TRIP'
+			})
+		).toEqual(['Base']);
+	});
+});
 
 describe('normaliseTagName', () => {
 	it('trims, lowercases and collapses inner whitespace', () => {
@@ -63,5 +80,40 @@ describe('rollUpTagTotals', () => {
 		});
 		expect(totals.get('reno')?.get('CZK')).toBe(-3000n);
 		expect(totals.get('holiday')?.get('CZK')).toBe(-1550n);
+	});
+
+	it('keeps each effective amount at its own value date for later FX conversion', () => {
+		const datedTxn = {
+			...txn,
+			bookedAt: '2026-04-02',
+			valueDate: '2026-04-01'
+		};
+		const amounts = rollUpTaggedAmounts([datedTxn], splits, {
+			transactionTags: [{ transactionId: 't1', tagId: 'reno' }],
+			splitTags: []
+		});
+
+		expect(amounts.get('reno')).toEqual([
+			{ amountMinor: -3000n, currency: 'CZK', day: '2026-04-01' },
+			{ amountMinor: -1550n, currency: 'CZK', day: '2026-04-01' }
+		]);
+	});
+
+	it('converts tagged amounts at their individual dates instead of converting a bucket today', () => {
+		const seen: string[] = [];
+		const total = convertedTagTotal(
+			[
+				{ amountMinor: -100n, currency: 'USD', day: '2026-01-05' },
+				{ amountMinor: -100n, currency: 'USD', day: '2026-02-05' }
+			],
+			'EUR',
+			(amount, _from, _to, day) => {
+				seen.push(day);
+				return day === '2026-01-05' ? amount * 2n : amount * 3n;
+			}
+		);
+
+		expect(seen).toEqual(['2026-01-05', '2026-02-05']);
+		expect(total).toBe(-500n);
 	});
 });

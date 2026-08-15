@@ -4,7 +4,12 @@ import { account, category, tag } from '$lib/server/db/schema';
 import { getBaseCurrency } from '$lib/server/settings';
 import { fileTransaction, PAGE_SIZE, registerPage } from '$lib/server/transactions';
 import { deleteSplits, loadSplits, saveSplits } from '$lib/server/splits';
-import { loadTagsFor, normaliseTagName, setTransactionTags } from '$lib/server/tags';
+import {
+	loadSplitTagsFor,
+	loadTagsFor,
+	setSplitTagSets,
+	updateTransactionTags
+} from '$lib/server/tags';
 import { parseFilter, REVIEW_STATES } from '$lib/transactions/filter';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
@@ -25,9 +30,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 	const rowIds = page.rows.map((r) => r.id);
-	const [splitsByTxn, tagsByTxn, knownTags] = await Promise.all([
+	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags] = await Promise.all([
 		loadSplits(rowIds),
 		loadTagsFor(rowIds),
+		loadSplitTagsFor(rowIds),
 		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name)
 	]);
 
@@ -76,7 +82,8 @@ export const load: PageServerLoad = async ({ url }) => {
 					amountMajor: formatMinor(s.amountMinor < 0n ? -s.amountMinor : s.amountMinor, r.currency),
 					categoryId: s.categoryId,
 					categoryLabel: s.categoryId ? (categoryName.get(s.categoryId) ?? null) : null,
-					note: s.note
+					note: s.note,
+					tags: splitTagsBySplit.get(s.id) ?? []
 				}))
 			};
 		}),
@@ -116,6 +123,7 @@ export const actions: Actions = {
 		const amounts = form.getAll('amount').map(String);
 		const categoryIds = form.getAll('categoryId').map(String);
 		const lineIds = form.getAll('lineId').map(String);
+		const splitTagNames = form.getAll('splitTags').map(String);
 
 		let lines;
 		try {
@@ -123,6 +131,10 @@ export const actions: Actions = {
 				.map((raw, i) => ({
 					raw: raw.trim(),
 					categoryId: categoryIds[i] || null,
+					tagNames: (splitTagNames[i] ?? '')
+						.split(',')
+						.map((name) => name.trim())
+						.filter(Boolean),
 					// Carries the stored row's id when this line is an edit of one,
 					// so its tags follow the line and not its position.
 					id: lineIds[i] || null
@@ -131,13 +143,30 @@ export const actions: Actions = {
 				.map((l) => ({
 					id: l.id,
 					amountMinor: parseAmountToMinor(l.raw, currency),
-					categoryId: l.categoryId
+					categoryId: l.categoryId,
+					tagNames: l.tagNames
 				}));
 		} catch {
 			return fail(400, { message: 'Every split line needs a valid amount.' });
 		}
 
-		const result = await saveSplits(id, lines);
+		const result = await saveSplits(
+			id,
+			lines.map((line) => ({
+				id: line.id,
+				amountMinor: line.amountMinor,
+				categoryId: line.categoryId
+			})),
+			async (tx, saved) => {
+				await setSplitTagSets(
+					saved.map((line) => ({
+						splitId: line.id,
+						names: lines[line.sort]?.tagNames ?? []
+					})),
+					tx
+				);
+			}
+		);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
@@ -155,15 +184,12 @@ export const actions: Actions = {
 		const id = String(form.get('id') ?? '');
 		if (!id) return fail(400, { message: 'Missing transaction.' });
 
-		const existing = (await loadTagsFor([id])).get(id) ?? [];
 		const added = String(form.get('tagName') ?? '').trim();
 		const removed = String(form.get('removeTag') ?? '').trim();
-
-		const names = existing.map((t) => t.name).filter((n) => n !== removed);
-		if (added && !names.some((n) => normaliseTagName(n) === normaliseTagName(added)))
-			names.push(added);
-
-		await setTransactionTags(id, names);
+		await updateTransactionTags(id, {
+			add: added || undefined,
+			remove: removed || undefined
+		});
 		return { ok: true };
 	}
 };

@@ -3,6 +3,7 @@ import {
 	DEFAULT_ENROLLMENT_LINK_DAYS,
 	DEFAULT_PASSWORD_MIN_LENGTH,
 	daysPhrase,
+	passwordLengthError,
 	passwordHint
 } from '$lib/password-policy';
 
@@ -12,6 +13,15 @@ describe('passwordHint', () => {
 	it('states the configured minimum', () => {
 		expect(passwordHint(DEFAULT_PASSWORD_MIN_LENGTH)).toBe('8+ characters');
 		expect(passwordHint(12)).toBe('12+ characters');
+	});
+});
+
+describe('passwordLengthError', () => {
+	it('centralizes the configurable minimum and caller-specific label', () => {
+		expect(passwordLengthError('short', 8, 'New password')).toBe(
+			'New password needs at least 8 characters.'
+		);
+		expect(passwordLengthError('long enough', 8, 'Password')).toBeNull();
 	});
 });
 

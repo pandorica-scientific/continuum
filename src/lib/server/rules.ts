@@ -2,9 +2,8 @@
 // this loads rules, records evidence, and previews matches without writing.
 
 import { eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { rule, ruleTag } from '$lib/server/db/schema';
-import { getSetting } from '$lib/server/settings';
+import { db, type Queryable } from '$lib/server/db';
+import { rule, ruleTag, settings } from '$lib/server/db/schema';
 import {
 	DEFAULT_AUTO_THRESHOLD,
 	ruleMatches,
@@ -14,12 +13,16 @@ import {
 } from '$lib/rules/match';
 
 /** Confidence a rule must reach before it files without asking. */
-export async function autoThreshold(): Promise<number> {
-	return getSetting('rules.autoThreshold', DEFAULT_AUTO_THRESHOLD);
+export async function autoThreshold(handle: Queryable = db): Promise<number> {
+	const rows = await handle.select().from(settings).where(eq(settings.key, 'rules.autoThreshold'));
+	return rows.length > 0 ? (rows[0].value as number) : DEFAULT_AUTO_THRESHOLD;
 }
 
-export async function loadRules(): Promise<RuleLike[]> {
-	const [rows, tagRows] = await Promise.all([db.select().from(rule), db.select().from(ruleTag)]);
+export async function loadRules(handle: Queryable = db): Promise<RuleLike[]> {
+	const [rows, tagRows] = await Promise.all([
+		handle.select().from(rule),
+		handle.select().from(ruleTag)
+	]);
 
 	const tagsByRule = new Map<string, string[]>();
 	for (const row of tagRows) {
@@ -42,11 +45,12 @@ export async function loadRules(): Promise<RuleLike[]> {
 
 /** Record what a human's decision said about each rule that had an opinion. */
 export async function applyScores(
-	changes: { ruleId: string; accepted: number; corrected: number }[]
+	changes: { ruleId: string; accepted: number; corrected: number }[],
+	handle: Queryable = db
 ): Promise<void> {
 	for (const change of changes) {
 		if (change.accepted === 0 && change.corrected === 0) continue;
-		await db
+		await handle
 			.update(rule)
 			.set({
 				acceptedCount: sql`${rule.acceptedCount} + ${change.accepted}`,
@@ -94,7 +98,7 @@ export async function previewMatches(conditions: Condition[], limit = 5): Promis
 		.from(transaction);
 
 	const matching = rows.filter((row: (typeof rows)[number]) =>
-		ruleMatches(candidate, { ...row, amountMinor: row.amount } as RowLike)
+		ruleMatches(candidate, { ...row, amountMinor: row.amount, currency: row.currency } as RowLike)
 	);
 
 	return {

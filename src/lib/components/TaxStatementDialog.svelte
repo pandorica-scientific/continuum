@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
 	interface Existing {
@@ -44,6 +46,7 @@
 			{ label: '', amount: '' }
 		]
 	);
+	let actionError = $state<string | null>(null);
 
 	// Prefill applies while creating, and stops the moment the gross field is
 	// touched. Editing an existing statement never prefills: a saved figure is
@@ -60,12 +63,14 @@
 		method="POST"
 		action="?/save"
 		use:enhance={() =>
-			async ({ update }) => {
+			async ({ update, result }) => {
+				actionError = messageFromActionResult(result);
 				await update();
-				onclose();
+				if (shouldCloseAfterAction(result.type)) onclose();
 			}}
 		class="tax-form"
 	>
+		<ActionError message={actionError} />
 		<div class="grid">
 			<label>
 				<span>Whose</span>

@@ -1,13 +1,10 @@
 import { db } from '$lib/server/db';
 import { account } from '$lib/server/db/schema';
-import { json, requireToken } from '$lib/server/api/respond';
+import { json } from '$lib/server/api/respond';
 import { money } from '$lib/api/serialise';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ request, getClientAddress }) => {
-	const refused = await requireToken(request, getClientAddress());
-	if (refused) return refused;
-
+export const GET: RequestHandler = async () => {
 	const rows = await db.select().from(account).orderBy(account.createdAt);
 	return json({
 		accounts: rows.map((a) => ({

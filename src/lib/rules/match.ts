@@ -18,7 +18,14 @@ export const DEFAULT_AUTO_THRESHOLD = 0.5;
 export type Condition =
 	| { field: 'counterparty' | 'description'; op: 'contains'; value: string }
 	| { field: 'counterAccount' | 'variableSymbol'; op: 'equals'; value: string }
-	| { field: 'amount'; op: 'between'; min: string | null; max: string | null };
+	| {
+			field: 'amount';
+			op: 'between';
+			min: string | null;
+			max: string | null;
+			/** Currency the bounds were authored in. Missing only on legacy rows. */
+			currency?: string;
+	  };
 
 /** The conditions that carry a plain text value — everything but amount. */
 export type ValueCondition = Extract<Condition, { value: string }>;
@@ -40,6 +47,7 @@ export interface RowLike {
 	variableSymbol?: string | null;
 	description?: string | null;
 	amountMinor: bigint;
+	currency?: string;
 }
 
 export interface RuleDecision {
@@ -101,6 +109,16 @@ function conditionHolds(condition: Condition, row: RowLike): boolean {
 		case 'variableSymbol':
 			return (row.variableSymbol ?? '') === condition.value;
 		case 'amount': {
+			// Bounds are stored in the household base currency. Comparing those
+			// minor units directly with (say) EUR cents would silently apply a
+			// different economic threshold, so foreign rows do not match.
+			if (
+				!condition.currency ||
+				!row.currency ||
+				row.currency.toUpperCase() !== condition.currency.toUpperCase()
+			) {
+				return false;
+			}
 			// Magnitudes, so a bound reads the same either side of zero — the same
 			// treatment the register's amount filter uses.
 			const magnitude = row.amountMinor < 0n ? -row.amountMinor : row.amountMinor;

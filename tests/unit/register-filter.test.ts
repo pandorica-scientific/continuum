@@ -20,9 +20,9 @@ describe('parseFilter', () => {
 			direction: 'any',
 			minMinor: null,
 			maxMinor: null,
+			baseCurrency: 'CZK',
 			reviewState: null,
 			tagId: null,
-			baseFactor: '100',
 			includeTransfers: false,
 			page: 1
 		});

@@ -1,6 +1,8 @@
 // The "value against money in" chart series. Benchmarks compound every real
 // contribution from its own date — the honest comparison the design demands.
 
+import { toMajor } from '$lib/money';
+
 export interface Contribution {
 	at: string; // ISO date
 	amountMinor: bigint;
@@ -48,7 +50,8 @@ export function costValueSeries(
 	ops: CashOp[],
 	positions: PositionSpan[],
 	purchaseByPosition: Map<string, bigint>,
-	months: string[]
+	months: string[],
+	currency = 'EUR'
 ): number[] {
 	const sortedOps = [...ops].sort((a, b) => (a.at < b.at ? -1 : 1));
 	let opIndex = 0;
@@ -66,7 +69,7 @@ export function costValueSeries(
 			const purchase = position.purchaseValueMinor ?? purchaseByPosition.get(position.id) ?? 0n;
 			book += purchase;
 		}
-		return Number(cash + book) / 100;
+		return toMajor(cash + book, currency);
 	});
 }
 
@@ -89,7 +92,8 @@ export function buildSeries(
 	contributions: Contribution[],
 	snapshots: SnapshotPoint[],
 	ops: CashOp[] = [],
-	positions: PositionSpan[] = []
+	positions: PositionSpan[] = [],
+	currency = 'EUR'
 ): SeriesPoint[] {
 	if (contributions.length === 0) return [];
 	const firstMonth = contributions[0].at.slice(0, 7);
@@ -114,7 +118,8 @@ export function buildSeries(
 			);
 		}
 	}
-	const cost = ops.length > 0 ? costValueSeries(ops, positions, purchaseByPosition, months) : null;
+	const cost =
+		ops.length > 0 ? costValueSeries(ops, positions, purchaseByPosition, months, currency) : null;
 
 	let moneyIn = 0;
 	let bench5 = 0;
@@ -127,7 +132,7 @@ export function buildSeries(
 		bench10 *= monthlyRate(10);
 		// add this month's contributions to all three
 		while (ci < contributions.length && contributions[ci].at.slice(0, 7) === month) {
-			const amount = Number(contributions[ci].amountMinor) / 100;
+			const amount = toMajor(contributions[ci].amountMinor, currency);
 			moneyIn += amount;
 			bench5 += amount;
 			bench10 += amount;
@@ -140,7 +145,7 @@ export function buildSeries(
 			moneyIn,
 			bench5,
 			bench10,
-			actual: snapshot !== undefined ? Number(snapshot) / 100 : (cost?.[index] ?? null),
+			actual: snapshot !== undefined ? toMajor(snapshot, currency) : (cost?.[index] ?? null),
 			isSnapshot: snapshot !== undefined
 		});
 	});
@@ -150,14 +155,15 @@ export function buildSeries(
 /** Crude nominal annualised return from total money-in over the whole span. */
 export function annualisedReturn(
 	contributions: Contribution[],
-	currentValueMinor: bigint
+	currentValueMinor: bigint,
+	currency = 'EUR'
 ): number | null {
 	if (contributions.length === 0) return null;
-	const moneyIn = contributions.reduce((s, c) => s + Number(c.amountMinor) / 100, 0);
+	const moneyIn = contributions.reduce((s, c) => s + toMajor(c.amountMinor, currency), 0);
 	if (moneyIn <= 0) return null;
 	const years = (Date.now() - new Date(contributions[0].at).getTime()) / (365.25 * 86400000);
 	if (years < 0.5) return null;
-	const ratio = Number(currentValueMinor) / 100 / moneyIn;
+	const ratio = toMajor(currentValueMinor, currency) / moneyIn;
 	if (ratio <= 0) return null;
 	return (Math.pow(ratio, 1 / years) - 1) * 100;
 }

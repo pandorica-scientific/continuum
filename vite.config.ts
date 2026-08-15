@@ -15,7 +15,12 @@ export default defineConfig({
 		})
 	],
 	test: {
-		include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'tests/acceptance/**/*.test.ts'],
+		include: [
+			'src/**/*.test.ts',
+			'tests/unit/**/*.test.ts',
+			'tests/integration/**/*.test.ts',
+			'tests/acceptance/**/*.test.ts'
+		],
 		environment: 'node'
 	}
 });

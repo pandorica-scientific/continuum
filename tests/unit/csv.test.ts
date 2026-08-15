@@ -6,6 +6,12 @@ import { parseFio } from '$lib/server/import/adapters/fio';
 const fixture = (name: string) => new URL(`../fixtures/${name}`, import.meta.url).pathname;
 
 describe('csvLines', () => {
+	it('keeps an escaped quote and newline inside one CSV record', () => {
+		const rows = csvLines('a;"before ""quoted""\nafter";c\nd;e;f');
+		expect(rows).toHaveLength(2);
+		expect(splitCsvLine(rows[0], ';')).toEqual(['a', 'before "quoted"\nafter', 'c']);
+	});
+
 	it('splits on unquoted newlines and normalises CRLF', () => {
 		expect(csvLines('a;b\r\nc;d\rE;f\ng;h')).toEqual(['a;b', 'c;d', 'E;f', 'g;h']);
 	});

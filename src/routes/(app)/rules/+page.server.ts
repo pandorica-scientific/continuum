@@ -1,11 +1,11 @@
 import { fail } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { category, rule, ruleTag, tag } from '$lib/server/db/schema';
 import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/ingest';
-import { upsertTag } from '$lib/server/tags';
+import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rule-mutations';
 import { confidence } from '$lib/rules/confidence';
 import { DEFAULT_RULE_PRIOR, normalise, type Condition } from '$lib/rules/match';
 import { CATEGORY_GROUPS } from '$lib/categories';
@@ -24,11 +24,13 @@ const FIELD_LABELS: Record<string, string> = {
 /** A condition as a person would read it. */
 function describe(condition: Condition, currency: string): string {
 	if (condition.field === 'amount') {
-		const from = condition.min ? formatMinor(BigInt(condition.min), currency) : null;
-		const to = condition.max ? formatMinor(BigInt(condition.max), currency) : null;
-		if (from && to) return `Amount between ${from} and ${to}`;
-		if (from) return `Amount at least ${from}`;
-		if (to) return `Amount at most ${to}`;
+		const authoredCurrency = condition.currency ?? currency;
+		const unit = displayCurrency(authoredCurrency);
+		const from = condition.min ? formatMinor(BigInt(condition.min), authoredCurrency) : null;
+		const to = condition.max ? formatMinor(BigInt(condition.max), authoredCurrency) : null;
+		if (from && to) return `Amount between ${from} and ${to} ${unit}`;
+		if (from) return `Amount at least ${from} ${unit}`;
+		if (to) return `Amount at most ${to} ${unit}`;
 		return 'Amount (no bounds)';
 	}
 	const verb = condition.op === 'contains' ? 'contains' : 'is';
@@ -109,7 +111,8 @@ async function conditionsFromForm(form: FormData): Promise<Condition[] | null> {
 					field: 'amount',
 					op: 'between',
 					min: min ? parseAmountToMinor(min, currency).toString() : null,
-					max: max ? parseAmountToMinor(max, currency).toString() : null
+					max: max ? parseAmountToMinor(max, currency).toString() : null,
+					currency
 				});
 			} catch {
 				return null;
@@ -134,17 +137,26 @@ export const actions: Actions = {
 	toggle: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
-		const rows = await db.select().from(rule).where(eq(rule.id, id));
-		if (!rows[0]) return fail(404, { message: 'Rule not found.' });
-		await db.update(rule).set({ enabled: !rows[0].enabled }).where(eq(rule.id, id));
-		await pairAndCategorise();
+		const changed = await mutateRuleAndReplay(async (tx) => {
+			const rows = await tx
+				.update(rule)
+				.set({ enabled: sql`not ${rule.enabled}` })
+				.where(eq(rule.id, id))
+				.returning({ id: rule.id });
+			return rows[0]?.id ?? null;
+		}, pairAndCategorise);
+		if (changed === null) return fail(404, { message: 'Rule not found.' });
 		return { ok: true };
 	},
 
 	remove: async ({ request }) => {
 		const form = await request.formData();
-		await db.delete(rule).where(eq(rule.id, String(form.get('id') ?? '')));
-		await pairAndCategorise();
+		const id = String(form.get('id') ?? '');
+		const changed = await mutateRuleAndReplay(async (tx) => {
+			const rows = await tx.delete(rule).where(eq(rule.id, id)).returning({ id: rule.id });
+			return rows[0]?.id ?? null;
+		}, pairAndCategorise);
+		if (changed === null) return fail(404, { message: 'Rule not found.' });
 		return { ok: true };
 	},
 
@@ -184,22 +196,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'A rule needs at least one condition.' });
 		if (!name) return fail(400, { message: 'Give the rule a name.' });
 
-		const existing = await db.select().from(rule).where(eq(rule.id, id));
-		if (existing[0]) {
-			await db.update(rule).set({ name, conditions, categoryId }).where(eq(rule.id, id));
-		} else {
-			// A hand-written rule starts from no evidence and earns its confidence.
-			await db.insert(rule).values({ id, name, provenance: 'manual', conditions, categoryId });
-		}
-
-		await db.delete(ruleTag).where(eq(ruleTag.ruleId, id));
-		for (const tagName of tagNames) {
-			const t = await upsertTag(tagName);
-			await db.insert(ruleTag).values({ ruleId: id, tagId: t.id }).onConflictDoNothing();
-		}
-
-		// Take effect immediately on everything not yet confirmed.
-		await pairAndCategorise();
+		await saveRuleDefinition({ id, name, conditions, categoryId, tagNames }, pairAndCategorise);
 		return { ok: true };
 	}
 };

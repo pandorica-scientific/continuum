@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -18,12 +20,14 @@
 	let draftCategory = $state('');
 	let draftTags = $state('');
 	let conditions = $state<DraftCondition[]>([]);
+	let actionError = $state<string | null>(null);
 
 	function openEditor() {
 		draftName = '';
 		draftCategory = '';
 		draftTags = '';
 		conditions = [{ field: 'counterparty', value: '', min: '', max: '' }];
+		actionError = null;
 		editing = true;
 	}
 
@@ -55,6 +59,10 @@
 	<div class="toolbar">
 		<button type="button" class="btn btn-primary" onclick={openEditor}>New rule</button>
 	</div>
+	<p class="scope-note">
+		Changes apply to future imports and transactions still awaiting a category. Existing automatic
+		filings stay as filed.
+	</p>
 
 	{#each data.rules as r (r.id)}
 		<div class="card rule-row" class:off={!r.enabled}>
@@ -104,13 +112,15 @@
 			action="?/save"
 			use:enhance={({ action }) => {
 				const saving = action.search.includes('save');
-				return async ({ update }) => {
+				return async ({ update, result }) => {
+					actionError = messageFromActionResult(result);
 					await update({ reset: false });
-					if (saving) editing = false;
+					if (saving && shouldCloseAfterAction(result.type)) editing = false;
 				};
 			}}
 			class="rule-form"
 		>
+			<ActionError message={actionError} />
 			<label>
 				<span>Name</span>
 				<input
@@ -230,6 +240,11 @@
 	.toolbar {
 		display: flex;
 		gap: 10px;
+	}
+	.scope-note {
+		margin: 0;
+		font-size: 12px;
+		color: var(--fg3);
 	}
 	.rule-row {
 		display: flex;

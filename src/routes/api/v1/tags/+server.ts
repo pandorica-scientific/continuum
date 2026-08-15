@@ -1,12 +1,9 @@
-import { json, requireToken } from '$lib/server/api/respond';
+import { json } from '$lib/server/api/respond';
 import { money } from '$lib/api/serialise';
 import { tagTotals } from '$lib/server/tags';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ request, getClientAddress }) => {
-	const refused = await requireToken(request, getClientAddress());
-	if (refused) return refused;
-
+export const GET: RequestHandler = async () => {
 	const totals = await tagTotals();
 	return json({
 		tags: totals.map((t) => ({

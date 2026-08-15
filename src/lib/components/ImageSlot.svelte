@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
 
 	let {
 		propertyId,
@@ -21,16 +21,18 @@
 	let input: HTMLInputElement | undefined = $state();
 	let dragOver = $state(false);
 	let busy = $state(false);
+	let error = $state<string | null>(null);
 
 	async function upload(file: File) {
 		const body = new FormData();
 		body.set('propertyId', propertyId);
 		body.set('slot', slot);
+		body.set('expectedImage', image ?? '');
 		body.set('file', file);
 		busy = true;
 		try {
-			await fetch('/property?/uploadImage', { method: 'POST', body });
-			await invalidateAll();
+			const outcome = await submitAction('/property?/uploadImage', body);
+			error = outcome.type === 'success' ? null : outcome.message;
 		} finally {
 			busy = false;
 		}
@@ -113,6 +115,7 @@
 	style="display: none"
 	onchange={() => input?.files?.[0] && upload(input.files[0])}
 />
+{#if error}<p class="error" role="alert">{error}</p>{/if}
 
 <style>
 	.slot {
@@ -152,6 +155,11 @@
 		color: var(--fg3);
 		padding: 8px;
 		text-align: center;
+	}
+	.error {
+		margin: 5px 0 0;
+		color: var(--red);
+		font-size: 12px;
 	}
 	.replace {
 		position: absolute;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
@@ -10,15 +10,17 @@
 	let kind = $state('homeassistant');
 	const selected = $derived(data.providers.find((p) => p.id === kind));
 	let busyDevice: string | null = $state(null);
+	let deviceError = $state<string | null>(null);
 
 	async function toggle(deviceId: string, on: boolean) {
 		busyDevice = deviceId;
+		deviceError = null;
 		try {
 			const body = new FormData();
 			body.set('deviceId', deviceId);
 			body.set('on', String(!on));
-			await fetch('?/toggleDevice', { method: 'POST', body });
-			await invalidateAll();
+			const outcome = await submitAction('?/toggleDevice', body);
+			if (outcome.type !== 'success') deviceError = outcome.message;
 		} finally {
 			busyDevice = null;
 		}
@@ -36,6 +38,7 @@
 {#if form?.message}
 	<div class="error">{form.message}</div>
 {/if}
+{#if deviceError}<div class="error" role="alert">{deviceError}</div>{/if}
 
 {#if !data.configured}
 	<section class="card setup">
@@ -46,6 +49,15 @@
 			is the first; the demo home shows the screen without any hardware.
 		</p>
 		<form method="POST" action="?/configure" use:enhance class="stack">
+			<label
+				><span>Home for meter readings</span>
+				<select name="meterPropertyId" required>
+					<option value="">Choose a lived-in property</option>
+					{#each data.livedInOptions as property (property.id)}
+						<option value={property.id}>{property.name}</option>
+					{/each}
+				</select></label
+			>
 			<label
 				><span>Platform</span>
 				<select name="kind" bind:value={kind}>

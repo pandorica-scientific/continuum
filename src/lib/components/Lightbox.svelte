@@ -1,17 +1,17 @@
 <script lang="ts">
 	// Full-size image viewer: X, Escape, or a click outside the image closes it.
+	import { overlayFocus } from '$lib/actions/overlay';
 	let { image, alt, onclose }: { image: string; alt: string; onclose: () => void } = $props();
-
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') onclose();
-	}
 </script>
-
-<svelte:window {onkeydown} />
 
 <div
 	class="backdrop"
-	role="presentation"
+	role="dialog"
+	aria-modal="true"
+	aria-label={alt}
+	tabindex="-1"
+	use:overlayFocus={{ onclose }}
+	onkeydown={() => {}}
 	onclick={(e) => {
 		if (e.target === e.currentTarget) onclose();
 	}}

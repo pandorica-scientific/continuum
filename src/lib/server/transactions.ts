@@ -4,14 +4,24 @@
 // imports categorize — putting it there would close a cycle.
 
 import { and, asc, desc, eq, gte, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { account, category, transaction } from '$lib/server/db/schema';
+import { db, type Db, type Queryable } from '$lib/server/db';
+import {
+	account,
+	category,
+	currencyRate,
+	transaction,
+	transactionSplit,
+	transactionSplitTag,
+	transactionTag
+} from '$lib/server/db/schema';
 import { learnRule } from '$lib/server/categorize';
-import { pairAndCategorise } from '$lib/server/import/ingest';
-import { loadSplitsMatching } from '$lib/server/splits';
+import {
+	lockTransferPairing,
+	pairAndCategorise,
+	pairingWindowAround
+} from '$lib/server/import/ingest';
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
-import { matchingLineTotal } from '$lib/transactions/lines';
 import { minorDigits } from '$lib/money';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 
@@ -31,73 +41,148 @@ function searchable(term: string): SQL {
 	) as SQL;
 }
 
+/** One transaction's lines after split resolution and fee allocation. */
+function effectiveLineRelation(): SQL {
+	const fee = sql`coalesce(${transaction.feeMinor}, 0::bigint)`;
+	return sql`
+		select
+			(${transaction.amount} - ${fee})::bigint as amount_minor,
+			${transaction.categoryId}::text as category_id,
+			null::text as split_id
+		where not exists (
+			select 1 from ${transactionSplit} any_split
+			where any_split.transaction_id = ${transaction.id}
+		)
+		union all
+		select
+			(split.amount_minor - case
+				when row_number() over (order by split.sort, split.id) = 1 then ${fee}
+				else 0::bigint
+			end)::bigint as amount_minor,
+			split.category_id::text as category_id,
+			split.id::text as split_id
+		from ${transactionSplit} split
+		where split.transaction_id = ${transaction.id}
+	`;
+}
+
 /**
- * The filter as a single predicate; every clause is independent of the rest.
+ * The effective lines selected by the line-scoped filters.
  *
- * `rowFactor` is 10^(minor digits) for the row's own currency, as SQL. Amount
- * bounds are typed in the base currency, so the comparison cross-multiplies:
- * abs(amount)·baseFactor against bound·rowFactor — all integers, no floats,
- * and a zero-digit currency is never compared a hundred times too small.
- * Omitted, it falls back to the base factor and the factors cancel.
+ * A direct tag covers every line. A split tag covers only that split, and the
+ * boolean `or` means a line carrying both scopes still appears once. Category
+ * and tag predicates live in the same `where`, so they must match the same
+ * effective line rather than two unrelated lines of the same transaction.
  */
-export function registerWhere(filter: RegisterFilter, rowFactor?: SQL): SQL | undefined {
+function selectedEffectiveLines(filter: RegisterFilter): SQL {
 	const clauses: SQL[] = [];
-	const factor = rowFactor ?? sql`${filter.baseFactor}::bigint`;
+	if (filter.categoryId === UNCATEGORISED) clauses.push(sql`effective_line.category_id is null`);
+	else if (filter.categoryId) clauses.push(sql`effective_line.category_id = ${filter.categoryId}`);
+
+	if (filter.tagId) {
+		clauses.push(sql`(
+			exists (
+				select 1 from ${transactionTag} direct_tag
+				where direct_tag.transaction_id = ${transaction.id}
+				  and direct_tag.tag_id = ${filter.tagId}
+			)
+			or (
+				effective_line.split_id is not null
+				and exists (
+					select 1 from ${transactionSplitTag} split_tag
+					where split_tag.split_id = effective_line.split_id
+					  and split_tag.tag_id = ${filter.tagId}
+				)
+			)
+		)`);
+	}
+
+	const where = clauses.length > 0 ? sql`where ${and(...clauses)}` : sql``;
+	return sql`
+		select effective_line.amount_minor
+		from (${effectiveLineRelation()}) effective_line
+		${where}
+	`;
+}
+
+/** Latest known CZK-per-unit fixing on a transaction's effective date. */
+function datedCzkRate(currency: SQL, day: SQL): SQL {
+	return sql`case
+		when ${currency} = 'CZK' then 1::numeric
+		else (
+			select ${currencyRate.rate}::numeric
+			from ${currencyRate}
+			where ${currencyRate.code} = ${currency}
+			  and ${currencyRate.day} <= ${day}
+			order by ${currencyRate.day} desc
+			limit 1
+		)
+	end`;
+}
+
+/** Magnitude of the parent transaction, rounded to base-currency minor units. */
+function convertedMagnitude(filter: RegisterFilter, rowFactor?: SQL): SQL {
+	const baseCurrency = filter.baseCurrency.toUpperCase();
+	const baseFactor = (10 ** minorDigits(baseCurrency)).toString();
+	const sourceFactor = rowFactor ?? sql`${baseFactor}::numeric`;
+	const day = sql`coalesce(${transaction.valueDate}, ${transaction.bookedAt})`;
+	const sourceRate = datedCzkRate(sql`${transaction.currency}`, day);
+	const baseRate = datedCzkRate(sql`${baseCurrency}`, day);
+	const faceValue = sql`round(
+		abs(${transaction.amount})::numeric * ${baseFactor}::numeric / (${sourceFactor})::numeric
+	)`;
+
+	return sql`case
+		when ${transaction.currency} = ${baseCurrency} then abs(${transaction.amount})::numeric
+		else coalesce(
+			round(
+				abs(${transaction.amount})::numeric
+				* (${sourceRate})
+				* ${baseFactor}::numeric
+				/ nullif((${baseRate}) * (${sourceFactor})::numeric, 0::numeric)
+			),
+			${faceValue}
+		)
+	end`;
+}
+
+/** Transaction-scoped filter clauses, deliberately excluding line selection. */
+function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL | undefined {
+	const clauses: SQL[] = [];
 
 	if (filter.search) clauses.push(searchable(filter.search));
 	if (filter.from) clauses.push(gte(transaction.bookedAt, filter.from));
 	if (filter.to) clauses.push(lte(transaction.bookedAt, filter.to));
 	if (filter.accountId) clauses.push(eq(transaction.accountId, filter.accountId));
 
-	// A split transaction has no category of its own, so both branches have to
-	// reach through to its lines.
-	if (filter.categoryId === UNCATEGORISED)
-		clauses.push(
-			and(
-				isNull(transaction.categoryId),
-				sql`not exists (select 1 from transaction_split s where s.transaction_id = ${transaction.id})`
-			) as SQL
-		);
-	else if (filter.categoryId)
-		clauses.push(
-			or(
-				eq(transaction.categoryId, filter.categoryId),
-				sql`exists (select 1 from transaction_split s
-				            where s.transaction_id = ${transaction.id}
-				              and s.category_id = ${filter.categoryId})`
-			) as SQL
-		);
-
 	if (filter.direction === 'in') clauses.push(sql`${transaction.amount} > 0`);
 	else if (filter.direction === 'out') clauses.push(sql`${transaction.amount} < 0`);
 
-	// Bounds are magnitudes, so they read the same either side of zero.
+	// Bounds are magnitudes entered in the household base currency. Conversion
+	// uses value date (falling back to booking date), like every other dated
+	// ledger total. When no fixing exists, face-value scaling matches the
+	// application's visible, explicitly-labelled FX fallback.
+	const magnitude = convertedMagnitude(filter, rowFactor);
 	if (filter.minMinor !== null)
-		clauses.push(
-			sql`abs(${transaction.amount}) * ${filter.baseFactor}::bigint >= ${filter.minMinor.toString()}::bigint * (${factor})`
-		);
+		clauses.push(sql`${magnitude} >= ${filter.minMinor.toString()}::numeric`);
 	if (filter.maxMinor !== null)
-		clauses.push(
-			sql`abs(${transaction.amount}) * ${filter.baseFactor}::bigint <= ${filter.maxMinor.toString()}::bigint * (${factor})`
-		);
+		clauses.push(sql`${magnitude} <= ${filter.maxMinor.toString()}::numeric`);
 
 	if (filter.reviewState) clauses.push(eq(transaction.reviewState, filter.reviewState));
-
-	// Tagged directly, or through any of its split lines.
-	if (filter.tagId)
-		clauses.push(
-			sql`(exists (select 1 from transaction_tag tt
-			             where tt.transaction_id = ${transaction.id} and tt.tag_id = ${filter.tagId})
-			     or exists (select 1 from transaction_split s
-			                join transaction_split_tag st on st.split_id = s.id
-			                where s.transaction_id = ${transaction.id} and st.tag_id = ${filter.tagId}))`
-		);
 
 	// Own-account transfers are noise in a ledger view, as they are in cash
 	// flow, so they stay out unless explicitly asked for.
 	if (!filter.includeTransfers) clauses.push(isNull(transaction.transferPairId));
 
 	return clauses.length > 0 ? and(...clauses) : undefined;
+}
+
+/** The complete row predicate, including at least one selected effective line. */
+export function registerWhere(filter: RegisterFilter, rowFactor?: SQL): SQL {
+	return and(
+		registerTransactionWhere(filter, rowFactor),
+		sql`exists (${selectedEffectiveLines(filter)})`
+	) as SQL;
 }
 
 export interface RegisterRow {
@@ -124,8 +209,8 @@ export interface RegisterPage {
 }
 
 /** 10^(minor digits) per row, derived from the currencies actually present. */
-async function currencyRowFactor(): Promise<SQL> {
-	const rows = await db.selectDistinct({ currency: transaction.currency }).from(transaction);
+async function currencyRowFactor(handle: Queryable): Promise<SQL> {
+	const rows = await handle.selectDistinct({ currency: transaction.currency }).from(transaction);
 	if (rows.length === 0) return sql`100::bigint`;
 	const whens = rows.map(
 		(r) => sql`when ${r.currency} then ${(10 ** minorDigits(r.currency)).toString()}::bigint`
@@ -133,17 +218,22 @@ async function currencyRowFactor(): Promise<SQL> {
 	return sql`case ${transaction.currency} ${sql.join(whens, sql` `)} else 100::bigint end`;
 }
 
-export async function registerPage(filter: RegisterFilter): Promise<RegisterPage> {
+export async function registerPage(
+	filter: RegisterFilter,
+	handle: Queryable = db
+): Promise<RegisterPage> {
 	const needsScale = filter.minMinor !== null || filter.maxMinor !== null;
-	const where = registerWhere(filter, needsScale ? await currencyRowFactor() : undefined);
+	const rowFactor = needsScale ? await currencyRowFactor(handle) : undefined;
+	const transactionWhere = registerTransactionWhere(filter, rowFactor);
+	const where = registerWhere(filter, rowFactor);
+	const selectedLines = selectedEffectiveLines(filter);
 
-	const [rows, matching] = await Promise.all([
-		db
+	const [rows, aggregates] = await Promise.all([
+		handle
 			.select({
 				id: transaction.id,
 				bookedAt: transaction.bookedAt,
 				amount: transaction.amount,
-				feeMinor: transaction.feeMinor,
 				currency: transaction.currency,
 				counterparty: transaction.counterparty,
 				description: transaction.description,
@@ -161,32 +251,24 @@ export async function registerPage(filter: RegisterFilter): Promise<RegisterPage
 			.orderBy(desc(transaction.bookedAt), asc(transaction.id))
 			.limit(PAGE_SIZE)
 			.offset((filter.page - 1) * PAGE_SIZE),
-		// The whole filtered set, for the totals — a split transaction only
-		// contributes the lines the filter actually selected, so this cannot be
-		// a SQL sum over transaction.amount.
-		db
+		// Only one aggregate row per currency crosses the wire, regardless of
+		// ledger size. This replaces loading every matching transaction and split
+		// into Node merely to count and sum them.
+		handle
 			.select({
-				id: transaction.id,
-				amount: transaction.amount,
-				feeMinor: transaction.feeMinor,
-				categoryId: transaction.categoryId,
-				currency: transaction.currency
+				currency: transaction.currency,
+				count: sql<number>`count(distinct ${transaction.id})::integer`.mapWith(Number),
+				sumMinor: sql<bigint>`sum(selected_line.amount_minor)`.mapWith(transaction.amount)
 			})
 			.from(transaction)
-			.where(where)
+			.innerJoin(sql`lateral (${selectedLines}) selected_line`, sql`true`)
+			.where(transactionWhere)
+			.groupBy(transaction.currency)
 	]);
 
-	const splitsForTotals = await loadSplitsMatching(where);
-	const wanted = filter.categoryId === UNCATEGORISED ? null : (filter.categoryId ?? null);
-	const sumByCurrency = new Map<string, bigint>();
-	for (const m of matching) {
-		const value = matchingLineTotal(m, splitsForTotals.get(m.id) ?? [], wanted);
-		sumByCurrency.set(m.currency, (sumByCurrency.get(m.currency) ?? 0n) + value);
-	}
-
-	const total = matching.length;
-	const sums = [...sumByCurrency.entries()]
-		.map(([currency, sum]) => ({ currency, sum }))
+	const total = aggregates.reduce((sum, aggregate) => sum + aggregate.count, 0);
+	const totals = aggregates
+		.map((aggregate) => ({ currency: aggregate.currency, sumMinor: aggregate.sumMinor }))
 		.sort((a, b) => (a.currency < b.currency ? -1 : 1));
 
 	return {
@@ -205,7 +287,7 @@ export async function registerPage(filter: RegisterFilter): Promise<RegisterPage
 			isTransfer: r.transferPairId !== null
 		})),
 		total,
-		totals: sums.map((s) => ({ currency: s.currency, sumMinor: s.sum })),
+		totals,
 		pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE))
 	};
 }
@@ -217,51 +299,65 @@ export type FileResult = { ok: true } | { ok: false; status: number; message: st
  * correction made in the register carries the same weight as one made in the
  * review queue.
  */
-export async function fileTransaction(id: string, categoryId: string): Promise<FileResult> {
+export async function fileTransaction(
+	id: string,
+	categoryId: string,
+	handle: Db = db
+): Promise<FileResult> {
 	if (!id || !categoryId)
 		return { ok: false, status: 400, message: 'Missing transaction or category.' };
 
-	const rows = await db.select().from(transaction).where(eq(transaction.id, id));
-	const row = rows[0];
-	if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
+	return handle.transaction(async (tx) => {
+		// This workflow invokes pairing after filing. Acquire the pairing lock
+		// before the transaction row so every caller has the same lock order.
+		await lockTransferPairing(tx);
+		const rows = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');
+		const row = rows[0];
+		if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
 
-	// Score the rules that had an opinion about this row before anything is
-	// written. The matcher is re-run against the current rules rather than
-	// recorded on the transaction: both are to hand, and scoring the present
-	// rule set is more useful than scoring a historical one.
-	const [rules, threshold] = await Promise.all([loadRules(), autoThreshold()]);
-	const decision = decideWithRules(
-		{
-			counterparty: row.counterparty,
-			counterpartyAccount: row.counterpartyAccount,
-			variableSymbol: row.variableSymbol,
-			description: row.description,
-			amountMinor: row.amount
-		},
-		rules,
-		threshold
-	);
-	await applyScores(scoreChanges(decision.matched, categoryId));
+		// Score the rules that had an opinion about this row before anything is
+		// written. The lock prevents two corrections from scoring and teaching
+		// independently against the same stale transaction state.
+		const [rules, threshold] = await Promise.all([loadRules(tx), autoThreshold(tx)]);
+		const decision = decideWithRules(
+			{
+				counterparty: row.counterparty,
+				counterpartyAccount: row.counterpartyAccount,
+				variableSymbol: row.variableSymbol,
+				description: row.description,
+				amountMinor: row.amount,
+				currency: row.currency
+			},
+			rules,
+			threshold
+		);
+		await applyScores(scoreChanges(decision.matched, categoryId), tx);
 
-	await db
-		.update(transaction)
-		.set({
+		await tx
+			.update(transaction)
+			.set({
+				categoryId,
+				suggestedCategoryId: null,
+				reviewState: 'confirmed',
+				reviewReason: null
+			})
+			.where(eq(transaction.id, id));
+
+		await learnRule(
+			{
+				counterparty: row.counterparty,
+				counterpartyAccount: row.counterpartyAccount,
+				variableSymbol: row.variableSymbol,
+				amountMinor: row.amount,
+				currency: row.currency
+			},
 			categoryId,
-			suggestedCategoryId: null,
-			reviewState: 'confirmed',
-			reviewReason: null
-		})
-		.where(eq(transaction.id, id));
-
-	await learnRule(
-		{
-			counterparty: row.counterparty,
-			counterpartyAccount: row.counterpartyAccount,
-			variableSymbol: row.variableSymbol,
-			amountMinor: row.amount
-		},
-		categoryId
-	);
-	await pairAndCategorise();
-	return { ok: true };
+			tx
+		);
+		// Only the filed row changed, so the pass has nothing to learn outside its
+		// own neighbourhood — and reading the whole unpaired ledger under row
+		// locks made one click of "File" wait on it.
+		await pairAndCategorise(tx, pairingWindowAround([row.bookedAt]));
+		return { ok: true };
+	});
 }

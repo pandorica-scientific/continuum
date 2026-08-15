@@ -2,21 +2,31 @@ import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { db } from '$lib/server/db';
-import { credential } from '$lib/server/db/schema';
+import { credential, person } from '$lib/server/db/schema';
 import { storeChallenge } from '$lib/server/auth/webauthn/challenge';
 import { getHouseholdName } from '$lib/server/settings';
 import { currentOrigin, passkeysAvailable, relyingPartyId } from '$lib/server/auth/webauthn/origin';
+import { reserveChallengeIssuance } from '$lib/server/auth/ratelimit';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ locals, cookies }) => {
+export const POST: RequestHandler = async ({ locals, cookies, getClientAddress }) => {
 	if (!locals.person) error(401, 'Sign in first.');
 	if (!passkeysAvailable()) error(400, 'Passkeys need an HTTPS address.');
+	const address = getClientAddress();
+	const wait = reserveChallengeIssuance(address);
+	if (wait > 0) error(429, 'Too many passkey requests — try again later.');
 
 	const existing = await db
 		.select({ id: credential.id, transports: credential.transports })
 		.from(credential)
 		.where(eq(credential.personId, locals.person.id));
+	const generationRows = await db
+		.select({ authGeneration: person.authGeneration })
+		.from(person)
+		.where(eq(person.id, locals.person.id));
+	const authGeneration = generationRows[0]?.authGeneration;
+	if (authGeneration === undefined) error(401, 'Sign in first.');
 
 	const options = await generateRegistrationOptions({
 		rpName: await getHouseholdName(),
@@ -40,6 +50,11 @@ export const POST: RequestHandler = async ({ locals, cookies }) => {
 		}))
 	});
 
-	await storeChallenge(cookies, options.challenge);
+	await storeChallenge(cookies, options.challenge, {
+		address,
+		personId: locals.person.id,
+		authGeneration,
+		authSnapshot: { [locals.person.id]: authGeneration }
+	});
 	return json(options);
 };

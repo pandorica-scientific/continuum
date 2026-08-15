@@ -1,24 +1,26 @@
 <script lang="ts">
 	import BrandMark from '$lib/components/BrandMark.svelte';
-	import { MODULE_KEYS } from '$lib/modules/registry';
+	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
 	import { passwordHint } from '$lib/password-policy';
 
 	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
 
-	const moduleLabels: Record<string, string> = {
-		import: 'Import — statement upload and review',
-		property: 'Property',
-		investments: 'Investments',
-		loans: 'Loans',
-		retirement: 'Retirement',
-		home: 'Home Assistant',
-		calendar: 'Calendar',
-		documents: 'Documents'
-	};
+	// What survived a rejected submission. Passwords are never sent back, so those
+	// boxes start empty and have to be retyped — everything else is restored.
+	const entered = $derived(form?.entered);
+	const enteredPeople = $derived(entered?.people ?? []);
+	const selectedCurrency = $derived(
+		entered && data.currencies.includes(entered.baseCurrency)
+			? entered.baseCurrency
+			: data.currencies[0]
+	);
 
-	let peopleCount = $state(2);
+	// Rows the wizard shows: what came back, never fewer than two, plus any the
+	// person added by hand.
+	let extraRows = $state(0);
+	const peopleCount = $derived(Math.max(enteredPeople.length, 2) + extraRows);
 </script>
 
 <svelte:head><title>Set up Continuum</title></svelte:head>
@@ -41,14 +43,18 @@
 	<form method="POST" class="card form">
 		<label class="field">
 			<span>Household name</span>
-			<input name="householdName" placeholder="e.g. Robert & Tereza" />
+			<input
+				name="householdName"
+				placeholder="e.g. Robert & Tereza"
+				value={entered?.householdName ?? ''}
+			/>
 		</label>
 
 		<label class="field">
 			<span>Base currency — totals convert to this; balances keep their own currency</span>
 			<select name="baseCurrency">
 				{#each data.currencies as c (c)}
-					<option value={c}>{currencyLabel(c)}</option>
+					<option value={c} selected={c === selectedCurrency}>{currencyLabel(c)}</option>
 				{/each}
 			</select>
 		</label>
@@ -57,8 +63,18 @@
 			<legend class="eyebrow">People</legend>
 			{#each { length: peopleCount }, i (i)}
 				<div class="person-row">
-					<input name="personName" placeholder="Name" required={i === 0} />
-					<input name="personBirthYear" placeholder="Birth year" inputmode="numeric" />
+					<input
+						name="personName"
+						placeholder="Name"
+						required={i === 0}
+						value={enteredPeople[i]?.name ?? ''}
+					/>
+					<input
+						name="personBirthYear"
+						placeholder="Birth year"
+						inputmode="numeric"
+						value={enteredPeople[i]?.birthYear ?? ''}
+					/>
 					<input
 						name="personPassword"
 						type="password"
@@ -66,15 +82,16 @@
 					/>
 				</div>
 			{/each}
-			<button type="button" class="btn" onclick={() => (peopleCount += 1)}>➕ Add a person</button>
+			<button type="button" class="btn" onclick={() => (extraRows += 1)}>➕ Add a person</button>
 		</fieldset>
 
 		<fieldset>
 			<legend class="eyebrow">Modules — switch off what you do not have</legend>
 			{#each MODULE_KEYS as key (key)}
+				{@const m = MODULES[key]}
 				<label class="toggle">
-					<input type="checkbox" name={`module_${key}`} checked />
-					<span>{moduleLabels[key]}</span>
+					<input type="checkbox" name={`module_${key}`} checked={entered?.modules[key] ?? true} />
+					<span>{m.emoji} {m.label} <span class="note">— {m.note}</span></span>
 				</label>
 			{/each}
 		</fieldset>
@@ -165,6 +182,9 @@
 		gap: 10px;
 		font-size: 13.5px;
 		color: var(--fg2);
+	}
+	.note {
+		color: var(--fg3);
 	}
 	@media (max-width: 560px) {
 		.person-row {

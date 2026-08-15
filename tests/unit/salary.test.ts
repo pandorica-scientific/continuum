@@ -3,9 +3,17 @@ import {
 	detectPeriod,
 	extractCandidates,
 	parsePrintedAmount,
+	payslipEditCurrency,
 	pickAmount,
 	salaryStats
 } from '$lib/salary';
+
+describe('payslipEditCurrency', () => {
+	it('retains the stored currency after the household base changes', () => {
+		expect(payslipEditCurrency('EUR', 'CZK')).toBe('EUR');
+		expect(payslipEditCurrency(null, 'CZK')).toBe('CZK');
+	});
+});
 
 describe('parsePrintedAmount', () => {
 	it('reads Czech and English printed amounts', () => {

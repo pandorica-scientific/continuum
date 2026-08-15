@@ -1,0 +1,2425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&amp;family=Source+Code+Pro:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e1117; --bg2: #11161f; --side: #0a0d13;
+    --card: rgba(255,255,255,0.03); --card2: rgba(255,255,255,0.06); --card3: rgba(255,255,255,0.09);
+    --bd: rgba(255,255,255,0.08); --bd2: rgba(255,255,255,0.18);
+    --fg1: #e6e9ef; --fg2: #c5ccd6; --fg3: #8a96a6;
+    --green: #2ecc71; --red: #e74c3c; --yellow: #f1c40f; --blue: #3498db;
+    --purple: #9b59b6; --orange: #e67e22; --teal: #1abc9c;
+    --tint: rgba(52,152,219,0.18);
+    --fg-inverse: #0e1117;
+    --plate: rgba(14,17,23,0.86);
+    --green-tint: rgba(46,204,113,0.18); --yellow-tint: rgba(241,196,15,0.18);
+    --red-tint: rgba(231,76,60,0.18); --blue-tint: rgba(52,152,219,0.18);
+    --teal-tint: rgba(26,188,156,0.18); --purple-tint: rgba(155,89,182,0.18);
+    --grey-tint: rgba(138,150,166,0.16);
+    --brand: #4a86c8;
+  }
+  html[data-ledger-theme="light"] {
+    --bg: #edeae3; --bg2: #e6e2d9; --side: #e9e5dd;
+    --card: #f6f4ef; --card2: #eeebe3; --card3: #e2ddd2;
+    --bd: rgba(58,50,38,0.13); --bd2: rgba(58,50,38,0.26);
+    --fg1: #23201b; --fg2: #4b463d; --fg3: #7d766a;
+    --green: #12945a; --red: #cf3b2c; --yellow: #a8800a; --blue: #2478b5;
+    --purple: #7c4795; --orange: #bd6317; --teal: #0f8a72;
+    --tint: rgba(36,120,181,0.12);
+    --fg-inverse: #ffffff;
+    --plate: rgba(237,234,227,0.9);
+    --green-tint: rgba(18,148,90,0.12); --yellow-tint: rgba(168,128,10,0.14);
+    --red-tint: rgba(207,59,44,0.12); --blue-tint: rgba(36,120,181,0.12);
+    --teal-tint: rgba(15,138,114,0.12); --purple-tint: rgba(124,71,149,0.12);
+    --grey-tint: rgba(109,120,135,0.12);
+    --brand: #1b4f8a;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background-attachment: fixed;
+    color: var(--fg1);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  * { box-sizing: border-box; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  input, select, button, textarea { font-family: inherit; }
+  input::placeholder { color: var(--fg3); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+<script src="./image-slot.js"></script>
+</helmet>
+
+<div style="display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; align-items: stretch;">
+
+  <aside style="background: var(--side); border-right: 1px solid var(--bd); padding: 20px 14px 22px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; height: 100vh; overflow-y: auto;">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 0 8px;">
+      <svg viewBox="0 0 56 56" style="width: 22px; height: 22px; flex: 0 0 22px; display: block; color: var(--brand);" aria-hidden="true">
+        <g fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">
+          <path d="M18 18 A10 10 0 0 1 18 38"></path>
+          <path d="M18 10 A18 18 0 0 1 18 46" opacity="0.62"></path>
+          <path d="M18 3 A25 25 0 0 1 18 53" opacity="0.34"></path>
+        </g>
+        <circle cx="18" cy="28" r="3.6" fill="currentColor"></circle>
+      </svg>
+      <span style="font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em;">{{ appName }}</span>
+    </div>
+
+    <div style="padding: 10px 12px; border: 1px solid var(--bd); border-radius: 10px; background: var(--card); display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3);">Net worth</span>
+      <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; letter-spacing: -0.01em;">10 575 900<span style="font-size: 12px; color: var(--fg3); margin-left: 5px;">Kč</span></span>
+      <span style="font-size: 11.5px; color: var(--green);">+184 300 this month</span>
+    </div>
+
+    <nav style="display: flex; flex-direction: column; gap: 2px;">
+      <sc-for list="{{ navAreas }}" as="a" hint-placeholder-count="7">
+        <button onClick="{{ a.go }}" style="display: grid; grid-template-columns: 19px minmax(0, 1fr) auto; align-items: center; gap: 11px; width: 100%; text-align: left; border: 0; cursor: pointer; padding: 9px 10px; border-radius: 8px; background: {{ a.bg }}; color: {{ a.fg }}; font-weight: {{ a.fw }}; font-family: inherit; font-size: 13.5px;" style-hover="background: var(--card2);">
+          <svg viewBox="0 0 24 24" style="width: 19px; height: 19px; flex: 0 0 19px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ a.paths }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg>
+          <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.label }}</span>
+          <span style="font-family: 'Source Code Pro', monospace; font-size: 10.5px; color: var(--fg-inverse, #0e1117); background: {{ a.badgeBg }}; border-radius: 20px; padding: 1px 6px;">{{ a.badge }}</span>
+        </button>
+      </sc-for>
+    </nav>
+
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--bd); padding-top: 14px;">
+      <div style="display: flex; gap: 6px;">
+        <sc-for list="{{ themeOptions }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style="flex: 1 1 0; border: 1px solid {{ t.bd }}; background: {{ t.bg }}; color: {{ t.fg }}; border-radius: 8px; padding: 7px 4px; font-family: inherit; font-size: 12px; cursor: pointer;">{{ t.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 4px;">
+        <span style="width: 24px; height: 24px; border-radius: 24px; background: var(--card3); display: grid; place-items: center; font-size: 11px;">R</span>
+        <span style="font-size: 12.5px; color: var(--fg2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ personOne }} &amp; {{ personTwo }}</span>
+      </div>
+    </div>
+  </aside>
+
+  <main style="padding: 26px 32px 60px; display: flex; flex-direction: column; gap: 26px; min-width: 0;">
+
+    <button onClick="{{ goImport }}" title="Import a statement" style="position: fixed; right: 26px; bottom: 26px; z-index: 30; width: 52px; height: 52px; border-radius: 52px; border: 1px solid var(--bd2); background: var(--brand); color: #fff; display: grid; place-items: center; cursor: pointer; font-family: inherit;" style-hover="opacity: 0.9;">
+      <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><path d="M12,5v14"></path><path d="M5,12h14"></path></svg>
+    </button>
+
+
+    <header style="display: flex; flex-direction: column; gap: 15px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; display: flex; align-items: center; gap: 12px;"><svg viewBox="0 0 24 24" style="width: 26px; height: 26px; flex: 0 0 26px; display: block; color: var(--brand);" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ screenPaths }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg><span>{{ screenTitle }}</span></h1>
+          <span style="font-size: 13.6px; color: var(--fg3);">{{ screenCaption }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-size: 12px; color: var(--fg3); border: 1px solid var(--bd); border-radius: 8px; padding: 7px 11px; background: var(--card); white-space: nowrap;">synced {{ syncedAt }}</span>
+          <button onClick="{{ goImport }}" style="display: flex; align-items: center; gap: 8px; border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);"><svg viewBox="0 0 24 24" style="width: 16px; height: 16px; flex: 0 0 16px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ iconImport }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg><span>Import statement</span></button>
+        </div>
+      </div>
+      <sc-if value="{{ hasSubTabs }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--bd); padding-bottom: 9px;">
+          <sc-for list="{{ subTabs }}" as="t" hint-placeholder-count="3">
+            <button onClick="{{ t.go }}" style="border: 0; background: {{ t.bg }}; color: {{ t.fg }}; font-weight: {{ t.fw }}; border-radius: 8px; padding: 7px 14px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">{{ t.label }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </header>
+
+    <!-- ═══════════════ OVERVIEW ═══════════════ -->
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <section style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Your overview</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <sc-if value="{{ customising }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ resetLayout }}" style="border: 1px solid var(--bd); background: var(--card); color: var(--fg2); border-radius: 8px; padding: 6px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Reset to default</button>
+            </sc-if>
+            <button onClick="{{ toggleCustomise }}" style="border: 1px solid var(--bd); background: var(--card); color: var(--fg2); border-radius: 8px; padding: 6px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">{{ customiseLabel }}</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ customising }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px dashed var(--bd2); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Add a panel</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <sc-for list="{{ addable }}" as="a" hint-placeholder-count="4">
+                <button onClick="{{ a.go }}" style="border: 1px solid var(--bd); background: var(--card); color: var(--fg2); border-radius: 20px; padding: 6px 14px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--brand); color: var(--fg1);">+ {{ a.label }}</button>
+              </sc-for>
+            </div>
+            <span style="font-size: 12px; color: var(--fg3); line-height: 1.5;">Drag a panel by its body to put it anywhere on the twelve-column grid — anything it lands on moves down out of the way. Pull the corner handle to reshape it, sideways for width and down for height. ✕ takes it off. The layout is yours, saved on this machine.</span>
+          </div>
+        </sc-if>
+
+        <div ref="{{ gridRef }}" style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 40px; gap: 16px; align-items: stretch;">
+          <sc-for list="{{ widgets }}" as="w" hint-placeholder-count="4">
+            <div onPointerDown="{{ w.startMove }}" style="position: relative; grid-column: {{ w.gc }}; grid-row: {{ w.gr }}; z-index: {{ w.z }}; cursor: {{ w.cursor }}; overflow-x: hidden; overflow-y: auto; background: var(--card); border: 1px solid {{ w.bd }}; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 12px; min-height: 22px; min-width: 0;">
+                <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ w.label }}</span>
+                <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}">
+                  <span style="margin-left: auto; display: flex; align-items: center; gap: 5px;">
+                    <sc-if value="{{ w.showSize }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--brand); border: 1px solid var(--brand); border-radius: 12px; padding: 1px 9px;">{{ w.sizeLabel }}</span>
+                    </sc-if>
+                    <button onClick="{{ w.remove }}" style="border: 1px solid var(--bd); background: var(--card2); color: var(--fg2); border-radius: 6px; width: 22px; height: 22px; display: grid; place-items: center; font-family: inherit; font-size: 13px; line-height: 1; cursor: pointer; padding: 0;" style-hover="border-color: var(--red); color: var(--red);">✕</button>
+                  </span>
+                </sc-if>
+              </div>
+                <sc-if value="{{ w.isBriefing }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
+                    <sc-for list="{{ briefing }}" as="b" hint-placeholder-count="4">
+                      <button onClick="{{ b.go }}" style="text-align: left; display: flex; flex-direction: column; gap: 7px; background: var(--card2); border: 1px solid var(--bd); border-radius: 9px; padding: 13px 15px; cursor: pointer; color: var(--fg1); font-family: inherit;" style-hover="border-color: var(--bd2);">
+                        <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg3);">
+                          <span>{{ b.kind }}</span>
+                          <span style="margin-left: auto; font-family: 'Source Code Pro', monospace; font-size: 11.5px; font-weight: 600; color: {{ b.color }}; background: {{ b.tint }}; border: 1px solid {{ b.color }}; border-radius: 12px; padding: 2px 10px; line-height: 1.2; white-space: nowrap;">{{ b.when }}</span>
+                        </span>
+                        <span style="font-size: 14px; font-weight: 500; line-height: 1.35;">{{ b.title }}</span>
+                        <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.5;">{{ b.detail }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isFlow }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <div style="display: flex; gap: 14px 28px; flex-wrap: wrap; align-items: baseline;">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3);">In</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 20px; font-weight: 600; white-space: nowrap; color: var(--green);">{{ flow.totalIn }}<span style="font-size: 12px; color: var(--fg3); margin-left: 5px;">Kč</span></span>
+                      </div>
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3);">Out</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 20px; font-weight: 600; white-space: nowrap;">{{ flow.totalOut }}</span>
+                      </div>
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3);">Kept</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 20px; font-weight: 600; white-space: nowrap; color: var(--green);">{{ flow.kept }}</span>
+                      </div>
+                      <div style="margin-left: auto; display: flex; gap: 6px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card2);">
+                        <sc-for list="{{ flow.periods }}" as="p" hint-placeholder-count="2">
+                          <button onClick="{{ p.go }}" style="border: 0; background: {{ p.bg }}; color: {{ p.fg }}; border-radius: 6px; padding: 6px 13px; font-family: inherit; font-size: 12.5px; cursor: pointer;">{{ p.label }}</button>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div ref="{{ flowRefA }}" style="position: relative; width: 100%; height: {{ flowBoxA }}; overflow: hidden;">
+                      <div style="position: absolute; top: 0; left: 0; width: 880px; height: 592px; transform: {{ flowTransA }}; transform-origin: top left;">
+                        <svg viewBox="0 0 1240 860" preserveAspectRatio="none" style="width: 100%; height: 100%; display: block;">
+                          <sc-for list="{{ flow.paths }}" as="p" hint-placeholder-count="24">
+                            <path d="{{ p.d }}" fill="{{ p.color }}" fillOpacity="{{ p.o }}"></path>
+                          </sc-for>
+                          <sc-for list="{{ flow.nodes }}" as="n" hint-placeholder-count="22">
+                            <rect x="{{ n.x }}" y="{{ n.y }}" width="11" height="{{ n.h }}" rx="2" fill="{{ n.color }}"></rect>
+                          </sc-for>
+                        </svg>
+                        <sc-for list="{{ flow.labels }}" as="l" hint-placeholder-count="22">
+                          <div style="position: absolute; left: {{ l.left }}; right: {{ l.right }}; top: {{ l.top }}; transform: translateY(-50%); text-align: {{ l.align }}; display: flex; flex-direction: {{ l.dir }}; align-items: {{ l.items }}; gap: {{ l.gap }}; pointer-events: none;">
+                            <span style="font-size: 12.5px; font-weight: 500; color: var(--fg1); white-space: nowrap; text-shadow: 0 0 8px var(--bg), 0 0 8px var(--bg), 0 0 4px var(--bg), 0 0 2px var(--bg);">{{ l.name }}</span>
+                            <span style="font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg2); white-space: nowrap; text-shadow: 0 0 8px var(--bg), 0 0 8px var(--bg), 0 0 4px var(--bg), 0 0 2px var(--bg);">{{ l.amount }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(174px, 1fr)); gap: 16px 22px; border-top: 1px solid var(--bd); padding-top: 15px;">
+                      <sc-for list="{{ flow.breakdown }}" as="g" hint-placeholder-count="6">
+                        <div style="display: flex; flex-direction: column; gap: 7px;">
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 9px; height: 9px; border-radius: 3px; background: {{ g.color }}; flex: 0 0 auto;"></span>
+                            <span style="font-size: 12.5px; font-weight: 500; color: var(--fg1);">{{ g.label }}</span>
+                            <span style="font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3); margin-left: auto;">{{ g.pct }}</span>
+                          </div>
+                          <sc-for list="{{ g.leaves }}" as="l" hint-placeholder-count="3">
+                            <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12px; color: var(--fg3);">
+                              <span>{{ l.name }}</span>
+                              <span style="font-family: 'Source Code Pro', monospace; white-space: nowrap;">{{ l.value }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isComposition }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <sc-for list="{{ composition }}" as="c" hint-placeholder-count="4">
+                      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px;">
+                        <span style="font-size: 13.5px; color: var(--fg2);">{{ c.label }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px; text-align: right; color: {{ c.color }};">{{ c.value }}</span>
+                        <div style="grid-column: 1 / -1; height: 6px; background: var(--card3); border-radius: 4px; overflow: hidden;">
+                          <div style="height: 100%; width: {{ c.width }}; background: {{ c.color }}; border-radius: 4px;"></div>
+                        </div>
+                        <span style="grid-column: 1 / -1; font-size: 11.5px; color: var(--fg3);">{{ c.detail }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isUpcoming }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column;">
+                    <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="6">
+                      <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--bd);">
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ u.date }}</span>
+                        <span style="font-size: 13.5px; color: var(--fg2);">{{ u.label }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; color: {{ u.color }};">{{ u.amount }}</span>
+                      </div>
+                    </sc-for>
+                    <button onClick="{{ goCalendar }}" style="align-self: flex-start; margin-top: 10px; border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12.5px; cursor: pointer; padding: 0;">Open calendar →</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isNetworth }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                      <span style="font-family: 'Source Code Pro', monospace; font-size: 22px; font-weight: 600;">10 575 900<span style="font-size: 12px; color: var(--fg3); margin-left: 5px;">Kč</span></span>
+                      <span style="font-size: 12.5px; color: var(--green);">+184 300 this month</span>
+                    </div>
+                    <svg viewBox="0 0 540 100" preserveAspectRatio="none" style="width: 100%; height: 92px; display: block;">
+                      <polygon points="{{ nwArea }}" fill="var(--teal)" fillOpacity="0.14"></polygon>
+                      <polyline points="{{ nwPoints }}" fill="none" stroke="var(--teal)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round"></polyline>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--fg3);">
+                      <span>2019</span><span>2026</span>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isAccounts }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 11px;">
+                    <sc-for list="{{ cashPanel }}" as="cs" hint-placeholder-count="5">
+                      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: baseline;">
+                        <span style="font-size: 13px; color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ cs.label }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3);">{{ cs.pct }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; text-align: right;">{{ cs.value }}</span>
+                        <div style="grid-column: 1 / -1; height: 5px; background: var(--card3); border-radius: 4px; overflow: hidden;">
+                          <div style="height: 100%; width: {{ cs.width }}; background: {{ cs.color }}; border-radius: 4px;"></div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isEquity }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <sc-for list="{{ equityRows }}" as="e" hint-placeholder-count="2">
+                      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px;">
+                        <span style="font-size: 13.5px; color: var(--fg2);">{{ e.label }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px; text-align: right;">{{ e.value }}</span>
+                        <div style="grid-column: 1 / -1; height: 6px; background: var(--red-tint, var(--card3)); border-radius: 4px; overflow: hidden;">
+                          <div style="height: 100%; width: {{ e.width }}; background: var(--green); border-radius: 4px;"></div>
+                        </div>
+                        <span style="grid-column: 1 / -1; font-size: 11.5px; color: var(--fg3);">{{ e.owed }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isEnergy }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                      <span style="font-family: 'Source Code Pro', monospace; font-size: 22px; font-weight: 600;">312<span style="font-size: 12px; color: var(--fg3); margin-left: 5px;">kWh</span></span>
+                      <span style="font-size: 12.5px; color: var(--fg3);">≈ 2 180 Kč, into Karlín's bills</span>
+                    </div>
+                    <div style="display: flex; align-items: flex-end; gap: 4px; height: 78px;">
+                      <sc-for list="{{ energyBars }}" as="b" hint-placeholder-count="14">
+                        <div style="flex: 1 1 0; height: {{ b.h }}; background: {{ b.color }}; border-radius: 2px; min-width: 0;"></div>
+                      </sc-for>
+                    </div>
+                    <span style="font-size: 11.5px; color: var(--fg3);">last 14 days · orange is above your daily average</span>
+                  </div>
+                </sc-if>
+              <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}">
+                <span draggable="false" onPointerDown="{{ w.startResize }}" title="Drag to reshape" style="position: absolute; right: 2px; bottom: 2px; width: 20px; height: 20px; cursor: nwse-resize; display: grid; place-items: center; color: var(--fg3); touch-action: none;" style-hover="color: var(--brand);">
+                  <svg viewBox="0 0 12 12" style="width: 11px; height: 11px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><path d="M11,4 4,11"></path><path d="M11,8.5 8.5,11"></path></svg>
+                </span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ CASH FLOW ═══════════════ -->
+    <sc-if value="{{ isCashflow }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 6px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card);">
+            <sc-for list="{{ flow.periods }}" as="p" hint-placeholder-count="2">
+              <button onClick="{{ p.go }}" style="border: 0; background: {{ p.bg }}; color: {{ p.fg }}; border-radius: 6px; padding: 7px 15px; font-family: inherit; font-size: 13px; cursor: pointer;">{{ p.label }}</button>
+            </sc-for>
+          </div>
+          <span style="font-size: 13.6px; color: var(--fg3);">{{ flow.caption }} · click a period to redraw</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+          <sc-for list="{{ flow.metrics }}" as="m" hint-placeholder-count="4">
+            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
+              <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 18px 20px 20px;">
+          <div ref="{{ flowRefB }}" style="position: relative; width: 100%; height: {{ flowBoxB }}; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; width: 880px; height: 592px; transform: {{ flowTransB }}; transform-origin: top left;">
+            <svg viewBox="0 0 1240 860" preserveAspectRatio="none" style="width: 100%; height: 100%; display: block;">
+              <sc-for list="{{ flow.paths }}" as="p" hint-placeholder-count="24">
+                <path d="{{ p.d }}" fill="{{ p.color }}" fillOpacity="{{ p.o }}"></path>
+              </sc-for>
+              <sc-for list="{{ flow.nodes }}" as="n" hint-placeholder-count="22">
+                <rect x="{{ n.x }}" y="{{ n.y }}" width="11" height="{{ n.h }}" rx="2" fill="{{ n.color }}"></rect>
+              </sc-for>
+            </svg>
+            <sc-for list="{{ flow.labels }}" as="l" hint-placeholder-count="22">
+              <div style="position: absolute; left: {{ l.left }}; right: {{ l.right }}; top: {{ l.top }}; transform: translateY(-50%); text-align: {{ l.align }}; display: flex; flex-direction: {{ l.dir }}; align-items: {{ l.items }}; gap: {{ l.gap }}; pointer-events: none;">
+                <span style="font-size: 12.5px; font-weight: 500; color: var(--fg1); white-space: nowrap; text-shadow: 0 0 8px var(--bg), 0 0 8px var(--bg), 0 0 4px var(--bg), 0 0 2px var(--bg);">{{ l.name }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg2); white-space: nowrap; text-shadow: 0 0 8px var(--bg), 0 0 8px var(--bg), 0 0 4px var(--bg), 0 0 2px var(--bg);">{{ l.amount }}</span>
+              </div>
+            </sc-for>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(174px, 1fr)); gap: 16px 22px; border-top: 1px solid var(--bd); padding-top: 15px; margin-top: 4px;">
+            <sc-for list="{{ flow.breakdown }}" as="g" hint-placeholder-count="6">
+              <div style="display: flex; flex-direction: column; gap: 7px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 9px; height: 9px; border-radius: 3px; background: {{ g.color }}; flex: 0 0 auto;"></span>
+                  <span style="font-size: 12.5px; font-weight: 500; color: var(--fg1);">{{ g.label }}</span>
+                  <span style="font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3); margin-left: auto;">{{ g.pct }}</span>
+                </div>
+                <sc-for list="{{ g.leaves }}" as="l" hint-placeholder-count="3">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12px; color: var(--fg3);">
+                    <span>{{ l.name }}</span>
+                    <span style="font-family: 'Source Code Pro', monospace; white-space: nowrap;">{{ l.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">📊</span>Every month on record</span>
+            <span style="font-size: 12px; color: var(--fg3);">{{ history.range }} · {{ history.rate }}% saved on average</span>
+          </div>
+          <div style="display: flex; align-items: flex-end; gap: 2px; height: 168px;">
+            <sc-for list="{{ history.months }}" as="m" hint-placeholder-count="91">
+              <div style="flex: 1 1 0; display: flex; align-items: flex-end; justify-content: center; gap: 1px; height: 100%; min-width: 0;" title="{{ m.tip }}">
+                <div style="flex: 1 1 0; height: {{ m.inH }}; background: var(--green); opacity: 0.85; border-radius: 2px 2px 0 0;"></div>
+                <div style="flex: 1 1 0; height: {{ m.outH }}; background: var(--red); opacity: 0.8; border-radius: 2px 2px 0 0;"></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">
+            <sc-for list="{{ history.years }}" as="y" hint-placeholder-count="8">
+              <span>{{ y }}</span>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 18px; font-size: 12.5px; color: var(--fg2); border-top: 1px solid var(--bd); padding-top: 11px;">
+            <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--green);"></span>earned</span>
+            <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--red);"></span>spent</span>
+            <span style="margin-left: auto; color: var(--fg3);">{{ history.negative }}</span>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ ACCOUNTS ═══════════════ -->
+    <sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ false }}">
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 10px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🏦</span>Accounts</span>
+            <span style="font-size: 12px; color: var(--fg3);">native currency · {{ cashTotalCzk }} Kč in total</span>
+          </div>
+          <sc-for list="{{ accounts }}" as="a" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--bd);">
+              <span style="font-size: 15px;">{{ a.emoji }}</span>
+              <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+                <span style="font-size: 13.5px;">{{ a.name }}</span>
+                <span style="font-size: 11.5px; color: var(--fg3);">{{ a.meta }}</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 1px; text-align: right;">
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 14.5px;">{{ a.balance }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">{{ a.czk }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 16px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🥧</span>Where the cash sits</span>
+          <div style="display: flex; align-items: center; gap: 22px; flex-wrap: wrap;">
+            <div style="width: 148px; height: 148px; border-radius: 148px; flex: 0 0 148px; background: conic-gradient(var(--blue) 0 67.3%, var(--teal) 67.3% 83.4%, var(--purple) 83.4% 93.4%, var(--orange) 93.4% 97.6%, var(--yellow) 97.6% 100%); display: grid; place-items: center;">
+              <div style="width: 88px; height: 88px; border-radius: 88px; background: var(--bg2); display: grid; place-items: center; flex-direction: column;">
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px;">921 400</span>
+              </div>
+            </div>
+            <div style="flex: 1 1 190px; display: flex; flex-direction: column; gap: 8px;">
+              <sc-for list="{{ cashSplit }}" as="s" hint-placeholder-count="5">
+                <div style="display: grid; grid-template-columns: 11px minmax(0, 1fr) auto; gap: 9px; align-items: center; font-size: 12.5px;">
+                  <span style="width: 9px; height: 9px; border-radius: 3px; background: {{ s.color }};"></span>
+                  <span style="color: var(--fg2);">{{ s.label }}</span>
+                  <span style="font-family: 'Source Code Pro', monospace; color: var(--fg3);">{{ s.pct }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.55; border-top: 1px solid var(--bd); padding-top: 12px;">Two thirds sits in one savings account. Fine for the buffer, but it is also the account the monthly sweep never leaves.</span>
+        </div>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🔁</span>Transfers between your own accounts</span>
+          <span style="font-size: 12px; color: var(--fg3);">matched automatically · never counted as income or expense</span>
+        </div>
+        <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 9px 0; border-top: 1px solid var(--bd); font-size: 13.5px;">
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ t.date }}</span>
+            <span style="color: var(--fg2);">{{ t.route }}</span>
+            <span style="font-family: 'Source Code Pro', monospace;">{{ t.amount }}</span>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ IMPORT ═══════════════ -->
+    <sc-if value="{{ isImport }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="border: 1.5px dashed var(--bd2); border-radius: 12px; padding: 34px 24px; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; background: var(--card);">
+          <span style="font-size: 24px;">📥</span>
+          <span style="font-size: 15px; font-weight: 500;">Drop statements here</span>
+          <span style="font-size: 13px; color: var(--fg3); max-width: 52ch; line-height: 1.55;">CSV, XML, OFX, ABO or PDF, any of the five banks. The layout is detected, transfers between your own accounts are paired and dropped, and categories come from what you corrected last time.</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+          <sc-for list="{{ importStats }}" as="s" hint-placeholder-count="4">
+            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 12px; color: var(--fg3);">{{ s.label }}</span>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ s.color }};">{{ s.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">❓</span>Needs a decision</span>
+            <span style="font-size: 12px; color: var(--fg3);">everything else was filed without asking</span>
+          </div>
+          <sc-for list="{{ review }}" as="r" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 62px minmax(0, 1fr) 100px auto; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--bd);">
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ r.date }}</span>
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">{{ r.merchant }}</span>
+                <span style="font-size: 11.5px; color: var(--fg3);">{{ r.reason }}</span>
+              </div>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px; text-align: right;">{{ r.amount }}</span>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+                <sc-for list="{{ r.options }}" as="o" hint-placeholder-count="2">
+                  <button onClick="{{ o.go }}" style="border: 1px solid {{ o.bd }}; background: {{ o.bg }}; color: {{ o.fg }}; border-radius: 8px; padding: 6px 11px; font-family: inherit; font-size: 12px; cursor: pointer;" style-hover="border-color: var(--bd2);">{{ o.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ PROPERTY ═══════════════ -->
+    <sc-if value="{{ isProperty }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <sc-for list="{{ propTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style="display: flex; align-items: center; gap: 9px; border: 1px solid {{ t.bd }}; background: {{ t.bg }}; color: {{ t.fg }}; border-radius: 10px; padding: 10px 15px; font-family: inherit; font-size: 13.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">
+            <span>{{ t.emoji }}</span><span>{{ t.label }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3);">{{ t.tag }}</span>
+          </button>
+        </sc-for>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🏢</span>This flat</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">valued and reconciled to 31 July</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
+        <sc-for list="{{ prop.metrics }}" as="m" hint-placeholder-count="5">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 18px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
+            <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
+          </div>
+        </sc-for>
+        </div>
+      </section>
+
+      <section style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: start;">
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">📐</span>Floor plan</span>
+            <span style="font-size: 12px; color: var(--fg3);">{{ prop.size }}</span>
+          </div>
+          <div style="height: 300px; border-radius: 10px; overflow: hidden; border: 1px solid var(--bd);">
+            <image-slot id="{{ prop.planSlot }}" shape="rect" fit="contain" placeholder="Drop the floor plan"></image-slot>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <sc-for list="{{ prop.photoSlots }}" as="s" hint-placeholder-count="3">
+              <div style="height: 144px; border-radius: 8px; overflow: hidden; border: 1px solid var(--bd);">
+                <image-slot id="{{ s.id }}" shape="rect" placeholder="{{ s.label }}"></image-slot>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <sc-if value="{{ prop.rented }}" hint-placeholder-val="{{ false }}">
+            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🔑</span>Tenancy</span>
+                <span style="font-size: 11.5px; font-weight: 600; color: {{ prop.leaseColor }}; border: 1px solid {{ prop.leaseColor }}; background: {{ prop.leaseTint }}; border-radius: 12px; padding: 3px 11px; white-space: nowrap;">{{ prop.leaseState }}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="width: 40px; height: 40px; border-radius: 40px; background: var(--card3); display: grid; place-items: center; font-size: 14px;">{{ prop.tenantInitials }}</span>
+                <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+                  <span style="font-size: 14px; font-weight: 500;">{{ prop.tenantName }}</span>
+                  <span style="font-size: 12px; color: var(--fg3);">{{ prop.tenantContact }}</span>
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">
+                <sc-for list="{{ prop.leaseFacts }}" as="f" hint-placeholder-count="4">
+                  <div style="display: flex; flex-direction: column; gap: 1px;">
+                    <span style="font-size: 11px; color: var(--fg3);">{{ f.label }}</span>
+                    <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px; color: {{ f.color }};">{{ f.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 12px;">
+                <button style="border: 1px solid var(--bd2); background: var(--card2); color: var(--fg1); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card3);">📄 Lease agreement</button>
+                <button onClick="{{ goCalendar }}" style="border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">🔔 Renewal reminder</button>
+                <button style="border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Rent ledger</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ prop.lived }}" hint-placeholder-val="{{ true }}">
+            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🏠</span>You live here</span>
+              <span style="font-size: 13px; color: var(--fg2); line-height: 1.55;">Home Assistant is bound to this flat, so its energy and water readings become the bills you see below — no meter typing.</span>
+              <button onClick="{{ goHome }}" style="align-self: flex-start; border: 1px solid var(--bd2); background: var(--card2); color: var(--fg1); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card3);">🏠 Open Household</button>
+            </div>
+          </sc-if>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🧾</span>Monthly bills</span>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; color: var(--fg3);">{{ prop.billsTotal }}</span>
+            </div>
+            <sc-for list="{{ prop.bills }}" as="b" hint-placeholder-count="4">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px;">
+                <span style="color: var(--fg2);">{{ b.label }}</span>
+                <span style="font-family: 'Source Code Pro', monospace;">{{ b.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🏦</span>Mortgage</span>
+              <span style="font-size: 11.5px; color: var(--yellow);">{{ prop.fixation }}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 7px;">
+              <div style="height: 8px; background: var(--card3); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: {{ prop.paidPct }}; background: var(--green); border-radius: 4px;"></div>
+              </div>
+              <span style="font-size: 12px; color: var(--fg3);">{{ prop.paidNote }}</span>
+            </div>
+            <button onClick="{{ goLoans }}" style="align-self: flex-start; border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Schedule &amp; repayments →</button>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ INVESTMENTS ═══════════════ -->
+    <sc-if value="{{ isInvestments }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">💼</span>Portfolio</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">from the last XTB report</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
+        <sc-for list="{{ invMetrics }}" as="m" hint-placeholder-count="4">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
+            <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
+          </div>
+        </sc-for>
+        </div>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">📈</span>Value against money in</span>
+          <span style="font-size: 12px; color: var(--fg3);">millions Kč · benchmarks use the same contribution dates</span>
+        </div>
+        <div style="position: relative; padding-left: 46px;">
+          <sc-for list="{{ invAxis }}" as="a" hint-placeholder-count="5">
+            <span style="position: absolute; left: 0; width: 36px; text-align: right; top: {{ a.top }}; transform: translateY(-50%); font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">{{ a.label }}</span>
+          </sc-for>
+          <svg viewBox="0 0 800 200" style="width: 100%; height: auto; display: block;">
+            <line x1="0" y1="0" x2="800" y2="0" stroke="var(--bd)" strokeWidth="1"></line>
+            <line x1="0" y1="50" x2="800" y2="50" stroke="var(--bd)" strokeWidth="1"></line>
+            <line x1="0" y1="100" x2="800" y2="100" stroke="var(--bd)" strokeWidth="1"></line>
+            <line x1="0" y1="150" x2="800" y2="150" stroke="var(--bd)" strokeWidth="1"></line>
+            <line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" strokeWidth="1"></line>
+            <polyline points="0,188 114,169 229,150 343,129 457,108 571,85 686,63 800,41" fill="none" stroke="var(--orange)" strokeWidth="2" strokeDasharray="3 4"></polyline>
+            <polyline points="0,188 114,169 229,148 343,125 457,99 571,71 686,41 800,10" fill="none" stroke="var(--purple)" strokeWidth="2" strokeDasharray="3 4"></polyline>
+            <polyline points="0,188 114,170 229,152 343,134 457,116 571,98 686,81 800,66" fill="none" stroke="var(--fg3)" strokeWidth="2" strokeDasharray="6 4"></polyline>
+            <polyline points="0,187 114,165 229,140 343,140 457,119 571,91 686,60 800,33" fill="none" stroke="var(--teal)" strokeWidth="2.5" strokeLinejoin="round"></polyline>
+            <circle cx="800" cy="33" r="4" fill="var(--teal)"></circle>
+          </svg>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-left: 46px; font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">
+          <sc-for list="{{ history.years }}" as="y" hint-placeholder-count="8">
+            <span>{{ y }}</span>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 14px 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--fg2); border-top: 1px solid var(--bd); padding-top: 12px;">
+          <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; border-top: 2.5px solid var(--teal);"></span>actual</span>
+          <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; border-top: 2px dashed var(--fg3);"></span>money in</span>
+          <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; border-top: 2px dashed var(--orange);"></span>at 5% a year</span>
+          <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; border-top: 2px dashed var(--purple);"></span>at 10% a year</span>
+        </div>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">📋</span>Holdings</span>
+          <span style="font-size: 12px; color: var(--fg3);">from the last XTB report · duplicates dropped by trade id</span>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, minmax(84px, auto)); gap: 10px 14px; padding: 0 0 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3); border-bottom: 1px solid var(--bd);">
+          <span>Holding</span><span style="text-align: right;">Units</span><span style="text-align: right;">Value</span><span style="text-align: right;">In Kč</span><span style="text-align: right;">Gain</span>
+        </div>
+        <sc-for list="{{ holdings }}" as="h" hint-placeholder-count="6">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, minmax(84px, auto)); gap: 10px 14px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--bd);">
+            <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px;">{{ h.ticker }}</span>
+              <span style="font-size: 11.5px; color: var(--fg3);">{{ h.name }}</span>
+            </div>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; text-align: right; color: var(--fg2);">{{ h.units }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; text-align: right;">{{ h.value }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; text-align: right; color: var(--fg3);">{{ h.czk }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; text-align: right; color: {{ h.color }};">{{ h.gain }}</span>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ LOANS ═══════════════ -->
+    <sc-if value="{{ isLoans }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">💳</span>What you owe</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">three loans, all on fixed terms</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
+        <sc-for list="{{ loanMetrics }}" as="m" hint-placeholder-count="4">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
+            <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
+          </div>
+        </sc-for>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <sc-for list="{{ loans }}" as="l" hint-placeholder-count="3">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 3px;">
+                <span style="font-size: 15px; font-weight: 600;">{{ l.name }}</span>
+                <span style="font-size: 12px; color: var(--fg3);">{{ l.sub }}</span>
+              </div>
+              <span style="font-size: 11.5px; font-weight: 600; color: {{ l.fixColor }}; border: 1px solid {{ l.fixColor }}; background: {{ l.fixTint }}; border-radius: 12px; padding: 3px 11px; white-space: nowrap;">{{ l.fixLabel }}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 12px;">
+              <sc-for list="{{ l.facts }}" as="f" hint-placeholder-count="4">
+                <div style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-size: 11px; color: var(--fg3);">{{ f.label }}</span>
+                  <span style="font-family: 'Source Code Pro', monospace; font-size: 14px; color: {{ f.color }};">{{ f.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="height: 8px; background: var(--card3); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: {{ l.paidPct }}; background: var(--green); border-radius: 4px;"></div>
+              </div>
+              <span style="font-size: 11.5px; color: var(--fg3);">{{ l.paidNote }}</span>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 12px;">
+              <button onClick="{{ l.openSchedule }}" style="border: 1px solid var(--bd2); background: var(--card2); color: var(--fg1); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card3);">Interest vs. principal</button>
+              <button style="border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Extra repayment</button>
+              <button style="border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Pay off in full</button>
+            </div>
+          </div>
+        </sc-for>
+
+        <button style="border: 1.5px dashed var(--bd2); background: transparent; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; cursor: pointer; font-family: inherit; text-align: left; color: var(--fg2);" style-hover="border-color: var(--blue);">
+          <span style="font-size: 14px; font-weight: 500;">➕ Add loan</span>
+          <span style="font-size: 12.5px; color: var(--fg3);">Mortgage, car, consumer, or a loan to family. Payments then match themselves from your statements.</span>
+        </button>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ RETIREMENT ═══════════════ -->
+    <sc-if value="{{ isRetire }}" hint-placeholder-val="{{ false }}">
+      <section style="background: var(--blue-tint); border: 1px solid var(--blue); border-radius: 12px; padding: 18px 22px; display: flex; flex-direction: column; gap: 12px;">
+        <p style="margin: 0; font-size: 18px; line-height: 1.6; color: var(--fg1); text-wrap: pretty;">If you stopped working today, your capital would pay about <span style="font-family: 'Source Code Pro', monospace; font-weight: 600; background: var(--card2); border-radius: 5px; padding: 1px 7px; white-space: nowrap;">{{ ret.draw }} Kč</span> a month and the state pension would add <span style="font-family: 'Source Code Pro', monospace; font-weight: 600; background: var(--card2); border-radius: 5px; padding: 1px 7px; white-space: nowrap;">{{ ret.pension }}</span>. That covers <span style="font-family: 'Source Code Pro', monospace; font-weight: 600; background: var(--card2); border-radius: 5px; padding: 1px 7px; white-space: nowrap;">{{ ret.covers }}</span> of the {{ ret.target }} Kč you say you would need.</p>
+        <span style="font-size: 13px; color: var(--fg2); border-top: 1px solid var(--bd); padding-top: 11px;">{{ ret.verdict }}</span>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🎛️</span>What you assume</span>
+          <span style="font-size: 12px; color: var(--fg3);">{{ ret.pensionSource }}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 16px 20px; align-items: start;">
+
+          <label style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: var(--fg3);">Monthly spending you would need</span>
+            <input type="number" step="1000" value="{{ ret.spendValue }}" onChange="{{ ret.setSpend }}" style="border: 1px solid var(--bd2); border-radius: 8px; padding: 9px 11px; font-family: 'Source Code Pro', monospace; font-size: 13.5px; color: var(--fg1); background: var(--card); width: 100%;">
+          </label>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-size: 12px; color: var(--fg3);">Withdrawal rate</span>
+            <div style="display: flex; gap: 6px;">
+              <sc-for list="{{ ret.swrOptions }}" as="o" hint-placeholder-count="3">
+                <button onClick="{{ o.go }}" style="flex: 1 1 0; border: 1px solid {{ o.bd }}; background: {{ o.bg }}; color: {{ o.fg }}; border-radius: 8px; padding: 8px 6px; font-family: 'Source Code Pro', monospace; font-size: 12.5px; cursor: pointer;">{{ o.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 7px;">
+            <span style="display: flex; justify-content: space-between; font-size: 12px; color: var(--fg3);"><span>Real return until then</span><span style="font-family: 'Source Code Pro', monospace; color: var(--fg1);">{{ ret.realReturn }}%</span></span>
+            <input type="range" min="0" max="8" step="0.5" value="{{ ret.realReturnValue }}" onChange="{{ ret.setReturn }}" style="width: 100%; accent-color: var(--blue);">
+          </label>
+          <div style="display: flex; flex-direction: column; gap: 8px; grid-column: span 2;">
+            <span style="font-size: 12px; color: var(--fg3);">The flats, once you retire</span>
+            <div style="display: flex; gap: 6px;">
+              <sc-for list="{{ ret.planOptions }}" as="o" hint-placeholder-count="3">
+                <button onClick="{{ o.go }}" style="flex: 1 1 0; border: 1px solid {{ o.bd }}; background: {{ o.bg }}; color: {{ o.fg }}; border-radius: 8px; padding: 9px 8px; font-family: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;">{{ o.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+              <sc-for list="{{ ret.pensionFields }}" as="p" hint-placeholder-count="4">
+                <label style="display: flex; flex-direction: column; gap: 5px;">
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ p.label }}</span>
+                  <input type="number" value="{{ p.value }}" onChange="{{ p.set }}" style="border: 1px solid var(--bd2); border-radius: 8px; padding: 8px 10px; font-family: 'Source Code Pro', monospace; font-size: 13px; color: var(--fg1); background: var(--card); width: 100%;">
+                </label>
+              </sc-for>
+          </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">⛱️</span>If you retire in…</span>
+            <span style="font-size: 12px; color: var(--fg3);">saving continues at today's rate</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <div style="min-width: 600px; display: grid; grid-template-columns: 92px 66px repeat(3, minmax(0, 1fr)) 84px; gap: 10px; padding: 0 6px 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3); border-bottom: 1px solid var(--bd);">
+              <span>Retire</span><span>Ages</span><span style="text-align: right;">Capital</span><span style="text-align: right;">Flat equity</span><span style="text-align: right;">Monthly</span><span style="text-align: right;">Vs. target</span>
+            </div>
+            <sc-for list="{{ ret.rows }}" as="r" hint-placeholder-count="5">
+              <div style="min-width: 600px; display: grid; grid-template-columns: 92px 66px repeat(3, minmax(0, 1fr)) 84px; gap: 10px; align-items: baseline; padding: 12px 6px; border-bottom: 1px solid var(--bd); font-size: 13.5px; background: {{ r.bg }};">
+                <span style="white-space: nowrap;">{{ r.when }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ r.ages }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; text-align: right; color: var(--fg2);">{{ r.capital }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; text-align: right; color: var(--fg2);">{{ r.equity }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; text-align: right;">{{ r.total }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; text-align: right; color: {{ r.gapColor }};">{{ r.gap }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.6;">{{ ret.pensionStart }}</span>
+
+          <div style="display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--bd); padding-top: 18px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap; white-space: nowrap;">Pot against what it needs to be</span>
+              <span style="font-size: 12px; color: var(--fg3);">millions Kč</span>
+            </div>
+            <div style="position: relative; padding-left: 46px;">
+              <sc-for list="{{ ret.chart.axis }}" as="a" hint-placeholder-count="5">
+                <span style="position: absolute; left: 0; width: 36px; text-align: right; top: {{ a.top }}; transform: translateY(-50%); font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">{{ a.label }}</span>
+              </sc-for>
+              <svg viewBox="0 0 800 190" preserveAspectRatio="none" style="width: 100%; height: 190px; display: block;">
+                <line x1="0" y1="0" x2="800" y2="0" stroke="var(--bd)" strokeWidth="1"></line>
+                <line x1="0" y1="47.5" x2="800" y2="47.5" stroke="var(--bd)" strokeWidth="1"></line>
+                <line x1="0" y1="95" x2="800" y2="95" stroke="var(--bd)" strokeWidth="1"></line>
+                <line x1="0" y1="142.5" x2="800" y2="142.5" stroke="var(--bd)" strokeWidth="1"></line>
+                <line x1="0" y1="190" x2="800" y2="190" stroke="var(--bd2)" strokeWidth="1"></line>
+                <polyline points="{{ ret.chart.reqPath }}" fill="none" stroke="var(--orange)" strokeWidth="2" strokeDasharray="7 5" vectorEffect="non-scaling-stroke"></polyline>
+                <polyline points="{{ ret.chart.potPath }}" fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke"></polyline>
+              </svg>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-left: 46px; font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">
+              <sc-for list="{{ ret.chart.years }}" as="y" hint-placeholder-count="5">
+                <span>{{ y }}</span>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 14px 20px; flex-wrap: wrap; font-size: 12.5px; color: var(--fg2);">
+              <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; border-top: 2.5px solid var(--blue);"></span>your pot</span>
+              <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 16px; border-top: 2px dashed var(--orange);"></span>needed · {{ ret.chart.required }}</span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.6;">{{ ret.chart.note }}</span>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ HOUSEHOLD ═══════════════ -->
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">⚡</span>Right now</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">live from Home Assistant</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px;">
+        <sc-for list="{{ ha.tiles }}" as="t" hint-placeholder-count="5">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+            <span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg3);"><span>{{ t.emoji }}</span><span>{{ t.label }}</span></span>
+            <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ t.color }};">{{ t.value }}</span>
+            <span style="font-size: 11.5px; color: var(--fg3);">{{ t.note }}</span>
+          </div>
+        </sc-for>
+        </div>
+      </section>
+
+      <sc-if value="{{ ha.hasAlerts }}" hint-placeholder-val="{{ true }}">
+        <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 13px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 12.5px; font-weight: 600; color: var(--yellow); background: var(--yellow-tint); border: 1px solid var(--yellow); border-radius: 12px; padding: 4px 12px; white-space: nowrap;">⚠️ Attention</span>
+          <sc-for list="{{ ha.alerts }}" as="a" hint-placeholder-count="2">
+            <span style="font-size: 13px; color: var(--fg2);">{{ a }}</span>
+          </sc-for>
+        </section>
+      </sc-if>
+
+      <section style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🛋️</span>Rooms</span>
+            <span style="font-size: 12px; color: var(--fg3);">{{ ha.onCount }} devices on · Karlín only</span>
+          </div>
+          <sc-for list="{{ ha.rooms }}" as="r" hint-placeholder-count="4">
+            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <span style="font-size: 14px; font-weight: 500;">{{ r.name }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ r.climate }}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 8px;">
+                <sc-for list="{{ r.devices }}" as="d" hint-placeholder-count="3">
+                  <button onClick="{{ d.toggle }}" style="display: flex; align-items: center; gap: 10px; text-align: left; border: 1px solid {{ d.bd }}; background: {{ d.bg }}; border-radius: 9px; padding: 10px 12px; cursor: pointer; font-family: inherit; color: var(--fg1);" style-hover="border-color: var(--bd2);">
+                    <span style="font-size: 15px;">{{ d.emoji }}</span>
+                    <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+                      <span style="font-size: 12.5px;">{{ d.name }}</span>
+                      <span style="font-size: 11px; color: {{ d.stateColor }};">{{ d.state }}</span>
+                    </span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 13px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap; white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">⚡</span>Energy into the budget</span>
+              <span style="font-size: 11.5px; color: var(--green);">live</span>
+            </div>
+            <div style="display: flex; align-items: flex-end; gap: 3px; height: 92px;">
+              <sc-for list="{{ ha.energyBars }}" as="b" hint-placeholder-count="14">
+                <div style="flex: 1 1 0; height: {{ b.h }}; background: {{ b.color }}; border-radius: 2px 2px 0 0;" title="{{ b.tip }}"></div>
+              </sc-for>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--fg3);">
+              <span>14 days</span><span>{{ ha.energyNote }}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--bd); padding-top: 12px;">
+              <sc-for list="{{ ha.meters }}" as="m" hint-placeholder-count="3">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px;">
+                  <span style="color: var(--fg2);">{{ m.label }}</span>
+                  <span style="font-family: 'Source Code Pro', monospace;">{{ m.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size: 12px; color: var(--fg3); line-height: 1.55;">These readings replace the estimated energy line on Karlín's bills, so the budget follows what the meter actually did.</span>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🗓️</span>This week at home</span>
+              <button onClick="{{ goCalendar }}" style="border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12.5px; cursor: pointer; padding: 0;">Calendar →</button>
+            </div>
+            <sc-for list="{{ ha.week }}" as="w" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--bd);">
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ w.day }}</span>
+                <span style="font-size: 13px; color: var(--fg2);">{{ w.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ CALENDAR ═══════════════ -->
+    <sc-if value="{{ isCalendar }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <sc-for list="{{ cal.sources }}" as="s" hint-placeholder-count="3">
+            <span style="display: flex; align-items: center; gap: 8px; border: 1px solid var(--bd); background: var(--card); border-radius: 20px; padding: 6px 13px; font-size: 12.5px; color: var(--fg2);">
+              <span style="width: 8px; height: 8px; border-radius: 8px; background: {{ s.color }};"></span>{{ s.label }}
+            </span>
+          </sc-for>
+        </div>
+        <span style="font-size: 12.5px; color: var(--fg3);">two-way · last sync {{ cal.synced }}</span>
+      </section>
+
+      <section style="display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start;">
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 16px; font-weight: 600;">{{ cal.monthLabel }}</span>
+            <span style="font-size: 12px; color: var(--fg3);">{{ cal.eventCount }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px;">
+            <sc-for list="{{ cal.weekdays }}" as="w" hint-placeholder-count="7">
+              <span style="font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg3); text-align: center; padding-bottom: 3px;">{{ w }}</span>
+            </sc-for>
+            <sc-for list="{{ cal.cells }}" as="c" hint-placeholder-count="35">
+              <button onClick="{{ c.go }}" style="min-height: 58px; border: 1px solid {{ c.bd }}; background: {{ c.bg }}; border-radius: 8px; padding: 6px 7px 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; cursor: {{ c.cursor }}; font-family: inherit;">
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; font-weight: {{ c.numWeight }}; color: {{ c.numColor }};">{{ c.num }}</span>
+                <span style="display: flex; gap: 3px; flex-wrap: wrap;">
+                  <sc-for list="{{ c.dots }}" as="d" hint-placeholder-count="0">
+                    <span style="width: 6px; height: 6px; border-radius: 6px; background: {{ d }};"></span>
+                  </sc-for>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--bd); padding-top: 12px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 6px;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">{{ cal.agendaTitle }}</span>
+              <span style="font-size: 12px; color: var(--fg3);">{{ cal.agendaNote }}</span>
+            </div>
+            <sc-for list="{{ cal.agenda }}" as="e" hint-placeholder-count="11">
+              <div style="display: grid; grid-template-columns: 50px 9px minmax(0, 1fr) auto; align-items: baseline; gap: 11px; padding: 9px 2px; border-top: 1px solid var(--bd); background: {{ e.rowBg }};">
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: {{ e.dateColor }};">{{ e.date }}</span>
+                <span style="width: 7px; height: 7px; border-radius: 7px; background: {{ e.color }}; align-self: center;"></span>
+                <span style="font-size: 13.5px; color: var(--fg1);">{{ e.label }}</span>
+                <span style="font-size: 11.5px; color: var(--fg3); white-space: nowrap;">{{ e.source }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🤖</span>What the ledger puts here by itself</span>
+            <sc-for list="{{ cal.rules }}" as="r" hint-placeholder-count="4">
+              <button onClick="{{ r.toggle }}" style="display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 11px; align-items: center; text-align: left; border: 0; background: transparent; padding: 8px 0; border-top: 1px solid var(--bd); cursor: pointer; font-family: inherit; color: var(--fg1);">
+                <span style="width: 30px; height: 17px; border-radius: 20px; background: {{ r.trackBg }}; position: relative; display: block;">
+                  <span style="position: absolute; top: 2px; left: {{ r.knobLeft }}; width: 13px; height: 13px; border-radius: 13px; background: {{ r.knobBg }};"></span>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+                  <span style="font-size: 13px;">{{ r.label }}</span>
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ r.detail }}</span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🔗</span>Connected calendars</span>
+            <sc-for list="{{ cal.feeds }}" as="f" hint-placeholder-count="3">
+              <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--bd);">
+                <span style="font-size: 13px;">{{ f.emoji }}</span>
+                <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+                  <span style="font-size: 13px;">{{ f.name }}</span>
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ f.detail }}</span>
+                </div>
+                <span style="font-size: 11.5px; color: {{ f.color }};">{{ f.state }}</span>
+              </div>
+            </sc-for>
+            <button style="align-self: flex-start; border: 1px solid var(--bd2); background: var(--card2); color: var(--fg1); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer; margin-top: 4px;" style-hover="background: var(--card3);">➕ Add a feed</button>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ DOCUMENTS ═══════════════ -->
+    <sc-if value="{{ isDocs }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <input type="text" value="{{ docs.query }}" onChange="{{ docs.setQuery }}" placeholder="Search by name, person, flat, year or tag" style="border: 1px solid var(--bd2); border-radius: 8px; padding: 9px 12px; font-size: 13.5px; color: var(--fg1); background: var(--card); flex: 1 1 260px; max-width: 440px;">
+        <button onClick="{{ docs.clear }}" style="border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 9px 13px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Clear</button>
+        <button style="margin-left: auto; border: 1px solid var(--blue); background: var(--blue); color: #fff; border-radius: 8px; padding: 9px 16px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="opacity: 0.9;">➕ Add document</button>
+      </section>
+
+      <section style="display: grid; grid-template-columns: 218px minmax(0, 1fr); gap: 28px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🗂️</span>Shelves</span>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <sc-for list="{{ docs.shelves }}" as="s" hint-placeholder-count="9">
+              <button onClick="{{ s.go }}" style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; cursor: pointer; padding: 8px 10px; border-radius: 8px; background: {{ s.bg }}; color: {{ s.fg }}; font-family: inherit; font-size: 13px;" style-hover="background: var(--card2);">
+                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.label }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3);">{{ s.count }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">{{ docs.shownLabel }}</span>
+            <span style="font-size: 12px; color: var(--fg3);">{{ docs.note }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: 16px;">
+            <sc-for list="{{ docs.columns }}" as="col" hint-placeholder-count="3">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; align-items: baseline; gap: 9px; padding: 0 2px 8px; border-bottom: 1px solid var(--bd);">
+                  <span style="font-size: 13px; font-weight: 500;">{{ col.label }}</span>
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ col.count }}</span>
+                </div>
+                <sc-for list="{{ col.items }}" as="d" hint-placeholder-count="3">
+                  <div style="display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 11px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--bd);">
+                    <span style="font-family: 'Source Code Pro', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: var(--fg3); border: 1px solid var(--bd); border-radius: 5px; padding: 4px 0; text-align: center;">{{ d.ext }}</span>
+                    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                      <span style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ d.name }}</span>
+                      <span style="font-size: 11px; color: {{ d.metaColor }};">{{ d.meta }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start;">
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🧩</span>Modules</span>
+          <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.55;">Everything is optional. Switch off what you do not have and it leaves the sidebar entirely.</span>
+          <sc-for list="{{ moduleRows }}" as="m" hint-placeholder-count="7">
+            <button onClick="{{ m.toggle }}" style="display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 11px; align-items: center; text-align: left; border: 0; background: transparent; padding: 9px 0; border-top: 1px solid var(--bd); cursor: pointer; font-family: inherit; color: var(--fg1);">
+              <span style="width: 30px; height: 17px; border-radius: 20px; background: {{ m.trackBg }}; position: relative; display: block;">
+                <span style="position: absolute; top: 2px; left: {{ m.knobLeft }}; width: 13px; height: 13px; border-radius: 13px; background: {{ m.knobBg }};"></span>
+              </span>
+              <span style="display: flex; flex-direction: column; gap: 1px;">
+                <span style="font-size: 13px;">{{ m.label }}</span>
+                <span style="font-size: 11.5px; color: var(--fg3);">{{ m.hint }}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">💱</span>Currencies</span>
+            <div style="display: flex; flex-direction: column; gap: 9px;">
+              <sc-for list="{{ currencyRows }}" as="c" hint-placeholder-count="4">
+                <div style="display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--bd);">
+                  <span style="font-family: 'Source Code Pro', monospace; font-size: 13px;">{{ c.code }}</span>
+                  <span style="font-size: 12.5px; color: var(--fg3);">{{ c.role }}</span>
+                  <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; color: var(--fg2);">{{ c.rate }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size: 12px; color: var(--fg3); line-height: 1.55;">Balances stay in their own currency everywhere. Only the totals at the top of a screen convert, at the day's rate.</span>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">👪</span>Household</span>
+            <sc-for list="{{ peopleRows }}" as="p" hint-placeholder-count="3">
+              <div style="display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 8px 0; border-top: 1px solid var(--bd);">
+                <span style="width: 28px; height: 28px; border-radius: 28px; background: {{ p.color }}; display: grid; place-items: center; font-size: 11px; color: var(--bg);">{{ p.initials }}</span>
+                <div style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-size: 13px;">{{ p.name }}</span>
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ p.role }}</span>
+                </div>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3);">{{ p.born }}</span>
+              </div>
+            </sc-for>
+            <button style="align-self: flex-start; border: 1px solid var(--bd2); background: var(--card2); color: var(--fg1); border-radius: 8px; padding: 7px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer; margin-top: 4px;" style-hover="background: var(--card3);">➕ Add a person</button>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🖥️</span>Self-hosting</span>
+            <span style="font-size: 12.5px; color: var(--fg2); line-height: 1.6;">Every label, currency, person, module and integration on this page is configuration, not code. The package ships with this file empty and fills from your own <code style="font-family: 'Source Code Pro', monospace; font-size: 12px; background: var(--card2); border: 1px solid var(--bd); border-radius: 5px; padding: 1px 6px;">ledger.config.json</code>.</span>
+          </div>
+        </div>
+      </section>
+
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(292px, 1fr)); gap: 16px; align-items: start;">
+        <sc-for list="{{ settingCards }}" as="c" hint-placeholder-count="6">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">{{ c.emoji }}</span>{{ c.label }}</span>
+            <sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--bd);">
+                <span style="font-size: 12.5px; color: var(--fg2);">{{ r.label }}</span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 12.5px; color: {{ r.color }}; text-align: right;">{{ r.value }}</span>
+                <span style="grid-column: 1 / -1; font-size: 11px; color: var(--fg3); line-height: 1.5;">{{ r.hint }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 980}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'overview',
+    theme: 'dark',
+    period: 'ytd',
+    propKey: 'karlin',
+    docShelf: 'all',
+    docQuery: '',
+    retire: null,
+    devices: null,
+    rules: null,
+    modules: { property: true, investments: true, loans: true, retirement: true, home: true, calendar: true, documents: true, imports: true }
+  };
+
+  componentDidMount() {
+    let t = this.state.theme;
+    try {
+      const saved = window.localStorage.getItem('ledger.theme');
+      if (saved === 'light' || saved === 'dark') t = saved;
+    } catch (e) {}
+    this.applyTheme(t);
+    if (t !== this.state.theme) this.setState({ theme: t });
+  }
+  applyTheme(t) {
+    try {
+      document.documentElement.setAttribute('data-ledger-theme', t);
+      window.localStorage.setItem('ledger.theme', t);
+    } catch (e) {}
+  }
+
+  static rr(x, y, w, h, r) {
+    return 'M' + (x + r) + ',' + y + 'h' + (w - 2 * r) + 'a' + r + ',' + r + ' 0 0 1 ' + r + ',' + r +
+      'v' + (h - 2 * r) + 'a' + r + ',' + r + ' 0 0 1 ' + (-r) + ',' + r +
+      'h' + (-(w - 2 * r)) + 'a' + r + ',' + r + ' 0 0 1 ' + (-r) + ',' + (-r) +
+      'v' + (-(h - 2 * r)) + 'a' + r + ',' + r + ' 0 0 1 ' + r + ',' + (-r) + 'Z';
+  }
+
+  static get ICONS() {
+    const rr = Component.rr;
+    const chart = ['M3.2,20.4h17.6', 'M5.4,16.4 9.9,11.1 13.5,14.4 20,6.8', 'M15.1,6.8H20v4.9'];
+    const house = ['M3.8,10.4 12,4 20.2,10.4v9.2a1.4,1.4 0 0 1-1.4,1.4H5.2a1.4,1.4 0 0 1-1.4-1.4Z'];
+    const sliders = ['M3.4,8.2h9.2', 'M17.4,8.2h3.2', 'M3.4,15.8h3.2', 'M11.4,15.8h9.2',
+      rr(12.9, 5.9, 4.2, 4.6, 1.4), rr(6.9, 13.5, 4.2, 4.6, 1.4)];
+    return {
+      overview: [rr(3.2, 3.2, 7.4, 7.4, 2), rr(13.4, 3.2, 7.4, 7.4, 2), rr(3.2, 13.4, 7.4, 7.4, 2), rr(13.4, 13.4, 7.4, 7.4, 2)],
+      money: [rr(2.8, 5.6, 18.4, 13.2, 3), 'M16.6,12.2h1.6'],
+      cashflow: ['M8.2,3.6v16.8', 'M4.4,7.4 8.2,3.6 12,7.4', 'M15.8,20.4V3.6', 'M12,16.6 15.8,20.4 19.6,16.6'],
+      accounts: ['M3,9.8 12,4.4 21,9.8', 'M5.2,9.8v8.2M9.7,9.8v8.2M14.3,9.8v8.2M18.8,9.8v8.2', 'M3,20.4h18'],
+      import: ['M12,3.6v10.8', 'M7.9,10.5 12,14.6 16.1,10.5', 'M4,17.4v2a1.4,1.4 0 0 0 1.4,1.4h13.2a1.4,1.4 0 0 0 1.4-1.4v-2'],
+      property: ['M3.4,20.6V7.8L10,4v16.6', 'M10,11.8h8.2a1.5,1.5 0 0 1 1.5,1.5v7.3', 'M6.1,10.8h1.5M6.1,14.2h1.5M6.1,17.6h1.5', 'M13.5,15.2h1.8M13.5,18.2h1.8'],
+      wealth: chart,
+      investments: chart,
+      loans: [rr(2.8, 5.4, 18.4, 13.2, 3), 'M2.8,10h18.4', 'M6.2,14.4h3.6'],
+      retire: ['M12,3.2v17.6', 'M2.9,12.4a9.1,9.1 0 0 1 18.2,0Z', 'M12,20.8a2.5,2.5 0 0 0 2.5-2.5'],
+      household: house,
+      home: house,
+      calendar: [rr(3.2, 5.2, 17.6, 15.6, 3), 'M8,3.2v4M16,3.2v4', 'M3.2,10.4h17.6'],
+      admin: sliders,
+      settings: sliders,
+      docs: ['M3.2,7.4a1.8,1.8 0 0 1 1.8-1.8h3.6l2.2,2.6h8a1.8,1.8 0 0 1 1.8,1.8v8.6a1.8,1.8 0 0 1-1.8,1.8H5a1.8,1.8 0 0 1-1.8-1.8Z']
+    };
+  }
+
+  static get AREAS() {
+    return [
+      { key: 'overview', label: 'Overview', icon: 'overview', screens: ['overview'] },
+      { key: 'money', label: 'Money', icon: 'money', screens: ['cashflow', 'accounts', 'import'] },
+      { key: 'property', label: 'Property', icon: 'property', screens: ['property'] },
+      { key: 'wealth', label: 'Wealth', icon: 'wealth', screens: ['investments', 'loans'] },
+      { key: 'retire', label: 'Retirement', icon: 'retire', screens: ['retire'] },
+      { key: 'household', label: 'Household', icon: 'household', screens: ['home', 'calendar'] },
+      { key: 'admin', label: 'Admin', icon: 'admin', screens: ['docs', 'settings'] }
+    ];
+  }
+
+  static get WIDGETS() {
+    return {
+      briefing: { label: 'Needs you', def: 12 },
+      flow: { label: 'Where the money goes', def: 12 },
+      composition: { label: 'What it is made of', def: 6 },
+      upcoming: { label: 'Next 30 days', def: 6 },
+      networth: { label: 'Net worth over time', def: 6 },
+      accounts: { label: 'Where the cash sits', def: 6 },
+      equity: { label: 'Flats against mortgages', def: 6 },
+      energy: { label: 'Energy this month', def: 6 }
+    };
+  }
+
+  static get ROW() { return 40; }
+  static get GAP() { return 16; }
+
+  static cell(k) {
+    return ({
+      briefing: { w: 12, h: 6 }, flow: { w: 12, h: 19 }, composition: { w: 6, h: 6 },
+      upcoming: { w: 6, h: 7 }, networth: { w: 6, h: 5 }, accounts: { w: 6, h: 6 },
+      equity: { w: 6, h: 5 }, energy: { w: 6, h: 5 }
+    })[k] || { w: 6, h: 5 };
+  }
+
+  static get DEFAULT_LAYOUT() {
+    return [
+      { k: 'briefing', x: 0, y: 0, w: 12, h: 6 },
+      { k: 'flow', x: 0, y: 6, w: 12, h: 19 },
+      { k: 'composition', x: 0, y: 25, w: 6, h: 6 },
+      { k: 'upcoming', x: 6, y: 25, w: 6, h: 7 }
+    ];
+  }
+
+  static overlap(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+
+  // Push anything the moved panel now sits on downward, cascading. Nothing is pulled
+  // back up: a panel left where you put it stays there, gaps and all.
+  static resolve(items, moved) {
+    const it = items.map(o => Object.assign({}, o));
+    const settled = [moved];
+    const rest = it.map((_, i) => i).filter(i => i !== moved).sort((a, b) => it[a].y - it[b].y);
+    for (const i of rest) {
+      let guard = 0;
+      let clash = true;
+      while (clash && guard++ < 300) {
+        clash = false;
+        for (const j of settled) {
+          if (Component.overlap(it[i], it[j])) { it[i].y = it[j].y + it[j].h; clash = true; }
+        }
+      }
+      settled.push(i);
+    }
+    return it;
+  }
+
+  static freeSlot(items, w, h) {
+    for (let y = 0; y < 400; y++) {
+      for (let x = 0; x <= 12 - w; x++) {
+        const box = { x: x, y: y, w: w, h: h };
+        if (!items.some(o => Component.overlap(box, o))) return box;
+      }
+    }
+    return { x: 0, y: 0, w: w, h: h };
+  }
+
+  loadLayout() {
+    try {
+      const raw = localStorage.getItem('continuum-overview');
+      if (raw) {
+        const p = JSON.parse(raw);
+        const live = Array.isArray(p) ? p.filter(w => Component.WIDGETS[w.k]) : [];
+        if (live.length) {
+          if (live[0].w == null) return Component.DEFAULT_LAYOUT;
+          return live.map(o => ({
+            k: o.k, x: Math.min(11, Math.max(0, o.x | 0)), y: Math.max(0, o.y | 0),
+            w: Math.min(12, Math.max(3, o.w | 0)), h: Math.max(3, o.h | 0)
+          }));
+        }
+      }
+    } catch (e) {}
+    return Component.DEFAULT_LAYOUT;
+  }
+
+  saveLayout(layout) {
+    this.setState({ layout: layout });
+    try { localStorage.setItem('continuum-overview', JSON.stringify(layout)); } catch (e) {}
+  }
+
+  currentLayout() { return this.state.layout || this.loadLayout(); }
+
+  resizeWidget(i, dir) {
+    const steps = [4, 6, 8, 12];
+    const next = this.currentLayout().slice();
+    const at = steps.indexOf(next[i].span);
+    const to = Math.min(steps.length - 1, Math.max(0, (at < 0 ? 3 : at) + dir));
+    next[i] = { k: next[i].k, span: steps[to] };
+    this.saveLayout(next);
+  }
+
+  gridMetrics() {
+    const g = Component.GAP;
+    const rect = this._grid ? this._grid.getBoundingClientRect() : { width: 1200, left: 0, top: 0 };
+    return { col: (rect.width - 11 * g) / 12, row: Component.ROW, gap: g, rect: rect };
+  }
+
+  startResize(i, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const m = this.gridMetrics();
+    const it = this.currentLayout()[i];
+    const x0 = e.clientX, y0 = e.clientY, w0 = it.w, h0 = it.h;
+    const move = ev => {
+      const w = Math.min(12 - it.x, Math.max(3, w0 + Math.round((ev.clientX - x0) / (m.col + m.gap))));
+      const h = Math.max(3, h0 + Math.round((ev.clientY - y0) / (m.row + m.gap)));
+      this.setState({ ghost: { i: i, x: it.x, y: it.y, w: w, h: h } });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const gh = this.state.ghost;
+      this.setState({ ghost: null });
+      if (!gh) return;
+      const next = this.currentLayout().slice();
+      next[gh.i] = { k: next[gh.i].k, x: gh.x, y: gh.y, w: gh.w, h: gh.h };
+      this.saveLayout(Component.resolve(next, gh.i));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  startMove(i, e) {
+    if (!this.state.customising) return;
+    if (e.target.closest && e.target.closest('button, [title="Drag to reshape"]')) return;
+    e.preventDefault();
+    const m = this.gridMetrics();
+    const it = this.currentLayout()[i];
+    const x0 = e.clientX, y0 = e.clientY;
+    let live = false;
+    const move = ev => {
+      const dx = ev.clientX - x0, dy = ev.clientY - y0;
+      if (!live && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      live = true;
+      const x = Math.min(12 - it.w, Math.max(0, it.x + Math.round(dx / (m.col + m.gap))));
+      const y = Math.max(0, it.y + Math.round(dy / (m.row + m.gap)));
+      this.setState({ ghost: { i: i, x: x, y: y, w: it.w, h: it.h } });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const gh = this.state.ghost;
+      this.setState({ ghost: null });
+      if (!gh || !live) return;
+      const next = this.currentLayout().slice();
+      next[gh.i] = { k: next[gh.i].k, x: gh.x, y: gh.y, w: gh.w, h: gh.h };
+      this.saveLayout(Component.resolve(next, gh.i));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  observeFlow(key) {
+    return el => {
+      this._ro = this._ro || {};
+      if (this._ro[key]) { this._ro[key].disconnect(); this._ro[key] = null; }
+      if (!el) return;
+      const apply = w => {
+        if (!w) return;
+        const sc = Math.round(Math.min(1, Math.max(0.18, w / 880)) * 1000) / 1000;
+        const k = 'flowScale' + key;
+        if (this.state[k] !== sc) { const patch = {}; patch[k] = sc; this.setState(patch); }
+      };
+      apply(el.getBoundingClientRect().width);
+      if (typeof ResizeObserver === 'undefined') return;
+      const ro = new ResizeObserver(entries => apply(entries[0].contentRect.width));
+      ro.observe(el);
+      this._ro[key] = ro;
+    };
+  }
+
+  moveWidget(from, to) {
+    if (from == null || from === to) return;
+    const next = this.currentLayout().slice();
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    this.saveLayout(next);
+  }
+
+  static fmt(n) {
+    const neg = n < 0;
+    const s = String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (neg ? '\u2212' : '') + s;
+  }
+
+  // ---------- Sankey ----------
+  static get FLOWS() {
+    const build = (income, out) => ({ income: income, out: out });
+    return {
+      ytd: build(
+        [['Salary · Robert', 644000], ['Salary · Tereza', 483000], ['Rent · Brno', 115500], ['Dividends', 41300]],
+        [
+          ['Saved & invested', 'green', [['Brokerage transfers', 154000], ['Cash buffer', 143300]]],
+          ['Housing', 'blue', [['Mortgage · Karlín', 245000], ['Mortgage · Brno', 141400], ['SVJ & insurance', 44800]]],
+          ['Food', 'teal', [['Groceries', 113400], ['Eating out', 43400]]],
+          ['Family & lifestyle', 'purple', [['Travel', 62400], ['Kids', 48300], ['Everything else', 38200]]],
+          ['Bills & utilities', 'orange', [['Energy', 61600], ['Water & heating', 28700], ['Internet & phone', 28000]]],
+          ['Transport', 'yellow', [['Car loan', 42700], ['Fuel & tolls', 31500], ['Car service', 22300]]],
+          ['Taxes & fees', 'red', [['Taxes & fees', 34800]]]
+        ]),
+      month: build(
+        [['Salary · Robert', 92000], ['Salary · Tereza', 69000], ['Rent · Brno', 16500], ['Dividends', 5200]],
+        [
+          ['Saved & invested', 'green', [['Brokerage transfers', 22000], ['Cash buffer', 21900]]],
+          ['Housing', 'blue', [['Mortgage · Karlín', 35000], ['Mortgage · Brno', 20200], ['SVJ & insurance', 6400]]],
+          ['Food', 'teal', [['Groceries', 16200], ['Eating out', 6200]]],
+          ['Family & lifestyle', 'purple', [['Travel', 8300], ['Kids', 6900], ['Everything else', 3900]]],
+          ['Bills & utilities', 'orange', [['Energy', 8800], ['Water & heating', 4100], ['Internet & phone', 4000]]],
+          ['Transport', 'yellow', [['Car loan', 6100], ['Fuel & tolls', 4500], ['Car service', 3200]]],
+          ['Taxes & fees', 'red', [['Taxes & fees', 5000]]]
+        ])
+    };
+  }
+
+  buildFlow(key) {
+    const W = 1240, H = 860, NW = 9;
+    const spec = Component.FLOWS[key];
+    const cvar = n => 'var(--' + n + ')';
+    const totalIn = spec.income.reduce((s, r) => s + r[1], 0);
+    const byName = {};
+    spec.out.forEach(g => { byName[g[0]] = { color: g[1], leaves: g[2], v: g[2].reduce((a, l) => a + l[1], 0) }; });
+
+    // The money is peeled off in the order it is really committed: the state first,
+    // then the bills you cannot skip, then living, then the roof — what survives is savings.
+    const stages = [
+      { label: 'Taxes & fees', color: 'red', from: ['Taxes & fees'], rest: 'After tax' },
+      { label: 'Bills & utilities', color: 'orange', from: ['Bills & utilities'], rest: 'After bills' },
+      { label: 'Transport', color: 'yellow', from: ['Transport'], rest: 'After transport' },
+      { label: 'Food & lifestyle', color: 'purple', from: ['Food', 'Family & lifestyle'], rest: 'After living' },
+      { label: 'Housing', color: 'blue', from: ['Housing'], rest: 'Saved & invested' }
+    ];
+    stages.forEach(st => {
+      st.v = st.from.reduce((a, n) => a + byName[n].v, 0);
+      st.leaves = st.from.reduce((a, n) => a.concat(byName[n].leaves), []);
+    });
+    const N = stages.length;
+
+    const K = H / 592;
+    const GAP = 13 * K, inset = 12 * K, TOPLAB = 42 * K, ABOVE = 25 * K;
+    const incomeTop = inset + TOPLAB;
+    const srcGaps = (spec.income.length - 1) * GAP;
+    const scale = Math.min(
+      (H - inset - incomeTop - N * GAP) / totalIn,
+      (H - 2 * inset - srcGaps) / totalIn
+    );
+    const colX = [];
+    for (let i = 0; i <= N + 1; i++) colX.push(8 + (990 - 8) * i / (N + 1));
+
+    const nodes = [], links = [];
+    let y = Math.max(inset, incomeTop - srcGaps / 2);
+    spec.income.forEach((r, i) => {
+      nodes.push({ id: 'src' + i, label: r[0], v: r[1], x: colX[0], y: y, h: r[1] * scale, color: cvar('green'), place: 'right', w: NW });
+      y += r[1] * scale + GAP;
+    });
+    nodes.push({ id: 'income', label: 'Income', v: totalIn, x: colX[1], y: incomeTop, h: totalIn * scale, color: cvar('green'), place: 'none', w: NW });
+    spec.income.forEach((r, i) => links.push({ s: 'src' + i, t: 'income', v: r[1], color: cvar('green'), o: 0.18 }));
+
+    let rest = totalIn, prev = 'income';
+    stages.forEach((st, k) => {
+      rest -= st.v;
+      const rid = 'rem' + k, eid = 'exp' + k;
+      nodes.push({ id: rid, label: st.rest, v: rest, x: colX[2 + k], y: incomeTop, h: rest * scale, color: cvar('green'), place: 'above', w: NW });
+      nodes.push({ id: eid, label: st.label, v: st.v, x: colX[2 + k], y: incomeTop + rest * scale + (N - k) * GAP, h: st.v * scale, color: cvar(st.color), place: 'right', w: NW });
+      links.push({ s: prev, t: rid, v: rest, color: cvar('green'), o: 0.16 });
+      links.push({ s: prev, t: eid, v: st.v, color: cvar(st.color), o: 0.28 });
+      prev = rid;
+    });
+
+    const pos = {};
+    nodes.forEach(n => { pos[n.id] = n; n.so = 0; n.to = 0; });
+    const paths = links.map(l => {
+      const s = pos[l.s], t = pos[l.t];
+      const hh = l.v * scale;
+      const y0 = s.y + s.so, y1 = t.y + t.to;
+      s.so += hh; t.to += hh;
+      const x0 = s.x + s.w, x1 = t.x, xm = (x0 + x1) / 2;
+      return {
+        d: 'M' + x0.toFixed(1) + ',' + y0.toFixed(1) +
+           ' C' + xm.toFixed(1) + ',' + y0.toFixed(1) + ' ' + xm.toFixed(1) + ',' + y1.toFixed(1) + ' ' + x1.toFixed(1) + ',' + y1.toFixed(1) +
+           ' L' + x1.toFixed(1) + ',' + (y1 + hh).toFixed(1) +
+           ' C' + xm.toFixed(1) + ',' + (y1 + hh).toFixed(1) + ' ' + xm.toFixed(1) + ',' + (y0 + hh).toFixed(1) + ' ' + x0.toFixed(1) + ',' + (y0 + hh).toFixed(1) + ' Z',
+        color: l.color, o: String(l.o)
+      };
+    });
+
+    const svgNodes = nodes.filter(n => n.w > 0).map(n => ({ x: n.x.toFixed(1), y: n.y.toFixed(1), h: Math.max(n.h, 3).toFixed(1), color: n.color }));
+
+    // Side labels sit on their band's centre; where bands are too thin, the colliding
+    // run is treated as one block and centred on its own average.
+    const MINGAP = 25 * K, EDGE = 12 * K;
+    const relax = list => {
+      if (!list.length) return;
+      const items = list.map(n => ({ n: n, ideal: n.y + n.h / 2 })).sort((a, b) => a.ideal - b.ideal);
+      const fit = b => { let s = 0; b.items.forEach((it, k) => { s += it.ideal - k * MINGAP; }); b.start = s / b.items.length; };
+      const blocks = [];
+      items.forEach(it => {
+        let cur = { items: [it] }; fit(cur); blocks.push(cur);
+        while (blocks.length > 1) {
+          const p = blocks[blocks.length - 2];
+          if (p.start + p.items.length * MINGAP <= cur.start) break;
+          const m = { items: p.items.concat(cur.items) }; fit(m);
+          blocks.splice(blocks.length - 2, 2, m); cur = m;
+        }
+      });
+      let floor = EDGE;
+      blocks.forEach(b => {
+        const span = (b.items.length - 1) * MINGAP;
+        b.start = Math.max(floor, Math.min(b.start, H - EDGE - span));
+        b.items.forEach((it, k) => { it.n.labelY = b.start + k * MINGAP; });
+        floor = b.start + span + MINGAP;
+      });
+    };
+    relax(nodes.filter(n => n.id.indexOf('src') === 0));
+    relax(nodes.filter(n => n.id.indexOf('exp') === 0));
+
+    const labels = nodes.filter(n => n.place !== 'none').map(n => {
+      const above = n.place === 'above';
+      return {
+        name: n.label,
+        amount: above ? Component.fmt(n.v) : Component.fmt(n.v) + ' · ' + (n.v / totalIn * 100).toFixed(1) + '%',
+        dir: above ? 'column' : 'row',
+        items: above ? 'flex-start' : 'baseline',
+        gap: above ? '1px' : '8px',
+        top: ((above ? n.y - ABOVE : n.labelY) / H * 100).toFixed(2) + '%',
+        left: ((n.x + (above ? 0 : n.w + 12)) / W * 100).toFixed(2) + '%',
+        right: 'auto',
+        align: 'left'
+      };
+    });
+
+    const savings = rest;
+    const breakdown = stages.map(st => ({ label: st.label, color: st.color, v: st.v, leaves: st.leaves }))
+      .concat([{ label: 'Saved & invested', color: 'green', v: savings, leaves: byName['Saved & invested'].leaves }])
+      .map(g => ({
+        label: g.label, color: cvar(g.color),
+        pct: (g.v / totalIn * 100).toFixed(1) + '%',
+        leaves: (g.leaves.length === 1 && g.leaves[0][0] === g.label ? [] : g.leaves.slice().sort((a, b) => b[1] - a[1]))
+          .map(l => ({ name: l[0], value: Component.fmt(l[1]) }))
+      }));
+
+    return {
+      paths: paths, nodes: svgNodes, labels: labels, breakdown: breakdown,
+      totalIn: Component.fmt(totalIn), totalOut: Component.fmt(totalIn - savings),
+      kept: Component.fmt(savings),
+      metrics: [
+        { label: 'Money in', value: Component.fmt(totalIn), color: 'var(--green)', note: key === 'ytd' ? 'seven months' : 'July 2026' },
+        { label: 'Money out', value: Component.fmt(totalIn - savings), color: 'var(--fg1)', note: 'living costs only' },
+        { label: 'Saved and invested', value: Component.fmt(savings), color: 'var(--green)', note: (savings / totalIn * 100).toFixed(0) + '% of income' },
+        { label: 'Biggest single line', value: Component.fmt(byName['Housing'].leaves[0][1]), color: 'var(--blue)', note: 'Mortgage · Karlín' }
+      ]
+    };
+  }
+
+  // ---------- history ----------
+  static history() {
+    const rows = [];
+    let seed = 20190101;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    for (let y = 2019; y <= 2026; y++) {
+      for (let m = 1; m <= 12; m++) {
+        if (y === 2026 && m > 7) break;
+        const t = (y - 2019) + (m - 1) / 12;
+        const bonus = m === 3 ? 1.28 : m === 12 ? 1.14 : 1;
+        const heavy = (y === 2022 && m === 6) ? 2.3 : m === 12 ? 1.4 : (m === 7 || m === 8) ? 1.18 : 1;
+        rows.push({
+          y: y, m: m,
+          inK: Math.round(74 * Math.pow(1.082, t) * bonus * (0.94 + rnd() * 0.12)),
+          outK: Math.round(58 * Math.pow(1.066, t) * heavy * (0.92 + rnd() * 0.18))
+        });
+      }
+    }
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const peak = rows.reduce((mx, r) => Math.max(mx, r.inK, r.outK), 1);
+    const tin = rows.reduce((s, r) => s + r.inK, 0), tout = rows.reduce((s, r) => s + r.outK, 0);
+    const neg = rows.filter(r => r.outK > r.inK).length;
+    return {
+      months: rows.map(r => ({
+        inH: (r.inK / peak * 100).toFixed(1) + '%',
+        outH: (r.outK / peak * 100).toFixed(1) + '%',
+        tip: names[r.m - 1] + ' ' + r.y + ' — earned ' + Component.fmt(r.inK * 1000) + ', spent ' + Component.fmt(r.outK * 1000)
+      })),
+      years: ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'],
+      range: rows.length + ' months · Jan 2019 to Jul 2026',
+      rate: Math.round((1 - tout / tin) * 100),
+      negative: neg === 0 ? 'never spent more than you earned'
+        : neg === 1 ? 'one month spent more than it earned'
+        : neg + ' months spent more than they earned'
+    };
+  }
+
+  // ---------- retirement ----------
+  static get RET_DEFAULTS() {
+    return { spend: 65000, swr: 3.5, realReturn: 4, plan: 'keep', pensionOne: 28000, pensionTwo: 23700, ageOne: 65, ageTwo: 63, bornOne: 1988, bornTwo: 1990 };
+  }
+  retModel(cfg) {
+    const liquid = 921400 + 1672500, contribution = 29750 * 12, r = cfg.realReturn / 100;
+    const at = t => {
+      let capital = liquid, c = contribution;
+      for (let k = 0; k < t; k++) { capital = capital * (1 + r) + c; c *= 1.02; }
+      let mortgage = 6600000;
+      for (let k = 0; k < t; k++) mortgage = Math.max(0, mortgage * 1.0424 - 492000);
+      const equity = 14800000 * Math.pow(1.02, t) - mortgage;
+      const pot = capital + (cfg.plan === 'sell' ? equity : 0);
+      const draw = pot * (cfg.swr / 100) / 12;
+      const rent = cfg.plan === 'rent' ? 16500 : 0;
+      const a1 = 2026 + t - cfg.bornOne, a2 = 2026 + t - cfg.bornTwo;
+      const pension = (a1 >= cfg.ageOne ? cfg.pensionOne : 0) + (a2 >= cfg.ageTwo ? cfg.pensionTwo : 0);
+      const total = draw + rent + pension;
+      return { t: t, year: 2026 + t, a1: a1, a2: a2, capital: capital, equity: equity, draw: draw, pension: pension, total: total, gap: total - cfg.spend };
+    };
+    let fire = null;
+    for (let t = 0; t <= 40 && fire === null; t++) if (at(t).total >= cfg.spend) fire = at(t);
+    return { at: at, rows: [0, 5, 10, 15, 20].map(at), fire: fire };
+  }
+
+  // ---------- Home Assistant ----------
+  static get ROOMS() {
+    return [
+      { name: 'Living room', climate: '23.1 °C · 44%', devices: [
+        { id: 'lr_light', emoji: '💡', name: 'Ceiling lights', on: 'Warm, 40%', off: 'Off' },
+        { id: 'lr_blinds', emoji: '🪟', name: 'Blinds', on: 'Open', off: 'Closed' },
+        { id: 'lr_heat', emoji: '🔥', name: 'Radiator', on: 'Heating to 22°', off: 'Idle' }
+      ] },
+      { name: 'Kitchen', climate: '22.6 °C · 48%', devices: [
+        { id: 'k_light', emoji: '💡', name: 'Worktop', on: 'On, 80%', off: 'Off' },
+        { id: 'k_dish', emoji: '🍽️', name: 'Dishwasher', on: 'Running · 38 min', off: 'Finished' }
+      ] },
+      { name: 'Bedroom', climate: '20.4 °C · 46%', devices: [
+        { id: 'b_light', emoji: '💡', name: 'Bedside', on: 'On, 15%', off: 'Off' },
+        { id: 'b_heat', emoji: '🔥', name: 'Radiator', on: 'Heating to 20°', off: 'Idle' },
+        { id: 'b_blinds', emoji: '🪟', name: 'Blinds', on: 'Open', off: 'Closed' }
+      ] },
+      { name: 'Eliška\u2019s room', climate: '21.8 °C · 45%', devices: [
+        { id: 'e_light', emoji: '💡', name: 'Lamp', on: 'On, 30%', off: 'Off' },
+        { id: 'e_air', emoji: '🌬️', name: 'Air purifier', on: 'Auto · PM2.5 6', off: 'Off' }
+      ] }
+    ];
+  }
+  static get DEVICE_DEFAULTS() {
+    return { lr_light: true, lr_blinds: true, lr_heat: false, k_light: false, k_dish: true, b_light: false, b_heat: true, b_blinds: false, e_light: true, e_air: true };
+  }
+
+  // ---------- documents ----------
+  static get SHELVES() {
+    return [
+      { key: 'payslips', label: 'Payslips' }, { key: 'tax', label: 'Tax' },
+      { key: 'identity', label: 'Identity' }, { key: 'family', label: 'Family' },
+      { key: 'property', label: 'Property' }, { key: 'tenancy', label: 'Tenancy' },
+      { key: 'loans', label: 'Loans' }, { key: 'insurance', label: 'Insurance' }
+    ];
+  }
+  static get DOCS() {
+    return [
+      { n: 'Payslip 2026-07 · Robert', s: 'payslips', a: 'Robert', x: 'PDF', d: '2 Aug 2026' },
+      { n: 'Payslip 2026-07 · Tereza', s: 'payslips', a: 'Tereza', x: 'PDF', d: '2 Aug 2026' },
+      { n: 'Payslip 2026-06 · Robert', s: 'payslips', a: 'Robert', x: 'PDF', d: '3 Jul 2026' },
+      { n: 'Payslip 2026-06 · Tereza', s: 'payslips', a: 'Tereza', x: 'PDF', d: '3 Jul 2026' },
+      { n: 'Tax return 2025', s: 'tax', a: 'Household', x: 'PDF', d: '28 Mar 2026' },
+      { n: 'Mortgage interest confirmation', s: 'tax', a: 'Karlín', x: 'PDF', d: '4 Feb 2026' },
+      { n: 'ČSSZ pension record', s: 'tax', a: 'Robert', x: 'PDF', d: '11 May 2026' },
+      { n: 'Passport · Robert', s: 'identity', a: 'Robert', x: 'JPG', d: '9 Jan 2024', e: 'expires Mar 2027' },
+      { n: 'Passport · Tereza', s: 'identity', a: 'Tereza', x: 'JPG', d: '9 Jan 2024', e: 'expires Nov 2029' },
+      { n: 'Driving licence · Robert', s: 'identity', a: 'Robert', x: 'PDF', d: '9 Jan 2024' },
+      { n: 'Marriage certificate', s: 'family', a: 'Household', x: 'PDF', d: '9 Jan 2024' },
+      { n: 'Birth certificate · Eliška', s: 'family', a: 'Eliška', x: 'PDF', d: '9 Jan 2024' },
+      { n: 'Purchase contract · Karlín', s: 'property', a: 'Karlín', x: 'PDF', d: '9 Jan 2024' },
+      { n: 'Valuation 2026 · Karlín', s: 'property', a: 'Karlín', x: 'PDF', d: '14 Jul 2026' },
+      { n: 'Floor plan · Karlín', s: 'property', a: 'Karlín', x: 'PNG', d: '9 Jan 2024' },
+      { n: 'Purchase contract · Brno', s: 'property', a: 'Brno', x: 'PDF', d: '17 Jun 2022' },
+      { n: 'Floor plan · Brno', s: 'property', a: 'Brno', x: 'PNG', d: '17 Jun 2022' },
+      { n: 'Lease agreement · Brno', s: 'tenancy', a: 'Brno', x: 'PDF', d: '1 Oct 2024', e: 'ends 30 Sep 2026' },
+      { n: 'Handover protocol · Brno', s: 'tenancy', a: 'Brno', x: 'PDF', d: '1 Oct 2024' },
+      { n: 'Tenant ID copy · M. Dvořák', s: 'tenancy', a: 'Brno', x: 'JPG', d: '1 Oct 2024' },
+      { n: 'Mortgage contract · Karlín', s: 'loans', a: 'Karlín', x: 'PDF', d: '9 Jan 2024' },
+      { n: 'Fixation letter 4.29%', s: 'loans', a: 'Karlín', x: 'PDF', d: '2 Mar 2024' },
+      { n: 'Mortgage contract · Brno', s: 'loans', a: 'Brno', x: 'PDF', d: '17 Jun 2022' },
+      { n: 'Car loan agreement', s: 'loans', a: 'Vehicle', x: 'PDF', d: '6 Jun 2024' },
+      { n: 'Home insurance · Karlín', s: 'insurance', a: 'Karlín', x: 'PDF', d: '8 Jan 2026', e: 'renews Jan 2027' },
+      { n: 'Landlord insurance · Brno', s: 'insurance', a: 'Brno', x: 'PDF', d: '3 Oct 2025', e: 'renews Oct 2026' },
+      { n: 'Car insurance · Octavia', s: 'insurance', a: 'Vehicle', x: 'PDF', d: '20 May 2026', e: 'renews May 2027' }
+    ];
+  }
+
+  static get PROPS() {
+    return {
+      karlin: {
+        name: 'Karlín, Praha 8', size: '3+kk · 78 m² · bought 2019', lived: true, rented: false,
+        planSlot: 'plan-karlin', fixation: 'fixed 4.29% to Mar 2029',
+        paidPct: '26.4%', paidNote: '1 480 000 of 5 600 000 repaid · 4 120 000 owed',
+        billsTotal: '10 850 Kč',
+        bills: [['SVJ fee & repair fund', '4 850'], ['Energy · from meter', '3 100'], ['Water & heating', '1 700'], ['Internet', '1 200']],
+        metrics: [
+          ['Est. value', '9 850 000', 'var(--fg1)', 'valued Jul 2026'],
+          ['Mortgage owed', '4 120 000', 'var(--red)', 'Česká spořitelna'],
+          ['Equity', '5 730 000', 'var(--green)', '58% of value'],
+          ['Money in', '2 940 000', 'var(--fg2)', 'deposit, fees, principal'],
+          ['Appreciation', '+41%', 'var(--green)', 'since 2019']
+        ]
+      },
+      brno: {
+        name: 'Brno, Žabovřesky', size: '2+kk · 54 m² · bought 2022', lived: false, rented: true,
+        planSlot: 'plan-brno', fixation: 'fixed 4.19% to Sep 2028',
+        paidPct: '10.1%', paidNote: '280 000 of 2 760 000 repaid · 2 480 000 owed',
+        billsTotal: '3 400 Kč',
+        tenantName: 'Martin Dvořák', tenantInitials: 'MD', tenantContact: '+420 774 118 902 · m.dvorak@email.cz',
+        leaseState: 'ends in 49 days', leaseColor: 'var(--yellow)', leaseTint: 'var(--yellow-tint)',
+        leaseFacts: [['Rent', '16 500 Kč', 'var(--fg1)'], ['Deposit held', '33 000 Kč', 'var(--fg2)'], ['Lease ends', '30 Sep 2026', 'var(--yellow)'], ['Since', 'Oct 2024', 'var(--fg2)']],
+        bills: [['SVJ fee & repair fund', '2 100'], ['Landlord insurance', '600'], ['Building services', '700']],
+        metrics: [
+          ['Est. value', '4 950 000', 'var(--fg1)', 'valued Jun 2026'],
+          ['Mortgage owed', '2 480 000', 'var(--red)', 'Raiffeisenbank'],
+          ['Equity', '2 470 000', 'var(--green)', '50% of value'],
+          ['Rent yield', '4.0%', 'var(--teal)', 'gross, on value'],
+          ['Cash flow', '−3 700', 'var(--red)', 'monthly, after costs']
+        ]
+      }
+    };
+  }
+
+  set(key, path) {
+    return e => {
+      const v = Number(e.target.value);
+      this.setState(s => {
+        const base = Object.assign({}, Component.RET_DEFAULTS, s.retire);
+        base[key] = v;
+        return { retire: base };
+      });
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const go = k => () => this.setState({ screen: k });
+    const mods = s.modules;
+    const flow = this.buildFlow(s.period);
+    const history = Component.history();
+    const cfg = Object.assign({}, Component.RET_DEFAULTS, s.retire);
+    const model = this.retModel(cfg);
+    const devices = Object.assign({}, Component.DEVICE_DEFAULTS, s.devices);
+    const prop = Component.PROPS[s.propKey];
+    const money = v => Component.fmt(Math.round(v / 100) * 100);
+
+    const screens = {
+      overview: ['Overview', 'August 2026 · everything reconciled to 31 July', '🧭'],
+      cashflow: ['Cash flow', 'Income traced to the category it ended up in', '💸'],
+      accounts: ['Accounts', 'Five banks, four currencies, one balance sheet', '🏦'],
+      import: ['Import', 'Drop a statement, correct what it got wrong, it learns', '📥'],
+      property: ['Property', 'Two flats · value, debt, tenants and paperwork', '🏢'],
+      investments: ['Investments', 'XTB, updated from your own report', '📈'],
+      loans: ['Loans', 'Mortgages with fixation periods, and everything else', '💳'],
+      retire: ['Retirement', 'In today\u2019s money · returns are real', '⛱️'],
+      home: ['Household', 'Karlín · Home Assistant, energy and the week ahead', '🏠'],
+      calendar: ['Calendar', 'Two-way with iCal and Google', '📅'],
+      docs: ['Documents', 'On your own server, filed by shelf and subject', '🗂️'],
+      settings: ['Settings', 'Every part of this is optional', '⚙️']
+    };
+    const cur = screens[s.screen] || screens.overview;
+
+    const SUBLABEL = {
+      cashflow: 'Cash flow', accounts: 'Accounts', import: 'Import',
+      investments: 'Investments', loans: 'Loans', home: 'Home',
+      calendar: 'Calendar', docs: 'Documents', settings: 'Settings'
+    };
+    const enabled = k => ({
+      cashflow: true, accounts: true, overview: true, settings: true,
+      import: mods.imports, property: mods.property, investments: mods.investments,
+      loans: mods.loans, retire: mods.retirement, home: mods.home,
+      calendar: mods.calendar, docs: mods.documents
+    })[k];
+
+    const navAreas = Component.AREAS.map(a => {
+      const live = a.screens.filter(enabled);
+      if (!live.length) return null;
+      const active = live.indexOf(s.screen) >= 0;
+      return {
+        label: a.label, paths: Component.ICONS[a.icon], go: go(live[0]),
+        badge: live.indexOf('import') >= 0 && mods.imports ? '12' : '',
+        badgeBg: live.indexOf('import') >= 0 && mods.imports ? 'var(--yellow)' : 'transparent',
+        bg: active ? 'var(--card3)' : 'transparent',
+        fg: active ? 'var(--fg1)' : 'var(--fg2)',
+        fw: active ? '500' : '400'
+      };
+    }).filter(Boolean);
+
+    const areaOf = Component.AREAS.filter(a => a.screens.indexOf(s.screen) >= 0)[0];
+    const subScreens = areaOf ? areaOf.screens.filter(enabled) : [];
+    const subTabs = subScreens.length > 1 ? subScreens.map(k => ({
+      label: SUBLABEL[k] || k, go: go(k),
+      bg: s.screen === k ? 'var(--card3)' : 'transparent',
+      fg: s.screen === k ? 'var(--fg1)' : 'var(--fg3)',
+      fw: s.screen === k ? '500' : '400'
+    })) : [];
+
+    const navItem = (key, label, icon, badge) => ({
+      label: label, icon: icon, badge: badge || '', go: go(key),
+      bg: s.screen === key ? 'var(--card3)' : 'transparent',
+      fg: s.screen === key ? 'var(--fg1)' : 'var(--fg2)',
+      fw: s.screen === key ? '500' : '400',
+      badgeBg: badge ? 'var(--yellow)' : 'transparent'
+    });
+
+    const navGroups = [
+      { label: 'Money', items: [navItem('overview', 'Overview', '🧭'), navItem('cashflow', 'Cash flow', '💸'), navItem('accounts', 'Accounts', '🏦')].concat(mods.imports ? [navItem('import', 'Import', '📥', '12')] : []) },
+      { label: 'Assets', items: [].concat(
+          mods.property ? [navItem('property', 'Property', '🏢')] : [],
+          mods.investments ? [navItem('investments', 'Investments', '📈')] : [],
+          mods.loans ? [navItem('loans', 'Loans', '💳')] : [],
+          mods.retirement ? [navItem('retire', 'Retirement', '⛱️')] : []) },
+      { label: 'Household', items: [].concat(
+          mods.home ? [navItem('home', 'Home', '🏠')] : [],
+          mods.calendar ? [navItem('calendar', 'Calendar', '📅')] : []) },
+      { label: 'Admin', items: [].concat(
+          mods.documents ? [navItem('docs', 'Documents', '🗂️')] : [],
+          [navItem('settings', 'Settings', '⚙️')]) }
+    ].filter(g => g.items.length);
+
+    const themeOptions = ['dark', 'light'].map(t => ({
+      label: t === 'dark' ? 'Dark' : 'Light',
+      go: () => { this.applyTheme(t); this.setState({ theme: t }); },
+      bg: s.theme === t ? 'var(--card3)' : 'transparent',
+      fg: s.theme === t ? 'var(--fg1)' : 'var(--fg3)',
+      bd: s.theme === t ? 'var(--bd2)' : 'var(--bd)'
+    }));
+
+    // documents
+    const q = (s.docQuery || '').trim().toLowerCase();
+    const shelf = s.docShelf;
+    const docsAll = Component.DOCS;
+    const shown = docsAll.filter(d => {
+      if (shelf !== 'all' && d.s !== shelf) return false;
+      if (!q) return true;
+      return (d.n + ' ' + d.a + ' ' + (d.e || '')).toLowerCase().indexOf(q) >= 0;
+    });
+    const subjectsOf = list => { const o = []; list.forEach(d => { if (o.indexOf(d.a) < 0) o.push(d.a); }); return o; };
+    const docColumns = subjectsOf(shown).map(a => ({
+      label: a,
+      count: shown.filter(d => d.a === a).length + ' files',
+      items: shown.filter(d => d.a === a).map(d => ({
+        name: d.n, ext: d.x,
+        meta: d.e ? d.e : 'added ' + d.d,
+        metaColor: d.e ? 'var(--yellow)' : 'var(--fg3)'
+      }))
+    }));
+
+    const CAL_EVENTS = [
+      [3, 'SVJ meeting · Karlín', 'blue', 'Ledger'],
+      [5, 'Mortgage payment · Karlín', 'red', 'Ledger'],
+      [7, 'Eliška · school starts', 'purple', 'Google'],
+      [8, 'Import July statements', 'yellow', 'Ledger'],
+      [12, 'Car loan payment · Octavia', 'red', 'Ledger'],
+      [15, 'Mortgage payment · Brno', 'red', 'Ledger'],
+      [17, 'Rent due · Brno', 'green', 'Ledger'],
+      [21, 'XTB quarterly report update', 'teal', 'Ledger'],
+      [24, 'Property inspection · Brno', 'blue', 'Ledger'],
+      [24, 'Lease renewal window opens', 'yellow', 'Ledger'],
+      [28, 'Landlord insurance renewal · Brno', 'yellow', 'Ledger'],
+      [31, 'Lease renewal notice due', 'yellow', 'Ledger']
+    ].map(e => ({ day: e[0], label: e[1], color: 'var(--' + e[2] + ')', source: e[3] }));
+
+    const today = 12;
+    const selDay = s.calDay;
+    const cells = (() => {
+      const out = [];
+      for (let i = 0; i < 5; i++) out.push({ num: '', dots: [], bg: 'transparent', bd: 'transparent', numColor: 'var(--fg3)', numWeight: '400', cursor: 'default', go: () => {} });
+      for (let d = 1; d <= 31; d++) {
+        const ev = CAL_EVENTS.filter(e => e.day === d);
+        const sel = selDay === d;
+        out.push({
+          num: String(d),
+          dots: ev.map(e => e.color),
+          bg: sel ? 'var(--card3)' : (d === today ? 'var(--card2)' : 'var(--card)'),
+          bd: sel ? 'var(--blue)' : (d === today ? 'var(--bd2)' : 'var(--bd)'),
+          numColor: (sel || d === today) ? 'var(--fg1)' : 'var(--fg3)',
+          numWeight: (sel || d === today) ? '600' : '400',
+          cursor: ev.length ? 'pointer' : 'default',
+          go: () => this.setState({ calDay: selDay === d ? null : d })
+        });
+      }
+      return out;
+    })();
+    const agendaSrc = selDay ? CAL_EVENTS.filter(e => e.day === selDay) : CAL_EVENTS;
+
+    const ruleDefs = [
+      ['imports', 'Statement import reminder', 'First working day of each month'],
+      ['payments', 'Loan and card payment dates', 'From each loan\u2019s schedule'],
+      ['inspections', 'Property inspections & SVJ meetings', 'Karlín and Brno'],
+      ['reports', 'Investment report update', 'Quarterly, from XTB'],
+      ['expiry', 'Contract and document expiry', 'Lease, fixation, passports, policies']
+    ];
+    const rules = Object.assign({ imports: true, payments: true, inspections: true, reports: true, expiry: true }, s.rules);
+
+    const toggleRow = (on, fn, label, detail) => ({
+      label: label, detail: detail, hint: detail, toggle: fn,
+      trackBg: on ? 'var(--green)' : 'var(--card3)',
+      knobLeft: on ? '15px' : '2px',
+      knobBg: on ? 'var(--bg)' : 'var(--fg3)'
+    });
+
+    return {
+      appName: 'Continuum',
+      personOne: 'Robert', personTwo: 'Tereza',
+      syncedAt: '09:12',
+      screenTitle: cur[0], screenCaption: cur[1], screenIcon: cur[2],
+      navGroups: navGroups, themeOptions: themeOptions,
+      navAreas: navAreas, subTabs: subTabs, hasSubTabs: subTabs.length > 0,
+      screenPaths: Component.ICONS[s.screen] || Component.ICONS.overview,
+      iconImport: Component.ICONS.import, iconCalendar: Component.ICONS.calendar,
+
+      customising: !!s.customising,
+      customiseLabel: s.customising ? 'Done' : 'Customise',
+      toggleCustomise: () => this.setState({ customising: !s.customising }),
+      resetLayout: () => this.saveLayout(Component.DEFAULT_LAYOUT),
+      addable: Object.keys(Component.WIDGETS)
+        .filter(k => !this.currentLayout().some(w => w.k === k))
+        .map(k => ({
+          label: Component.WIDGETS[k].label,
+          go: () => {
+            const cur = this.currentLayout();
+            const c = Component.cell(k);
+            const slot = Component.freeSlot(cur, c.w, c.h);
+            this.saveLayout(cur.concat([{ k: k, x: slot.x, y: slot.y, w: c.w, h: c.h }]));
+          }
+        })),
+      nothingToAdd: Object.keys(Component.WIDGETS).length === this.currentLayout().length,
+
+      gridRef: el => { this._grid = el; },
+      flowRefA: this._flowRefA || (this._flowRefA = this.observeFlow('A')),
+      flowRefB: this._flowRefB || (this._flowRefB = this.observeFlow('B')),
+      flowBoxA: Math.round(592 * (s.flowScaleA || 1)) + 'px',
+      flowBoxB: Math.round(592 * (s.flowScaleB || 1)) + 'px',
+      flowTransA: 'scale(' + (s.flowScaleA || 1) + ')',
+      flowTransB: 'scale(' + (s.flowScaleB || 1) + ')',
+      widgets: this.currentLayout().map((w, i) => {
+        const gh = s.ghost && s.ghost.i === i ? s.ghost : null;
+        const c = gh || w;
+        return {
+        label: Component.WIDGETS[w.k].label,
+        gc: (c.x + 1) + ' / span ' + c.w,
+        gr: (c.y + 1) + ' / span ' + c.h,
+        sizeLabel: c.w + '/12',
+        showSize: !!gh,
+        z: gh ? 5 : 1,
+        cursor: s.customising ? 'grab' : 'default',
+        startMove: e => this.startMove(i, e),
+        startResize: e => this.startResize(i, e),
+        editing: !!s.customising,
+        bd: gh ? 'var(--brand)' : (s.customising ? 'var(--bd2)' : 'var(--bd)'),
+        remove: () => this.saveLayout(this.currentLayout().filter((x, j) => j !== i)),
+        isBriefing: w.k === 'briefing', isFlow: w.k === 'flow',
+        isComposition: w.k === 'composition', isUpcoming: w.k === 'upcoming',
+        isNetworth: w.k === 'networth', isAccounts: w.k === 'accounts',
+        isEquity: w.k === 'equity', isEnergy: w.k === 'energy'
+        }; }),
+
+      nwPoints: '0,86 60,80 120,74 180,60 240,58 300,47 360,41 420,30 480,22 540,14',
+      nwArea: '0,86 60,80 120,74 180,60 240,58 300,47 360,41 420,30 480,22 540,14 540,100 0,100',
+      cashPanel: [
+        { label: 'Raiffeisenbank · savings', pct: '67.3%', value: '620 000', width: '100%', color: 'var(--blue)' },
+        { label: 'Fio banka · current', pct: '16.1%', value: '148 300', width: '24%', color: 'var(--teal)' },
+        { label: 'Česká spořitelna', pct: '10.0%', value: '92 400', width: '15%', color: 'var(--purple)' },
+        { label: 'Revolut · EUR', pct: '4.2%', value: '38 900', width: '6%', color: 'var(--orange)' },
+        { label: 'mBank · PLN', pct: '2.4%', value: '21 800', width: '4%', color: 'var(--yellow)' }
+      ],
+      equityRows: [
+        { label: 'Karlín, Praha 8', value: '9 850 000', owed: 'owed 4 120 000', width: '58%' },
+        { label: 'Brno, Žabovřesky', value: '4 950 000', owed: 'owed 2 480 000', width: '50%' }
+      ],
+      energyBars: [42, 38, 51, 47, 39, 44, 58, 62, 49, 41, 37, 45, 53, 48].map((v, i) => ({
+        h: v + '%', color: v > 55 ? 'var(--orange)' : 'var(--teal)'
+      })),
+
+      goImport: go('import'), goCalendar: go('calendar'), goHome: go('home'), goLoans: go('loans'),
+
+      isOverview: s.screen === 'overview', isCashflow: s.screen === 'cashflow',
+      isAccounts: s.screen === 'accounts', isImport: s.screen === 'import',
+      isProperty: s.screen === 'property', isInvestments: s.screen === 'investments',
+      isLoans: s.screen === 'loans', isRetire: s.screen === 'retire',
+      isHome: s.screen === 'home', isCalendar: s.screen === 'calendar',
+      isDocs: s.screen === 'docs', isSettings: s.screen === 'settings',
+
+      briefing: [
+        { emoji: '📄', kind: 'Tenancy', when: '49 days', color: 'var(--yellow)', tint: 'var(--yellow-tint)', title: 'Brno lease ends 30 September', detail: 'Martin Dvořák has been there two years. Renewal notice is due by 31 August.', go: go('property') },
+        { emoji: '↓', kind: 'Import', when: 'waiting', color: 'var(--blue)', tint: 'var(--blue-tint)', title: '12 transactions need a decision', detail: 'Mostly one-off merchants the categoriser has not seen before.', go: go('import') },
+        { emoji: '🏦', kind: 'Mortgage', when: 'Mar 2029', color: 'var(--fg3)', tint: 'var(--grey-tint)', title: 'Karlín fixation runs to March 2029', detail: 'Nothing to do yet. Refinancing quotes are worth collecting from late 2028.', go: go('loans') },
+        { emoji: '🛂', kind: 'Document', when: '7 months', color: 'var(--yellow)', tint: 'var(--yellow-tint)', title: 'Robert\u2019s passport expires in March', detail: 'Renewal takes about a month at the Prague 8 office.', go: go('docs') }
+      ],
+
+      flow: Object.assign({}, flow, {
+        caption: s.period === 'ytd' ? 'January to July 2026' : 'July 2026',
+        periods: [
+          { label: 'Year to date', go: () => this.setState({ period: 'ytd' }), bg: s.period === 'ytd' ? 'var(--card3)' : 'transparent', fg: s.period === 'ytd' ? 'var(--fg1)' : 'var(--fg3)' },
+          { label: 'This month', go: () => this.setState({ period: 'month' }), bg: s.period === 'month' ? 'var(--card3)' : 'transparent', fg: s.period === 'month' ? 'var(--fg1)' : 'var(--fg3)' }
+        ]
+      }),
+
+      history: history,
+
+      composition: [
+        { label: 'Flats, net of mortgage', value: '8 200 000', width: '100%', color: 'var(--blue)', detail: '14 800 000 valued · 6 600 000 owed' },
+        { label: 'Investments', value: '1 672 500', width: '20.4%', color: 'var(--teal)', detail: 'XTB · EUR and USD' },
+        { label: 'Cash', value: '921 400', width: '11.2%', color: 'var(--purple)', detail: 'across five accounts' },
+        { label: 'Other loans', value: '\u2212218 000', width: '2.7%', color: 'var(--red)', detail: 'car loan · paid off Jun 2029' }
+      ],
+
+      upcoming: [
+        { date: '5 Aug', label: 'Mortgage · Karlín', amount: '\u221235 000', color: 'var(--red)' },
+        { date: '12 Aug', label: 'Car loan · Octavia', amount: '\u22126 100', color: 'var(--red)' },
+        { date: '15 Aug', label: 'Mortgage · Brno', amount: '\u221220 200', color: 'var(--red)' },
+        { date: '17 Aug', label: 'Rent received · Brno', amount: '+16 500', color: 'var(--green)' },
+        { date: '24 Aug', label: 'Property inspection · Brno', amount: '—', color: 'var(--fg3)' },
+        { date: '31 Aug', label: 'Lease renewal notice due', amount: '—', color: 'var(--yellow)' }
+      ],
+
+      cashTotalCzk: '921 400',
+      accounts: [
+        { emoji: '🟦', name: 'Fio banka · current', meta: 'CZK · joint · statements to 31 Jul', balance: '148 300 Kč', czk: '' },
+        { emoji: '🟨', name: 'Raiffeisenbank · savings', meta: 'CZK · joint · the buffer', balance: '620 000 Kč', czk: '' },
+        { emoji: '🟥', name: 'Česká spořitelna · current', meta: 'CZK · Robert · mortgage account', balance: '92 400 Kč', czk: '' },
+        { emoji: '⬛', name: 'Revolut', meta: 'EUR · joint · travel and abroad', balance: '1 562 €', czk: '38 900 Kč' },
+        { emoji: '🟩', name: 'mBank Polska', meta: 'PLN · Tereza · legacy account', balance: '3 940 zł', czk: '21 800 Kč' },
+        { emoji: '🟪', name: 'XTB brokerage', meta: 'EUR and USD · investments', balance: '67 168 €', czk: '1 672 500 Kč' }
+      ],
+      cashSplit: [
+        { label: 'Raiffeisenbank · savings', pct: '67.3%', color: 'var(--blue)' },
+        { label: 'Fio banka · current', pct: '16.1%', color: 'var(--teal)' },
+        { label: 'Česká spořitelna', pct: '10.0%', color: 'var(--purple)' },
+        { label: 'Revolut · EUR', pct: '4.2%', color: 'var(--orange)' },
+        { label: 'mBank · PLN', pct: '2.4%', color: 'var(--yellow)' }
+      ],
+      transfers: [
+        { date: '2 Aug', route: 'Fio banka → Raiffeisenbank · monthly sweep', amount: '25 000 Kč' },
+        { date: '2 Aug', route: 'Fio banka → XTB · brokerage top-up', amount: '880 €' },
+        { date: '18 Jul', route: 'Revolut → Fio banka · leftover holiday cash', amount: '310 €' }
+      ],
+
+      importStats: [
+        { label: 'Files this month', value: '5', color: 'var(--fg1)' },
+        { label: 'Transactions read', value: '412', color: 'var(--fg1)' },
+        { label: 'Filed automatically', value: '97%', color: 'var(--green)' },
+        { label: 'Transfers paired', value: '3', color: 'var(--teal)' }
+      ],
+      review: [
+        { date: '28 Jul', merchant: 'ALZA.CZ A.S.', reason: 'could be Kids or Everything else', amount: '\u22124 190 Kč',
+          options: [{ label: 'Kids', go: () => {}, bg: 'var(--card2)', fg: 'var(--fg1)', bd: 'var(--bd2)' }, { label: 'Else', go: () => {}, bg: 'transparent', fg: 'var(--fg2)', bd: 'var(--bd)' }] },
+        { date: '26 Jul', merchant: 'BOOKING.COM AMSTERDAM', reason: 'first time this merchant appears', amount: '\u2212312 €',
+          options: [{ label: 'Travel', go: () => {}, bg: 'var(--card2)', fg: 'var(--fg1)', bd: 'var(--bd2)' }, { label: 'Other', go: () => {}, bg: 'transparent', fg: 'var(--fg2)', bd: 'var(--bd)' }] },
+        { date: '24 Jul', merchant: 'Incoming · 16 500 from M. DVOŘÁK', reason: 'looks like rent, no reference given', amount: '+16 500 Kč',
+          options: [{ label: 'Rent · Brno', go: () => {}, bg: 'var(--card2)', fg: 'var(--fg1)', bd: 'var(--bd2)' }, { label: 'Not rent', go: () => {}, bg: 'transparent', fg: 'var(--fg2)', bd: 'var(--bd)' }] },
+        { date: '21 Jul', merchant: 'Transfer to XTB', reason: 'own account, but no matching leg found', amount: '\u2212880 €',
+          options: [{ label: 'Transfer', go: () => {}, bg: 'var(--card2)', fg: 'var(--fg1)', bd: 'var(--bd2)' }, { label: 'Expense', go: () => {}, bg: 'transparent', fg: 'var(--fg2)', bd: 'var(--bd)' }] }
+      ],
+
+      propTabs: Object.keys(Component.PROPS).map(k => ({
+        label: Component.PROPS[k].name,
+        emoji: Component.PROPS[k].lived ? '🏠' : '🔑',
+        tag: Component.PROPS[k].lived ? 'you live here' : 'rented out',
+        go: () => this.setState({ propKey: k }),
+        bg: s.propKey === k ? 'var(--card3)' : 'var(--card)',
+        fg: s.propKey === k ? 'var(--fg1)' : 'var(--fg2)',
+        bd: s.propKey === k ? 'var(--bd2)' : 'var(--bd)'
+      })),
+      prop: {
+        size: prop.size, lived: prop.lived, rented: prop.rented,
+        planSlot: prop.planSlot, fixation: prop.fixation,
+        paidPct: prop.paidPct, paidNote: prop.paidNote,
+        billsTotal: prop.billsTotal,
+        photoSlots: ['Living room', 'Kitchen', 'Building'].map((l, i) => ({ id: prop.planSlot + '-photo-' + i, label: l })),
+        metrics: prop.metrics.map(m => ({ label: m[0], value: m[1], color: m[2], note: m[3] })),
+        bills: prop.bills.map(b => ({ label: b[0], value: b[1] })),
+        tenantName: prop.tenantName || '', tenantInitials: prop.tenantInitials || '',
+        tenantContact: prop.tenantContact || '',
+        leaseState: prop.leaseState || '', leaseColor: prop.leaseColor || 'var(--fg3)',
+        leaseTint: prop.leaseTint || 'var(--grey-tint)',
+        leaseFacts: (prop.leaseFacts || []).map(f => ({ label: f[0], value: f[1], color: f[2] }))
+      },
+
+      invMetrics: [
+        { label: 'Portfolio', value: '1 672 500', color: 'var(--fg1)', note: 'Kč · 67 168 € at 24.90' },
+        { label: 'Money in', value: '1 336 100', color: 'var(--fg2)', note: 'since 2019' },
+        { label: 'Gain', value: '+336 400', color: 'var(--green)', note: '+25.2%' },
+        { label: 'Annualised', value: '+7.4%', color: 'var(--green)', note: 'real, after inflation' }
+      ],
+      invAxis: [[0, '2.0'], [25, '1.5'], [50, '1.0'], [75, '0.5'], [100, '0']].map(a => ({ top: a[0] + '%', label: a[1] })),
+      holdings: [
+        { ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', units: '412', value: '48 210 €', czk: '1 200 400', gain: '+27.1%', color: 'var(--green)' },
+        { ticker: 'IWDA.AS', name: 'iShares Core MSCI World', units: '96', value: '9 840 €', czk: '245 000', gain: '+21.4%', color: 'var(--green)' },
+        { ticker: 'AAPL', name: 'Apple Inc.', units: '22', value: '5 190 $', czk: '111 100', gain: '+38.6%', color: 'var(--green)' },
+        { ticker: 'MSFT', name: 'Microsoft Corp.', units: '9', value: '4 120 $', czk: '88 200', gain: '+19.8%', color: 'var(--green)' },
+        { ticker: 'CEZ.PR', name: 'ČEZ a.s.', units: '48', value: '52 800 Kč', czk: '52 800', gain: '\u22123.2%', color: 'var(--red)' },
+        { ticker: 'CASH', name: 'Uninvested balance', units: '—', value: '−1 000 €', czk: '\u221225 000', gain: '—', color: 'var(--fg3)' }
+      ],
+
+      loanMetrics: [
+        { label: 'Total owed', value: '6 818 000', color: 'var(--red)', note: 'across three loans' },
+        { label: 'Monthly payments', value: '61 300', color: 'var(--fg1)', note: '34% of income' },
+        { label: 'Interest this year', value: '191 400', color: 'var(--orange)', note: 'deductible: 141 200' },
+        { label: 'Debt-free', value: '2049', color: 'var(--fg2)', note: 'at current payments' }
+      ],
+      loans: [
+        { name: 'Mortgage · Karlín', sub: 'Česká spořitelna · 4.29% · secured by the flat you live in',
+          fixLabel: 'fixed to Mar 2029', fixColor: 'var(--green)', fixTint: 'var(--green-tint)',
+          facts: [{ label: 'Owed', value: '4 120 000', color: 'var(--red)' }, { label: 'Payment', value: '35 000', color: 'var(--fg1)' }, { label: 'Rate', value: '4.29%', color: 'var(--fg2)' }, { label: 'Ends', value: '2044', color: 'var(--fg2)' }],
+          paidPct: '26.4%', paidNote: '1 480 000 of 5 600 000 repaid', openSchedule: () => {} },
+        { name: 'Mortgage · Brno', sub: 'Raiffeisenbank · 4.19% · secured by the rented flat',
+          fixLabel: 'fixed to Sep 2028', fixColor: 'var(--green)', fixTint: 'var(--green-tint)',
+          facts: [{ label: 'Owed', value: '2 480 000', color: 'var(--red)' }, { label: 'Payment', value: '20 200', color: 'var(--fg1)' }, { label: 'Rate', value: '4.19%', color: 'var(--fg2)' }, { label: 'Ends', value: '2047', color: 'var(--fg2)' }],
+          paidPct: '10.1%', paidNote: '280 000 of 2 760 000 repaid', openSchedule: () => {} },
+        { name: 'Car loan · Škoda Octavia', sub: 'Fio banka · 6.90% · no early-repayment fee',
+          fixLabel: 'fixed for the whole term', fixColor: 'var(--teal)', fixTint: 'var(--teal-tint)',
+          facts: [{ label: 'Owed', value: '218 000', color: 'var(--red)' }, { label: 'Payment', value: '6 100', color: 'var(--fg1)' }, { label: 'Rate', value: '6.90%', color: 'var(--fg2)' }, { label: 'Ends', value: 'Jun 2029', color: 'var(--fg2)' }],
+          paidPct: '43.3%', paidNote: '166 500 of 384 500 repaid', openSchedule: () => {} }
+      ],
+
+      ret: {
+        draw: money(model.rows[0].draw), pension: model.rows[0].pension ? money(model.rows[0].pension) + ' Kč' : 'nothing yet',
+        covers: Math.round(model.rows[0].total / cfg.spend * 100) + '%',
+        target: Component.fmt(cfg.spend),
+        verdict: model.fire
+          ? (model.fire.t === 0 ? 'On these assumptions you could stop now.'
+            : 'On these assumptions you clear the target in ' + model.fire.t + ' years — ' + model.fire.year + ', aged ' + model.fire.a1 + ' and ' + model.fire.a2 + '.')
+          : 'On these assumptions the target is never reached within 40 years.',
+        spendValue: String(cfg.spend), setSpend: this.set('spend'),
+        realReturn: cfg.realReturn.toFixed(1), realReturnValue: String(cfg.realReturn), setReturn: this.set('realReturn'),
+        swrOptions: [3, 3.5, 4].map(v => ({
+          label: v.toFixed(1) + '%',
+          go: () => this.setState(st => ({ retire: Object.assign({}, Component.RET_DEFAULTS, st.retire, { swr: v }) })),
+          bg: cfg.swr === v ? 'var(--blue)' : 'transparent',
+          fg: cfg.swr === v ? '#fff' : 'var(--fg2)',
+          bd: cfg.swr === v ? 'var(--blue)' : 'var(--bd)'
+        })),
+        planOptions: [['keep', 'Keep, live in it'], ['rent', 'Rent it out'], ['sell', 'Sell and invest']].map(o => ({
+          label: o[1],
+          go: () => this.setState(st => ({ retire: Object.assign({}, Component.RET_DEFAULTS, st.retire, { plan: o[0] }) })),
+          bg: cfg.plan === o[0] ? 'var(--blue)' : 'transparent',
+          fg: cfg.plan === o[0] ? '#fff' : 'var(--fg2)',
+          bd: cfg.plan === o[0] ? 'var(--blue)' : 'var(--bd)'
+        })),
+        pensionSource: 'Rough placeholder until you paste the real figures from your ČSSZ personal account.',
+        pensionFields: [
+          { label: 'Robert · monthly', value: String(cfg.pensionOne), set: this.set('pensionOne') },
+          { label: 'Tereza · monthly', value: String(cfg.pensionTwo), set: this.set('pensionTwo') },
+          { label: 'Robert · starts at', value: String(cfg.ageOne), set: this.set('ageOne') },
+          { label: 'Tereza · starts at', value: String(cfg.ageTwo), set: this.set('ageTwo') }
+        ],
+        rows: model.rows.map(r => ({
+          when: r.t === 0 ? 'today' : 'in ' + r.t + ' years',
+          ages: r.a1 + ' / ' + r.a2,
+          capital: money(r.capital), equity: money(r.equity), total: money(r.total),
+          gap: (r.gap >= 0 ? '+' : '\u2212') + money(Math.abs(r.gap)),
+          gapColor: r.gap >= 0 ? 'var(--green)' : 'var(--red)',
+          bg: r.t === 0 ? 'var(--card2)' : 'transparent'
+        })),
+        chart: (() => {
+          const required = cfg.spend * 12 / (cfg.swr / 100);
+          const pts = [];
+          for (let t = 0; t <= 20; t++) {
+            const x = model.at(t);
+            pts.push([t, x.capital + (cfg.plan === 'sell' ? x.equity : 0)]);
+          }
+          const peak = Math.max(required, pts[pts.length - 1][1]) * 1.08;
+          const path = f => pts.map(p => (p[0] / 20 * 800).toFixed(1) + ',' + (190 - f(p) / peak * 190).toFixed(1)).join(' ');
+          let cross = null;
+          for (let i = 0; i < pts.length && cross === null; i++) if (pts[i][1] >= required) cross = pts[i][0];
+          return {
+            potPath: path(p => p[1]),
+            reqPath: path(() => required),
+            required: money(required),
+            axis: [0, 25, 50, 75, 100].map(t => ({ top: t + '%', label: (peak * (1 - t / 100) / 1000000).toFixed(1) })),
+            years: [0, 5, 10, 15, 20].map(t => String(2026 + t)),
+            note: cross === null
+              ? 'On these assumptions the pot never reaches the line within twenty years.'
+              : cross === 0 ? 'Your pot already clears the line — the state pension is not needed.'
+              : 'The pot crosses the line in ' + cross + ' years. From then on the state pension is extra, not load-bearing.'
+          };
+        })(),
+        pensionStart: 'State pension starts in ' + (cfg.bornOne + cfg.ageOne) + ' and ' + (cfg.bornTwo + cfg.ageTwo) +
+          ', adding ' + money(cfg.pensionOne + cfg.pensionTwo) + ' Kč a month together. Until then everything comes from capital.'
+      },
+
+      ha: {
+        tiles: [
+          { emoji: '⚡', label: 'Power now', value: '0.62 kW', color: 'var(--fg1)', note: 'dishwasher running' },
+          { emoji: '📊', label: 'This month', value: '184 kWh', color: 'var(--fg1)', note: '3 100 Kč · into the budget' },
+          { emoji: '💧', label: 'Water', value: '4.1 m³', color: 'var(--teal)', note: '11% below last August' },
+          { emoji: '🌡️', label: 'Indoors', value: '22.4 °C', color: 'var(--fg1)', note: '45% humidity' },
+          { emoji: '🌫️', label: 'Air', value: 'PM2.5 6', color: 'var(--green)', note: 'good' }
+        ],
+        hasAlerts: true,
+        alerts: ['Balcony door has been open 2h 14m', 'Bathroom leak sensor battery at 9%'],
+        onCount: String(Object.keys(devices).filter(k => devices[k]).length),
+        rooms: Component.ROOMS.map(r => ({
+          name: r.name, climate: r.climate,
+          devices: r.devices.map(d => {
+            const on = !!devices[d.id];
+            return {
+              emoji: d.emoji, name: d.name,
+              state: on ? d.on : d.off,
+              stateColor: on ? 'var(--green)' : 'var(--fg3)',
+              bg: on ? 'var(--card2)' : 'transparent',
+              bd: on ? 'var(--bd2)' : 'var(--bd)',
+              toggle: () => this.setState(st => {
+                const next = Object.assign({}, Component.DEVICE_DEFAULTS, st.devices);
+                next[d.id] = !next[d.id];
+                return { devices: next };
+              })
+            };
+          })
+        })),
+        energyBars: [5.2, 6.1, 5.8, 7.4, 6.9, 5.5, 4.8, 6.2, 8.1, 7.0, 6.4, 5.9, 6.8, 6.1].map((v, i) => ({
+          h: (v / 8.1 * 100).toFixed(0) + '%',
+          color: v > 7.2 ? 'var(--orange)' : 'var(--teal)',
+          tip: v.toFixed(1) + ' kWh'
+        })),
+        energyNote: '6.2 kWh a day on average',
+        meters: [
+          { label: 'Electricity · month to date', value: '184 kWh · 3 100 Kč' },
+          { label: 'Water · month to date', value: '4.1 m³ · 410 Kč' },
+          { label: 'Heating · month to date', value: 'off for summer' }
+        ],
+        week: [
+          { day: 'Wed', label: 'Bin collection · paper' },
+          { day: 'Thu', label: 'Eliška swimming, 16:00' },
+          { day: 'Sat', label: 'SVJ meeting · Karlín, 10:00' },
+          { day: 'Sun', label: 'Filter change due · air purifier' }
+        ]
+      },
+
+      cal: {
+        sources: [
+          { label: 'Ledger', color: 'var(--yellow)' },
+          { label: 'Google · family', color: 'var(--blue)' },
+          { label: 'iCal · work', color: 'var(--purple)' }
+        ],
+        synced: '09:12 today',
+        monthLabel: 'August 2026',
+        eventCount: CAL_EVENTS.length + ' events · ' + CAL_EVENTS.filter(e => e.source === 'Ledger').length + ' written by the ledger',
+        weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        cells: cells,
+        agendaTitle: selDay ? 'August ' + selDay : 'Everything in August',
+        agendaNote: selDay ? 'click the day again to see the whole month' : 'click a day to narrow it',
+        agenda: agendaSrc.map(e => ({
+          date: e.day + ' Aug', label: e.label, color: e.color, source: e.source,
+          dateColor: e.day === today ? 'var(--fg1)' : 'var(--fg3)',
+          rowBg: e.day === today ? 'var(--card2)' : 'transparent'
+        })),
+        rules: ruleDefs.map(r => toggleRow(rules[r[0]], () => this.setState(st => {
+          const next = Object.assign({ imports: true, payments: true, inspections: true, reports: true, expiry: true }, st.rules);
+          next[r[0]] = !next[r[0]];
+          return { rules: next };
+        }), r[1], r[2])),
+        feeds: [
+          { emoji: '📅', name: 'Google · family', detail: 'read and write · robert@gmail.com', state: 'connected', color: 'var(--green)' },
+          { emoji: '🗓️', name: 'iCal · work', detail: 'read only · webcal subscription', state: 'connected', color: 'var(--green)' },
+          { emoji: '📤', name: 'Ledger events out', detail: 'published as ledger.ics', state: 'publishing', color: 'var(--teal)' }
+        ]
+      },
+
+      docs: {
+        query: s.docQuery,
+        setQuery: e => this.setState({ docQuery: e.target.value }),
+        clear: () => this.setState({ docQuery: '', docShelf: 'all' }),
+        shelves: [{ key: 'all', label: 'Everything' }].concat(Component.SHELVES).map(sh => ({
+          label: sh.label,
+          count: String(sh.key === 'all' ? docsAll.length : docsAll.filter(d => d.s === sh.key).length),
+          go: () => this.setState({ docShelf: sh.key }),
+          bg: shelf === sh.key ? 'var(--card3)' : 'transparent',
+          fg: shelf === sh.key ? 'var(--fg1)' : 'var(--fg2)'
+        })),
+        shownLabel: shown.length + (shown.length === 1 ? ' document' : ' documents'),
+        note: shelf === 'all' ? 'split by who or what it is about' : 'split by who or what it is about',
+        columns: docColumns
+      },
+
+      moduleRows: [
+        ['property', 'Property', 'Flats, floor plans, tenants, bills'],
+        ['investments', 'Investments', 'Holdings and long-run return'],
+        ['loans', 'Loans', 'Mortgages, car loans, schedules'],
+        ['retirement', 'Retirement', 'What your assets could pay you'],
+        ['home', 'Home Assistant', 'Only for the flat you live in'],
+        ['calendar', 'Calendar', 'iCal and Google, two-way'],
+        ['documents', 'Documents', 'Payslips, contracts, certificates'],
+        ['imports', 'Import', 'Bank statement ingestion']
+      ].map(m => toggleRow(mods[m[0]], () => this.setState(st => ({
+        modules: Object.assign({}, st.modules, { [m[0]]: !st.modules[m[0]] })
+      })), m[1], m[2])),
+
+      settingCards: [
+        { emoji: '🏷️', label: 'Categories & rules', rows: [
+          { label: 'Categories', value: '42', color: 'var(--fg1)', hint: 'seven groups, yours to rename or delete' },
+          { label: 'Rules learned from corrections', value: '68', color: 'var(--teal)', hint: 'each correction becomes a rule, reviewable here' },
+          { label: 'Transfer pairing window', value: '3 days', color: 'var(--fg1)', hint: 'how far apart the two legs of a transfer may sit' },
+          { label: 'Split rules', value: '4', color: 'var(--fg1)', hint: 'one payment divided across categories or people' }
+        ] },
+        { emoji: '🔌', label: 'Integrations', rows: [
+          { label: 'Home Assistant', value: 'connected', color: 'var(--green)', hint: 'http://homeassistant.local:8123 · long-lived token' },
+          { label: 'Google Calendar', value: 'read & write', color: 'var(--green)', hint: 'family calendar' },
+          { label: 'iCal subscription', value: 'read only', color: 'var(--teal)', hint: 'work calendar, webcal feed' },
+          { label: 'XTB report folder', value: 'watched', color: 'var(--teal)', hint: 'new report files import themselves' }
+        ] },
+        { emoji: '💾', label: 'Data & backup', rows: [
+          { label: 'Database', value: 'SQLite', color: 'var(--fg1)', hint: '/data/ledger.db · one file, yours' },
+          { label: 'Nightly backup', value: '03:00', color: 'var(--green)', hint: 'last one 12 Aug, 41 MB, kept 30 days' },
+          { label: 'History kept', value: 'forever', color: 'var(--fg1)', hint: 'nothing is pruned' },
+          { label: 'Export', value: 'CSV · JSON', color: 'var(--fg2)', hint: 'whole ledger or one screen at a time' }
+        ] },
+        { emoji: '🔐', label: 'Access', rows: [
+          { label: 'Accounts', value: '2', color: 'var(--fg1)', hint: 'Robert and Tereza, both full access' },
+          { label: 'Sign-in', value: 'password + 2FA', color: 'var(--green)', hint: 'no external identity provider needed' },
+          { label: 'Session length', value: '30 days', color: 'var(--fg1)', hint: 'on trusted devices' },
+          { label: 'Telemetry', value: 'off', color: 'var(--green)', hint: 'nothing leaves your server, ever' }
+        ] },
+        { emoji: '📨', label: 'Notifications', rows: [
+          { label: 'Channel', value: 'email · ntfy', color: 'var(--fg1)', hint: 'push to your phone without a third party' },
+          { label: 'Monthly summary', value: 'on', color: 'var(--green)', hint: 'first working day, both of you' },
+          { label: 'Expiry warnings', value: '60 days', color: 'var(--yellow)', hint: 'lease, fixation, passports, policies' },
+          { label: 'Unusual spending', value: '2.5×', color: 'var(--fg1)', hint: 'when a category runs past its own average' }
+        ] },
+        { emoji: '🌍', label: 'Locale & formats', rows: [
+          { label: 'Language', value: 'English', color: 'var(--fg1)', hint: 'Czech and Polish also shipped' },
+          { label: 'Dates', value: '12 Aug 2026', color: 'var(--fg1)', hint: 'week starts Monday' },
+          { label: 'Numbers', value: '1 283 800', color: 'var(--fg1)', hint: 'space as thousands separator' },
+          { label: 'Time zone', value: 'Europe/Prague', color: 'var(--fg2)', hint: 'used for statement dates and the calendar' }
+        ] },
+        { emoji: '📡', label: 'Rates & valuations', rows: [
+          { label: 'Exchange rates', value: 'ČNB daily', color: 'var(--fg1)', hint: 'fetched at 15:00, historical rates kept' },
+          { label: 'Share prices', value: 'from report', color: 'var(--fg2)', hint: 'no live market feed — the XTB report is the truth' },
+          { label: 'Property values', value: 'manual', color: 'var(--fg2)', hint: 'you enter a valuation; the index only suggests' },
+          { label: 'Inflation', value: 'ČSÚ CPI', color: 'var(--fg1)', hint: 'used for the real returns in Retirement' }
+        ] },
+        { emoji: '🧪', label: 'Advanced', rows: [
+          { label: 'Config file', value: 'ledger.config.json', color: 'var(--fg2)', hint: 'everything on this screen, in one file' },
+          { label: 'Statement parsers', value: '5 built in', color: 'var(--fg1)', hint: 'add your own bank as a small plugin' },
+          { label: 'API', value: 'read-only', color: 'var(--teal)', hint: 'token-scoped, for your own dashboards' },
+          { label: 'Version', value: 'v3.0.1', color: 'var(--fg2)', hint: 'update check weekly, never automatic' }
+        ] }
+      ],
+
+      currencyRows: [
+        { code: 'CZK', role: 'base · totals convert to this', rate: '1.00' },
+        { code: 'EUR', role: 'Revolut, XTB', rate: '24.90' },
+        { code: 'USD', role: 'XTB holdings', rate: '21.40' },
+        { code: 'PLN', role: 'mBank Polska', rate: '5.53' }
+      ],
+      peopleRows: [
+        { initials: 'R', name: 'Robert', role: 'earner · born 1988', born: '1988', color: 'var(--blue)' },
+        { initials: 'T', name: 'Tereza', role: 'earner · born 1990', born: '1990', color: 'var(--purple)' },
+        { initials: 'E', name: 'Eliška', role: 'dependant', born: '2019', color: 'var(--teal)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -72,23 +72,31 @@ export function applyRepayment(
 }
 
 /** Periods after a re-fix from `startDate`: anything reaching past that date
- *  is closed there, the new period takes over. History never rewrites. */
+ *  is closed there, the new period takes over. History never rewrites, and
+ *  neither does already-agreed future schedule — a period starting later
+ *  survives, and a blank end runs until it begins. This mirrors what
+ *  replaceFixation persists, so the preview cannot show a schedule the save
+ *  will not produce. */
 export function applyFixation(
 	periods: FixationPeriod[],
 	input: { startDate: string; endDate: string | null; annualRatePct: number; paymentMinor: bigint }
 ): FixationPeriod[] {
+	const later = periods
+		.filter((p) => p.startDate > input.startDate)
+		.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0));
 	return [
-		...periods.map((p) =>
-			p.startDate < input.startDate && (p.endDate === null || p.endDate > input.startDate)
-				? { ...p, endDate: input.startDate }
-				: p
-		),
+		...periods
+			.filter((p) => p.startDate < input.startDate)
+			.map((p) =>
+				p.endDate === null || p.endDate > input.startDate ? { ...p, endDate: input.startDate } : p
+			),
 		{
 			startDate: input.startDate,
-			endDate: input.endDate,
+			endDate: input.endDate ?? later[0]?.startDate ?? null,
 			annualRatePct: input.annualRatePct,
 			paymentMinor: input.paymentMinor
-		}
+		},
+		...later
 	];
 }
 

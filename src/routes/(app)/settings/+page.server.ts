@@ -7,7 +7,7 @@ import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
-import { changeOwnPassword, revokeOtherAccess } from '$lib/server/auth/password';
+import { changeOwnPassword } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
@@ -340,13 +340,12 @@ export const actions = administered({
 		const confirm = String(form.get('confirmPassword') ?? '');
 		if (next !== confirm) return fail(400, { message: 'The two new passwords do not match.' });
 
-		const result = await changeOwnPassword(locals.person.id, current, next);
+		const keep = currentSessionId(cookies);
+		const result = await changeOwnPassword(locals.person.id, current, next, keep);
 		if (!result.ok) return fail(400, { message: result.message });
 
-		const keep = currentSessionId(cookies);
 		// Sessions and passkeys both: a passkey enrolled from a stolen session
 		// would otherwise survive the one remedy the app offers.
-		if (keep) await revokeOtherAccess(locals.person.id, keep);
 		// Named rather than a bare ok, so the page can confirm the one action here
 		// with a real security consequence instead of appearing to do nothing.
 		return { passwordChanged: true };

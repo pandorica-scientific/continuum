@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { document, documentTag, property, propertyTag } from '$lib/server/db/schema';
-import { tagTotals } from '$lib/server/tags';
+import { convertedTagTotal, tagTotals } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { displayCurrency, formatMinor } from '$lib/money';
@@ -22,17 +22,16 @@ export const load: PageServerLoad = async () => {
 	const docById = new Map(docs.map((d) => [d.id, d]));
 	const propById = new Map(properties.map((p) => [p.id, p]));
 
-	const today = new Date().toISOString().slice(0, 10);
-
 	return {
 		baseCurrency: displayCurrency(base),
 		tags: totals
 			.map((t) => {
-				// Per-currency sums stand as they are; the single figure beside them
-				// is only a convenience, converted at today's rate.
-				const convertedMinor = t.totals.reduce((sum, part) => {
-					return sum + convertOrFace(rates, part.sumMinor, part.currency, base, today);
-				}, 0n);
+				// Native buckets remain useful context, but the combined figure is
+				// built from dated effective lines. Converting a historical USD bucket
+				// at today's rate rewrites the past whenever exchange rates move.
+				const convertedMinor = convertedTagTotal(t.amounts, base, (amount, from, to, day) =>
+					convertOrFace(rates, amount, from, to, day)
+				);
 				const taggedDocs = docTagRows
 					.filter((r) => r.tagId === t.id)
 					.map((r) => docById.get(r.documentId))

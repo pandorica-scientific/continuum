@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { asc, eq, inArray, type SQL } from 'drizzle-orm';
-import { db, type Tx } from '$lib/server/db';
+import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import { transaction, transactionSplit } from '$lib/server/db/schema';
 
 export interface SplitInput {
@@ -70,8 +70,23 @@ async function clearSplits(tx: Tx, transactionId: string): Promise<SplitResult> 
  * the stored lines summed to twice the transaction amount while
  * `validateSplits` had checked only what was in memory.
  */
-export async function saveSplits(transactionId: string, lines: SplitInput[]): Promise<SplitResult> {
-	return db.transaction(async (tx) => {
+export interface SavedSplitLine {
+	id: string;
+	sort: number;
+}
+
+export async function saveSplits(
+	transactionId: string,
+	lines: SplitInput[],
+	afterSave?: (handle: Queryable, lines: SavedSplitLine[]) => Promise<void>,
+	handle: Db = db
+): Promise<SplitResult> {
+	const submittedIds = lines.flatMap((line) => (line.id ? [line.id] : []));
+	if (new Set(submittedIds).size !== submittedIds.length) {
+		return bad('A stored split line cannot be submitted more than once.');
+	}
+
+	return handle.transaction(async (tx) => {
 		// Lock the parent for the duration. Without it two concurrent saves each
 		// plan against a snapshot the other invalidates, and no amount of
 		// in-transaction care makes the result add up.
@@ -106,6 +121,7 @@ export async function saveSplits(transactionId: string, lines: SplitInput[]): Pr
 		// position was no better, because deleting one line shifts every line
 		// after it onto a different row and its tags with it.
 		const kept = new Set<string>();
+		const saved: SavedSplitLine[] = [];
 		for (let index = 0; index < signed.length; index++) {
 			const line = signed[index];
 			const values = {
@@ -117,9 +133,12 @@ export async function saveSplits(transactionId: string, lines: SplitInput[]): Pr
 			if (line.id && existingIds.has(line.id)) {
 				kept.add(line.id);
 				await tx.update(transactionSplit).set(values).where(eq(transactionSplit.id, line.id));
+				saved.push({ id: line.id, sort: index });
 			} else {
 				// A line the dialog added: a new row, with no tags of its own yet.
-				await tx.insert(transactionSplit).values({ id: randomUUID(), transactionId, ...values });
+				const id = randomUUID();
+				await tx.insert(transactionSplit).values({ id, transactionId, ...values });
+				saved.push({ id, sort: index });
 			}
 		}
 
@@ -136,12 +155,23 @@ export async function saveSplits(transactionId: string, lines: SplitInput[]): Pr
 			.update(transaction)
 			.set({ categoryId: null, reviewState: 'confirmed', reviewReason: null })
 			.where(eq(transaction.id, transactionId));
+		await afterSave?.(tx, saved);
 		return { ok: true };
 	});
 }
 
-export async function deleteSplits(transactionId: string): Promise<SplitResult> {
-	return db.transaction((tx) => clearSplits(tx, transactionId));
+export async function deleteSplits(transactionId: string, handle: Db = db): Promise<SplitResult> {
+	return handle.transaction(async (tx) => {
+		// Saving takes this same lock before it touches child rows. Taking it here
+		// too gives save and unsplit one lock order (parent, then children), avoiding
+		// the deadlock where each operation held the row the other needed.
+		await tx
+			.select({ id: transaction.id })
+			.from(transaction)
+			.where(eq(transaction.id, transactionId))
+			.for('update');
+		return clearSplits(tx, transactionId);
+	});
 }
 
 export type SplitRow = typeof transactionSplit.$inferSelect;

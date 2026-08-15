@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { onDestroy } from 'svelte';
+	import { onNavigate } from '$app/navigation';
+	import { createSerializedAutosave } from '$lib/actions/autosave';
+	import { sendActionForPageExit, submitAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import SalaryCharts from '$lib/charts/SalaryCharts.svelte';
-	import { retModel, type RetireConfig } from '$lib/retire';
+	import { MAX_RETIREMENT_AGE, MIN_RETIREMENT_AGE, retModel, type RetireConfig } from '$lib/retire';
 	import { displayCurrency } from '$lib/money';
 
 	let { data, form } = $props();
@@ -21,6 +25,7 @@
 	);
 
 	// Local assumptions recompute the model instantly; saving is fire-and-forget.
+	// svelte-ignore state_referenced_locally
 	let cfg: RetireConfig = $state({ ...data.config });
 
 	const model = $derived(retModel(data.inputs, cfg));
@@ -29,14 +34,68 @@
 	const money = (v: number) => Math.round(v).toLocaleString('en').replace(/,/g, ' ');
 
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	let saveError = $state<string | null>(null);
+	// A loader invalidation may replace `data`, but one mounted page must retain
+	// one writer identity and the version it originally edited against.
+	// svelte-ignore state_referenced_locally
+	const autosaveWriterId = data.autosaveWriterId;
+	// svelte-ignore state_referenced_locally
+	const autosaveBaseVersion = data.autosaveBaseVersion;
+
+	function bodyFor(snapshot: RetireConfig, revision: number) {
+		const body = new FormData();
+		for (const [key, value] of Object.entries(snapshot)) body.set(key, String(value));
+		body.set('revision', String(revision));
+		body.set('writerId', autosaveWriterId);
+		body.set('baseVersion', String(autosaveBaseVersion));
+		return body;
+	}
+
+	function sendSave(snapshot: RetireConfig, revision: number) {
+		const body = bodyFor(snapshot, revision);
+		return submitAction(new URL('/retirement?/save', window.location.origin), body, {
+			updatePage: false
+		}).then((outcome) => {
+			saveError = outcome.type === 'success' ? null : outcome.message;
+			if (outcome.type !== 'success') throw new Error(outcome.message);
+		});
+	}
+
+	const autosave = createSerializedAutosave(
+		sendSave,
+		(snapshot, revision) => {
+			sendActionForPageExit(
+				new URL('/retirement?/save', window.location.origin),
+				bodyFor(snapshot, revision)
+			);
+		},
+		0
+	);
+
+	function flushSave() {
+		if (saveTimer) clearTimeout(saveTimer);
+		saveTimer = undefined;
+		return autosave.flush();
+	}
+
+	function flushForPageExit() {
+		if (saveTimer) clearTimeout(saveTimer);
+		saveTimer = undefined;
+		autosave.flushForPageExit();
+	}
+
 	function persist() {
 		clearTimeout(saveTimer);
+		autosave.queue({ ...cfg });
 		saveTimer = setTimeout(() => {
-			const body = new FormData();
-			for (const [key, value] of Object.entries(cfg)) body.set(key, String(value));
-			fetch('?/save', { method: 'POST', body });
+			void flushSave();
 		}, 500);
 	}
+
+	onNavigate(() => flushSave());
+	onDestroy(() => {
+		flushForPageExit();
+	});
 
 	// Chart geometry.
 	const CW = 800;
@@ -69,6 +128,8 @@
 	title="Retirement"
 	caption="All figures in today's money · returns are real, after inflation."
 />
+<svelte:window onpagehide={flushForPageExit} />
+{#if saveError}<p class="save-error" role="alert">Could not save assumptions: {saveError}</p>{/if}
 
 <section class="verdict">
 	<p>
@@ -97,7 +158,14 @@
 	<div class="controls">
 		<label>
 			<span>Monthly spending you would need</span>
-			<input class="mono" type="number" step="1000" bind:value={cfg.spend} oninput={persist} />
+			<input
+				class="mono"
+				type="number"
+				min="0"
+				step="1000"
+				bind:value={cfg.spend}
+				oninput={persist}
+			/>
 		</label>
 		<div class="control">
 			<span>Withdrawal rate</span>
@@ -132,6 +200,36 @@
 				oninput={persist}
 			/>
 		</label>
+		<label>
+			<span class="split"
+				><span>Yearly contributions grow</span><span class="mono value"
+					>{cfg.contributionGrowth.toFixed(1)}%</span
+				></span
+			>
+			<input
+				type="range"
+				min="-5"
+				max="10"
+				step="0.5"
+				bind:value={cfg.contributionGrowth}
+				oninput={persist}
+			/>
+		</label>
+		<label>
+			<span class="split"
+				><span>Property values grow</span><span class="mono value"
+					>{cfg.propertyGrowth.toFixed(1)}%</span
+				></span
+			>
+			<input
+				type="range"
+				min="-5"
+				max="10"
+				step="0.5"
+				bind:value={cfg.propertyGrowth}
+				oninput={persist}
+			/>
+		</label>
 		<div class="control wide">
 			<span>The flats, once you retire</span>
 			<div class="seg">
@@ -151,19 +249,49 @@
 		</div>
 		<label>
 			<span>{data.personNames[0]} · pension / month</span>
-			<input class="mono" type="number" step="500" bind:value={cfg.pensionOne} oninput={persist} />
+			<input
+				class="mono"
+				type="number"
+				min="0"
+				step="500"
+				bind:value={cfg.pensionOne}
+				oninput={persist}
+			/>
 		</label>
 		<label>
 			<span>{data.personNames[1]} · pension / month</span>
-			<input class="mono" type="number" step="500" bind:value={cfg.pensionTwo} oninput={persist} />
+			<input
+				class="mono"
+				type="number"
+				min="0"
+				step="500"
+				bind:value={cfg.pensionTwo}
+				oninput={persist}
+			/>
 		</label>
 		<label>
 			<span>{data.personNames[0]} · starts at</span>
-			<input class="mono" type="number" bind:value={cfg.ageOne} oninput={persist} />
+			<input
+				class="mono"
+				type="number"
+				min={MIN_RETIREMENT_AGE}
+				max={MAX_RETIREMENT_AGE}
+				step="1"
+				bind:value={cfg.ageOne}
+				oninput={persist}
+			/>
 		</label>
 		<label>
 			<span>{data.personNames[1]} · starts at</span>
-			<input class="mono" type="number" bind:value={cfg.ageTwo} oninput={persist} />
+			<input
+				class="mono"
+				type="number"
+				min={MIN_RETIREMENT_AGE}
+				max={MAX_RETIREMENT_AGE}
+				step="1"
+				bind:value={cfg.ageTwo}
+				oninput={persist}
+			/>
 		</label>
 	</div>
 	<span class="quiet">
@@ -345,6 +473,11 @@
 </section>
 
 <style>
+	.save-error {
+		margin: 0;
+		color: var(--red);
+		font-size: 13px;
+	}
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);

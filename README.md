@@ -47,8 +47,11 @@ cloud-synced folder.
 | Česká spořitelna | PDF (text layer, no OCR)                               |
 
 Statements are deduplicated by content and by transaction, so re-uploading
-overlapping exports is always safe — that is the intended way to backfill
-years of history.
+overlapping exports is always safe — including concurrent uploads and exports
+that overlap an older fingerprint format. Account identity includes bank,
+currency and the exact normalised account number; an ambiguous match is held
+for a person instead of creating or choosing an account by guess. Re-uploading
+is the intended way to backfill years of history.
 
 ## Install (Docker)
 
@@ -63,12 +66,14 @@ if something else already owns it) and follow the setup wizard. Everything —
 people, base currency (CZK, EUR or PLN), modules — is configured there, not in
 files.
 
-Two optional knobs, both in `.env`. `CONTINUUM_MAX_UPLOAD` sets the largest
+Three optional knobs live in `.env`. `CONTINUUM_MAX_UPLOAD` sets the largest
 accepted upload (`32M` by default — a phone photo does not fit in the server's
 own 512 KB default). `ADDRESS_HEADER=x-forwarded-for` makes the app read the
-real client address from a forwarded header, which the sign-in rate limit needs
-behind a reverse proxy; set it only where that proxy is the only way in and
-always overwrites the header, or a caller can forge it.
+real client address from a forwarded header, which authentication rate limits
+need behind a reverse proxy. `XFF_DEPTH=1` chooses the trusted hop counted from
+the right of `X-Forwarded-For`; increase it only for a known proxy chain. Set
+either only where that chain is the only way in and always overwrites the
+header, or a caller can forge its address.
 
 Backups: Settings → Backups writes one restorable database dump
 (`continuum-backup.sql`, overwritten on every run) plus a copy of every
@@ -92,6 +97,19 @@ docker compose exec -T db psql -U continuum -d continuum -v ON_ERROR_STOP=1 \
 ```
 
 then copying the `files/` folder back into the `continuum-data` volume.
+
+### Upgrading
+
+Take a backup, then pull and restart the containers:
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+Database migrations run before the app accepts requests. Release-specific data
+repairs and any manual considerations are listed at the top of
+[CHANGELOG.md](CHANGELOG.md).
 
 Demo mode: `DEMO=1 docker compose up -d` on a pristine instance seeds a
 fictional household — six months of categorised cash flow, two flats on one
@@ -216,6 +234,15 @@ with Let's Encrypt, or your own internal certificate authority via `mkcert` if
 you would rather nothing appear in a public log. Continuum only cares that
 `ORIGIN` is `https://` and matches the address you browse to.
 
+## Smart-meter billing
+
+When connecting Home Assistant, choose the lived-in property whose bill the
+meter should feed and enter the energy price with its currency. On that
+property, mark exactly one bill with the meter control. The hourly sync updates
+only that row and converts the price into the property's currency; it never
+creates a guessed "energy" bill. If the provider or target changes while a slow
+snapshot is in flight, that stale reading is discarded.
+
 ## API
 
 Settings → API tokens creates a bearer token (shown once) that grants
@@ -241,7 +268,9 @@ npm install
 npm run dev
 ```
 
-- `npm test` — unit tests (parsers, pairing, categoriser, chart layout)
+- `npm test` — unit tests plus isolated embedded-PostgreSQL integration tests
+  for imports, authentication, transactions/tags, loans, rollback/concurrency
+  and revisioned autosave
 - `npm run test:e2e` — Playwright journey (needs the db and `npm run build` first)
 - `npm run check` / `npm run lint` — types and style
 

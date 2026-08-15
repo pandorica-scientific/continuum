@@ -5,9 +5,12 @@ const INPUTS: RetireInputs = {
 	liquid: 2_593_900, // cash + portfolio
 	contribution: 357_000, // yearly savings
 	propertyValue: 14_800_000,
-	mortgageOwed: 6_600_000,
-	mortgageYearlyPayment: 492_000,
-	mortgageRate: 0.0424,
+	// Supplied by the shared month-by-month loan engine, sampled yearly.
+	mortgageOwedByYear: [
+		6_600_000, 6_380_000, 6_150_000, 5_910_000, 5_660_000, 5_400_000, 5_130_000, 4_850_000,
+		4_560_000, 4_260_000, 3_950_000, 3_630_000, 3_300_000, 2_960_000, 2_610_000, 2_250_000,
+		1_880_000, 1_500_000, 1_110_000, 710_000, 300_000, 0
+	],
 	monthlyRent: 16_500,
 	bornOne: 1989,
 	bornTwo: 1992,
@@ -32,6 +35,31 @@ describe('retModel', () => {
 		expect(five.capital).toBeGreaterThan(today.capital * 1.15);
 		// equity grows both by appreciation and by mortgage amortisation
 		expect(five.equity).toBeGreaterThan(today.equity);
+	});
+
+	it('uses the loan-engine balance path instead of reimplementing annual amortisation', () => {
+		const model = retModel(
+			{ ...INPUTS, propertyValue: 10_000_000, mortgageOwedByYear: [6_000_000, 1_000_000] },
+			{ ...RETIRE_DEFAULTS, propertyGrowth: 0 }
+		);
+		expect(model.rows[0].equity).toBe(4_000_000);
+		// The five-year row clamps to the last known engine balance (1m).
+		expect(model.rows[1].equity).toBe(9_000_000);
+	});
+
+	it('makes contribution and property growth explicit assumptions', () => {
+		const flat = retModel(INPUTS, {
+			...RETIRE_DEFAULTS,
+			contributionGrowth: 0,
+			propertyGrowth: 0
+		});
+		const growing = retModel(INPUTS, {
+			...RETIRE_DEFAULTS,
+			contributionGrowth: 2,
+			propertyGrowth: 2
+		});
+		expect(growing.rows[1].capital).toBeGreaterThan(flat.rows[1].capital);
+		expect(growing.rows[1].equity).toBeGreaterThan(flat.rows[1].equity);
 	});
 
 	it('the sell plan moves flat equity into the pot', () => {

@@ -5,6 +5,7 @@ import { property, propertyBill } from '$lib/server/db/schema';
 import {
 	availableHomeProviders,
 	configuredHomeProvider,
+	configuredMeterProperty,
 	getHomeConfig,
 	haMeterCandidates,
 	syncMeterBill
@@ -20,19 +21,28 @@ export const load: PageServerLoad = async () => {
 		Promise.resolve(availableHomeProviders()),
 		db.select().from(property)
 	]);
-	const livedIn = properties.find((p) => p.kind === 'lived') ?? null;
+	const livedInOptions = properties
+		.filter((candidate) => candidate.kind === 'lived')
+		.map((candidate) => ({ id: candidate.id, name: candidate.name }));
+	const livedIn = configuredMeterProperty(config, properties);
 
 	if (!config) {
 		return {
 			configured: false as const,
 			providers,
+			livedInOptions,
 			livedInName: livedIn?.name ?? null
 		};
 	}
 
 	const provider = await configuredHomeProvider();
 	if (!provider) {
-		return { configured: false as const, providers, livedInName: livedIn?.name ?? null };
+		return {
+			configured: false as const,
+			providers,
+			livedInOptions,
+			livedInName: livedIn?.name ?? null
+		};
 	}
 
 	const probe = await provider.probe();
@@ -96,10 +106,18 @@ export const actions: Actions = {
 		const kind = String(form.get('kind') ?? '');
 		const provider = availableHomeProviders().find((p) => p.id === kind);
 		if (!provider) return fail(400, { message: 'Pick a platform.' });
+		const meterPropertyId = String(form.get('meterPropertyId') ?? '');
+		const meterProperties = await db
+			.select({ id: property.id })
+			.from(property)
+			.where(and(eq(property.id, meterPropertyId), eq(property.kind, 'lived')));
+		if (!meterProperties[0]) {
+			return fail(400, { message: 'Pick the lived-in property whose meter this is.' });
+		}
 
 		// Generic: the provider's own field description drives validation, so
 		// a new platform never adds code here.
-		const config: Record<string, string> = { kind };
+		const config: Record<string, string> = { kind, meterPropertyId };
 		for (const field of provider.fields) {
 			let value = String(form.get(field.key) ?? '').trim();
 			if (!value) {

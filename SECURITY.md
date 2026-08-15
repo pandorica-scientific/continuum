@@ -91,12 +91,17 @@ whether a finding is in scope:
 
 Current protections, for reference when assessing a report: passwords hashed
 with Argon2id; session tokens, API tokens and enrollment links stored hashed,
-never in plaintext; enrollment links single-use and expiring; passkeys requiring
-user verification, with single-use challenges and a clone signal on the
-signature counter; the relying-party ID derived from `ORIGIN` rather than
-configured separately; failed sign-ins and failed bearer tokens rate limited per
-address on separate budgets; the `/api/v1` surface read-only with no write
-endpoints and no webhooks.
+never in plaintext; enrollment links single-use, expiring and consumed in the
+same transaction that creates the password/session; passkeys requiring user
+verification, with bounded single-use challenges and compare-and-swap signature
+counters; the relying-party ID derived from `ORIGIN` rather than configured
+separately; authentication generations preventing an in-flight sign-in or
+registration from surviving a password change/deactivation; failed sign-ins
+limited by both account and address, with separate bounded budgets for bearer
+tokens, enrollment and public passkey challenges; `/api/v1` bearer enforcement
+at the route boundary and a read-only surface with no write endpoints or
+webhooks. Initial setup is one atomic singleton claim and caps the submitted
+household at twenty people before any password hashing begins.
 
 ## In scope
 

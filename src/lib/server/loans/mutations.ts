@@ -1,0 +1,435 @@
+import { randomUUID } from 'node:crypto';
+import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
+import { DAY_COUNTS } from '$lib/loans/amortise';
+import { parseAmountToMinor } from '$lib/money';
+import { addRatios, tryRatioFromPercent, type Ratio } from '$lib/property/finance';
+import { db, type Db } from '$lib/server/db';
+import { loan, loanEvent, loanFixationPeriod, loanProperty, property } from '$lib/server/db/schema';
+
+export type LoanMutationResult = { ok: true } | { ok: false; status: number; message: string };
+
+export interface RepaymentInput {
+	loanId: string;
+	date: string;
+	amount: string;
+	balanceAfter: string;
+	note: string;
+}
+
+export interface FixationInput {
+	loanId: string;
+	startDate: string;
+	endDate: string | null;
+	rate: string;
+	payment: string;
+}
+
+export interface SecuredPropertyInput {
+	propertyId: string;
+	sharePct: string | null;
+}
+
+export interface CreateLoanInput {
+	name: string;
+	lender: string;
+	kind: string;
+	currency: string;
+	principal: string;
+	owed: string;
+	payment: string;
+	rate: string;
+	regime: string;
+	dayCount: string;
+	accrualStyle: string;
+	paymentDay: number | null;
+	fixedUntil: string | null;
+	startDate: string | null;
+	endDate: string | null;
+	interestDeductible: boolean;
+	secured: SecuredPropertyInput[];
+	today?: string;
+}
+
+function today(): string {
+	return new Date().toISOString().slice(0, 10);
+}
+
+function isIsoDay(value: string): boolean {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+	const parsed = new Date(`${value}T00:00:00.000Z`);
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Record an extra repayment and move the balance anchor as one serialized
+ * mutation. Locking the loan ensures two tabs subtract from successive
+ * balances instead of the same stale balance.
+ */
+export async function recordRepayment(
+	input: RepaymentInput,
+	handle: Db = db
+): Promise<LoanMutationResult> {
+	const happenedOn = input.date.trim() || today();
+	if (!isIsoDay(happenedOn)) {
+		return { ok: false, status: 400, message: 'The repayment needs a valid date.' };
+	}
+	if (happenedOn > today()) {
+		return { ok: false, status: 400, message: 'The repayment cannot be in the future.' };
+	}
+
+	return handle.transaction(async (tx) => {
+		const rows = await tx.select().from(loan).where(eq(loan.id, input.loanId)).for('update');
+		const current = rows[0];
+		if (!current) return { ok: false, status: 404, message: 'Loan not found.' };
+		if (current.startDate && happenedOn < current.startDate) {
+			return {
+				ok: false,
+				status: 400,
+				message: 'The repayment cannot predate the loan agreement.'
+			};
+		}
+		if (current.owedAsOf && happenedOn < current.owedAsOf) {
+			return {
+				ok: false,
+				status: 400,
+				message: 'The repayment cannot predate the current balance.'
+			};
+		}
+
+		let amount: bigint;
+		let balanceAfter: bigint | null = null;
+		try {
+			amount = parseAmountToMinor(input.amount, current.currency);
+			if (amount <= 0n) throw new Error('amount');
+			if (input.balanceAfter.trim()) {
+				balanceAfter = parseAmountToMinor(input.balanceAfter, current.currency);
+				if (balanceAfter < 0n) throw new Error('balance');
+			}
+		} catch {
+			return {
+				ok: false,
+				status: 400,
+				message: 'The repayment amount must be a positive number.'
+			};
+		}
+		if (
+			current.owedMinor <= 0n ||
+			amount > current.owedMinor ||
+			(balanceAfter !== null && balanceAfter >= current.owedMinor)
+		) {
+			return {
+				ok: false,
+				status: 400,
+				message: 'The repayment cannot exceed or increase the current balance.'
+			};
+		}
+
+		let newOwed = balanceAfter ?? current.owedMinor - amount;
+		if (newOwed < 0n) newOwed = 0n;
+
+		await tx.insert(loanEvent).values({
+			id: randomUUID(),
+			loanId: input.loanId,
+			happenedOn,
+			kind: 'extra_payment',
+			amountMinor: amount,
+			note: input.note.trim() || null
+		});
+		await tx
+			.update(loan)
+			.set({ owedMinor: newOwed, owedAsOf: happenedOn })
+			.where(eq(loan.id, input.loanId));
+		return { ok: true };
+	});
+}
+
+/**
+ * Replace the projected fixation schedule from a boundary while preserving
+ * immutable history before it. The event and chronology change commit or roll
+ * back together.
+ */
+export async function replaceFixation(
+	input: FixationInput,
+	handle: Db = db
+): Promise<LoanMutationResult> {
+	const startDate = input.startDate.trim();
+	if (!isIsoDay(startDate)) {
+		return { ok: false, status: 400, message: 'The new fixation needs a valid start date.' };
+	}
+	const endDate = input.endDate?.trim() || null;
+	if (endDate && (!isIsoDay(endDate) || endDate <= startDate)) {
+		return { ok: false, status: 400, message: 'The fixation end must be after its start.' };
+	}
+
+	return handle.transaction(async (tx) => {
+		const rows = await tx.select().from(loan).where(eq(loan.id, input.loanId)).for('update');
+		const current = rows[0];
+		if (!current) return { ok: false, status: 404, message: 'Loan not found.' };
+		if (current.startDate && startDate < current.startDate) {
+			return {
+				ok: false,
+				status: 400,
+				message: 'The fixation cannot predate the loan agreement.'
+			};
+		}
+		if (
+			current.endDate &&
+			(startDate >= current.endDate || (endDate !== null && endDate > current.endDate))
+		) {
+			return { ok: false, status: 400, message: 'The fixation cannot outlast the loan.' };
+		}
+		let payment: bigint;
+		const rate = Number(input.rate.replace(',', '.'));
+		try {
+			payment = parseAmountToMinor(input.payment, current.currency);
+			if (payment <= 0n || !Number.isFinite(rate) || rate < 0 || rate > 100) {
+				throw new Error('rate');
+			}
+		} catch {
+			return {
+				ok: false,
+				status: 400,
+				message: 'Rate and payment must be positive numbers.'
+			};
+		}
+
+		// A later period is schedule the bank has already agreed, not something a
+		// re-fix may silently destroy. Deleting everything from startDate onward
+		// threw away a committed follow-on with no warning and no recovery, so
+		// only the period starting on exactly this boundary is replaced.
+		const following = await tx
+			.select({ startDate: loanFixationPeriod.startDate })
+			.from(loanFixationPeriod)
+			.where(
+				and(
+					eq(loanFixationPeriod.loanId, input.loanId),
+					gt(loanFixationPeriod.startDate, startDate)
+				)
+			)
+			.orderBy(asc(loanFixationPeriod.startDate))
+			.limit(1);
+		const nextStart = following[0]?.startDate ?? null;
+		if (endDate && nextStart && endDate > nextStart) {
+			return {
+				ok: false,
+				status: 400,
+				message: `The fixation would overlap the one starting ${nextStart}.`
+			};
+		}
+		// A blank end means "not fixed to a date", so it runs until the next
+		// agreed period or stays open. Defaulting to the loan's maturity wrote a
+		// decades-long fixation nobody entered and the dialog never previewed.
+		const persistedEndDate = endDate ?? nextStart;
+
+		await tx
+			.delete(loanFixationPeriod)
+			.where(
+				and(
+					eq(loanFixationPeriod.loanId, input.loanId),
+					eq(loanFixationPeriod.startDate, startDate)
+				)
+			);
+		await tx
+			.update(loanFixationPeriod)
+			.set({ endDate: startDate })
+			.where(
+				and(
+					eq(loanFixationPeriod.loanId, input.loanId),
+					lt(loanFixationPeriod.startDate, startDate),
+					or(isNull(loanFixationPeriod.endDate), gt(loanFixationPeriod.endDate, startDate))
+				)
+			);
+		await tx.insert(loanFixationPeriod).values({
+			id: randomUUID(),
+			loanId: input.loanId,
+			startDate,
+			endDate: persistedEndDate,
+			annualRatePct: String(rate),
+			paymentMinor: payment
+		});
+		await tx.insert(loanEvent).values({
+			id: randomUUID(),
+			loanId: input.loanId,
+			happenedOn: startDate,
+			kind: 'refix',
+			amountMinor: payment,
+			note: `${rate.toFixed(2)}%${persistedEndDate ? ` to ${persistedEndDate}` : ''}`
+		});
+		return { ok: true };
+	});
+}
+
+/** Insert the agreement, every secured-property link, and its first terms. */
+export async function createLoan(
+	input: CreateLoanInput,
+	handle: Db = db
+): Promise<LoanMutationResult> {
+	const name = input.name.trim();
+	if (!name) return { ok: false, status: 400, message: 'The loan needs a name.' };
+
+	const currency = input.currency.trim().toUpperCase() || 'CZK';
+	if (!/^[A-Z]{3}$/.test(currency)) {
+		return { ok: false, status: 400, message: 'Use a three-letter currency code.' };
+	}
+	let principal: bigint;
+	let owed: bigint;
+	let payment: bigint;
+	const rate = Number(input.rate.replace(',', '.'));
+	try {
+		principal = parseAmountToMinor(input.principal, currency);
+		owed = parseAmountToMinor(input.owed, currency);
+		payment = parseAmountToMinor(input.payment, currency);
+		if (
+			principal <= 0n ||
+			owed < 0n ||
+			owed > principal ||
+			payment <= 0n ||
+			!Number.isFinite(rate) ||
+			rate < 0 ||
+			rate > 100
+		) {
+			throw new Error('range');
+		}
+	} catch {
+		return {
+			ok: false,
+			status: 400,
+			message: 'Principal and payment must be positive; owed must be between zero and principal.'
+		};
+	}
+
+	const regime = input.regime || 'fixed_period';
+	if (!['fixed_period', 'fixed_term', 'floating'].includes(regime)) {
+		return { ok: false, status: 400, message: 'Choose a valid rate regime.' };
+	}
+	const observedOn = (input.today ?? today()).trim();
+	const startDate = input.startDate?.trim() || null;
+	const endDate = input.endDate?.trim() || null;
+	const fixedUntil = input.fixedUntil?.trim() || null;
+	if (
+		!isIsoDay(observedOn) ||
+		(startDate !== null && !isIsoDay(startDate)) ||
+		(endDate !== null && !isIsoDay(endDate)) ||
+		(fixedUntil !== null && !isIsoDay(fixedUntil))
+	) {
+		return { ok: false, status: 400, message: 'Loan dates must be valid calendar dates.' };
+	}
+	const scheduleStart = startDate ?? observedOn;
+	if (owed > 0n && startDate && startDate > observedOn) {
+		return { ok: false, status: 400, message: 'A loan with a balance cannot start in the future.' };
+	}
+	if (owed > 0n && endDate && endDate < observedOn) {
+		return { ok: false, status: 400, message: 'An ended loan cannot keep a current balance.' };
+	}
+	if (endDate && endDate <= scheduleStart) {
+		return { ok: false, status: 400, message: 'The loan end must be after its start.' };
+	}
+	if (regime === 'fixed_period' && !fixedUntil) {
+		return {
+			ok: false,
+			status: 400,
+			message: 'A fixed-period loan needs the date the fixation ends.'
+		};
+	}
+	if (fixedUntil && fixedUntil <= scheduleStart) {
+		return { ok: false, status: 400, message: 'The fixation end must be after its start.' };
+	}
+	if (fixedUntil && endDate && fixedUntil > endDate) {
+		return { ok: false, status: 400, message: 'The fixation cannot outlast the loan.' };
+	}
+	const propertyIds = input.secured.map((link) => link.propertyId);
+	if (new Set(propertyIds).size !== propertyIds.length) {
+		return { ok: false, status: 400, message: 'A property can secure this loan only once.' };
+	}
+	// Validate with the same grammar the property page reads back, and sum the
+	// shares as exact rationals. `Number` accepted forms the reader rejects and
+	// spent float precision on money-adjacent input.
+	let explicitShareTotal: Ratio = { numerator: 0n, denominator: 1n };
+	let explicitShares = 0;
+	for (const link of input.secured) {
+		if (link.sharePct === null) continue;
+		explicitShares++;
+		const share = tryRatioFromPercent(link.sharePct);
+		if (!share) {
+			return { ok: false, status: 400, message: 'Secured-property shares must be percentages.' };
+		}
+		explicitShareTotal = addRatios(explicitShareTotal, share);
+	}
+	if (explicitShareTotal.numerator > explicitShareTotal.denominator) {
+		return { ok: false, status: 400, message: 'Secured-property shares cannot exceed 100%.' };
+	}
+	if (explicitShares > 0 && explicitShares < input.secured.length) {
+		return {
+			ok: false,
+			status: 400,
+			message: 'Enter a share for every secured property, or leave every share blank.'
+		};
+	}
+
+	const dayCount = (DAY_COUNTS as readonly string[]).includes(input.dayCount)
+		? input.dayCount
+		: '30/360';
+	const accrualStyle = input.accrualStyle === 'calendar' ? 'calendar' : 'payment';
+	const paymentDay =
+		Number.isInteger(input.paymentDay) && input.paymentDay! >= 1 && input.paymentDay! <= 31
+			? input.paymentDay
+			: null;
+	const loanId = randomUUID();
+
+	return handle.transaction(async (tx) => {
+		if (input.secured.length > 1 && explicitShares === 0) {
+			const securedProperties = await tx
+				.select({ id: property.id, valueMinor: property.valueMinor })
+				.from(property)
+				.where(inArray(property.id, propertyIds))
+				.orderBy(property.id)
+				.for('update');
+			if (
+				securedProperties.length !== propertyIds.length ||
+				securedProperties.every((candidate) => candidate.valueMinor <= 0n)
+			) {
+				return {
+					ok: false as const,
+					status: 400,
+					message: 'Enter secured-property shares until those properties have values.'
+				};
+			}
+		}
+		await tx.insert(loan).values({
+			id: loanId,
+			name,
+			lender: input.lender.trim(),
+			kind: input.kind || 'mortgage',
+			currency,
+			principalMinor: principal,
+			owedMinor: owed,
+			owedAsOf: observedOn,
+			startDate,
+			endDate,
+			regime,
+			dayCount,
+			accrualStyle,
+			paymentDay,
+			interestDeductible: input.interestDeductible ? 1 : 0
+		});
+		if (input.secured.length > 0) {
+			await tx.insert(loanProperty).values(
+				input.secured.map((link) => ({
+					id: randomUUID(),
+					loanId,
+					propertyId: link.propertyId,
+					sharePct: link.sharePct
+				}))
+			);
+		}
+		await tx.insert(loanFixationPeriod).values({
+			id: randomUUID(),
+			loanId,
+			startDate: startDate ?? observedOn,
+			endDate: regime === 'fixed_period' ? fixedUntil : null,
+			annualRatePct: String(rate),
+			paymentMinor: payment
+		});
+		return { ok: true };
+	});
+}

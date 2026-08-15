@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { overlayFocus } from '$lib/actions/overlay';
 
 	let { data, children } = $props();
 
@@ -7,7 +8,14 @@
 </script>
 
 <div class="shell">
-	<div class="side" class:open={drawerOpen}>
+	<div
+		class="side"
+		class:open={drawerOpen}
+		role={drawerOpen ? 'dialog' : undefined}
+		aria-modal={drawerOpen ? 'true' : undefined}
+		aria-label={drawerOpen ? 'Navigation menu' : undefined}
+		use:overlayFocus={{ onclose: () => (drawerOpen = false), active: drawerOpen }}
+	>
 		<Sidebar
 			modules={data.modules}
 			householdLabel={data.householdLabel}
@@ -20,23 +28,35 @@
 		/>
 	</div>
 	{#if drawerOpen}
-		<button type="button" class="scrim" aria-label="Close menu" onclick={() => (drawerOpen = false)}
+		<button
+			type="button"
+			class="scrim"
+			data-overlay-keep
+			aria-label="Close menu"
+			onclick={() => (drawerOpen = false)}
 		></button>
 	{/if}
 
 	<main>
 		{#if data.missingRates.length > 0}
 			<p class="rate-warning" role="status">
-				No exchange rate for {data.missingRates.join(', ')}. Amounts in
-				{data.missingRates.length > 1 ? 'those currencies' : 'that currency'} are counted at face value,
-				so every converted total on these screens is understated. Check the internet connection — rates
-				come from the Czech National Bank and refresh every six hours.
+				Approximate exchange rate for {data.missingRates.join(', ')}. Amounts in
+				{data.missingRates.length > 1 ? 'those currencies' : 'that currency'} dated before the first stored
+				fixing use the oldest rate on record, and a currency with no fixing at all is counted at face
+				value. Check the internet connection — rates come from the Czech National Bank and refresh every
+				six hours.
 			</p>
 		{/if}
 		{@render children()}
 	</main>
 
-	<button type="button" class="menu-btn" aria-label="Menu" onclick={() => (drawerOpen = true)}>
+	<button
+		type="button"
+		class="menu-btn"
+		aria-label="Menu"
+		aria-expanded={drawerOpen}
+		onclick={() => (drawerOpen = true)}
+	>
 		☰
 	</button>
 </div>
@@ -83,9 +103,14 @@
 			width: 252px;
 			z-index: 30;
 			transform: translateX(-100%);
+			/* A transformed element is still tabbable and exposed to assistive
+			 * technology. Visibility removes the closed mobile drawer from both;
+			 * the desktop sidebar is outside this media rule and remains visible. */
+			visibility: hidden;
 		}
 		.side.open {
 			transform: none;
+			visibility: visible;
 		}
 		.scrim {
 			position: fixed;

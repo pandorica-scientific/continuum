@@ -1,8 +1,7 @@
 import { error, json } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import { db } from '$lib/server/db';
-import { credential } from '$lib/server/db/schema';
+import { createCredentialAtGeneration } from '$lib/server/auth/generation';
 import { takeChallenge } from '$lib/server/auth/webauthn/challenge';
 import { readWebAuthnBody } from '$lib/server/auth/webauthn/payload';
 import { currentOrigin, passkeysAvailable, relyingPartyId } from '$lib/server/auth/webauthn/origin';
@@ -13,8 +12,14 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
 	if (!locals.person) error(401, 'Sign in first.');
 	if (!passkeysAvailable()) error(400, 'Passkeys need an HTTPS address.');
 
-	const expectedChallenge = await takeChallenge(cookies);
-	if (!expectedChallenge) error(400, 'That took too long — try again.');
+	const storedChallenge = await takeChallenge(cookies);
+	if (!storedChallenge) error(400, 'That took too long — try again.');
+	if (
+		storedChallenge.personId !== locals.person.id ||
+		typeof storedChallenge.authGeneration !== 'number'
+	) {
+		error(400, 'Authentication changed during registration — try again.');
+	}
 
 	const body = await readWebAuthnBody<RegistrationResponseJSON>(request);
 	if (!body) error(400, 'That passkey response was malformed.');
@@ -23,7 +28,7 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
 	try {
 		verification = await verifyRegistrationResponse({
 			response: body.response,
-			expectedChallenge,
+			expectedChallenge: storedChallenge.challenge,
 			expectedOrigin: currentOrigin(),
 			expectedRPID: relyingPartyId(currentOrigin())
 		});
@@ -51,37 +56,20 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
 	// excludeCredentials only lists this person's own credentials and is advisory
 	// — an authenticator may ignore it, and a double click races it outright. So
 	// a credential id arriving twice is expected rather than exceptional.
-	const owner = await db
-		.select({ personId: credential.personId })
-		.from(credential)
-		.where(eq(credential.id, info.id));
-	if (owner[0] && owner[0].personId !== locals.person.id) {
-		error(400, 'That passkey is already registered to someone else.');
-	}
-
-	const values = {
+	const stored = await createCredentialAtGeneration(db, {
+		id: info.id,
+		personId: locals.person.id,
+		authGeneration: storedChallenge.authGeneration,
 		publicKey: Buffer.from(info.publicKey).toString('base64url'),
 		counter: info.counter,
 		transports: info.transports ?? [],
 		label
-	};
-	const stored = await db
-		.insert(credential)
-		.values({ id: info.id, personId: locals.person.id, ...values })
-		.onConflictDoUpdate({
-			target: credential.id,
-			set: values,
-			// Re-registering your own device is a rename. The check above already
-			// rejects someone else's credential with a message; this makes the same
-			// rule hold when two requests race, rather than reassigning the row.
-			setWhere: eq(credential.personId, locals.person.id)
-		})
-		.returning({ id: credential.id });
+	});
 
 	// Empty only when setWhere skipped the update — the race the check above
 	// cannot see. Reporting success there would claim a passkey was added when
 	// nothing was written.
-	if (!stored[0]) error(400, 'That passkey is already registered to someone else.');
+	if (!stored) error(400, 'Authentication changed or that passkey belongs to someone else.');
 
 	return json({ ok: true });
 };

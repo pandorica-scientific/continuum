@@ -14,42 +14,143 @@ import {
 	tenancy
 } from '$lib/server/db/schema';
 import { monthlyHistory } from '$lib/server/cashflow';
-import { toMajor } from '$lib/money';
-import { convertOrFace } from '$lib/server/fx';
-import { minorDigits } from '$lib/money';
+import { formatMinor, parseAmountToMinor, toMajor } from '$lib/money';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/files';
-import { periodForMonth } from '$lib/loans/amortise';
+import { amortise, DAY_COUNTS, type DayCount } from '$lib/loans/amortise';
+import { anchorMonthFor } from '$lib/loans/simulate';
 import { learnAmountLabel, readPayslip, readStoredPayslip } from '$lib/server/salary';
-import { getBaseCurrency, getSetting, setSetting } from '$lib/server/settings';
-import { formatMinor, parseAmountToMinor } from '$lib/money';
-import { RETIRE_DEFAULTS, type RetireConfig, type RetireInputs } from '$lib/retire';
-import { salaryStats } from '$lib/salary';
+import {
+	getBaseCurrency,
+	getRevisionedSetting,
+	isRevisionWriterId,
+	setRevisionedSetting
+} from '$lib/server/settings';
+import {
+	MAX_RETIREMENT_AGE,
+	MIN_RETIREMENT_AGE,
+	RETIRE_DEFAULTS,
+	RETIRE_LABELS,
+	type RetireConfig,
+	type RetireInputs
+} from '$lib/retire';
+import { activeTenanciesByProperty } from '$lib/property/tenancy';
+import { payslipEditCurrency, salaryStats } from '$lib/salary';
 import type { Actions, PageServerLoad } from './$types';
+
+const RETIRE_NUMBER_KEYS = [
+	'spend',
+	'swr',
+	'realReturn',
+	'contributionGrowth',
+	'propertyGrowth',
+	'pensionOne',
+	'pensionTwo',
+	'ageOne',
+	'ageTwo'
+] as const;
+
+/**
+ * Name the assumption that is out of range rather than refusing the snapshot
+ * as a whole.
+ *
+ * This page autosaves, so there is no moment where a person is submitting and
+ * can see what was wrong. One generic refusal meant an out-of-range value that
+ * stayed in the form refused every later edit too — changing spending or a
+ * growth slider silently did nothing behind the same line of text, for as long
+ * as the offending field held its value.
+ */
+function retireConfigFromForm(form: FormData): { config: RetireConfig } | { message: string } {
+	type NumberKey = (typeof RETIRE_NUMBER_KEYS)[number];
+	const numbers = Object.fromEntries(
+		RETIRE_NUMBER_KEYS.map((key) => {
+			const raw = String(form.get(key) ?? '')
+				.trim()
+				.replace(',', '.');
+			const value = raw ? Number(raw) : Number.NaN;
+			return [key, Number.isFinite(value) ? value : null];
+		})
+	) as Record<NumberKey, number | null>;
+	const missing = RETIRE_NUMBER_KEYS.find((key) => numbers[key] === null);
+	if (missing) return { message: `${RETIRE_LABELS[missing]} must be a number.` };
+
+	const values = numbers as Record<NumberKey, number>;
+	const plan = String(form.get('plan') ?? '');
+	const problems: [boolean, string][] = [
+		[values.spend < 0, `${RETIRE_LABELS.spend} cannot be negative.`],
+		[![3, 3.5, 4].includes(values.swr), 'Choose a withdrawal rate of 3, 3.5 or 4%.'],
+		[
+			values.realReturn < 0 || values.realReturn > 8,
+			`${RETIRE_LABELS.realReturn} must be between 0 and 8%.`
+		],
+		[
+			values.contributionGrowth < -5 || values.contributionGrowth > 10,
+			`${RETIRE_LABELS.contributionGrowth} must be between -5 and 10%.`
+		],
+		[
+			values.propertyGrowth < -5 || values.propertyGrowth > 10,
+			`${RETIRE_LABELS.propertyGrowth} must be between -5 and 10%.`
+		],
+		[values.pensionOne < 0 || values.pensionTwo < 0, 'A pension cannot be negative.'],
+		[
+			!Number.isInteger(values.ageOne) || !Number.isInteger(values.ageTwo),
+			'Retirement ages must be whole years.'
+		],
+		[
+			values.ageOne < MIN_RETIREMENT_AGE || values.ageTwo < MIN_RETIREMENT_AGE,
+			`Retirement age must be at least ${MIN_RETIREMENT_AGE}.`
+		],
+		[
+			values.ageOne > MAX_RETIREMENT_AGE || values.ageTwo > MAX_RETIREMENT_AGE,
+			`Retirement age must be at most ${MAX_RETIREMENT_AGE}.`
+		],
+		[plan !== 'keep' && plan !== 'rent' && plan !== 'sell', 'Choose what happens to the property.']
+	];
+	const failed = problems.find(([bad]) => bad);
+	if (failed) return { message: failed[1] };
+
+	return { config: { ...values, plan: plan as RetireConfig['plan'] } };
+}
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const toBase = async (amount: bigint, currency: string) =>
-		Number(await convertOrFace(amount, currency, baseCurrency)) / 10 ** minorDigits(baseCurrency);
 
-	const [accounts, snapshots, loans, periods, properties, tenancies, people, history, stored] =
-		await Promise.all([
-			db.select().from(account),
-			db.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1),
-			db.select().from(loan),
-			db.select().from(loanFixationPeriod),
-			db.select().from(property),
-			db.select().from(tenancy),
-			db.select().from(person).orderBy(asc(person.createdAt)),
-			monthlyHistory(),
-			getSetting<Partial<RetireConfig>>('retirement', {})
-		]);
+	const [
+		accounts,
+		snapshots,
+		loans,
+		periods,
+		properties,
+		tenancies,
+		people,
+		history,
+		stored,
+		rates
+	] = await Promise.all([
+		db.select().from(account),
+		db.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1),
+		db.select().from(loan),
+		db.select().from(loanFixationPeriod),
+		db.select().from(property),
+		db.select().from(tenancy),
+		db.select().from(person).orderBy(asc(person.createdAt)),
+		monthlyHistory(),
+		getRevisionedSetting<Partial<RetireConfig>>('retirement', {}),
+		loadRateTable()
+	]);
+	const today = new Date().toISOString().slice(0, 10);
+	const toBaseMinor = (amount: bigint, currency: string, day = today) =>
+		convertOrFace(rates, amount, currency, baseCurrency, day);
+	const toBase = (amount: bigint, currency: string, day = today) =>
+		toMajor(toBaseMinor(amount, currency, day), baseCurrency);
 
 	let liquid = 0;
 	for (const a of accounts) {
 		if (a.kind === 'brokerage') continue;
-		liquid += await toBase(a.balanceMinor, a.currency);
+		liquid += toBase(a.balanceMinor, a.currency, a.balanceAsOf ?? today);
 	}
-	if (snapshots[0]) liquid += await toBase(snapshots[0].valueMinor, snapshots[0].currency);
+	if (snapshots[0])
+		liquid += toBase(snapshots[0].valueMinor, snapshots[0].currency, snapshots[0].day);
 
 	// What the household actually saves: kept money over the last 12 recorded
 	// months, annualised. Zero history → zero contribution, honestly.
@@ -58,41 +159,56 @@ export const load: PageServerLoad = async () => {
 	const contribution = last12.length > 0 ? (kept / last12.length) * 12 : 0;
 
 	let propertyValue = 0;
-	for (const p of properties) propertyValue += await toBase(p.valueMinor, p.currency);
-
-	let mortgageOwed = 0;
-	let mortgageYearlyPayment = 0;
-	let weightedRate = 0;
-	const month = new Date().toISOString().slice(0, 7);
-	for (const l of loans) {
-		if (l.owedMinor <= 0n) continue;
-		const owed = await toBase(l.owedMinor, l.currency);
-		const current = periodForMonth(
-			periods
-				.filter((p) => p.loanId === l.id)
-				.map((p) => ({
-					startDate: p.startDate,
-					endDate: p.endDate,
-					annualRatePct: Number(p.annualRatePct),
-					paymentMinor: p.paymentMinor
-				})),
-			month
-		);
-		mortgageOwed += owed;
-		if (current) {
-			mortgageYearlyPayment += (await toBase(current.paymentMinor, l.currency)) * 12;
-			weightedRate += (current.annualRatePct / 100) * owed;
-		}
-	}
-	const mortgageRate = mortgageOwed > 0 ? weightedRate / mortgageOwed : 0;
-
-	const today = new Date().toISOString().slice(0, 10);
-	let monthlyRent = 0;
-	for (const t of tenancies) {
-		if (!t.endDate || t.endDate >= today) monthlyRent += toMajor(t.rentMinor, baseCurrency);
-	}
+	for (const p of properties)
+		propertyValue += toBase(p.valueMinor, p.currency, p.valuedAt ?? today);
 
 	const year = new Date().getFullYear();
+	const month = today.slice(0, 7);
+	const horizon = 40;
+	const mortgageOwedByYear = Array.from({ length: horizon + 1 }, () => 0);
+	for (const l of loans) {
+		if (l.owedMinor <= 0n) continue;
+		const loanPeriods = periods
+			.filter((period) => period.loanId === l.id)
+			.map((period) => ({
+				startDate: period.startDate,
+				endDate: period.endDate,
+				annualRatePct: Number(period.annualRatePct),
+				paymentMinor: period.paymentMinor
+			}));
+		const schedule = amortise(
+			{
+				owedMinor: l.owedMinor,
+				owedAsOfMonth: anchorMonthFor(l.owedAsOf ?? today, l.paymentDay),
+				dayCount: (DAY_COUNTS as readonly string[]).includes(l.dayCount)
+					? (l.dayCount as DayCount)
+					: '30/360',
+				accrualStyle: l.accrualStyle === 'calendar' ? 'calendar' : 'payment',
+				paymentDay: l.paymentDay ?? 1
+			},
+			loanPeriods,
+			`${year + horizon}-${month.slice(5)}`
+		);
+
+		mortgageOwedByYear[0] += toBase(l.owedMinor, l.currency, l.owedAsOf ?? today);
+		let rowIndex = -1;
+		for (let offset = 1; offset <= horizon; offset++) {
+			const targetMonth = `${year + offset}-${month.slice(5)}`;
+			while (schedule[rowIndex + 1]?.month <= targetMonth) rowIndex++;
+			const balance = rowIndex >= 0 ? schedule[rowIndex].owedAfterMinor : l.owedMinor;
+			// Future exchange rates are unknowable; keep the loan engine in its
+			// native currency and translate each sampled balance at today's rate.
+			mortgageOwedByYear[offset] += toBase(balance, l.currency, today);
+		}
+	}
+
+	let monthlyRent = 0;
+	for (const t of activeTenanciesByProperty(tenancies, today).values()) {
+		const currency =
+			properties.find((property) => property.id === t.propertyId)?.currency ?? baseCurrency;
+		monthlyRent += toBase(t.rentMinor, currency, today);
+	}
+
 	const bornOne = people[0]?.birthYear ?? year - 36;
 	const bornTwo = people[1]?.birthYear ?? bornOne;
 
@@ -100,9 +216,7 @@ export const load: PageServerLoad = async () => {
 		liquid,
 		contribution,
 		propertyValue,
-		mortgageOwed,
-		mortgageYearlyPayment,
-		mortgageRate,
+		mortgageOwedByYear,
 		monthlyRent,
 		bornOne,
 		bornTwo,
@@ -131,7 +245,10 @@ export const load: PageServerLoad = async () => {
 			}))
 			.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1));
 		const rows = salaryStats(
-			own.map((s) => ({ periodMonth: s.periodMonth, amountMinor: s.amountMinor })),
+			own.map((s) => ({
+				periodMonth: s.periodMonth,
+				amountMinor: toBaseMinor(s.amountMinor, s.currency, `${s.periodMonth}-01`)
+			})),
 			p.birthYear
 		);
 		return {
@@ -142,7 +259,7 @@ export const load: PageServerLoad = async () => {
 				.map((r) => ({
 					year: r.year,
 					age: r.age,
-					avg: formatMinor(r.avgMonthlyMinor, own[0]?.currency ?? baseCurrency),
+					avg: formatMinor(r.avgMonthlyMinor, baseCurrency),
 					avgMajor: toMajor(r.avgMonthlyMinor, baseCurrency),
 					months: r.months,
 					deltaPct: r.deltaPct
@@ -158,7 +275,9 @@ export const load: PageServerLoad = async () => {
 
 	return {
 		inputs,
-		config: { ...RETIRE_DEFAULTS, ...stored },
+		config: { ...RETIRE_DEFAULTS, ...stored.value },
+		autosaveWriterId: randomUUID(),
+		autosaveBaseVersion: stored.version,
 		personNames: [people[0]?.name ?? 'Person one', people[1]?.name ?? 'Person two'],
 		peopleOptions: people.map((p) => ({ id: p.id, name: p.name })),
 		peopleList: people.map((p) => p.name),
@@ -219,18 +338,20 @@ export const actions: Actions = {
 		if (amountRaw && reading) await learnAmountLabel(subject, amountMinor, reading.candidates);
 
 		const documentId = randomUUID();
-		await db.insert(document).values({
-			id: documentId,
-			name: `Payslip ${periodMonth} · ${subject}`,
-			shelf: 'payslips',
-			storedName,
-			ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
-			addedOn: new Date().toISOString().slice(0, 10),
-			amountMinor,
-			amountCurrency: baseCurrency,
-			periodMonth
+		await db.transaction(async (tx) => {
+			await tx.insert(document).values({
+				id: documentId,
+				name: `Payslip ${periodMonth} · ${subject}`,
+				shelf: 'payslips',
+				storedName,
+				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
+				addedOn: new Date().toISOString().slice(0, 10),
+				amountMinor,
+				amountCurrency: baseCurrency,
+				periodMonth
+			});
+			await tx.insert(documentPerson).values({ documentId, personId }).onConflictDoNothing();
 		});
-		await db.insert(documentPerson).values({ documentId, personId }).onConflictDoNothing();
 		return { ok: true };
 	},
 
@@ -240,10 +361,10 @@ export const actions: Actions = {
 		const rows = await db.select().from(document).where(eq(document.id, id));
 		const doc = rows[0];
 		if (!doc) return fail(404, { message: 'Payslip not found.' });
-		const baseCurrency = await getBaseCurrency();
+		const currency = payslipEditCurrency(doc.amountCurrency, await getBaseCurrency());
 		let amountMinor: bigint;
 		try {
-			amountMinor = parseAmountToMinor(String(form.get('amount') ?? ''), baseCurrency);
+			amountMinor = parseAmountToMinor(String(form.get('amount') ?? ''), currency);
 			if (amountMinor <= 0n) throw new Error('amount');
 		} catch {
 			return fail(400, { message: 'The amount must be a positive number.' });
@@ -263,31 +384,40 @@ export const actions: Actions = {
 		}
 		await db
 			.update(document)
-			.set({ amountMinor, amountCurrency: baseCurrency })
+			.set({ amountMinor, amountCurrency: currency })
 			.where(eq(document.id, id));
 		return { ok: true };
 	},
 
 	save: async ({ request }) => {
 		const form = await request.formData();
-		const number = (key: string, fallback: number) => {
-			const value = Number(String(form.get(key) ?? '').replace(',', '.'));
-			return Number.isFinite(value) ? value : fallback;
-		};
-		const plan = String(form.get('plan') ?? 'keep');
-		const config: RetireConfig = {
-			spend: Math.max(0, number('spend', RETIRE_DEFAULTS.spend)),
-			swr: [3, 3.5, 4].includes(number('swr', RETIRE_DEFAULTS.swr))
-				? number('swr', RETIRE_DEFAULTS.swr)
-				: RETIRE_DEFAULTS.swr,
-			realReturn: Math.min(8, Math.max(0, number('realReturn', RETIRE_DEFAULTS.realReturn))),
-			plan: plan === 'rent' || plan === 'sell' ? plan : 'keep',
-			pensionOne: Math.max(0, number('pensionOne', RETIRE_DEFAULTS.pensionOne)),
-			pensionTwo: Math.max(0, number('pensionTwo', RETIRE_DEFAULTS.pensionTwo)),
-			ageOne: Math.max(50, number('ageOne', RETIRE_DEFAULTS.ageOne)),
-			ageTwo: Math.max(50, number('ageTwo', RETIRE_DEFAULTS.ageTwo))
-		};
-		await setSetting('retirement', config);
+		const revision = Number(form.get('revision'));
+		const writerId = String(form.get('writerId') ?? '');
+		const baseVersion = Number(form.get('baseVersion'));
+		if (!isRevisionWriterId(writerId)) {
+			return fail(400, { message: 'The save writer is invalid.' });
+		}
+		if (!Number.isSafeInteger(baseVersion) || baseVersion < 0) {
+			return fail(400, { message: 'The save base version is invalid.' });
+		}
+		if (!Number.isSafeInteger(revision) || revision < 1) {
+			return fail(400, { message: 'The save revision is invalid.' });
+		}
+		const parsed = retireConfigFromForm(form);
+		if ('message' in parsed) return fail(400, { message: parsed.message });
+		const saved = await setRevisionedSetting(
+			'retirement',
+			writerId,
+			baseVersion,
+			revision,
+			parsed.config
+		);
+		if (!saved) {
+			return fail(409, {
+				message:
+					'Newer assumptions were already saved here or in another tab. Reload before editing again.'
+			});
+		}
 		return { ok: true };
 	}
 };

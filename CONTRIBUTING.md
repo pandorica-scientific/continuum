@@ -54,7 +54,7 @@ Everything below runs in CI on every pull request, so run it locally first:
 ```sh
 npm run lint       # eslint + prettier --check
 npm run check      # svelte-check, TypeScript strict
-npm test           # unit tests (vitest)
+npm test           # unit + embedded-PostgreSQL integration tests (vitest)
 npm run build && npm run test:e2e   # Playwright journey; needs the db running
 ```
 
@@ -74,7 +74,11 @@ npm run db:migrate     # applies it locally
 Commit the generated SQL and the snapshot together with the schema change.
 Migrations are forward-only and run automatically on container start, so a
 migration that cannot apply to an existing household's database is a breaking
-change — call it out in the pull request.
+change — call it out in the pull request. Keep `drizzle/meta/_journal.json` in
+sync for a hand-written migration, and run `npx drizzle-kit check`; the
+migration-metadata regression also verifies that the current snapshot matches
+the TypeScript schema so the next generated migration cannot recreate objects
+that already exist.
 
 ## The two rules the codebase follows
 
@@ -106,8 +110,13 @@ be sent back.
 - A parser must reproduce each statement's own `opening + rows = closing`. The
   acceptance suite enforces this against real files when they are present
   locally, and never in CI.
-- Auth, import, splits and the API tokens are covered end to end only by the
-  Playwright journey. If you touch those paths, extend it.
+- Multi-row and concurrent behavior belongs in `tests/integration`, whose
+  suites start isolated embedded PostgreSQL instances. Use an injectable
+  database handle in the domain mutation so the test can force rollback and
+  interleave transactions without driving a page.
+- Playwright remains the user-journey boundary for authentication, uploads,
+  dialogs and API tokens. Extend it when a visible workflow changes; do not use
+  it in place of a focused unit or database regression.
 
 Write the test so that it fails without your change. A test that passes either
 way is documentation, not coverage.

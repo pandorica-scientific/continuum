@@ -2,11 +2,13 @@
 // changing a password after a scare should actually eject the other device,
 // which is the entire point of changing it.
 
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { credential, person, session } from '$lib/server/db/schema';
+import { person } from '$lib/server/db/schema';
 import { passwordMinLength } from '$lib/server/policy';
+import { passwordLengthError } from '$lib/password-policy';
 import { hashPassword, verifyPassword } from './index';
+import { revokeAuthenticationGeneration } from './generation';
 
 /**
  * Revoke every way into this account except the session doing the revoking.
@@ -22,35 +24,40 @@ import { hashPassword, verifyPassword } from './index';
  * is the correct trade when the reason for doing this is that someone else may
  * have had the account.
  */
-export async function revokeOtherAccess(personId: string, keepSessionId: string): Promise<void> {
-	await db.transaction(async (tx) => {
-		await tx
-			.delete(session)
-			.where(and(eq(session.personId, personId), ne(session.id, keepSessionId)));
-		await tx.delete(credential).where(eq(credential.personId, personId));
-	});
-}
-
 export async function changeOwnPassword(
 	personId: string,
 	current: string,
-	next: string
+	next: string,
+	keepSessionId: string | null
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-	const minLength = passwordMinLength();
-	if (next.length < minLength) {
-		return { ok: false, message: `New password needs at least ${minLength} characters.` };
-	}
+	const passwordError = passwordLengthError(next, passwordMinLength(), 'New password');
+	if (passwordError) return { ok: false, message: passwordError };
 	const rows = await db
 		.select({ passwordHash: person.passwordHash })
 		.from(person)
 		.where(eq(person.id, personId));
 	const row = rows[0];
-	if (!row || !(await verifyPassword(row.passwordHash, current))) {
+	const correct = await verifyPassword(row?.passwordHash ?? null, current);
+	if (!row || row.passwordHash === null || !correct) {
 		return { ok: false, message: 'Current password is wrong.' };
 	}
-	await db
-		.update(person)
-		.set({ passwordHash: await hashPassword(next) })
-		.where(eq(person.id, personId));
+	const previousHash = row.passwordHash;
+	const nextHash = await hashPassword(next);
+	const changed = await db.transaction(async (tx) => {
+		const updated = await tx
+			.update(person)
+			.set({ passwordHash: nextHash })
+			.where(and(eq(person.id, personId), eq(person.passwordHash, previousHash)))
+			.returning({ id: person.id });
+		if (!updated[0]) return false;
+		await revokeAuthenticationGeneration(tx, personId, keepSessionId);
+		return true;
+	});
+	if (!changed) {
+		return {
+			ok: false,
+			message: 'Authentication changed while updating the password — try again.'
+		};
+	}
 	return { ok: true };
 }

@@ -1,15 +1,20 @@
-import { and, desc, eq, lte, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { sql } from 'drizzle-orm';
+import { db, type Queryable } from '$lib/server/db';
 import {
 	account,
+	brokerOperation,
+	brokerPosition,
 	currencyRate,
+	document as storedDocument,
 	holding,
 	loan,
 	portfolioSnapshot,
 	property,
+	settings,
+	taxStatement,
 	transaction
 } from '$lib/server/db/schema';
-import { minorDigits } from '$lib/money';
+import { convertMinorSync, faceValueMinor, loadRateTable, missingRateCodes } from './table';
 
 // The Czech National Bank publishes a daily fixing of ~30 currencies against
 // CZK — free, no API key. All rates are stored as CZK per one unit; rates
@@ -77,18 +82,6 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
 	return rates.length;
 }
 
-/** CZK per one unit of `code` on the newest day at or before `day`. */
-async function czkPerUnit(code: string, day: string): Promise<number | null> {
-	if (code === 'CZK') return 1;
-	const rows = await db
-		.select()
-		.from(currencyRate)
-		.where(and(eq(currencyRate.code, code), lte(currencyRate.day, day)))
-		.orderBy(desc(currencyRate.day))
-		.limit(1);
-	return rows[0] ? Number(rows[0].rate) : null;
-}
-
 /**
  * Convert an amount in minor units between currencies at the day's rate.
  * Returns null when no rate is known yet (e.g. before the first fetch).
@@ -99,13 +92,7 @@ export async function convertMinor(
 	to: string,
 	day: string = new Date().toISOString().slice(0, 10)
 ): Promise<bigint | null> {
-	if (from === to) return amountMinor;
-	const [fromCzk, toCzk] = await Promise.all([czkPerUnit(from, day), czkPerUnit(to, day)]);
-	if (fromCzk === null || toCzk === null) return null;
-	// The result is in the target's minor units, and not every currency has two
-	// of them: 1000 JPY is amountMinor 1000, the same value in CZK is 15000.
-	const scale = 10 ** (minorDigits(to) - minorDigits(from));
-	return BigInt(Math.round(Number(amountMinor) * (fromCzk / toCzk) * scale));
+	return convertMinorSync(await loadRateTable(), amountMinor, from, to, day);
 }
 
 /**
@@ -119,7 +106,7 @@ export async function convertOrFace(
 	to: string,
 	day?: string
 ): Promise<bigint> {
-	return (await convertMinor(amountMinor, from, to, day)) ?? amountMinor;
+	return (await convertMinor(amountMinor, from, to, day)) ?? faceValueMinor(amountMinor, from, to);
 }
 
 /**
@@ -128,32 +115,47 @@ export async function convertOrFace(
  * layout names them in a banner: a missing rate has to be visible, because
  * every total that silently absorbs one is wrong by the size of the rate.
  */
-export async function missingRateCurrencies(baseCurrency: string): Promise<string[]> {
+export async function missingRateCurrencies(
+	baseCurrency: string,
+	handle: Queryable = db
+): Promise<string[]> {
 	// Every table computeNetWorth converts from. Property and the portfolio
 	// snapshot were missing, which are the two largest figures on the net-worth
 	// screen — so a flat valued in EUR with no EUR rate was counted at face
 	// value, roughly 25x understated, while the banner raised to say exactly
 	// that stayed silent.
-	const rows = (await db.execute(sql`
-		select distinct currency as code from (
-			select currency from ${account}
-			union all select currency from ${transaction}
-			union all select currency from ${loan}
-			union all select currency from ${holding}
-			union all select currency from ${property}
-			union all select currency from ${portfolioSnapshot}
+	// Rates carry forward after their first fixing, so the earliest use of each
+	// currency is sufficient to prove whether any historical fallback occurred.
+	// Keep that aggregation in Postgres instead of returning the whole ledger on
+	// every app-layout load.
+	const rows = (await handle.execute(sql`
+		select currency, min(day)::text as day from (
+			select currency, coalesce(balance_as_of, current_date) as day from ${account}
+			union all select currency, coalesce(value_date, booked_at) as day from ${transaction}
+			union all select currency, coalesce(owed_as_of, current_date) as day from ${loan}
+			union all select currency, as_of::date as day from ${holding}
+			union all select currency, coalesce(valued_at, current_date) as day from ${property}
+			union all select currency, day from ${portfolioSnapshot}
+			union all select ${storedDocument.amountCurrency},
+				case
+					when ${storedDocument.periodMonth} ~ '^\\d{4}-\\d{2}$'
+						then (${storedDocument.periodMonth} || '-01')::date
+					else ${storedDocument.addedOn}
+				end
+			from ${storedDocument}
+			where ${storedDocument.amountCurrency} is not null
+				and ${storedDocument.amountMinor} is not null
+			union all select currency, happened_at::date from ${brokerOperation}
+			union all select currency, opened_at::date from ${brokerPosition}
+			union all select currency, make_date(year, 1, 1) from ${taxStatement}
+			union all select value->>'pricePerKwhCurrency', current_date
+			from ${settings}
+			where key = 'home' and coalesce(value->>'pricePerKwhCurrency', '') <> ''
 		) used
-	`)) as unknown as { code: string }[];
+		where currency is not null
+		group by currency
+	`)) as unknown as { currency: string; day: string }[];
 
-	const today = new Date().toISOString().slice(0, 10);
-	const codes = [...new Set(rows.map((r) => r.code))].filter((c) => c && c !== baseCurrency);
-
-	// Every conversion goes through CZK, so a base currency with no rate of its
-	// own makes all of them fail, not just the exotic ones.
-	if ((await czkPerUnit(baseCurrency, today)) === null) return codes.sort();
-
-	// One round trip per currency, not one after another: this runs on every
-	// page under (app), hover preloads included.
-	const rates = await Promise.all(codes.map((code) => czkPerUnit(code, today)));
-	return codes.filter((_, i) => rates[i] === null).sort();
+	const rates = await loadRateTable(handle);
+	return missingRateCodes(rates, rows, baseCurrency);
 }

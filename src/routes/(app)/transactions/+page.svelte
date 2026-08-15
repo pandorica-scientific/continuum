@@ -172,6 +172,9 @@
 					{#each r.splits as s (s.id)}
 						<li class="split-line">
 							<span class="s-category">{s.categoryLabel ?? 'Uncategorised'}</span>
+							{#if s.tags.length > 0}
+								<span class="s-note">{s.tags.map((tag) => `#${tag.name}`).join(' · ')}</span>
+							{/if}
 							{#if s.note}<span class="s-note">{s.note}</span>{/if}
 							<span class="mono s-amount">{s.amount}</span>
 						</li>
@@ -181,12 +184,16 @@
 
 			<div class="r-tags">
 				{#each r.tags as t (t.id)}
-					<form method="POST" action="?/tags" use:enhance class="tag-chip">
-						<input type="hidden" name="id" value={r.id} />
-						<input type="hidden" name="removeTag" value={t.name} />
-						<span>{t.name}</span>
-						<button type="submit" aria-label="Remove tag {t.name}">✕</button>
-					</form>
+					{#if t.direct}
+						<form method="POST" action="?/tags" use:enhance class="tag-chip">
+							<input type="hidden" name="id" value={r.id} />
+							<input type="hidden" name="removeTag" value={t.name} />
+							<span>{t.name}</span>
+							<button type="submit" aria-label="Remove tag {t.name}">✕</button>
+						</form>
+					{:else}
+						<span class="tag-chip" title="This tag belongs to a split line">{t.name}</span>
+					{/if}
 				{/each}
 				<form method="POST" action="?/tags" use:enhance class="tag-form">
 					<input type="hidden" name="id" value={r.id} />
@@ -209,8 +216,10 @@
 				existing={splitting.splits.map((s) => ({
 					id: s.id,
 					amountMajor: s.amountMajor,
-					categoryId: s.categoryId
+					categoryId: s.categoryId,
+					tagNames: s.tags.map((tag) => tag.name).join(', ')
 				}))}
+				knownTags={data.knownTags}
 				onclose={() => (splitting = null)}
 			/>
 		{/key}

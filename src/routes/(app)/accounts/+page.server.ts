@@ -3,10 +3,12 @@ import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, person, transaction, transferPair } from '$lib/server/db/schema';
-import { convertMinor } from '$lib/server/fx';
+import { loadRateTable } from '$lib/server/fx/table';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
+import { positiveDonutSlices } from '$lib/charts/donut';
+import { accountBalanceInBase } from '$lib/accounts/balance';
 import type { Actions, PageServerLoad } from './$types';
 
 const BANK_EMOJI: Record<string, string> = {
@@ -20,25 +22,38 @@ const BANK_EMOJI: Record<string, string> = {
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const accounts = await db
-		.select({
-			id: account.id,
-			name: account.name,
-			emoji: account.emoji,
-			bank: account.bank,
-			kind: account.kind,
-			currency: account.currency,
-			balanceMinor: account.balanceMinor,
-			balanceAsOf: account.balanceAsOf,
-			ownerName: person.name
-		})
-		.from(account)
-		.leftJoin(person, eq(account.ownerPersonId, person.id))
-		.orderBy(account.createdAt);
+	const [accounts, rates] = await Promise.all([
+		db
+			.select({
+				id: account.id,
+				name: account.name,
+				emoji: account.emoji,
+				bank: account.bank,
+				kind: account.kind,
+				currency: account.currency,
+				balanceMinor: account.balanceMinor,
+				balanceAsOf: account.balanceAsOf,
+				ownerName: person.name
+			})
+			.from(account)
+			.leftJoin(person, eq(account.ownerPersonId, person.id))
+			.orderBy(account.createdAt),
+		loadRateTable()
+	]);
+	const today = new Date().toISOString().slice(0, 10);
 
 	const rows = [];
 	for (const a of accounts) {
-		const inBase = await convertMinor(a.balanceMinor, a.currency, baseCurrency);
+		const converted = accountBalanceInBase(
+			rates,
+			a.balanceMinor,
+			a.currency,
+			baseCurrency,
+			// This is today's cash/net-worth total. The statement date describes
+			// freshness; it must not make this screen use a different FX basis from
+			// the net-worth total in the sidebar.
+			today
+		);
 		rows.push({
 			id: a.id,
 			name: a.name,
@@ -54,24 +69,20 @@ export const load: PageServerLoad = async () => {
 			baseEquivalent:
 				a.currency === baseCurrency
 					? null
-					: inBase === null
+					: converted.exactMinor === null
 						? '—'
-						: `≈ ${formatMinor(inBase, baseCurrency)} ${displayCurrency(baseCurrency)}`,
-			balanceMinorBase: inBase
+						: `≈ ${formatMinor(converted.exactMinor, baseCurrency)} ${displayCurrency(baseCurrency)}`,
+			balanceMinorBase: converted.totalMinor
 		});
 	}
 
 	// Donut: share of cash by account, excluding the brokerage, in base currency.
-	const cashRows = rows.filter((r) => r.kind !== 'brokerage' && r.balanceMinorBase !== null);
-	const cashTotal = cashRows.reduce((sum, r) => sum + (r.balanceMinorBase ?? 0n), 0n);
-	let acc = 0;
-	const donut = cashRows
-		.filter((r) => (r.balanceMinorBase ?? 0n) > 0n)
-		.map((r, i) => {
-			const pct =
-				cashTotal > 0n ? Number(((r.balanceMinorBase ?? 0n) * 10000n) / cashTotal) / 100 : 0;
-			const from = acc;
-			acc += pct;
+	// A missing rate uses the app-wide, explicitly-bannered face-value fallback;
+	// dropping that row would make this total disagree with net worth.
+	const cashRows = rows.filter((r) => r.kind !== 'brokerage');
+	const cashTotal = cashRows.reduce((sum, r) => sum + r.balanceMinorBase, 0n);
+	const donut = positiveDonutSlices(cashRows, (row) => row.balanceMinorBase).map(
+		({ item: r, pct, from, to }, i) => {
 			const colors = [
 				'var(--blue)',
 				'var(--teal)',
@@ -80,8 +91,9 @@ export const load: PageServerLoad = async () => {
 				'var(--yellow)',
 				'var(--green)'
 			];
-			return { label: r.name, pct, from, to: acc, color: colors[i % colors.length] };
-		});
+			return { label: r.name, pct, from, to, color: colors[i % colors.length] };
+		}
+	);
 
 	// Recent matched transfer pairs with their legs (proposals and rejections
 	// belong to the review queue, not here).

@@ -1,5 +1,197 @@
 # Changelog
 
+## 0.3.3 — 2026-08-15
+
+A full correctness and simplification pass over the paths that move money or
+credentials. This release closes races that only appeared when two requests
+arrived together, makes multi-row changes commit as one unit, and replaces
+repeated route code with shared domain mutations and interaction helpers.
+
+**Upgrading:** migrations `0027`–`0032` run automatically. They repair legacy
+transaction fingerprints and transfer claims, add authentication-concurrency
+guards and broker-report freshness state, enforce one smart-meter bill per
+property, and bind legacy monetary settings and the meter to explicit
+currencies/properties. The fingerprint repair deliberately reconciles old
+duplicates while preserving their categories, splits, tags and linked events.
+If the household has more than one lived-in property, migration `0032` binds an
+existing home integration to the oldest one; open Home settings once and
+confirm that target. As with every database release, take a backup before
+replacing the image.
+
+### Fixed
+
+- **Overlapping or simultaneous statement imports could create duplicate
+  accounts and transactions.** Account identity is now exact, bank-aware and
+  serialised; an explicit account choice learns a compatible statement number,
+  closing balances move forward in time only, and the import record, rows,
+  counters and post-processing commit together or not at all.
+- **Old fingerprints could disagree with the current parser.** The forward
+  repair handles the version-1 Revolut fee representation, version-2 minor-unit
+  rescaling and collisions with already-current rows one occurrence at a time.
+  It also repairs existing transfer claims without deleting a genuine repeated
+  movement.
+- **Transfer pairing still had timing holes.** Pairing now takes one global
+  transaction lock before row locks, waits for ordinary edits, sees the other
+  side of concurrent imports, works for historical statements, and never
+  overwrites a transaction a person has already filed or split. Confirm and
+  reject update the pair and both legs atomically.
+- **The transaction register and its totals could disagree.** One database-side
+  effective-line relation now owns category, uncategorised, direct-tag,
+  split-tag and fee semantics. Counts and per-currency totals remain correct
+  beyond one page, and amount bounds are converted to the household currency at
+  the transaction date.
+- **Split and tag edits could leave partial or contradictory state.** Duplicate
+  split identifiers are rejected, save/delete operations lock the parent, line
+  tags save in the same transaction, and concurrent tag additions are resolved
+  under an owner lock instead of silently dropping one another.
+- **Several cross-currency figures mixed raw minor units.** Property equity and
+  rent, loan allocation, account charts, retirement income, tax series,
+  investment history, tag totals and net-worth deltas now convert each operand
+  at its effective date. A day before the first stored fixing converts at the
+  oldest rate on record — the CNB publishes forward and only today's fixing is
+  ever fetched, so those days can never gain one of their own — and a currency
+  with no fixing at all still falls back to major-unit face value. Both are
+  labelled by a banner covering every converted source and target currency.
+- **Broker reports could replay stale holdings or closed positions.** Import
+  freshness is stored independently of the current holdings, so a newer empty
+  report stays authoritative and an older same-day or partial report cannot
+  resurrect or regress positions.
+- **Loan actions accepted impossible chronology and inconsistent balances.** A
+  repayment cannot increase or overpay debt, occur before the agreement/current
+  balance or in the future. Creation and re-fixation validate dates, rates,
+  payments, agreement bounds and secured-property shares before one atomic
+  write replaces the affected schedule.
+- **Property figures and edits could lose data.** Every active linked loan is
+  included, only the deterministic tenancy active today contributes rent,
+  overlapping tenancies are serialised, and concurrent image/floor-plan updates
+  merge under a property lock. Invalid or ambiguous secured shares are refused
+  instead of duplicating debt between properties.
+- **A shared mortgage could report one minor unit more debt than it carries.**
+  Each property's share used to be rounded on its own, so a 50/50 split of an
+  odd balance rounded up on both sides. Shares are now allocated as the gap
+  between cumulative boundaries over a loan's whole secured set, in a fixed
+  order, so the parts always sum to the loan itself. A secured share is also
+  validated with the one grammar the property page reads back, rejecting
+  precision the `numeric(6,3)` column would silently round away.
+- **A tag on a transfer leg totalled zero.** Tag totals excluded any
+  transaction pairing had marked a transfer, so a tag put on the outgoing leg of
+  a move — money set aside — reported nothing while the register still showed the
+  chip on that row. A tag is a filing decision and now counts wherever it is put.
+- **The month-on-month net-worth delta could vanish or measure the wrong
+  period.** The baseline is the last snapshot before the month began, falling
+  back to the oldest on record, rather than the first snapshot inside the month:
+  the figure no longer disappears on the 1st, nor silently measures only the days
+  since the container last ran.
+- **Backfilling an older broker report recorded no value point.** The report's
+  own day is written whatever its age — `portfolio_snapshot` is keyed by day, so
+  an archived report cannot collide with the current one — while holdings and
+  freshness still follow the newest report only.
+- **Saving a re-fixation destroyed later agreed periods.** A follow-on fixation
+  the bank had already committed to is preserved; a blank end date runs until
+  that period begins instead of silently becoming the loan's maturity date, and
+  an explicit end that would span a committed period is refused rather than
+  deleting it. The dialog preview shows the same schedule the save writes.
+- **Non-Czech accounts never matched their own IBAN.** Account comparison fell
+  back to a Czech-only reading, so a Polish or Revolut account written one way in
+  a statement and another in the ledger looked like two accounts: own transfers
+  stopped pairing and an import could mint a duplicate account. Czech references
+  keep their structural rule; elsewhere the national number and the IBAN body are
+  compared directly.
+- **Filing one transaction scanned the whole ledger.** A pairing pass is bounded
+  to the days around whatever changed, rather than row-locking and comparing every
+  unpaired transaction on every filing, import, rule edit and transfer decision.
+  Unlike the horizon this replaces, the bound follows the rows, so historical
+  statements still pair.
+- **One out-of-range retirement assumption stopped the page saving anything.**
+  Refusals now name the assumption at fault, and the form carries the same bounds
+  the save enforces, so an age left below the minimum no longer refused every
+  later edit to spending or growth behind one generic line.
+- **Importing a configuration file could be undone by an open tab.** An imported
+  retirement payload takes a version above whatever is stored, so a tab loaded
+  before the import gets a visible conflict rather than silently replacing the
+  file — or being refused forever.
+- **An account chosen for one upload was applied to the next.** The import
+  screen's account choice is cleared once no file is still waiting on an answer,
+  so a later unrelated statement is detected normally instead of being refused
+  against the previous batch's account.
+- **Smart-meter sync could target the wrong flat, wrong bill or stale
+  configuration.** The selected property and meter bill are explicit and
+  database-enforced. A delayed provider response is discarded if the
+  configuration changed while it was in flight, and switching the meter source
+  cannot race an hourly update.
+- **Documents, property bills, tax statements and rule edits used several
+  commits for one action.** Their database rows, links and tags now use shared
+  transactional mutations with rollback coverage. Rule replacement, tags and
+  replay also follow the same lock order as transaction filing.
+- **Retirement autosave could persist an older request last or silently ignore
+  another tab.** Each page writer now carries an ordered revision plus a shared
+  optimistic version; stale writes return a visible conflict, while unload
+  retries of the same snapshot remain idempotent.
+- **Form and upload failures were hidden behind dialogs or discarded local
+  state.** Shared action-result and upload helpers now keep drafts open, show
+  errors inside the active dialog and refresh page data only after success.
+  Property, import, investment, home-device, split, tax, rule and loan flows all
+  use the same behavior.
+- **Keyboard and assistive-technology users could still reach hidden UI.**
+  Modals, the lightbox and the mobile drawer now move and contain focus, restore
+  it on close, announce their state and errors, and support Escape. Calendar and
+  property-local drafts reset when their route identity changes.
+- **Editing an older payslip could silently change its currency.** Corrections
+  retain the document's stored currency, while legacy rule thresholds and home
+  energy prices are permanently bound to the currency in force when they were
+  authored rather than being reinterpreted after a base-currency change.
+- **The setup wizard showed one module with no name, and threw away everything
+  typed when it refused a submission.** The wizard kept its own list of module
+  labels beside the registry, so Tax — added to the registry later — rendered as
+  a bare checkbox; labels now come from the registry itself and cannot drift
+  again. A rejected submission re-renders with the household name, currency,
+  people, birth years and module choices intact. Passwords are deliberately not
+  restored: echoing one would write it into the response HTML.
+- **Nothing explained why passkeys were missing on a plain-HTTP deployment.**
+  Settings now says that browsers refuse WebAuthn outside a secure context and
+  that pointing `ORIGIN` at an `https://` address brings the controls back,
+  instead of hiding the whole section without a word.
+
+### Security
+
+- Initial setup is a single database claim: concurrent requests cannot create
+  two first administrators, and the public pre-claim work is capped at twenty
+  people so losing requests cannot schedule unbounded Argon2 work.
+- Password changes and deactivation advance an authentication generation.
+  Sessions, credentials and positive passkey counters are written only if that
+  generation is still current and the person is still active, closing the
+  in-flight registration and sign-in races.
+- Enrollment token consumption, the active-person/password check, password
+  creation and session issuance are now one atomic transition. A concurrent
+  deactivation or second enrollment request cannot leave a usable partial
+  account.
+- Public passkey challenge issuance has its own rate budget, sized for a
+  household rather than for guessed credentials, and bounded, expiry-indexed
+  storage. Login limiting is keyed per account, with unknown accounts collapsed
+  onto one budget: behind Tailscale or a reverse proxy the whole household is a
+  single address, so there is deliberately no budget above that key.
+- Bearer authentication is enforced once at the whole `/api` route boundary —
+  the same tree the sign-in redirect exempts — and therefore fails closed for
+  future endpoints. Scheme parsing is
+  case-insensitive, token failures are throttled, invalid cookies are cleared,
+  and expired sessions have a cleanup path.
+
+### Changed
+
+- Coherent writes now live in reusable server-domain modules for loans,
+  documents, property, rules, tags, splits and imports; page actions translate
+  form data and results instead of repeating transaction orchestration.
+- Repeated client behavior is shared through upload, action-error, autosave,
+  overlay and loan-scenario primitives. Repayment and re-fix dialogs retain
+  their distinct fields while sharing payload decoding and comparison UI.
+- Retirement assumptions now expose contribution-growth and property-growth
+  controls, saved through the same conflict-safe autosave as the other inputs.
+- The migration journal now has a consolidated current schema snapshot and a
+  regression holding it to the declared schema table by table and column by
+  column, so drift cannot surface later as a surprise migration. Embedded
+  PostgreSQL integration coverage now exercises imports, authentication,
+  transactions/tags, loans, domain rollback/concurrency and autosave ordering.
+
 ## 0.3.2 — 2026-08-15
 
 Two rounds of whole-codebase review, and the repairs the second round found in

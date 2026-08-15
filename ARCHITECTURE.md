@@ -3,7 +3,9 @@
 Continuum is a single SvelteKit (Svelte 5, TypeScript strict) application over
 PostgreSQL via Drizzle, shipped as a two-container docker-compose stack.
 Money is integer minor units + a currency code everywhere; stored amounts are
-never re-denominated — only screen-level totals convert, at the day's rate.
+never re-denominated. Aggregates convert each operand with the newest rate on
+or before its effective date; a missing historical rate is an explicit
+approximation, never a future rate or a silent one-to-one conversion.
 
 ## The two rules everything follows
 
@@ -33,14 +35,21 @@ never re-denominated — only screen-level totals convert, at the day's rate.
 
 ## Correctness anchors
 
-- **Dedup**: `transaction (accountId, dedupFingerprint)` is unique;
-  fingerprints prefer the bank's own reference, are versioned
-  (`fingerprintVersion`), and every original statement file is stored on the
-  data volume — a parser change re-parses history instead of asking for
-  seven years of exports again.
+- **Import identity and dedup**: account resolution is exact across bank,
+  currency and canonical account-number identity. The selected account, import
+  record, transactions, counters, closing balance and deterministic
+  post-processing commit in one database transaction. `transaction (accountId,
+dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
+  are versioned (`fingerprintVersion`), and aliases preserve dedup across
+  repaired historical representations. Every original statement file is
+  stored on the data volume — a parser change re-parses history instead of
+  asking for seven years of exports again.
 - **Transfers**: only hard evidence (the counter-account provably naming the
-  other own account) pairs automatically; everything weaker is a held
-  proposal that stays inside the figures until confirmed.
+  other own account) pairs automatically; everything weaker is a held proposal
+  that stays inside the figures until confirmed. Pairing takes a
+  transaction-scoped advisory lock before transaction rows, and
+  `transfer_pair_leg` gives each active leg one owner. Confirmed, filed or split
+  movements are human-owned and automatic replay cannot overwrite them.
 - **Loans**: interest is booked per fixation period; rate, payment, day-count
   convention and accrual style are per-loan data, verified to the haléř
   against real Česká spořitelna statements.
@@ -52,11 +61,11 @@ never re-denominated — only screen-level totals convert, at the day's rate.
   (`saveSplits`), which is one database transaction with the parent row locked
   for its duration. Lines are matched to the rows they came from by id rather
   than by position, so a split-level tag stays with its line when another line
-  is removed. Every consumer resolves through one pure function,
-  `effectiveLines` (`src/lib/transactions/lines.ts`), so the "is it split?"
-  branch exists once; splitting nulls the parent category so a consumer that
-  ever forgot the branch would report "unfiled" loudly rather than a stale
-  category silently.
+  is removed. In-memory consumers resolve through `effectiveLines`
+  (`src/lib/transactions/lines.ts`); register filtering/counting/totals use one
+  equivalent database-side effective-line relation so they do not materialise
+  the whole ledger. Splitting nulls the parent category, making an omitted split
+  branch fail visibly as "unfiled" instead of silently using a stale category.
 - **Rule confidence**: a rule's standing is the Wilson lower bound on its
   accepted/corrected record — conservative at low counts, never certain.
   Seeded and learned rules start from a prior that clears the auto-file
@@ -72,20 +81,61 @@ never re-denominated — only screen-level totals convert, at the day's rate.
   through `toMajor` / `fromMajor`; a hardcoded hundred anywhere is a bug waiting
   for the first household that keeps money in one of those currencies.
 - **Exchange rates**: a missing rate is never silently treated as one-to-one.
-  Conversion returns null for "unknown", callers fall back to face value through
-  a named helper, and the app layout names every currency being shown that way —
-  the figure is allowed to be approximate, never quietly wrong.
+  One preloaded rate table selects the latest fixing on or before the value
+  date. Conversion returns null for "unknown", callers preserve the major-unit
+  magnitude through a named helper, and the app layout names every source or
+  target currency being shown that way — the figure is allowed to be
+  approximate, never quietly wrong. Legacy monetary settings store their
+  authored currency so changing the household base cannot reinterpret them.
+- **Rules and tags**: amount rules carry their authored currency and compare
+  only like-dimensional transaction values. A rule definition, its tags and
+  replay are one transaction. Tag replacement locks the owning record; totals
+  use direct and split scope without duplication and omit paired own-account
+  transfers just like the register they link to.
+- **Broker freshness**: `broker_import_state` records the newest accepted
+  report independently of current holdings. A newer zero-holding report is
+  still authoritative, and a stale or partial report cannot regress holdings,
+  snapshots or aggregated closed positions.
+- **Revisioned settings**: high-frequency autosave data stores a global
+  optimistic version and a per-page-writer revision. The first prevents a stale
+  browser tab overwriting another tab; the second orders an ordinary request
+  against its page-exit keepalive and makes exact retries idempotent.
 - **Entity links**: a document always belongs to records — people, flats,
   brokerage accounts, or `subject` rows (household, car, …) — through typed
   join tables. There is no free-text subject anywhere, so a rename follows
   every document and a typo cannot mint a phantom column; catch-all subjects
   are case-insensitively unique.
 
+## Write boundaries
+
+Page-server actions parse and validate transport data, then delegate coherent
+multi-row changes to modules under `src/lib/server/<domain>/` (or a focused
+server module such as `rule-mutations.ts`). The domain function owns the
+transaction, locks its parent/owner before reading dependent state, and accepts
+an injectable database handle so rollback and interleaving behavior can be
+tested directly. Rules, tags, splits, loans, documents, property and import all
+follow this boundary.
+
+Global locks are acquired before owner rows, and owner rows before dependent
+rows. The transfer-pairing advisory lock is the outermost lock for any mutation
+that replays categorisation, preventing a filer and a rule edit from taking the
+same locks in opposite order. Database constraints remain the final guard for
+one-owner invariants such as active transfer legs and a property's meter bill.
+
+Filesystem uploads cannot join a PostgreSQL transaction. Routes therefore save
+the file first and perform all database links in one transaction, so rollback
+can leave an unreferenced file but never a partly linked financial record.
+Replaceable property media removes a rejected new file; statement import
+deliberately retains and logs its original when preserving the only uploaded
+copy is safer than deleting it.
+
 ## Authentication
 
-Two ways in, converging on one session. A password sign-in and a passkey
-sign-in both end at `createSession`, so everything downstream — the session
-cookie, `validateSession`, `locals.person` — is unaware of which was used.
+Two ways in, converging on one generation-conditional session grant. A password
+sign-in and a passkey sign-in both capture `person.authGeneration`; the session
+row is created only if that generation is still current and the person remains
+active. Everything downstream — the session cookie, `validateSession`,
+`locals.person` — is unaware of which credential was used.
 
 - **Passwords** are Argon2 hashes on `person`. The column is nullable: a person
   created by an administrator has no password until they open their enrollment
@@ -102,21 +152,34 @@ cookie, `validateSession`, `locals.person` — is unaware of which was used.
   monotonicity check would reject every Apple credential on its second use.
   `webauthn/counter.ts` holds the rule and a unit test pins it.
 - **WebAuthn challenges** are recorded in `webauthn_challenge` when issued and
-  deleted when spent, so a verification that spends nothing is refused. The
-  cookie carries the value back from the browser but is not the record of it:
-  SvelteKit does not sign cookies, so a challenge held only there is whatever
-  the caller says it is, and one captured assertion replays forever.
+  deleted when spent, so a verification that spends nothing is refused. Public
+  issuance has its own rate budget, expired rows are indexed for cleanup, and
+  stored challenge counts are bounded. The cookie carries the value back from
+  the browser but is not the record of it: SvelteKit does not sign cookies, so a
+  challenge held only there is whatever the caller says it is.
+- **Authentication generations** invalidate a ceremony that began before a
+  password change or deactivation. Session, credential and positive-counter
+  writes all compare the captured generation and active state in the same SQL
+  statement. Enrollment consumes its token, writes the password and creates
+  the session in one transaction.
 - **Enrollment tokens**, **sessions**, **API tokens** and challenges all store
   only a sha256 of the value; the raw token is shown once and never persisted.
 - **Changing a password revokes every other way in** — other sessions and every
   registered passkey. Enrolling a passkey needs only a live session, so one
   enrolled from a stolen cookie would otherwise outlive the remedy.
 - **Rate limiting** is per scope and per subject, not per address alone
-  (`auth/ratelimit.ts`). Sign-in attempts are budgeted per account, and the API
-  and enrollment doors keep their own — behind a reverse proxy or Tailscale the
-  whole household shares one address, so an address-only budget let any caller
-  shut everyone out. Set `ADDRESS_HEADER` only where a trusted proxy is the
-  only way in.
+  (`auth/ratelimit.ts`). Sign-in attempts combine account and address budgets;
+  unknown identifiers share bounded state. API tokens, enrollment and public
+  passkey challenges keep separate budgets — behind a reverse proxy or
+  Tailscale the whole household may share one address, so an address-only
+  budget lets any caller shut everyone out. Set `ADDRESS_HEADER`/`XFF_DEPTH`
+  only where a trusted proxy chain is the only way in.
+- **API authentication** is applied once by the SvelteKit hook to the complete
+  `/api/v1` boundary. A newly added endpoint therefore fails closed before its
+  handler runs; endpoint files only format domain results.
+- **Initial setup** is guarded by a singleton row claimed in the same
+  transaction that creates the household. Losing concurrent requests do no
+  password hashing, and one request can initialise at most twenty people.
 - **Permissions** live in `auth/policy.ts` as pure functions, so the
   last-administrator invariant is tested without a database and cannot drift
   between call sites. `person.role` is exactly `admin` or `member`.
@@ -137,4 +200,5 @@ cookie, `validateSession`, `locals.person` — is unaware of which was used.
 - `docs/superpowers/` — the specs and implementation plans each feature was
   built from, including what was deliberately deferred
 - `tests/unit` — pure logic; `tests/acceptance` — real files, self-skipping;
-  `tests/e2e` — one ordered Playwright journey against a reset database
+  `tests/integration` — isolated embedded-PostgreSQL rollback and concurrency
+  cases; `tests/e2e` — one ordered Playwright journey against a reset database

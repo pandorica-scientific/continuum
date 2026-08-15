@@ -297,4 +297,18 @@ describe('costValueSeries via buildSeries', () => {
 		expect(byMonth.get('2026-04')).toBe(11000); // realised gain lands
 		expect(byMonth.get('2026-06')).toBe(12000); // snapshot overrides
 	});
+
+	it('uses the broker currency minor-unit scale', async () => {
+		const { buildSeries } = await import('$lib/server/invest/series');
+		const series = buildSeries(
+			[{ at: '2026-01-05', amountMinor: 1000n }],
+			[{ day: '2026-01-31', valueMinor: 1500n }],
+			[],
+			[],
+			'JPY'
+		);
+
+		expect(series[0].moneyIn).toBe(1000);
+		expect(series[0].actual).toBe(1500);
+	});
 });

@@ -1,16 +1,65 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, asc, eq, gte, isNull } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { account, importFile, person, transaction, transferPair } from '$lib/server/db/schema';
-import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { db, type Db, type Queryable } from '$lib/server/db';
+import {
+	account,
+	currencyRate,
+	importFile,
+	person,
+	transaction,
+	transactionFingerprintAlias,
+	transactionSplit,
+	transferPair
+} from '$lib/server/db/schema';
+import { convertMinorSync, type RateTable } from '$lib/server/fx/table';
 import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
 import { saveUpload } from '$lib/server/files';
 import { detectAndParse } from './detect';
 import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
-import { normaliseAccountKey, proposePairs, type PairableTx } from './pairing';
+import {
+	accountKeysMatch,
+	canonicalAccountIdentity,
+	normaliseAccountKey,
+	proposePairs,
+	type PairableTx
+} from './pairing';
 import type { ParsedStatement } from './types';
+
+interface LegacyRevolutIdentity {
+	bookedAt: string;
+	amountMinor: bigint;
+	currency: string;
+	bankRef?: string | null;
+	counterpartyAccount?: string | null;
+	counterparty?: string | null;
+	description?: string | null;
+	balanceAfterMinor?: bigint | null;
+	variableSymbol?: string | null;
+	constantSymbol?: string | null;
+	specificSymbol?: string | null;
+	originalAmountMinor?: bigint | null;
+	originalCurrency?: string | null;
+}
+
+function legacyRevolutKey(row: LegacyRevolutIdentity): string {
+	return JSON.stringify([
+		row.bookedAt,
+		row.amountMinor.toString(),
+		row.currency,
+		row.bankRef ?? '',
+		row.counterpartyAccount ?? '',
+		row.counterparty ?? '',
+		row.description ?? '',
+		row.balanceAfterMinor?.toString() ?? '',
+		row.variableSymbol ?? '',
+		row.constantSymbol ?? '',
+		row.specificSymbol ?? '',
+		row.originalAmountMinor?.toString() ?? '',
+		row.originalCurrency ?? ''
+	]);
+}
 
 export interface IngestResult {
 	filename: string;
@@ -36,6 +85,19 @@ const BANK_LABEL: Record<string, string> = {
 type Resolution =
 	{ kind: 'ok'; account: typeof account.$inferSelect } | { kind: 'ambiguous'; reason: string };
 
+export type DatabaseHandle = Queryable;
+
+export async function inTransaction<T>(
+	handle: DatabaseHandle,
+	operation: (tx: DatabaseHandle) => Promise<T>
+): Promise<T> {
+	const candidate = handle as Db;
+	if (typeof candidate.transaction === 'function') {
+		return candidate.transaction((tx) => operation(tx));
+	}
+	return operation(handle);
+}
+
 /**
  * Match the statement to an account. When the statement carries no account
  * number (Revolut) and more than one candidate exists, refuse and ask —
@@ -44,27 +106,86 @@ type Resolution =
  */
 async function resolveAccount(
 	statement: ParsedStatement,
-	explicitAccountId?: string
+	explicitAccountId: string | undefined,
+	handle: DatabaseHandle
 ): Promise<Resolution> {
-	const accounts = await db.select().from(account);
-
 	if (explicitAccountId) {
-		const chosen = accounts.find((a) => a.id === explicitAccountId);
+		// Use the same identity -> account lock order as automatic resolution.
+		// This prevents an automatic upload racing an explicit first assignment
+		// from observing the account before its statement identity is learned.
+		if (statement.accountNumber) {
+			const statementIdentity = canonicalAccountIdentity(statement.accountNumber);
+			await handle.execute(
+				sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:statement-account:${statement.bank}:${statement.currency}:${statementIdentity}`}, 0))`
+			);
+		}
+		// Explicit imports can carry aliases that produce different statement
+		// identity keys. Lock the selected row's stable id, then read it, so every
+		// balance decision for that account sees the latest committed date.
+		await handle.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:account:${explicitAccountId}`}, 0))`
+		);
+		const [chosen] = await handle.select().from(account).where(eq(account.id, explicitAccountId));
 		if (!chosen) return { kind: 'ambiguous', reason: 'The selected account no longer exists.' };
+		if (chosen.currency !== statement.currency) {
+			return {
+				kind: 'ambiguous',
+				reason: `The selected account uses ${chosen.currency}, but this statement uses ${statement.currency}. Choose an account with the statement currency.`
+			};
+		}
+		if (chosen.bank !== statement.bank) {
+			return {
+				kind: 'ambiguous',
+				reason: `The selected account belongs to ${chosen.bank}, but this statement belongs to ${statement.bank}.`
+			};
+		}
+		if (
+			statement.accountNumber &&
+			chosen.numbers.length > 0 &&
+			!chosen.numbers.some((number) => accountKeysMatch(number, statement.accountNumber!))
+		) {
+			return {
+				kind: 'ambiguous',
+				reason: `The statement account number does not match the selected account.`
+			};
+		}
 		return { kind: 'ok', account: chosen };
 	}
 
+	// The first two statements for an as-yet unknown account can otherwise both
+	// observe an empty account table and mint separate UUID rows. PostgreSQL's
+	// transaction-scoped lock serialises just that canonical statement identity;
+	// equivalent Czech local/IBAN forms deliberately share a key.
+	const statementIdentity = statement.accountNumber
+		? canonicalAccountIdentity(statement.accountNumber)
+		: '(number-not-printed)';
+	await handle.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:statement-account:${statement.bank}:${statement.currency}:${statementIdentity}`}, 0))`
+	);
+	const accounts = await handle.select().from(account);
+	let resolved: typeof account.$inferSelect | undefined;
+
 	if (statement.accountNumber) {
 		const key = normaliseAccountKey(statement.accountNumber);
-		const byNumber = accounts.find((a) =>
-			a.numbers.some((n) => normaliseAccountKey(n) === key || key.includes(normaliseAccountKey(n)))
+		const byNumber = accounts.filter(
+			(a) =>
+				a.bank === statement.bank &&
+				a.currency === statement.currency &&
+				a.numbers.some((number) => accountKeysMatch(normaliseAccountKey(number), key))
 		);
-		if (byNumber) return { kind: 'ok', account: byNumber };
+		if (byNumber.length === 1) resolved = byNumber[0];
+		if (byNumber.length > 1) {
+			return {
+				kind: 'ambiguous',
+				reason:
+					'Several accounts share this bank, currency, and account number. Choose the intended account and upload again.'
+			};
+		}
 	} else {
 		const byBank = accounts.filter(
 			(a) => a.bank === statement.bank && a.currency === statement.currency
 		);
-		if (byBank.length === 1) return { kind: 'ok', account: byBank[0] };
+		if (byBank.length === 1) resolved = byBank[0];
 		if (byBank.length > 1) {
 			return {
 				kind: 'ambiguous',
@@ -73,13 +194,22 @@ async function resolveAccount(
 		}
 	}
 
+	if (resolved) {
+		await handle.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:account:${resolved.id}`}, 0))`
+		);
+		const [fresh] = await handle.select().from(account).where(eq(account.id, resolved.id));
+		if (!fresh) return { kind: 'ambiguous', reason: 'The matched account no longer exists.' };
+		return { kind: 'ok', account: fresh };
+	}
+
 	// First statement from this account: create it.
 	const id = randomUUID();
 	const label = BANK_LABEL[statement.bank] ?? statement.bank;
 	// Suffix from the account number itself, not the bank code after the slash.
 	const numberPart = statement.accountNumber?.split('/')[0].replace(/\D/g, '') ?? '';
 	const suffix = numberPart ? ` ·${numberPart.slice(-4)}` : '';
-	const [created] = await db
+	const [created] = await handle
 		.insert(account)
 		.values({
 			id,
@@ -96,11 +226,12 @@ async function resolveAccount(
 export async function ingestFile(
 	filename: string,
 	buffer: Uint8Array,
-	explicitAccountId?: string
+	explicitAccountId?: string,
+	handle: DatabaseHandle = db
 ): Promise<IngestResult> {
 	const contentHash = createHash('sha256').update(buffer).digest('hex');
 
-	const existing = await db
+	const existing = await handle
 		.select()
 		.from(importFile)
 		.where(eq(importFile.contentHash, contentHash));
@@ -146,22 +277,23 @@ export async function ingestFile(
 				'No transactions were found in this file, so nothing was imported. The file was not recorded — you can upload it again once the format is supported.'
 		};
 	}
-
-	const resolution = await resolveAccount(statement, explicitAccountId);
-	if (resolution.kind === 'ambiguous') {
-		return {
-			filename,
-			bank: statement.bank,
-			rowsRead: statement.rows.length,
-			rowsAdded: 0,
-			rowsDuplicate: 0,
-			rowsPaired: 0,
-			needsAccount: true,
-			error: resolution.reason
-		};
+	// Validate a user selection before writing the original file. The same
+	// validation runs again in the transaction in case the account changes.
+	if (explicitAccountId) {
+		const preflightResolution = await resolveAccount(statement, explicitAccountId, handle);
+		if (preflightResolution.kind === 'ambiguous') {
+			return {
+				filename,
+				bank: statement.bank,
+				rowsRead: statement.rows.length,
+				rowsAdded: 0,
+				rowsDuplicate: 0,
+				rowsPaired: 0,
+				needsAccount: true,
+				error: preflightResolution.reason
+			};
+		}
 	}
-	const acct = resolution.account;
-	const fileId = randomUUID();
 
 	// Keep the original bytes on the data volume: parser improvements re-parse
 	// stored files instead of asking for years of statements again.
@@ -173,79 +305,260 @@ export async function ingestFile(
 	}
 
 	const fingerprints = fingerprintAll(statement.rows);
-	let added = 0;
-	let duplicate = 0;
-	// The import-file row must exist before transactions reference it.
-	await db.insert(importFile).values({
-		id: fileId,
-		filename,
-		bank: statement.bank,
-		format: statement.format,
-		accountId: acct.id,
-		contentHash,
-		storedName,
-		rowsRead: statement.rows.length
-	});
+	try {
+		return await inTransaction(handle, async (tx) => {
+			// Serialise the same body before checking the unique content hash. The
+			// second uploader then gets the normal duplicate result instead of a
+			// transaction-level unique violation.
+			await tx.execute(
+				sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:import-file:${contentHash}`}, 0))`
+			);
+			// The preflight duplicate check above is only an optimisation. Repeat it
+			// inside the transaction so a racing upload cannot partially proceed.
+			const duplicateFiles = await tx
+				.select()
+				.from(importFile)
+				.where(eq(importFile.contentHash, contentHash));
+			if (duplicateFiles.length > 0) {
+				return {
+					filename,
+					bank: duplicateFiles[0].bank,
+					rowsRead: duplicateFiles[0].rowsRead,
+					rowsAdded: 0,
+					rowsDuplicate: duplicateFiles[0].rowsRead,
+					rowsPaired: 0,
+					error: 'This exact file was already imported.'
+				};
+			}
 
-	for (let i = 0; i < statement.rows.length; i++) {
-		const row = statement.rows[i];
-		const inserted = await db
-			.insert(transaction)
-			.values({
-				id: randomUUID(),
+			const resolution = await resolveAccount(statement, explicitAccountId, tx);
+			if (resolution.kind === 'ambiguous') {
+				return {
+					filename,
+					bank: statement.bank,
+					rowsRead: statement.rows.length,
+					rowsAdded: 0,
+					rowsDuplicate: 0,
+					rowsPaired: 0,
+					needsAccount: true,
+					error: resolution.reason
+				};
+			}
+			let acct = resolution.account;
+			if (
+				explicitAccountId &&
+				statement.accountNumber &&
+				!acct.numbers.includes(statement.accountNumber)
+			) {
+				const numbers = [...acct.numbers, statement.accountNumber];
+				await tx.update(account).set({ numbers }).where(eq(account.id, acct.id));
+				acct = { ...acct, numbers };
+			}
+			const fileId = randomUUID();
+			let added = 0;
+			let duplicate = 0;
+
+			await tx.insert(importFile).values({
+				id: fileId,
+				filename,
+				bank: statement.bank,
+				format: statement.format,
 				accountId: acct.id,
-				bookedAt: row.bookedAt,
-				valueDate: row.valueDate,
-				amount: row.amountMinor,
-				feeMinor: row.feeMinor,
-				currency: row.currency,
-				balanceAfterMinor: row.balanceAfterMinor,
-				originalAmountMinor: row.originalAmountMinor,
-				originalCurrency: row.originalCurrency,
-				counterparty: row.counterparty,
-				counterpartyAccount: row.counterpartyAccount,
-				variableSymbol: row.variableSymbol,
-				constantSymbol: row.constantSymbol,
-				specificSymbol: row.specificSymbol,
-				description: row.description,
-				bankRef: row.bankRef,
-				dedupFingerprint: fingerprints[i],
-				fingerprintVersion: FINGERPRINT_VERSION,
-				importFileId: fileId
-			})
-			.onConflictDoNothing({ target: [transaction.accountId, transaction.dedupFingerprint] })
-			.returning({ id: transaction.id });
-		if (inserted.length > 0) added++;
-		else duplicate++;
+				contentHash,
+				storedName,
+				rowsRead: statement.rows.length
+			});
+
+			const knownFingerprints = new Set(
+				(
+					await tx
+						.select({ fingerprint: transaction.dedupFingerprint })
+						.from(transaction)
+						.where(
+							and(
+								eq(transaction.accountId, acct.id),
+								inArray(transaction.dedupFingerprint, fingerprints)
+							)
+						)
+				).map((row) => row.fingerprint)
+			);
+			const knownAliases = new Map(
+				(
+					await tx
+						.select({
+							fingerprint: transactionFingerprintAlias.fingerprint,
+							transactionId: transactionFingerprintAlias.transactionId
+						})
+						.from(transactionFingerprintAlias)
+						.where(
+							and(
+								eq(transactionFingerprintAlias.accountId, acct.id),
+								inArray(transactionFingerprintAlias.fingerprint, fingerprints)
+							)
+						)
+				).map((row) => [row.fingerprint, row.transactionId] as const)
+			);
+			const usedLegacyIds = new Set(knownAliases.values());
+			const legacyRevolut = new Map<string, string[]>();
+			if (statement.bank === 'revolut') {
+				const replayDays = [...new Set(statement.rows.map((row) => row.bookedAt))];
+				const replayCurrencies = [...new Set(statement.rows.map((row) => row.currency))];
+				const legacyRows = await tx
+					.select({
+						id: transaction.id,
+						bookedAt: transaction.bookedAt,
+						amountMinor: transaction.amount,
+						currency: transaction.currency,
+						bankRef: transaction.bankRef,
+						counterpartyAccount: transaction.counterpartyAccount,
+						counterparty: transaction.counterparty,
+						description: transaction.description,
+						balanceAfterMinor: transaction.balanceAfterMinor,
+						variableSymbol: transaction.variableSymbol,
+						constantSymbol: transaction.constantSymbol,
+						specificSymbol: transaction.specificSymbol,
+						originalAmountMinor: transaction.originalAmountMinor,
+						originalCurrency: transaction.originalCurrency
+					})
+					.from(transaction)
+					.where(
+						and(
+							eq(transaction.accountId, acct.id),
+							eq(transaction.fingerprintVersion, 1),
+							inArray(transaction.bookedAt, replayDays),
+							inArray(transaction.currency, replayCurrencies),
+							sql`not exists (
+									select 1 from ${transactionFingerprintAlias} existing_alias
+									where existing_alias.transaction_id = ${transaction.id}
+								)`
+						)
+					)
+					.orderBy(transaction.id);
+				for (const legacy of legacyRows) {
+					const key = legacyRevolutKey(legacy);
+					const candidates = legacyRevolut.get(key) ?? [];
+					candidates.push(legacy.id);
+					legacyRevolut.set(key, candidates);
+				}
+			}
+
+			for (let i = 0; i < statement.rows.length; i++) {
+				const row = statement.rows[i];
+				const currentFingerprint = fingerprints[i];
+				if (knownFingerprints.has(currentFingerprint)) {
+					duplicate++;
+					continue;
+				}
+				const knownLegacyId = knownAliases.get(currentFingerprint);
+				if (knownLegacyId) {
+					usedLegacyIds.add(knownLegacyId);
+					duplicate++;
+					continue;
+				}
+
+				// V1 Revolut stored amount - fee but discarded the fee itself, so its
+				// current fingerprint cannot be reconstructed by a SQL migration.
+				// Replay supplies the missing fee: bind the v3 fingerprint to the
+				// exact legacy source facts and keep the historical row untouched.
+				if (statement.bank === 'revolut') {
+					const fee = row.feeMinor ?? 0n;
+					const key = legacyRevolutKey({ ...row, amountMinor: row.amountMinor - fee });
+					const candidates = legacyRevolut.get(key);
+					let legacyId = candidates?.shift();
+					while (legacyId && usedLegacyIds.has(legacyId)) {
+						legacyId = candidates?.shift();
+					}
+					if (legacyId) {
+						await tx
+							.insert(transactionFingerprintAlias)
+							.values({
+								accountId: acct.id,
+								fingerprint: currentFingerprint,
+								transactionId: legacyId
+							})
+							.onConflictDoNothing({
+								target: [
+									transactionFingerprintAlias.accountId,
+									transactionFingerprintAlias.fingerprint
+								]
+							});
+						knownAliases.set(currentFingerprint, legacyId);
+						usedLegacyIds.add(legacyId);
+						duplicate++;
+						continue;
+					}
+				}
+
+				const inserted = await tx
+					.insert(transaction)
+					.values({
+						id: randomUUID(),
+						accountId: acct.id,
+						bookedAt: row.bookedAt,
+						valueDate: row.valueDate,
+						amount: row.amountMinor,
+						feeMinor: row.feeMinor,
+						currency: row.currency,
+						balanceAfterMinor: row.balanceAfterMinor,
+						originalAmountMinor: row.originalAmountMinor,
+						originalCurrency: row.originalCurrency,
+						counterparty: row.counterparty,
+						counterpartyAccount: row.counterpartyAccount,
+						variableSymbol: row.variableSymbol,
+						constantSymbol: row.constantSymbol,
+						specificSymbol: row.specificSymbol,
+						description: row.description,
+						bankRef: row.bankRef,
+						dedupFingerprint: currentFingerprint,
+						fingerprintVersion: FINGERPRINT_VERSION,
+						importFileId: fileId
+					})
+					.onConflictDoNothing({ target: [transaction.accountId, transaction.dedupFingerprint] })
+					.returning({ id: transaction.id });
+				if (inserted.length > 0) {
+					knownFingerprints.add(currentFingerprint);
+					added++;
+				} else duplicate++;
+			}
+
+			if (statement.closingBalanceMinor !== undefined && statement.periodEnd) {
+				await tx
+					.update(account)
+					.set({ balanceMinor: statement.closingBalanceMinor, balanceAsOf: statement.periodEnd })
+					.where(
+						and(
+							eq(account.id, acct.id),
+							or(isNull(account.balanceAsOf), lte(account.balanceAsOf, statement.periodEnd))
+						)
+					);
+			}
+
+			const paired = await pairAndCategorise(
+				tx,
+				pairingWindowAround(statement.rows.map((row) => row.bookedAt))
+			);
+			await tx
+				.update(importFile)
+				.set({ rowsAdded: added, rowsDuplicate: duplicate, rowsPaired: paired })
+				.where(eq(importFile.id, fileId));
+
+			return {
+				filename,
+				bank: statement.bank,
+				rowsRead: statement.rows.length,
+				rowsAdded: added,
+				rowsDuplicate: duplicate,
+				rowsPaired: paired
+			};
+		});
+	} catch (error) {
+		// Filesystem writes cannot join the database transaction. Retain the
+		// UUID-named original as an explicitly logged orphan so a transient
+		// database failure never destroys the user's only copy of a statement.
+		if (storedName)
+			console.warn(`Statement upload ${storedName} retained as an orphan after rollback.`);
+		throw error;
 	}
-
-	// Statement closing balance is authoritative when it is the newest we have.
-	if (
-		statement.closingBalanceMinor !== undefined &&
-		statement.periodEnd &&
-		(!acct.balanceAsOf || statement.periodEnd >= acct.balanceAsOf)
-	) {
-		await db
-			.update(account)
-			.set({ balanceMinor: statement.closingBalanceMinor, balanceAsOf: statement.periodEnd })
-			.where(eq(account.id, acct.id));
-	}
-
-	const paired = await pairAndCategorise();
-
-	await db
-		.update(importFile)
-		.set({ rowsAdded: added, rowsDuplicate: duplicate, rowsPaired: paired })
-		.where(eq(importFile.id, fileId));
-
-	return {
-		filename,
-		bank: statement.bank,
-		rowsRead: statement.rows.length,
-		rowsAdded: added,
-		rowsDuplicate: duplicate,
-		rowsPaired: paired
-	};
 }
 
 /**
@@ -255,22 +568,97 @@ export async function ingestFile(
  * Only auto pairs (hard evidence) are excluded from the figures immediately;
  * review proposals stay in income/spending until the user confirms them.
  */
-export async function pairAndCategorise(): Promise<number> {
-	const accounts = await db.select().from(account);
-	const people = await db.select({ name: person.name }).from(person);
-	const rates = await loadRateTable();
+/** Inclusive ISO-day bounds a pairing pass may consider. */
+export interface PairingWindow {
+	from: string;
+	to: string;
+}
 
-	// Candidate legs: recent, unpaired, and not already part of a pending
-	// proposal (else every run would re-propose the same pairs).
-	const horizon = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
-	const pendingPairs = await db.select().from(transferPair);
+// Tier 3 pairs legs up to three days apart, so a week either side covers every
+// tier with slack to spare.
+const PAIRING_WINDOW_DAYS = 7;
+
+function shiftDay(day: string, delta: number): string {
+	const at = new Date(`${day}T00:00:00.000Z`);
+	at.setUTCDate(at.getUTCDate() + delta);
+	return at.toISOString().slice(0, 10);
+}
+
+/**
+ * The span a pass has to read to pair anything that just changed.
+ *
+ * Without one, every filing, import and transfer decision row-locked and
+ * compared the entire unpaired ledger: auto-categorised rows stay candidates
+ * forever, so the set only grows, and proposePairs is a nested loop over it.
+ * The horizon this replaces was anchored to today, which is why it had to go —
+ * it silently stopped historical statements pairing at all. Anchoring to the
+ * changed rows instead bounds the work without caring how old they are.
+ */
+export function pairingWindowAround(days: string[]): PairingWindow | null {
+	const known = days.filter(Boolean).sort();
+	if (known.length === 0) return null;
+	return {
+		from: shiftDay(known[0], -PAIRING_WINDOW_DAYS),
+		to: shiftDay(known[known.length - 1], PAIRING_WINDOW_DAYS)
+	};
+}
+
+export async function pairAndCategorise(
+	handle: DatabaseHandle = db,
+	window: PairingWindow | null = null
+): Promise<number> {
+	return inTransaction(handle, (tx) => pairAndCategoriseInTransaction(tx, window));
+}
+
+export async function lockTransferPairing(handle: DatabaseHandle): Promise<void> {
+	// Every pairing pass takes this transaction-scoped lock before reading any
+	// candidates. If opposite legs arrive in concurrent import transactions,
+	// the second pass waits for the first commit and then sees both movements.
+	await handle.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended('continuum:transfer-pairing', 0))`
+	);
+}
+
+async function pairAndCategoriseInTransaction(
+	handle: DatabaseHandle,
+	window: PairingWindow | null = null
+): Promise<number> {
+	await lockTransferPairing(handle);
+
+	const accounts = await handle.select().from(account);
+	const people = await handle.select({ name: person.name }).from(person);
+	const rateRows = await handle.select().from(currencyRate);
+	const rates: RateTable = new Map();
+	for (const row of rateRows) {
+		const list = rates.get(row.code) ?? [];
+		list.push({ day: row.day, rate: Number(row.rate) });
+		rates.set(row.code, list);
+	}
+	for (const list of rates.values()) list.sort((a, b) => (a.day < b.day ? 1 : -1));
+
+	// Candidate legs: unpaired and not already part of a pending proposal (else
+	// every run would re-propose the same pairs). Do not use a wall-clock cutoff:
+	// historical statement imports need the same exact-evidence pairing.
+	const pendingPairs = await handle.select().from(transferPair);
 	const legsInPairs = new Set(pendingPairs.flatMap((p) => [p.outTransactionId, p.inTransactionId]));
 	const candidates = (
-		await db
+		await handle
 			.select()
 			.from(transaction)
-			.where(and(isNull(transaction.transferPairId), gte(transaction.bookedAt, horizon)))
+			.where(
+				and(
+					isNull(transaction.transferPairId),
+					sql`${transaction.reviewState} not in ('confirmed', 'filed')`,
+					sql`not exists (
+						select 1 from ${transactionSplit} split
+						where split.transaction_id = ${transaction.id}
+					)`,
+					window ? gte(transaction.bookedAt, window.from) : undefined,
+					window ? lte(transaction.bookedAt, window.to) : undefined
+				)
+			)
 			.orderBy(asc(transaction.bookedAt), asc(transaction.id))
+			.for('update')
 	).filter((t) => !legsInPairs.has(t.id));
 
 	const proposals = proposePairs(
@@ -298,14 +686,14 @@ export async function pairAndCategorise(): Promise<number> {
 	for (const proposal of proposals) {
 		const pairId = randomUUID();
 		if (proposal.confidence === 'auto') {
-			await db.insert(transferPair).values({
+			await handle.insert(transferPair).values({
 				id: pairId,
 				outTransactionId: proposal.outId,
 				inTransactionId: proposal.inId,
 				state: 'auto'
 			});
 			for (const id of [proposal.outId, proposal.inId]) {
-				await db
+				await handle
 					.update(transaction)
 					.set({
 						transferPairId: pairId,
@@ -319,14 +707,14 @@ export async function pairAndCategorise(): Promise<number> {
 		} else {
 			// Held proposal: no transferPairId, so the legs stay in the figures
 			// and in the review queue until confirmed.
-			await db.insert(transferPair).values({
+			await handle.insert(transferPair).values({
 				id: pairId,
 				outTransactionId: proposal.outId,
 				inTransactionId: proposal.inId,
 				state: 'proposed'
 			});
 			for (const id of [proposal.outId, proposal.inId]) {
-				await db
+				await handle
 					.update(transaction)
 					.set({
 						reviewState: 'needs_review',
@@ -339,7 +727,7 @@ export async function pairAndCategorise(): Promise<number> {
 
 	// Categorise whatever is new and not a transfer (held proposals included —
 	// a categorisation would resolve them as "not a transfer").
-	const [rules, threshold] = await Promise.all([loadRules(), autoThreshold()]);
+	const [rules, threshold] = await Promise.all([loadRules(handle), autoThreshold(handle)]);
 	// Re-read the proposals rather than reuse the snapshot taken above: the loop
 	// that just ran inserts proposals of its own, and a leg waiting on a
 	// transfer decision must not be categorised out from under it. Against the
@@ -348,15 +736,20 @@ export async function pairAndCategorise(): Promise<number> {
 	// 'needs_review'. Its transferPairId would then stay null forever, so both
 	// legs kept counting as real income and real spending, and legsInPairs
 	// stopped any later run from re-proposing them.
-	const proposedRows = await db
+	const undecided = await handle
+		.select()
+		.from(transaction)
+		.where(and(isNull(transaction.categoryId), isNull(transaction.transferPairId)))
+		.for('update');
+	// Read proposals after claiming the undecided rows. The global lock excludes
+	// another pairing pass, and waiting for ordinary row editors means their
+	// committed state is visible before categorisation. Reading in the reverse
+	// order would leave a commit window where a proposal can be missed.
+	const proposedRows = await handle
 		.select({ outId: transferPair.outTransactionId, inId: transferPair.inTransactionId })
 		.from(transferPair)
 		.where(eq(transferPair.state, 'proposed'));
 	const proposedLegs = new Set(proposedRows.flatMap((p) => [p.outId, p.inId]));
-	const undecided = await db
-		.select()
-		.from(transaction)
-		.where(and(isNull(transaction.categoryId), isNull(transaction.transferPairId)));
 	for (const t of undecided) {
 		if (t.reviewState === 'confirmed') continue;
 		if (proposedLegs.has(t.id)) continue; // waiting on the transfer decision
@@ -366,13 +759,14 @@ export async function pairAndCategorise(): Promise<number> {
 				counterpartyAccount: t.counterpartyAccount,
 				variableSymbol: t.variableSymbol,
 				description: t.description,
-				amountMinor: t.amount
+				amountMinor: t.amount,
+				currency: t.currency
 			},
 			rules,
 			threshold
 		);
 		if (decision.kind === 'auto') {
-			await db
+			await handle
 				.update(transaction)
 				.set({
 					categoryId: decision.categoryId,
@@ -386,7 +780,7 @@ export async function pairAndCategorise(): Promise<number> {
 			t.reviewReason !== decision.reason ||
 			t.suggestedCategoryId !== decision.categoryId
 		) {
-			await db
+			await handle
 				.update(transaction)
 				.set({
 					reviewState: 'needs_review',
@@ -396,7 +790,7 @@ export async function pairAndCategorise(): Promise<number> {
 				.where(eq(transaction.id, t.id));
 		}
 		// Tags are additive: every matching rule contributes, no conflict possible.
-		if (decision.tagIds.length > 0) await addTagsToTransaction(t.id, decision.tagIds);
+		if (decision.tagIds.length > 0) await addTagsToTransaction(t.id, decision.tagIds, handle);
 	}
 
 	return paired;

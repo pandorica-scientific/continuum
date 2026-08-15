@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	accountKeysMatch,
+	canonicalAccountIdentity,
 	normaliseAccountKey,
 	proposePairs,
 	type PairableTx,
@@ -36,6 +37,14 @@ function tx(
 }
 
 describe('accountKeysMatch', () => {
+	it('does not equate the same local number at different Czech banks', () => {
+		expect(accountKeysMatch('12345678/0100', '12345678/0300')).toBe(false);
+	});
+
+	it('does not accept a longer unrelated account containing the local digits', () => {
+		expect(accountKeysMatch('123456/0100', '99123456/0300')).toBe(false);
+	});
+
 	it('matches a czech local number against its IBAN form', () => {
 		expect(
 			accountKeysMatch(
@@ -43,11 +52,47 @@ describe('accountKeysMatch', () => {
 				normaliseAccountKey('CZ69 5500 0000 0000 9353 1803')
 			)
 		).toBe(true);
+		expect(canonicalAccountIdentity('93531803/5500')).toBe(
+			canonicalAccountIdentity('CZ69 5500 0000 0000 9353 1803')
+		);
 	});
 	it('rejects short or unrelated numbers', () => {
 		expect(accountKeysMatch('123', '456')).toBe(false);
 		expect(
 			accountKeysMatch(normaliseAccountKey('11112222/0100'), normaliseAccountKey('33334444/0300'))
+		).toBe(false);
+	});
+
+	// The household holds mBank Polska and Revolut accounts. Requiring a Czech
+	// identity on both sides meant these never matched: the transfer kept
+	// counting as real income and spending, and the import minted a duplicate
+	// account rather than recognising the one it already had.
+	it('matches a non-Czech national number against its own IBAN', () => {
+		expect(
+			accountKeysMatch(
+				normaliseAccountKey('61 1090 1014 0000 0712 1981 2874'),
+				normaliseAccountKey('PL61 1090 1014 0000 0712 1981 2874')
+			)
+		).toBe(true);
+	});
+
+	it('does not equate two different foreign IBANs', () => {
+		expect(
+			accountKeysMatch(
+				normaliseAccountKey('PL61 1090 1014 0000 0712 1981 2874'),
+				normaliseAccountKey('PL27 1140 2004 0000 3002 0135 5387')
+			)
+		).toBe(false);
+	});
+
+	it('does not compare a Czech reference as a flat run of digits', () => {
+		// The local form reorders the IBAN's fields, so a digit-core comparison
+		// would be wrong in both directions.
+		expect(
+			accountKeysMatch(
+				normaliseAccountKey('93531803/5500'),
+				normaliseAccountKey('PL69 5500 0000 0000 9353 1803')
+			)
 		).toBe(false);
 	});
 });

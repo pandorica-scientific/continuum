@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	account,
@@ -17,7 +17,7 @@ import {
 	tag
 } from '$lib/server/db/schema';
 import { saveUpload } from '$lib/server/files';
-import { upsertTag } from '$lib/server/tags';
+import { createDocument } from '$lib/server/documents/mutations';
 import { deriveColumns, isUnlinked, type LinkedDoc } from '$lib/documents-links';
 import { EXPIRY_VERBS, SHELVES, type ShelfKey } from '$lib/documents';
 import type { Actions, PageServerLoad } from './$types';
@@ -181,19 +181,7 @@ export const actions: Actions = {
 
 		// "＋ new subject": creating the record and linking it is one save.
 		const newSubject = String(form.get('newSubject') ?? '').trim();
-		if (newSubject) {
-			// Case-insensitive reuse, matching the unique index: typing "car" when
-			// "Car" exists links to the existing record instead of failing on it.
-			const existing = await db
-				.select()
-				.from(subject)
-				.where(sql`lower(${subject.name}) = ${newSubject.toLowerCase()}`);
-			const id = existing[0]?.id ?? randomUUID();
-			if (!existing[0]) await db.insert(subject).values({ id, name: newSubject, emoji: '📁' });
-			picked.subjects.push(id);
-		}
-
-		if (isUnlinked(picked))
+		if (isUnlinked(picked) && !newSubject)
 			return fail(400, {
 				message: 'A document has to belong to something — tick the household if nothing else fits.'
 			});
@@ -213,7 +201,14 @@ export const actions: Actions = {
 		const expiresOn = String(form.get('expiresOn') ?? '').trim() || null;
 		const verb = String(form.get('expiryVerb') ?? 'expires');
 		const documentId = randomUUID();
-		await db.insert(document).values({
+		const tagNames = String(form.get('tags') ?? '')
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
+
+		// The file is already durably stored above; the domain mutation owns every
+		// related database row, so a bad link or tag cannot leave a partial record.
+		await createDocument({
 			id: documentId,
 			name,
 			shelf,
@@ -221,37 +216,14 @@ export const actions: Actions = {
 			ext,
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn,
-			expiryVerb: (EXPIRY_VERBS as readonly string[]).includes(verb) ? verb : 'expires'
+			expiryVerb: (EXPIRY_VERBS as readonly string[]).includes(verb) ? verb : 'expires',
+			personIds: picked.people,
+			propertyIds: picked.properties,
+			accountIds: picked.accounts,
+			subjectIds: picked.subjects,
+			newSubjectName: newSubject || undefined,
+			tagNames
 		});
-
-		if (picked.people.length)
-			await db
-				.insert(documentPerson)
-				.values(picked.people.map((personId) => ({ documentId, personId })))
-				.onConflictDoNothing();
-		if (picked.properties.length)
-			await db
-				.insert(documentProperty)
-				.values(picked.properties.map((propertyId) => ({ documentId, propertyId })))
-				.onConflictDoNothing();
-		if (picked.accounts.length)
-			await db
-				.insert(documentAccount)
-				.values(picked.accounts.map((accountId) => ({ documentId, accountId })))
-				.onConflictDoNothing();
-		if (picked.subjects.length)
-			await db
-				.insert(documentSubject)
-				.values(picked.subjects.map((subjectId) => ({ documentId, subjectId })))
-				.onConflictDoNothing();
-
-		for (const raw of String(form.get('tags') ?? '')
-			.split(',')
-			.map((t) => t.trim())
-			.filter(Boolean)) {
-			const t = await upsertTag(raw);
-			await db.insert(documentTag).values({ documentId, tagId: t.id }).onConflictDoNothing();
-		}
 		return { ok: true };
 	}
 };

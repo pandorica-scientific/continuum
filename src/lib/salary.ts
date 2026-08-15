@@ -6,6 +6,15 @@
 
 import { minorDigits } from '$lib/money';
 
+/** Corrections keep the unit the payslip was stored in. The household base
+ * may change later, but that must never redenominate historical salary. */
+export function payslipEditCurrency(
+	storedCurrency: string | null,
+	currentBaseCurrency: string
+): string {
+	return storedCurrency ?? currentBaseCurrency;
+}
+
 export interface AmountCandidate {
 	/** the text on the line before the amount, lowercased — the amount's label */
 	label: string;

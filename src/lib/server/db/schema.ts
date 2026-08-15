@@ -27,6 +27,9 @@ export const person = pgTable('person', {
 	// Null between "created by an admin" and "enrolled via the one-time link".
 	// A null hash can never satisfy a sign-in — see verifyPassword.
 	passwordHash: text('password_hash'),
+	// Captured by sessions, passkeys and ceremonies so work begun before a
+	// revocation cannot create a new way in after it commits.
+	authGeneration: integer('auth_generation').notNull().default(0),
 	// Set to suspend sign-in without deleting a person other tables reference.
 	deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -40,13 +43,23 @@ export const session = pgTable(
 		personId: text('person_id')
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
+		authGeneration: integer('auth_generation').notNull(),
 		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
 	},
 	// Revoking every other session of one person reads by person_id, as does
 	// deleting them when the person goes. Indexed like every comparable foreign
 	// key in this schema.
-	(table) => [index('session_person_idx').on(table.personId)]
+	(table) => [
+		index('session_person_idx').on(table.personId),
+		index('session_expires_idx').on(table.expiresAt)
+	]
 );
+
+// The primary key arbitrates concurrent initial setup requests in PostgreSQL.
+export const setupClaim = pgTable('setup_claim', {
+	claimed: boolean('claimed').primaryKey(),
+	claimedAt: timestamp('claimed_at', { withTimezone: true }).notNull().defaultNow()
+});
 
 // A bearer token for the read-only API. Only the hash is stored — the raw
 // token is shown once at creation, exactly as session tokens are handled.
@@ -83,11 +96,23 @@ export const enrollmentToken = pgTable('enrollment_token', {
 // request said it should be. One captured assertion could then be replayed into
 // a fresh session forever. A row here is what makes a challenge single-use —
 // verification deletes it and refuses if it was not there.
-export const webauthnChallenge = pgTable('webauthn_challenge', {
-	// sha256 hex of the challenge, the way sessions and tokens are stored
-	id: text('id').primaryKey(),
-	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
-});
+export const webauthnChallenge = pgTable(
+	'webauthn_challenge',
+	{
+		// sha256 hex of the challenge, the way sessions and tokens are stored
+		id: text('id').primaryKey(),
+		address: text('address').notNull(),
+		personId: text('person_id').references(() => person.id, { onDelete: 'cascade' }),
+		authGeneration: integer('auth_generation'),
+		authSnapshot: jsonb('auth_snapshot').$type<Record<string, number>>().notNull().default({}),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(table) => [
+		index('webauthn_challenge_expires_idx').on(table.expiresAt),
+		index('webauthn_challenge_address_created_idx').on(table.address, table.createdAt)
+	]
+);
 
 // A registered passkey. The public key is public by construction — the private
 // half never leaves the authenticator, which is the whole point.
@@ -99,6 +124,7 @@ export const credential = pgTable(
 		personId: text('person_id')
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
+		authGeneration: integer('auth_generation').notNull(),
 		publicKey: text('public_key').notNull(),
 		// See webauthn/counter.ts: 0 means "not reported", not "never used".
 		counter: bigint('counter', { mode: 'number' }).notNull().default(0),
@@ -237,6 +263,27 @@ export const transaction = pgTable(
 	]
 );
 
+// A legacy parser fingerprint can name the same movement as a current
+// fingerprint even when the old stored row cannot be reconstructed exactly
+// (notably Revolut v1 rows whose fee was folded into amount). Replay records
+// the current fingerprint here without rewriting the user's historical row.
+export const transactionFingerprintAlias = pgTable(
+	'transaction_fingerprint_alias',
+	{
+		accountId: text('account_id')
+			.notNull()
+			.references(() => account.id, { onDelete: 'cascade' }),
+		fingerprint: text('fingerprint').notNull(),
+		transactionId: text('transaction_id')
+			.notNull()
+			.references(() => transaction.id, { onDelete: 'cascade' })
+	},
+	(table) => [
+		primaryKey({ columns: [table.accountId, table.fingerprint] }),
+		index('transaction_fingerprint_alias_transaction_idx').on(table.transactionId)
+	]
+);
+
 // A matched pair of legs moving money between the household's own accounts.
 // Confirmed/auto legs point back via transaction.transferPairId (a soft
 // pointer, to avoid an FK cycle); proposed pairs exist only here until the
@@ -252,6 +299,29 @@ export const transferPair = pgTable('transfer_pair', {
 	state: text('state').notNull().default('auto'), // auto | proposed | confirmed | rejected
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+// A transaction can be claimed by only one active pair, regardless of whether
+// it is the outgoing or incoming leg. Migration 0027 maintains this normalized
+// relation from transfer_pair with a trigger so one primary key covers the
+// cross-column uniqueness that two ordinary indexes cannot express.
+//
+// The rows are written by the maintain_transfer_pair_legs() trigger, never by
+// application code. Drizzle models tables, not triggers: this declaration
+// cannot recreate it, `db:generate` cannot notice it going missing, and a
+// database materialised with `drizzle-kit push` would have the table without
+// the constraint it exists to enforce. Apply migrations to build the schema.
+export const transferPairLeg = pgTable(
+	'transfer_pair_leg',
+	{
+		transactionId: text('transaction_id')
+			.primaryKey()
+			.references(() => transaction.id, { onDelete: 'cascade' }),
+		pairId: text('pair_id')
+			.notNull()
+			.references(() => transferPair.id, { onDelete: 'cascade' })
+	},
+	(table) => [index('transfer_pair_leg_pair_idx').on(table.pairId)]
+);
 
 export const markTransferRule = pgTable('mark_transfer_rule', {
 	id: text('id').primaryKey(),
@@ -310,28 +380,36 @@ export const tenancy = pgTable('tenancy', {
 	renewalNoticeDate: date('renewal_notice_date')
 });
 
-export const propertyBill = pgTable('property_bill', {
-	id: text('id').primaryKey(),
-	propertyId: text('property_id')
-		.notNull()
-		.references(() => property.id, { onDelete: 'cascade' }),
-	label: text('label').notNull(),
-	amountMinor: bigint('amount_minor', { mode: 'bigint' })
-		.notNull()
-		.default(sql`0`),
-	sort: integer('sort').notNull().default(0),
-	/**
-	 * Where the amount comes from: 'meter' rows are rewritten from the smart
-	 * meter reading, everything else is the household's own figure and is never
-	 * touched. A typed column rather than a label match — looking for a label
-	 * containing "energy" missed the app's own seeded "Electricity advance", so
-	 * a second energy line appeared beside it and the property's bill total
-	 * counted electricity twice, and renaming a bill to Czech did the same.
-	 */
-	source: text('source').notNull().default('manual'),
-	// the uploaded bill itself, filed in Documents about this property
-	documentId: text('document_id').references(() => document.id, { onDelete: 'set null' })
-});
+export const propertyBill = pgTable(
+	'property_bill',
+	{
+		id: text('id').primaryKey(),
+		propertyId: text('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' }),
+		label: text('label').notNull(),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		sort: integer('sort').notNull().default(0),
+		/**
+		 * Where the amount comes from: 'meter' rows are rewritten from the smart
+		 * meter reading, everything else is the household's own figure and is never
+		 * touched. A typed column rather than a label match — looking for a label
+		 * containing "energy" missed the app's own seeded "Electricity advance", so
+		 * a second energy line appeared beside it and the property's bill total
+		 * counted electricity twice, and renaming a bill to Czech did the same.
+		 */
+		source: text('source').notNull().default('manual'),
+		// the uploaded bill itself, filed in Documents about this property
+		documentId: text('document_id').references(() => document.id, { onDelete: 'set null' })
+	},
+	(table) => [
+		uniqueIndex('property_bill_meter_property_idx')
+			.on(table.propertyId)
+			.where(sql`${table.source} = 'meter'`)
+	]
+);
 
 // ---- Loans ----
 
@@ -504,6 +582,15 @@ export const holding = pgTable('holding', {
 export const portfolioSnapshot = pgTable('portfolio_snapshot', {
 	day: date('day').primaryKey(),
 	valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
+	currency: text('currency').notNull()
+});
+
+// A holdings report can legitimately contain zero rows, so freshness cannot
+// be inferred from the current holding table. This singleton remembers the
+// exact report timestamp and account currency independently of its contents.
+export const brokerImportState = pgTable('broker_import_state', {
+	id: text('id').primaryKey(),
+	latestGeneratedAt: timestamp('latest_generated_at', { withTimezone: true }).notNull(),
 	currency: text('currency').notNull()
 });
 

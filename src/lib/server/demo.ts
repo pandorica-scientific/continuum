@@ -9,6 +9,7 @@ import { db } from '$lib/server/db';
 import { initialsFor } from '$lib/people';
 import {
 	account,
+	brokerImportState,
 	document,
 	documentPerson,
 	documentProperty,
@@ -156,7 +157,7 @@ export async function seedDemo(): Promise<void> {
 		provenance: 'manual',
 		conditions: [
 			{ field: 'counterparty', op: 'contains', value: 'alza' },
-			{ field: 'amount', op: 'between', min: '100000', max: null }
+			{ field: 'amount', op: 'between', min: '100000', max: null, currency: 'CZK' }
 		],
 		categoryId: 'everything-else'
 	});
@@ -257,9 +258,15 @@ export async function seedDemo(): Promise<void> {
 		{ id: randomUUID(), propertyId: flatB, label: 'SVJ fee', amountMinor: 310000n }
 	]);
 
+	const demoPortfolioAsOf = new Date();
 	await db.insert(portfolioSnapshot).values({
-		day: new Date().toISOString().slice(0, 10),
+		day: demoPortfolioAsOf.toISOString().slice(0, 10),
 		valueMinor: 41200000n,
+		currency: 'CZK'
+	});
+	await db.insert(brokerImportState).values({
+		id: 'global',
+		latestGeneratedAt: demoPortfolioAsOf,
 		currency: 'CZK'
 	});
 

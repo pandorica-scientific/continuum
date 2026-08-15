@@ -2,6 +2,7 @@ import { redirect, type Handle, type ServerInit } from '@sveltejs/kit';
 import { building } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { validateSession } from '$lib/server/auth';
+import { authorizeApiRequest } from '$lib/server/api/respond';
 import { maybeRunScheduledBackup } from '$lib/server/backup';
 import { seedCategories } from '$lib/server/categorize';
 import { runMigrations } from '$lib/server/db/migrate';
@@ -90,9 +91,11 @@ export const init: ServerInit = async () => {
 // same shape again — the visitor has no session yet, and the token in the URL
 // is what authorises them to set a password.
 //
-// This exempts them from the redirect to /login, NOT from authentication —
-// every /api route calls requireToken itself, and one that forgets to would be
-// wide open. The E2E journey asserts an unauthenticated request gets a 401.
+// This exempts them from the redirect to /login, NOT from authentication — the
+// hook applies bearer authentication to the whole /api boundary before any
+// endpoint runs, covering exactly what '/api' below exempts so a route added
+// beside the versioned ones cannot ship unauthenticated. The E2E journey
+// asserts an unauthenticated request gets a 401.
 //
 // /auth/passkey/register is on the list for the same reason, and only that
 // reason: both of its endpoints refuse a request without a session themselves.
@@ -116,6 +119,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
 	event.locals.person = await validateSession(event.cookies);
+
+	const apiRefusal = await authorizeApiRequest(pathname, event.request, event.getClientAddress());
+	if (apiRefusal) return apiRefusal;
 
 	const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 

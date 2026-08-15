@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { blockedForSeconds, recordFailure, recordSuccess } from '$lib/server/auth/ratelimit';
+import {
+	RateLimiter,
+	blockedForSeconds,
+	loginLimitSubject,
+	recordFailure,
+	recordSuccess,
+	reserveChallengeIssuance
+} from '$lib/server/auth/ratelimit';
 
 const MAX_FAILURES = 8;
+const MAX_CHALLENGE_ISSUES = 60;
 
 describe('rate limiter scopes', () => {
 	it('a locked-out API caller does not lock the sign-in form', () => {
@@ -52,6 +60,56 @@ describe('rate limiter scopes', () => {
 		expect(blockedForSeconds('login', address, 'person-tereza')).toBe(0);
 	});
 
+	// Rotating account names is already answered by collapsing every unknown one
+	// to a single subject, so they share one budget without a coarser
+	// address-wide tier — which behind a proxy would be the whole household.
+	it('rotating unknown account IDs spends one shared unknown-account budget', () => {
+		const address = '198.51.100.17';
+		for (let i = 0; i < MAX_FAILURES; i++) {
+			recordFailure('login', address, loginLimitSubject(`made-up-${i}`, false));
+		}
+
+		expect(
+			blockedForSeconds('login', address, loginLimitSubject('made-up-next', false))
+		).toBeGreaterThan(0);
+		// A named member signing in from the same address is untouched by it.
+		expect(blockedForSeconds('login', address, loginLimitSubject('person-robert', true))).toBe(0);
+	});
+
+	// One wrong password, or a few expired passkey challenges, must not refuse
+	// every other member: behind Tailscale the household is one address.
+	it('does not let one account or door lock out the rest of the household', () => {
+		const address = '198.51.100.23';
+		for (let i = 0; i < MAX_FAILURES * 2; i++) {
+			recordFailure('login', address, 'person-robert');
+			recordFailure('login', address);
+		}
+
+		expect(blockedForSeconds('login', address, 'person-robert')).toBeGreaterThan(0);
+		expect(blockedForSeconds('login', address, 'person-tereza')).toBe(0);
+	});
+
+	it('collapses attacker-controlled unknown account IDs to one subject', () => {
+		expect(loginLimitSubject('made-up-one', false)).toBe(loginLimitSubject('made-up-two', false));
+		expect(loginLimitSubject('known-person', true)).toBe('known-person');
+	});
+
+	it('bounds attacker-created state and stale cleanup work', () => {
+		let now = 0;
+		const limiter = new RateLimiter({
+			now: () => now,
+			maxEntries: 12,
+			pruneBatchSize: 3
+		});
+
+		for (let i = 0; i < 100; i++) limiter.recordFailure('login', `address-${i}`, 'unknown');
+		expect(limiter.size).toBeLessThanOrEqual(12);
+
+		now = 16 * 60 * 1000;
+		limiter.blockedForSeconds('login', 'fresh-address', 'unknown');
+		expect(limiter.size).toBe(9);
+	});
+
 	it('enrollment has its own budget and never touches the sign-in one', () => {
 		// An enrollment link is an unauthenticated URL anyone can probe.
 		const address = '100.64.0.2';
@@ -60,5 +118,23 @@ describe('rate limiter scopes', () => {
 		expect(blockedForSeconds('login', address)).toBe(0);
 		expect(blockedForSeconds('login', address, 'person-robert')).toBe(0);
 		expect(blockedForSeconds('api', address)).toBe(0);
+	});
+
+	// A flood guard, not a credential budget. Every one of these ceremonies
+	// succeeds; capping them at the failure allowance meant four clicks each
+	// from two members refused the ninth ordinary sign-in of the window.
+	it('lets an ordinary household issue passkey challenges freely', () => {
+		const address = '203.0.113.44';
+		for (let i = 0; i < MAX_FAILURES * 4; i++) {
+			expect(reserveChallengeIssuance(address)).toBe(0);
+		}
+	});
+
+	it('still stops a script flooding challenge issuance', () => {
+		const address = '203.0.113.45';
+		for (let i = 0; i < MAX_CHALLENGE_ISSUES; i++) {
+			expect(reserveChallengeIssuance(address)).toBe(0);
+		}
+		expect(reserveChallengeIssuance(address)).toBeGreaterThan(0);
 	});
 });

@@ -5,10 +5,17 @@
 
 import { randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import { db, type Queryable } from '$lib/server/db';
-import { enrollmentToken } from '$lib/server/db/schema';
+import { db, type Db, type Queryable } from '$lib/server/db';
+import { enrollmentToken, person } from '$lib/server/db/schema';
 import { hashToken } from '$lib/server/auth/token-hash';
 import { enrollmentLinkDays } from '$lib/server/policy';
+import {
+	applySessionCookie,
+	createSessionGrant,
+	currentSessionId,
+	hashPassword
+} from '$lib/server/auth';
+import type { Cookies } from '@sveltejs/kit';
 
 export type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
 
@@ -79,9 +86,12 @@ export async function lookupEnrollmentToken(
  * its status from `expired` to `used`, the one distinction enrollmentStatus
  * draws, on a route any unauthenticated visitor can reach.
  */
-export async function consumeEnrollmentToken(raw: string): Promise<{ personId: string } | null> {
+export async function consumeEnrollmentToken(
+	raw: string,
+	on: Queryable = db
+): Promise<{ personId: string } | null> {
 	const now = new Date();
-	const updated = await db
+	const updated = await on
 		.update(enrollmentToken)
 		.set({ usedAt: now })
 		.where(
@@ -94,6 +104,88 @@ export async function consumeEnrollmentToken(raw: string): Promise<{ personId: s
 		.returning({ personId: enrollmentToken.personId });
 	const row = updated[0];
 	return row ? { personId: row.personId } : null;
+}
+
+class EnrollmentUnavailable extends Error {}
+
+/**
+ * Consume a link, set its still-pending person's password, and create the first
+ * session as one transaction. The cookie is published only after commit.
+ */
+export async function completeEnrollment(
+	raw: string,
+	password: string,
+	cookies: Cookies,
+	handle: Db = db
+): Promise<boolean> {
+	let grant;
+	try {
+		grant = await handle.transaction(async (tx) => {
+			const tokenRows = await tx
+				.select({
+					personId: enrollmentToken.personId,
+					expiresAt: enrollmentToken.expiresAt,
+					usedAt: enrollmentToken.usedAt
+				})
+				.from(enrollmentToken)
+				.where(eq(enrollmentToken.id, hashToken(raw)));
+			const token = tokenRows[0];
+			if (!token || enrollmentStatus(token, new Date()) !== 'valid') return null;
+
+			// Match deactivation's person-then-token lock order. Whichever operation
+			// owns this row first is the one that happened first; the loser then sees
+			// the committed active/password state and cannot resurrect claimability.
+			const targets = await tx
+				.select({ id: person.id, authGeneration: person.authGeneration })
+				.from(person)
+				.where(
+					and(
+						eq(person.id, token.personId),
+						isNull(person.passwordHash),
+						isNull(person.deactivatedAt)
+					)
+				)
+				.for('update');
+			const target = targets[0];
+			if (!target) return null;
+
+			const consumed = await consumeEnrollmentToken(raw, tx);
+			if (!consumed || consumed.personId !== target.id) return null;
+
+			// Only the transaction that consumed the token reaches Argon2. A second
+			// submission waits on the locks above and returns without hashing.
+			const passwordHash = await hashPassword(password);
+			const updated = await tx
+				.update(person)
+				.set({ passwordHash })
+				.where(
+					and(
+						eq(person.id, target.id),
+						eq(person.authGeneration, target.authGeneration),
+						isNull(person.passwordHash),
+						isNull(person.deactivatedAt)
+					)
+				)
+				.returning({ authGeneration: person.authGeneration });
+			if (!updated[0]) throw new EnrollmentUnavailable();
+
+			const sessionGrant = await createSessionGrant(
+				tx,
+				target.id,
+				updated[0].authGeneration,
+				currentSessionId(cookies)
+			);
+			if (!sessionGrant) throw new EnrollmentUnavailable();
+			return sessionGrant;
+		});
+	} catch (error) {
+		if (error instanceof EnrollmentUnavailable) return false;
+		throw error;
+	}
+
+	if (!grant) return false;
+	applySessionCookie(cookies, grant);
+	return true;
 }
 
 /**

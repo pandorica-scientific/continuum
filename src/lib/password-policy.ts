@@ -16,6 +16,15 @@ export function passwordHint(minLength: number): string {
 	return `${minLength}+ characters`;
 }
 
+/** One length rule and message shape for setup, enrollment and password changes. */
+export function passwordLengthError(
+	password: string,
+	minLength: number,
+	label = 'Password'
+): string | null {
+	return password.length < minLength ? `${label} needs at least ${minLength} characters.` : null;
+}
+
 const WORDS = [
 	'zero',
 	'one',

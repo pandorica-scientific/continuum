@@ -165,6 +165,18 @@
 		</button>
 		{#if passkeyError}<p class="note">{passkeyError}</p>{/if}
 	</div>
+{:else}
+	<!-- Hiding the passkey card on a plain-HTTP deployment is correct — browsers
+	     refuse WebAuthn outside a secure context — but hiding it silently reads as
+	     "this build has no passkeys". Say why, and what turns them on. -->
+	<div class="card people">
+		<p class="note">
+			Passwords are the only sign-in here because passkeys need a secure address: browsers refuse
+			them over plain HTTP. Point <code>ORIGIN</code> at an <code>https://</code> URL — a Tailscale name
+			is the least painful route on a home network — and the passkey controls appear on this screen and
+			on the sign-in page.
+		</p>
+	</div>
 {/if}
 
 <style>

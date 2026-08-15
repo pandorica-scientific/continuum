@@ -1,25 +1,18 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 
 	let { data, form } = $props();
 
-	let fileInput: HTMLInputElement | undefined = $state();
-	let uploading = $state(false);
-	let dragOver = $state(false);
-
-	async function upload(file: File) {
+	async function upload(files: FileList) {
+		const file = files[0];
+		if (!file) return { type: 'error' as const, message: 'Choose a report first.' };
 		const body = new FormData();
 		body.set('report', file);
-		uploading = true;
-		try {
-			await fetch('?/upload', { method: 'POST', body });
-			await invalidateAll();
-		} finally {
-			uploading = false;
-		}
+		return submitAction('?/upload', body);
 	}
 
 	// Chart geometry: 800×200 viewBox, HTML axis labels outside the SVG.
@@ -241,35 +234,11 @@
 			<p class="quiet">No holdings yet — upload a report below.</p>
 		{/if}
 
-		<div
-			class="drop"
-			class:drag={dragOver}
-			role="button"
-			tabindex="0"
-			onclick={() => fileInput?.click()}
-			onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
-			ondragover={(e) => {
-				e.preventDefault();
-				dragOver = true;
-			}}
-			ondragleave={() => (dragOver = false)}
-			ondrop={(e) => {
-				e.preventDefault();
-				dragOver = false;
-				const file = e.dataTransfer?.files?.[0];
-				if (file) upload(file);
-			}}
-		>
-			{uploading
-				? 'Reading the report…'
-				: '📥 Drop the XTB account statement here, or click to browse'}
-		</div>
-		<input
-			bind:this={fileInput}
-			type="file"
+		<UploadDropzone
 			accept=".xlsx"
-			style="display: none"
-			onchange={() => fileInput?.files?.[0] && upload(fileInput.files[0])}
+			idleText="📥 Drop the XTB account statement here, or click to browse"
+			busyText="Reading the report…"
+			onfiles={upload}
 		/>
 		{#if form?.result}
 			<span class="quiet">
@@ -464,7 +433,7 @@
 		font-size: 12.5px;
 		color: var(--fg3);
 	}
-	.drop {
+	:global(.dropzone) {
 		margin-top: 12px;
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
@@ -475,11 +444,11 @@
 		cursor: pointer;
 		text-align: center;
 	}
-	.drop:hover,
-	.drop.drag {
+	:global(.dropzone:hover),
+	:global(.dropzone.dragging) {
 		border-color: var(--blue);
 	}
-	.drop.drag {
+	:global(.dropzone.dragging) {
 		background: var(--blue-tint);
 	}
 	@media (max-width: 720px) {

@@ -2,8 +2,8 @@
 // in the pure module; nothing here computes what is owed.
 
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { eq } from 'drizzle-orm';
+import { db, type Db } from '$lib/server/db';
 import { person, taxStatement, taxStatementLine } from '$lib/server/db/schema';
 
 export interface StatementInput {
@@ -41,55 +41,55 @@ export async function loadStatements() {
  * One statement per person per country per year: an existing one is updated in
  * place and its lines replaced wholesale — the same contract tags use.
  */
-export async function saveStatement(input: StatementInput): Promise<TaxResult> {
+export async function saveStatement(input: StatementInput, handle: Db = db): Promise<TaxResult> {
 	if (!input.personId) return { ok: false, status: 400, message: 'Pick whose statement this is.' };
 	if (!Number.isInteger(input.year) || input.year < 1900 || input.year > 2200)
 		return { ok: false, status: 400, message: 'That year does not look right.' };
 	if (!input.country.trim()) return { ok: false, status: 400, message: 'Name the country.' };
-	if (!input.currency.trim()) return { ok: false, status: 400, message: 'Name the currency.' };
+	const currency = input.currency.trim().toUpperCase();
+	if (!/^[A-Z]{3}$/.test(currency))
+		return { ok: false, status: 400, message: 'Use a three-letter currency code.' };
 	if (input.grossIncomeMinor < 0n || input.taxPaidMinor < 0n)
 		return { ok: false, status: 400, message: 'Figures on a statement cannot be negative.' };
 
 	const country = input.country.trim().toUpperCase();
-	const existing = await db
-		.select()
-		.from(taxStatement)
-		.where(
-			and(
-				eq(taxStatement.personId, input.personId),
-				eq(taxStatement.year, input.year),
-				eq(taxStatement.country, country)
-			)
-		);
-
-	const id = existing[0]?.id ?? randomUUID();
 	const values = {
 		personId: input.personId,
 		year: input.year,
 		country,
-		currency: input.currency.trim().toUpperCase(),
+		currency,
 		grossIncomeMinor: input.grossIncomeMinor,
 		taxPaidMinor: input.taxPaidMinor,
 		documentId: input.documentId,
 		note: input.note
 	};
-	if (existing[0]) {
-		await db.update(taxStatement).set(values).where(eq(taxStatement.id, id));
-		await db.delete(taxStatementLine).where(eq(taxStatementLine.statementId, id));
-	} else {
-		await db.insert(taxStatement).values({ id, ...values });
-	}
-	if (input.lines.length > 0) {
-		await db.insert(taxStatementLine).values(
-			input.lines.map((l, sort) => ({
-				id: randomUUID(),
-				statementId: id,
-				label: l.label,
-				amountMinor: l.amountMinor,
-				sort
-			}))
-		);
-	}
+	await handle.transaction(async (tx) => {
+		// The unique key resolves concurrent saves of the same statement and
+		// RETURNING gives us the winning row id. Replacing its lines in this same
+		// transaction means a failed insert can never leave an empty statement.
+		const saved = await tx
+			.insert(taxStatement)
+			.values({ id: randomUUID(), ...values })
+			.onConflictDoUpdate({
+				target: [taxStatement.personId, taxStatement.year, taxStatement.country],
+				set: values
+			})
+			.returning({ id: taxStatement.id });
+		const id = saved[0].id;
+
+		await tx.delete(taxStatementLine).where(eq(taxStatementLine.statementId, id));
+		if (input.lines.length > 0) {
+			await tx.insert(taxStatementLine).values(
+				input.lines.map((line, sort) => ({
+					id: randomUUID(),
+					statementId: id,
+					label: line.label,
+					amountMinor: line.amountMinor,
+					sort
+				}))
+			);
+		}
+	});
 	return { ok: true };
 }
 

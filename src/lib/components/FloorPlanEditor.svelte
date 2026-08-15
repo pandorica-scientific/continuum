@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
 	import {
 		DEFAULT_CELL_CM,
 		outlinePath,
@@ -37,6 +37,7 @@
 	let svgEl: SVGSVGElement | undefined = $state();
 	let nameInput: HTMLInputElement | undefined = $state();
 	let saving = $state(false);
+	let saveError = $state<string | null>(null);
 
 	const drawing = $derived({ cellCm, rooms } as PlanDrawing);
 	const draftMeters = $derived.by(() => {
@@ -172,13 +173,14 @@
 
 	async function save() {
 		saving = true;
+		saveError = null;
 		try {
 			const body = new FormData();
 			body.set('propertyId', propertyId);
 			body.set('drawing', JSON.stringify({ cellCm, rooms }));
-			await fetch('/property?/savePlan', { method: 'POST', body });
-			await invalidateAll();
-			onclose();
+			const outcome = await submitAction('/property?/savePlan', body);
+			if (outcome.type === 'success') onclose();
+			else saveError = outcome.message;
 		} finally {
 			saving = false;
 		}
@@ -307,6 +309,7 @@
 			{saving ? 'Saving…' : 'Save plan'}
 		</button>
 	</div>
+	{#if saveError}<p class="save-error" role="alert">{saveError}</p>{/if}
 </div>
 
 <style>
@@ -431,6 +434,11 @@
 		align-items: center;
 		gap: 12px;
 		flex-wrap: wrap;
+	}
+	.save-error {
+		margin: 0;
+		color: var(--red);
+		font-size: 12px;
 	}
 	.name-label {
 		display: flex;

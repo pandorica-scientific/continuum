@@ -1,9 +1,13 @@
 import { fail } from '@sveltejs/kit';
-import { and, desc, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
+import { desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, category, importFile, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
-import { ingestFile, pairAndCategorise, type IngestResult } from '$lib/server/import/ingest';
+import { ingestFile, type IngestResult } from '$lib/server/import/ingest';
+import {
+	confirmTransferProposal,
+	rejectTransferProposal
+} from '$lib/server/import/transfer-decisions';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
@@ -125,67 +129,16 @@ export const actions: Actions = {
 	confirmTransfer: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
-		// Proposals live only in transferPair until confirmed; find by leg.
-		// The leg test must go through or(), not a raw fragment: drizzle's and()
-		// parenthesises the list as a whole and never its operands, so a raw
-		// `a = x or b = x` inside it renders as `(state = ? and a = ?) or b = ?`
-		// — AND binds tighter — and the state filter would not cover the in-leg.
-		const pairs = await db
-			.select()
-			.from(transferPair)
-			.where(
-				and(
-					eq(transferPair.state, 'proposed'),
-					or(eq(transferPair.outTransactionId, id), eq(transferPair.inTransactionId, id))
-				)
-			);
-		const pair = pairs[0];
-		if (!pair) return fail(404, { message: 'No transfer proposal on this row.' });
-		await db.update(transferPair).set({ state: 'confirmed' }).where(eq(transferPair.id, pair.id));
-		for (const legId of [pair.outTransactionId, pair.inTransactionId]) {
-			await db
-				.update(transaction)
-				.set({
-					transferPairId: pair.id,
-					reviewState: 'confirmed',
-					reviewReason: null,
-					categoryId: null
-				})
-				.where(eq(transaction.id, legId));
-		}
+		const result = await confirmTransferProposal(id);
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
 
 	rejectTransfer: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
-		// Same shape as confirmTransfer, and the same state filter: the reject
-		// button only ever appears on a proposed pair, so a confirmed or
-		// already-rejected one must not be reachable through it.
-		const pairs = await db
-			.select()
-			.from(transferPair)
-			.where(
-				and(
-					eq(transferPair.state, 'proposed'),
-					or(eq(transferPair.outTransactionId, id), eq(transferPair.inTransactionId, id))
-				)
-			);
-		const pair = pairs[0];
-		if (!pair) return fail(404, { message: 'No transfer proposal on this row.' });
-		for (const legId of [pair.outTransactionId, pair.inTransactionId]) {
-			await db
-				.update(transaction)
-				.set({
-					transferPairId: null,
-					reviewState: 'needs_review',
-					reviewReason: 'transfer rejected — pick a category'
-				})
-				.where(eq(transaction.id, legId));
-		}
-		// Keep the pair as 'rejected' so the pairing pass never re-proposes it.
-		await db.update(transferPair).set({ state: 'rejected' }).where(eq(transferPair.id, pair.id));
-		await pairAndCategorise();
+		const result = await rejectTransferProposal(id);
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	}
 };

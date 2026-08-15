@@ -21,9 +21,16 @@ const rule = (over: Partial<RuleLike> = {}): RuleLike => ({
 	...over
 });
 
-const row = { counterparty: 'ALBERT PRAHA 4', amountMinor: -45500n };
+const row = { counterparty: 'ALBERT PRAHA 4', amountMinor: -45500n, currency: 'CZK' };
 
 describe('ruleMatches', () => {
+	it('fails closed for a legacy amount bound until its authored currency is migrated', () => {
+		const legacy = rule({
+			conditions: [{ field: 'amount', op: 'between', min: '100', max: null }]
+		});
+		expect(ruleMatches(legacy, { ...row, currency: 'CZK' })).toBe(false);
+	});
+
 	it('matches a normalised whole word in the counterparty', () => {
 		expect(ruleMatches(rule(), row)).toBe(true);
 	});
@@ -60,7 +67,7 @@ describe('ruleMatches', () => {
 		const twoConditions = rule({
 			conditions: [
 				{ field: 'counterparty', op: 'contains', value: 'albert' },
-				{ field: 'amount', op: 'between', min: '100000', max: null }
+				{ field: 'amount', op: 'between', min: '100000', max: null, currency: 'CZK' }
 			]
 		});
 		expect(ruleMatches(twoConditions, row)).toBe(false); // 455 < 1000
@@ -69,10 +76,18 @@ describe('ruleMatches', () => {
 
 	it('compares amounts as magnitudes, so direction does not matter', () => {
 		const r = rule({
-			conditions: [{ field: 'amount', op: 'between', min: '40000', max: '50000' }]
+			conditions: [{ field: 'amount', op: 'between', min: '40000', max: '50000', currency: 'CZK' }]
 		});
-		expect(ruleMatches(r, { ...row, amountMinor: -45500n })).toBe(true);
-		expect(ruleMatches(r, { ...row, amountMinor: 45500n })).toBe(true);
+		expect(ruleMatches(r, { ...row, amountMinor: -45500n, currency: 'CZK' })).toBe(true);
+		expect(ruleMatches(r, { ...row, amountMinor: 45500n, currency: 'CZK' })).toBe(true);
+	});
+
+	it('does not compare a base-currency amount bound to foreign minor units', () => {
+		const r = rule({
+			conditions: [{ field: 'amount', op: 'between', min: '40000', max: '50000', currency: 'CZK' }]
+		});
+
+		expect(ruleMatches(r, { ...row, amountMinor: 45500n, currency: 'EUR' })).toBe(false);
 	});
 
 	it('never matches while disabled', () => {
@@ -131,7 +146,7 @@ describe('decideWithRules', () => {
 			categoryId: 'eating-out',
 			conditions: [
 				{ field: 'counterparty', op: 'contains', value: 'albert' },
-				{ field: 'amount', op: 'between', min: null, max: '100000' }
+				{ field: 'amount', op: 'between', min: null, max: '100000', currency: 'CZK' }
 			]
 		});
 		expect(decideWithRules(row, [rule(), specific], THRESHOLD).categoryId).toBe('eating-out');

@@ -1,15 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { overlayFocus } from '$lib/actions/overlay';
 
 	let { title, onclose, children }: { title: string; onclose: () => void; children: Snippet } =
 		$props();
-
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') onclose();
-	}
 </script>
-
-<svelte:window {onkeydown} />
 
 <div
 	class="backdrop"
@@ -18,7 +13,14 @@
 		if (e.target === e.currentTarget) onclose();
 	}}
 >
-	<div class="modal" role="dialog" aria-modal="true" aria-label={title}>
+	<div
+		class="modal"
+		role="dialog"
+		aria-modal="true"
+		aria-label={title}
+		tabindex="-1"
+		use:overlayFocus={{ onclose }}
+	>
 		<div class="head">
 			<span class="title">{title}</span>
 			<button type="button" class="close" onclick={onclose} aria-label="Close">✕</button>

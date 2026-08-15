@@ -137,11 +137,13 @@
 				</button>
 			</div>
 			{#if editingPlan}
-				<FloorPlanEditor
-					propertyId={data.detail.id}
-					initial={data.detail.images.drawing ?? null}
-					onclose={() => (editingPlan = false)}
-				/>
+				{#key data.detail.id}
+					<FloorPlanEditor
+						propertyId={data.detail.id}
+						initial={data.detail.images.drawing ?? null}
+						onclose={() => (editingPlan = false)}
+					/>
+				{/key}
 			{:else if data.detail.images.drawing}
 				<div class="plan drawn">
 					<FloorPlan drawing={data.detail.images.drawing} />

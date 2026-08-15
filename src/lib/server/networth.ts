@@ -1,4 +1,4 @@
-import { and, asc, desc, lt } from 'drizzle-orm';
+import { asc, desc, lt } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	account,
@@ -10,6 +10,7 @@ import {
 } from '$lib/server/db/schema';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
+import { deltaSinceMonthStart } from '$lib/networth/history';
 
 export interface NetWorthGroup {
 	key: string;
@@ -126,19 +127,33 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	const liabilitiesMinor = groups.reduce((s, g) => s + g.liabilityMinor, 0n);
 	const totalMinor = assetsMinor - liabilitiesMinor;
 
-	// Read the month baseline. (Today's figure is persisted on the scheduler.)
+	// The month opened at the close of the previous one, so read the last
+	// snapshot before it began, plus the oldest on record for an install whose
+	// history does not reach back that far. Today's figure is persisted by the
+	// scheduler and is not its own comparison baseline. Two single indexed reads
+	// rather than loading the month.
 	const monthStart = today.slice(0, 8) + '01';
-	const baseline = await db
-		.select()
-		.from(netWorthSnapshot)
-		.where(and(lt(netWorthSnapshot.day, monthStart)))
-		.orderBy(desc(netWorthSnapshot.day))
-		.limit(1);
-	const earliest = baseline[0]
-		? baseline[0]
-		: (await db.select().from(netWorthSnapshot).orderBy(asc(netWorthSnapshot.day)).limit(1))[0];
-	const deltaThisMonthMinor =
-		earliest && earliest.day !== today ? totalMinor - earliest.valueMinor : null;
+	const [priorMonth, oldest] = await Promise.all([
+		db
+			.select()
+			.from(netWorthSnapshot)
+			.where(lt(netWorthSnapshot.day, monthStart))
+			.orderBy(desc(netWorthSnapshot.day))
+			.limit(1),
+		db
+			.select()
+			.from(netWorthSnapshot)
+			.where(lt(netWorthSnapshot.day, today))
+			.orderBy(asc(netWorthSnapshot.day))
+			.limit(1)
+	]);
+	const deltaThisMonthMinor = deltaSinceMonthStart(
+		totalMinor,
+		baseCurrency,
+		today,
+		[...priorMonth, ...oldest],
+		(amount, from, to, day) => convertOrFace(rates, amount, from, to, day)
+	);
 
 	return { baseCurrency, totalMinor, groups, assetsMinor, liabilitiesMinor, deltaThisMonthMinor };
 }

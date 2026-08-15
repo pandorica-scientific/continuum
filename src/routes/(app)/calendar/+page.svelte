@@ -1,13 +1,20 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { selectedDayForMonth } from '$lib/ui/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 
 	let { data } = $props();
 
 	// Clicking a day filters the agenda; clicking it again clears.
-	let selectedDay: string | null = $state(null);
+	let selectedDay = $derived<string | null>(null);
+	$effect(() => {
+		selectedDay = selectedDayForMonth(
+			selectedDay,
+			data.cells.flatMap((cell) => (cell ? [cell.date] : []))
+		);
+	});
 
 	const agenda = $derived(
 		selectedDay ? data.agenda.filter((e) => e.date === selectedDay) : data.agenda

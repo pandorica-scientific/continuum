@@ -1,0 +1,1223 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import EmbeddedPostgres from 'embedded-postgres';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import * as schema from '$lib/server/db/schema';
+import { createDocument } from '$lib/server/documents/mutations';
+import { missingRateCurrencies } from '$lib/server/fx';
+import {
+	registerHomeProvider,
+	syncMeterBill,
+	type HomeProvider,
+	type HomeSnapshot
+} from '$lib/server/home';
+import { registerBrokerAdapter, type BrokerReport } from '$lib/server/invest/adapter';
+import { ingestBrokerFile } from '$lib/server/invest/ingest';
+import {
+	createPropertyBill,
+	createTenancy,
+	setPropertyBillSource,
+	setPropertyDrawing,
+	setPropertyImage,
+	updateMeterBillAmount
+} from '$lib/server/property/mutations';
+import { deleteSplits, saveSplits } from '$lib/server/splits';
+import { setSetting } from '$lib/server/settings';
+import { updateLoanTags, updatePropertyTags, updateTransactionTags } from '$lib/server/tags';
+import { saveStatement } from '$lib/server/tax';
+import { removeStalePostgresDirectory } from './embedded-postgres';
+
+const PORT = 55442;
+const DATABASE = 'continuum_domain_atomicity';
+const DATABASE_DIR = resolve('scratch-workspace/domain-atomicity-postgres');
+const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
+
+let embedded: EmbeddedPostgres;
+let sqlClient: postgres.Sql;
+let testDb: ReturnType<typeof drizzle<typeof schema>>;
+
+const REPORT: BrokerReport = {
+	accountCurrency: 'EUR',
+	generatedAt: '2026-08-15T12:00:00.000Z',
+	summaryValueMinor: 30000n,
+	holdings: [
+		{
+			ticker: 'GOOD',
+			name: 'Good holding',
+			category: 'STOCK',
+			units: 1,
+			valueMinor: 10000n,
+			netProfitPct: null
+		},
+		{
+			ticker: 'BAD',
+			name: 'Injected failure',
+			category: 'STOCK',
+			units: 1,
+			valueMinor: 20000n,
+			netProfitPct: null
+		}
+	],
+	operations: [
+		{
+			id: 'new-operation',
+			type: 'Deposit',
+			ticker: null,
+			happenedAt: '2026-08-15T10:00:00.000Z',
+			amountMinor: 30000n,
+			comment: null,
+			positionId: null
+		}
+	],
+	positions: []
+};
+
+let activeReport = REPORT;
+let delayedHomeSnapshotStarted: Promise<void>;
+let markDelayedHomeSnapshotStarted: () => void;
+let releaseDelayedHomeSnapshot: () => void;
+let delayedHomeSnapshotRelease: Promise<void>;
+
+const DELAYED_HOME_SNAPSHOT: HomeSnapshot = {
+	metrics: [],
+	rooms: [],
+	attention: [],
+	monthKwh: 10
+};
+
+function resetDelayedHomeProvider(): void {
+	delayedHomeSnapshotStarted = new Promise<void>(
+		(resolve) => (markDelayedHomeSnapshotStarted = resolve)
+	);
+	delayedHomeSnapshotRelease = new Promise<void>(
+		(resolve) => (releaseDelayedHomeSnapshot = resolve)
+	);
+}
+
+function delayedHomeProvider(): HomeProvider {
+	return {
+		id: 'domain-delayed',
+		label: 'Delayed home fixture',
+		async probe() {
+			return { ok: true, detail: 'connected' };
+		},
+		async snapshot() {
+			markDelayedHomeSnapshotStarted();
+			await delayedHomeSnapshotRelease;
+			return DELAYED_HOME_SNAPSHOT;
+		},
+		async setDevice() {},
+		async energyHistory() {
+			return [];
+		}
+	};
+}
+
+async function executeSqlFile(path: string): Promise<void> {
+	await sqlClient.unsafe(readFileSync(path, 'utf8'));
+}
+
+beforeAll(async () => {
+	removeStalePostgresDirectory(DATABASE_DIR);
+	embedded = new EmbeddedPostgres({
+		databaseDir: DATABASE_DIR,
+		port: PORT,
+		user: 'postgres',
+		password: 'password',
+		persistent: false,
+		onLog: () => undefined,
+		onError: () => undefined
+	});
+	await embedded.initialise();
+	await embedded.start();
+	await embedded.createDatabase(DATABASE);
+
+	sqlClient = postgres(URL, { max: 10, onnotice: () => undefined });
+	testDb = drizzle(sqlClient, { schema });
+	const migrations = readdirSync('drizzle')
+		.filter(
+			(name) => /^\d{4}_.+\.sql$/.test(name) && name !== '0027_repair_transaction_fingerprints.sql'
+		)
+		.sort();
+	for (const name of migrations) await executeSqlFile(resolve('drizzle', name));
+
+	registerBrokerAdapter({
+		id: 'domain-atomicity',
+		label: 'Domain atomicity fixture',
+		sniff: (fileName) => fileName.endsWith('.atomic'),
+		parse: () => activeReport
+	});
+	registerHomeProvider('domain-delayed', 'Delayed home fixture', delayedHomeProvider);
+}, 30_000);
+
+beforeEach(async () => {
+	activeReport = REPORT;
+	resetDelayedHomeProvider();
+	await sqlClient.unsafe(`
+		drop trigger if exists task_domain_fail_tax_line on tax_statement_line;
+		drop function if exists task_domain_fail_tax_line();
+		drop trigger if exists task_domain_fail_holding on holding;
+		drop function if exists task_domain_fail_holding();
+		drop trigger if exists task_domain_fail_document_tag on document_tag;
+		drop function if exists task_domain_fail_document_tag();
+		drop trigger if exists task_domain_fail_property_bill on property_bill;
+		drop function if exists task_domain_fail_property_bill();
+		drop trigger if exists task_domain_slow_tag_replace on transaction_tag;
+		drop function if exists task_domain_slow_tag_replace();
+		drop trigger if exists task_domain_slow_meter on property_bill;
+		drop function if exists task_domain_slow_meter();
+		truncate table transaction_split_tag, transaction_tag, transaction_split,
+			"transaction", loan_tag, property_tag, document_tag, document_subject, document_property, document_account,
+			document_person, property_bill, document, subject, property, tag, account,
+			loan, tax_statement_line, tax_statement, broker_import_state, portfolio_snapshot, holding, broker_position,
+			broker_operation, currency_rate, settings, person restart identity cascade;
+	`);
+});
+
+describe('home meter sync freshness', () => {
+	async function seedMeterHomes(): Promise<void> {
+		await testDb.insert(schema.property).values([
+			{ id: 'old-home', name: 'Old home', kind: 'lived', currency: 'CZK' },
+			{ id: 'new-home', name: 'New home', kind: 'lived', currency: 'CZK' }
+		]);
+		await testDb.insert(schema.propertyBill).values([
+			{
+				id: 'old-meter-bill',
+				propertyId: 'old-home',
+				label: 'Old meter',
+				amountMinor: 111n,
+				source: 'meter'
+			},
+			{
+				id: 'new-meter-bill',
+				propertyId: 'new-home',
+				label: 'New meter',
+				amountMinor: 222n,
+				source: 'meter'
+			}
+		]);
+		await setSetting(
+			'home',
+			{
+				kind: 'domain-delayed',
+				meterPropertyId: 'old-home',
+				pricePerKwh: '100',
+				pricePerKwhCurrency: 'CZK',
+				endpoint: 'old-provider'
+			},
+			testDb
+		);
+	}
+
+	it('does not write the old property after configuration changes during a delayed snapshot', async () => {
+		await seedMeterHomes();
+		const syncing = syncMeterBill(testDb);
+		await delayedHomeSnapshotStarted;
+
+		await setSetting(
+			'home',
+			{
+				kind: 'demo',
+				meterPropertyId: 'new-home',
+				pricePerKwh: '900',
+				pricePerKwhCurrency: 'CZK'
+			},
+			testDb
+		);
+		releaseDelayedHomeSnapshot();
+
+		await expect(syncing).resolves.toBeNull();
+		expect(
+			await testDb
+				.select({ id: schema.propertyBill.id, amountMinor: schema.propertyBill.amountMinor })
+				.from(schema.propertyBill)
+				.orderBy(schema.propertyBill.id)
+		).toEqual([
+			{ id: 'new-meter-bill', amountMinor: 222n },
+			{ id: 'old-meter-bill', amountMinor: 111n }
+		]);
+	});
+
+	it('does not write the old property after disconnect during a delayed snapshot', async () => {
+		await seedMeterHomes();
+		const syncing = syncMeterBill(testDb);
+		await delayedHomeSnapshotStarted;
+
+		await testDb.delete(schema.settings).where(eq(schema.settings.key, 'home'));
+		releaseDelayedHomeSnapshot();
+
+		await expect(syncing).resolves.toBeNull();
+		expect(
+			(await testDb.select().from(schema.propertyBill)).find((bill) => bill.id === 'old-meter-bill')
+		).toMatchObject({ amountMinor: 111n });
+	});
+});
+
+afterAll(async () => {
+	await sqlClient?.end();
+	await embedded?.stop();
+}, 30_000);
+
+describe('domain replacement writes', () => {
+	async function seedSplit(): Promise<void> {
+		await testDb.insert(schema.account).values({
+			id: 'account-split',
+			name: 'Split account',
+			bank: 'other',
+			currency: 'CZK'
+		});
+		await testDb.insert(schema.transaction).values({
+			id: 'transaction-split',
+			accountId: 'account-split',
+			bookedAt: '2026-08-15',
+			amount: -100n,
+			currency: 'CZK',
+			dedupFingerprint: 'split-fixture',
+			reviewState: 'confirmed'
+		});
+		await testDb.insert(schema.transactionSplit).values([
+			{
+				id: 'split-a',
+				transactionId: 'transaction-split',
+				amountMinor: -40n,
+				categoryId: null,
+				sort: 0
+			},
+			{
+				id: 'split-b',
+				transactionId: 'transaction-split',
+				amountMinor: -60n,
+				categoryId: null,
+				sort: 1
+			}
+		]);
+	}
+
+	it('rejects duplicate persisted split identities without changing the stored split', async () => {
+		await seedSplit();
+
+		const result = await saveSplits(
+			'transaction-split',
+			[
+				{ id: 'split-a', amountMinor: 30n, categoryId: null },
+				{ id: 'split-a', amountMinor: 70n, categoryId: null }
+			],
+			undefined,
+			testDb
+		);
+
+		expect(result).toMatchObject({ ok: false, status: 400 });
+		expect(
+			await testDb
+				.select({
+					id: schema.transactionSplit.id,
+					amountMinor: schema.transactionSplit.amountMinor
+				})
+				.from(schema.transactionSplit)
+				.orderBy(schema.transactionSplit.sort)
+		).toEqual([
+			{ id: 'split-a', amountMinor: -40n },
+			{ id: 'split-b', amountMinor: -60n }
+		]);
+	});
+
+	it('locks the parent before unsplitting so a concurrent save cannot deadlock on child rows', async () => {
+		await seedSplit();
+		const blocker = postgres(URL, { max: 1 });
+		const probe = postgres(URL, { max: 1 });
+		let releaseParent!: () => void;
+		let parentLocked!: () => void;
+		const release = new Promise<void>((resolveRelease) => (releaseParent = resolveRelease));
+		const locked = new Promise<void>((resolveLocked) => (parentLocked = resolveLocked));
+		const holding = blocker.begin(async (connection) => {
+			await connection`select id from "transaction" where id = 'transaction-split' for update`;
+			parentLocked();
+			await release;
+		});
+
+		await locked;
+		const deleting = deleteSplits('transaction-split', testDb).then(
+			(result) => ({ result, error: null }),
+			(error: unknown) => ({ result: null, error })
+		);
+
+		try {
+			let waiting = false;
+			for (let attempt = 0; attempt < 100; attempt++) {
+				const rows = await sqlClient<{ query: string }[]>`
+					select query from pg_stat_activity
+					where datname = ${DATABASE} and wait_event_type = 'Lock'
+				`;
+				if (rows.some((row) => row.query.includes('transaction'))) {
+					waiting = true;
+					break;
+				}
+				await delay(10);
+			}
+			expect(waiting).toBe(true);
+
+			await expect(
+				probe.begin(
+					(connection) =>
+						connection`select id from transaction_split where transaction_id = 'transaction-split' for update nowait`
+				)
+			).resolves.toHaveLength(2);
+		} finally {
+			releaseParent();
+			await holding;
+		}
+
+		const outcome = await deleting;
+		expect(outcome.error).toBeNull();
+		expect(outcome.result).toEqual({ ok: true });
+		expect(await testDb.select().from(schema.transactionSplit)).toHaveLength(0);
+		await blocker.end();
+		await probe.end();
+	});
+
+	it('rolls a document, its new subject, links, and tags back when a tag link fails', async () => {
+		await sqlClient.unsafe(`
+			create function task_domain_fail_document_tag() returns trigger language plpgsql as $$
+			begin
+				if exists (select 1 from tag where id = new.tag_id and normalised_name = 'explode') then
+					raise exception 'injected document tag failure';
+				end if;
+				return new;
+			end $$;
+			create trigger task_domain_fail_document_tag before insert on document_tag
+			for each row execute function task_domain_fail_document_tag();
+		`);
+
+		let documentError: unknown;
+		try {
+			await createDocument(
+				{
+					id: 'document-fail',
+					name: 'Rollback document',
+					shelf: 'family',
+					storedName: 'stored.pdf',
+					ext: 'PDF',
+					addedOn: '2026-08-15',
+					expiresOn: null,
+					expiryVerb: 'expires',
+					personIds: [],
+					propertyIds: [],
+					accountIds: [],
+					subjectIds: [],
+					newSubjectName: 'Vehicle',
+					tagNames: ['Safe', 'Explode']
+				},
+				testDb
+			);
+		} catch (error) {
+			documentError = error;
+		}
+		expect(
+			(documentError as { cause?: { message?: string } } | undefined)?.cause?.message
+		).toContain('injected document tag failure');
+
+		expect(await testDb.select().from(schema.document)).toHaveLength(0);
+		expect(await testDb.select().from(schema.subject)).toHaveLength(0);
+		expect(await testDb.select().from(schema.tag)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentSubject)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentTag)).toHaveLength(0);
+	});
+
+	it('rolls an attached bill document and links back when the property bill insert fails', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-a',
+			name: 'Flat A',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+		await sqlClient.unsafe(`
+			create function task_domain_fail_property_bill() returns trigger language plpgsql as $$
+			begin
+				if new.label = 'Explode' then raise exception 'injected property bill failure'; end if;
+				return new;
+			end $$;
+			create trigger task_domain_fail_property_bill before insert on property_bill
+			for each row execute function task_domain_fail_property_bill();
+		`);
+
+		let billError: unknown;
+		try {
+			await createPropertyBill(
+				{
+					id: 'bill-fail',
+					propertyId: 'property-a',
+					label: 'Explode',
+					amountMinor: 1200n,
+					document: {
+						id: 'bill-document-fail',
+						name: 'Explode · Flat A',
+						storedName: 'bill.pdf',
+						ext: 'PDF',
+						addedOn: '2026-08-15'
+					}
+				},
+				testDb
+			);
+		} catch (error) {
+			billError = error;
+		}
+		expect((billError as { cause?: { message?: string } } | undefined)?.cause?.message).toContain(
+			'injected property bill failure'
+		);
+
+		expect(await testDb.select().from(schema.propertyBill)).toHaveLength(0);
+		expect(await testDb.select().from(schema.document)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentProperty)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentTag)).toHaveLength(0);
+		expect(await testDb.select().from(schema.tag)).toHaveLength(0);
+	});
+
+	it('serializes overlapping tenancy inserts on their property', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-tenancy',
+			name: 'Rental flat',
+			kind: 'rented',
+			currency: 'CZK'
+		});
+		const base = {
+			propertyId: 'property-tenancy',
+			tenantContact: '',
+			rentMinor: 20_000n,
+			depositMinor: 40_000n,
+			startDate: '2026-01-01',
+			endDate: '2026-12-31',
+			renewalNoticeDate: null
+		};
+
+		const outcomes = await Promise.all([
+			createTenancy({ ...base, id: 'tenancy-a', tenantName: 'Tenant A' }, testDb),
+			createTenancy({ ...base, id: 'tenancy-b', tenantName: 'Tenant B' }, testDb)
+		]);
+
+		expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
+		expect(outcomes.filter((outcome) => !outcome.ok)).toMatchObject([{ ok: false, status: 409 }]);
+		expect(await testDb.select().from(schema.tenancy)).toHaveLength(1);
+	});
+
+	it('rejects a tenancy whose end precedes its start', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-invalid-tenancy',
+			name: 'Rental flat',
+			kind: 'rented',
+			currency: 'CZK'
+		});
+
+		expect(
+			await createTenancy(
+				{
+					id: 'tenancy-invalid',
+					propertyId: 'property-invalid-tenancy',
+					tenantName: 'Tenant',
+					tenantContact: '',
+					rentMinor: 20_000n,
+					depositMinor: 0n,
+					startDate: '2026-12-31',
+					endDate: '2026-01-01',
+					renewalNoticeDate: null
+				},
+				testDb
+			)
+		).toMatchObject({ ok: false, status: 400 });
+		expect(await testDb.select().from(schema.tenancy)).toHaveLength(0);
+	});
+
+	it('merges concurrent property image and drawing updates after locking the row', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-images',
+			name: 'Photo flat',
+			kind: 'lived',
+			currency: 'CZK',
+			images: { plan: 'plan-old.png', photos: ['one.jpg'] }
+		});
+		const drawing = {
+			cellCm: 50,
+			rooms: [{ name: 'Kitchen', cells: [[0, 0] as [number, number]] }]
+		};
+
+		const outcomes = await Promise.all([
+			setPropertyImage(
+				{
+					propertyId: 'property-images',
+					slot: 'photo1',
+					storedName: 'two.jpg',
+					expectedImage: null
+				},
+				testDb
+			),
+			setPropertyDrawing({ propertyId: 'property-images', drawing }, testDb)
+		]);
+
+		expect(outcomes).toEqual([{ ok: true }, { ok: true }]);
+		expect((await testDb.select().from(schema.property))[0].images).toEqual({
+			plan: 'plan-old.png',
+			photos: ['one.jpg', 'two.jpg'],
+			drawing
+		});
+	});
+
+	it('preserves both photos when concurrent requests append to the same stale slot', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-photo-appends',
+			name: 'Photo flat',
+			kind: 'lived',
+			currency: 'CZK',
+			images: { photos: ['one.jpg'] }
+		});
+
+		const outcomes = await Promise.all(
+			['two.jpg', 'three.jpg'].map((storedName) =>
+				setPropertyImage(
+					{
+						propertyId: 'property-photo-appends',
+						slot: 'photo1',
+						storedName,
+						expectedImage: null
+					},
+					testDb
+				)
+			)
+		);
+
+		expect(outcomes).toEqual([{ ok: true }, { ok: true }]);
+		const photos = (await testDb.select().from(schema.property))[0].images.photos;
+		expect(photos[0]).toBe('one.jpg');
+		expect(photos.slice(1).sort()).toEqual(['three.jpg', 'two.jpg']);
+	});
+
+	it('rejects a property image slot beyond the next append position', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-image-slot',
+			name: 'Photo flat',
+			kind: 'lived',
+			currency: 'CZK',
+			images: { photos: ['one.jpg'] }
+		});
+
+		expect(
+			await setPropertyImage(
+				{
+					propertyId: 'property-image-slot',
+					slot: 'photo3',
+					storedName: 'gap.jpg',
+					expectedImage: null
+				},
+				testDb
+			)
+		).toMatchObject({ ok: false, status: 400 });
+		expect((await testDb.select().from(schema.property))[0].images.photos).toEqual(['one.jpg']);
+	});
+
+	it('serializes meter-source switches and enforces one meter bill in the database', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-meter',
+			name: 'Meter flat',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+		await testDb.insert(schema.propertyBill).values([
+			{ id: 'bill-a', propertyId: 'property-meter', label: 'Power A' },
+			{ id: 'bill-b', propertyId: 'property-meter', label: 'Power B' }
+		]);
+		await sqlClient.unsafe(`
+			create function task_domain_slow_meter() returns trigger language plpgsql as $$
+			begin
+				if new.source = 'meter' then perform pg_sleep(0.2); end if;
+				return new;
+			end $$;
+			create trigger task_domain_slow_meter before update of source on property_bill
+			for each row execute function task_domain_slow_meter();
+		`);
+
+		expect(
+			await Promise.all([
+				setPropertyBillSource('bill-a', true, testDb),
+				setPropertyBillSource('bill-b', true, testDb)
+			])
+		).toEqual([{ ok: true }, { ok: true }]);
+		expect(
+			await testDb
+				.select({ id: schema.propertyBill.id })
+				.from(schema.propertyBill)
+				.where(eq(schema.propertyBill.source, 'meter'))
+		).toHaveLength(1);
+
+		await expect(testDb.update(schema.propertyBill).set({ source: 'meter' })).rejects.toThrow();
+	});
+
+	it('reselects the meter bill after a concurrent source switch', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-meter-sync',
+			name: 'Meter sync flat',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+		await testDb.insert(schema.propertyBill).values([
+			{
+				id: 'bill-old-meter',
+				propertyId: 'property-meter-sync',
+				label: 'Old meter',
+				amountMinor: 100n,
+				source: 'meter'
+			},
+			{
+				id: 'bill-new-meter',
+				propertyId: 'property-meter-sync',
+				label: 'New meter',
+				amountMinor: 200n,
+				source: 'manual'
+			}
+		]);
+		await sqlClient.unsafe(`
+			create function task_domain_slow_meter() returns trigger language plpgsql as $$
+			begin
+				if old.source = 'meter' and new.source = 'manual' then perform pg_sleep(0.2); end if;
+				return new;
+			end $$;
+			create trigger task_domain_slow_meter before update of source on property_bill
+			for each row execute function task_domain_slow_meter();
+		`);
+
+		const switching = setPropertyBillSource('bill-new-meter', true, testDb);
+		await delay(50);
+		const syncing = updateMeterBillAmount('property-meter-sync', 999n, testDb);
+		await Promise.all([switching, syncing]);
+
+		expect(
+			await testDb
+				.select({ id: schema.propertyBill.id, amount: schema.propertyBill.amountMinor })
+				.from(schema.propertyBill)
+				.orderBy(schema.propertyBill.id)
+		).toEqual([
+			{ id: 'bill-new-meter', amount: 999n },
+			{ id: 'bill-old-meter', amount: 100n }
+		]);
+	});
+
+	it('migration 0030 deterministically keeps the first sorted meter bill', async () => {
+		await sqlClient.unsafe('drop index property_bill_meter_property_idx');
+		await testDb.insert(schema.property).values({
+			id: 'property-meter-migration',
+			name: 'Meter flat',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+		await testDb.insert(schema.propertyBill).values([
+			{
+				id: 'bill-later',
+				propertyId: 'property-meter-migration',
+				label: 'Later',
+				sort: 2,
+				source: 'meter'
+			},
+			{
+				id: 'bill-first',
+				propertyId: 'property-meter-migration',
+				label: 'First',
+				sort: 1,
+				source: 'meter'
+			}
+		]);
+
+		await executeSqlFile(resolve('drizzle/0030_property_meter_bill_unique.sql'));
+
+		expect(
+			await testDb
+				.select({ id: schema.propertyBill.id, source: schema.propertyBill.source })
+				.from(schema.propertyBill)
+				.orderBy(schema.propertyBill.sort)
+		).toEqual([
+			{ id: 'bill-first', source: 'meter' },
+			{ id: 'bill-later', source: 'manual' }
+		]);
+	});
+
+	it('migration 0032 deterministically binds an existing home config to one lived property', async () => {
+		await testDb.insert(schema.property).values([
+			{
+				id: 'newer-home',
+				name: 'Newer home',
+				kind: 'lived',
+				createdAt: new Date('2026-01-02T00:00:00.000Z')
+			},
+			{
+				id: 'older-home',
+				name: 'Older home',
+				kind: 'lived',
+				createdAt: new Date('2026-01-01T00:00:00.000Z')
+			}
+		]);
+		await testDb.insert(schema.settings).values({ key: 'home', value: { kind: 'demo' } });
+
+		await executeSqlFile(resolve('drizzle/0032_bind_home_meter_property.sql'));
+
+		expect((await testDb.select().from(schema.settings))[0].value).toEqual({
+			kind: 'demo',
+			meterPropertyId: 'older-home'
+		});
+	});
+
+	it('reports every historically unconvertible document and broker currency', async () => {
+		await testDb.insert(schema.currencyRate).values([
+			{ code: 'EUR', day: '2026-01-02', rate: '25' },
+			{ code: 'USD', day: '2026-01-02', rate: '23' },
+			{ code: 'PLN', day: '2026-01-02', rate: '5.8' }
+		]);
+		await testDb.insert(schema.document).values({
+			id: 'historical-amount-document',
+			name: 'Historical payslip',
+			shelf: 'payslips',
+			ext: 'PDF',
+			addedOn: '2026-08-15',
+			amountMinor: 100n,
+			amountCurrency: 'EUR',
+			periodMonth: '2020-01'
+		});
+		await testDb.insert(schema.brokerOperation).values({
+			id: 'historical-operation',
+			type: 'Deposit',
+			happenedAt: new Date('2020-01-02T00:00:00.000Z'),
+			amountMinor: 100n,
+			currency: 'USD'
+		});
+		await testDb.insert(schema.brokerPosition).values({
+			id: 'historical-position',
+			ticker: 'OLD',
+			purchaseValueMinor: 100n,
+			saleValueMinor: null,
+			currency: 'PLN',
+			openedAt: new Date('2020-01-03T00:00:00.000Z'),
+			closedAt: null
+		});
+		await testDb.insert(schema.person).values({
+			id: 'historical-tax-person',
+			name: 'Historical Tax Person',
+			initials: 'HT'
+		});
+		await testDb.insert(schema.taxStatement).values({
+			id: 'historical-tax-statement',
+			personId: 'historical-tax-person',
+			year: 2020,
+			country: 'CH',
+			currency: 'CHF',
+			grossIncomeMinor: 100n,
+			taxPaidMinor: 10n
+		});
+
+		expect(await missingRateCurrencies('CZK', testDb)).toEqual(['CHF', 'EUR', 'PLN', 'USD']);
+	});
+
+	it('serializes tag deltas so a concurrent add cannot restore a removed tag', async () => {
+		await testDb.insert(schema.account).values({
+			id: 'account-tags',
+			name: 'Tag account',
+			bank: 'other',
+			currency: 'CZK'
+		});
+		await testDb.insert(schema.transaction).values({
+			id: 'transaction-tags',
+			accountId: 'account-tags',
+			bookedAt: '2026-08-15',
+			amount: -100n,
+			currency: 'CZK',
+			dedupFingerprint: 'tag-fixture'
+		});
+		await testDb.insert(schema.tag).values({
+			id: 'tag-base',
+			name: 'Base',
+			normalisedName: 'base'
+		});
+		await testDb
+			.insert(schema.transactionTag)
+			.values({ transactionId: 'transaction-tags', tagId: 'tag-base' });
+		// With no owner lock, both mutations load Base before either DELETE runs.
+		// The adder then re-inserts that stale name after the remover commits.
+		await sqlClient.unsafe(`
+			create function task_domain_slow_tag_replace() returns trigger language plpgsql as $$
+			begin
+				perform pg_sleep(0.2);
+				return null;
+			end $$;
+			create trigger task_domain_slow_tag_replace before delete on transaction_tag
+			for each statement execute function task_domain_slow_tag_replace();
+		`);
+
+		await Promise.all([
+			updateTransactionTags('transaction-tags', { remove: 'Base' }, testDb),
+			updateTransactionTags('transaction-tags', { add: 'Beta' }, testDb)
+		]);
+
+		const names = await testDb
+			.select({ name: schema.tag.name })
+			.from(schema.transactionTag)
+			.innerJoin(schema.tag, eq(schema.transactionTag.tagId, schema.tag.id))
+			.orderBy(schema.tag.name);
+		expect(names).toEqual([{ name: 'Beta' }]);
+	});
+
+	it('applies the shared delta mutation to property tags', async () => {
+		await testDb.insert(schema.property).values({
+			id: 'property-tags',
+			name: 'Tagged flat',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+
+		await updatePropertyTags('property-tags', { add: 'Home' }, testDb);
+
+		expect(
+			await testDb
+				.select({ name: schema.tag.name })
+				.from(schema.propertyTag)
+				.innerJoin(schema.tag, eq(schema.propertyTag.tagId, schema.tag.id))
+		).toEqual([{ name: 'Home' }]);
+	});
+
+	it('applies the shared delta mutation to loan tags', async () => {
+		await testDb.insert(schema.loan).values({
+			id: 'loan-tags',
+			name: 'Tagged loan',
+			principalMinor: 10000n,
+			owedMinor: 9000n
+		});
+
+		await updateLoanTags('loan-tags', { add: 'Debt' }, testDb);
+
+		expect(
+			await testDb
+				.select({ name: schema.tag.name })
+				.from(schema.loanTag)
+				.innerJoin(schema.tag, eq(schema.loanTag.tagId, schema.tag.id))
+		).toEqual([{ name: 'Debt' }]);
+	});
+
+	it('keeps the prior tax statement and lines when replacement line insertion fails', async () => {
+		await testDb.insert(schema.person).values({ id: 'person-a', name: 'Person A', initials: 'PA' });
+		const base = {
+			personId: 'person-a',
+			year: 2025,
+			country: 'CZ',
+			currency: 'CZK',
+			taxPaidMinor: 2000n,
+			documentId: null,
+			note: null
+		};
+		await saveStatement(
+			{ ...base, grossIncomeMinor: 10000n, lines: [{ label: 'Original', amountMinor: 500n }] },
+			testDb
+		);
+		await sqlClient.unsafe(`
+			create function task_domain_fail_tax_line() returns trigger language plpgsql as $$
+			begin
+				if new.label = 'Injected failure' then raise exception 'injected tax line failure'; end if;
+				return new;
+			end $$;
+			create trigger task_domain_fail_tax_line before insert on tax_statement_line
+			for each row execute function task_domain_fail_tax_line();
+		`);
+
+		await expect(
+			saveStatement(
+				{
+					...base,
+					grossIncomeMinor: 99999n,
+					lines: [{ label: 'Injected failure', amountMinor: 999n }]
+				},
+				testDb
+			)
+		).rejects.toThrow();
+
+		const statements = await testDb.select().from(schema.taxStatement);
+		const lines = await testDb.select().from(schema.taxStatementLine);
+		expect(statements[0].grossIncomeMinor).toBe(10000n);
+		expect(lines).toMatchObject([{ label: 'Original', amountMinor: 500n }]);
+	});
+
+	it('rolls back the entire broker report when the new holdings snapshot fails', async () => {
+		await testDb.insert(schema.holding).values({
+			id: 'old-holding',
+			ticker: 'OLD',
+			name: 'Prior snapshot',
+			category: 'STOCK',
+			units: '1',
+			valueMinor: 7000n,
+			currency: 'EUR',
+			netProfitPct: null,
+			asOf: new Date('2026-08-01T00:00:00.000Z')
+		});
+		await testDb.insert(schema.portfolioSnapshot).values({
+			day: '2026-08-01',
+			valueMinor: 7000n,
+			currency: 'EUR'
+		});
+		await sqlClient.unsafe(`
+			create function task_domain_fail_holding() returns trigger language plpgsql as $$
+			begin
+				if new.ticker = 'BAD' then raise exception 'injected holding failure'; end if;
+				return new;
+			end $$;
+			create trigger task_domain_fail_holding before insert on holding
+			for each row execute function task_domain_fail_holding();
+		`);
+
+		await expect(ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).rejects.toThrow();
+
+		expect(await testDb.select().from(schema.holding)).toMatchObject([
+			{ id: 'old-holding', ticker: 'OLD', valueMinor: 7000n }
+		]);
+		expect(await testDb.select().from(schema.brokerOperation)).toHaveLength(0);
+		expect(await testDb.select().from(schema.portfolioSnapshot)).toMatchObject([
+			{ day: '2026-08-01', valueMinor: 7000n }
+		]);
+	});
+
+	it('does not let an older report resurrect holdings after a newer empty report', async () => {
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-20T18:00:00.000Z',
+			summaryValueMinor: 0n,
+			holdings: [],
+			operations: []
+		};
+		expect(await ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).toMatchObject({
+			replacedHoldings: true,
+			holdings: 0
+		});
+
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-19T18:00:00.000Z',
+			summaryValueMinor: 99_999n,
+			holdings: [{ ...REPORT.holdings[0], ticker: 'STALE', name: 'Stale holding' }],
+			operations: []
+		};
+		expect(await ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).toMatchObject({
+			replacedHoldings: false
+		});
+
+		expect(await testDb.select().from(schema.holding)).toHaveLength(0);
+		// Holdings are a snapshot of now and must not come back. The older
+		// report's own day is a different matter: it is a genuine record of what
+		// the portfolio was worth on the 19th, and portfolio_snapshot is keyed by
+		// day, so it records without touching the 20th.
+		expect(
+			await testDb.select().from(schema.portfolioSnapshot).orderBy(schema.portfolioSnapshot.day)
+		).toMatchObject([
+			{ day: '2026-08-19', valueMinor: 99_999n, currency: 'EUR' },
+			{ day: '2026-08-20', valueMinor: 0n, currency: 'EUR' }
+		]);
+	});
+
+	it('does not let an older same-day report overwrite the newer snapshot', async () => {
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-20T18:00:00.000Z',
+			summaryValueMinor: 30_000n,
+			holdings: [{ ...REPORT.holdings[0], ticker: 'NEW' }],
+			operations: []
+		};
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-20T08:00:00.000Z',
+			summaryValueMinor: 10_000n,
+			holdings: [{ ...REPORT.holdings[0], ticker: 'OLD' }],
+			operations: []
+		};
+		expect(await ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).toMatchObject({
+			replacedHoldings: false
+		});
+
+		expect(await testDb.select().from(schema.holding)).toMatchObject([
+			{ ticker: 'NEW', valueMinor: 10_000n }
+		]);
+		expect(await testDb.select().from(schema.portfolioSnapshot)).toMatchObject([
+			{ day: '2026-08-20', valueMinor: 30_000n, currency: 'EUR' }
+		]);
+	});
+
+	// portfolio_snapshot is keyed by day, so an archived report describes a row
+	// the current one cannot occupy. Skipping it left the investments chart with
+	// exactly the gap the backfill was uploaded to close, while the action still
+	// reported the day as recorded.
+	it('records a value point when an older report backfills a different day', async () => {
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-20T18:00:00.000Z',
+			summaryValueMinor: 30_000n,
+			operations: []
+		};
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-03-31T18:00:00.000Z',
+			summaryValueMinor: 12_000n,
+			operations: []
+		};
+		expect(await ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).toMatchObject({
+			replacedHoldings: false
+		});
+
+		expect(
+			await testDb.select().from(schema.portfolioSnapshot).orderBy(schema.portfolioSnapshot.day)
+		).toMatchObject([
+			{ day: '2026-03-31', valueMinor: 12_000n, currency: 'EUR' },
+			{ day: '2026-08-20', valueMinor: 30_000n, currency: 'EUR' }
+		]);
+	});
+
+	it('rejects a report in a different account currency without mixing the portfolio', async () => {
+		activeReport = { ...REPORT, operations: [] };
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		activeReport = {
+			...REPORT,
+			accountCurrency: 'USD',
+			generatedAt: '2026-08-16T12:00:00.000Z',
+			operations: []
+		};
+		await expect(ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).rejects.toThrow(
+			/currenc/i
+		);
+
+		expect(await testDb.select().from(schema.holding)).toHaveLength(2);
+		expect(await testDb.select().from(schema.portfolioSnapshot)).toMatchObject([
+			{ day: '2026-08-15', valueMinor: 30_000n, currency: 'EUR' }
+		]);
+	});
+
+	it('does not let an older partial close overwrite a newer completed position', async () => {
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-20T18:00:00.000Z',
+			holdings: [],
+			operations: [],
+			positions: [
+				{
+					id: 'position-1',
+					ticker: 'ACME',
+					purchaseValueMinor: 10_000n,
+					saleValueMinor: 15_000n,
+					openedAt: '2026-01-01T00:00:00.000Z',
+					closedAt: '2026-08-20T12:00:00.000Z'
+				}
+			]
+		};
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-10T18:00:00.000Z',
+			holdings: [],
+			operations: [],
+			positions: [
+				{
+					id: 'position-1',
+					ticker: 'ACME',
+					purchaseValueMinor: 8_000n,
+					saleValueMinor: 9_000n,
+					openedAt: '2026-01-01T00:00:00.000Z',
+					closedAt: '2026-08-10T12:00:00.000Z'
+				}
+			]
+		};
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		expect(await testDb.select().from(schema.brokerPosition)).toMatchObject([
+			{
+				id: 'position-1',
+				purchaseValueMinor: 10_000n,
+				saleValueMinor: 15_000n,
+				closedAt: new Date('2026-08-20T12:00:00.000Z')
+			}
+		]);
+	});
+
+	it('does not regress a closed position when a stale report has the same close time', async () => {
+		const closedAt = '2026-08-20T12:00:00.000Z';
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-30T18:00:00.000Z',
+			holdings: [],
+			operations: [],
+			positions: [
+				{
+					id: 'position-same-close',
+					ticker: 'ACME',
+					purchaseValueMinor: 10_000n,
+					saleValueMinor: 15_000n,
+					openedAt: '2026-01-01T00:00:00.000Z',
+					closedAt
+				}
+			]
+		};
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		activeReport = {
+			...REPORT,
+			generatedAt: '2026-08-25T18:00:00.000Z',
+			holdings: [],
+			operations: [],
+			positions: [
+				{
+					id: 'position-same-close',
+					ticker: 'ACME',
+					purchaseValueMinor: 8_000n,
+					saleValueMinor: 9_000n,
+					openedAt: '2026-01-01T00:00:00.000Z',
+					closedAt
+				}
+			]
+		};
+		await ingestBrokerFile('report.atomic', new Uint8Array(), testDb);
+
+		expect(await testDb.select().from(schema.brokerPosition)).toMatchObject([
+			{
+				id: 'position-same-close',
+				purchaseValueMinor: 10_000n,
+				saleValueMinor: 15_000n,
+				closedAt: new Date(closedAt)
+			}
+		]);
+	});
+
+	it('backfills broker freshness from a newer empty snapshot instead of stale holdings', async () => {
+		await sqlClient.unsafe('drop table broker_import_state');
+		await testDb.insert(schema.holding).values({
+			id: 'stale-holding',
+			ticker: 'OLD',
+			name: 'Stale resurrection',
+			category: 'STOCK',
+			units: '1',
+			valueMinor: 1_000n,
+			currency: 'EUR',
+			netProfitPct: null,
+			asOf: new Date('2026-08-10T12:00:00.000Z')
+		});
+		await testDb.insert(schema.portfolioSnapshot).values({
+			day: '2026-08-20',
+			valueMinor: 0n,
+			currency: 'EUR'
+		});
+
+		await executeSqlFile(resolve('drizzle/0029_broker_import_state.sql'));
+
+		expect(await testDb.select().from(schema.brokerImportState)).toMatchObject([
+			{
+				id: 'global',
+				latestGeneratedAt: new Date('2026-08-20T23:59:59.999Z'),
+				currency: 'EUR'
+			}
+		]);
+	});
+});
