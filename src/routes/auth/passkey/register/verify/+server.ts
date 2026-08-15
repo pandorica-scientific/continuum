@@ -38,7 +38,15 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
 	}
 
 	const info = verification.registrationInfo.credential;
-	const label = String(body.label ?? '').trim() || 'Passkey';
+	// Typed by the person and stored in a Postgres text column, so it gets the
+	// same treatment as the credential id: a NUL byte would make the insert throw
+	// 22021 and turn a device name into a 500. Control and formatting characters
+	// have no business in one regardless, and the bound keeps the list readable.
+	const label =
+		String(body.label ?? '')
+			.replace(/[\p{Cc}\p{Cf}]/gu, '')
+			.trim()
+			.slice(0, 64) || 'Passkey';
 
 	// excludeCredentials only lists this person's own credentials and is advisory
 	// — an authenticator may ignore it, and a double click races it outright. So

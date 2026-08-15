@@ -45,3 +45,33 @@ describe('readWebAuthnBody', () => {
 		expect(await readWebAuthnBody(post(JSON.stringify({ response: {} })))).toBeNull();
 	});
 });
+
+describe('credential id shape', () => {
+	const withId = (id: string) => post(JSON.stringify({ response: { id } }));
+
+	// Both endpoints put this string straight into a Postgres text lookup, and a
+	// NUL byte there throws 22021 from outside every catch in the handler. That
+	// made a request anyone can send unauthenticated into a 500, reached without
+	// passing any branch that records a failed attempt — so it was never counted
+	// against the rate limit and could be repeated without end.
+	it('rejects a credential id carrying a NUL byte', async () => {
+		expect(await readWebAuthnBody(withId('abc' + String.fromCharCode(0) + 'def'))).toBeNull();
+	});
+
+	it('rejects anything that is not base64url', async () => {
+		for (const id of ['has space', 'plus+slash/', 'padded=', 'new\nline', 'unic\u00f6de']) {
+			expect(await readWebAuthnBody(withId(id)), id).toBeNull();
+		}
+	});
+
+	it('accepts what an authenticator actually sends', async () => {
+		expect(
+			await readWebAuthnBody(withId('AQIDBAUGBwgJCgsMDQ4PEA_-abcXYZ0123456789'))
+		).not.toBeNull();
+	});
+
+	it('rejects one longer than the specification allows', async () => {
+		expect(await readWebAuthnBody(withId('a'.repeat(1365)))).toBeNull();
+		expect(await readWebAuthnBody(withId('a'.repeat(1364)))).not.toBeNull();
+	});
+});

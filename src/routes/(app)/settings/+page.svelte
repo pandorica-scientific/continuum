@@ -40,9 +40,9 @@
 					<button
 						type="submit"
 						class="switch"
-						class:on={data.moduleToggles[key]}
+						class:on={data.moduleToggles?.[key]}
 						role="switch"
-						aria-checked={data.moduleToggles[key]}
+						aria-checked={data.moduleToggles?.[key] ?? false}
 						aria-label={`Toggle ${m.label}`}
 					>
 						<span class="knob"></span>

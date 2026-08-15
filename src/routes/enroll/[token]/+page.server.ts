@@ -24,7 +24,12 @@ async function enrollableePerson(token: string): Promise<{ id: string; name: str
 	const { personId, status } = await lookupEnrollmentToken(token);
 	if (status !== 'valid') return null;
 	const rows = await db
-		.select({ id: person.id, name: person.name, deactivatedAt: person.deactivatedAt })
+		.select({
+			id: person.id,
+			name: person.name,
+			deactivatedAt: person.deactivatedAt,
+			passwordHash: person.passwordHash
+		})
 		.from(person)
 		.where(eq(person.id, personId));
 	const row = rows[0];
@@ -33,6 +38,14 @@ async function enrollableePerson(token: string): Promise<{ id: string; name: str
 	// password, is handed a session, and is bounced straight back out at
 	// /overview by validateSession with nothing explaining why.
 	if (!row || row.deactivatedAt) return null;
+	// A link must never be spendable against an account that already has a
+	// password, because spending it overwrites that password and signs the
+	// visitor in. reissueEnrollment refuses to mint one for somebody enrolled,
+	// but it reads and then writes in two round trips: a person who enrols inside
+	// that window would be left with a fresh, unused link pointing at their live
+	// account. Checking again here means a link that should never have existed is
+	// refused rather than honoured, whatever the mint side did.
+	if (row.passwordHash !== null) return null;
 	return { id: row.id, name: row.name };
 }
 

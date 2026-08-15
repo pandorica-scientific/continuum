@@ -57,8 +57,12 @@ export const apiToken = pgTable('api_token', {
 export const enrollmentToken = pgTable('enrollment_token', {
 	// sha256 hex of the raw token
 	id: text('id').primaryKey(),
+	// Unique: one live link per person. createEnrollmentToken upserts against
+	// this constraint, which is what makes reissuing atomic — without it two
+	// racing reissues each left a spendable link behind.
 	personId: text('person_id')
 		.notNull()
+		.unique()
 		.references(() => person.id, { onDelete: 'cascade' }),
 	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 	usedAt: timestamp('used_at', { withTimezone: true })

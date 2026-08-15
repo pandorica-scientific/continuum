@@ -74,6 +74,38 @@ test('a malformed sign-in body is refused rather than crashing', async ({ browse
 	await context.close();
 });
 
+// A challenge is good for exactly one attempt, and takeChallenge clears it on
+// the way in — so a refused ceremony has to carry that deletion back or the
+// same challenge stays live for its full five minutes. Nothing else in the
+// suite looks at the header, so nothing else would notice it stopping.
+//
+// The second body is the reason this is not only about cookies: a credential id
+// carrying a NUL byte used to pass validation, reach a Postgres text lookup and
+// throw 22021 from outside every catch — a 500 on an unauthenticated endpoint,
+// reached without passing any branch that counts a failed attempt.
+test('a refused ceremony still clears the challenge', async ({ browser }) => {
+	for (const body of [
+		// Malformed: no credential id at all.
+		{},
+		{ response: { id: 'abc' + String.fromCharCode(0) + 'def' } }
+	]) {
+		const context = await browser.newContext({ storageState: undefined });
+		await context.request.post('/auth/passkey/login/options');
+		const response = await context.request.post('/auth/passkey/login/verify', { data: body });
+
+		expect(response.status(), JSON.stringify(body)).toBe(400);
+		const cleared = response
+			.headersArray()
+			.filter((h) => h.name.toLowerCase() === 'set-cookie')
+			.map((h) => h.value)
+			.find((v) => v.startsWith('continuum_webauthn_challenge='));
+		expect(cleared, `no challenge cookie cleared for ${JSON.stringify(body)}`).toBeTruthy();
+		// Cleared, not merely rewritten: an empty value with an expiry in the past.
+		expect(cleared).toMatch(/continuum_webauthn_challenge=;/);
+		await context.close();
+	}
+});
+
 test('the passkey button matches whether the context is secure', async ({ page }) => {
 	// The E2E base URL is localhost, which browsers treat as secure, so this
 	// asserts the flag is wired rather than hard-coded. If the suite ever runs

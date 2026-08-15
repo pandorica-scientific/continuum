@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword, revokeOtherSessions } from '$lib/server/auth/password';
-import { canChangeRole, canDeactivate, requireAdmin } from '$lib/server/auth/policy';
+import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
@@ -25,6 +25,7 @@ import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { serverStatus } from '$lib/server/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
+import type { Action } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -59,6 +60,13 @@ async function transactional(work: (tx: Tx) => Promise<void>) {
  * the same count, or two administrators demoting each other in the same moment
  * both read "2", both pass, and the instance is left with nobody in charge.
  *
+ * The predicate is canSignIn's, in SQL. It used to be the deactivation half
+ * only, which counted an administrator created but never enrolled — someone who
+ * has no password, holds nothing but a one-time link, and cannot reach these
+ * controls at all. Adding one was enough to walk the household past this guard:
+ * the count read two, the only real administrator was allowed to step down, and
+ * recovering meant the psql one-liner in the README.
+ *
  * Postgres refuses FOR UPDATE alongside an aggregate, so this returns the rows
  * and measures them. A household has a handful of administrators, and ordering
  * by id keeps two concurrent transactions from taking the locks in opposite
@@ -68,10 +76,32 @@ async function lockActiveAdminCount(tx: Tx): Promise<number> {
 	const rows = await tx
 		.select({ id: person.id })
 		.from(person)
-		.where(and(eq(person.role, 'admin'), isNull(person.deactivatedAt)))
+		.where(
+			and(eq(person.role, 'admin'), isNull(person.deactivatedAt), isNotNull(person.passwordHash))
+		)
 		.orderBy(person.id)
 		.for('update');
 	return rows.length;
+}
+
+/**
+ * The person an action acts on, in the shape the guards want — read inside the
+ * same transaction as the count, and after it, so the two cannot disagree about
+ * whether this person is one of the administrators still standing.
+ */
+async function policyTarget(tx: Tx, personId: string) {
+	const rows = await tx
+		.select({
+			id: person.id,
+			role: person.role,
+			deactivatedAt: person.deactivatedAt,
+			passwordHash: person.passwordHash
+		})
+		.from(person)
+		.where(eq(person.id, personId));
+	const row = rows[0];
+	if (!row) return null;
+	return { id: row.id, role: row.role, canSignIn: canSignIn(row) };
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -98,9 +128,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		status,
 		tokens
 	] = await Promise.all([
-		getModules(),
-		getBaseCurrency(),
-		availableCurrencies(),
+		// All three render only inside the isAdmin branches of this page, so a
+		// member paid for three queries to fill sections their copy never draws.
+		// The currency list is the one that costs something real — it reads the FX
+		// table. The module map is merely redundant: the (app) layout loads one for
+		// everybody to decide the sidebar, so this was a second copy of it rather
+		// than a leak of anything.
+		isAdmin ? getModules() : null,
+		isAdmin ? getBaseCurrency() : null,
+		isAdmin ? availableCurrencies() : [],
 		db
 			.select({
 				id: person.id,
@@ -116,7 +152,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.orderBy(person.createdAt),
 		isAdmin ? getBackupConfig() : null,
 		isAdmin ? getLastBackupRun() : null,
-		locals.person
+		// Gated on passkeysAvailable() as well as on being signed in: a plain-HTTP
+		// LAN instance never renders the passkey card, so this was a round trip
+		// per person per visit for the entire life of that deployment.
+		passkeysAvailable() && locals.person
 			? db
 					.select({
 						id: credential.id,
@@ -157,24 +196,53 @@ export const load: PageServerLoad = async ({ locals }) => {
 	};
 };
 
-export const actions: Actions = {
-	createApiToken: async ({ request, locals }) => {
-		requireAdmin(locals.person);
+/**
+ * The two things a member comes to this page for. Everything else on it is
+ * household administration.
+ */
+const MEMBER_ACTIONS = new Set(['changePassword', 'removePasskey']);
+
+/**
+ * Administrator enforcement for the whole page, applied once.
+ *
+ * Written the other way round — a requireAdmin() at the top of each action —
+ * the guard was correct twelve times over and the shape was still wrong: the
+ * cost of forgetting the thirteenth is an action anyone signed in can call,
+ * with nothing failing to say so. That is exactly what /settings/export was
+ * until recently. Here, forgetting is a 403 the author meets immediately, and
+ * escaping the guard takes naming yourself in MEMBER_ACTIONS above.
+ *
+ * The cast preserves the concrete shape of the object literal, which is what
+ * SvelteKit derives the page's `form` type from — widening it to Actions would
+ * cost every field on it.
+ */
+function administered<T extends Actions>(actions: T): T {
+	return Object.fromEntries(
+		Object.entries(actions).map(([name, run]) => [
+			name,
+			(event: Parameters<Action>[0]) => {
+				if (!MEMBER_ACTIONS.has(name)) requireAdmin(event.locals.person);
+				return (run as Action)(event);
+			}
+		])
+	) as T;
+}
+
+export const actions = administered({
+	createApiToken: async ({ request }) => {
 		const form = await request.formData();
 		const { raw } = await createToken(String(form.get('label') ?? ''));
 		// Returned once and never stored: only its hash is in the database.
 		return { createdToken: raw };
 	},
 
-	revokeApiToken: async ({ request, locals }) => {
-		requireAdmin(locals.person);
+	revokeApiToken: async ({ request }) => {
 		const form = await request.formData();
 		await revokeToken(String(form.get('id') ?? ''));
 		return { ok: true };
 	},
 
-	toggleModule: async ({ request, locals }) => {
-		requireAdmin(locals.person);
+	toggleModule: async ({ request }) => {
 		const form = await request.formData();
 		const key = String(form.get('key') ?? '') as ModuleKey;
 		if (!MODULE_KEYS.includes(key)) return fail(400, { message: 'Unknown module.' });
@@ -184,8 +252,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	setBaseCurrency: async ({ request, locals }) => {
-		requireAdmin(locals.person);
+	setBaseCurrency: async ({ request }) => {
 		const form = await request.formData();
 		const code = String(form.get('baseCurrency') ?? '').toUpperCase();
 		if (!/^[A-Z]{3}$/.test(code)) return fail(400, { message: 'Use a three-letter code.' });
@@ -193,10 +260,10 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	saveBackup: async ({ request, locals }) => {
-		// `dir` is a path on the host that the server will later write a full
-		// database dump to. Nobody but an administrator gets to choose it.
-		requireAdmin(locals.person);
+	// `dir` is a path on the host that the server will later write a full
+	// database dump to. Nobody but an administrator gets to choose it, which is
+	// administered()'s job now rather than this action's.
+	saveBackup: async ({ request }) => {
 		const form = await request.formData();
 		const cadence = String(form.get('cadence') ?? '') as BackupCadence;
 		if (!BACKUP_CADENCES.includes(cadence)) return fail(400, { message: 'Unknown cadence.' });
@@ -204,8 +271,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	importConfig: async ({ request, locals }) => {
-		requireAdmin(locals.person);
+	importConfig: async ({ request }) => {
 		const form = await request.formData();
 		const file = form.get('file');
 		if (!(file instanceof File) || file.size === 0) {
@@ -222,8 +288,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	runBackupNow: async ({ locals }) => {
-		requireAdmin(locals.person);
+	runBackupNow: async () => {
 		const run = await runBackup();
 		if (!run.ok) return fail(500, { message: `Backup failed: ${run.note}` });
 		return { ok: true };
@@ -247,8 +312,7 @@ export const actions: Actions = {
 		return { passwordChanged: true };
 	},
 
-	addPerson: async ({ request, locals, url }) => {
-		requireAdmin(locals.person);
+	addPerson: async ({ request, url }) => {
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();
 		const role = form.get('role') === 'admin' ? 'admin' : 'member';
@@ -284,12 +348,15 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	reissueEnrollment: async ({ request, locals, url }) => {
-		requireAdmin(locals.person);
+	reissueEnrollment: async ({ request, url }) => {
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 		const rows = await db
-			.select({ id: person.id, passwordHash: person.passwordHash })
+			.select({
+				id: person.id,
+				passwordHash: person.passwordHash,
+				deactivatedAt: person.deactivatedAt
+			})
 			.from(person)
 			.where(eq(person.id, personId));
 		const target = rows[0];
@@ -301,25 +368,34 @@ export const actions: Actions = {
 		if (target.passwordHash !== null) {
 			return fail(400, { message: 'That person has already enrolled.' });
 		}
+		// Still pending, but closed — deactivation revoked whatever link they had.
+		// A replacement would look valid, be passed on in good faith, and then be
+		// refused at /enroll with the wording a broken link gets, leaving both
+		// sides blaming the URL rather than the account.
+		if (target.deactivatedAt) {
+			return fail(400, { message: 'That account is deactivated — reactivate them first.' });
+		}
 
 		const { raw } = await createEnrollmentToken(personId);
 		return { ok: true, enrollmentLink: `${url.origin}/enroll/${raw}` };
 	},
 
 	deactivatePerson: async ({ request, locals }) => {
-		requireAdmin(locals.person);
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 
 		return transactional(async (tx) => {
-			const rows = await tx
-				.select({ id: person.id, role: person.role })
-				.from(person)
-				.where(eq(person.id, personId));
-			const target = rows[0];
+			// Counted first, because that call is what takes the locks: every
+			// administrator the count includes is held for the rest of the
+			// transaction, so if the target is one of them the read below sees a row
+			// nobody else can move. A target the count does not include — a member, a
+			// pending or deactivated admin — is read unlocked, which is harmless
+			// precisely because they are not what the guard is measuring.
+			const activeAdmins = await lockActiveAdminCount(tx);
+			const target = await policyTarget(tx, personId);
 			if (!target) throw new Refused(404, 'No such person.');
 
-			const verdict = canDeactivate(locals.person!, target, await lockActiveAdminCount(tx));
+			const verdict = canDeactivate(locals.person!, target, activeAdmins);
 			if (!verdict.ok) throw new Refused(400, verdict.reason);
 
 			await tx.update(person).set({ deactivatedAt: new Date() }).where(eq(person.id, personId));
@@ -332,8 +408,7 @@ export const actions: Actions = {
 		});
 	},
 
-	reactivatePerson: async ({ request, locals }) => {
-		requireAdmin(locals.person);
+	reactivatePerson: async ({ request }) => {
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 		const updated = await db
@@ -346,23 +421,20 @@ export const actions: Actions = {
 	},
 
 	changePersonRole: async ({ request, locals }) => {
-		requireAdmin(locals.person);
 		const form = await request.formData();
 		const personId = String(form.get('personId') ?? '');
 		const next = form.get('role') === 'admin' ? 'admin' : 'member';
 
 		return transactional(async (tx) => {
-			const rows = await tx
-				.select({ id: person.id, role: person.role })
-				.from(person)
-				.where(eq(person.id, personId));
-			const target = rows[0];
+			// Counted first, for the same reason as deactivatePerson.
+			const activeAdmins = await lockActiveAdminCount(tx);
+			const target = await policyTarget(tx, personId);
 			if (!target) throw new Refused(404, 'No such person.');
 
-			const verdict = canChangeRole(locals.person!, target, next, await lockActiveAdminCount(tx));
+			const verdict = canChangeRole(locals.person!, target, next, activeAdmins);
 			if (!verdict.ok) throw new Refused(400, verdict.reason);
 
 			await tx.update(person).set({ role: next }).where(eq(person.id, personId));
 		});
 	}
-};
+} satisfies Actions);

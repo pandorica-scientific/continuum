@@ -75,16 +75,19 @@
 
 <div class="card people">
 	{#each people as p (p.id)}
+		{@const label = note(p)}
 		<div class="person-row" class:dimmed={p.deactivatedAt}>
 			<span class="avatar">{p.initials}</span>
 			<span class="mod-label">
 				<span>{p.name}</span>
-				{#if note(p)}<span class="note">{note(p)}</span>{/if}
+				{#if label}<span class="note">{label}</span>{/if}
 			</span>
 
 			{#if isAdmin && p.id !== me?.id}
 				<span class="row-actions">
-					{#if p.pending}
+					<!-- Not for a closed account: deactivation revoked the link they
+					     had, and the server refuses to mint a replacement. -->
+					{#if p.pending && !p.deactivatedAt}
 						<form method="POST" action="?/reissueEnrollment" use:enhance>
 							<input type="hidden" name="personId" value={p.id} />
 							<button type="submit" class="btn">New link</button>
@@ -218,6 +221,15 @@
 		grid-template-columns: minmax(0, 1.2fr) 90px minmax(0, 1fr) auto;
 		gap: 6px;
 		padding-top: 11px;
+	}
+	/* Came along with the rule above when this list moved out of the settings
+	   page. Left behind there, four columns stayed four columns on a phone and
+	   the name field, the birth year, the role and the button each got about
+	   ninety pixels. */
+	@media (max-width: 640px) {
+		.add-form {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 	.reveal {
 		display: block;

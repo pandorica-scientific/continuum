@@ -3,10 +3,11 @@
 // never knows it. Only the hash is stored — the raw token is shown once, the
 // same handling sessions and API tokens already use.
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { enrollmentToken } from '$lib/server/db/schema';
+import { hashToken } from '$lib/server/auth/token-hash';
 import { enrollmentLinkDays } from '$lib/server/policy';
 
 export type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
@@ -29,16 +30,27 @@ export function enrollmentStatus(row: EnrollmentRow | undefined, now: Date): Enr
 	return 'valid';
 }
 
-function hashToken(raw: string): string {
-	return createHash('sha256').update(raw).digest('hex');
-}
-
 export async function createEnrollmentToken(personId: string): Promise<{ raw: string }> {
 	const raw = randomBytes(32).toString('base64url');
+	const id = hashToken(raw);
 	const expiresAt = new Date(Date.now() + enrollmentLinkDays() * 24 * 60 * 60 * 1000);
 	// One live link per person: reissuing invalidates the previous one.
-	await db.delete(enrollmentToken).where(eq(enrollmentToken.personId, personId));
-	await db.insert(enrollmentToken).values({ id: hashToken(raw), personId, expiresAt });
+	//
+	// A DELETE followed by an INSERT only looked like it enforced that. Nothing
+	// in the table stopped two rows for one person, so two administrators — or
+	// one double-clicked "New link" — both deleted, then both inserted, and two
+	// independent links were spendable at once. The older URL, quite possibly the
+	// one that went to the wrong address, kept working. This is a single
+	// statement against a unique person_id: the second writer overwrites the
+	// first, and the invariant is the database's to keep rather than a comment's.
+	await db
+		.insert(enrollmentToken)
+		.values({ id, personId, expiresAt })
+		.onConflictDoUpdate({
+			target: enrollmentToken.personId,
+			// usedAt too: this is a fresh link, whatever became of the last one.
+			set: { id, expiresAt, usedAt: null }
+		});
 	return { raw };
 }
 

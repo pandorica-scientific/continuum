@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person, session } from '$lib/server/db/schema';
 import { cookieSecure } from './cookies';
+import { hashToken } from './token-hash';
 import type { Cookies } from '@sveltejs/kit';
 import type { PersonRole } from './policy';
 
@@ -14,19 +15,51 @@ export async function hashPassword(password: string): Promise<string> {
 	return argonHash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
 }
 
+/**
+ * A hash of a value nobody will ever type, verified against when there is no
+ * real hash to check. Derived from hashPassword rather than written out as a
+ * constant so it cannot drift from the parameters a real password uses — the
+ * whole point is that the two cost the same.
+ *
+ * A rejection is not cached. Storing one would make every later sign-in for an
+ * unknown or unenrolled person answer 500 instead of "wrong person or
+ * password", which is a far louder account oracle than the timing difference
+ * this exists to remove.
+ */
+let decoyHash: Promise<string> | null = null;
+
+function decoy(): Promise<string> {
+	decoyHash ??= hashPassword(randomBytes(32).toString('base64url')).catch((err) => {
+		decoyHash = null;
+		throw err;
+	});
+	return decoyHash;
+}
+
+// Built at start-up, so the first refusal after a restart does not pay for
+// constructing it on top of verifying against it and stand out by taking twice
+// as long as every refusal after it.
+void decoy().catch(() => {});
+
 export async function verifyPassword(
 	passwordHash: string | null,
 	password: string
 ): Promise<boolean> {
-	// A person created by an administrator has no hash until they enrol. Argon2
-	// would throw on null; returning false keeps "not yet enrolled" a plain
-	// failed sign-in rather than a 500.
-	if (!passwordHash) return false;
-	return argonVerify(passwordHash, password);
-}
-
-function hashToken(token: string): string {
-	return createHash('sha256').update(token).digest('hex');
+	if (passwordHash) return argonVerify(passwordHash, password);
+	// A person created by an administrator has no hash until they enrol, and
+	// argon2 would throw on null. Returning false outright kept that a plain
+	// failed sign-in rather than a 500 — but it also answered in about a
+	// millisecond where a wrong password costs a full verify, so how long the
+	// refusal took said "this account has not enrolled" as plainly as a
+	// different message would have. Spending the work anyway costs one
+	// deliberately doomed verify on a path that has already failed.
+	try {
+		await argonVerify(await decoy(), password);
+	} catch {
+		// Spending the work defends against timing analysis; it is not what
+		// decides the answer. If argon2 is unavailable the answer is still no.
+	}
+	return false;
 }
 
 export async function createSession(cookies: Cookies, personId: string): Promise<void> {

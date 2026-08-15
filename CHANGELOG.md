@@ -2,7 +2,7 @@
 
 ## 0.3.1 — 2026-08-14
 
-Hardening the accounts work in 0.3.0. Two rounds of review over that release
+Hardening the accounts work in 0.3.0. Three rounds of review over that release
 found gaps between what the code did and what the README promised; this closes
 them.
 
@@ -46,6 +46,55 @@ them.
   before a single test started. It now gets five minutes.
 - The README's Tailscale instructions proxied port 3000, which is the port
   inside the container. Compose publishes 80.
+- **An administrator who had never enrolled counted as one.** The last-
+  administrator guard measured "admins who are not deactivated", which includes
+  an account created moments ago that has no password, holds nothing but a
+  one-time link, and cannot reach a single administrative control. Adding one
+  made the count read two, and the only person who could actually sign in and
+  administer the household was then free to demote themselves — the exact
+  outcome the guard exists to prevent, recoverable only through the database
+  one-liner in the README. The count is now the same condition sign-in uses.
+- **A crafted credential id was an uncounted 500.** The sign-in endpoint checked
+  only that the id was a non-empty string, but a credential id is base64url and
+  goes straight into a Postgres text lookup: a NUL byte in it threw 22021 from
+  outside every catch in the handler. Anyone could reach that unauthenticated,
+  and it happened without passing any branch that records a failed attempt, so
+  it was never rate limited. The id is now checked against its actual shape, and
+  a passkey's label is stripped of control characters for the same reason.
+- **Two enrollment links could be live for one person.** "One link per person"
+  was a delete followed by an insert with nothing in the table to enforce it, so
+  a double-clicked _New link_ left both spendable and the older URL — possibly
+  the one sent to the wrong address — kept working. It is now a single upsert
+  against a unique constraint, and the upgrade removes any duplicates already
+  stored.
+- **An enrollment link was honoured against an account that already had a
+  password.** Spending one overwrites the password and signs its visitor in, so
+  reissuing refuses anyone already enrolled — but it read and then wrote in two
+  separate round trips, and somebody who enrolled inside that window was left
+  with a live link pointing at their own account. Enrollment now checks the same
+  condition at the point of use, so a link that should never have been minted is
+  refused rather than honoured.
+- **A new link could be minted for a closed account.** Deactivation revokes the
+  outstanding link, but _New link_ still appeared for a deactivated person who
+  had never enrolled and still produced a valid-looking URL, which enrollment
+  then refused with the wording a broken link gets — leaving both sides blaming
+  the URL rather than the account.
+- **The sign-in picker listed people who could not sign in.** Someone added but
+  not yet enrolled appeared in the list, and every attempt they made failed
+  against the shared per-address limit that gates everyone's sign-in — behind a
+  reverse proxy or Tailscale, eight guesses from one new person locked out the
+  household.
+- **A refusal could name the wrong person as the last administrator.** Demoting
+  or deactivating an administrator who was already deactivated cannot reduce the
+  number of people who can administer anything, but the guard tested the role
+  alone and refused, citing a person the request never touched.
+- **How long a sign-in failed said what kind of account it was.** A wrong
+  password costs a full argon2 verify; a deactivated or never-enrolled account
+  short-circuited before it and answered in about a millisecond, so timing drew
+  the distinction the identical wording exists to hide.
+- The add-person form kept four columns on a phone. Its single-column rule was
+  left behind in the settings page when the household list moved into its own
+  component, where it was quietly reused by the password form.
 
 ### Changed
 
@@ -63,6 +112,18 @@ them.
 - The two passkey buttons share one ceremony helper. The fragile part is the
   list of exception names that mean "the person cancelled", and it was written
   out twice.
+- **Administrator enforcement on the settings page is applied once**, to every
+  action except the two a member comes there for, instead of being repeated at
+  the top of each. The guard was correct twelve times over and the shape was
+  still wrong: forgetting the thirteenth left an action anyone signed in could
+  call, with nothing failing to say so.
+- A member's settings page no longer fetches the module map, the base currency
+  or the currency list — all three render only for administrators — and the
+  passkey query is skipped entirely on deployments where passkeys are not
+  possible.
+- Sessions, API tokens and enrollment links share one token-hashing function.
+  Each had its own private copy whose comment claimed to match the others, so
+  hardening one would have quietly left the other two behind.
 
 ## 0.3.0 — 2026-08-14
 
