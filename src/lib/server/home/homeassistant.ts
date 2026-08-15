@@ -6,10 +6,12 @@
 import {
 	dailyDeltas,
 	domainOf,
+	energyToKwh,
 	mapAttention,
 	mapMetrics,
 	mapRooms,
 	meterCandidates,
+	risingTotal,
 	type HaEntityConfig,
 	type HaRegistry,
 	type HaState
@@ -108,14 +110,31 @@ async function fetchRegistry(config: HaConfig): Promise<HaRegistry> {
 function makeHomeAssistant(rawConfig: Record<string, string>): HomeProvider {
 	const config = rawConfig as unknown as HaConfig;
 
+	// The history endpoint is asked for `no_attributes`, so the unit has to come
+	// from the entity's own state. Cached for the lifetime of this provider,
+	// which is one request.
+	let cachedFactor: number | null | undefined;
+	const energyFactor = async (): Promise<number | null> => {
+		if (cachedFactor !== undefined) return cachedFactor;
+		try {
+			const state = await rest<HaState>(config, `/api/states/${config.energyEntity}`);
+			cachedFactor = energyToKwh(state.attributes.unit_of_measurement);
+		} catch {
+			cachedFactor = null;
+		}
+		return cachedFactor;
+	};
+
 	const monthToDate = async (): Promise<number | null> => {
 		if (!config.energyEntity) return null;
+		const factor = await energyFactor();
+		if (factor === null) return null;
 		const start = new Date();
 		start.setUTCDate(1);
 		start.setUTCHours(0, 0, 0, 0);
 		const history = await energyHistorySamples(start.toISOString());
 		if (history.length < 2) return null;
-		return Math.max(0, history[history.length - 1].value - history[0].value);
+		return risingTotal(history) * factor;
 	};
 
 	const energyHistorySamples = async (
@@ -174,9 +193,15 @@ function makeHomeAssistant(rawConfig: Record<string, string>): HomeProvider {
 		},
 		async energyHistory(days): Promise<DayEnergy[]> {
 			if (!config.energyEntity) return [];
+			const factor = await energyFactor();
+			if (factor === null) return [];
 			const since = new Date(Date.now() - (days + 1) * 86400000).toISOString();
 			const samples = await energyHistorySamples(since);
-			return dailyDeltas(samples, days, new Date().toISOString().slice(0, 10));
+			return dailyDeltas(
+				samples.map((s) => ({ ...s, value: s.value * factor })),
+				days,
+				new Date().toISOString().slice(0, 10)
+			);
 		}
 	};
 }

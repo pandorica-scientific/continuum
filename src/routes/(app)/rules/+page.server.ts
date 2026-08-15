@@ -7,7 +7,7 @@ import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/ingest';
 import { upsertTag } from '$lib/server/tags';
 import { confidence } from '$lib/rules/confidence';
-import { DEFAULT_RULE_PRIOR, type Condition } from '$lib/rules/match';
+import { DEFAULT_RULE_PRIOR, normalise, type Condition } from '$lib/rules/match';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -119,7 +119,10 @@ async function conditionsFromForm(form: FormData): Promise<Condition[] | null> {
 		const value = values[i]?.trim();
 		if (!value) continue;
 		if (field === 'counterparty' || field === 'description') {
-			out.push({ field, op: 'contains', value: value.toLowerCase() });
+			// Store the folded form, the same one the matcher compares against.
+			// `.toLowerCase()` alone left accents and punctuation in a needle that
+			// is tested against diacritic-stripped, punctuation-collapsed text.
+			out.push({ field, op: 'contains', value: normalise(value) });
 		} else if (field === 'counterAccount' || field === 'variableSymbol') {
 			out.push({ field, op: 'equals', value: value.replace(/\s/g, '') });
 		}

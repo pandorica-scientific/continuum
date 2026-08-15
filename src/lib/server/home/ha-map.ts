@@ -240,11 +240,78 @@ export function meterCandidates(states: HaState[]): Record<string, { id: string;
 			.sort((a, b) => a.name.localeCompare(b.name));
 	return {
 		power: pick((s) => s.attributes.device_class === 'power'),
-		energy: pick((s) => s.attributes.device_class === 'energy'),
+		// Energy sensors keep their unit in the label: the same device class
+		// covers Wh, kWh and MWh entities, and picking the wrong one is a
+		// thousandfold error in the bill rather than a cosmetic one.
+		energy: states
+			.filter((s) => domainOf(s.entity_id) === 'sensor' && s.attributes.device_class === 'energy')
+			.map((s) => {
+				const unit = s.attributes.unit_of_measurement;
+				const name = s.attributes.friendly_name ?? s.entity_id;
+				return {
+					id: s.entity_id,
+					name: unit ? `${name} (${unit})` : name
+				};
+			})
+			.sort((a, b) => a.name.localeCompare(b.name)),
 		water: pick((s) => s.attributes.device_class === 'water'),
 		temperature: pick((s) => s.attributes.device_class === 'temperature'),
 		air: pick((s) => ['pm25', 'aqi', 'carbon_dioxide'].includes(s.attributes.device_class ?? ''))
 	};
+}
+
+/**
+ * Multiplier turning a reading in the sensor's own unit into kWh, or null when
+ * the unit is not an energy unit we can convert.
+ *
+ * The unit lives in the entity's attributes, never in its state, and Home
+ * Assistant energy sensors report whatever their integration reports — Shelly,
+ * Tasmota and ESPHome commonly report Wh. Assuming kWh made a 186 kWh month
+ * read as 186 000, and that figure is not merely displayed: it is multiplied by
+ * the price per kWh and written onto the household's bill as money.
+ *
+ * Null rather than a guess of 1: an energy figure a thousand times wrong is
+ * worse than no energy figure.
+ */
+export function energyToKwh(unit: string | null | undefined): number | null {
+	switch ((unit ?? '').trim().toLowerCase()) {
+		case 'wh':
+			return 0.001;
+		case 'kwh':
+			return 1;
+		case 'mwh':
+			return 1000;
+		case 'gwh':
+			return 1_000_000;
+		case 'j':
+			return 1 / 3_600_000;
+		case 'kj':
+			return 1 / 3600;
+		case 'mj':
+			return 1 / 3.6;
+		case 'gj':
+			return 1000 / 3.6;
+		default:
+			return null;
+	}
+}
+
+/**
+ * Total consumption across a run of readings from a total-increasing counter,
+ * in the counter's own unit.
+ *
+ * Sums the rises rather than subtracting the ends, because the counter does
+ * reset — a Home Assistant restart, a meter swap, an integration reload. Taking
+ * `last - first` then clamping at zero reported such a month as 0, which is
+ * indistinguishable on screen from a month of no consumption at all.
+ */
+export function risingTotal(samples: { value: number }[]): number {
+	let total = 0;
+	for (let i = 1; i < samples.length; i++) {
+		const delta = samples[i].value - samples[i - 1].value;
+		if (delta > 0) total += delta;
+	}
+	return total;
 }
 
 /**

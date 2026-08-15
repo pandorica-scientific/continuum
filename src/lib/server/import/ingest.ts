@@ -130,6 +130,23 @@ export async function ingestFile(
 		};
 	}
 
+	// A parse that found nothing is a parser problem, not an import. Recording
+	// it would store the content hash and make the correct re-import — after a
+	// sniffing or adapter fix — look like a duplicate forever, and resolving an
+	// account below would mint one for a bank the user may not even have.
+	if (statement.rows.length === 0) {
+		return {
+			filename,
+			bank: statement.bank,
+			rowsRead: 0,
+			rowsAdded: 0,
+			rowsDuplicate: 0,
+			rowsPaired: 0,
+			error:
+				'No transactions were found in this file, so nothing was imported. The file was not recorded — you can upload it again once the format is supported.'
+		};
+	}
+
 	const resolution = await resolveAccount(statement, explicitAccountId);
 	if (resolution.kind === 'ambiguous') {
 		return {
@@ -323,11 +340,19 @@ export async function pairAndCategorise(): Promise<number> {
 	// Categorise whatever is new and not a transfer (held proposals included —
 	// a categorisation would resolve them as "not a transfer").
 	const [rules, threshold] = await Promise.all([loadRules(), autoThreshold()]);
-	const proposedLegs = new Set(
-		pendingPairs
-			.filter((p) => p.state === 'proposed')
-			.flatMap((p) => [p.outTransactionId, p.inTransactionId])
-	);
+	// Re-read the proposals rather than reuse the snapshot taken above: the loop
+	// that just ran inserts proposals of its own, and a leg waiting on a
+	// transfer decision must not be categorised out from under it. Against the
+	// stale snapshot, a leg proposed in this very pass could match a rule, flip
+	// to reviewState 'auto', and vanish from /import — which lists only
+	// 'needs_review'. Its transferPairId would then stay null forever, so both
+	// legs kept counting as real income and real spending, and legsInPairs
+	// stopped any later run from re-proposing them.
+	const proposedRows = await db
+		.select({ outId: transferPair.outTransactionId, inId: transferPair.inTransactionId })
+		.from(transferPair)
+		.where(eq(transferPair.state, 'proposed'));
+	const proposedLegs = new Set(proposedRows.flatMap((p) => [p.outId, p.inId]));
 	const undecided = await db
 		.select()
 		.from(transaction)

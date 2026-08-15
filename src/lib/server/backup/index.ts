@@ -5,13 +5,14 @@
 // keep their own version history of it. Destination and cadence are settings.
 
 import { copyFile, mkdir, readdir, rename, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { env } from '$env/dynamic/private';
 import { getSetting, setSetting } from '$lib/server/settings';
 import { dumpDatabase } from './dump';
 import {
 	BACKUP_CADENCES,
 	BACKUP_FILE,
+	backupDirProblem,
 	backupDue,
 	legacyDumps,
 	type BackupCadence,
@@ -20,6 +21,7 @@ import {
 } from './policy';
 
 export { detectDestinations } from './destinations';
+export { backupDirProblem } from './policy';
 export { BACKUP_CADENCES, type BackupCadence, type BackupConfig, type BackupRun };
 
 // Backups get their own subfolder so a shared Drive folder stays tidy.
@@ -49,6 +51,11 @@ export async function runBackup(): Promise<BackupRun> {
 	let run: BackupRun;
 	try {
 		if (!config.dir) throw new Error('No backup destination is set.');
+		// Checked again at write time, not only where it was typed: the setting
+		// can also arrive through an imported ledger.config.json, or have been
+		// stored before this check existed.
+		const problem = backupDirProblem(resolve(config.dir), resolve(env.UPLOAD_DIR || 'data'));
+		if (problem) throw new Error(problem);
 		const dest = join(config.dir, SUBFOLDER);
 		await mkdir(dest, { recursive: true });
 

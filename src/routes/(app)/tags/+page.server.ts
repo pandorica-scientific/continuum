@@ -2,7 +2,7 @@ import { db } from '$lib/server/db';
 import { document, documentTag, property, propertyTag } from '$lib/server/db/schema';
 import { tagTotals } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
-import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { PageServerLoad } from './$types';
 
@@ -31,8 +31,7 @@ export const load: PageServerLoad = async () => {
 				// Per-currency sums stand as they are; the single figure beside them
 				// is only a convenience, converted at today's rate.
 				const convertedMinor = t.totals.reduce((sum, part) => {
-					const converted = convertMinorSync(rates, part.sumMinor, part.currency, base, today);
-					return sum + (converted ?? part.sumMinor);
+					return sum + convertOrFace(rates, part.sumMinor, part.currency, base, today);
 				}, 0n);
 				const taggedDocs = docTagRows
 					.filter((r) => r.tagId === t.id)

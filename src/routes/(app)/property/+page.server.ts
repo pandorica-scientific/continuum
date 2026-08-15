@@ -139,9 +139,6 @@ export const load: PageServerLoad = async ({ url }) => {
 				color: 'var(--fg2)',
 				note: 'deposit, fees, principal'
 			});
-			const appreciation =
-				current.moneyInMinor > 0n && current.valueMinor > 0n && current.boughtYear ? null : null;
-			void appreciation;
 			metrics.push({
 				label: 'Appreciation',
 				value:

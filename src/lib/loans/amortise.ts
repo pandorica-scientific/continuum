@@ -117,7 +117,7 @@ export interface MonthRow {
 	annualRatePct: number;
 }
 
-function nextMonth(month: string): string {
+export function nextMonth(month: string): string {
 	const [y, m] = month.split('-').map(Number);
 	const date = new Date(Date.UTC(y, m - 1 + 1, 1));
 	return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;

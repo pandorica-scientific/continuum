@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	dailyDeltas,
+	energyToKwh,
 	mapAttention,
 	mapMetrics,
 	mapRooms,
 	meterCandidates,
+	risingTotal,
 	type HaRegistry,
 	type HaState
 } from '$lib/server/home/ha-map';
@@ -135,7 +137,51 @@ describe('meterCandidates', () => {
 	it('offers sensors by device class for the settings pickers', () => {
 		const candidates = meterCandidates(STATES);
 		expect(candidates.power).toEqual([{ id: 'sensor.house_power', name: 'House power' }]);
-		expect(candidates.energy).toEqual([{ id: 'sensor.house_energy', name: 'House energy' }]);
+		// Energy candidates carry their unit: device_class 'energy' covers Wh,
+		// kWh and MWh entities alike, and picking the wrong one is a
+		// thousandfold error in the household's bill.
+		expect(candidates.energy).toEqual([{ id: 'sensor.house_energy', name: 'House energy (kWh)' }]);
+	});
+});
+
+describe('energyToKwh', () => {
+	it('converts the units Home Assistant integrations actually report', () => {
+		expect(energyToKwh('kWh')).toBe(1);
+		expect(energyToKwh('Wh')).toBe(0.001);
+		expect(energyToKwh('MWh')).toBe(1000);
+		expect(energyToKwh('wh')).toBe(0.001); // case-insensitive
+		expect(energyToKwh(' kWh ')).toBe(1);
+		expect(energyToKwh('GJ')).toBeCloseTo(277.7778, 3);
+	});
+
+	it('refuses to guess for an unknown or missing unit', () => {
+		// A Shelly or Tasmota entity reporting Wh, read as kWh, turned a 186 kWh
+		// month into 186 000 — and that figure is multiplied by the price and
+		// written onto the household's bill as money. No reading beats one that
+		// is a thousand times wrong.
+		expect(energyToKwh(undefined)).toBeNull();
+		expect(energyToKwh(null)).toBeNull();
+		expect(energyToKwh('')).toBeNull();
+		expect(energyToKwh('m³')).toBeNull();
+		expect(energyToKwh('°C')).toBeNull();
+	});
+});
+
+describe('risingTotal', () => {
+	it('sums consumption across a counter reset instead of reporting zero', () => {
+		// last − first would be 40 − 500 = −460, which Math.max(0, …) flattened
+		// to 0 — indistinguishable from a month of no consumption at all.
+		const samples = [{ value: 400 }, { value: 500 }, { value: 0 }, { value: 40 }];
+		expect(risingTotal(samples)).toBe(140);
+	});
+
+	it('is a plain difference when the counter never resets', () => {
+		expect(risingTotal([{ value: 100 }, { value: 130 }, { value: 186 }])).toBe(86);
+	});
+
+	it('is zero for fewer than two samples', () => {
+		expect(risingTotal([])).toBe(0);
+		expect(risingTotal([{ value: 5 }])).toBe(0);
 	});
 });
 

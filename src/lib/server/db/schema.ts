@@ -293,6 +293,15 @@ export const propertyBill = pgTable('property_bill', {
 		.notNull()
 		.default(sql`0`),
 	sort: integer('sort').notNull().default(0),
+	/**
+	 * Where the amount comes from: 'meter' rows are rewritten from the smart
+	 * meter reading, everything else is the household's own figure and is never
+	 * touched. A typed column rather than a label match — looking for a label
+	 * containing "energy" missed the app's own seeded "Electricity advance", so
+	 * a second energy line appeared beside it and the property's bill total
+	 * counted electricity twice, and renaming a bill to Czech did the same.
+	 */
+	source: text('source').notNull().default('manual'),
 	// the uploaded bill itself, filed in Documents about this property
 	documentId: text('document_id').references(() => document.id, { onDelete: 'set null' })
 });

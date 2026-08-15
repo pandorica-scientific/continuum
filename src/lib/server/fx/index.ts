@@ -1,6 +1,7 @@
-import { and, desc, eq, lte } from 'drizzle-orm';
+import { and, desc, eq, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { currencyRate } from '$lib/server/db/schema';
+import { account, currencyRate, holding, loan, transaction } from '$lib/server/db/schema';
+import { minorDigits } from '$lib/money';
 
 // The Czech National Bank publishes a daily fixing of ~30 currencies against
 // CZK — free, no API key. All rates are stored as CZK per one unit; rates
@@ -93,6 +94,52 @@ export async function convertMinor(
 	if (from === to) return amountMinor;
 	const [fromCzk, toCzk] = await Promise.all([czkPerUnit(from, day), czkPerUnit(to, day)]);
 	if (fromCzk === null || toCzk === null) return null;
-	const factor = fromCzk / toCzk;
-	return BigInt(Math.round(Number(amountMinor) * factor));
+	// The result is in the target's minor units, and not every currency has two
+	// of them: 1000 JPY is amountMinor 1000, the same value in CZK is 15000.
+	const scale = 10 ** (minorDigits(to) - minorDigits(from));
+	return BigInt(Math.round(Number(amountMinor) * (fromCzk / toCzk) * scale));
+}
+
+/**
+ * Convert, or fall back to the amount's face value when no rate is known.
+ * The async twin of `convertOrFace` in ./table — see its comment for why a
+ * null rate must never be coalesced into an identity conversion.
+ */
+export async function convertOrFace(
+	amountMinor: bigint,
+	from: string,
+	to: string,
+	day?: string
+): Promise<bigint> {
+	return (await convertMinor(amountMinor, from, to, day)) ?? amountMinor;
+}
+
+/**
+ * Currencies this household actually holds money in that have no exchange rate,
+ * so their amounts appear at face value in every converted total. The app
+ * layout names them in a banner: a missing rate has to be visible, because
+ * every total that silently absorbs one is wrong by the size of the rate.
+ */
+export async function missingRateCurrencies(baseCurrency: string): Promise<string[]> {
+	const rows = (await db.execute(sql`
+		select distinct currency as code from (
+			select currency from ${account}
+			union all select currency from ${transaction}
+			union all select currency from ${loan}
+			union all select currency from ${holding}
+		) used
+	`)) as unknown as { code: string }[];
+
+	const today = new Date().toISOString().slice(0, 10);
+	const codes = [...new Set(rows.map((r) => r.code))].filter((c) => c && c !== baseCurrency);
+
+	// Every conversion goes through CZK, so a base currency with no rate of its
+	// own makes all of them fail, not just the exotic ones.
+	if ((await czkPerUnit(baseCurrency, today)) === null) return codes.sort();
+
+	const missing: string[] = [];
+	for (const code of codes) {
+		if ((await czkPerUnit(code, today)) === null) missing.push(code);
+	}
+	return missing.sort();
 }

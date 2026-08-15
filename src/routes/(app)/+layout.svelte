@@ -25,6 +25,14 @@
 	{/if}
 
 	<main>
+		{#if data.missingRates.length > 0}
+			<p class="rate-warning" role="status">
+				No exchange rate for {data.missingRates.join(', ')}. Amounts in
+				{data.missingRates.length > 1 ? 'those currencies' : 'that currency'} are counted at face value,
+				so every converted total on these screens is understated. Check the internet connection — rates
+				come from the Czech National Bank and refresh every six hours.
+			</p>
+		{/if}
 		{@render children()}
 	</main>
 
@@ -49,6 +57,17 @@
 	}
 	.menu-btn {
 		display: none;
+	}
+	.rate-warning {
+		margin: 0;
+		padding: 12px 14px;
+		border: 1px solid var(--bd2);
+		border-left: 3px solid var(--orange);
+		border-radius: 10px;
+		background: var(--card3);
+		color: var(--fg2);
+		font-size: 13px;
+		line-height: 1.5;
 	}
 
 	@media (max-width: 1023px) {

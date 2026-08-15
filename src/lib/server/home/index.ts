@@ -4,7 +4,11 @@
 import './homeassistant';
 import './demo';
 
-import { getSetting } from '$lib/server/settings';
+import { randomUUID } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { property, propertyBill } from '$lib/server/db/schema';
+import { getBaseCurrency, getSetting } from '$lib/server/settings';
 import {
 	homeProviderKinds,
 	makeHomeProvider,
@@ -34,4 +38,56 @@ export async function configuredHomeProvider(): Promise<HomeProvider | null> {
 
 export function availableHomeProviders(): ProviderKind[] {
 	return homeProviderKinds();
+}
+
+/**
+ * Write this month's meter reading onto the lived-in flat's energy bill, so the
+ * budget follows what the meter actually did.
+ *
+ * This is a write, so it lives behind an explicit call and never inside a page
+ * load. It used to run in the home page's GET `load`, and app.html asks
+ * SvelteKit to preload on hover — so moving the pointer across the sidebar
+ * mutated the database. It runs on the hourly tick and once when a platform is
+ * connected; the home page only reads.
+ *
+ * Returns the bill note for the page, or null when there is nothing to write.
+ */
+export async function syncMeterBill(): Promise<string | null> {
+	const config = await getHomeConfig();
+	if (!config) return null;
+	const price = Number(config.pricePerKwh);
+	if (!Number.isFinite(price) || price <= 0) return null;
+
+	const provider = await configuredHomeProvider();
+	if (!provider) return null;
+
+	const properties = await db.select().from(property).where(eq(property.kind, 'lived'));
+	const livedIn = properties[0];
+	if (!livedIn) return null;
+
+	const snapshot = await provider.snapshot();
+	if (snapshot.monthKwh === null) return null;
+
+	const amountMinor = BigInt(Math.round(snapshot.monthKwh * price));
+	// Bound by the typed source column, not by the label text.
+	const existing = await db
+		.select()
+		.from(propertyBill)
+		.where(and(eq(propertyBill.propertyId, livedIn.id), eq(propertyBill.source, 'meter')));
+
+	if (existing[0]) {
+		await db.update(propertyBill).set({ amountMinor }).where(eq(propertyBill.id, existing[0].id));
+	} else {
+		await db.insert(propertyBill).values({
+			id: randomUUID(),
+			propertyId: livedIn.id,
+			label: 'Energy · from meter',
+			amountMinor,
+			source: 'meter',
+			sort: 1
+		});
+	}
+
+	const baseCurrency = await getBaseCurrency();
+	return `These readings replace the estimated energy line on ${livedIn.name}'s bills, so the budget follows what the meter actually did. (${baseCurrency})`;
 }

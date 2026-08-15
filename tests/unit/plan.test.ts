@@ -5,6 +5,8 @@ import {
 	totalAreaM2,
 	traceOutlines,
 	validateDrawing,
+	PLAN_COLS,
+	PLAN_ROWS,
 	type PlanRoom
 } from '$lib/plan';
 
@@ -76,6 +78,28 @@ describe('areas and validation', () => {
 		const drawing = validateDrawing({ rooms: [{ x: 1, y: 1, w: 3, h: 2, name: 'Old' }] })!;
 		expect(drawing.cellCm).toBe(10);
 		expect(drawing.rooms[0].cells).toHaveLength(6);
+	});
+
+	it('legacy rectangles are bounded by the grid, not just checked for integerness', () => {
+		// Unbounded, this allocates w × h tuples straight from the request body:
+		// a 60-byte payload was enough to exhaust the heap and kill the server.
+		expect(
+			validateDrawing({ rooms: [{ x: 0, y: 0, w: 200000, h: 200000, name: 'x' }] })
+		).toBeNull();
+		// One cell past each edge is still out.
+		expect(
+			validateDrawing({ rooms: [{ x: 0, y: 0, w: PLAN_COLS + 1, h: 1, name: 'x' }] })
+		).toBeNull();
+		expect(
+			validateDrawing({ rooms: [{ x: 0, y: 0, w: 1, h: PLAN_ROWS + 1, name: 'x' }] })
+		).toBeNull();
+		expect(validateDrawing({ rooms: [{ x: -1, y: 0, w: 2, h: 2, name: 'x' }] })).toBeNull();
+		expect(validateDrawing({ rooms: [{ x: 0, y: 0, w: 0, h: 5, name: 'x' }] })).toBeNull();
+		// Exactly filling the grid is still legal.
+		const full = validateDrawing({
+			rooms: [{ x: 0, y: 0, w: PLAN_COLS, h: PLAN_ROWS, name: 'Whole flat' }]
+		})!;
+		expect(full.rooms[0].cells).toHaveLength(PLAN_COLS * PLAN_ROWS);
 	});
 
 	it('rejects garbage and clamps the scale', () => {

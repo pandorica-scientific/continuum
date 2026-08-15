@@ -8,7 +8,7 @@ import {
 	portfolioSnapshot,
 	property
 } from '$lib/server/db/schema';
-import { convertMinor } from '$lib/server/fx';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
 
 export interface NetWorthGroup {
@@ -36,10 +36,17 @@ export interface NetWorth {
 /**
  * A true statement: gross assets (flats at value, portfolio, cash) minus
  * liabilities (mortgages, other loans) = net worth.
+ *
+ * Read-only. The daily snapshot is written by `recordNetWorthSnapshot` on the
+ * scheduler, not here: this function runs from the (app) layout on every page,
+ * again on /overview, and from `GET /api/v1/networth` — so an upsert inside it
+ * meant the documented read-only API wrote on every poll.
  */
 export async function computeNetWorth(): Promise<NetWorth> {
 	const baseCurrency = await getBaseCurrency();
-	const [accounts, properties, loans, links, snapshots] = await Promise.all([
+	const [rates, accounts, properties, loans, links, snapshots] = await Promise.all([
+		// One table load, not a query per holding: this ran on every page view.
+		loadRateTable(),
 		db.select().from(account),
 		db.select().from(property),
 		db.select().from(loan),
@@ -48,30 +55,31 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	]);
 	const securedLoanIds = new Set(links.map((l) => l.loanId));
 
-	const toBase = async (amount: bigint, currency: string) =>
-		(await convertMinor(amount, currency, baseCurrency)) ?? amount;
+	const today = new Date().toISOString().slice(0, 10);
+	const toBase = (amount: bigint, currency: string) =>
+		convertOrFace(rates, amount, currency, baseCurrency, today);
 
 	let cash = 0n;
 	for (const a of accounts) {
 		if (a.kind === 'brokerage') continue;
-		cash += await toBase(a.balanceMinor, a.currency);
+		cash += toBase(a.balanceMinor, a.currency);
 	}
 
 	let flatsGross = 0n;
 	for (const p of properties) {
-		flatsGross += await toBase(p.valueMinor, p.currency);
+		flatsGross += toBase(p.valueMinor, p.currency);
 	}
 	let mortgagesOwed = 0n;
 	let otherLoans = 0n;
 	for (const l of loans) {
-		const owedBase = await toBase(l.owedMinor, l.currency);
+		const owedBase = toBase(l.owedMinor, l.currency);
 		if (securedLoanIds.has(l.id)) mortgagesOwed += owedBase;
 		else otherLoans += owedBase;
 	}
 
 	let portfolio = 0n;
 	if (snapshots[0]) {
-		portfolio = await toBase(snapshots[0].valueMinor, snapshots[0].currency);
+		portfolio = toBase(snapshots[0].valueMinor, snapshots[0].currency);
 	}
 
 	const groups: NetWorthGroup[] = [];
@@ -118,16 +126,7 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	const liabilitiesMinor = groups.reduce((s, g) => s + g.liabilityMinor, 0n);
 	const totalMinor = assetsMinor - liabilitiesMinor;
 
-	// Persist today's figure and read the month baseline.
-	const today = new Date().toISOString().slice(0, 10);
-	await db
-		.insert(netWorthSnapshot)
-		.values({ day: today, valueMinor: totalMinor, currency: baseCurrency })
-		.onConflictDoUpdate({
-			target: netWorthSnapshot.day,
-			set: { valueMinor: totalMinor, currency: baseCurrency }
-		});
-
+	// Read the month baseline. (Today's figure is persisted on the scheduler.)
 	const monthStart = today.slice(0, 8) + '01';
 	const baseline = await db
 		.select()
@@ -142,4 +141,24 @@ export async function computeNetWorth(): Promise<NetWorth> {
 		earliest && earliest.day !== today ? totalMinor - earliest.valueMinor : null;
 
 	return { baseCurrency, totalMinor, groups, assetsMinor, liabilitiesMinor, deltaThisMonthMinor };
+}
+
+/**
+ * Record today's net worth, so the month-on-month delta has a history to read.
+ * One row per day, upserted — called from the scheduler, never from a page load
+ * or from the read-only API.
+ */
+export async function recordNetWorthSnapshot(): Promise<void> {
+	const { totalMinor, baseCurrency } = await computeNetWorth();
+	await db
+		.insert(netWorthSnapshot)
+		.values({
+			day: new Date().toISOString().slice(0, 10),
+			valueMinor: totalMinor,
+			currency: baseCurrency
+		})
+		.onConflictDoUpdate({
+			target: netWorthSnapshot.day,
+			set: { valueMinor: totalMinor, currency: baseCurrency }
+		});
 }

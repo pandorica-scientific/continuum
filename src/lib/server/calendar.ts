@@ -144,11 +144,12 @@ export async function generateEvents(startIso: string, endIso: string): Promise<
 		for (const t of tenancies) {
 			const propertyName = properties.find((p) => p.id === t.propertyId)?.name ?? 'the flat';
 			if (t.endDate && inRange(t.endDate)) {
+				// No amountMinor: a lease ending is a date, not a movement of
+				// money, and the renderer prints amountMinor as a signed figure.
 				events.push({
 					date: t.endDate,
 					label: `Lease ends · ${propertyName}`,
-					ruleKey: 'propertyDates',
-					amountMinor: t.rentMinor > 0n ? undefined : undefined
+					ruleKey: 'propertyDates'
 				});
 			}
 			if (t.renewalNoticeDate && inRange(t.renewalNoticeDate)) {

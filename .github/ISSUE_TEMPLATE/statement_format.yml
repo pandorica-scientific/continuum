@@ -1,0 +1,82 @@
+name: Bank or broker format
+description: Ask for a new statement format, or report one that parses wrongly.
+title: 'Format: <bank name> — '
+labels: [import, format]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never attach a real statement.** Not to this issue, not to a comment,
+        not in a zip. Retype a handful of rows with invented account numbers,
+        invented amounts and invented names, keeping the real column order,
+        separators, encoding and date format — that is what the parser cares
+        about.
+
+        Real files live only in your local `bank_data_examples_do_not_share/`.
+
+  - type: input
+    id: bank
+    attributes:
+      label: Bank or broker
+      placeholder: 'Komerční banka / Degiro / N26'
+    validations:
+      required: true
+
+  - type: input
+    id: country
+    attributes:
+      label: Country and account currency
+      placeholder: 'Czechia, CZK (also holds an EUR sub-account)'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is this
+      options:
+        - A format that is not supported yet
+        - A supported format that parses wrongly
+    validations:
+      required: true
+
+  - type: input
+    id: export-path
+    attributes:
+      label: How the file is exported
+      description: The exact path in the bank's interface, and the options chosen.
+      placeholder: 'Internetbanking → Statements → Export → CSV, semicolon, with header'
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: Anonymised sample rows
+      description: >-
+        The header line plus three or four invented rows — include the awkward
+        ones: an outgoing payment, an incoming one, a card transaction with no
+        counterparty, a foreign-currency row. For PDF statements, paste the
+        extracted text layer rather than a screenshot.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What the parser does today
+      description: >-
+        Only for a format that already exists — the rows that come out wrong,
+        and what they should be. If reconciliation fails, give the statement's
+        own opening balance, its total and its closing balance.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: Every number, name and account in this issue is invented.
+          required: true
+        - label: The sample keeps the real layout — separators, encoding, date and decimal format.
+          required: true

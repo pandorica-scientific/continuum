@@ -1,0 +1,101 @@
+name: Bug report
+description: Something behaves wrong, crashes, or shows a number you cannot explain.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you write anything: no real financial data.** Redact account
+        numbers, balances, names and variable symbols. Invented values in the
+        real layout reproduce a bug just as well.
+
+        A security problem does not belong in a public issue — open a
+        [private advisory](https://github.com/robertkiewisz/continuum/security/advisories/new) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+      placeholder: |
+        The cash-flow waterfall shows rent twice for March. It should appear
+        once — the second row is the transfer to the joint account.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Import a Fio CSV covering March
+        2. Open Cash flow, pick March
+        3. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Import / statement parsing
+        - Transactions, splits or tags
+        - Rules and categorisation
+        - Cash flow / Overview
+        - Accounts, currencies or FX rates
+        - Property
+        - Loans
+        - Investments
+        - Retirement / salary
+        - Tax
+        - Documents
+        - Calendar
+        - Home Assistant
+        - API / tokens
+        - Sign-in, people, setup wizard
+        - Backups
+        - Deployment (Docker, compose, ports)
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From Settings, the image tag, or the commit you are running.
+      placeholder: '0.2.1'
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Deployment
+      description: How it runs and how you reach it.
+      placeholder: |
+        docker compose, ghcr image, Raspberry Pi 5 (arm64)
+        ORIGIN=http://continuum.local, port 80, no reverse proxy
+        Base currency CZK, two people
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: >-
+        `docker compose logs app` around the failure, and the browser console if
+        it is a screen problem. Redact before pasting.
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: This issue contains no real account numbers, balances or names.
+          required: true
+        - label: I am on the latest release, or I have said which older version I run.
+          required: true

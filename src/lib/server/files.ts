@@ -53,19 +53,43 @@ const CONTENT_TYPES: Record<string, string> = {
 	'.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 };
 
+/**
+ * Uploads are user content served from the app's own origin, so nothing in
+ * them may run. An SVG is not an image to a browser, it is a document: navigate
+ * to one and any <script> it carries executes on this origin with the session
+ * cookie attached — stored cross-site scripting from an ordinary photo upload,
+ * and from there every authenticated action is reachable.
+ *
+ * The policy applies to the file's own document, so an SVG still renders inside
+ * an <img> (which cannot run scripts anyway) while a direct visit to it is
+ * inert. `nosniff` stops a .csv or .abo being re-interpreted as HTML on the
+ * strength of its contents.
+ */
+const SECURITY_HEADERS: Record<string, string> = {
+	'content-security-policy':
+		"default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; sandbox",
+	'x-content-type-options': 'nosniff'
+};
+
+// Data formats nobody views in a browser tab. Handing them over as a download
+// removes the question of how the browser might choose to render them.
+const DOWNLOAD_ONLY = new Set(['.csv', '.xml', '.ofx', '.abo', '.xlsx']);
+
 export async function openUpload(name: string): Promise<Response | null> {
 	// The name is always a uuid + extension we generated; reject anything else.
 	if (!/^[0-9a-f-]{36}\.[a-z0-9]+$/.test(name)) return null;
 	const path = join(uploadDir(), name);
+	const ext = extname(name);
 	try {
 		const info = await stat(path);
-		return new Response(Readable.toWeb(createReadStream(path)) as ReadableStream, {
-			headers: {
-				'content-type': CONTENT_TYPES[extname(name)] ?? 'application/octet-stream',
-				'content-length': String(info.size),
-				'cache-control': 'private, max-age=31536000, immutable'
-			}
-		});
+		const headers: Record<string, string> = {
+			...SECURITY_HEADERS,
+			'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+			'content-length': String(info.size),
+			'cache-control': 'private, max-age=31536000, immutable'
+		};
+		if (DOWNLOAD_ONLY.has(ext)) headers['content-disposition'] = `attachment; filename="${name}"`;
+		return new Response(Readable.toWeb(createReadStream(path)) as ReadableStream, { headers });
 	} catch {
 		return null;
 	}

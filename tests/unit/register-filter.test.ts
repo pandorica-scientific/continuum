@@ -81,6 +81,17 @@ describe('parseFilter', () => {
 		expect(parseFilter(params('page=later'), 'CZK').page).toBe(1);
 	});
 
+	it('bounds the page above, so an absurd one cannot reach SQL as an offset', () => {
+		// Number.isInteger(1e21) is true, so an integerness check alone let
+		// ?page=1e21 render as OFFSET 5e+22 and Postgres rejected the statement:
+		// a 500 from a hand-edited URL.
+		const huge = parseFilter(params('page=1e21'), 'CZK').page;
+		expect(Number.isSafeInteger(huge)).toBe(true);
+		expect(huge).toBeLessThanOrEqual(1_000_000);
+		expect(String((huge - 1) * 50)).not.toContain('e');
+		expect(parseFilter(params('page=999999999999'), 'CZK').page).toBeLessThanOrEqual(1_000_000);
+	});
+
 	it('passes account through and reads the uncategorised sentinel', () => {
 		expect(parseFilter(params('account=acc-1'), 'CZK').accountId).toBe('acc-1');
 		expect(parseFilter(params('category=none'), 'CZK').categoryId).toBe('none');

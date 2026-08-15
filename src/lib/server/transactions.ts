@@ -8,7 +8,7 @@ import { db } from '$lib/server/db';
 import { account, category, transaction } from '$lib/server/db/schema';
 import { learnRule } from '$lib/server/categorize';
 import { pairAndCategorise } from '$lib/server/import/ingest';
-import { loadSplits } from '$lib/server/splits';
+import { loadSplitsMatching } from '$lib/server/splits';
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { matchingLineTotal } from '$lib/transactions/lines';
@@ -176,7 +176,7 @@ export async function registerPage(filter: RegisterFilter): Promise<RegisterPage
 			.where(where)
 	]);
 
-	const splitsForTotals = await loadSplits(matching.map((m) => m.id));
+	const splitsForTotals = await loadSplitsMatching(where);
 	const wanted = filter.categoryId === UNCATEGORISED ? null : (filter.categoryId ?? null);
 	const sumByCurrency = new Map<string, bigint>();
 	for (const m of matching) {

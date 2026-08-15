@@ -14,7 +14,8 @@ import {
 	tenancy
 } from '$lib/server/db/schema';
 import { monthlyHistory } from '$lib/server/cashflow';
-import { convertMinor } from '$lib/server/fx';
+import { convertOrFace } from '$lib/server/fx';
+import { minorDigits } from '$lib/money';
 import { saveUpload } from '$lib/server/files';
 import { periodForMonth } from '$lib/loans/amortise';
 import { learnAmountLabel, readPayslip, readStoredPayslip } from '$lib/server/salary';
@@ -27,7 +28,7 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
 	const toBase = async (amount: bigint, currency: string) =>
-		Number((await convertMinor(amount, currency, baseCurrency)) ?? amount) / 100;
+		Number(await convertOrFace(amount, currency, baseCurrency)) / 10 ** minorDigits(baseCurrency);
 
 	const [accounts, snapshots, loans, periods, properties, tenancies, people, history, stored] =
 		await Promise.all([

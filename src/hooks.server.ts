@@ -8,8 +8,20 @@ import { runMigrations } from '$lib/server/db/migrate';
 import { refreshRates } from '$lib/server/fx';
 import { isSetUp } from '$lib/server/settings';
 
-// Requests must not race the boot migrations, so handle() awaits this.
+// Requests must not race the boot migrations, so handle() awaits this. A
+// *failed* boot must not be cached: `ready ??= boot()` alone would memoise the
+// rejection forever, so one unreachable database during migration would 500
+// every later request until the container restarted, long after the database
+// came back. Clearing the slot on rejection lets the next request retry.
 let ready: Promise<void> | null = null;
+
+function ensureReady(): Promise<void> {
+	ready ??= boot().catch((err) => {
+		ready = null;
+		throw err;
+	});
+	return ready;
+}
 
 async function boot(): Promise<void> {
 	await runMigrations();
@@ -39,12 +51,37 @@ async function boot(): Promise<void> {
 		);
 	void backup();
 	setInterval(backup, 60 * 60 * 1000);
+
+	// The smart-meter reading writes itself onto the lived-in flat's energy
+	// bill. It belongs on a tick, not in the home page's load: that load is a
+	// GET, and app.html preloads on hover, so hovering the sidebar link wrote to
+	// the database. A no-op unless a home platform and a price per kWh are set.
+	const meter = async () => {
+		const { syncMeterBill } = await import('$lib/server/home');
+		return syncMeterBill();
+	};
+	const meterTick = () =>
+		meter().catch((err) => console.warn('Meter bill sync failed:', err.message ?? err));
+	void meterTick();
+	setInterval(meterTick, 60 * 60 * 1000);
+
+	// Today's net worth, for the month-on-month delta. One row per day, upserted
+	// — it used to be written by computeNetWorth() itself, which the app layout
+	// calls on every page and GET /api/v1/networth calls on every poll, so the
+	// documented read-only API wrote to the database.
+	const snapshot = async () => {
+		const { recordNetWorthSnapshot } = await import('$lib/server/networth');
+		return recordNetWorthSnapshot();
+	};
+	const snapshotTick = () =>
+		snapshot().catch((err) => console.warn('Net worth snapshot failed:', err.message ?? err));
+	void snapshotTick();
+	setInterval(snapshotTick, 60 * 60 * 1000);
 }
 
 export const init: ServerInit = async () => {
 	if (building) return;
-	ready ??= boot();
-	await ready;
+	await ensureReady();
 };
 
 // /ics/<token> is public by design: calendar apps subscribe without a session,
@@ -74,7 +111,7 @@ const PUBLIC_PATHS = [
 ];
 
 export const handle: Handle = async ({ event, resolve }) => {
-	await (ready ??= boot());
+	await ensureReady();
 
 	const { pathname } = event.url;
 

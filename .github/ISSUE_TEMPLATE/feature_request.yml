@@ -1,0 +1,77 @@
+name: Feature or change
+description: Propose something Continuum should do, or do differently.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Continuum is built for households, not companies. The useful question is
+        not "could this exist" but "what does a household do differently once it
+        does". Answer that and the proposal mostly writes itself.
+
+        For a new bank or broker format, use the **Bank or broker format**
+        template instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to find out or keep track of, and why it is awkward today.
+      placeholder: >-
+        I pay the mortgage from one account and the bills from another, so the
+        Overview never tells me what a flat actually costs per month.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+      description: Concretely — a screen, a number, a setting, an export.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the app
+      options:
+        - Import and parsing
+        - Transactions, splits, tags
+        - Rules and categorisation
+        - Cash flow and Overview
+        - Accounts, currencies, FX
+        - Property
+        - Loans
+        - Investments
+        - Retirement and salary
+        - Tax
+        - Documents
+        - Calendar
+        - Home Assistant
+        - API
+        - Setup, people, settings
+        - Backups and deployment
+        - Something new
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: The spreadsheet, the manual step, or the workaround. This is often the clearest description of the gap.
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Fit
+      description: >-
+        Continuum hard-codes nothing a household could disagree with, keeps
+        capabilities behind adapters, and calls home to nobody. Tick what
+        applies — it is fine to leave these empty and let the discussion sort
+        it out.
+      options:
+        - label: This is a setting or derived from data, not a value baked into the code.
+        - label: This can be added behind an existing seam (a new adapter or provider), not by editing screens.
+        - label: This needs no external service, or the service is optional and self-hostable.

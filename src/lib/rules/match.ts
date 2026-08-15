@@ -64,9 +64,30 @@ export function normalise(raw: string): string {
 		.trim();
 }
 
+/**
+ * Whole-word match over normalised text. Both sides go through `normalise`:
+ * the haystack has its diacritics stripped and its punctuation collapsed, so a
+ * needle that keeps either can never match it. Rules the app writes itself
+ * (learned and seeded) were already folded, but a hand-typed one was stored
+ * with only `.toLowerCase()`, so every rule containing an accent or a hyphen
+ * saved cleanly, listed cleanly, reported a confidence — and never once fired.
+ * "Rohlík" missed ROHLIK.CZ, "T-Mobile" missed T-MOBILE, "Česká pošta" missed
+ * CESKA POSTA. In a Czech household that is most of the rules a person writes.
+ *
+ * Normalising here rather than only on save also repairs rules already in the
+ * database, and `normalise` is idempotent so pre-folded values are unaffected.
+ *
+ * The match is deliberately whole-word despite the operator being called
+ * "contains": seeded rules include values as short as "pre", "o2" and "cez",
+ * and a substring test would file every PREMIER, EXPRESS and similar under
+ * energy. The cost is that "albert" does not match "ALBERTCZ" — write the rule
+ * as "albertcz", which the editor's preview shows immediately.
+ */
 function containsWord(haystack: string | null | undefined, needle: string): boolean {
 	if (!haystack) return false;
-	return ` ${normalise(haystack)} `.includes(` ${needle} `);
+	const wanted = normalise(needle);
+	if (!wanted) return false;
+	return ` ${normalise(haystack)} `.includes(` ${wanted} `);
 }
 
 function conditionHolds(condition: Condition, row: RowLike): boolean {

@@ -24,22 +24,41 @@ const NET_PAY_KEYWORDS = [
 	'amount paid'
 ];
 
+// Two printing conventions, both of which real payslips use. The comma-grouped
+// alternative comes first and has to: without it "45,231.00" fell through to
+// the bare `\d{1,3}[.,]\d{2}` tail and matched its first four characters, so an
+// English payslip was filed as 45.23 instead of 45 231 — silently, with no
+// throw and no null, straight into the salary history and the tax prefill.
+// NET_PAY_KEYWORDS carries "net pay", "take home" and "amount paid", so English
+// payslips are an intended input and comma-grouped thousands are how they print.
 const AMOUNT_RE =
-	/\d{1,3}(?:[\u00A0\u202F .]\d{3})+(?:[.,]\d{2})?|\d{4,9}(?:[.,]\d{2})?|\d{1,3}[.,]\d{2}/g;
+	/\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{1,3}(?:[\u00A0\u202F .]\d{3})+(?:[.,]\d{2})?|\d{4,9}(?:[.,]\d{2})?|\d{1,3}[.,]\d{2}/g;
 
-/** Parse a printed amount ("45 231,00", "45.231", "45231.00") to minor units. */
+/**
+ * Parse a printed amount to minor units: "45 231,00", "45.231" and "45231.00"
+ * in the European form, "45,231.00" and "1,234,567.89" in the English one.
+ */
 export function parsePrintedAmount(raw: string): bigint | null {
 	const cleaned = raw.replace(/[\s\u00A0\u202F]/g, '');
-	// decimal separator: a trailing ,dd or .dd — everything else is grouping
+
+	const toMinor = (whole: string, fraction?: string): bigint | null => {
+		if (!/^\d+$/.test(whole)) return null;
+		try {
+			return BigInt(whole) * 100n + BigInt(fraction ?? '0');
+		} catch {
+			return null;
+		}
+	};
+
+	// Comma-grouped thousands with a dot decimal. Unambiguous: a comma followed
+	// by exactly three digits is never a decimal separator.
+	const english = cleaned.match(/^(\d{1,3}(?:,\d{3})+)(?:\.(\d{2}))?$/);
+	if (english) return toMinor(english[1].replace(/,/g, ''), english[2]);
+
+	// European form: a trailing ,dd or .dd is the decimal, everything else groups.
 	const m = cleaned.match(/^(\d+(?:\.\d{3})*|\d+)(?:[.,](\d{2}))?$/);
 	if (!m) return null;
-	const whole = m[1].replace(/\./g, '');
-	if (!/^\d+$/.test(whole)) return null;
-	try {
-		return BigInt(whole) * 100n + BigInt(m[2] ?? '0');
-	} catch {
-		return null;
-	}
+	return toMinor(m[1].replace(/\./g, ''), m[2]);
 }
 
 /** Every amount on every line, labelled by the text before it. */
@@ -138,7 +157,14 @@ export function detectPeriod(lines: string[]): string | null {
 		if (iso) return `${iso[1]}-${iso[2]}`;
 		const lower = line.toLowerCase();
 		for (const [name, month] of Object.entries(MONTHS)) {
-			const named = lower.match(new RegExp(`\\b${name}\\b\\s*(20\\d{2})`));
+			// Unicode letter boundaries, not \b. JavaScript defines \b over
+			// [A-Za-z0-9_] only, so between a space and "ú" there is no boundary
+			// at all and `\búnor\b` could never match: 9 of the 23 names here —
+			// únor, února, červen, června, červenec, července, září, říjen, října
+			// — silently failed, so February, June, July, September and October
+			// payslips stored periodMonth null and dropped out of both the salary
+			// chart and the tax gross prefill.
+			const named = lower.match(new RegExp(`(?<!\\p{L})${name}(?!\\p{L})\\s*(20\\d{2})`, 'u'));
 			if (named) return `${named[1]}-${String(month).padStart(2, '0')}`;
 		}
 	}

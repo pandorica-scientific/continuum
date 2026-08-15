@@ -8,11 +8,7 @@ import { takeChallenge } from '$lib/server/auth/webauthn/challenge';
 import { isCloneSignal } from '$lib/server/auth/webauthn/counter';
 import { readWebAuthnBody } from '$lib/server/auth/webauthn/payload';
 import { currentOrigin, passkeysAvailable, relyingPartyId } from '$lib/server/auth/webauthn/origin';
-import {
-	loginBlockedForSeconds,
-	recordLoginFailure,
-	recordLoginSuccess
-} from '$lib/server/auth/ratelimit';
+import { blockedForSeconds, recordFailure, recordSuccess } from '$lib/server/auth/ratelimit';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import type { RequestHandler } from './$types';
 
@@ -25,7 +21,7 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 	// password — and behind a reverse proxy or Tailscale every request shares
 	// one address, so one caller could do that to everyone.
 	const address = getClientAddress();
-	const wait = loginBlockedForSeconds(address);
+	const wait = blockedForSeconds('login', address);
 	if (wait > 0) {
 		const minutes = Math.ceil(wait / 60);
 		error(429, `Too many failed attempts — try again in ${minutes} minute${wait > 60 ? 's' : ''}.`);
@@ -36,7 +32,7 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 
 	const body = await readWebAuthnBody<AuthenticationResponseJSON>(request);
 	if (!body) {
-		recordLoginFailure(address);
+		recordFailure('login', address);
 		error(400, 'That passkey response was malformed.');
 	}
 
@@ -56,7 +52,7 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 	// A deactivated person's credentials are kept so reactivation is a clean
 	// undo, so the check has to happen here rather than by deleting them.
 	if (!row || row.deactivatedAt) {
-		recordLoginFailure(address);
+		recordFailure('login', address);
 		error(400, 'That passkey is not recognised.');
 	}
 
@@ -84,18 +80,18 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 		// The library throws rather than returning a verdict for most mismatches,
 		// a misconfigured ORIGIN being the likely one. Its message names internals
 		// and belongs in neither a 500 nor the browser.
-		recordLoginFailure(address);
+		recordFailure('login', address);
 		error(400, 'That passkey could not be verified.');
 	}
 
 	if (!verification.verified) {
-		recordLoginFailure(address);
+		recordFailure('login', address);
 		error(400, 'That passkey could not be verified.');
 	}
 
 	const incoming = verification.authenticationInfo.newCounter;
 	if (isCloneSignal(row.counter, incoming)) {
-		recordLoginFailure(address);
+		recordFailure('login', address);
 		error(400, 'That passkey looks cloned and has been refused.');
 	}
 
@@ -104,7 +100,7 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 		.set({ counter: incoming, lastUsedAt: new Date() })
 		.where(eq(credential.id, row.id));
 
-	recordLoginSuccess(address);
+	recordSuccess('login', address);
 	await createSession(cookies, row.personId);
 	return json({ ok: true });
 };

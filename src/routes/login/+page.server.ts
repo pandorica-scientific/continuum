@@ -4,11 +4,7 @@ import { db } from '$lib/server/db';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { person } from '$lib/server/db/schema';
 import { createSession, verifyPassword } from '$lib/server/auth';
-import {
-	loginBlockedForSeconds,
-	recordLoginFailure,
-	recordLoginSuccess
-} from '$lib/server/auth/ratelimit';
+import { blockedForSeconds, recordFailure, recordSuccess } from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -31,7 +27,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	default: async ({ request, cookies, getClientAddress }) => {
 		const address = getClientAddress();
-		const wait = loginBlockedForSeconds(address);
+		const wait = blockedForSeconds('login', address);
 		if (wait > 0) {
 			return fail(429, {
 				message: `Too many failed attempts — try again in ${Math.ceil(wait / 60)} minute${wait > 60 ? 's' : ''}.`
@@ -52,11 +48,11 @@ export const actions: Actions = {
 		// does the same for a null hash rather than returning early.
 		const correct = await verifyPassword(row?.passwordHash ?? null, password);
 		if (!row || row.deactivatedAt || !correct) {
-			recordLoginFailure(address);
+			recordFailure('login', address);
 			return fail(400, { message: 'Wrong person or password.' });
 		}
 
-		recordLoginSuccess(address);
+		recordSuccess('login', address);
 		await createSession(cookies, row.id);
 		redirect(303, '/overview');
 	}

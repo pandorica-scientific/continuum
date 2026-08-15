@@ -15,6 +15,12 @@ describe('parsePrintedAmount', () => {
 		expect(parsePrintedAmount('45231.50')).toBe(4523150n);
 		expect(parsePrintedAmount('1 234 567,89')).toBe(123456789n);
 	});
+
+	it('reads comma-grouped thousands', () => {
+		expect(parsePrintedAmount('45,231.00')).toBe(4523100n);
+		expect(parsePrintedAmount('45,231')).toBe(4523100n);
+		expect(parsePrintedAmount('1,234,567.89')).toBe(123456789n);
+	});
 });
 
 describe('extractCandidates and pickAmount', () => {
@@ -53,6 +59,19 @@ describe('extractCandidates and pickAmount', () => {
 		const noDiacritics = ['Hruba mzda 62 000,00', 'K vyplate 45 231,00'];
 		expect(pickAmount(extractCandidates(noDiacritics), null)?.amountMinor).toBe(4523100n);
 	});
+
+	it('reads an English payslip at full magnitude, not its first four digits', () => {
+		// Without a comma-grouped alternative the amount pattern fell through to
+		// `\d{1,3}[.,]\d{2}` and matched "45,23" out of "45,231.00", so the slip
+		// was filed as 45.23 — a thousandfold error, silently.
+		const english = ['Gross pay 62,000.00', 'Tax withheld 16,769.00', 'Net pay 45,231.00'];
+		const candidates = extractCandidates(english);
+		expect(candidates.some((c) => c.label === 'net pay' && c.amountMinor === 4523100n)).toBe(true);
+		expect(pickAmount(candidates, null)?.amountMinor).toBe(4523100n);
+		expect(pickAmount(extractCandidates(['Take home 1,234,567.89']), null)?.amountMinor).toBe(
+			123456789n
+		);
+	});
 });
 
 describe('detectPeriod', () => {
@@ -62,6 +81,47 @@ describe('detectPeriod', () => {
 		expect(detectPeriod(['Mzda za srpen 2026'])).toBe('2026-08');
 		expect(detectPeriod(['July 2026 payslip'])).toBe('2026-07');
 		expect(detectPeriod(['no period here'])).toBeNull();
+	});
+
+	it('reads every month name in the table, diacritics included', () => {
+		// `\b` is defined over [A-Za-z0-9_], so between a space and "ú" there is
+		// no boundary and `\búnor\b` never matched. Nine names failed that way,
+		// which quietly removed five months a year from the salary history and
+		// the tax prefill.
+		const expected: Array<[string, string]> = [
+			['leden', '01'],
+			['ledna', '01'],
+			['únor', '02'],
+			['února', '02'],
+			['březen', '03'],
+			['března', '03'],
+			['duben', '04'],
+			['dubna', '04'],
+			['květen', '05'],
+			['května', '05'],
+			['červen', '06'],
+			['června', '06'],
+			['červenec', '07'],
+			['července', '07'],
+			['srpen', '08'],
+			['srpna', '08'],
+			['září', '09'],
+			['říjen', '10'],
+			['října', '10'],
+			['listopad', '11'],
+			['listopadu', '11'],
+			['prosinec', '12'],
+			['prosince', '12']
+		];
+		for (const [name, month] of expected) {
+			expect(detectPeriod([`Mzda za ${name} 2026`])).toBe(`2026-${month}`);
+			expect(detectPeriod([`MZDA ZA ${name.toUpperCase()} 2026`])).toBe(`2026-${month}`);
+		}
+	});
+
+	it('does not match a month name inside a longer word', () => {
+		expect(detectPeriod(['Zaříznuto 2026'])).toBeNull();
+		expect(detectPeriod(['Mayor 2026'])).toBeNull();
 	});
 });
 

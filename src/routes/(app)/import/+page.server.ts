@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit';
-import { and, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, category, importFile, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
@@ -126,13 +126,17 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
 		// Proposals live only in transferPair until confirmed; find by leg.
+		// The leg test must go through or(), not a raw fragment: drizzle's and()
+		// parenthesises the list as a whole and never its operands, so a raw
+		// `a = x or b = x` inside it renders as `(state = ? and a = ?) or b = ?`
+		// — AND binds tighter — and the state filter would not cover the in-leg.
 		const pairs = await db
 			.select()
 			.from(transferPair)
 			.where(
 				and(
 					eq(transferPair.state, 'proposed'),
-					sql`${transferPair.outTransactionId} = ${id} or ${transferPair.inTransactionId} = ${id}`
+					or(eq(transferPair.outTransactionId, id), eq(transferPair.inTransactionId, id))
 				)
 			);
 		const pair = pairs[0];
@@ -155,11 +159,17 @@ export const actions: Actions = {
 	rejectTransfer: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
+		// Same shape as confirmTransfer, and the same state filter: the reject
+		// button only ever appears on a proposed pair, so a confirmed or
+		// already-rejected one must not be reachable through it.
 		const pairs = await db
 			.select()
 			.from(transferPair)
 			.where(
-				sql`${transferPair.outTransactionId} = ${id} or ${transferPair.inTransactionId} = ${id}`
+				and(
+					eq(transferPair.state, 'proposed'),
+					or(eq(transferPair.outTransactionId, id), eq(transferPair.inTransactionId, id))
+				)
 			);
 		const pair = pairs[0];
 		if (!pair) return fail(404, { message: 'No transfer proposal on this row.' });

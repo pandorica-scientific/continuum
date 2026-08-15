@@ -2,7 +2,13 @@
 // saved chart) and the browser (live previews while a repayment or new
 // fixation is being typed — the chart becomes a tool for comparing offers).
 
-import { amortise, type FixationPeriod, type LoanTerms, type MonthRow } from './amortise';
+import {
+	amortise,
+	nextMonth,
+	type FixationPeriod,
+	type LoanTerms,
+	type MonthRow
+} from './amortise';
 
 // Far enough that any real loan reaches payoff or its last known rate first.
 export const FAR_MONTH = '2126-01';
@@ -30,14 +36,29 @@ export function aggregateByYear(rows: MonthRow[]): YearAgg[] {
 }
 
 /** New terms after an extra repayment: the amount (or the bank's stated
- *  post-repayment balance) re-anchors the projection at that date. */
+ *  post-repayment balance) re-anchors the projection at that date.
+ *
+ *  The anchor month depends on `paymentDay`, not just on the repayment date.
+ *  The projection books an instalment for its own anchor month, so anchoring on
+ *  a month whose instalment the bank has already collected replays it: the
+ *  balance drops twice, and every projected figure after it — the debt-free
+ *  month, the total interest, the year aggregates — inherits the error. When
+ *  the repayment lands after the payment day, the projection starts next month.
+ */
 export function applyRepayment(
 	terms: LoanTerms,
 	input: { date: string; amountMinor: bigint; balanceAfterMinor?: bigint | null }
 ): LoanTerms {
 	let owed = input.balanceAfterMinor ?? terms.owedMinor - input.amountMinor;
 	if (owed < 0n) owed = 0n;
-	return { ...terms, owedMinor: owed, owedAsOfMonth: input.date.slice(0, 7) };
+	const month = input.date.slice(0, 7);
+	const repaidOn = Number(input.date.slice(8, 10));
+	const alreadyCollected = Number.isFinite(repaidOn) && repaidOn > (terms.paymentDay ?? 1);
+	return {
+		...terms,
+		owedMinor: owed,
+		owedAsOfMonth: alreadyCollected ? nextMonth(month) : month
+	};
 }
 
 /** Periods after a re-fix from `startDate`: anything reaching past that date

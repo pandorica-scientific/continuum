@@ -1,12 +1,13 @@
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { property, propertyBill } from '$lib/server/db/schema';
 import {
 	availableHomeProviders,
 	configuredHomeProvider,
 	getHomeConfig,
-	haMeterCandidates
+	haMeterCandidates,
+	syncMeterBill
 } from '$lib/server/home';
 import { generateEvents } from '$lib/server/calendar';
 import { getBaseCurrency, setSetting } from '$lib/server/settings';
@@ -54,34 +55,20 @@ export const load: PageServerLoad = async () => {
 		)
 	]);
 
-	// Meter readings replace the estimated energy line on the lived-in flat's
-	// bills, so the budget follows what the meter actually did.
+	// Read-only: the meter bill is written by syncMeterBill on the hourly tick
+	// and when a platform is connected, never here. A GET load that writes is a
+	// load that runs on hover, because app.html sets preload-data="hover".
 	let billNote: string | null = null;
 	const price = Number(config.pricePerKwh);
 	if (livedIn && snapshot.monthKwh !== null && Number.isFinite(price) && price > 0) {
-		const baseCurrency = await getBaseCurrency();
-		const amountMinor = BigInt(Math.round(snapshot.monthKwh * price));
-		const bills = await db
-			.select()
+		const meterBills = await db
+			.select({ id: propertyBill.id })
 			.from(propertyBill)
-			.where(eq(propertyBill.propertyId, livedIn.id));
-		const energyBill = bills.find((b) => b.label.toLowerCase().includes('energy'));
-		if (energyBill) {
-			await db
-				.update(propertyBill)
-				.set({ amountMinor, label: 'Energy · from meter' })
-				.where(eq(propertyBill.id, energyBill.id));
-		} else {
-			const { randomUUID } = await import('node:crypto');
-			await db.insert(propertyBill).values({
-				id: randomUUID(),
-				propertyId: livedIn.id,
-				label: 'Energy · from meter',
-				amountMinor,
-				sort: 1
-			});
+			.where(and(eq(propertyBill.propertyId, livedIn.id), eq(propertyBill.source, 'meter')));
+		if (meterBills.length > 0) {
+			const baseCurrency = await getBaseCurrency();
+			billNote = `These readings replace the estimated energy line on ${livedIn.name}'s bills, so the budget follows what the meter actually did. (${baseCurrency})`;
 		}
-		billNote = `These readings replace the estimated energy line on ${livedIn.name}'s bills, so the budget follows what the meter actually did. (${baseCurrency})`;
 	}
 
 	const maxKwh = Math.max(...energyDays.map((d) => d.kwh), 1);
@@ -134,6 +121,12 @@ export const actions: Actions = {
 			config[field.key] = value;
 		}
 		await setSetting('home', config);
+		// Fill the bill line straight away rather than making the household wait
+		// for the hourly tick. Failures are not fatal: the platform is connected
+		// either way, and the next tick tries again.
+		await syncMeterBill().catch((err) =>
+			console.warn('Meter bill sync failed:', err?.message ?? err)
+		);
 		return { ok: true };
 	},
 

@@ -65,7 +65,6 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 		const middle = cells.slice(1, -1);
 		const type = middle[0];
 		const counterpartyAccount = middle.find((c) => /^[\d-]+\/\d{4}$/.test(c));
-		const vs = middle.find((c) => /^\d{1,10}$/.test(c) && c !== counterpartyAccount);
 
 		let bankRef: string | undefined;
 		let counterparty: string | undefined;
@@ -89,6 +88,23 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 				detail.push(text);
 			}
 		}
+
+		// A card row prints the compressed transaction date ("30052026" for
+		// d.tran.30.05.2026) exactly where a transfer prints its variable
+		// symbol, so a positional guess fabricates a symbol on most card
+		// payments. That is not cosmetic: rules match on variableSymbol, so a
+		// rule keyed to a genuine symbol that happens to look like a date would
+		// silently file unrelated card payments, and the register would show a
+		// payment symbol the bank never printed. Cards are excluded by type,
+		// and any candidate equal to this row's own transaction date is a date
+		// whatever the type says.
+		const isCardRow = /\bkart/i.test(type ?? '');
+		const compactValueDate = valueDate
+			? `${valueDate.slice(8, 10)}${valueDate.slice(5, 7)}${valueDate.slice(0, 4)}`
+			: null;
+		const vs = isCardRow
+			? undefined
+			: middle.find((c) => /^\d{1,10}$/.test(c) && c !== compactValueDate);
 
 		rows.push({
 			bookedAt,

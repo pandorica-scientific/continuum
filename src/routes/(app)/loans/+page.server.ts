@@ -24,7 +24,7 @@ import { project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { normaliseTagName, setLoanTags } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
-import { convertMinor } from '$lib/server/fx';
+import { convertOrFace } from '$lib/server/fx';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -104,16 +104,14 @@ export const load: PageServerLoad = async () => {
 		const currentPeriod = periodForMonth(periods, monthNow());
 		const payment = currentPeriod?.paymentMinor ?? 0n;
 
-		const owedBase = (await convertMinor(l.owedMinor, l.currency, baseCurrency)) ?? l.owedMinor;
-		const paymentBase = (await convertMinor(payment, l.currency, baseCurrency)) ?? payment;
+		const owedBase = await convertOrFace(l.owedMinor, l.currency, baseCurrency);
+		const paymentBase = await convertOrFace(payment, l.currency, baseCurrency);
 		totalOwedBase += owedBase;
 		totalPaymentBase += l.owedMinor > 0n ? paymentBase : 0n;
 
 		const interest = interestForYear(terms, periods, year);
 		if (interest) {
-			const interestBase =
-				(await convertMinor(interest.interestMinor, l.currency, baseCurrency)) ??
-				interest.interestMinor;
+			const interestBase = await convertOrFace(interest.interestMinor, l.currency, baseCurrency);
 			interestYearBase += interestBase;
 			if (l.interestDeductible) deductibleYearBase += interestBase;
 			if (

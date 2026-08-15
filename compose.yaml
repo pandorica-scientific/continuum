@@ -26,6 +26,10 @@ services:
       # DEMO=1 seeds a fictional household on a pristine instance
       # (sign in as Jana Nováková / demo-demo-demo)
       DEMO: ${DEMO:-}
+      # Largest upload the server accepts. adapter-node's own default is 512K,
+      # which rejects most phone photos with a bare 413 before the upload form
+      # can say anything useful. Raise it if you file large scans.
+      BODY_SIZE_LIMIT: ${CONTINUUM_MAX_UPLOAD:-32M}
     volumes:
       - continuum-data:/data
       # Backups land here (configure cadence in Settings → Backups). Point

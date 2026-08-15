@@ -69,6 +69,11 @@ function bound(params: URLSearchParams, key: string, baseCurrency: string): bigi
 	}
 }
 
+// Far beyond any real ledger, and small enough that page × PAGE_SIZE stays an
+// offset Postgres will accept. The server narrows this again once it knows the
+// real page count.
+const MAX_PAGE = 1_000_000;
+
 export function parseFilter(params: URLSearchParams, baseCurrency: string): RegisterFilter {
 	const direction = params.get('dir') as Direction | null;
 	const review = text(params, 'review');
@@ -87,6 +92,9 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		reviewState: review && REVIEW_STATES.includes(review as never) ? review : null,
 		tagId: text(params, 'tag'),
 		includeTransfers: params.get('transfers') === '1',
-		page: Number.isInteger(page) && page > 0 ? page : 1
+		// Clamped, not merely checked for integerness: Number.isInteger(1e21) is
+		// true, so ?page=1e21 rendered as OFFSET 5e+22 and Postgres rejected the
+		// statement — a 500 from a hand-edited URL.
+		page: Number.isInteger(page) && page > 0 ? Math.min(page, MAX_PAGE) : 1
 	};
 }

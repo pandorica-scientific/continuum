@@ -28,6 +28,34 @@ describe('ruleMatches', () => {
 		expect(ruleMatches(rule(), row)).toBe(true);
 	});
 
+	it('matches a hand-typed value carrying accents or punctuation', () => {
+		// The editor used to store the value with only .toLowerCase(), while the
+		// haystack is diacritic-stripped and punctuation-collapsed. Every rule a
+		// Czech household would actually write saved, listed, reported a
+		// confidence — and never fired. Both sides are folded now, which also
+		// repairs the rules already sitting in the database.
+		const cases: Array<[string, string]> = [
+			['Rohlík', 'ROHLIK.CZ 12345'],
+			['Košík', 'KOSIK.CZ'],
+			['T-Mobile', 'T-MOBILE CZECH REPUBLIC A.S.'],
+			['Česká pošta', 'CESKA POSTA S.P.'],
+			['Alza.cz', 'ALZA CZ PRAHA'],
+			['ALBERT', 'albert praha 4']
+		];
+		for (const [needle, counterparty] of cases) {
+			const r = rule({ conditions: [{ field: 'counterparty', op: 'contains', value: needle }] });
+			expect(ruleMatches(r, { counterparty, amountMinor: -45500n })).toBe(true);
+		}
+	});
+
+	it('stays whole-word, so short seeded values cannot run wild', () => {
+		// "pre", "o2" and "cez" are seeded rules. A substring test would file
+		// every PREMIER and EXPRESS under energy.
+		const pre = rule({ conditions: [{ field: 'counterparty', op: 'contains', value: 'pre' }] });
+		expect(ruleMatches(pre, { counterparty: 'PREMIER SPORT', amountMinor: -1000n })).toBe(false);
+		expect(ruleMatches(pre, { counterparty: 'PRE distribuce', amountMinor: -1000n })).toBe(true);
+	});
+
 	it('requires every condition to hold', () => {
 		const twoConditions = rule({
 			conditions: [

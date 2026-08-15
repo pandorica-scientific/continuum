@@ -242,6 +242,17 @@ Real bank statements for parser development belong in
 `bank_data_examples_do_not_share/` (gitignored). The committed test fixtures in
 `tests/fixtures/` are synthetic and anonymised — keep it that way.
 
+## Contributing
+
+Bug reports, new bank formats and patches are welcome — start with
+[CONTRIBUTING.md](CONTRIBUTING.md), which covers the setup above plus the two
+rules the codebase follows and the one rule with no exceptions: no real
+financial data ever leaves your machine. Participation is under the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+Found a security problem? Do not open an issue — [SECURITY.md](SECURITY.md)
+explains how to report it privately, and what the deployment assumes.
+
 ## License
 
 PolyForm Noncommercial — free to self-host and modify for personal,

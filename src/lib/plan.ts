@@ -29,7 +29,15 @@ interface LegacyRoom {
 	name: string;
 }
 
-function rectToCells(room: LegacyRoom): [number, number][] {
+/**
+ * Expand a legacy rectangle, or null if it does not fit the grid. The bound is
+ * not cosmetic: without it `w * h` tuples are allocated straight from a request
+ * body, and a two-field rectangle is enough to exhaust the heap.
+ */
+function rectToCells(room: LegacyRoom): [number, number][] | null {
+	if (room.w < 1 || room.h < 1) return null;
+	if (room.x < 0 || room.y < 0) return null;
+	if (room.x + room.w > PLAN_COLS || room.y + room.h > PLAN_ROWS) return null;
 	const cells: [number, number][] = [];
 	for (let dy = 0; dy < room.h; dy++) {
 		for (let dx = 0; dx < room.w; dx++) {
@@ -68,7 +76,9 @@ export function validateDrawing(raw: unknown): PlanDrawing | null {
 			}
 		} else if ([room.x, room.y, room.w, room.h].every((v) => Number.isInteger(v))) {
 			// legacy rectangle format from the first editor version
-			cells = rectToCells(room as unknown as LegacyRoom);
+			const rect = rectToCells(room as unknown as LegacyRoom);
+			if (!rect) return null;
+			cells = rect;
 		} else {
 			return null;
 		}

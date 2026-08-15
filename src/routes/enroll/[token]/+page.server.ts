@@ -6,11 +6,7 @@ import { createSession, hashPassword } from '$lib/server/auth';
 import { consumeEnrollmentToken, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { passwordMinLength } from '$lib/server/policy';
-import {
-	loginBlockedForSeconds,
-	recordLoginFailure,
-	recordLoginSuccess
-} from '$lib/server/auth/ratelimit';
+import { blockedForSeconds, recordFailure, recordSuccess } from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
 // Every unusable token reads the same to the visitor. Distinguishing "expired"
@@ -63,7 +59,7 @@ export const load: PageServerLoad = async ({ params }) => {
 export const actions: Actions = {
 	default: async ({ request, cookies, params, getClientAddress }) => {
 		const address = getClientAddress();
-		const wait = loginBlockedForSeconds(address);
+		const wait = blockedForSeconds('login', address);
 		if (wait > 0) {
 			return fail(429, {
 				message: `Too many attempts — try again in ${Math.ceil(wait / 60)} minute${wait > 60 ? 's' : ''}.`
@@ -84,17 +80,17 @@ export const actions: Actions = {
 		// Checked before the token is spent, so a link for a closed account is not
 		// burned on the way to being refused.
 		if (!(await enrollableePerson(params.token))) {
-			recordLoginFailure(address);
+			recordFailure('login', address);
 			return fail(400, { message: UNUSABLE });
 		}
 
 		const consumed = await consumeEnrollmentToken(params.token);
 		if (!consumed) {
-			recordLoginFailure(address);
+			recordFailure('login', address);
 			return fail(400, { message: UNUSABLE });
 		}
 
-		recordLoginSuccess(address);
+		recordSuccess('login', address);
 		await db
 			.update(person)
 			.set({ passwordHash: await hashPassword(password) })

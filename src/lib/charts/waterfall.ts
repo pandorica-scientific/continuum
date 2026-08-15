@@ -54,8 +54,13 @@ const LABEL_LINE_H = 26; // svg units ≈ one 12.5px line + amount line at 592px
 /**
  * Resolve vertical label collisions: walk the sorted column, and where
  * consecutive labels sit closer than `minGap`, centre that colliding block on
- * its members' mean preferred position (the prototype's block-relaxation),
- * then clamp into [minY, maxY].
+ * its members' mean preferred position, then clamp into [minY, maxY].
+ *
+ * Pool-adjacent-violators, not sweep-until-stable. A block's position is the
+ * mean of its members' *preferred* positions, so recomputing block membership
+ * from the *moved* positions — as a repeated sweep does — lets two
+ * arrangements swap forever and never settle. Merging only ever reduces the
+ * block count, so this terminates in at most one merge per label.
  */
 export function relaxLabels(
 	preferred: number[],
@@ -65,31 +70,39 @@ export function relaxLabels(
 ): number[] {
 	if (preferred.length === 0) return [];
 	const order = preferred.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
-	const placed = order.map((o) => o.y);
 
-	// Merge into blocks until no overlap remains.
-	let changed = true;
-	while (changed) {
-		changed = false;
-		let start = 0;
-		while (start < placed.length) {
-			let end = start;
-			while (end + 1 < placed.length && placed[end + 1] - placed[end] < minGap) end++;
-			if (end > start) {
-				const mean = order.slice(start, end + 1).reduce((s, o) => s + o.y, 0) / (end - start + 1);
-				const blockHeight = (end - start) * minGap;
-				let top = mean - blockHeight / 2;
-				top = Math.max(minY, Math.min(top, maxY - blockHeight));
-				for (let k = start; k <= end; k++) {
-					const next = top + (k - start) * minGap;
-					if (placed[k] !== next) changed = true;
-					placed[k] = next;
-				}
-			} else {
-				placed[start] = Math.max(minY, Math.min(placed[start], maxY));
-			}
-			start = end + 1;
+	// Each block pins its members minGap apart, so member k of a block sits at
+	// `top + k * minGap`. The top that minimises total drift is the mean of
+	// (preferred − k · minGap) over the block's members; `sum` accumulates that
+	// numerator. Merging block B (m members) onto block A (n members) shifts
+	// every B member n places down the stack, hence the − n · m · minGap term.
+	const blocks: { top: number; count: number; sum: number }[] = [];
+	for (const { y } of order) {
+		blocks.push({ top: y, count: 1, sum: y });
+		while (blocks.length > 1) {
+			const b = blocks[blocks.length - 1];
+			const a = blocks[blocks.length - 2];
+			if (a.top + a.count * minGap <= b.top) break;
+			a.sum += b.sum - a.count * b.count * minGap;
+			a.count += b.count;
+			a.top = a.sum / a.count;
+			blocks.pop();
 		}
+	}
+
+	const placed: number[] = [];
+	for (const block of blocks) {
+		for (let k = 0; k < block.count; k++) placed.push(block.top + k * minGap);
+	}
+
+	// Clamp into the band without reintroducing overlap: one pass down enforces
+	// the floor and the spacing, one pass up enforces the ceiling. Both are
+	// bounded, so neither can spin.
+	for (let k = 0; k < placed.length; k++) {
+		placed[k] = Math.max(k === 0 ? minY : placed[k - 1] + minGap, placed[k]);
+	}
+	for (let k = placed.length - 1; k >= 0; k--) {
+		placed[k] = Math.min(k === placed.length - 1 ? maxY : placed[k + 1] - minGap, placed[k]);
 	}
 
 	const out = new Array(preferred.length);
@@ -135,12 +148,11 @@ export function buildWaterfall(input: WaterfallInput): WaterfallLayout {
 		for (let k = 0; k < stageCount; k++) {
 			const naturalTop = trunkTop + trunkHeights[k + 1] * scale + 44;
 			terminalTop = Math.max(naturalTop, terminalTop + 30);
-			const bottom = terminalTop + Math.max(input.stages[k].amount * scale, 4);
-			deepest = Math.max(deepest, bottom);
-			terminalTop =
-				bottom -
-				Math.max(input.stages[k].amount * scale, 4) +
-				Math.max(input.stages[k].amount * scale, 4);
+			// One unit taller than hOf's floor, so the measured depth is never
+			// under the depth the layout pass below actually produces.
+			const terminalH = Math.max(input.stages[k].amount * scale, 4);
+			deepest = Math.max(deepest, terminalTop + terminalH);
+			terminalTop += terminalH;
 		}
 		if (deepest <= H - EDGE) break;
 		scale *= (H - EDGE - trunkTop) / (deepest - trunkTop);

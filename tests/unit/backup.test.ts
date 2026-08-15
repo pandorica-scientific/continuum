@@ -1,5 +1,11 @@
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { backupDue, labelForDestination, legacyDumps } from '$lib/server/backup/policy';
+import {
+	backupDirProblem,
+	backupDue,
+	labelForDestination,
+	legacyDumps
+} from '$lib/server/backup/policy';
 import { orderTables } from '$lib/server/backup/dump';
 
 describe('backup policy', () => {
@@ -62,5 +68,46 @@ describe('orderTables', () => {
 
 	it('leaves unrelated tables in place', () => {
 		expect(orderTables(['x', 'y'], []).sort()).toEqual(['x', 'y']);
+	});
+});
+
+describe('backupDirProblem', () => {
+	const UPLOADS = '/app/data';
+
+	it('allows the folders people actually use', () => {
+		expect(backupDirProblem('/backups', UPLOADS)).toBeNull();
+		expect(backupDirProblem('/Users/jana/Library/CloudStorage/Dropbox', UPLOADS)).toBeNull();
+		expect(backupDirProblem('/mnt/nas/continuum', UPLOADS)).toBeNull();
+		expect(backupDirProblem('  /backups  ', UPLOADS)).toBeNull();
+	});
+
+	it('allows empty, which means backups are not set up', () => {
+		expect(backupDirProblem('', UPLOADS)).toBeNull();
+	});
+
+	it('refuses the uploads folder, which this server publishes', () => {
+		// The dump is plaintext SQL holding every password hash, the API tokens
+		// and the calendar token.
+		expect(backupDirProblem('/app/data', UPLOADS)).toMatch(/uploads/i);
+		expect(backupDirProblem('/app/data/backups', UPLOADS)).toMatch(/uploads/i);
+		expect(backupDirProblem('/app/data/../data', UPLOADS)).toMatch(/uploads/i);
+	});
+
+	it('is not fooled by a lookalike sibling of the uploads folder', () => {
+		expect(backupDirProblem('/app/database', UPLOADS)).toBeNull();
+	});
+
+	it('refuses system directories', () => {
+		expect(backupDirProblem('/', UPLOADS)).toMatch(/system directory/);
+		expect(backupDirProblem('/etc', UPLOADS)).toMatch(/system directory/);
+		expect(backupDirProblem('/usr/', UPLOADS)).toMatch(/system directory/);
+	});
+
+	it('compares resolved paths, so a relative destination is judged correctly', () => {
+		// Callers resolve before calling — a relative path is perfectly legal
+		// (the E2E suite uses one), it just has to be resolved first or the
+		// overlap with the served uploads folder would never be spotted.
+		expect(backupDirProblem(resolve('/app', 'data/backups'), UPLOADS)).toMatch(/uploads/i);
+		expect(backupDirProblem(resolve('/app', 'scratch/backups'), UPLOADS)).toBeNull();
 	});
 });

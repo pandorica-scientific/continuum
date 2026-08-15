@@ -20,10 +20,32 @@ const periods: FixationPeriod[] = [
 ];
 
 describe('applyRepayment', () => {
-	it('re-anchors the balance at the repayment month', () => {
+	it('re-anchors at the repayment month when the instalment is still to come', () => {
+		// paymentDay is 15, so a repayment on the 10th precedes it.
 		const t = applyRepayment(terms, { date: '2026-06-10', amountMinor: 30_000_00n });
 		expect(t.owedMinor).toBe(70_000_00n);
 		expect(t.owedAsOfMonth).toBe('2026-06');
+	});
+
+	it('starts next month when this month has already been collected', () => {
+		// The projection books an instalment for its own anchor month, so
+		// anchoring on June after the 15th replays a payment the balance already
+		// reflects — the debt-free month and total interest both come out wrong.
+		const t = applyRepayment(terms, { date: '2026-06-20', amountMinor: 30_000_00n });
+		expect(t.owedMinor).toBe(70_000_00n);
+		expect(t.owedAsOfMonth).toBe('2026-07');
+	});
+
+	it('rolls the year over at December', () => {
+		expect(applyRepayment(terms, { date: '2026-12-20', amountMinor: 1_00n }).owedAsOfMonth).toBe(
+			'2027-01'
+		);
+	});
+
+	it('does not skip a month when the repayment lands on the payment day', () => {
+		expect(applyRepayment(terms, { date: '2026-06-15', amountMinor: 1_00n }).owedAsOfMonth).toBe(
+			'2026-06'
+		);
 	});
 
 	it("prefers the bank's stated balance and never goes negative", () => {

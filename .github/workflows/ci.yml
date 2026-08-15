@@ -19,9 +19,50 @@ jobs:
       - run: npm run check
       - run: npm test
 
+  # The Playwright journey is the only coverage the auth, import, splits and
+  # API-token paths have end to end. It existed but nothing ran it, so those
+  # paths were effectively untested in CI.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: continuum
+          POSTGRES_PASSWORD: continuum
+          POSTGRES_DB: continuum_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U continuum"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # playwright.config.ts starts the built server itself, so it has to exist.
+      - run: npm run build
+        env:
+          DATABASE_URL: postgres://continuum:continuum@localhost:5432/continuum_e2e
+      - run: npm run test:e2e
+        env:
+          E2E_DATABASE_URL: postgres://continuum:continuum@localhost:5432/continuum_e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   image:
     runs-on: ubuntu-latest
-    needs: checks
+    needs: [checks, e2e]
     permissions:
       contents: read
       packages: write

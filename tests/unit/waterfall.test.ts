@@ -138,6 +138,20 @@ describe('buildWaterfall', () => {
 		});
 	});
 
+	// Three sources with two of them nearly coincident: the source-label column
+	// lands on the arrangement that used to spin forever.
+	it('holds the invariants on three sources with a tight label pair', () => {
+		assertInvariants({
+			sources: [
+				{ name: 'Salary', amount: 25777 },
+				{ name: 'Rent', amount: 1558 },
+				{ name: 'Dividends', amount: 1322 }
+			],
+			stages: REALISTIC.stages,
+			remainderLabel: 'Saved & invested'
+		});
+	});
+
 	it('returns an empty layout for zero income', () => {
 		const layout = buildWaterfall({ sources: [], stages: [], remainderLabel: 'x' });
 		expect(layout.paths).toHaveLength(0);
@@ -171,5 +185,49 @@ describe('relaxLabels', () => {
 	it('preserves input order mapping', () => {
 		const out = relaxLabels([300, 100], 26, 0, 860);
 		expect(out[0]).toBeGreaterThan(out[1]);
+	});
+
+	// The sweep-until-stable version recomputed block membership from the moved
+	// positions while taking the block mean from the preferred ones. The two
+	// disagreed and this input alternated between two arrangements forever —
+	// a synchronous infinite loop inside an SSR $derived, which took the whole
+	// server down rather than just the page. If this ever regresses the suite
+	// hangs instead of failing, so the sweep below covers the same shape at
+	// many offsets.
+	it('settles on the configuration that used to oscillate forever', () => {
+		const out = relaxLabels([354, 385, 386], 26, 24, 836);
+		expect(out[1] - out[0]).toBeCloseTo(26, 5);
+		expect(out[2] - out[1]).toBeCloseTo(26, 5);
+		// Centred on the members' mean preferred position, 375.
+		expect((out[0] + out[1] + out[2]) / 3).toBeCloseTo(375, 5);
+	});
+
+	it('settles for every near-collision offset, and keeps the invariants', () => {
+		const minGap = 26;
+		const minY = 24;
+		const maxY = 836;
+		for (let base = 40; base <= 780; base += 7) {
+			// Two labels just far enough apart to escape a merge, then a third
+			// close behind — the shape that made membership and mean disagree.
+			for (const second of [minGap - 1, minGap, minGap + 1, minGap + 2]) {
+				for (const third of [1, 2, minGap - 1]) {
+					const input = [base, base + second, base + second + third];
+					const out = relaxLabels(input, minGap, minY, maxY);
+					const sorted = [...out].sort((a, b) => a - b);
+					expect(sorted[0]).toBeGreaterThanOrEqual(minY - 1e-9);
+					expect(sorted[sorted.length - 1]).toBeLessThanOrEqual(maxY + 1e-9);
+					for (let i = 1; i < sorted.length; i++) {
+						expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(minGap - 1e-9);
+					}
+				}
+			}
+		}
+	});
+
+	it('keeps every label inside a band only just wide enough', () => {
+		// Four labels, 3 × 26 = 78 units of span, in a band of exactly 78.
+		const out = relaxLabels([50, 51, 52, 53], 26, 100, 178);
+		expect(Math.min(...out)).toBeCloseTo(100, 5);
+		expect(Math.max(...out)).toBeCloseTo(178, 5);
 	});
 });

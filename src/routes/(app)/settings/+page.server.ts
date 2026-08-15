@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
@@ -10,8 +13,10 @@ import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { enrollmentLinkDays, passwordMinLength } from '$lib/server/policy';
+import { env } from '$env/dynamic/private';
 import {
 	BACKUP_CADENCES,
+	backupDirProblem,
 	detectDestinations,
 	getBackupConfig,
 	getLastBackupRun,
@@ -267,7 +272,40 @@ export const actions = administered({
 		const form = await request.formData();
 		const cadence = String(form.get('cadence') ?? '') as BackupCadence;
 		if (!BACKUP_CADENCES.includes(cadence)) return fail(400, { message: 'Unknown cadence.' });
-		await setBackupConfig({ dir: String(form.get('dir') ?? '').trim(), cadence });
+		const dir = String(form.get('dir') ?? '').trim();
+		// The dump is plaintext SQL carrying every password hash and access
+		// token, so where it lands is checked before it is stored — and checked
+		// here, where the mistake can still be shown to the person who made it,
+		// rather than failing silently at three in the morning.
+		const problem = dir ? backupDirProblem(resolve(dir), resolve(env.UPLOAD_DIR || 'data')) : null;
+		if (problem) return fail(400, { message: problem });
+		if (dir) {
+			// The folder itself need not exist — the backup creates it — so the
+			// check walks up to the nearest ancestor that does. Catching an
+			// unwritable destination here beats discovering it from a failed run
+			// at three in the morning.
+			let probe = resolve(dir);
+			for (;;) {
+				const exists = await access(probe, constants.F_OK).then(
+					() => true,
+					() => false
+				);
+				if (exists) break;
+				const parent = dirname(probe);
+				if (parent === probe) break;
+				probe = parent;
+			}
+			const writable = await access(probe, constants.W_OK).then(
+				() => true,
+				() => false
+			);
+			if (!writable) {
+				return fail(400, {
+					message: `This server cannot write to ${probe}. Pick another folder, or change its permissions.`
+				});
+			}
+		}
+		await setBackupConfig({ dir, cadence });
 		return { ok: true };
 	},
 

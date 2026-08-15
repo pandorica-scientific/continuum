@@ -1,7 +1,8 @@
 import { and, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { category, transaction } from '$lib/server/db/schema';
-import { convertMinorSync, loadRateTable } from '$lib/server/fx/table';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { minorDigits } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
 import { loadSplits } from '$lib/server/splits';
 import { effectiveLines } from '$lib/transactions/lines';
@@ -86,14 +87,14 @@ export async function flowData(period: Period): Promise<FlowData> {
 		// effectiveLines is the only thing that knows whether this is split, and
 		// it has already netted the bank's own fee out of the first line.
 		for (const line of effectiveLines(t, splitsByTxn.get(t.id) ?? [])) {
-			const converted = convertMinorSync(
+			const converted = convertOrFace(
 				rates,
 				line.amountMinor,
 				t.currency,
 				base,
 				t.valueDate ?? t.bookedAt
 			);
-			const major = Number(converted ?? line.amountMinor) / 100;
+			const major = Number(converted) / 10 ** minorDigits(base);
 			if (line.categoryId) {
 				byCategory.set(line.categoryId, (byCategory.get(line.categoryId) ?? 0) + major);
 			} else if (major > 0) {
@@ -196,8 +197,8 @@ export async function monthlyHistory(): Promise<MonthBar[]> {
 		const effective = t.valueDate ?? t.bookedAt;
 		const month = effective.slice(0, 7);
 		const net = t.amount - (t.feeMinor ?? 0n);
-		const converted = convertMinorSync(rates, net, t.currency, base, effective);
-		const major = Number(converted ?? net) / 100;
+		const converted = convertOrFace(rates, net, t.currency, base, effective);
+		const major = Number(converted) / 10 ** minorDigits(base);
 		if (!byMonth.has(month)) byMonth.set(month, { earned: 0, spent: 0 });
 		const bucket = byMonth.get(month)!;
 		if (major > 0) bucket.earned += major;

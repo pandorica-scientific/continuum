@@ -12,12 +12,16 @@ function rbDate(raw: string): string | null {
 const AMOUNT = /^([-+]?[\d\s  ]+\.\d{2}) ([A-Z]{3})$/;
 
 /**
- * Raiffeisenbank PDF statement ("Výpis z běžného účtu"). Each movement spans
- * three stacked lines plus an optional merchant line:
+ * Raiffeisenbank PDF statement ("Výpis z běžného účtu"). A movement's first
+ * line is
  *   date | category | type | [VS] | amount "−1 000.00 CZK"
+ * followed by its detail lines until the next dated movement line:
  *   valuta date | counter-account | [message]
  *   transaction code | [counterparty name] | [note]
  *   [merchant; city; country]
+ * The detail lines come in no fixed number and no fixed order — a card payment
+ * can push its "PK:" marker onto a line of its own — so each is found by shape
+ * within the movement's own span, never at a counted offset.
  */
 export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 	let accountNumber: string | undefined;
@@ -48,19 +52,37 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 		if (closing) closingBalanceMinor = parseAmountToMinor(closing[1], currency);
 	}
 
+	// Collect movement start indices first, the way the ČS adapter does, so a
+	// movement can own every line up to the next one. RB prints no fixed number
+	// of continuation lines: the transaction code lands on the second, third or
+	// fourth, and the merchant line after it. Reading them at a fixed stride
+	// (code at i+2, merchant within i+3) lost the bank reference on a quarter
+	// of a real statement's movements and the counterparty on nearly half —
+	// rows that then match no counterparty rule and sit in review forever.
 	const rows: ParsedRow[] = [];
+	const starts: number[] = [];
 	for (let i = 0; i < lines.length; i++) {
 		const cells = lines[i].cells;
 		if (cells.length < 3) continue;
-		const bookedAt = rbDate(cells[0]);
-		if (!bookedAt) continue;
+		if (!rbDate(cells[0])) continue;
 		// The amount is the last cell, "−1 000.00 CZK".
-		const amountMatch = cells[cells.length - 1].match(AMOUNT);
-		if (!amountMatch) continue;
+		if (!AMOUNT.test(cells[cells.length - 1])) continue;
 		// Continuation lines (valuta date + KS/PK markers or the foreign
 		// "original amount") also start with a date — a real movement's second
 		// cell is a category name, never a symbol marker, number or account.
 		if (/^(KS:|VS:|SS:|PK:)/.test(cells[1]) || /^[\d-]+(\/\d{4})?$/.test(cells[1])) continue;
+		starts.push(i);
+	}
+
+	for (let s = 0; s < starts.length; s++) {
+		const i = starts[s];
+		const cells = lines[i].cells;
+		const bookedAt = rbDate(cells[0])!;
+		const amountMatch = cells[cells.length - 1].match(AMOUNT)!;
+		// Up to the next movement, but never unbounded: the last movement on a
+		// statement is followed by the page footer, not by its own detail.
+		const end = Math.min(s + 1 < starts.length ? starts[s + 1] : lines.length, i + 8);
+		const detail = lines.slice(i + 1, end);
 
 		const rowCurrency = amountMatch[2];
 		const kind = cells[1];
@@ -79,35 +101,29 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 		let originalAmountMinor: bigint | undefined;
 		let originalCurrency: string | undefined;
 
-		// Second line: valuta date + counter-account, and for FX card payments
+		// Valuta line: valuta date + counter-account, and for FX card payments
 		// the original amount in the foreign currency as its last cell.
-		const second = lines[i + 1]?.cells ?? [];
-		if (second.length >= 1 && rbDate(second[0])) {
-			valueDate = rbDate(second[0]) ?? undefined;
-			const acc = second.find((c) => /^[\d-]+\/\d{4}$/.test(c));
+		const valuta = detail.find((l) => l.cells.length >= 1 && rbDate(l.cells[0]))?.cells;
+		if (valuta) {
+			valueDate = rbDate(valuta[0]) ?? undefined;
+			const acc = valuta.find((c) => /^[\d-]+\/\d{4}$/.test(c));
 			if (acc) counterpartyAccount = acc;
-			const original = second[second.length - 1]?.match(AMOUNT);
+			const original = valuta[valuta.length - 1]?.match(AMOUNT);
 			if (original && original[2] !== rowCurrency) {
 				originalAmountMinor = parseAmountToMinor(original[1].replace('−', '-'), original[2]);
 				originalCurrency = original[2];
 			}
 		}
-		// Third line: 10-digit transaction code, optional counterparty name.
-		const third = lines[i + 2]?.cells ?? [];
-		const codeLine = /^\d{9,11}$/.test(third[0] ?? '') ? third : second;
-		if (/^\d{9,11}$/.test(codeLine[0] ?? '')) {
+		// Code line: 9-11 digit transaction code, optional counterparty name.
+		const codeLine = detail.find((l) => /^\d{9,11}$/.test(l.cells[0] ?? ''))?.cells;
+		if (codeLine) {
 			bankRef = codeLine[0];
 			const name = codeLine.slice(1).find((c) => !c.startsWith('PK:') && !c.startsWith('KS:'));
 			if (name) counterparty = name;
 		}
 		// Optional merchant line: "ZOOPLUS; MUNCHEN; DEU".
-		for (let j = i + 1; j <= i + 3 && j < lines.length; j++) {
-			const text = lines[j].cells.join(' ');
-			if (/^[^|]+; .+; [A-Z]{3}$/.test(text)) {
-				merchant = text.split(';')[0].trim();
-				break;
-			}
-		}
+		const merchantLine = detail.find((l) => /^[^|]+; .+; [A-Z]{3}$/.test(l.cells.join(' ')));
+		if (merchantLine) merchant = merchantLine.cells.join(' ').split(';')[0].trim();
 
 		rows.push({
 			bookedAt,

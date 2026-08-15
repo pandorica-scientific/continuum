@@ -112,7 +112,7 @@ describe('Raiffeisenbank PDF adapter', () => {
 		expect(statement.periodStart).toBe('2026-07-01');
 	});
 
-	it('reads three-line movements with references', () => {
+	it('reads movements with references', () => {
 		expect(statement.rows).toHaveLength(5);
 		const first = statement.rows[0];
 		expect(first.bookedAt).toBe('2026-07-02');
@@ -124,6 +124,21 @@ describe('Raiffeisenbank PDF adapter', () => {
 	it('prefers the merchant line for card payments', () => {
 		const card = statement.rows.find((r) => r.amountMinor === -249900n);
 		expect(card?.counterparty).toBe('ZOOPLUS');
+	});
+
+	it('finds the reference and merchant however many detail lines precede them', () => {
+		// The Apple Pay row pushes its "PK:" marker onto a line of its own, so
+		// the transaction code lands at i+3 and the merchant line at i+4. Read
+		// at a fixed stride (code at i+2, merchant within i+3) this row lost
+		// both: no reference, and no counterparty for any rule to match.
+		const applePay = statement.rows.find((r) => r.amountMinor === -4444n);
+		expect(applePay?.bankRef).toBe('9198541942');
+		expect(applePay?.counterparty).toBe('ALBERT VAM DEKUJE');
+		expect(applePay?.valueDate).toBe('2026-07-05');
+	});
+
+	it('gives every movement a bank reference', () => {
+		expect(statement.rows.filter((r) => !r.bankRef)).toHaveLength(0);
 	});
 
 	it('reads incoming amounts with plus signs', () => {
@@ -154,6 +169,18 @@ describe('Česká spořitelna PDF adapter', () => {
 	it('uses instruction numbers as bank references when present', () => {
 		const saving = statement.rows.find((r) => r.amountMinor === -780n);
 		expect(saving?.bankRef).toBe('2000026391448011');
+	});
+
+	it('does not read a card row transaction date as a variable symbol', () => {
+		// "01.06.2026 | Platba kartou | 30052026 | -1 202.20" — the middle cell
+		// is d.tran.30.05.2026 compressed, not a payment symbol. Rules match on
+		// variableSymbol, so inventing one here would let a rule keyed to a real
+		// symbol silently file unrelated card payments.
+		const card = statement.rows.find((r) => r.amountMinor === -120220n);
+		expect(card?.variableSymbol).toBeUndefined();
+		expect(card?.valueDate).toBe('2026-05-30');
+		// The genuine symbols on transfer rows are still read.
+		expect(statement.rows.find((r) => r.amountMinor === -48000n)?.variableSymbol).toBe('45628997');
 	});
 
 	it('identical-looking rows still fingerprint uniquely', () => {
