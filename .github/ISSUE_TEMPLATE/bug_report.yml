@@ -10,7 +10,7 @@ body:
         real layout reproduce a bug just as well.
 
         A security problem does not belong in a public issue — open a
-        [private advisory](https://github.com/robertkiewisz/continuum/security/advisories/new) instead.
+        [private advisory](https://github.com/pandorica-scientific/continuum/security/advisories/new) instead.
 
   - type: textarea
     id: what-happened

@@ -8,7 +8,7 @@ deterministically (rules you can read, corrections it learns), and turns the res
 a true net worth statement — each flat side by side with its mortgage, portfolio,
 cash, and loans.
 
-![Overview — the cash-flow waterfall](https://raw.githubusercontent.com/robertkiewisz/continuum/main/docs/screenshots/overview.png)
+![Overview — the cash-flow waterfall](https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docs/screenshots/overview.png)
 
 ## What it does
 
@@ -33,12 +33,12 @@ cash, and loans.
 - **Backups** — one restorable dump plus every uploaded file, written straight into a
   cloud-synced folder (Google Drive / Dropbox mount) on your schedule
 
-![Loans — interest vs principal](https://raw.githubusercontent.com/robertkiewisz/continuum/main/docs/screenshots/loans.png)
+![Loans — interest vs principal](https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docs/screenshots/loans.png)
 
 ## Quick start
 
 ```sh
-curl -O https://raw.githubusercontent.com/robertkiewisz/continuum/main/compose.yaml
+curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
 POSTGRES_PASSWORD=change-me docker compose up -d
 ```
 
@@ -69,5 +69,5 @@ configured in the app and stored in your own database. Nothing calls home.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](https://github.com/robertkiewisz/continuum/blob/main/LICENSE.md) —
+[PolyForm Noncommercial 1.0.0](https://github.com/pandorica-scientific/continuum/blob/main/LICENSE.md) —
 free for personal self-hosting; commercial use needs a separate licence.

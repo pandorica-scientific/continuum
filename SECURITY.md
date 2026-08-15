@@ -63,17 +63,25 @@ image — migrations run on start.
 These are design decisions, not vulnerabilities. Knowing them helps you judge
 whether a finding is in scope:
 
-- **A trusted local network.** Continuum serves plain HTTP on port 80 by
-  default and terminates no TLS of its own. It is built to sit on a home LAN
-  behind a router, reachable as `http://continuum.local`. Exposing it directly
-  to the internet without a reverse proxy and TLS is a deployment choice the app
-  cannot defend against.
+- **A trusted local network, or a private tunnel.** Continuum serves plain HTTP
+  on port 80 by default and terminates no TLS of its own. It is built to sit on
+  a home LAN behind a router, reachable as `http://continuum.local`, or behind
+  something that provides HTTPS — Tailscale, a reverse proxy, an internal
+  certificate authority. Exposing it directly to the public internet, including
+  via `tailscale funnel`, is a deployment choice the app cannot defend against.
 - **`ORIGIN` matches the address you browse to.** Form submissions are
-  origin-checked and refused otherwise. A misconfigured `ORIGIN` breaks
-  submissions rather than weakening them.
-- **Everyone with an account is trusted with the household's data.** There is no
+  origin-checked and refused otherwise, and the WebAuthn relying-party ID is
+  derived from the same value. A misconfigured `ORIGIN` breaks sign-in rather
+  than weakening it.
+- **Passkeys need a secure context.** The passkey controls appear only when
+  `ORIGIN` is `https://` (or loopback in development); on a plain-HTTP LAN
+  address they are absent, and passwords remain the only door. That is a
+  browser rule, not a Continuum one.
+- **Everyone with an account can read the whole ledger.** There is no
   multi-tenancy and no per-person data isolation: people are separate sign-ins
-  over one shared ledger, by design.
+  over one shared household, by design. Roles separate administration only —
+  members cannot manage people, tokens, modules, currency or backups, and those
+  sections are never sent to them rather than merely hidden.
 - **Backups are plain SQL.** The scheduled backup writes an unencrypted
   `continuum-backup.sql` plus copies of every uploaded file. Pointing
   `CONTINUUM_BACKUPS` at a cloud-synced folder hands that content to the sync
@@ -82,15 +90,23 @@ whether a finding is in scope:
   with a published password. Never enable it on an instance holding real data.
 
 Current protections, for reference when assessing a report: passwords hashed
-with Argon2id; session and API tokens stored hashed, never in plaintext;
-failed sign-ins and failed bearer tokens rate limited per address on separate
-budgets; the `/api/v1` surface read-only with no write endpoints and no
-webhooks.
+with Argon2id; session tokens, API tokens and enrollment links stored hashed,
+never in plaintext; enrollment links single-use and expiring; passkeys requiring
+user verification, with single-use challenges and a clone signal on the
+signature counter; the relying-party ID derived from `ORIGIN` rather than
+configured separately; failed sign-ins and failed bearer tokens rate limited per
+address on separate budgets; the `/api/v1` surface read-only with no write
+endpoints and no webhooks.
 
 ## In scope
 
 - Authentication or session bypass; token forgery, reuse after revocation, or
-  privilege escalation to admin.
+  privilege escalation from member to administrator.
+- Passkey ceremony flaws: challenge replay or reuse, relying-party or origin
+  confusion, a credential registered to one person authenticating another,
+  user verification not actually enforced.
+- Enrollment-link flaws: a link that works twice, after expiry, after the
+  person was deactivated, or that can be guessed from another one.
 - Anything letting an unauthenticated caller read or modify ledger data.
 - Injection: SQL, command, or template — including through parsed statement
   fields.

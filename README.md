@@ -53,7 +53,7 @@ years of history.
 ## Install (Docker)
 
 ```sh
-curl -O https://raw.githubusercontent.com/robertkiewisz/continuum/main/compose.yaml
+curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
 docker login   # the kerth92/continuum image is private for now
 POSTGRES_PASSWORD=change-me docker compose up -d
 ```
