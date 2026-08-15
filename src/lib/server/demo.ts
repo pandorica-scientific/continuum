@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { db } from '$lib/server/db';
+import { initialsFor } from '$lib/people';
 import {
 	account,
 	document,
@@ -48,12 +49,19 @@ export async function seedDemo(): Promise<void> {
 		{
 			id: jana,
 			name: 'Jana Nováková',
-			initials: 'JN',
+			initials: initialsFor('Jana Nováková'),
 			role: 'admin',
 			birthYear: 1990,
 			passwordHash
 		},
-		{ id: petr, name: 'Petr Novák', initials: 'PN', role: 'member', birthYear: 1988, passwordHash }
+		{
+			id: petr,
+			name: 'Petr Novák',
+			initials: initialsFor('Petr Novák'),
+			role: 'member',
+			birthYear: 1988,
+			passwordHash
+		}
 	]);
 
 	const fio = randomUUID();

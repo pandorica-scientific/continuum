@@ -5,6 +5,12 @@ import * as schema from './schema';
 
 export type Db = PostgresJsDatabase<typeof schema>;
 
+/** The handle inside `db.transaction(...)`. Exported so helpers can take either. */
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+/** Whichever of the two a caller happens to hold. */
+export type Queryable = Db | Tx;
+
 // Lazy so that importing server modules at build time (when DATABASE_URL is
 // not set) does not open a connection or throw.
 let instance: Db | null = null;

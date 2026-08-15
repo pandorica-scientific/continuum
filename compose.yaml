@@ -37,6 +37,38 @@ services:
       db:
         condition: service_healthy
 
+  # Optional, and off unless you run `docker compose --profile tailscale up -d`.
+  #
+  # Joins your tailnet and terminates HTTPS for the app, which is what makes
+  # passkeys possible — browsers refuse WebAuthn outside a secure context.
+  # This publishes to your tailnet only; the command that would expose the app
+  # to the public internet is `tailscale funnel`, which nothing here runs.
+  #
+  # Set TS_AUTHKEY in .env, then point ORIGIN at the name Tailscale issues:
+  #   ORIGIN=https://continuum.<your-tailnet>.ts.net
+  #
+  # Keep the app's port mapping above until a passkey sign-in over the tailnet
+  # works, then remove it to make Tailscale the only way in.
+  tailscale:
+    profiles: ['tailscale']
+    image: tailscale/tailscale:latest
+    hostname: continuum
+    restart: unless-stopped
+    environment:
+      # A plain default, not `:?`: compose interpolates every service even when
+      # its profile is inactive, so a required-variable guard here would break
+      # `docker compose up -d` for anyone not using Tailscale at all.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./docker/tailscale-serve.json:/config/serve.json:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+
   db:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -56,3 +88,4 @@ volumes:
   continuum-data:
   continuum-db:
   continuum-backups:
+  tailscale-state:

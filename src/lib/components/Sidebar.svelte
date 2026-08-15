@@ -99,6 +99,12 @@
 		<div class="person">
 			<span class="avatar">{householdLabel.slice(0, 1).toUpperCase() || '·'}</span>
 			<span class="name">{householdLabel}</span>
+			<!-- /logout has existed since the first release with nothing linking to
+			     it; without this there is no way to switch accounts or sign in with
+			     a passkey once a session exists. -->
+			<form method="POST" action="/logout">
+				<button type="submit" class="sign-out">Sign out</button>
+			</form>
 		</div>
 	</div>
 </aside>
@@ -236,6 +242,17 @@
 		gap: 8px;
 		padding: 0 4px;
 	}
+	.sign-out {
+		border: 0;
+		background: transparent;
+		color: var(--fg2);
+		font-size: 11.5px;
+		cursor: pointer;
+		padding: 2px 0;
+	}
+	.sign-out:hover {
+		color: var(--fg1);
+	}
 	.avatar {
 		width: 24px;
 		height: 24px;
@@ -250,6 +267,7 @@
 		font-size: 12.5px;
 		color: var(--fg2);
 		min-width: 0;
+		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

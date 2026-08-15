@@ -48,13 +48,14 @@ household — sign in as _Jana Nováková_ / `demo-demo-demo`.
 
 ## Volumes & environment
 
-|                |                                                            |
-| -------------- | ---------------------------------------------------------- |
-| `/data`        | uploaded files: documents, photos, original statements     |
-| `/backups`     | backup destination — bind-mount a cloud-synced host folder |
-| `DATABASE_URL` | PostgreSQL connection (compose wires this)                 |
-| `ORIGIN`       | the URL the server is reached at                           |
-| `DEMO`         | `1` seeds demo data on a pristine instance                 |
+|                |                                                               |
+| -------------- | ------------------------------------------------------------- |
+| `/data`        | uploaded files: documents, photos, original statements        |
+| `/backups`     | backup destination — bind-mount a cloud-synced host folder    |
+| `DATABASE_URL` | PostgreSQL connection (compose wires this)                    |
+| `ORIGIN`       | the URL the server is reached at; `https://` enables passkeys |
+| `DEMO`         | `1` seeds demo data on a pristine instance                    |
+| `TS_AUTHKEY`   | Tailscale auth key, for the optional `tailscale` profile      |
 
 Everything else — people, base currency (CZK/EUR/PLN), modules, integrations — is
 configured in the app and stored in your own database. Nothing calls home.

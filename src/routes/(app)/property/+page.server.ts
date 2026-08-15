@@ -17,6 +17,7 @@ import {
 	tenancy
 } from '$lib/server/db/schema';
 import { SHELVES } from '$lib/documents';
+import { initialsFor } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { saveUpload } from '$lib/server/files';
 import { normaliseTagName, setPropertyTags, upsertTag } from '$lib/server/tags';
@@ -173,12 +174,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			const days = currentTenancy.endDate ? daysUntil(currentTenancy.endDate) : null;
 			lease = {
 				tenantName: currentTenancy.tenantName,
-				tenantInitials: currentTenancy.tenantName
-					.split(/\s+/)
-					.map((w) => w[0] ?? '')
-					.join('')
-					.slice(0, 2)
-					.toUpperCase(),
+				tenantInitials: initialsFor(currentTenancy.tenantName),
 				tenantContact: currentTenancy.tenantContact,
 				state: days === null ? 'open-ended' : days < 0 ? 'lease ended' : `ends in ${days} days`,
 				hue:

@@ -1,5 +1,194 @@
 # Changelog
 
+## 0.3.1 — 2026-08-14
+
+Hardening the accounts work in 0.3.0. Three rounds of review over that release
+found gaps between what the code did and what the README promised; this closes
+them.
+
+### Fixed
+
+- **Settings export needed no administrator.** `?/importConfig` was restricted
+  when roles landed but its read counterpart, `GET /settings/export`, was not —
+  so any signed-in member could download `ledger.config.json`, which names the
+  host filesystem path backups are written to. It now requires an administrator,
+  and an end-to-end test signs in as a member and checks for the 403.
+- **The household roster told members too much.** Administrative sections were
+  withheld from members, but the list of people still carried everyone's role,
+  birth year, deactivation state, and which accounts had no password set yet —
+  that last one naming exactly the people with a live enrollment link. Members
+  now see names and nothing else.
+- **Deactivation left enrollment links live.** Deactivating someone cut their
+  sessions but not the one-time link they had never opened, so whoever held that
+  URL could still set a password on a closed account. Deactivation now voids the
+  link, and enrollment independently refuses a deactivated person — previously
+  they would have been handed a session and bounced straight back out at the
+  next request with nothing explaining why.
+- **An expired enrollment link could be marked used.** Submitting the form on an
+  eight-day-old link stamped `used_at` on the way to rejecting it, flipping its
+  status from expired to used. Every condition now lives in the update's own
+  predicate, so an expired link is refused without being written to.
+- **A trailing slash in `ORIGIN` broke every passkey.** `ORIGIN` was passed to
+  WebAuthn verbatim while everything else parsed it, so a value written as
+  `https://Continuum.example.ts.net/` reported itself secure, drew both passkey
+  buttons, and then failed every registration and sign-in with an error that
+  named nothing. It is now normalised the way a browser reports an origin.
+- **Cloned-authenticator detection never ran.** The library's own counter rule
+  fired first, which made the check unreachable — and that rule would have
+  locked out a synced passkey that once reported a real counter and later
+  reported zero, which is exactly the case the check exists to permit.
+- **A refused role change or deactivation committed its transaction.** `fail()`
+  returns rather than throws, so Drizzle saw a normal completion. Nothing was
+  written either way, but the locks were held to COMMIT and the pattern would
+  have silently persisted partial work the day a write moved above a guard.
+- The end-to-end suite builds inside its web-server command, whose timeout
+  defaults to sixty seconds — enough for a cold build to abort the whole run
+  before a single test started. It now gets five minutes.
+- The README's Tailscale instructions proxied port 3000, which is the port
+  inside the container. Compose publishes 80.
+- **An administrator who had never enrolled counted as one.** The last-
+  administrator guard measured "admins who are not deactivated", which includes
+  an account created moments ago that has no password, holds nothing but a
+  one-time link, and cannot reach a single administrative control. Adding one
+  made the count read two, and the only person who could actually sign in and
+  administer the household was then free to demote themselves — the exact
+  outcome the guard exists to prevent, recoverable only through the database
+  one-liner in the README. The count is now the same condition sign-in uses.
+- **A crafted credential id was an uncounted 500.** The sign-in endpoint checked
+  only that the id was a non-empty string, but a credential id is base64url and
+  goes straight into a Postgres text lookup: a NUL byte in it threw 22021 from
+  outside every catch in the handler. Anyone could reach that unauthenticated,
+  and it happened without passing any branch that records a failed attempt, so
+  it was never rate limited. The id is now checked against its actual shape, and
+  a passkey's label is stripped of control characters for the same reason.
+- **Two enrollment links could be live for one person.** "One link per person"
+  was a delete followed by an insert with nothing in the table to enforce it, so
+  a double-clicked _New link_ left both spendable and the older URL — possibly
+  the one sent to the wrong address — kept working. It is now a single upsert
+  against a unique constraint, and the upgrade removes any duplicates already
+  stored.
+- **An enrollment link was honoured against an account that already had a
+  password.** Spending one overwrites the password and signs its visitor in, so
+  reissuing refuses anyone already enrolled — but it read and then wrote in two
+  separate round trips, and somebody who enrolled inside that window was left
+  with a live link pointing at their own account. Enrollment now checks the same
+  condition at the point of use, so a link that should never have been minted is
+  refused rather than honoured.
+- **A new link could be minted for a closed account.** Deactivation revokes the
+  outstanding link, but _New link_ still appeared for a deactivated person who
+  had never enrolled and still produced a valid-looking URL, which enrollment
+  then refused with the wording a broken link gets — leaving both sides blaming
+  the URL rather than the account.
+- **The sign-in picker listed people who could not sign in.** Someone added but
+  not yet enrolled appeared in the list, and every attempt they made failed
+  against the shared per-address limit that gates everyone's sign-in — behind a
+  reverse proxy or Tailscale, eight guesses from one new person locked out the
+  household.
+- **A refusal could name the wrong person as the last administrator.** Demoting
+  or deactivating an administrator who was already deactivated cannot reduce the
+  number of people who can administer anything, but the guard tested the role
+  alone and refused, citing a person the request never touched.
+- **How long a sign-in failed said what kind of account it was.** A wrong
+  password costs a full argon2 verify; a deactivated or never-enrolled account
+  short-circuited before it and answered in about a millisecond, so timing drew
+  the distinction the identical wording exists to hide.
+- The add-person form kept four columns on a phone. Its single-column rule was
+  left behind in the settings page when the household list moved into its own
+  component, where it was quietly reused by the password form.
+
+### Changed
+
+- **`PASSWORD_MIN_LENGTH` and `ENROLLMENT_LINK_DAYS` are configurable**, with
+  the previous values as defaults. Both are household policy rather than facts,
+  and the interface hints are fed by the same numbers the server enforces so the
+  two cannot disagree. The WebAuthn challenge lifetime stays fixed on purpose:
+  it bounds one ceremony, and a knob there would only widen a replay window.
+- **Changing your password says so.** It was the one action on the page with a
+  real security consequence and no feedback at all — the form now clears and
+  confirms that other devices were signed out. It also has its own layout
+  instead of borrowing the add-person grid, whose second column is sized for a
+  birth year and left the new-password field a third the width of its
+  neighbours.
+- The two passkey buttons share one ceremony helper. The fragile part is the
+  list of exception names that mean "the person cancelled", and it was written
+  out twice.
+- **Administrator enforcement on the settings page is applied once**, to every
+  action except the two a member comes there for, instead of being repeated at
+  the top of each. The guard was correct twelve times over and the shape was
+  still wrong: forgetting the thirteenth left an action anyone signed in could
+  call, with nothing failing to say so.
+- A member's settings page no longer fetches the module map, the base currency
+  or the currency list — all three render only for administrators — and the
+  passkey query is skipped entirely on deployments where passkeys are not
+  possible.
+- Sessions, API tokens and enrollment links share one token-hashing function.
+  Each had its own private copy whose comment claimed to match the others, so
+  hardening one would have quietly left the other two behind.
+
+## 0.3.0 — 2026-08-14
+
+Accounts you can actually manage, and a way in that is not a password.
+
+### Added
+
+- **Passkeys**: sign in with Face ID, Touch ID or Windows Hello alongside the
+  existing passwords, which are staying — a device without a passkey still
+  works, and there is no lockout risk. Credentials are discoverable, so the
+  sign-in screen needs no person picker: one tap and you are in. Manage them in
+  Settings → Household, where each device is listed with its last-used date and
+  can be removed on its own.
+- **Enrollment links**: adding a person produces a one-time link, valid seven
+  days, that lets them choose their own password. The administrator who created
+  the account never knows it. Until they enrol they show as "not enrolled yet"
+  and cannot sign in.
+- **Change your own password**, from Settings. Every other session for that
+  person is revoked on success, so changing it after a scare actually ejects
+  the other device.
+- **Deactivate and reactivate a person.** Deactivation blocks sign-in and cuts
+  live sessions but keeps their password, passkeys and history, so reactivating
+  is a clean undo. People are never deleted — six tables reference them.
+- **Administrator role.** `person.role` finally means something: exactly
+  `admin` or `member`. Administrators alone can add or deactivate people, change
+  roles, manage API tokens, switch modules, set the base currency, and configure
+  or run backups. A member's Settings page holds their own password and their
+  own passkeys and nothing else — the rest is never sent to them. You cannot
+  deactivate yourself, and the last administrator can be neither deactivated nor
+  demoted, so an instance can never be left with nobody in charge. Those two
+  guards now hold under concurrent edits: the check and the write share one
+  transaction with the administrator rows locked.
+- **A sign-out control** in the sidebar. `/logout` had existed since the first
+  release with nothing linking to it.
+- **Optional Tailscale sidecar** (`docker compose --profile tailscale up -d`)
+  that terminates HTTPS for the app, which is what makes passkeys possible.
+  Private by default: it publishes to your tailnet, never the public internet.
+
+### Changed
+
+- `person.role` was previously incoherent — the schema defaulted to `adult`,
+  the demo seeder wrote `admin`/`member`, the setup wizard never set it, and
+  nothing read it. It is now the permission field, with exactly two values.
+- `person.password_hash` is now nullable, so a person can exist between being
+  created and choosing a password.
+- The end-to-end suite now builds the app before running. It previously served
+  whatever was last compiled, so it could pass against code no longer in the
+  repository.
+- Passkeys now require user verification — the biometric or PIN — rather than
+  merely preferring it. The server already enforced it, so asking for less than
+  that meant an authenticator which skipped the prompt was rejected afterwards
+  with an error nobody could act on. A security key with no PIN configured will
+  no longer register; Face ID, Touch ID and Windows Hello are unaffected.
+- Signing in now ends whatever session the browser arrived with, instead of
+  leaving the previous person's session row alive for its full thirty days.
+
+### Upgrading from 0.2.x
+
+Your existing people carry `role = 'adult'`, the old column default, which is
+neither `admin` nor `member`. Migration `0020` runs on first boot and turns
+every such row into an administrator — before 0.3.0 anyone who could sign in
+could do anything, so this takes no capability away from anyone. Demote whoever
+should be a member in Settings → Household afterwards. Nothing else is needed:
+`docker compose pull && docker compose up -d` is the whole upgrade.
+
 ## 0.2.1 — 2026-08-14
 
 Reachable by name.

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import BrandMark from '$lib/components/BrandMark.svelte';
+	import PasskeyButton from '$lib/components/PasskeyButton.svelte';
 
 	let { data, form } = $props();
 
@@ -16,6 +17,10 @@
 
 	{#if form?.message}
 		<div class="error">{form.message}</div>
+	{/if}
+
+	{#if data.passkeys}
+		<PasskeyButton />
 	{/if}
 
 	<form method="POST" class="card form">

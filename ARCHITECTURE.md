@@ -69,6 +69,35 @@ never re-denominated — only screen-level totals convert, at the day's rate.
   every document and a typo cannot mint a phantom column; catch-all subjects
   are case-insensitively unique.
 
+## Authentication
+
+Two ways in, converging on one session. A password sign-in and a passkey
+sign-in both end at `createSession`, so everything downstream — the session
+cookie, `validateSession`, `locals.person` — is unaware of which was used.
+
+- **Passwords** are Argon2 hashes on `person`. The column is nullable: a person
+  created by an administrator has no password until they open their enrollment
+  link and choose one, and `verifyPassword` returns false on a null hash rather
+  than throwing.
+- **Passkeys** are WebAuthn credentials in `credential`, one row per registered
+  device. They are registered as discoverable, so the sign-in screen needs no
+  person picker — the authenticator returns the person ID in its user handle.
+  The relying-party ID is derived from `ORIGIN` rather than configured, which
+  makes the classic origin/RP-ID mismatch impossible. Where `ORIGIN` is not a
+  secure context the passkey interface is absent, not broken.
+- **Signature counters** are compared only when both the stored and incoming
+  value are non-zero. Synced passkeys always report zero, so a naive
+  monotonicity check would reject every Apple credential on its second use.
+  `webauthn/counter.ts` holds the rule and a unit test pins it.
+- **Enrollment tokens**, **sessions** and **API tokens** all store only a
+  sha256 of the value; the raw token is shown once and never persisted.
+- **Permissions** live in `auth/policy.ts` as pure functions, so the
+  last-administrator invariant is tested without a database and cannot drift
+  between call sites. `person.role` is exactly `admin` or `member`.
+- **Deactivation** sets `deactivated_at` and drops live sessions, leaving
+  credentials and password intact so reactivation is an undo. People are never
+  deleted — six tables reference them.
+
 ## Where things live
 
 - `src/lib/server/` — everything with database or network access

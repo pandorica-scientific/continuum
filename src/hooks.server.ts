@@ -49,12 +49,29 @@ export const init: ServerInit = async () => {
 
 // /ics/<token> is public by design: calendar apps subscribe without a session,
 // authenticated by the secret token in the URL. /api authenticates itself the
-// same way, with a bearer token instead of a cookie.
+// same way, with a bearer token instead of a cookie. /enroll/<token> is the
+// same shape again — the visitor has no session yet, and the token in the URL
+// is what authorises them to set a password.
 //
 // This exempts them from the redirect to /login, NOT from authentication —
 // every /api route calls requireToken itself, and one that forgets to would be
 // wide open. The E2E journey asserts an unauthenticated request gets a 401.
-const PUBLIC_PATHS = ['/login', '/setup', '/ics', '/api'];
+//
+// /auth/passkey/register is on the list for the same reason, and only that
+// reason: both of its endpoints refuse a request without a session themselves.
+// They are fetched by script, so answering them with a 303 to the login page
+// meant the browser followed it and tried to parse an HTML page as JSON — an
+// expired session surfaced as "Unexpected token <" instead of "sign in again",
+// and the endpoints' own 401 could never fire.
+const PUBLIC_PATHS = [
+	'/login',
+	'/setup',
+	'/ics',
+	'/api',
+	'/enroll',
+	'/auth/passkey/login',
+	'/auth/passkey/register'
+];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	await (ready ??= boot());

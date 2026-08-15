@@ -13,13 +13,34 @@ export default defineConfig({
 		baseURL: 'http://localhost:4173'
 	},
 	projects: [
-		{ name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },
+		{
+			name: 'desktop',
+			use: { viewport: { width: 1440, height: 900 } },
+			testIgnore: /accounts|passkey/
+		},
+		// Account management and passkeys build on the household the wizard
+		// creates in flow.spec.ts, so they wait for `desktop` rather than relying
+		// on the alphabetical file order — which would otherwise run them first.
+		{
+			name: 'accounts',
+			use: { viewport: { width: 1440, height: 900 } },
+			testMatch: /accounts|passkey/,
+			dependencies: ['desktop']
+		},
 		{ name: 'tablet', use: { viewport: { width: 900, height: 1200 } }, testMatch: /smoke/ },
 		{ name: 'mobile', use: { viewport: { width: 390, height: 844 } }, testMatch: /smoke/ }
 	],
 	webServer: {
-		command: 'node tests/e2e/reset-db.mjs && node build',
+		// Build first: `node build` serves whatever was compiled last, so without
+		// this the suite silently tests a stale artifact and passes on code that
+		// is no longer in the repository.
+		command: 'npm run build && node tests/e2e/reset-db.mjs && node build',
 		port: 4173,
+		// The build is part of this command, and webServer.timeout defaults to 60
+		// seconds — which a cold Vite build of this project (pdfjs, drizzle,
+		// argon2) will exceed, aborting the whole suite before a test runs. The
+		// top-level `timeout` above is the per-test one and does not apply here.
+		timeout: 300_000,
 		reuseExistingServer: false,
 		env: {
 			DATABASE_URL,
