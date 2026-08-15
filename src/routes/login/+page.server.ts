@@ -27,16 +27,19 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	default: async ({ request, cookies, getClientAddress }) => {
 		const address = getClientAddress();
-		const wait = blockedForSeconds('login', address);
+		const form = await request.formData();
+		const personId = String(form.get('personId') ?? '');
+		const password = String(form.get('password') ?? '');
+
+		// Budgeted per account, not per address alone: otherwise attempts against
+		// one person locked the whole household out, and behind Tailscale or any
+		// reverse proxy every member shares an address.
+		const wait = blockedForSeconds('login', address, personId);
 		if (wait > 0) {
 			return fail(429, {
 				message: `Too many failed attempts — try again in ${Math.ceil(wait / 60)} minute${wait > 60 ? 's' : ''}.`
 			});
 		}
-
-		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '');
-		const password = String(form.get('password') ?? '');
 
 		const rows = await db.select().from(person).where(eq(person.id, personId));
 		const row = rows[0];
@@ -48,11 +51,11 @@ export const actions: Actions = {
 		// does the same for a null hash rather than returning early.
 		const correct = await verifyPassword(row?.passwordHash ?? null, password);
 		if (!row || row.deactivatedAt || !correct) {
-			recordFailure('login', address);
+			recordFailure('login', address, personId);
 			return fail(400, { message: 'Wrong person or password.' });
 		}
 
-		recordSuccess('login', address);
+		recordSuccess('login', address, personId);
 		await createSession(cookies, row.id);
 		redirect(303, '/overview');
 	}

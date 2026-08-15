@@ -32,14 +32,21 @@ export const person = pgTable('person', {
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-export const session = pgTable('session', {
-	// sha256 hash of the bearer token; the raw token never touches the database
-	id: text('id').primaryKey(),
-	personId: text('person_id')
-		.notNull()
-		.references(() => person.id, { onDelete: 'cascade' }),
-	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
-});
+export const session = pgTable(
+	'session',
+	{
+		// sha256 hash of the bearer token; the raw token never touches the database
+		id: text('id').primaryKey(),
+		personId: text('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	// Revoking every other session of one person reads by person_id, as does
+	// deleting them when the person goes. Indexed like every comparable foreign
+	// key in this schema.
+	(table) => [index('session_person_idx').on(table.personId)]
+);
 
 // A bearer token for the read-only API. Only the hash is stored — the raw
 // token is shown once at creation, exactly as session tokens are handled.
@@ -68,22 +75,42 @@ export const enrollmentToken = pgTable('enrollment_token', {
 	usedAt: timestamp('used_at', { withTimezone: true })
 });
 
+// A WebAuthn challenge this server issued and has not yet spent.
+//
+// The challenge used to live only in an httpOnly cookie the caller hands back,
+// which is not a record of anything: SvelteKit does not sign cookies, so the
+// value was entirely attacker-chosen and "expectedChallenge" was whatever the
+// request said it should be. One captured assertion could then be replayed into
+// a fresh session forever. A row here is what makes a challenge single-use —
+// verification deletes it and refuses if it was not there.
+export const webauthnChallenge = pgTable('webauthn_challenge', {
+	// sha256 hex of the challenge, the way sessions and tokens are stored
+	id: text('id').primaryKey(),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+});
+
 // A registered passkey. The public key is public by construction — the private
 // half never leaves the authenticator, which is the whole point.
-export const credential = pgTable('credential', {
-	// base64url credential ID as the authenticator reports it
-	id: text('id').primaryKey(),
-	personId: text('person_id')
-		.notNull()
-		.references(() => person.id, { onDelete: 'cascade' }),
-	publicKey: text('public_key').notNull(),
-	// See webauthn/counter.ts: 0 means "not reported", not "never used".
-	counter: bigint('counter', { mode: 'number' }).notNull().default(0),
-	transports: jsonb('transports').$type<string[]>().notNull().default([]),
-	label: text('label').notNull(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	lastUsedAt: timestamp('last_used_at', { withTimezone: true })
-});
+export const credential = pgTable(
+	'credential',
+	{
+		// base64url credential ID as the authenticator reports it
+		id: text('id').primaryKey(),
+		personId: text('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		publicKey: text('public_key').notNull(),
+		// See webauthn/counter.ts: 0 means "not reported", not "never used".
+		counter: bigint('counter', { mode: 'number' }).notNull().default(0),
+		transports: jsonb('transports').$type<string[]>().notNull().default([]),
+		label: text('label').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true })
+	},
+	// Listing a person's passkeys and revoking them on a password change both
+	// read by person_id.
+	(table) => [index('credential_person_idx').on(table.personId)]
+);
 
 // App-level configuration owned by the Settings screen (module toggles, base
 // currency, household name, …). One row per key, value is JSON.

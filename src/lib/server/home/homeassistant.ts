@@ -3,6 +3,8 @@
 // expose areas). All payload interpretation lives in ha-map.ts, pure and
 // unit-tested.
 
+import { displayCurrency, toMajor } from '$lib/money';
+
 import {
 	dailyDeltas,
 	domainOf,
@@ -26,8 +28,10 @@ import {
 interface HaConfig extends HaEntityConfig {
 	url: string;
 	token: string;
-	/** price of one kWh in minor units of the base currency, as a string */
+	/** price of one kWh in minor units of `pricePerKwhCurrency`, as a string */
 	pricePerKwh?: string;
+	/** the currency that price was typed in, recorded when it was saved */
+	pricePerKwhCurrency?: string;
 }
 
 async function rest<T>(config: HaConfig, path: string): Promise<T> {
@@ -129,12 +133,17 @@ function makeHomeAssistant(rawConfig: Record<string, string>): HomeProvider {
 		if (!config.energyEntity) return null;
 		const factor = await energyFactor();
 		if (factor === null) return null;
-		const start = new Date();
-		start.setUTCDate(1);
-		start.setUTCHours(0, 0, 0, 0);
+		// The month starts at local midnight on the 1st, not UTC midnight. Setting
+		// the UTC date on a local `now` crossed a month boundary either way: at
+		// 01:30 on 1 August in Prague the UTC date is still 31 July, so the window
+		// opened on 1 July and charged two months of energy to this one; west of
+		// UTC it opened in the wrong direction and wiped the figure to nearly zero.
+		// syncMeterBill writes this number onto a bill as money, hourly.
+		const now = new Date();
+		const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
 		const history = await energyHistorySamples(start.toISOString());
 		if (history.length < 2) return null;
-		return risingTotal(history) * factor;
+		return risingTotal(history.map((h) => h.value)) * factor;
 	};
 
 	const energyHistorySamples = async (
@@ -170,11 +179,15 @@ function makeHomeAssistant(rawConfig: Record<string, string>): HomeProvider {
 				monthToDate().catch(() => null)
 			]);
 			const price = Number(config.pricePerKwh);
+			// The price is in minor units of the currency it was typed in, which
+			// is recorded beside it — dividing by a hardcoded 100 was right only
+			// while every currency had two minor units.
+			const priceCurrency = config.pricePerKwhCurrency;
 			const costNote =
-				monthKwh !== null && Number.isFinite(price) && price > 0
-					? `≈ ${Math.round((monthKwh * price) / 100)
+				monthKwh !== null && priceCurrency && Number.isFinite(price) && price > 0
+					? `≈ ${Math.round(toMajor(monthKwh * price, priceCurrency))
 							.toLocaleString('en')
-							.replace(/,/g, ' ')} into the budget`
+							.replace(/,/g, ' ')} ${displayCurrency(priceCurrency)} into the budget`
 					: null;
 			return {
 				metrics: mapMetrics(states, config, monthKwh, costNote),

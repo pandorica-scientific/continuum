@@ -111,7 +111,10 @@
 		<button type="submit" class="btn">Change password</button>
 	</form>
 	{#if form?.passwordChanged}
-		<p class="ok-note">Password changed. Every other signed-in device has been signed out.</p>
+		<p class="ok-note">
+			Password changed. Every other signed-in device has been signed out, and any registered
+			passkeys have been removed — add them again from this device.
+		</p>
 	{/if}
 </section>
 

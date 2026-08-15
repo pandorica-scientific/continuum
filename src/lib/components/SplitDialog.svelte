@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fromMajor } from '$lib/money';
 	import { enhance } from '$app/forms';
 	import Modal from '$lib/components/Modal.svelte';
 
@@ -9,6 +10,8 @@
 	}
 
 	interface SplitLine {
+		/** the transaction_split row this line came from, when editing one */
+		id?: string | null;
 		amountMajor: string;
 		categoryId: string | null;
 	}
@@ -54,7 +57,7 @@
 			.replace(/\u2212/gu, '-')
 			.replace(',', '.');
 		if (!/^[+-]?\d+(\.\d*)?$/.test(cleaned)) return null;
-		return Math.round(Number(cleaned) * 100);
+		return Number(fromMajor(Number(cleaned), currency));
 	}
 
 	const targetMinor = $derived(toMinor(amountMajor) ?? 0);
@@ -90,6 +93,9 @@
 
 		{#each lines as line, i (i)}
 			<div class="split-line">
+				<!-- Which stored row this line is, so tags stay with the line rather
+				     than with its position in the list. -->
+				<input type="hidden" name="lineId" value={line.id ?? ''} />
 				<input
 					name="amount"
 					bind:value={line.amountMajor}

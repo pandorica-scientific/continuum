@@ -305,40 +305,57 @@ export function energyToKwh(unit: string | null | undefined): number | null {
  * `last - first` then clamping at zero reported such a month as 0, which is
  * indistinguishable on screen from a month of no consumption at all.
  */
-export function risingTotal(samples: { value: number }[]): number {
+export function risingTotal(readings: readonly number[]): number {
 	let total = 0;
-	for (let i = 1; i < samples.length; i++) {
-		const delta = samples[i].value - samples[i - 1].value;
-		if (delta > 0) total += delta;
+	for (let i = 1; i < readings.length; i++) {
+		const delta = readings[i] - readings[i - 1];
+		// A decrease is a counter reset, not negative consumption: the counter
+		// restarted from zero and climbed to its current reading, so that reading
+		// is the part of the period we can still account for. Whatever it counted
+		// between the previous sample and the reset is unrecoverable — but
+		// discarding the whole step reported a reset month as zero, which reads
+		// exactly like a month of no consumption at all.
+		total += delta > 0 ? delta : readings[i];
 	}
 	return total;
 }
 
 /**
- * Daily kWh from history samples of a total-increasing energy sensor: the
- * delta between each day's last reading and the previous day's.
+ * Daily kWh from history samples of a total-increasing energy sensor.
+ *
+ * Each day's figure is `risingTotal` over that day's own samples plus the
+ * previous day's last reading, so the two views of the same data agree about
+ * what a counter reset means. Comparing only the day's last reading against the
+ * previous day's dropped the reset day from the series entirely — not zero, not
+ * a gap, simply absent, which reads on screen as a day nobody was home, while
+ * the month tile beside it counted the consumption.
  */
 export function dailyDeltas(
 	samples: { at: string; value: number }[],
 	days: number,
 	today: string
 ): { day: string; kwh: number }[] {
-	const lastPerDay = new Map<string, number>();
+	// Every sample of a day, in order, so a reset inside the day is visible.
+	const perDay = new Map<string, number[]>();
 	for (const sample of samples) {
 		if (!Number.isFinite(sample.value)) continue;
-		lastPerDay.set(sample.at.slice(0, 10), sample.value);
+		const day = sample.at.slice(0, 10);
+		const list = perDay.get(day) ?? [];
+		list.push(sample.value);
+		perDay.set(day, list);
 	}
+
 	const out: { day: string; kwh: number }[] = [];
-	let previous: number | null = null;
+	let carry: number | null = null;
 	for (let i = days; i >= 0; i--) {
 		const day = new Date(new Date(today).getTime() - i * 86400000).toISOString().slice(0, 10);
-		const value = lastPerDay.get(day);
-		if (value !== undefined) {
-			if (previous !== null && value >= previous) {
-				out.push({ day, kwh: value - previous });
-			}
-			previous = value;
-		}
+		const values = perDay.get(day);
+		if (!values || values.length === 0) continue;
+		// The previous day's last reading opens this day's run, so consumption
+		// between midnights is counted exactly once.
+		const run = carry === null ? values : [carry, ...values];
+		if (carry !== null) out.push({ day, kwh: risingTotal(run) });
+		carry = values[values.length - 1];
 	}
 	return out.slice(-days);
 }

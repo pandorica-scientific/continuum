@@ -5,11 +5,11 @@
 	import MetricTile from '$lib/components/MetricTile.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
 	import FlowCard from '$lib/charts/FlowCard.svelte';
-	import { displayCurrency, formatMinor } from '$lib/money';
+	import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
 
 	let { data } = $props();
 
-	const fmt = (v: number) => formatMinor(BigInt(Math.round(v * 100)), data.baseCurrency);
+	const fmt = (v: number) => formatMinor(fromMajor(v, data.baseCurrency), data.baseCurrency);
 	const unit = $derived(displayCurrency(data.baseCurrency));
 
 	const maxMonth = $derived(

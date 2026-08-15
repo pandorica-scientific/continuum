@@ -150,7 +150,7 @@
 					<span>{k.label}</span>
 					<span class="note">
 						{k.lastUsedAt
-							? `last used ${new Date(k.lastUsedAt).toLocaleDateString()}`
+							? `last used ${new Date(k.lastUsedAt).toLocaleDateString('en')}`
 							: 'never used'}
 					</span>
 				</span>

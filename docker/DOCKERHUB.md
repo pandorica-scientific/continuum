@@ -57,12 +57,22 @@ household — sign in as _Jana Nováková_ / `demo-demo-demo`.
 | `DEMO`         | `1` seeds demo data on a pristine instance                    |
 | `TS_AUTHKEY`   | Tailscale auth key, for the optional `tailscale` profile      |
 
+Two more are optional and off unless you set them:
+
+|                        |                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONTINUUM_MAX_UPLOAD` | largest accepted upload (default `32M`); phone photos need more than the server's own 512K default                                                                           |
+| `ADDRESS_HEADER`       | read the client address from a forwarded header — set only behind a trusted proxy that always overwrites it, or a caller can forge it and step around the sign-in rate limit |
+
 Everything else — people, base currency (CZK/EUR/PLN), modules, integrations — is
 configured in the app and stored in your own database. Nothing calls home.
 
 ## Tags
 
 - `latest` — current build from `main` (amd64 + arm64)
+- `0.3.2` — two whole-codebase reviews: a server-side WebAuthn challenge store, currency-correct amounts, and a long list of silently wrong figures put right
+- `0.3.1` — hardening of the accounts work: enrollment, roles and passkey origins
+- `0.3.0` — passkeys, account management and roles; **breaking**, see the changelog
 - `0.2.1` — port 80 by default; reachable as `http://continuum.local` behind a LAN name
 - `0.2.0` — transaction register, splits & tags, self-correcting rules engine, read-only API, tax statements, entity-linked documents
 - `0.1.0` — first published version

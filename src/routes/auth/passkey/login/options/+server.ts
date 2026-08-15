@@ -18,6 +18,6 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		userVerification: 'required'
 	});
 
-	storeChallenge(cookies, options.challenge);
+	await storeChallenge(cookies, options.challenge);
 	return json(options);
 };

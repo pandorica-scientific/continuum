@@ -4,6 +4,7 @@ import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { db } from '$lib/server/db';
 import { credential } from '$lib/server/db/schema';
 import { storeChallenge } from '$lib/server/auth/webauthn/challenge';
+import { getHouseholdName } from '$lib/server/settings';
 import { currentOrigin, passkeysAvailable, relyingPartyId } from '$lib/server/auth/webauthn/origin';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
 import type { RequestHandler } from './$types';
@@ -18,7 +19,7 @@ export const POST: RequestHandler = async ({ locals, cookies }) => {
 		.where(eq(credential.personId, locals.person.id));
 
 	const options = await generateRegistrationOptions({
-		rpName: 'Continuum',
+		rpName: await getHouseholdName(),
 		rpID: relyingPartyId(currentOrigin()),
 		userName: locals.person.name,
 		userID: new TextEncoder().encode(locals.person.id),
@@ -39,6 +40,6 @@ export const POST: RequestHandler = async ({ locals, cookies }) => {
 		}))
 	});
 
-	storeChallenge(cookies, options.challenge);
+	await storeChallenge(cookies, options.challenge);
 	return json(options);
 };

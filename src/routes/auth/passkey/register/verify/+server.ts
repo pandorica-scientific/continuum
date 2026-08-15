@@ -13,7 +13,7 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
 	if (!locals.person) error(401, 'Sign in first.');
 	if (!passkeysAvailable()) error(400, 'Passkeys need an HTTPS address.');
 
-	const expectedChallenge = takeChallenge(cookies);
+	const expectedChallenge = await takeChallenge(cookies);
 	if (!expectedChallenge) error(400, 'That took too long — try again.');
 
 	const body = await readWebAuthnBody<RegistrationResponseJSON>(request);

@@ -66,7 +66,7 @@ export async function createSession(cookies: Cookies, personId: string): Promise
 	// Signing in replaces whatever session the caller arrived with. The cookie is
 	// overwritten either way, so leaving the old row behind would strand a fully
 	// valid 30-day session for the previous person — reachable by anyone who
-	// still had that cookie value, and invisible to revokeOtherSessions because
+	// still had that cookie value, and invisible to revokeOtherAccess because
 	// it belongs to a different account.
 	const previous = currentSessionId(cookies);
 	if (previous) await db.delete(session).where(eq(session.id, previous));

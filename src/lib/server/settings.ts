@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, type Db, type Tx } from '$lib/server/db';
 import { person, settings } from '$lib/server/db/schema';
 import { DEFAULT_MODULES, type ModuleToggles } from '$lib/modules/registry';
 
@@ -8,8 +8,13 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 	return rows.length > 0 ? (rows[0].value as T) : fallback;
 }
 
-export async function setSetting(key: string, value: unknown): Promise<void> {
-	await db
+/**
+ * Write one setting. `tx` lets a caller fold it into a wider transaction — the
+ * setup wizard writes people and settings as one unit, because the first person
+ * is what closes the wizard and a half-finished run has no way back to it.
+ */
+export async function setSetting(key: string, value: unknown, tx: Db | Tx = db): Promise<void> {
+	await tx
 		.insert(settings)
 		.values({ key, value })
 		.onConflictDoUpdate({ target: settings.key, set: { value } });

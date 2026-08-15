@@ -4,6 +4,8 @@
 // same way bank statement markers are; everything person-specific is learned
 // from corrections, never hard-coded.
 
+import { minorDigits } from '$lib/money';
+
 export interface AmountCandidate {
 	/** the text on the line before the amount, lowercased — the amount's label */
 	label: string;
@@ -38,13 +40,22 @@ const AMOUNT_RE =
  * Parse a printed amount to minor units: "45 231,00", "45.231" and "45231.00"
  * in the European form, "45,231.00" and "1,234,567.89" in the English one.
  */
-export function parsePrintedAmount(raw: string): bigint | null {
+export function parsePrintedAmount(raw: string, currency: string): bigint | null {
 	const cleaned = raw.replace(/[\s\u00A0\u202F]/g, '');
+	const digits = minorDigits(currency);
 
 	const toMinor = (whole: string, fraction?: string): bigint | null => {
 		if (!/^\d+$/.test(whole)) return null;
 		try {
-			return BigInt(whole) * 100n + BigInt(fraction ?? '0');
+			// Scaled by the currency's own minor units, not a fixed 100: the
+			// amount a person types into the payslip form is parsed by
+			// parseAmountToMinor, and learnAmountLabel compares the two for
+			// equality — a fixed 100 here meant that comparison could never
+			// match in a currency without exactly two minor units, so the
+			// reader silently never learned the label.
+			const scaled = BigInt(whole) * 10n ** BigInt(digits);
+			if (digits === 0) return scaled;
+			return scaled + BigInt((fraction ?? '').padEnd(digits, '0').slice(0, digits) || '0');
 		} catch {
 			return null;
 		}
@@ -62,11 +73,11 @@ export function parsePrintedAmount(raw: string): bigint | null {
 }
 
 /** Every amount on every line, labelled by the text before it. */
-export function extractCandidates(lines: string[]): AmountCandidate[] {
+export function extractCandidates(lines: string[], currency: string): AmountCandidate[] {
 	const out: AmountCandidate[] = [];
 	for (const line of lines) {
 		for (const match of line.matchAll(AMOUNT_RE)) {
-			const amountMinor = parsePrintedAmount(match[0]);
+			const amountMinor = parsePrintedAmount(match[0], currency);
 			if (amountMinor === null || amountMinor <= 0n) continue;
 			out.push({
 				label: line

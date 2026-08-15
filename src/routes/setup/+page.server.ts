@@ -56,25 +56,33 @@ export const actions: Actions = {
 			MODULE_KEYS.map((key) => [key, form.get(`module_${key}`) === 'on'])
 		) as ModuleToggles;
 
-		let firstId = '';
-		for (const p of validated) {
-			const id = randomUUID();
-			if (!firstId) firstId = id;
-			await db.insert(person).values({
-				id,
-				name: p.name,
-				initials: initialsFor(p.name),
-				// The person who runs the wizard administers the instance; anyone
-				// else added here is an ordinary member.
-				role: firstId === id ? 'admin' : 'member',
-				birthYear: p.birthYear,
-				passwordHash: await hashPassword(p.password)
-			});
-		}
+		// Hashing is slow and does not belong inside the transaction below.
+		const hashed = await Promise.all(
+			validated.map(async (p) => ({ ...p, id: randomUUID(), hash: await hashPassword(p.password) }))
+		);
+		const firstId = hashed[0].id;
 
-		await setSetting('householdName', householdName || people.map((p) => p.name).join(' & '));
-		await setSetting('baseCurrency', baseCurrency);
-		await setSetting('modules', modules);
+		// All of it, or none of it. The first insert is what makes isSetUp() true
+		// and closes the wizard forever, so a failure part-way through — a
+		// duplicate name, a dropped connection — used to strand the instance with
+		// some of its people, no settings, and no way back to this screen.
+		await db.transaction(async (tx) => {
+			for (const p of hashed) {
+				await tx.insert(person).values({
+					id: p.id,
+					name: p.name,
+					initials: initialsFor(p.name),
+					// The person who runs the wizard administers the instance; anyone
+					// else added here is an ordinary member.
+					role: p.id === firstId ? 'admin' : 'member',
+					birthYear: p.birthYear,
+					passwordHash: p.hash
+				});
+			}
+			await setSetting('householdName', householdName || people.map((p) => p.name).join(' & '), tx);
+			await setSetting('baseCurrency', baseCurrency, tx);
+			await setSetting('modules', modules, tx);
+		});
 
 		await createSession(cookies, firstId);
 		redirect(303, '/overview');

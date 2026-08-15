@@ -4,11 +4,11 @@
 import './homeassistant';
 import './demo';
 
-import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { property, propertyBill } from '$lib/server/db/schema';
 import { getBaseCurrency, getSetting } from '$lib/server/settings';
+import { convertOrFace } from '$lib/server/fx';
 import {
 	homeProviderKinds,
 	makeHomeProvider,
@@ -33,6 +33,15 @@ export async function configuredHomeProvider(): Promise<HomeProvider | null> {
 	const config = await getHomeConfig();
 	if (!config) return null;
 	const { kind, ...rest } = config;
+	// Configs saved before the currency was recorded beside each amount get
+	// today's base currency, which is what they were typed in at the time.
+	for (const key of Object.keys(rest)) {
+		if (!key.endsWith('Currency') || rest[key]) continue;
+		rest[key] = await getBaseCurrency();
+	}
+	if (rest.pricePerKwh && !rest.pricePerKwhCurrency) {
+		rest.pricePerKwhCurrency = await getBaseCurrency();
+	}
 	return makeHomeProvider(kind, rest);
 }
 
@@ -68,26 +77,23 @@ export async function syncMeterBill(): Promise<string | null> {
 	const snapshot = await provider.snapshot();
 	if (snapshot.monthKwh === null) return null;
 
-	const amountMinor = BigInt(Math.round(snapshot.monthKwh * price));
-	// Bound by the typed source column, not by the label text.
+	// The price is in minor units of the currency it was typed in; the bill is
+	// denominated in the property's. Converting was not optional the moment
+	// those two could differ.
+	const priceCurrency = config.pricePerKwhCurrency ?? (await getBaseCurrency());
+	const inPriceCurrency = BigInt(Math.round(snapshot.monthKwh * price));
+	const amountMinor = await convertOrFace(inPriceCurrency, priceCurrency, livedIn.currency);
+
+	// Bound by the typed source column, and only ever to a bill the household
+	// pointed at the meter. Creating one unasked is what made the flat's total
+	// count electricity twice — the estimate the household already had stayed
+	// exactly where it was, beside the new line.
 	const existing = await db
 		.select()
 		.from(propertyBill)
 		.where(and(eq(propertyBill.propertyId, livedIn.id), eq(propertyBill.source, 'meter')));
+	if (!existing[0]) return null;
 
-	if (existing[0]) {
-		await db.update(propertyBill).set({ amountMinor }).where(eq(propertyBill.id, existing[0].id));
-	} else {
-		await db.insert(propertyBill).values({
-			id: randomUUID(),
-			propertyId: livedIn.id,
-			label: 'Energy · from meter',
-			amountMinor,
-			source: 'meter',
-			sort: 1
-		});
-	}
-
-	const baseCurrency = await getBaseCurrency();
-	return `These readings replace the estimated energy line on ${livedIn.name}'s bills, so the budget follows what the meter actually did. (${baseCurrency})`;
+	await db.update(propertyBill).set({ amountMinor }).where(eq(propertyBill.id, existing[0].id));
+	return `“${existing[0].label}” on ${livedIn.name} is read from the meter, so the budget follows what it actually did.`;
 }

@@ -20,7 +20,7 @@ import {
 	type DayCount,
 	type FixationPeriod
 } from '$lib/loans/amortise';
-import { project } from '$lib/loans/simulate';
+import { anchorMonthFor, project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { normaliseTagName, setLoanTags } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -90,7 +90,13 @@ export const load: PageServerLoad = async () => {
 			}));
 		const terms = {
 			owedMinor: l.owedMinor,
-			owedAsOfMonth: (l.owedAsOf ?? new Date().toISOString().slice(0, 10)).slice(0, 7),
+			// Same rule the what-if preview uses, so the saved chart and the
+			// preview it was decided from cannot disagree: a balance observed
+			// after the payment day already reflects this month's instalment.
+			owedAsOfMonth: anchorMonthFor(
+				l.owedAsOf ?? new Date().toISOString().slice(0, 10),
+				l.paymentDay
+			),
 			dayCount: (DAY_COUNTS as readonly string[]).includes(l.dayCount)
 				? (l.dayCount as DayCount)
 				: ('30/360' as DayCount),

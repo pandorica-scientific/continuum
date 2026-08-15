@@ -115,16 +115,21 @@ export const actions: Actions = {
 		const currency = String(form.get('currency') ?? '');
 		const amounts = form.getAll('amount').map(String);
 		const categoryIds = form.getAll('categoryId').map(String);
+		const lineIds = form.getAll('lineId').map(String);
 
 		let lines;
 		try {
 			lines = amounts
 				.map((raw, i) => ({
 					raw: raw.trim(),
-					categoryId: categoryIds[i] || null
+					categoryId: categoryIds[i] || null,
+					// Carries the stored row's id when this line is an edit of one,
+					// so its tags follow the line and not its position.
+					id: lineIds[i] || null
 				}))
 				.filter((l) => l.raw !== '')
 				.map((l) => ({
+					id: l.id,
 					amountMinor: parseAmountToMinor(l.raw, currency),
 					categoryId: l.categoryId
 				}));

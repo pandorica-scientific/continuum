@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FixationPeriod, LoanTerms } from '$lib/loans/amortise';
 import {
 	aggregateByYear,
+	anchorMonthFor,
 	applyFixation,
 	applyRepayment,
 	project,
@@ -40,6 +41,23 @@ describe('applyRepayment', () => {
 		expect(applyRepayment(terms, { date: '2026-12-20', amountMinor: 1_00n }).owedAsOfMonth).toBe(
 			'2027-01'
 		);
+	});
+
+	it('derives the same anchor the loans screen derives from a stored date', () => {
+		// Both paths go through anchorMonthFor, so the preview and the chart
+		// drawn after saving cannot disagree — they used to, because only the
+		// preview applied the payment-day skip.
+		for (const date of ['2026-06-10', '2026-06-15', '2026-06-20', '2026-12-31']) {
+			expect(applyRepayment(terms, { date, amountMinor: 1_00n }).owedAsOfMonth).toBe(
+				anchorMonthFor(date, terms.paymentDay)
+			);
+		}
+	});
+
+	it('anchorMonthFor treats a missing payment day as the first', () => {
+		expect(anchorMonthFor('2026-06-01', null)).toBe('2026-06');
+		expect(anchorMonthFor('2026-06-02', null)).toBe('2026-07');
+		expect(anchorMonthFor('2026-06-02', undefined)).toBe('2026-07');
 	});
 
 	it('does not skip a month when the repayment lands on the payment day', () => {

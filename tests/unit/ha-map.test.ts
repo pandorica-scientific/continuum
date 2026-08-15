@@ -171,17 +171,16 @@ describe('risingTotal', () => {
 	it('sums consumption across a counter reset instead of reporting zero', () => {
 		// last − first would be 40 − 500 = −460, which Math.max(0, …) flattened
 		// to 0 — indistinguishable from a month of no consumption at all.
-		const samples = [{ value: 400 }, { value: 500 }, { value: 0 }, { value: 40 }];
-		expect(risingTotal(samples)).toBe(140);
+		expect(risingTotal([400, 500, 0, 40])).toBe(140);
 	});
 
 	it('is a plain difference when the counter never resets', () => {
-		expect(risingTotal([{ value: 100 }, { value: 130 }, { value: 186 }])).toBe(86);
+		expect(risingTotal([100, 130, 186])).toBe(86);
 	});
 
 	it('is zero for fewer than two samples', () => {
 		expect(risingTotal([])).toBe(0);
-		expect(risingTotal([{ value: 5 }])).toBe(0);
+		expect(risingTotal([5])).toBe(0);
 	});
 });
 
@@ -200,11 +199,29 @@ describe('dailyDeltas', () => {
 		]);
 	});
 
-	it('ignores meter resets instead of reporting negative days', () => {
+	it('keeps a reset day in the series instead of dropping it', () => {
+		// The counter restarted, so the 3 it has climbed to since is what can be
+		// accounted for. Dropping the day made it look like nobody was home,
+		// while the month tile beside it counted the consumption.
 		const samples = [
 			{ at: '2026-08-11T21:00:00Z', value: 500 },
 			{ at: '2026-08-12T21:00:00Z', value: 3 }
 		];
-		expect(dailyDeltas(samples, 3, '2026-08-13')).toEqual([]);
+		expect(dailyDeltas(samples, 3, '2026-08-13')).toEqual([
+			{ day: '2026-08-12', kwh: expect.closeTo(3, 5) }
+		]);
+	});
+
+	it('agrees with risingTotal over the same samples', () => {
+		// The month tile and the daily bars are two views of one series; they
+		// used to disagree about what a reset means.
+		const samples = [
+			{ at: '2026-08-10T21:00:00Z', value: 100 },
+			{ at: '2026-08-11T21:00:00Z', value: 130 },
+			{ at: '2026-08-12T09:00:00Z', value: 0 },
+			{ at: '2026-08-12T21:00:00Z', value: 40 }
+		];
+		const daily = dailyDeltas(samples, 3, '2026-08-13').reduce((s, d) => s + d.kwh, 0);
+		expect(daily).toBeCloseTo(risingTotal(samples.map((s) => s.value)), 5);
 	});
 });

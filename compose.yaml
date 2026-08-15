@@ -26,6 +26,14 @@ services:
       # DEMO=1 seeds a fictional household on a pristine instance
       # (sign in as Jana Nováková / demo-demo-demo)
       DEMO: ${DEMO:-}
+      # Behind a proxy — including the tailscale profile below — every request
+      # arrives from that proxy, so the sign-in rate limiter counts the whole
+      # household as one caller. Uncomment to read the real address from the
+      # forwarded header, but only when the proxy is the only way in and always
+      # overwrites it: anything that can reach the app directly could otherwise
+      # forge the header and slip the limiter.
+      # ADDRESS_HEADER: x-forwarded-for
+      # XFF_DEPTH: '1'
       # Largest upload the server accepts. adapter-node's own default is 512K,
       # which rejects most phone photos with a bare 413 before the upload form
       # can say anything useful. Raise it if you file large scans.

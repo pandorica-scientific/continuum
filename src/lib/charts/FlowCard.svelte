@@ -1,11 +1,11 @@
 <script lang="ts">
 	import Waterfall from './Waterfall.svelte';
-	import { formatMinor, displayCurrency } from '$lib/money';
+	import { formatMinor, displayCurrency, fromMajor } from '$lib/money';
 	import type { FlowData } from '$lib/server/cashflow';
 
 	let { flow, currency }: { flow: FlowData; currency: string } = $props();
 
-	const fmt = (v: number) => formatMinor(BigInt(Math.round(v * 100)), currency);
+	const fmt = (v: number) => formatMinor(fromMajor(v, currency), currency);
 	const unit = $derived(displayCurrency(currency));
 </script>
 

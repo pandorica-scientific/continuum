@@ -4,13 +4,18 @@
 
 import { randomUUID } from 'node:crypto';
 import { asc, eq, inArray, type SQL } from 'drizzle-orm';
-import { db, type Db } from '$lib/server/db';
+import { db, type Tx } from '$lib/server/db';
 import { transaction, transactionSplit } from '$lib/server/db/schema';
 
-/** The transaction-scoped handle drizzle hands to a db.transaction callback. */
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
-
 export interface SplitInput {
+	/**
+	 * The stored row this line edits, when it edits one. Line identity, not
+	 * list position: split-level tags hang off the row id, so reusing rows by
+	 * position moved a tag onto whatever line happened to take that slot after
+	 * a deletion or reorder — the surviving line carried someone else's tag and
+	 * the right one was cascaded away.
+	 */
+	id?: string | null;
 	amountMinor: bigint;
 	categoryId: string | null;
 	note?: string | null;
@@ -93,11 +98,14 @@ export async function saveSplits(transactionId: string, lines: SplitInput[]): Pr
 			.from(transactionSplit)
 			.where(eq(transactionSplit.transactionId, transactionId))
 			.orderBy(asc(transactionSplit.sort));
+		const existingIds = new Set(existing.map((r) => r.id));
 
-		// Reuse the existing rows position by position rather than recreating
-		// them. transaction_split_tag cascades on delete, so delete-and-insert
-		// destroyed every split-level tag whenever a single line's amount was
-		// edited — the tags were attached to ids that no longer existed.
+		// Match each submitted line to the row it came from by id, never by
+		// position. transaction_split_tag cascades on delete, so recreating the
+		// rows wholesale destroyed every split-level tag — but reusing them by
+		// position was no better, because deleting one line shifts every line
+		// after it onto a different row and its tags with it.
+		const kept = new Set<string>();
 		for (let index = 0; index < signed.length; index++) {
 			const line = signed[index];
 			const values = {
@@ -106,22 +114,20 @@ export async function saveSplits(transactionId: string, lines: SplitInput[]): Pr
 				note: line.note ?? null,
 				sort: index
 			};
-			if (index < existing.length) {
-				await tx
-					.update(transactionSplit)
-					.set(values)
-					.where(eq(transactionSplit.id, existing[index].id));
+			if (line.id && existingIds.has(line.id)) {
+				kept.add(line.id);
+				await tx.update(transactionSplit).set(values).where(eq(transactionSplit.id, line.id));
 			} else {
+				// A line the dialog added: a new row, with no tags of its own yet.
 				await tx.insert(transactionSplit).values({ id: randomUUID(), transactionId, ...values });
 			}
 		}
-		if (existing.length > signed.length) {
-			await tx.delete(transactionSplit).where(
-				inArray(
-					transactionSplit.id,
-					existing.slice(signed.length).map((r) => r.id)
-				)
-			);
+
+		// Whatever was not resubmitted is a line the user removed; its tags go
+		// with it, which is what removing a line means.
+		const dropped = existing.filter((r) => !kept.has(r.id)).map((r) => r.id);
+		if (dropped.length > 0) {
+			await tx.delete(transactionSplit).where(inArray(transactionSplit.id, dropped));
 		}
 
 		// The parent category goes null so anything that ever forgets to read the

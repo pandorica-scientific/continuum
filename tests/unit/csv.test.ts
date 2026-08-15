@@ -28,6 +28,35 @@ describe('csvLines', () => {
 	it('preserves a trailing empty record, as a plain split would', () => {
 		expect(csvLines('a\nb\n')).toEqual(['a', 'b', '']);
 	});
+
+	it('a stray quote mid-field does not swallow the rest of the file', () => {
+		// An inch mark in a card description is ordinary text, not syntax.
+		// Toggling on any quote turned this four-record file into two and
+		// silently dropped every movement after the stray quote.
+		const doc =
+			'date;desc;amount\n' +
+			'2026-01-01;NAKUP 27" MONITOR;-100\n' +
+			'2026-01-02;ALBERT;-50\n' +
+			'2026-01-03;RENT;-20000\n';
+		const lines = csvLines(doc).filter((l) => l.trim());
+		expect(lines).toHaveLength(4);
+		expect(splitCsvLine(lines[1], ';')).toEqual(['2026-01-01', 'NAKUP 27" MONITOR', '-100']);
+		expect(splitCsvLine(lines[3], ';')).toEqual(['2026-01-03', 'RENT', '-20000']);
+	});
+
+	it('an odd number of quotes in one field still ends the record', () => {
+		expect(csvLines('a;b"c;d\ne;f;g').filter((l) => l.trim())).toHaveLength(2);
+		expect(csvLines('12";34\n56;78').filter((l) => l.trim())).toHaveLength(2);
+	});
+
+	it('a quote opening a field is still honoured after every delimiter', () => {
+		for (const delim of [';', ',', '\t']) {
+			const doc = `a${delim}"note\nwrapped"${delim}c\nd${delim}e${delim}f`;
+			const lines = csvLines(doc);
+			expect(lines).toHaveLength(2);
+			expect(splitCsvLine(lines[0], delim)).toEqual(['a', 'note\nwrapped', 'c']);
+		}
+	});
 });
 
 describe('a wrapped payment note does not drop the transaction', () => {

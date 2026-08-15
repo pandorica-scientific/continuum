@@ -7,7 +7,7 @@ import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
-import { changeOwnPassword, revokeOtherSessions } from '$lib/server/auth/password';
+import { changeOwnPassword, revokeOtherAccess } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
@@ -344,7 +344,9 @@ export const actions = administered({
 		if (!result.ok) return fail(400, { message: result.message });
 
 		const keep = currentSessionId(cookies);
-		if (keep) await revokeOtherSessions(locals.person.id, keep);
+		// Sessions and passkeys both: a passkey enrolled from a stolen session
+		// would otherwise survive the one remedy the app offers.
+		if (keep) await revokeOtherAccess(locals.person.id, keep);
 		// Named rather than a bare ok, so the page can confirm the one action here
 		// with a real security consequence instead of appearing to do nothing.
 		return { passwordChanged: true };

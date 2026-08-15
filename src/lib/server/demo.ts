@@ -26,6 +26,7 @@ import {
 	transaction
 } from '$lib/server/db/schema';
 import { saveSplits } from '$lib/server/splits';
+import { FINGERPRINT_VERSION } from '$lib/server/import/fingerprint';
 import { setTransactionTags } from '$lib/server/tags';
 import { hashPassword } from '$lib/server/auth';
 import { setSetting } from '$lib/server/settings';
@@ -109,7 +110,7 @@ export async function seedDemo(): Promise<void> {
 			currency: 'CZK',
 			counterparty,
 			dedupFingerprint: `demo-${rows.length}`,
-			fingerprintVersion: 2,
+			fingerprintVersion: FINGERPRINT_VERSION,
 			categoryId,
 			reviewState: 'filed'
 		});

@@ -15,11 +15,13 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ cookies, request, getClientAddress }) => {
 	if (!passkeysAvailable()) error(400, 'Passkeys need an HTTPS address.');
 
-	// This endpoint feeds the same per-address counter that gates the password
-	// form, so it has to honour it too. Skipping the check left it unlimited
-	// while its own failures locked the household out of signing in with a
-	// password — and behind a reverse proxy or Tailscale every request shares
-	// one address, so one caller could do that to everyone.
+	// Rate limited like every other credential check. No subject: a passkey
+	// sign-in is usernameless, so there is no account to attribute an attempt to
+	// until it verifies — which gives it its own per-address budget, separate
+	// from the per-account ones the password form uses. Failures here therefore
+	// no longer refuse everyone's password sign-in, which is what happened when
+	// both shared one counter and every request behind Tailscale shares an
+	// address.
 	const address = getClientAddress();
 	const wait = blockedForSeconds('login', address);
 	if (wait > 0) {
@@ -27,7 +29,7 @@ export const POST: RequestHandler = async ({ cookies, request, getClientAddress 
 		error(429, `Too many failed attempts — try again in ${minutes} minute${wait > 60 ? 's' : ''}.`);
 	}
 
-	const expectedChallenge = takeChallenge(cookies);
+	const expectedChallenge = await takeChallenge(cookies);
 	if (!expectedChallenge) error(400, 'That took too long — try again.');
 
 	const body = await readWebAuthnBody<AuthenticationResponseJSON>(request);

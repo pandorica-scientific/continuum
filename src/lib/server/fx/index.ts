@@ -1,6 +1,14 @@
 import { and, desc, eq, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { account, currencyRate, holding, loan, transaction } from '$lib/server/db/schema';
+import {
+	account,
+	currencyRate,
+	holding,
+	loan,
+	portfolioSnapshot,
+	property,
+	transaction
+} from '$lib/server/db/schema';
 import { minorDigits } from '$lib/money';
 
 // The Czech National Bank publishes a daily fixing of ~30 currencies against
@@ -121,12 +129,19 @@ export async function convertOrFace(
  * every total that silently absorbs one is wrong by the size of the rate.
  */
 export async function missingRateCurrencies(baseCurrency: string): Promise<string[]> {
+	// Every table computeNetWorth converts from. Property and the portfolio
+	// snapshot were missing, which are the two largest figures on the net-worth
+	// screen — so a flat valued in EUR with no EUR rate was counted at face
+	// value, roughly 25x understated, while the banner raised to say exactly
+	// that stayed silent.
 	const rows = (await db.execute(sql`
 		select distinct currency as code from (
 			select currency from ${account}
 			union all select currency from ${transaction}
 			union all select currency from ${loan}
 			union all select currency from ${holding}
+			union all select currency from ${property}
+			union all select currency from ${portfolioSnapshot}
 		) used
 	`)) as unknown as { code: string }[];
 
@@ -137,9 +152,8 @@ export async function missingRateCurrencies(baseCurrency: string): Promise<strin
 	// own makes all of them fail, not just the exotic ones.
 	if ((await czkPerUnit(baseCurrency, today)) === null) return codes.sort();
 
-	const missing: string[] = [];
-	for (const code of codes) {
-		if ((await czkPerUnit(code, today)) === null) missing.push(code);
-	}
-	return missing.sort();
+	// One round trip per currency, not one after another: this runs on every
+	// page under (app), hover preloads included.
+	const rates = await Promise.all(codes.map((code) => czkPerUnit(code, today)));
+	return codes.filter((_, i) => rates[i] === null).sort();
 }

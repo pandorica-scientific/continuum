@@ -45,6 +45,10 @@ test('registering a passkey, then signing in with it', async ({ browser }) => {
 	await page.getByRole('button', { name: '🔑 Sign in with a passkey' }).click();
 	await expect(page).toHaveURL(/\/overview/);
 
+	// Hand the shared state back signed in. Signing out above revoked the
+	// session this file was given, so leaving the old file in place would hand
+	// every later spec a dead cookie.
+	await context.storageState({ path: AUTH_STATE });
 	await context.close();
 });
 
@@ -115,4 +119,52 @@ test('the passkey button matches whether the context is secure', async ({ page }
 	const secure = await page.evaluate(() => window.isSecureContext);
 	const button = page.getByRole('button', { name: '🔑 Sign in with a passkey' });
 	await expect(button).toHaveCount(secure ? 1 : 0);
+});
+
+// The challenge used to live only in the cookie the caller hands back, and
+// SvelteKit does not sign cookies — so "expectedChallenge" was whatever the
+// request said it was, and one captured assertion could be replayed into a
+// fresh session forever. The server now records each challenge it issues and
+// spends it on use, so a challenge it never issued gets nowhere.
+test('a challenge this server never issued is refused', async ({ browser }) => {
+	const context = await browser.newContext({ storageState: undefined });
+	await context.addCookies([
+		{
+			name: 'continuum_webauthn_challenge',
+			value: 'a-challenge-nobody-issued',
+			url: 'http://localhost:4173'
+		}
+	]);
+	const response = await context.request.post('/auth/passkey/login/verify', {
+		data: { response: { id: 'whatever' } }
+	});
+	expect(response.status()).toBe(400);
+	// The challenge message specifically — a generic 400 would also come back
+	// for a malformed body, which would pass whether or not the server keeps a
+	// record of what it issued.
+	expect((await response.json()).message).toContain('took too long');
+	await context.close();
+});
+
+test('a challenge is spent by its first use', async ({ browser }) => {
+	const context = await browser.newContext({ storageState: undefined });
+	await context.request.post('/auth/passkey/login/options');
+	const issued = (await context.cookies()).find(
+		(c) => c.name === 'continuum_webauthn_challenge'
+	)?.value;
+	expect(issued, 'the options endpoint should set a challenge cookie').toBeTruthy();
+
+	// First use spends it, however the ceremony turns out.
+	await context.request.post('/auth/passkey/login/verify', { data: {} });
+
+	// Replaying the same value now finds no record of it.
+	await context.addCookies([
+		{ name: 'continuum_webauthn_challenge', value: issued!, url: 'http://localhost:4173' }
+	]);
+	const replay = await context.request.post('/auth/passkey/login/verify', {
+		data: { response: { id: 'whatever' } }
+	});
+	expect(replay.status()).toBe(400);
+	expect((await replay.json()).message).toContain('took too long');
+	await context.close();
 });

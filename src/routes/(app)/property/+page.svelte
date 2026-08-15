@@ -276,6 +276,20 @@
 							{#if bill.file}
 								<a href="/files/{bill.file}" target="_blank" rel="noopener" class="b-file">📎</a>
 							{/if}
+							<form method="POST" action="?/setBillSource" use:enhance class="b-meter">
+								<input type="hidden" name="billId" value={bill.id} />
+								<input type="hidden" name="fromMeter" value={bill.fromMeter ? 'false' : 'true'} />
+								<button
+									type="submit"
+									class="b-meter-btn"
+									class:on={bill.fromMeter}
+									title={bill.fromMeter
+										? 'Read from the meter — click to go back to a fixed amount'
+										: 'Read this bill from the smart meter instead'}
+								>
+									{bill.fromMeter ? '📟 from meter' : '📟'}
+								</button>
+							</form>
 						</span>
 						<span class="mono">{bill.value}</span>
 					</div>
@@ -588,6 +602,30 @@
 		text-decoration: none;
 		font-size: 12px;
 		margin-left: 4px;
+	}
+	.b-meter {
+		display: inline;
+	}
+	.b-meter-btn {
+		margin-left: 6px;
+		padding: 1px 5px;
+		border: 1px solid transparent;
+		border-radius: 6px;
+		background: none;
+		color: var(--fg3);
+		font-size: 11px;
+		cursor: pointer;
+		opacity: 0.45;
+	}
+	.b-meter-btn:hover,
+	.b-meter-btn:focus-visible {
+		opacity: 1;
+		border-color: var(--bd2);
+	}
+	.b-meter-btn.on {
+		opacity: 1;
+		color: var(--teal);
+		border-color: var(--bd2);
 	}
 	.bill-file {
 		grid-column: 1 / -1;

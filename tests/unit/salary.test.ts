@@ -9,17 +9,17 @@ import {
 
 describe('parsePrintedAmount', () => {
 	it('reads Czech and English printed amounts', () => {
-		expect(parsePrintedAmount('45 231,00')).toBe(4523100n);
-		expect(parsePrintedAmount('45 231')).toBe(4523100n);
-		expect(parsePrintedAmount('45.231')).toBe(4523100n);
-		expect(parsePrintedAmount('45231.50')).toBe(4523150n);
-		expect(parsePrintedAmount('1 234 567,89')).toBe(123456789n);
+		expect(parsePrintedAmount('45 231,00', 'CZK')).toBe(4523100n);
+		expect(parsePrintedAmount('45 231', 'CZK')).toBe(4523100n);
+		expect(parsePrintedAmount('45.231', 'CZK')).toBe(4523100n);
+		expect(parsePrintedAmount('45231.50', 'CZK')).toBe(4523150n);
+		expect(parsePrintedAmount('1 234 567,89', 'CZK')).toBe(123456789n);
 	});
 
 	it('reads comma-grouped thousands', () => {
-		expect(parsePrintedAmount('45,231.00')).toBe(4523100n);
-		expect(parsePrintedAmount('45,231')).toBe(4523100n);
-		expect(parsePrintedAmount('1,234,567.89')).toBe(123456789n);
+		expect(parsePrintedAmount('45,231.00', 'CZK')).toBe(4523100n);
+		expect(parsePrintedAmount('45,231', 'CZK')).toBe(4523100n);
+		expect(parsePrintedAmount('1,234,567.89', 'CZK')).toBe(123456789n);
 	});
 });
 
@@ -33,31 +33,31 @@ describe('extractCandidates and pickAmount', () => {
 	];
 
 	it('labels each amount with the text before it', () => {
-		const candidates = extractCandidates(lines);
+		const candidates = extractCandidates(lines, 'CZK');
 		expect(candidates.some((c) => c.label === 'k výplatě' && c.amountMinor === 4523100n)).toBe(
 			true
 		);
 	});
 
 	it('prefers the net-pay keyword over the largest amount', () => {
-		const picked = pickAmount(extractCandidates(lines), null);
+		const picked = pickAmount(extractCandidates(lines, 'CZK'), null);
 		expect(picked?.amountMinor).toBe(4523100n); // not the 62 000 gross
 	});
 
 	it('a learned label beats the keywords', () => {
 		const withCustom = [...lines, 'Převedeno celkem 44 000,00'];
-		const picked = pickAmount(extractCandidates(withCustom), 'převedeno celkem');
+		const picked = pickAmount(extractCandidates(withCustom, 'CZK'), 'převedeno celkem');
 		expect(picked?.amountMinor).toBe(4400000n);
 	});
 
 	it('falls back to the largest amount when nothing matches', () => {
-		const picked = pickAmount(extractCandidates(['Alpha 100,00', 'Beta 900,00']), null);
+		const picked = pickAmount(extractCandidates(['Alpha 100,00', 'Beta 900,00'], 'CZK'), null);
 		expect(picked?.amountMinor).toBe(90000n);
 	});
 
 	it('matches keywords with or without diacritics', () => {
 		const noDiacritics = ['Hruba mzda 62 000,00', 'K vyplate 45 231,00'];
-		expect(pickAmount(extractCandidates(noDiacritics), null)?.amountMinor).toBe(4523100n);
+		expect(pickAmount(extractCandidates(noDiacritics, 'CZK'), null)?.amountMinor).toBe(4523100n);
 	});
 
 	it('reads an English payslip at full magnitude, not its first four digits', () => {
@@ -65,12 +65,12 @@ describe('extractCandidates and pickAmount', () => {
 		// `\d{1,3}[.,]\d{2}` and matched "45,23" out of "45,231.00", so the slip
 		// was filed as 45.23 — a thousandfold error, silently.
 		const english = ['Gross pay 62,000.00', 'Tax withheld 16,769.00', 'Net pay 45,231.00'];
-		const candidates = extractCandidates(english);
+		const candidates = extractCandidates(english, 'CZK');
 		expect(candidates.some((c) => c.label === 'net pay' && c.amountMinor === 4523100n)).toBe(true);
 		expect(pickAmount(candidates, null)?.amountMinor).toBe(4523100n);
-		expect(pickAmount(extractCandidates(['Take home 1,234,567.89']), null)?.amountMinor).toBe(
-			123456789n
-		);
+		expect(
+			pickAmount(extractCandidates(['Take home 1,234,567.89'], 'CZK'), null)?.amountMinor
+		).toBe(123456789n);
 	});
 });
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { buildWaterfall, W, H, type WaterfallInput } from './waterfall';
-	import { formatMinor } from '$lib/money';
+	import { formatMinor, fromMajor } from '$lib/money';
 
 	let { input, currency }: { input: WaterfallInput; currency: string } = $props();
 
@@ -9,7 +9,7 @@
 	const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 
 	function amountText(amount: number): string {
-		return formatMinor(BigInt(Math.round(amount * 100)), currency);
+		return formatMinor(fromMajor(amount, currency), currency);
 	}
 </script>
 

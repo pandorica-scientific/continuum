@@ -14,6 +14,7 @@ import {
 	tenancy
 } from '$lib/server/db/schema';
 import { monthlyHistory } from '$lib/server/cashflow';
+import { toMajor } from '$lib/money';
 import { convertOrFace } from '$lib/server/fx';
 import { minorDigits } from '$lib/money';
 import { saveUpload } from '$lib/server/files';
@@ -88,7 +89,7 @@ export const load: PageServerLoad = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 	let monthlyRent = 0;
 	for (const t of tenancies) {
-		if (!t.endDate || t.endDate >= today) monthlyRent += Number(t.rentMinor) / 100;
+		if (!t.endDate || t.endDate >= today) monthlyRent += toMajor(t.rentMinor, baseCurrency);
 	}
 
 	const year = new Date().getFullYear();
@@ -142,7 +143,7 @@ export const load: PageServerLoad = async () => {
 					year: r.year,
 					age: r.age,
 					avg: formatMinor(r.avgMonthlyMinor, own[0]?.currency ?? baseCurrency),
-					avgMajor: Number(r.avgMonthlyMinor) / 100,
+					avgMajor: toMajor(r.avgMonthlyMinor, baseCurrency),
 					months: r.months,
 					deltaPct: r.deltaPct
 				})),

@@ -11,6 +11,15 @@ function rbDate(raw: string): string | null {
 
 const AMOUNT = /^([-+]?[\d\s  ]+\.\d{2}) ([A-Z]{3})$/;
 
+// The page header and the summary block RB repeats on every page. A movement's
+// detail can never continue past one of these, so they close its window.
+const PAGE_FURNITURE =
+	/Výpis z běžného účtu|Číslo účtu:|Název účtu:|Pořadové č\. výpisu|Počáteční zůstatek|Konečný zůstatek|Příjmy celkem|Výdaje celkem|Pohledávky po splatnosti|IBAN:|BIC:|za období:|^Datum$|Kategorie transakce/;
+
+function isPageFurniture(line: PdfLine): boolean {
+	return PAGE_FURNITURE.test(line.cells.join(' '));
+}
+
 /**
  * Raiffeisenbank PDF statement ("Výpis z běžného účtu"). A movement's first
  * line is
@@ -79,10 +88,20 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 		const cells = lines[i].cells;
 		const bookedAt = rbDate(cells[0])!;
 		const amountMatch = cells[cells.length - 1].match(AMOUNT)!;
-		// Up to the next movement, but never unbounded: the last movement on a
-		// statement is followed by the page footer, not by its own detail.
+		// A movement owns the lines up to the next one — but the gap to the next
+		// movement is not always its own detail. At a page break it spans the
+		// footer and the following page's header, and after the last movement it
+		// runs to the end of the file. The finders below are first-match-by-shape,
+		// so an unstopped window let a footer's print date become a movement's
+		// valuta date and a statement or contract number become its bankRef —
+		// and bankRef decides the dedup fingerprint, so a statement whose page
+		// breaks fell differently would import the same movement twice.
 		const end = Math.min(s + 1 < starts.length ? starts[s + 1] : lines.length, i + 8);
-		const detail = lines.slice(i + 1, end);
+		const detail: PdfLine[] = [];
+		for (let j = i + 1; j < end; j++) {
+			if (isPageFurniture(lines[j])) break;
+			detail.push(lines[j]);
+		}
 
 		const rowCurrency = amountMatch[2];
 		const kind = cells[1];

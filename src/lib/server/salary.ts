@@ -8,6 +8,7 @@ import { env } from '$env/dynamic/private';
 import { extractPdfLines } from '$lib/server/import/pdftext';
 import { getSetting, setSetting } from '$lib/server/settings';
 import { detectPeriod, extractCandidates, pickAmount, type AmountCandidate } from '$lib/salary';
+import { getBaseCurrency } from '$lib/server/settings';
 
 export interface PayslipReading {
 	amountMinor: bigint | null;
@@ -27,7 +28,7 @@ export async function readPayslip(data: Uint8Array, subject: string): Promise<Pa
 	} catch {
 		return { amountMinor: null, periodMonth: null, candidates: [] };
 	}
-	const candidates = extractCandidates(lines);
+	const candidates = extractCandidates(lines, await getBaseCurrency());
 	const labels = await learnedLabels();
 	const picked = pickAmount(candidates, labels[subject.toLowerCase()] ?? null);
 	return {

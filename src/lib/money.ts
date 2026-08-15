@@ -5,13 +5,17 @@
 const digitCache = new Map<string, number>();
 
 /**
- * Minor units per currency, from the runtime's own ISO 4217 data rather than a
+ * Minor units per currency, from the runtime's own CLDR data rather than a
  * hand-kept table. `availableCurrencies()` offers every code the CNB quotes —
- * which includes JPY, KRW, HUF and ISK, all of which have no minor unit at all
- * — so a four-entry table with `?? 2` stored those amounts 100× too large, and
- * the same wrong factor reached the register's SQL amount filter and the API's
- * wire format. Well-formed codes the runtime does not recognise still fall back
- * to 2, the ISO default.
+ * which includes HUF, JPY, KRW and ISK, all of which CLDR gives no minor unit
+ * at all — so a four-entry table with `?? 2` stored those amounts 100× too
+ * large, and the same wrong factor reached the register's SQL amount filter and
+ * the API's wire format. Well-formed codes the runtime does not recognise still
+ * fall back to 2.
+ *
+ * CLDR, not ISO 4217: the two disagree (ISO gives HUF two digits, CLDR gives
+ * zero) and CLDR follows how the currency is actually written, which is what a
+ * ledger showing a person their own money should do.
  */
 export function minorDigits(currency: string): number {
 	const cached = digitCache.get(currency);
@@ -30,6 +34,28 @@ export function minorDigits(currency: string): number {
 
 export function displayCurrency(code: string): string {
 	return code === 'CZK' ? 'Kč' : code;
+}
+
+/**
+ * Minor units as a plain number of major units, and back.
+ *
+ * Every conversion between the two goes through these. Scattering `/ 100` and
+ * `* 100` across charts, screens and the API worked only while every currency
+ * had exactly two minor units: the moment `minorDigits` started telling the
+ * truth about HUF and JPY, one half of a round trip could be currency-aware
+ * while the other stayed hardcoded, and the figure came out a hundred times
+ * wrong with nothing to flag it.
+ *
+ * `toMajor` loses precision by construction — it exists for charts and
+ * percentages, which need a number. Anything that has to stay exact should keep
+ * the bigint and use `formatMinor`.
+ */
+export function toMajor(amountMinor: bigint | number, currency: string): number {
+	return Number(amountMinor) / 10 ** minorDigits(currency);
+}
+
+export function fromMajor(major: number, currency: string): bigint {
+	return BigInt(Math.round(major * 10 ** minorDigits(currency)));
 }
 
 export interface FormatOptions {

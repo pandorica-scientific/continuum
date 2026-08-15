@@ -41,4 +41,24 @@ describe('rate limiter scopes', () => {
 		expect(blockedForSeconds('login', '10.0.0.10')).toBeGreaterThan(0);
 		expect(blockedForSeconds('login', '10.0.0.11')).toBe(0);
 	});
+
+	it('attempts against one account do not lock the rest of the household', () => {
+		// Behind Tailscale or any reverse proxy the whole household shares one
+		// address, so an address-only budget meant eight bogus attempts against
+		// one person refused everyone's sign-in.
+		const address = '100.64.0.1';
+		for (let i = 0; i < MAX_FAILURES; i++) recordFailure('login', address, 'person-robert');
+		expect(blockedForSeconds('login', address, 'person-robert')).toBeGreaterThan(0);
+		expect(blockedForSeconds('login', address, 'person-tereza')).toBe(0);
+	});
+
+	it('enrollment has its own budget and never touches the sign-in one', () => {
+		// An enrollment link is an unauthenticated URL anyone can probe.
+		const address = '100.64.0.2';
+		for (let i = 0; i < MAX_FAILURES; i++) recordFailure('enroll', address);
+		expect(blockedForSeconds('enroll', address)).toBeGreaterThan(0);
+		expect(blockedForSeconds('login', address)).toBe(0);
+		expect(blockedForSeconds('login', address, 'person-robert')).toBe(0);
+		expect(blockedForSeconds('api', address)).toBe(0);
+	});
 });

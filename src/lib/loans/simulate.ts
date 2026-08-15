@@ -35,29 +35,39 @@ export function aggregateByYear(rows: MonthRow[]): YearAgg[] {
 	}));
 }
 
-/** New terms after an extra repayment: the amount (or the bank's stated
- *  post-repayment balance) re-anchors the projection at that date.
+/**
+ * The month a projection should start from, given the date a balance was
+ * observed and the day the instalment is collected.
  *
- *  The anchor month depends on `paymentDay`, not just on the repayment date.
- *  The projection books an instalment for its own anchor month, so anchoring on
- *  a month whose instalment the bank has already collected replays it: the
- *  balance drops twice, and every projected figure after it — the debt-free
- *  month, the total interest, the year aggregates — inherits the error. When
- *  the repayment lands after the payment day, the projection starts next month.
+ * The projection books an instalment for its own anchor month, so anchoring on
+ * a month whose instalment the bank has already taken replays it: the balance
+ * drops twice, and the debt-free month, the total interest and every year
+ * aggregate inherit the error. Past the payment day, the projection starts next
+ * month instead.
+ *
+ * This lives in one place because two callers need the same answer — the
+ * what-if preview in `applyRepayment`, and the loans screen deriving an anchor
+ * from the stored `owedAsOf`. When only the preview applied it, saving a
+ * repayment produced a different chart from the one the decision was made on.
  */
+export function anchorMonthFor(observedOn: string, paymentDay: number | null | undefined): string {
+	const month = observedOn.slice(0, 7);
+	const day = Number(observedOn.slice(8, 10));
+	return Number.isFinite(day) && day > (paymentDay ?? 1) ? nextMonth(month) : month;
+}
+
+/** New terms after an extra repayment: the amount (or the bank's stated
+ *  post-repayment balance) re-anchors the projection at that date. */
 export function applyRepayment(
 	terms: LoanTerms,
 	input: { date: string; amountMinor: bigint; balanceAfterMinor?: bigint | null }
 ): LoanTerms {
 	let owed = input.balanceAfterMinor ?? terms.owedMinor - input.amountMinor;
 	if (owed < 0n) owed = 0n;
-	const month = input.date.slice(0, 7);
-	const repaidOn = Number(input.date.slice(8, 10));
-	const alreadyCollected = Number.isFinite(repaidOn) && repaidOn > (terms.paymentDay ?? 1);
 	return {
 		...terms,
 		owedMinor: owed,
-		owedAsOfMonth: alreadyCollected ? nextMonth(month) : month
+		owedAsOfMonth: anchorMonthFor(input.date, terms.paymentDay)
 	};
 }
 

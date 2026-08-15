@@ -112,11 +112,16 @@ export const actions: Actions = {
 					return fail(400, { message: `${field.label} must start with http(s)://.` });
 				}
 			} else if (field.kind === 'amount') {
+				const typedIn = await getBaseCurrency();
 				try {
-					value = String(parseAmountToMinor(value, await getBaseCurrency()));
+					value = String(parseAmountToMinor(value, typedIn));
 				} catch {
 					return fail(400, { message: `${field.label} must be a number.` });
 				}
+				// Minor units are meaningless without the currency they were typed
+				// in, and the base currency can change afterwards — so record it
+				// beside the amount rather than assuming today's base still applies.
+				config[`${field.key}Currency`] = typedIn;
 			}
 			config[field.key] = value;
 		}

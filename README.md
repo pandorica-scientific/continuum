@@ -63,6 +63,13 @@ if something else already owns it) and follow the setup wizard. Everything —
 people, base currency (CZK, EUR or PLN), modules — is configured there, not in
 files.
 
+Two optional knobs, both in `.env`. `CONTINUUM_MAX_UPLOAD` sets the largest
+accepted upload (`32M` by default — a phone photo does not fit in the server's
+own 512 KB default). `ADDRESS_HEADER=x-forwarded-for` makes the app read the
+real client address from a forwarded header, which the sign-in rate limit needs
+behind a reverse proxy; set it only where that proxy is the only way in and
+always overwrites the header, or a caller can forge it.
+
 Backups: Settings → Backups writes one restorable database dump
 (`continuum-backup.sql`, overwritten on every run) plus a copy of every
 uploaded file to a folder of your choosing, weekly or monthly. By default that

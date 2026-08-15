@@ -49,7 +49,10 @@ never re-denominated — only screen-level totals convert, at the day's rate.
   files when they are present locally (never in CI).
 - **Splits**: a transaction divided between categories keeps its lines summing
   exactly to the parent, same sign, at least two — enforced in one write path
-  (`saveSplits`). Every consumer resolves through one pure function,
+  (`saveSplits`), which is one database transaction with the parent row locked
+  for its duration. Lines are matched to the rows they came from by id rather
+  than by position, so a split-level tag stays with its line when another line
+  is removed. Every consumer resolves through one pure function,
   `effectiveLines` (`src/lib/transactions/lines.ts`), so the "is it split?"
   branch exists once; splitting nulls the parent category so a consumer that
   ever forgot the branch would report "unfiled" loudly rather than a stale
@@ -63,6 +66,15 @@ never re-denominated — only screen-level totals convert, at the day's rate.
 - **Money over the wire**: `/api/v1` sends every amount as integer minor units
   plus a currency code, through one `money()` helper that throws on the safe
   integer boundary instead of rounding. Never floats, never formatted strings.
+- **Minor units**: how many a currency has comes from the runtime's own CLDR
+  data (`minorDigits`), not a table — HUF, JPY, KRW and ISK have none, KWD and
+  BHD have three. Every crossing between minor units and a plain number goes
+  through `toMajor` / `fromMajor`; a hardcoded hundred anywhere is a bug waiting
+  for the first household that keeps money in one of those currencies.
+- **Exchange rates**: a missing rate is never silently treated as one-to-one.
+  Conversion returns null for "unknown", callers fall back to face value through
+  a named helper, and the app layout names every currency being shown that way —
+  the figure is allowed to be approximate, never quietly wrong.
 - **Entity links**: a document always belongs to records — people, flats,
   brokerage accounts, or `subject` rows (household, car, …) — through typed
   join tables. There is no free-text subject anywhere, so a rename follows
@@ -89,8 +101,22 @@ cookie, `validateSession`, `locals.person` — is unaware of which was used.
   value are non-zero. Synced passkeys always report zero, so a naive
   monotonicity check would reject every Apple credential on its second use.
   `webauthn/counter.ts` holds the rule and a unit test pins it.
-- **Enrollment tokens**, **sessions** and **API tokens** all store only a
-  sha256 of the value; the raw token is shown once and never persisted.
+- **WebAuthn challenges** are recorded in `webauthn_challenge` when issued and
+  deleted when spent, so a verification that spends nothing is refused. The
+  cookie carries the value back from the browser but is not the record of it:
+  SvelteKit does not sign cookies, so a challenge held only there is whatever
+  the caller says it is, and one captured assertion replays forever.
+- **Enrollment tokens**, **sessions**, **API tokens** and challenges all store
+  only a sha256 of the value; the raw token is shown once and never persisted.
+- **Changing a password revokes every other way in** — other sessions and every
+  registered passkey. Enrolling a passkey needs only a live session, so one
+  enrolled from a stolen cookie would otherwise outlive the remedy.
+- **Rate limiting** is per scope and per subject, not per address alone
+  (`auth/ratelimit.ts`). Sign-in attempts are budgeted per account, and the API
+  and enrollment doors keep their own — behind a reverse proxy or Tailscale the
+  whole household shares one address, so an address-only budget let any caller
+  shut everyone out. Set `ADDRESS_HEADER` only where a trusted proxy is the
+  only way in.
 - **Permissions** live in `auth/policy.ts` as pure functions, so the
   last-administrator invariant is tested without a database and cannot drift
   between call sites. `person.role` is exactly `admin` or `member`.

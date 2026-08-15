@@ -162,6 +162,34 @@
       "when": 1786778578634,
       "tag": "0022_flat_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786778578635,
+      "tag": "0023_rescale_minor_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786793372065,
+      "tag": "0024_medical_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786793644667,
+      "tag": "0025_uneven_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786793644668,
+      "tag": "0026_person_role_check",
+      "breakpoints": true
     }
   ]
 }

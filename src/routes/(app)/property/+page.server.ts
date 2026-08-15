@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	document,
@@ -18,6 +18,7 @@ import {
 } from '$lib/server/db/schema';
 import { SHELVES } from '$lib/documents';
 import { initialsFor } from '$lib/people';
+import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { saveUpload } from '$lib/server/files';
 import { normaliseTagName, setPropertyTags, upsertTag } from '$lib/server/tags';
@@ -158,7 +159,8 @@ export const load: PageServerLoad = async ({ url }) => {
 					id: b.id,
 					label: b.label,
 					value: formatMinor(b.amountMinor, current.currency),
-					file: doc?.storedName ?? null
+					file: doc?.storedName ?? null,
+					fromMeter: b.source === 'meter'
 				};
 			});
 		const billsTotal = formatMinor(
@@ -401,6 +403,47 @@ export const actions: Actions = {
 			endDate: String(form.get('endDate') ?? '').trim() || null,
 			renewalNoticeDate: String(form.get('renewalNoticeDate') ?? '').trim() || null
 		});
+		return { ok: true };
+	},
+
+	/**
+	 * Point the smart meter at a bill, or take it off again.
+	 *
+	 * Which line the meter feeds is the household's decision, not something to
+	 * infer: matching a label containing "energy" missed the app's own seeded
+	 * "Electricity advance", so the meter added a second line beside it and the
+	 * flat's bill total counted electricity twice. One meter-fed line per
+	 * property, so pointing it at a new bill releases the old one.
+	 */
+	setBillSource: async ({ request }) => {
+		const form = await request.formData();
+		const billId = String(form.get('billId') ?? '');
+		const fromMeter = String(form.get('fromMeter')) === 'true';
+		const rows = await db.select().from(propertyBill).where(eq(propertyBill.id, billId));
+		const bill = rows[0];
+		if (!bill) return fail(404, { message: 'Bill not found.' });
+
+		await db.transaction(async (tx) => {
+			if (fromMeter) {
+				await tx
+					.update(propertyBill)
+					.set({ source: 'manual' })
+					.where(
+						and(eq(propertyBill.propertyId, bill.propertyId), eq(propertyBill.source, 'meter'))
+					);
+			}
+			await tx
+				.update(propertyBill)
+				.set({ source: fromMeter ? 'meter' : 'manual' })
+				.where(eq(propertyBill.id, billId));
+		});
+		// Fill the newly pointed-at line straight away rather than leaving a
+		// stale figure until the next hourly tick.
+		if (fromMeter) {
+			await syncMeterBill().catch((err) =>
+				console.warn('Meter bill sync failed:', err?.message ?? err)
+			);
+		}
 		return { ok: true };
 	},
 

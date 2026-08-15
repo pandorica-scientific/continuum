@@ -207,6 +207,7 @@
 				currency={splitting.currency}
 				categories={data.categories}
 				existing={splitting.splits.map((s) => ({
+					id: s.id,
 					amountMajor: s.amountMajor,
 					categoryId: s.categoryId
 				}))}

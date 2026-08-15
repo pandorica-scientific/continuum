@@ -65,9 +65,16 @@ const CONTENT_TYPES: Record<string, string> = {
  * inert. `nosniff` stops a .csv or .abo being re-interpreted as HTML on the
  * strength of its contents.
  */
+// No `sandbox` token. It would put the response in an opaque origin with
+// scripting disabled, which is exactly what the browsers' own PDF viewers are
+// — pdf.js in Firefox, the built-in viewer in Chrome — so every uploaded bill,
+// payslip and scanned statement opened as a blank tab, with `allow-downloads`
+// absent so the save fallback failed too. It bought nothing either: there is no
+// script-src here, and `default-src 'none'` already blocks inline and external
+// script alike, which is the whole of the SVG threat.
 const SECURITY_HEADERS: Record<string, string> = {
 	'content-security-policy':
-		"default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; sandbox",
+		"default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'",
 	'x-content-type-options': 'nosniff'
 };
 
