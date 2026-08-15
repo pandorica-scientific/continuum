@@ -5,7 +5,7 @@
 
 import { confidence } from '$lib/rules/confidence';
 
-/** Starter evidence for seeded and learned rules. See DEFAULT_AUTO_THRESHOLD. */
+/** Starter evidence a learned rule begins with. See DEFAULT_AUTO_THRESHOLD. */
 export const DEFAULT_RULE_PRIOR = 6;
 
 /**
@@ -76,7 +76,7 @@ export function normalise(raw: string): string {
  * Whole-word match over normalised text. Both sides go through `normalise`:
  * the haystack has its diacritics stripped and its punctuation collapsed, so a
  * needle that keeps either can never match it. Rules the app writes itself
- * (learned and seeded) were already folded, but a hand-typed one was stored
+ * (learned ones) were already folded, but a hand-typed one was stored
  * with only `.toLowerCase()`, so every rule containing an accent or a hyphen
  * saved cleanly, listed cleanly, reported a confidence — and never once fired.
  * "Rohlík" missed ROHLIK.CZ, "T-Mobile" missed T-MOBILE, "Česká pošta" missed
@@ -86,10 +86,10 @@ export function normalise(raw: string): string {
  * database, and `normalise` is idempotent so pre-folded values are unaffected.
  *
  * The match is deliberately whole-word despite the operator being called
- * "contains": seeded rules include values as short as "pre", "o2" and "cez",
- * and a substring test would file every PREMIER, EXPRESS and similar under
- * energy. The cost is that "albert" does not match "ALBERTCZ" — write the rule
- * as "albertcz", which the editor's preview shows immediately.
+ * "contains": a counterparty can be as short as "pre", "o2" or "cez", and a
+ * substring test would file every PREMIER, EXPRESS and similar under energy.
+ * The cost is that "albert" does not match "ALBERTCZ" — write the rule as
+ * "albertcz", which the editor's preview shows immediately.
  */
 function containsWord(haystack: string | null | undefined, needle: string): boolean {
 	if (!haystack) return false;

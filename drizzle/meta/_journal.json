@@ -232,6 +232,13 @@
       "when": 1786793644674,
       "tag": "0032_bind_home_meter_property",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786793644675,
+      "tag": "0033_drop_seeded_rules",
+      "breakpoints": true
     }
   ]
 }

@@ -55,9 +55,10 @@ describe('ruleMatches', () => {
 		}
 	});
 
-	it('stays whole-word, so short seeded values cannot run wild', () => {
-		// "pre", "o2" and "cez" are seeded rules. A substring test would file
-		// every PREMIER and EXPRESS under energy.
+	it('stays whole-word, so short values cannot run wild', () => {
+		// A counterparty can be as short as "pre", "o2" or "cez", so a rule learned
+		// from one is too. A substring test would file every PREMIER and EXPRESS
+		// under energy.
 		const pre = rule({ conditions: [{ field: 'counterparty', op: 'contains', value: 'pre' }] });
 		expect(ruleMatches(pre, { counterparty: 'PREMIER SPORT', amountMinor: -1000n })).toBe(false);
 		expect(ruleMatches(pre, { counterparty: 'PRE distribuce', amountMinor: -1000n })).toBe(true);

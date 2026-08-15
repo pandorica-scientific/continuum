@@ -655,7 +655,9 @@ export const rule = pgTable('rule', {
 	id: text('id').primaryKey(),
 	name: text('name').notNull(),
 	enabled: boolean('enabled').notNull().default(true),
-	provenance: text('provenance').notNull().default('learned'), // seeded | learned | manual
+	// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
+	// rules; migration 0033 retired it and no code writes it any more.
+	provenance: text('provenance').notNull().default('learned'),
 	// [{ field, op, value }], ANDed. Read only ever as a set with its rule.
 	conditions: jsonb('conditions').notNull(),
 	categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),

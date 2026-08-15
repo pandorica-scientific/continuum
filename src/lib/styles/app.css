@@ -124,6 +124,31 @@ input[type='radio'] {
 	accent-color: var(--blue);
 }
 
+/* A file field's "Choose File" button is drawn by the browser and inherits none
+   of the rules above, so it kept its platform default — a light grey chip sat
+   inside a dark card on the payslip, document, bill and restore forms. Styling
+   the pseudo-element here covers all four the way the base rule above covers
+   every other control. */
+input[type='file'] {
+	padding: 5px 6px;
+	color: var(--fg2);
+	cursor: pointer;
+}
+input[type='file']::file-selector-button {
+	border: 1px solid var(--bd2);
+	background: var(--card2);
+	color: var(--fg1);
+	border-radius: 6px;
+	padding: 5px 11px;
+	margin-right: 10px;
+	font-family: inherit;
+	font-size: 13px;
+	cursor: pointer;
+}
+input[type='file']::file-selector-button:hover {
+	background: var(--card3);
+}
+
 ::-webkit-scrollbar {
 	width: 10px;
 	height: 10px;

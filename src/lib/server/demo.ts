@@ -148,9 +148,10 @@ export async function seedDemo(): Promise<void> {
 	for (const row of cez) await setTransactionTags(row.id, ['Renovation 2026']);
 
 	// A hand-written rule that the old single-matcher categoriser could not have
-	// expressed: a counterparty *and* an amount floor. It starts from no
-	// evidence, so the rules screen shows it earning trust rather than assuming
-	// it — unlike the seeded rules beside it.
+	// expressed: a counterparty *and* an amount floor. It starts from no evidence,
+	// so the rules screen shows it earning trust rather than assuming it. Demo
+	// transactions carry their categories directly, so this is the only rule a
+	// demo instance begins with.
 	await db.insert(rule).values({
 		id: randomUUID(),
 		name: 'Big Alza purchases',

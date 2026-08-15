@@ -192,13 +192,14 @@ test.describe('signed in', () => {
 		await expect(row).toContainText('32 892');
 	});
 
-	test('the rules screen lists the seeded rules with their confidence', async ({ page }) => {
+	test('the rules screen lists what filing taught it, and nothing else', async ({ page }) => {
 		await page.goto('/rules');
 		await expect(page.locator('.rule-row').first()).toBeVisible();
-		// Seeded rules start at the prior, which clears the filing threshold.
-		await expect(
-			page.locator('.rule-row', { hasText: 'cssz' }).locator('.r-confidence')
-		).toHaveText('61%');
+		// Nothing arrives seeded any more, so every rule on this screen was earned
+		// by a correction — here, the review row filed two tests ago.
+		await expect(page.locator('.rule-row', { hasText: 'seeded' })).toHaveCount(0);
+		// A learned rule starts at the prior, which clears the filing threshold.
+		await expect(page.locator('.rule-row').first().locator('.r-confidence')).toHaveText('61%');
 	});
 
 	test('a hand-written rule previews its matches before it is saved', async ({ page }) => {
@@ -222,20 +223,25 @@ test.describe('signed in', () => {
 	});
 
 	test('overriding a rule-filed transaction is recorded against that rule', async ({ page }) => {
-		// The seeded cssz rule filed this row automatically; overriding it is the
-		// signal that should cost the rule some confidence.
-		await page.goto('/transactions?q=SSZ');
-		const row = page.locator('.txn-row').first();
-		await expect(row).toContainText('SSZ');
-		await row.locator('select[name=categoryId]').selectOption('groceries');
-		await row.getByRole('button', { name: 'File' }).click();
+		// Nothing arrives seeded, so the rule that filed this row is one the
+		// household taught: both Raiffeisenbank rows share a counter-account, so
+		// filing one from the review queue filed the other automatically. That
+		// second row is the only kind that can carry an override — overriding it is
+		// the signal that should cost the rule some confidence.
+		await page.goto('/transactions');
+		const filed = page.locator('.txn-row', { hasText: 'filed by rule' }).first();
+		await expect(filed).toBeVisible();
+		await filed.locator('select[name=categoryId]').selectOption('eating-out');
+		await filed.getByRole('button', { name: 'File' }).click();
 		await page.waitForTimeout(800);
 
+		// The rule that filed it is the one now carrying the correction. Its
+		// identity does not matter here; that exactly one rule took the hit does.
 		await page.goto('/rules');
-		const cssz = page.locator('.rule-row', { hasText: 'cssz' });
-		await expect(cssz.locator('.r-counts')).toContainText('1 overridden');
+		const overridden = page.locator('.rule-row', { hasText: '1 overridden' });
+		await expect(overridden).toHaveCount(1);
 		// One correction takes a rule at the prior below the threshold.
-		await expect(cssz.locator('.r-confidence')).toHaveText('49%');
+		await expect(overridden.locator('.r-confidence')).toHaveText('49%');
 	});
 
 	test('an api token is shown once and then reads the ledger', async ({ page, request }) => {

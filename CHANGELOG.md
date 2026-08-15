@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.4 — 2026-08-15
+
+A pass over the first-run experience: the setup wizard, what a fresh install
+starts with, and the controls that had kept their browser defaults.
+
+**Upgrading:** migration `0033` runs automatically and retires the shipped
+starter rules — the ones nobody ever accepted or corrected are removed, and any
+that did earn a record are kept and relabelled as learned. As with every
+database release, take a backup before replacing the image.
+
+### Fixed
+
+- **The setup wizard showed one module with no name, and threw away everything
+  typed when it refused a submission.** The wizard kept its own list of module
+  labels beside the registry, so Tax — added to the registry later — rendered as
+  a bare checkbox; labels now come from the registry itself and cannot drift
+  again. A rejected submission re-renders with the household name, currency,
+  people, birth years and module choices intact. Passwords are deliberately not
+  restored: echoing one would write it into the response HTML.
+- **A file field's "Choose File" button ignored the theme.** The browser draws
+  that button itself, so it kept its platform default — a light grey chip inside
+  a dark card on the payslip, document, bill and restore forms. It now takes the
+  same look as every other control, from one rule in the shared stylesheet.
+- **Nothing explained why passkeys were missing on a plain-HTTP deployment.**
+  Settings now says that browsers refuse WebAuthn outside a secure context and
+  that pointing `ORIGIN` at an `https://` address brings the controls back,
+  instead of hiding the whole section without a word.
+
+### Changed
+
+- **An install no longer ships 42 starter rules.** A fresh household begins with
+  the category taxonomy and no rules at all; every rule is earned from a
+  correction someone actually made, which is what the confidence score claims to
+  measure. The curated Czech/Polish merchant patterns were wrong in both
+  directions — dead weight for a household that shops elsewhere, and, because
+  seeding ran on every boot, a starter rule you deleted came back at the next
+  restart. The first import of a new install now sends more rows to the review
+  queue, and filing them is what teaches the rules.
+
 ## 0.3.3 — 2026-08-15
 
 A full correctness and simplification pass over the paths that move money or
@@ -15,8 +54,8 @@ currencies/properties. The fingerprint repair deliberately reconciles old
 duplicates while preserving their categories, splits, tags and linked events.
 If the household has more than one lived-in property, migration `0032` binds an
 existing home integration to the oldest one; open Home settings once and
-confirm that target. As with every database release, take a backup before
-replacing the image.
+confirm that target. As with every database release, take a backup
+before replacing the image.
 
 ### Fixed
 
@@ -140,17 +179,6 @@ replacing the image.
   retain the document's stored currency, while legacy rule thresholds and home
   energy prices are permanently bound to the currency in force when they were
   authored rather than being reinterpreted after a base-currency change.
-- **The setup wizard showed one module with no name, and threw away everything
-  typed when it refused a submission.** The wizard kept its own list of module
-  labels beside the registry, so Tax — added to the registry later — rendered as
-  a bare checkbox; labels now come from the registry itself and cannot drift
-  again. A rejected submission re-renders with the household name, currency,
-  people, birth years and module choices intact. Passwords are deliberately not
-  restored: echoing one would write it into the response HTML.
-- **Nothing explained why passkeys were missing on a plain-HTTP deployment.**
-  Settings now says that browsers refuse WebAuthn outside a secure context and
-  that pointing `ORIGIN` at an `https://` address brings the controls back,
-  instead of hiding the whole section without a word.
 
 ### Security
 

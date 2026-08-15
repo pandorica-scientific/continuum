@@ -67,11 +67,17 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   the whole ledger. Splitting nulls the parent category, making an omitted split
   branch fail visibly as "unfiled" instead of silently using a stale category.
 - **Rule confidence**: a rule's standing is the Wilson lower bound on its
-  accepted/corrected record — conservative at low counts, never certain.
-  Seeded and learned rules start from a prior that clears the auto-file
-  threshold and drops below it after a single correction; a unit test pins
-  that pair so tuning either number cannot silently stop rules from filing.
-  Only an explicit confirmation counts as acceptance — silence is not consent.
+  accepted/corrected record — conservative at low counts, never certain. A
+  learned rule starts from a prior that clears the auto-file threshold and
+  drops below it after a single correction; a unit test pins that pair so
+  tuning either number cannot silently stop rules from filing. Only an explicit
+  confirmation counts as acceptance — silence is not consent.
+- **No starter rules**: an install begins with the category taxonomy and
+  nothing else. Every rule is earned from a correction someone made, which is
+  what the confidence score claims to measure. The 42 curated Czech/Polish
+  merchant patterns that used to ship were wrong in both directions — dead
+  weight for a household that shops elsewhere, and, because seeding ran on
+  every boot, a deleted one came back at the next restart.
 - **Money over the wire**: `/api/v1` sends every amount as integer minor units
   plus a currency code, through one `money()` helper that throws on the safe
   integer boundary instead of rounding. Never floats, never formatted strings.

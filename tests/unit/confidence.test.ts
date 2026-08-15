@@ -32,7 +32,7 @@ describe('confidence', () => {
 	});
 
 	// The prior and the threshold are load-bearing together. Without this pin,
-	// tuning either could silently stop every seeded rule from filing, and no
+	// tuning either could silently stop every learned rule from filing, and no
 	// other test would notice.
 	it('trusts a rule at the starter prior, and demotes it after one correction', () => {
 		expect(confidence(DEFAULT_RULE_PRIOR, 0)).toBeGreaterThan(DEFAULT_AUTO_THRESHOLD);

@@ -73,6 +73,7 @@ configured in the app and stored in your own database. Nothing calls home.
 ## Tags
 
 - `latest` — current build from `main` (amd64 + arm64)
+- `0.3.4` — first-run pass: no shipped starter rules, a setup wizard that keeps what you typed, themed file fields
 - `0.3.3` — atomic imports and mutations, concurrency-safe authentication and autosave, dated multi-currency totals, and the full-review remediation
 - `0.3.2` — two whole-codebase reviews: a server-side WebAuthn challenge store, currency-correct amounts, and a long list of silently wrong figures put right
 - `0.3.1` — hardening of the accounts work: enrollment, roles and passkey origins
