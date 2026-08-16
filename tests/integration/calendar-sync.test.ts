@@ -11,6 +11,7 @@ import { createEvent, deleteEvent, updateEvent } from '$lib/server/calendar/muta
 import { syncAccount } from '$lib/server/calendar/sync/engine';
 import type { EventSeries } from '$lib/server/calendar/series';
 import { toRemoteId } from '$lib/calendar/keys';
+import { calendarConflicts, calendarSyncFailures } from '$lib/server/briefing';
 import { removeStalePostgresDirectory } from './embedded-postgres';
 import { FakeCalendarProvider } from './fake-calendar-provider';
 
@@ -300,6 +301,206 @@ describe('crash safety', () => {
 
 		await sync();
 		expect(fake.has(toRemoteId(created.id))).toBe(true);
+	});
+});
+
+describe('write-back into the ledger', () => {
+	/** A mortgage whose payment day produces generated events in the horizon. */
+	async function seedLoan(paymentDay: number) {
+		const id = randomUUID();
+		const today = new Date().toISOString().slice(0, 10);
+		await testDb.insert(schema.loan).values({
+			id,
+			name: 'Mortgage ČS',
+			lender: 'Česká spořitelna',
+			kind: 'mortgage',
+			currency: 'CZK',
+			principalMinor: 990000000n,
+			owedMinor: 927000000n,
+			owedAsOf: today,
+			startDate: '2020-01-01',
+			regime: 'fixed_period',
+			dayCount: 'act/360',
+			accrualStyle: 'calendar',
+			paymentDay,
+			interestDeductible: 1
+		});
+		await testDb.insert(schema.loanFixationPeriod).values({
+			id: randomUUID(),
+			loanId: id,
+			startDate: '2020-01-01',
+			endDate: '2035-01-01',
+			annualRatePct: '4.44',
+			paymentMinor: 5445600n
+		});
+		return id;
+	}
+
+	/**
+	 * The remote copy of the LOAN PAYMENT event specifically.
+	 *
+	 * The horizon also carries import reminders and quarterly-report events, which
+	 * are schedule rules with no row behind them — picking one of those by
+	 * accident tests the unbound path while claiming to test write-back.
+	 */
+	function pushedLoanPayment(): { resourceId: string; series: EventSeries } {
+		const resourceId = [...fake.uids()].find((id) => fake.get(id)?.uid.includes('loanPayments'));
+		if (!resourceId) throw new Error('no loan payment event was pushed');
+		return { resourceId, series: fake.get(resourceId)! };
+	}
+
+	it('moves the payment day when the date is moved remotely', async () => {
+		const loanId = await seedLoan(15);
+		await sync();
+
+		// The generated payment events went out.
+		expect(fake.uids().length).toBeGreaterThan(0);
+		const { resourceId, series } = pushedLoanPayment();
+
+		// Someone drags it to the 20th of the same month, changing nothing else.
+		const moved = new Date(series.startsAt);
+		moved.setUTCDate(20);
+		fake.setRemote(resourceId, {
+			...series,
+			startsAt: moved.toISOString(),
+			endsAt: moved.toISOString(),
+			updatedAt: new Date().toISOString()
+		});
+
+		await sync();
+
+		const [row] = await testDb.select().from(schema.loan).where(eq(schema.loan.id, loanId));
+		expect(row.paymentDay).toBe(20);
+	});
+
+	it('records the write-back so it can be traced afterwards', async () => {
+		await seedLoan(15);
+		await sync();
+		const { resourceId, series } = pushedLoanPayment();
+
+		const moved = new Date(series.startsAt);
+		moved.setUTCDate(20);
+		fake.setRemote(resourceId, {
+			...series,
+			startsAt: moved.toISOString(),
+			endsAt: moved.toISOString(),
+			updatedAt: new Date().toISOString()
+		});
+		await sync();
+
+		const written = await testDb
+			.select()
+			.from(schema.calendarConflict)
+			.where(eq(schema.calendarConflict.resolution, 'wrote-back'));
+		expect(written.length).toBeGreaterThan(0);
+	});
+
+	// The ledger owns a generated event's CONTENT. Retitling one in a phone
+	// calendar is not a fact about the amortisation schedule, so it is reverted
+	// rather than accepted — and it must not be mistaken for a date move.
+	it('re-asserts a remote retitle instead of writing anything back', async () => {
+		const loanId = await seedLoan(15);
+		await sync();
+		const { resourceId, series } = pushedLoanPayment();
+
+		fake.setRemote(resourceId, {
+			...series,
+			title: 'Something else entirely',
+			updatedAt: new Date().toISOString()
+		});
+		await sync();
+
+		const [row] = await testDb.select().from(schema.loan).where(eq(schema.loan.id, loanId));
+		expect(row.paymentDay).toBe(15);
+		expect(fake.get(resourceId)!.title).toContain('Mortgage ČS');
+	});
+});
+
+describe('what the household is told', () => {
+	const conflict = (resolution: 'local-won' | 'remote-won' | 'wrote-back') => ({
+		id: randomUUID(),
+		localKey: 'k1',
+		accountId: ACCOUNT,
+		ours: {} as never,
+		theirs: {} as never,
+		resolution
+	});
+
+	// The justification for last-writer-wins. An overwritten edit that nobody is
+	// told about is just a lost edit.
+	it('raises a discarded edit', async () => {
+		await testDb.insert(schema.calendarConflict).values(conflict('remote-won'));
+		const items = await calendarConflicts(testDb);
+		expect(items).toHaveLength(1);
+		expect(items[0].hue).toBe('yellow');
+		expect(items[0].title).toMatch(/overwritten/i);
+	});
+
+	// Louder than a discarded edit, because this one changed ledger data from
+	// outside the ledger.
+	it('raises a write-back in red', async () => {
+		await testDb.insert(schema.calendarConflict).values(conflict('wrote-back'));
+		const items = await calendarConflicts(testDb);
+		expect(items).toHaveLength(1);
+		expect(items[0].hue).toBe('red');
+		expect(items[0].title).toMatch(/changed a date in the ledger/i);
+	});
+
+	it('separates write-backs from overwritten edits', async () => {
+		await testDb
+			.insert(schema.calendarConflict)
+			.values([conflict('wrote-back'), conflict('remote-won'), conflict('local-won')]);
+		const items = await calendarConflicts(testDb);
+		expect(items).toHaveLength(2);
+		expect(items.find((i) => i.hue === 'red')!.pill).toBe('1 change');
+		expect(items.find((i) => i.hue === 'yellow')!.pill).toBe('2 edits');
+	});
+
+	it('stops raising one that has been acknowledged', async () => {
+		await testDb
+			.insert(schema.calendarConflict)
+			.values({ ...conflict('remote-won'), acknowledgedAt: new Date() });
+		expect(await calendarConflicts(testDb)).toHaveLength(0);
+	});
+
+	it('says nothing when there is nothing to say', async () => {
+		expect(await calendarConflicts(testDb)).toHaveLength(0);
+		expect(await calendarSyncFailures(testDb)).toHaveLength(0);
+	});
+
+	// A sync that fails quietly is worse than one that never ran: the calendar
+	// goes on showing what it last saw, looking correct while drifting.
+	it('raises an account that is failing', async () => {
+		await testDb
+			.update(schema.calendarAccount)
+			.set({ lastError: 'Server answered 401.', lastSyncAt: new Date() })
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+
+		const items = await calendarSyncFailures(testDb);
+		expect(items).toHaveLength(1);
+		expect(items[0].detail).toContain('401');
+		// Recently synced, so it may still be a blip.
+		expect(items[0].hue).toBe('yellow');
+	});
+
+	it('turns red once it has been broken for more than a day', async () => {
+		await testDb
+			.update(schema.calendarAccount)
+			.set({
+				lastError: 'Server answered 401.',
+				lastSyncAt: new Date(Date.now() - 40 * 60 * 60 * 1000)
+			})
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+
+		expect((await calendarSyncFailures(testDb))[0].hue).toBe('red');
+	});
+
+	it('says nothing about an account that is working', async () => {
+		await testDb
+			.update(schema.calendarAccount)
+			.set({ lastError: null, lastSyncAt: new Date() })
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+		expect(await calendarSyncFailures(testDb)).toHaveLength(0);
 	});
 });
 

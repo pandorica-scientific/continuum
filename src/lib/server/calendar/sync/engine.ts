@@ -241,20 +241,25 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 
 		outcomes.set(key, outcome);
 
+		// The etag we just pulled beats the one stored from last time: when the
+		// remote has moved, writing against the stale value fails as a conflict and
+		// the correction is delayed a whole pass for no reason.
+		const currentEtag = change?.etag ?? link?.remoteEtag ?? null;
+
 		if (outcome.kind === 'push' && localSeries) {
 			pushOps.push({
 				op: {
 					kind: 'upsert',
 					remoteId,
 					series: decorated(localSeries, item!),
-					etag: link?.remoteEtag ?? null
+					etag: currentEtag
 				},
 				localKey: key,
 				hash: localHash
 			});
 		} else if (outcome.kind === 'push-delete') {
 			pushOps.push({
-				op: { kind: 'delete', remoteId, etag: link?.remoteEtag ?? null },
+				op: { kind: 'delete', remoteId, etag: currentEtag },
 				localKey: key,
 				hash: null
 			});
@@ -264,7 +269,7 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 					kind: 'upsert',
 					remoteId,
 					series: decorated(localSeries, item!),
-					etag: link?.remoteEtag ?? null
+					etag: currentEtag
 				},
 				localKey: key,
 				hash: localHash
@@ -284,7 +289,26 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 		for (let i = 0; i < pushOps.length; i++) {
 			const sent = pushOps[i];
 			const result = results[i];
-			if (!result?.ok) continue;
+
+			if (!result?.ok) {
+				// A rejected write means the remote moved under us. Take the etag the
+				// pull just gave us so the NEXT pass can write; leaving the stale one
+				// in place makes every future attempt fail the same way, and a
+				// generated event retitled on someone's phone would never be corrected.
+				const seen = remoteByUid.get(sent.localKey);
+				if (result?.conflict && seen?.etag) {
+					await tx
+						.update(calendarSyncLink)
+						.set({ remoteEtag: seen.etag })
+						.where(
+							and(
+								eq(calendarSyncLink.localKey, sent.localKey),
+								eq(calendarSyncLink.accountId, accountId)
+							)
+						);
+				}
+				continue;
+			}
 
 			await upsertLink(tx, {
 				localKey: sent.localKey,
