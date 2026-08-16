@@ -1,5 +1,12 @@
 # Handoff: Continuum — self-hosted household finance server
 
+> **v4 — aligned to the shipped codebase.** The SvelteKit implementation
+> (`src/lib/modules/registry.ts`, `src/lib/overview/panels.ts`, `src/lib/icons.ts`,
+> `src/lib/styles/app.css`) is now the source of truth for navigation, panels, icons
+> and tokens; this document and `Continuum v4.dc.html` follow it rather than the other
+> way round. Where the two ever disagree, the code wins — file a design change instead
+> of forking the spec.
+
 ## Overview
 
 **Continuum** — a self-hosted web dashboard for a two-adult household to track everything financial in one
@@ -100,42 +107,94 @@ fallback — this was an explicit decision).
 | `--bd2` | `rgba(255,255,255,0.18)` | inputs, emphasised borders |
 | `--fg1` | `#e6e9ef` | primary text |
 | `--fg2` | `#c5ccd6` | body text |
-| `--fg3` | `#8a96a6` | captions, muted |
+| `--fg3` | `#99a4b3` | captions, muted |
 | `--fg-inverse` | `#0e1117` | text on a bright accent fill |
 | `--green` | `#2ecc71` | income, gains, "on" state |
-| `--red` | `#e74c3c` | debt, losses, outflow |
+| `--red` | `#ef6a5c` | debt, losses, outflow |
 | `--yellow` | `#f1c40f` | needs attention, transport series |
-| `--blue` | `#3498db` | housing series, links, primary action |
-| `--purple` | `#9b59b6` | food & lifestyle series, person 2 |
+| `--blue` | `#5aaee4` | housing series, links, primary action |
+| `--purple` | `#bd85d3` | food & lifestyle series, person 2 |
 | `--orange` | `#e67e22` | bills & utilities series |
 | `--teal` | `#1abc9c` | investments series |
 | `--plate` | `rgba(14,17,23,0.86)` | label halo base |
 | `--*-tint` | `rgba(<hue>,0.18)` | traffic-light pill fills (green/yellow/red/blue/teal/purple) |
 | `--grey-tint` | `rgba(138,150,166,0.16)` | neutral pill fill |
-| `--brand` | `#4a86c8` | logo mark only — see *Brand* |
+| `--indigo` | `#7b8ce8` | Calendar area identity |
+| `--brand` | `#4a86c8` | logo mark, Overview area identity — see *Brand* |
+| `--*-wash` | `rgba(<hue>,0.07)` | metric-tile and card backgrounds, one step below a tint |
 
 ### Colour — light
 
-| Token | Value |
-|---|---|
-| `--bg` / `--bg2` / `--side` | `#edeae3` / `#e6e2d9` / `#e9e5dd` |
-| `--card` / `--card2` / `--card3` | `#f6f4ef` / `#eeebe3` / `#e2ddd2` |
-| `--bd` / `--bd2` | `rgba(58,50,38,0.13)` / `rgba(58,50,38,0.26)` |
-| `--fg1` / `--fg2` / `--fg3` | `#23201b` / `#4b463d` / `#7d766a` |
-| `--fg-inverse` | `#ffffff` |
-| `--green` | `#12945a` |
-| `--red` | `#cf3b2c` |
-| `--yellow` | `#a8800a` |
-| `--blue` | `#2478b5` |
-| `--purple` | `#7c4795` |
-| `--orange` | `#bd6317` |
-| `--teal` | `#0f8a72` |
-| `--plate` | `rgba(237,234,227,0.9)` |
-| `--*-tint` | same hues at `0.12`–`0.14` alpha |
-| `--brand` | `#1b4f8a` |
+Warm paper, **crisp white cards**. The near-white card on warm paper is what makes the theme
+read clean; an off-white card on a grey-brown canvas (the first attempt) reads dingy because
+the two surfaces sit too close together.
 
-The light accents are darkened from the dark-theme hues to hold contrast on paper. Do not
-reuse the dark values on light.
+| Token | Value | Use |
+|---|---|---|
+| `--bg` / `--bg2` | `#f3f0e9` / `#eeeae1` | warm paper canvas, vertical gradient |
+| `--side` | `#efebe2` | sidebar |
+| `--card` | `#ffffff` | card and metric-tile fill |
+| `--card2` / `--card3` | `#f7f4ee` / `#ebe6dc` | hover / active nav, progress track |
+| `--bd` / `--bd2` | `rgba(60,52,40,0.10)` / `rgba(60,52,40,0.20)` | borders |
+| `--fg1` / `--fg2` / `--fg3` | `#1c1a16` / `#494339` / `#6b6559` | primary / body / muted |
+| `--fg-inverse` | `#ffffff` | text on a dark accent fill |
+| `--green` | `#0e7a4a` | ink only |
+| `--red` | `#bd2e21` | ink only |
+| `--yellow` | `#8a5900` | ink only |
+| `--blue` | `#186294` | ink only |
+| `--purple` | `#743990` | ink only |
+| `--orange` | `#a2530f` | ink only |
+| `--teal` | `#087059` | ink only |
+| `--indigo` | `#454fb0` | ink only |
+| `--brand` | `#1b4f8a` | logo mark, Overview identity |
+| `--plate` | `rgba(243,240,233,0.9)` | label halo base |
+
+#### The rule that matters: tints are mixed from BRIGHT hues, not from the ink
+
+This is the single most important thing to carry over, and it was learned the hard way over
+eight rounds of contrast fixes.
+
+In light mode each hue has **two values that are deliberately different**:
+
+- the **ink** — dark and saturated, used only as text or a 1px border (the table above);
+- a **bright** value that exists only inside the tint and wash `rgba()`, never as a token.
+
+```css
+--green-tint:  rgba(34,163,102,0.13);   /* bright green,  NOT #0e7a4a */
+--yellow-tint: rgba(232,169,4,0.16);    /* bright amber,  NOT #8a5900 */
+--red-tint:    rgba(224,80,63,0.13);
+--blue-tint:   rgba(63,143,206,0.13);
+--teal-tint:   rgba(20,161,132,0.13);
+--purple-tint: rgba(165,101,196,0.13);
+--orange-tint: rgba(224,123,30,0.14);
+--indigo-tint: rgba(112,128,224,0.14);
+--brand-tint:  rgba(63,124,191,0.13);
+--grey-tint:   rgba(120,130,145,0.13);
+/* washes: the same bright values at 0.05–0.06 */
+```
+
+Two reasons, and the second is counter-intuitive:
+
+1. **It looks right.** A tint mixed from the dark ink is mud — an amber pill mixed from
+   `#8a5900` reads olive, an orange one reads brown. Mixed from a bright amber it reads
+   as amber.
+2. **It gives MORE contrast headroom, not less.** A brighter tint is a *lighter* ground, so
+   the dark ink on it measures higher. Every attempt to fix a failing pill by darkening the
+   ink alone chased its own tail, because the tints had been rebuilt from the darkened inks
+   and the ground moved down with the text.
+
+So: **never re-mix a tint from its ink token**, and if a pill fails contrast, darken the ink
+and leave the tint alone.
+
+Do not reuse dark-theme hue values on light, or vice versa. The two blocks are independent.
+
+#### Verified state
+
+Both themes sweep clean at WCAG AA (4.5:1) for all text ≤15px, across all sixteen screens.
+Any change to a hue or a tint must be re-measured **alpha-flattened** — tints are
+translucent over a card that is itself over a gradient canvas, so a naive
+`getComputedStyle` walk reports the wrong ground and, in dark mode, falls back to white and
+produces nonsense.
 
 ---
 
@@ -251,19 +310,30 @@ list to stay legible. Seven areas hold twelve screens.
 [R] Robert & Tereza
 ```
 
-| Area | Screens (sub-tabs) |
-|---|---|
-| Overview | — |
-| Money | Cash flow · Accounts · Import |
-| Property | — |
-| Wealth | Investments · Loans |
-| Retirement | — |
-| Household | Home · Calendar |
-| Admin | Documents · Settings |
+| Area | Icon | Screens (sub-tabs) |
+|---|---|---|
+| Overview | `compass` | — |
+| Money | `flow` | Cash flow · Accounts · Transactions · Tax · Import · Rules · Tags |
+| Assets | `buildings` | Property · Investments · Loans |
+| Retirement | `target` | — |
+| Home | `house` | — |
+| Calendar | `calendar` | — |
+| Admin | `folders` | Documents · Settings |
 
-Property and Retirement stand alone deliberately: Property already carries its own
-property switcher inside the screen, so nesting it would mean two rows of tabs, and
-Retirement answers a different question from the rest of Wealth.
+Seven areas hold sixteen screens. Home and Calendar are separate rows rather than one
+Household area, so the calendar is one click away instead of two. Retirement stands
+alone because it answers a different question from the rest of Assets.
+
+**Core screens have no module.** Cash flow, Accounts, Transactions, Rules and Tags stay
+whatever is switched off — which is why Money can never disappear. The nine modules are
+`import`, `property`, `investments`, `loans`, `retirement`, `home`, `calendar`, `tax`,
+`documents`; each screen names at most one, and an area with no live screens is dropped
+from the sidebar entirely.
+
+Screen → icon: overview `compass`, cashflow `flow`, accounts `bank`, transactions
+`ledger`, tax `receipt`, import `inbox`, rules `sliders`, tags `tag`, property
+`buildings`, investments `chart`, loans `card`, retirement `target`, home `house`,
+calendar `calendar`, documents `folders`, settings `gear`.
 
 - Sidebar is a fixed 252px, one row per area, no group headings.
 - Clicking an area goes to its first live screen. An area is active when the current screen
@@ -293,8 +363,20 @@ Left: the screen's icon in `--brand` + screen title (28px/600) with a caption be
 Right: a `synced 09:12` status chip and an **Import statement** button.
 
 Below that, when the area has more than one screen, a **sub-tab row**: pills at 13px,
-active one on `--card3`, sitting above a 1px `--bd` rule. Areas with a single screen
-render no row at all.
+`border-radius: 20px`, `padding: 5px 12px`, active one on `--card3`, above a 1px `--bd`
+rule. Areas with a single screen render no row at all — a lone pill is a label pretending
+to be a choice. Money carries seven pills, which will not fit a narrow viewport: the row
+**scrolls sideways** (`overflow-x: auto`, scrollbar hidden) rather than wrapping into a
+second line that would shift every screen's content down by a variable amount.
+
+The **Import statement** button and the quick-add button are both gated on the `import`
+module — without that they lead to a 404 when it is switched off.
+
+### Approximate-rate banner
+
+When a currency on screen has no stored fixing for the dates in view, the app layout
+renders one `role="status"` line above the header — `--card3` fill, 3px `--orange` left
+border — naming the currency. A missing rate is never silently treated as one-to-one.
 
 ### Quick add
 
@@ -367,6 +449,25 @@ after any content change; an inner scrollbar on first load is a bug.
 | `accounts` | Where the cash sits | 6 × 6 | Five accounts, share and balance, bar scaled to the largest |
 | `equity` | Flats against mortgages | 6 × 5 | Equity as a green bar against value |
 | `energy` | Energy this month | 6 × 5 | 14-day bars, days above average in `--orange` |
+| `investments` | Portfolio | 6 × 5 | Value, gain, per-holding rows |
+| `retirement` | Retirement outlook | 6 × 5 | Percentage of target covered, with the verdict line |
+| `tax` | Tax position | 6 × 6 | Effective rate per person and country |
+| `activity` | Recent activity | 6 × 7 | The last transactions, linking to the register |
+| `savings` | Saved each month | 6 × 5 | Twelve monthly bars, thin months in `--orange` |
+
+**Panels are module-gated.** Each carries a list of modules that must all be on for it to
+exist: `upcoming` needs `calendar` (it links to a route that 404s otherwise), `equity`
+needs both `property` and `loans` (equity against a mortgage means nothing unless both
+halves exist), `energy` needs `home`, and the four new ones need their own. An
+unavailable panel is filtered out of both the board and the add tray.
+
+**Minimum size is 4 × 3** for every panel, `flow` included — deliberately, since below
+about half width the waterfall's leaf labels get genuinely small. That is recorded as an
+open question, and raising `flow`'s minimum is the lever if it proves unusable.
+
+**Default layout is unchanged on upgrade.** The four-panel default reproduces the
+pre-board Overview exactly, so upgrading changes nobody's screen; the other nine wait in
+the tray. The board is opt-in — it arrives when someone customises, not when they update.
 
 **A naming trap worth recording:** the panel data must not reuse a key already returned for
 another screen. `cashSplit` was defined twice — once for the Accounts donut legend
@@ -387,7 +488,7 @@ spec in *The waterfall chart* below.
 - **Next 30 days** — a dated list of upcoming money events, mono dates on the left,
   mono amounts on the right coloured by direction. Links to Calendar.
 
-### 2. 💸 Cash flow
+### 2. Cash flow
 
 The same waterfall chart at full width, plus:
 
@@ -396,7 +497,7 @@ The same waterfall chart at full width, plus:
   (green earned / red spent), 91 months from Jan 2019 to Jul 2026, year labels beneath,
   and a legend with the count of months that spent more than they earned.
 
-### 3. 🏦 Accounts
+### 3. Accounts
 
 - **Accounts list** — one row per account: emoji, name, meta line (currency · owner ·
   statement freshness), then the balance **in its own currency** with the CZK equivalent in
@@ -407,7 +508,84 @@ The same waterfall chart at full width, plus:
   from income and expenses. This is a core requirement: money moving between the household's
   own accounts must never appear as income or spending.
 
-### 4. 📥 Import
+### 4. Transactions
+
+Caption: *Every row the ledger holds. Search it, narrow it, file what the rules missed.*
+
+- **Filter card** — search (counterparty, note, symbol), from/to dates, account, category
+  (with an explicit *Uncategorised*), direction, min/max in the base currency, review
+  state (*filed by rule* / *needs a look* / *confirmed*), and a **Show own transfers**
+  checkbox. Apply and Clear. Filters live in the query string, so a filtered register is
+  a shareable URL.
+- **Matching** — the count and the per-currency totals of what the filter selected.
+- **Rows** — date, merchant, then a reason line naming the account and any detail
+  (counter-account, variable symbol, the foreign amount and the rate it converted at,
+  or *own transfer*). Amount right, mono, green when money came in.
+- **Per-row actions** — a state chip, a *File as…* select and a **File** button, and
+  **Split**.
+
+**A split transaction has no single category**, so there is nothing for the categoriser
+to learn: the File control does not apply to it. It offers *Edit split* and *Remove
+split* instead, and shows its lines beneath. Splitting nulls the parent category on
+purpose, so an omitted branch fails visibly as unfiled rather than quietly keeping a
+stale one.
+
+### 5. Tax
+
+Caption: *What each yearly statement said — recorded, never computed.*
+
+Tax is **recorded, never derived**. The app does not model any country's tax law; it
+stores what the statement a person actually received said, which is the only figure that
+is true in every jurisdiction the household files in.
+
+- **Statements**, grouped **person → country → year**, newest first. Each row: the year,
+  gross and tax paid in the statement's own currency, the effective rate, the component
+  lines (employment, rent, contract work), the linked document, and any note.
+- **Add statement / Edit / Delete.**
+- **Effective rate over time** per person, once there are enough years.
+
+A person filing in two countries gets two groups, not one merged figure — a Czech and a
+Polish statement are different documents about different money.
+
+### 6. Rules
+
+Caption: *What files itself, and how much each rule has earned your trust.*
+
+- **Header** — the rule count and the confidence threshold in force ("filing at 70%
+  confidence and above").
+- **New rule** opens an editor: a name, and one or more conditions — counterparty
+  contains, note contains, counter-account is, variable symbol is, amount between — plus
+  the category to file as and any tags. Amount rules carry the currency they were
+  authored in and compare only like-dimensional values.
+- **Rows** — name, its conditions, what it does ("files as Groceries · tags renovation"),
+  its provenance (*learned from a correction* or *written by hand*), the confidence
+  percentage, and the kept/overridden counts. Disable and Delete.
+- **Scope note** — changes apply to future imports and to transactions still awaiting a
+  category; existing automatic filings stay as filed.
+
+**Confidence is the Wilson lower bound** on a rule's accepted/corrected record —
+conservative at low counts, never certain. A learned rule starts from a prior that just
+clears the auto-file threshold and drops below it after a single correction. Only an
+explicit confirmation counts as acceptance; silence is not consent.
+
+**An install ships with no rules at all.** Every rule was earned from a correction
+someone made, which is what the confidence score claims to measure. Curated merchant
+patterns were tried and removed: wrong in both directions, and they came back at every
+restart.
+
+### 7. Tags
+
+Caption: *What each project has cost so far, across every category it touches.*
+
+A flat list of tags with their running totals; clicking one opens the register filtered
+to it. Each row shows the tag name, anything it is linked to (a property, a document),
+and its totals **per currency**, with a converted approximate total beneath when a tag
+spans more than one. A tag with nothing on it says so rather than showing a zero.
+
+Tags cut across categories: *Karlín renovation* collects materials, labour and permits
+wherever they were filed.
+
+### 8. Import
 
 - A dashed drop zone: *CSV, XML, OFX, ABO or PDF, any of the five banks. The layout is
   detected, transfers between your own accounts are paired and dropped, and categories come
@@ -418,7 +596,7 @@ The same waterfall chart at full width, plus:
   *reason* it is ambiguous, amount, and two one-click category buttons. Correcting a row is
   what trains the categoriser.
 
-### 5. 🏢 Property
+### 9. Property
 
 A property switcher at the top (one button per flat, showing whether it is lived in or
 rented), then per-property content.
@@ -437,7 +615,7 @@ rented), then per-property content.
   internet.
 - **Mortgage** — fixation pill, a repayment progress bar, and a link to the schedule.
 
-### 6. 📈 Investments
+### 10. Investments
 
 - Four metric tiles: portfolio, money in, gain, annualised real return.
 - **Value against money in** — a line chart with four series: actual (teal, solid), money in
@@ -449,7 +627,7 @@ rented), then per-property content.
   **duplicates are dropped by trade id** — this is a stated requirement, since the same
   report gets uploaded repeatedly.
 
-### 7. 💳 Loans
+### 11. Loans
 
 - Four metric tiles: total owed, monthly payments, interest this year (with the deductible
   portion), debt-free year.
@@ -468,7 +646,7 @@ refinanced at a different rate. The model must distinguish:
 Interest must be booked **per fixation period**, so a later re-fix never rewrites history.
 The pill states which regime applies and until when.
 
-### 8. 🎯 Retirement
+### 12. Retirement
 
 Three full-width bands stacked, not a sidebar-plus-column layout:
 
@@ -486,7 +664,7 @@ Three full-width bands stacked, not a sidebar-plus-column layout:
 
 All figures are in today's money; returns are real, after inflation.
 
-### 9. 🏠 Home (Household)
+### 13. Home
 
 **Bound to the flat the household lives in only** — explicitly not the rentals.
 
@@ -502,7 +680,7 @@ All figures are in today's money; returns are real, after inflation.
   on Karlín's bills, so the budget follows what the meter actually did.*
 - **This week at home** — the next few household events, linking to Calendar.
 
-### 10. 📅 Calendar
+### 14. Calendar
 
 - Source chips: Ledger (amber), Google · family (blue), iCal · work (purple).
 - **Month grid**, 7 columns. Each day cell shows its number and coloured dots for events.
@@ -515,7 +693,7 @@ All figures are in today's money; returns are real, after inflation.
 - **Connected calendars** — Google (read/write), iCal (read only, webcal), and the ledger's
   own published `ledger.ics` feed.
 
-### 11. 🗂️ Documents
+### 15. Documents
 
 - Search field over name, person, flat, year and tag; plus an `➕ Add document` action.
 - **Shelves** in a left rail: Everything, Payslips, Tax, Identity, Family, Property,
@@ -527,7 +705,7 @@ All figures are in today's money; returns are real, after inflation.
 - Each row: a file-type chip, the name, and a meta line. **Documents with an expiry date show
   it in amber instead of the added date.**
 
-### 12. ⚙️ Settings
+### 16. Settings
 
 - **Modules** — eight toggles (Property, Investments, Loans, Retirement, Home Assistant,
   Calendar, Documents, Import). Caption: *Everything is optional. Switch off what you do not
@@ -633,6 +811,120 @@ including the breakdown. Year to date covers January–July 2026; This month is 
 
 ---
 
+## Error and empty states
+
+A second design file, `Continuum Error Pages.dc.html`, covers every state where the app
+has nothing good to show. Ten states, one layout, one graphic language.
+
+The file opens on a **contact sheet** — all ten side by side — with chips in the header to
+open any one full-page. That sheet is a review surface, not a screen to build; ship the
+full-page layout.
+
+### The ten states
+
+| Code | Name | Hue | Title | Actions |
+|---|---|---|---|---|
+| 400 | Bad request | grey | That request did not make sense. | Back to Overview · Report this |
+| 401 | Unauthorised | blue | Identify yourself. | Sign in · Back to Overview |
+| 403 | Forbidden | purple | This is above your clearance. | Back to Overview · Request access |
+| 404 | Not found | indigo | This page is not in this timeline. | Back to Overview · Search |
+| 408 | Request timeout | yellow | Time ran out. | Try again · Back to Overview |
+| 429 | Too many requests | orange | You are moving faster than the server can follow. | Back to Overview · Try again |
+| 500 | Server error | red | Something came loose in the engine room. | Back to Overview · Copy reference |
+| 502 | Bad gateway | teal | Two halves of the system stopped talking. | Try again · Check status |
+| 503 | Unavailable | green | Out of service, briefly. | Try again · Release notes |
+| 000 | Offline | grey | You have drifted out of contact. | Try again · Connection help |
+
+Each hue is the existing semantic token, used as the page accent: the eyebrow chip's border
+and text, the ring graphic, and a faint `--*-wash` behind the whole page. No new colours.
+
+### Layout
+
+Two columns, content left and graphic right, collapsing to one below ~700px.
+
+**Text positions are fixed, not flowing.** The eyebrow, title block and body block have
+exact heights, so the actions row and the technical footer land on identical y coordinates
+in all ten states — flipping between codes must not shift anything. Titles bottom-align
+into a three-line block. Measured: eyebrow top 126, h1 174, body 301, actions 391,
+footer 451. Hold those relationships; the absolute values will change with your type stack.
+
+Type, padding and gaps scale with the viewport via `clamp()`. The ring graphic caps at
+`min(420px, 46vh)` so it never crowds a short window.
+
+**Structure, top to bottom:**
+
+1. **Eyebrow chip** — `404 Not found`, mono code + sans name, hue border over hue tint.
+2. **Title** — 40px/600, `max-width: 19ch`, sentence case.
+3. **Body** — 15.5px, `max-width: 46ch`, two or three sentences: what happened, whether
+   anything was lost, what to do.
+4. **Actions** — primary (filled `--blue`, `--fg-inverse` ink) and secondary (bordered).
+   The primary is whatever actually helps: *Try again* on transient states, *Sign in* on
+   401, *Back to Overview* when there is nothing to retry.
+5. **Technical footer** — mono, `--fg3`, above a 1px rule: reference id, path, timestamp,
+   upstream name, retry window. Switchable off.
+
+### The ring graphic
+
+The same concentric half-arcs on every page — six arcs at r = 34, 60, 86, 112, 138, 164
+around (150, 170) in a 340 viewBox, stroke widths 7 → 4, opacity 0.95 → 0.11, with a filled
+6px dot at the centre. Drawn in the state's hue. The code number sits over it in mono at
+`clamp(46px, 9vw, 74px)` with a `--bg` halo.
+
+It is the only illustration in the product and it is generated, not drawn — no imagery
+enters Continuum that is not data.
+
+### Voice
+
+Plain, calm, faintly temporal — never cute, never apologetic, never blaming the user. Every
+body answers three questions in order: what happened, whether anything was lost, what to do
+next. "Nothing was written, so nothing has been lost" is the register.
+
+A `copy` prop switches every title to a literal alternative (*This page does not exist.*)
+for anyone who wants the personality gone. Build both strings; let the install choose.
+
+### The easter egg
+
+Clicking the rings redraws them as a scene in the same line-art language — same 340 box,
+same hue, stroke only — and reveals a written line beneath. Clicking again restores the
+rings. What each state becomes:
+
+| Code | Scene | Line |
+|---|---|---|
+| 400 | the arcs shuffled out of sequence, an arrow pointing back | Somewhere in there, a comma is in the wrong place. |
+| 401 | a pocket watch on a chain, hands stopped | Names are the first thing you lose and the last thing you get back. |
+| 403 | a keyhole, locked from the far side | Some doors are locked from the other side. |
+| 404 | a door standing on its own, ajar, nothing behind it | Try the same address on a different Tuesday. |
+| 408 | an hourglass, run through | Nothing waits forever. Well. Almost nothing. |
+| 429 | the same arc arriving four times, out of step | Slow down. You arrive at the same moment either way. |
+| 500 | the ring split open, throwing sparks | Held together with rather more sticky tape than anyone likes to admit. |
+| 502 | two links that no longer meet | One of them is shouting down a corridor that is not there any more. |
+| 503 | a spanner where the rings should be | Back in five minutes. It may be a different five minutes for you. |
+| 000 | the signal thinning into dashes and one far dot | If you are reading this, you are further away than you think. |
+
+Rules that matter:
+
+- **The revealed line's space is reserved**, so revealing one shifts nothing.
+- Found ones persist (`localStorage['continuum-error-eggs']`, `{code: true}`), are marked
+  with a dot on the contact sheet, and are counted in the header — *3 of 10 found*.
+- An `easterEggs` prop switches the whole thing off for anyone self-hosting who would
+  rather not have it.
+- **Do not ship it pre-solved.** Seed the store empty; the discovery is the feature.
+
+### Props
+
+| Prop | Values | Default | Effect |
+|---|---|---|---|
+| `copy` | `themed` / `plain` | `themed` | Swaps every title for a literal one |
+| `technical` | boolean | `true` | Shows the mono footer |
+| `easterEggs` | boolean | `true` | Enables the ring scenes |
+
+### Empty states, not covered here
+
+These pages are for failures. Genuine empty states — no transactions imported yet, no
+documents on a shelf, no holdings — belong inside their screens and are not designed yet.
+
+---
+
 ## Interactions and behaviour
 
 | Interaction | Behaviour |
@@ -665,7 +957,9 @@ There are **no animations or transitions** anywhere. This is intentional.
 
 | State | Shape | Notes |
 |---|---|---|
-| `screen` | enum of 12 | current screen; its area drives the sidebar and sub-tabs |
+| `screen` | enum of 16 | current screen; its area drives the sidebar and sub-tabs |
+| `code` | error code | which error state is showing (error pages file) |
+| `open` | boolean | whether the ring graphic is showing its scene |
 | `layout` | `[{k, x, y, w, h}]` | Overview panels, persisted to `continuum-overview` |
 | `customising` | boolean | Overview edit mode |
 | `ghost` | `{i, x, y, w, h}` or null | live preview while dragging or resizing a panel |
@@ -755,13 +1049,14 @@ when nothing is pressing.
 
 | File | What it is |
 |---|---|
-| `Household Ledger v3.dc.html` | The design. Open it in a browser — it runs standalone. All twelve screens, both themes, all interactions. |
+| `Continuum v4.dc.html` | The design. Open it in a browser — it runs standalone. All sixteen screens, both themes, all interactions. |
 | `support.js` | Runtime the design file loads. Must sit beside it for the HTML to open. Prototype scaffolding — nothing to port. |
+| `Continuum Error Pages.dc.html` | The ten error states. Opens standalone; chips in the header switch state, and the rings hide an easter egg. |
 | `image-slot.js` | The drop-target component the property image slots use. Reference only. |
 | `colors_and_type.css` | The Stock Watcher design system's token file, for the values the design inherits. |
 | `README.md` | This document. |
 
-`Household Ledger v3.dc.html` is a single self-contained file: an HTML template followed by
+`Continuum v4.dc.html` is a single self-contained file: an HTML template followed by
 a JavaScript logic class. The chart maths, the label relaxation, the retirement model and
 all fixtures live in that class. Search it for `buildFlow`, `retModel`, `FLOWS`, `PROPS`,
 `ROOMS` and `DOCS`.

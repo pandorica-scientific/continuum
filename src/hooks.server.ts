@@ -1,4 +1,4 @@
-import { redirect, type Handle, type ServerInit } from '@sveltejs/kit';
+import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
 import { building } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { validateSession } from '$lib/server/auth';
@@ -151,3 +151,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+// An unexpected error becomes a short reference, printed to the log beside the
+// stack and shown on the error screen. Two halves of one pair: the stack never
+// reaches the browser — it can name file paths and, in a query, real figures —
+// and the reference is useless on its own without the log entry it points at.
+//
+// Only unexpected errors arrive here. A deliberate `error(400, '…')` is not an
+// exception and keeps its own message.
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	// Two four-character groups: long enough not to collide within one log file,
+	// short enough to read down a phone to somebody.
+	const reference = `${rand()}·${rand()}`;
+	console.error(`[${reference}] ${status} ${event.request.method} ${event.url.pathname}`, error);
+	return { message, reference };
+};
+
+function rand(): string {
+	return Math.random().toString(16).slice(2, 6).padStart(4, '0');
+}
