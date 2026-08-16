@@ -24,7 +24,6 @@
 </script>
 
 <ScreenHeader
-	emoji="📅"
 	title="Calendar"
 	caption="What the ledger knows is coming — written by itself, from your data."
 />

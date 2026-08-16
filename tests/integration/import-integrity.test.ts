@@ -129,6 +129,9 @@ beforeAll(async () => {
 		.filter((name) => /^\d{4}_.+\.sql$/.test(name) && name < '0029_')
 		.sort();
 	for (const name of baseMigrations) await executeSqlFile(resolve('drizzle', name));
+	// The baseline stops before this one, but every insert here goes through the
+	// current Drizzle schema, which names every person column including this.
+	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
 }, 30_000);
 
 beforeEach(async () => {

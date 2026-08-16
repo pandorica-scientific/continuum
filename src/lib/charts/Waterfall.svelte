@@ -4,7 +4,49 @@
 
 	let { input, currency }: { input: WaterfallInput; currency: string } = $props();
 
+	// The chart is laid out once at this size and then scaled to whatever room
+	// its panel gives it. It used to be a fixed 592px box that scrolled
+	// horizontally below 880px, which cannot work now that the flow panel is
+	// resizable to a quarter of the board.
+	const BASE_W = 880;
+	const BASE_H = 592;
+	const MIN_SCALE = 0.18;
+
 	const layout = $derived(buildWaterfall(input));
+
+	let outer = $state<HTMLDivElement | null>(null);
+	let scale = $state(1);
+
+	function fit(width: number) {
+		// A zero width means the element is not laid out at all; keep the last
+		// good scale rather than collapsing the chart to nothing.
+		if (width > 0) scale = Math.min(1, Math.max(MIN_SCALE, width / BASE_W));
+	}
+
+	// Above the base width the chart stretches instead of scaling, as it always
+	// did: the SVG has preserveAspectRatio="none" and the labels are positioned
+	// in percentages, so it fills the room without inflating type. Scaling up
+	// would grow the labels past their designed sizes; capping the scale at 1
+	// and leaving the box at 880px — which is what shipped — simply left dead
+	// space to the right of a full-width Flow panel.
+	const stretched = $derived(scale >= 1);
+
+	$effect(() => {
+		const element = outer;
+		if (!element) return;
+
+		// Measure synchronously as soon as the ref attaches. ResizeObserver never
+		// fires in a hidden document, so an observer-only implementation renders
+		// the chart unscaled and clipped in a background tab — leave the observer
+		// to handle later resizes only.
+		fit(element.getBoundingClientRect().width);
+
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) fit(entry.contentRect.width);
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	});
 
 	const pct = (v: number, total: number) => `${(v / total) * 100}%`;
 
@@ -13,8 +55,14 @@
 	}
 </script>
 
-<div class="chart-scroll">
-	<div class="chart-inner">
+<!-- The outer box takes the scaled height so nothing dead sits beneath it. -->
+<div class="chart-fit" bind:this={outer} style:height="{BASE_H * scale}px">
+	<div
+		class="chart-inner"
+		style:width={stretched ? '100%' : `${BASE_W}px`}
+		style:height="{BASE_H}px"
+		style:transform={stretched ? 'none' : `scale(${scale})`}
+	>
 		<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none">
 			{#each layout.paths as p, i (i)}
 				<path d={p.d} fill="var({p.colorVar})" fill-opacity={p.opacity} />
@@ -38,18 +86,14 @@
 </div>
 
 <style>
-	.chart-scroll {
+	.chart-fit {
 		position: relative;
 		width: 100%;
-		height: 592px;
-		overflow-x: auto;
-		overflow-y: hidden;
+		overflow: hidden;
 	}
 	.chart-inner {
 		position: relative;
-		height: 100%;
-		min-width: 880px;
-		margin-right: 14px;
+		transform-origin: top left;
 	}
 	svg {
 		width: 100%;

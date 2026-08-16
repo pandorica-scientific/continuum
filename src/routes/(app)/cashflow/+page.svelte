@@ -18,7 +18,6 @@
 </script>
 
 <ScreenHeader
-	emoji="💸"
 	title="Cash flow"
 	caption="Money in the order it is committed — what survives is what you keep."
 />

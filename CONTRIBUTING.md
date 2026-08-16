@@ -80,6 +80,31 @@ migration-metadata regression also verifies that the current snapshot matches
 the TypeScript schema so the next generated migration cannot recreate objects
 that already exist.
 
+### Cutting a release
+
+Pushing to `main` keeps `latest` current on ghcr.io and Docker Hub. A version is
+published only by a tag, so releasing stays a deliberate act rather than
+something a merge does by accident:
+
+```sh
+# 1. bump the version and write the changelog section, then commit
+# 2. tag it and push the tag
+git tag v0.3.5
+git push origin v0.3.5
+```
+
+CI then runs the full suite and, only if it passes, builds `linux/amd64` and
+`linux/arm64` and pushes `0.3.5` alongside `latest` to both registries.
+
+Two things fail the build rather than publishing something wrong:
+
+- **The tag must match `package.json`.** `v0.3.5` against a `0.3.4` package is
+  one of the two being a mistake, and publishing either would be wrong.
+- **Docker Hub must be configured** for a tagged release — the
+  `DOCKERHUB_USERNAME` repository variable and the `DOCKERHUB_TOKEN` secret (an
+  access token, not the account password). A release that silently reached only
+  ghcr.io would be worse than one that failed loudly.
+
 ## The two rules the codebase follows
 
 Both come from [ARCHITECTURE.md](ARCHITECTURE.md), and a review will hold you to

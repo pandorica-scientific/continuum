@@ -239,6 +239,13 @@
       "when": 1786793644675,
       "tag": "0033_drop_seeded_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786793644676,
+      "tag": "0034_person_overview_layout",
+      "breakpoints": true
     }
   ]
 }

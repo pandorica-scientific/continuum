@@ -75,6 +75,9 @@ beforeAll(async () => {
 		.sort();
 	for (const name of baseMigrations) await executeSqlFile(resolve('drizzle', name));
 	if (existsSync(AUTH_MIGRATION)) await executeSqlFile(AUTH_MIGRATION);
+	// The baseline stops before this one, but every insert here goes through the
+	// current Drizzle schema, which names every person column including this.
+	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
 }, 30_000);
 
 beforeEach(async () => {

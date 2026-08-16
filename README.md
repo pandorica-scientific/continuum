@@ -10,6 +10,13 @@ is our net worth right now, and is it going up?_
 
 ![Overview — the cash-flow waterfall](docs/screenshots/overview.png)
 
+The Overview is a board each person builds for themselves: drag the panels
+about, resize them, add the ones you care about and throw away the ones you
+don't. Thirteen panels are available and the arrangement is stored against your
+own profile, so two people sharing an install do not share a dashboard. It
+opens as the screen above until you press **Customise** — nothing rearranges
+itself on upgrade.
+
 ## Status
 
 All five phases are functional: setup wizard and per-person sign-in; statement

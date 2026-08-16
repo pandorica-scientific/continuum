@@ -1,10 +1,12 @@
+import type { IconName } from '$lib/icons';
+
 // The module registry is the single source of truth for the sidebar and for
 // which screens exist. Settings toggles modules on and off; a disabled module's
-// screens disappear from the sidebar and 404 their routes.
+// screens disappear from the navigation and 404 their routes.
 
 // One declaration per module: key, how the Settings toggle presents it, and
-// (below, in NAV_GROUPS) where it sits in the sidebar. Adding a module means
-// one entry here, one nav item, and its route directory — nothing else.
+// (below, in AREAS) where it sits in the navigation. Adding a module means one
+// entry here, one screen in an area, and its route directory — nothing else.
 export const MODULES = {
 	import: { emoji: '📥', label: 'Import', note: 'statement upload and the review queue' },
 	property: { emoji: '🏢', label: 'Property', note: 'flats, tenancies and bills' },
@@ -23,57 +25,93 @@ export type ModuleKey = keyof typeof MODULES;
 
 export type ModuleToggles = Record<ModuleKey, boolean>;
 
-export interface NavItem {
+export interface Screen {
 	path: string;
 	label: string;
-	emoji: string;
-	/** Screens without a module (Overview, Settings) are always visible. */
+	/** Shown at 26px in the screen title; ScreenHeader reads it from here so no
+	 *  page has to pass its own. */
+	icon: IconName;
+	/** Screens without a module (Overview, Settings, the core money screens)
+	 *  are always visible. */
 	module?: ModuleKey;
 }
 
-export interface NavGroup {
+export interface Area {
+	key: string;
 	label: string;
-	items: NavItem[];
+	icon: IconName;
+	screens: Screen[];
 }
 
-// Cash flow and Accounts are core money screens — they stay even when the
-// Import module is off (accounts can be maintained by hand). The Import
-// toggle governs only the statement-import screen itself.
-export const NAV_GROUPS: NavGroup[] = [
+/**
+ * Two levels: areas in the sidebar, screens as sub-tabs under the page title.
+ *
+ * A flat list was tried first and abandoned — eighteen screens in one column
+ * stops being legible. Seven of these rows are one click from what they hold;
+ * the areas with several screens open on their first live one.
+ *
+ * Home and Calendar are separate rows rather than one Household area, so the
+ * calendar is one click away rather than two. Retirement stands alone because
+ * it answers a different question from the rest of Assets.
+ */
+export const AREAS: Area[] = [
 	{
+		key: 'overview',
+		label: 'Overview',
+		icon: 'compass',
+		screens: [{ path: '/overview', label: 'Overview', icon: 'compass' }]
+	},
+	{
+		key: 'money',
 		label: 'Money',
-		items: [
-			{ path: '/overview', label: 'Overview', emoji: '🧭' },
-			{ path: '/cashflow', label: 'Cash flow', emoji: '💸' },
-			{ path: '/transactions', label: 'Transactions', emoji: '📒' },
-			{ path: '/tags', label: 'Tags', emoji: '🏷️' },
-			{ path: '/rules', label: 'Rules', emoji: '⚙️' },
-			{ path: '/tax', label: 'Tax', emoji: '🧾', module: 'tax' },
-			{ path: '/accounts', label: 'Accounts', emoji: '🏦' },
-			{ path: '/import', label: 'Import', emoji: '📥', module: 'import' }
+		icon: 'flow',
+		// Cash flow, Accounts, Transactions, Rules and Tags are core: they stay
+		// whatever is switched off, which is why this area can never disappear.
+		screens: [
+			{ path: '/cashflow', label: 'Cash flow', icon: 'flow' },
+			{ path: '/accounts', label: 'Accounts', icon: 'bank' },
+			{ path: '/transactions', label: 'Transactions', icon: 'ledger' },
+			{ path: '/tax', label: 'Tax', icon: 'receipt', module: 'tax' },
+			{ path: '/import', label: 'Import', icon: 'inbox', module: 'import' },
+			{ path: '/rules', label: 'Rules', icon: 'sliders' },
+			{ path: '/tags', label: 'Tags', icon: 'tag' }
 		]
 	},
 	{
+		key: 'assets',
 		label: 'Assets',
-		items: [
-			{ path: '/property', label: 'Property', emoji: '🏢', module: 'property' },
-			{ path: '/investments', label: 'Investments', emoji: '📈', module: 'investments' },
-			{ path: '/loans', label: 'Loans', emoji: '💳', module: 'loans' },
-			{ path: '/retirement', label: 'Retirement', emoji: '🎯', module: 'retirement' }
+		icon: 'buildings',
+		screens: [
+			{ path: '/property', label: 'Property', icon: 'buildings', module: 'property' },
+			{ path: '/investments', label: 'Investments', icon: 'chart', module: 'investments' },
+			{ path: '/loans', label: 'Loans', icon: 'card', module: 'loans' }
 		]
 	},
 	{
-		label: 'Household',
-		items: [
-			{ path: '/home', label: 'Home', emoji: '🏠', module: 'home' },
-			{ path: '/calendar', label: 'Calendar', emoji: '📅', module: 'calendar' }
-		]
+		key: 'retirement',
+		label: 'Retirement',
+		icon: 'target',
+		screens: [{ path: '/retirement', label: 'Retirement', icon: 'target', module: 'retirement' }]
 	},
 	{
+		key: 'home',
+		label: 'Home',
+		icon: 'house',
+		screens: [{ path: '/home', label: 'Home', icon: 'house', module: 'home' }]
+	},
+	{
+		key: 'calendar',
+		label: 'Calendar',
+		icon: 'calendar',
+		screens: [{ path: '/calendar', label: 'Calendar', icon: 'calendar', module: 'calendar' }]
+	},
+	{
+		key: 'admin',
 		label: 'Admin',
-		items: [
-			{ path: '/documents', label: 'Documents', emoji: '🗂️', module: 'documents' },
-			{ path: '/settings', label: 'Settings', emoji: '⚙️' }
+		icon: 'folders',
+		screens: [
+			{ path: '/documents', label: 'Documents', icon: 'folders', module: 'documents' },
+			{ path: '/settings', label: 'Settings', icon: 'gear' }
 		]
 	}
 ];
@@ -82,20 +120,36 @@ export const DEFAULT_MODULES: ModuleToggles = Object.fromEntries(
 	MODULE_KEYS.map((key) => [key, true])
 ) as ModuleToggles;
 
-/** Nav groups with disabled modules' items removed; empty groups collapse away. */
-export function visibleNavGroups(modules: ModuleToggles): NavGroup[] {
-	return NAV_GROUPS.map((group) => ({
-		label: group.label,
-		items: group.items.filter((item) => !item.module || modules[item.module])
-	})).filter((group) => group.items.length > 0);
+function matches(pathname: string, screen: Screen): boolean {
+	return pathname === screen.path || pathname.startsWith(screen.path + '/');
 }
 
-/** True when the given path belongs to a module that is switched off. */
+/** Areas with disabled modules' screens removed; areas left with none go too. */
+export function visibleAreas(modules: ModuleToggles): Area[] {
+	return AREAS.map((area) => ({
+		...area,
+		screens: area.screens.filter((screen) => !screen.module || modules[screen.module])
+	})).filter((area) => area.screens.length > 0);
+}
+
+/** The area a path belongs to, or undefined for a route outside the navigation. */
+export function areaForPath(pathname: string): Area | undefined {
+	return AREAS.find((area) => area.screens.some((screen) => matches(pathname, screen)));
+}
+
+/**
+ * True when the given path belongs to a module that is switched off.
+ *
+ * This is the route guard behind every disabled screen's 404, so its behaviour
+ * is pinned by tests independently of how the navigation is arranged: an
+ * unknown path is allowed and left to the router, and a screen with no module
+ * is always allowed.
+ */
 export function pathDisabled(pathname: string, modules: ModuleToggles): boolean {
-	for (const group of NAV_GROUPS) {
-		for (const item of group.items) {
-			if (pathname === item.path || pathname.startsWith(item.path + '/')) {
-				return item.module ? !modules[item.module] : false;
+	for (const area of AREAS) {
+		for (const screen of area.screens) {
+			if (matches(pathname, screen)) {
+				return screen.module ? !modules[screen.module] : false;
 			}
 		}
 	}

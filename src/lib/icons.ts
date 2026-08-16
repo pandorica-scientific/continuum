@@ -1,0 +1,96 @@
+// The icon set, drawn as inline SVG primitives.
+//
+// No library and no CDN: this ships as a self-hosted package, so the icons are
+// data in the bundle rather than a font or a fetch. Every icon is authored on a
+// 24 viewBox with no fill, `currentColor` stroke, 1.7 width and round caps —
+// change those in Icon.svelte, not here.
+//
+// Primitives rather than raw markup so nothing needs `{@html}` and a typo in a
+// path cannot inject anything.
+
+export type IconPrimitive =
+	| { path: string }
+	| { circle: [cx: number, cy: number, r: number] }
+	| { rect: [x: number, y: number, w: number, h: number, r: number] }
+	| { line: [x1: number, y1: number, x2: number, y2: number] };
+
+export const ICONS = {
+	// Areas and screens
+	compass: [{ circle: [12, 12, 9] }, { path: 'M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z' }],
+	flow: [{ path: 'M3 12h5l4-7h9' }, { path: 'M8 12l4 7h9' }, { path: 'M18 2.5 21 5l-3 2.5' }],
+	bank: [
+		{ path: 'M3 10 12 4.5 21 10' },
+		{ line: [5.5, 10.5, 5.5, 18] },
+		{ line: [12, 10.5, 12, 18] },
+		{ line: [18.5, 10.5, 18.5, 18] },
+		{ line: [3, 20.5, 21, 20.5] }
+	],
+	ledger: [
+		{ path: 'M5 4.8A1.8 1.8 0 0 1 6.8 3H19v18H6.8A1.8 1.8 0 0 1 5 19.2z' },
+		{ line: [9, 3, 9, 21] }
+	],
+	receipt: [
+		{ path: 'M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z' },
+		{ line: [9, 8, 15, 8] },
+		{ line: [9, 12, 15, 12] }
+	],
+	inbox: [
+		{ line: [12, 3, 12, 13] },
+		{ path: 'M8 9.5l4 4 4-4' },
+		{ path: 'M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3' }
+	],
+	sliders: [
+		{ line: [3.5, 8, 20.5, 8] },
+		{ circle: [9, 8, 2.2] },
+		{ line: [3.5, 16, 20.5, 16] },
+		{ circle: [15, 16, 2.2] }
+	],
+	tag: [
+		{ path: 'M3 12.6V4.4A1.4 1.4 0 0 1 4.4 3h8.2L21 11.4 12.6 21z' },
+		{ circle: [7.6, 7.6, 1.5] }
+	],
+	buildings: [
+		{ path: 'M4 21V8.5L11 5v16' },
+		{ path: 'M11 21V11l8-2.5V21' },
+		{ line: [3, 21, 21, 21] },
+		{ line: [7, 10.5, 7.8, 10.5] },
+		{ line: [14.5, 14, 15.3, 14] }
+	],
+	chart: [{ path: 'M4 16l4.5-4.5 3 3L18 8' }, { path: 'M14.5 8H18v3.5' }, { path: 'M3 3v17h18' }],
+	card: [
+		{ rect: [2.5, 5, 19, 14, 2.5] },
+		{ line: [2.5, 10, 21.5, 10] },
+		{ line: [6, 14.5, 10, 14.5] }
+	],
+	target: [{ circle: [12, 12, 9] }, { circle: [12, 12, 5] }, { circle: [12, 12, 1.4] }],
+	house: [{ path: 'M3 10.6 12 3.5l9 7.1' }, { path: 'M5.6 9.6V20.5h12.8V9.6' }],
+	calendar: [
+		{ rect: [3, 5, 18, 16, 2.5] },
+		{ line: [3, 10, 21, 10] },
+		{ line: [8, 3, 8, 7] },
+		{ line: [16, 3, 16, 7] }
+	],
+	folders: [
+		{
+			path: 'M3 7.6A1.6 1.6 0 0 1 4.6 6H9l2.2 2.6h8.2A1.6 1.6 0 0 1 21 10.2v8.2A1.6 1.6 0 0 1 19.4 20H4.6A1.6 1.6 0 0 1 3 18.4z'
+		}
+	],
+	gear: [
+		{ circle: [12, 12, 2.4] },
+		{ circle: [12, 12, 5.6] },
+		{ line: [17.6, 12.0, 20.4, 12.0] },
+		{ line: [15.96, 15.96, 17.94, 17.94] },
+		{ line: [12.0, 17.6, 12.0, 20.4] },
+		{ line: [8.04, 15.96, 6.06, 17.94] },
+		{ line: [6.4, 12.0, 3.6, 12.0] },
+		{ line: [8.04, 8.04, 6.06, 6.06] },
+		{ line: [12.0, 6.4, 12.0, 3.6] },
+		{ line: [15.96, 8.04, 17.94, 6.06] }
+	],
+
+	// Actions
+	plus: [{ line: [12, 5.5, 12, 18.5] }, { line: [5.5, 12, 18.5, 12] }],
+	clock: [{ circle: [12, 12, 8.5] }, { path: 'M12 7.2V12l3.2 2' }]
+} as const satisfies Record<string, readonly IconPrimitive[]>;
+
+export type IconName = keyof typeof ICONS;

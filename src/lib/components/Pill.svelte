@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-
-	type Hue = 'green' | 'yellow' | 'red' | 'blue' | 'teal' | 'purple' | 'grey';
+	import type { Hue } from '$lib/ui/hue';
 
 	let { hue = 'grey', children }: { hue?: Hue; children: Snippet } = $props();
 

@@ -6,7 +6,6 @@
 </script>
 
 <ScreenHeader
-	emoji="🏷️"
 	title="Tags"
 	caption="What each project has cost so far, across every category it touches."
 />

@@ -19,11 +19,7 @@
 	let lightbox = $state<string | null>(null);
 </script>
 
-<ScreenHeader
-	emoji="🏢"
-	title="Property"
-	caption="Each flat with its value, mortgage, bills and tenancy."
-/>
+<ScreenHeader title="Property" caption="Each flat with its value, mortgage, bills and tenancy." />
 
 {#if form?.message}
 	<div class="error">{form.message}</div>

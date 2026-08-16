@@ -30,6 +30,7 @@ export default ts.config(
 			'node_modules/',
 			'drizzle/',
 			'design_system/',
+			'design_system_V2/',
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
 			'.remember/'

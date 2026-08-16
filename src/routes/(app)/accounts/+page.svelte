@@ -15,7 +15,6 @@
 </script>
 
 <ScreenHeader
-	emoji="🏦"
 	title="Accounts"
 	caption="Balances stay in their own currency. Only totals convert."
 />

@@ -61,7 +61,6 @@
 </script>
 
 <ScreenHeader
-	emoji="📈"
 	title="Investments"
 	caption="Updated by uploading the XTB account statement. Duplicates are dropped by operation id."
 />

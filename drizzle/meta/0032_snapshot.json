@@ -1712,6 +1712,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "overview_layout": {
+          "name": "overview_layout",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",

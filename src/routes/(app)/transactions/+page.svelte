@@ -18,7 +18,6 @@
 </script>
 
 <ScreenHeader
-	emoji="📒"
 	title="Transactions"
 	caption="Every row the ledger holds. Search it, narrow it, file what the rules missed."
 />

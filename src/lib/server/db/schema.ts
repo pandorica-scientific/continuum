@@ -13,6 +13,9 @@ import {
 	timestamp,
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
+// Relative, not aliased: drizzle-kit loads this file outside Vite and does not
+// resolve SvelteKit's $lib.
+import type { OverviewPlacement } from '../../overview/layout';
 
 // ---- Household and auth ----
 
@@ -32,6 +35,12 @@ export const person = pgTable('person', {
 	authGeneration: integer('auth_generation').notNull().default(0),
 	// Set to suspend sign-in without deleting a person other tables reference.
 	deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+	// Each person arranges their own Overview board. Plumbing attached to the
+	// profile, never a Settings entry and never in the config export. Null means
+	// "never customised" and renders DEFAULT_LAYOUT; an empty array is a person
+	// who removed every panel, which is a different and equally valid state.
+	// validateSession selects explicit columns, so this never rides the hot path.
+	overviewLayout: jsonb('overview_layout').$type<OverviewPlacement[]>(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

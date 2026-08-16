@@ -40,7 +40,6 @@
 </script>
 
 <ScreenHeader
-	emoji="⚙️"
 	title="Rules"
 	caption="What files itself, and how much each rule has earned your trust."
 />

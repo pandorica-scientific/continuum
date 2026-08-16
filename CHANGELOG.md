@@ -1,5 +1,97 @@
 # Changelog
 
+## 0.3.5 — 2026-08-16
+
+The Overview stops being a screen somebody else designed and becomes a board
+you build. Drag the panels where you want them, resize them, add the ones you
+care about and remove the ones you don't — and because the arrangement belongs
+to your profile rather than the browser, two people sharing an install no
+longer share a dashboard.
+
+**Upgrading:** migration `0034` runs automatically and adds one nullable column
+to `person`. Nothing is rewritten and no existing data is touched. As with
+every database release, take a backup before replacing the image.
+
+**Nobody's screen changes on upgrade.** The default arrangement is the previous
+Overview exactly — the attention strip full width, the waterfall beneath it,
+then net-worth composition and the next thirty days side by side. The board
+arrives when you press **Customise**, not when you upgrade.
+
+### Added
+
+- **The Overview is a twelve-column board you arrange yourself.** Drag a panel
+  by its body to move it, drag the corner to resize it in columns and rows, ✕
+  to remove it, and an **Add a panel** tray for everything not currently
+  placed. **Reset to default** puts it back. The board has gravity: move a
+  panel away and everything below rises to close the space, so the arrangement
+  never keeps an empty band in the middle of it.
+- **Thirteen panels.** The four from the old screen — Needs you, Where the
+  money goes, What it is made of, Next 30 days — plus Net worth over time,
+  Where the cash sits, Flats against mortgages, Energy this month, Portfolio,
+  Retirement outlook, Tax position, Recent activity, and Saved each month.
+  Panels belonging to a switched-off module are not offered.
+- **The board follows you, not your browser.** Each person's arrangement is
+  stored against their own profile. It is not a setting, does not appear in
+  Settings, and is not part of the configuration export.
+- **A narrow screen stacks the board into one column** and swaps resizing for
+  move-up and move-down. There is only one arrangement, so reordering on a
+  phone does change how the board looks on a wider screen — the screen says so
+  while you are editing rather than letting you discover it later.
+
+- **The sidebar lists seven areas instead of twelve screens.** Overview, Money,
+  Assets, Retirement, Home, Calendar and Admin; the screens inside an area
+  appear as a row of tabs under the page title. Twelve items in one column had
+  stopped being legible, and the app now has eighteen screens rather than
+  twelve. Money holds Cash flow, Accounts, Transactions, Tax, Import, Rules and
+  Tags; Assets holds Property, Investments and Loans. Home and Calendar are
+  their own rows rather than one Household area, so the calendar stays one
+  click away.
+- **A quick-add button on every screen** — bottom right, straight to statement
+  import.
+- **Drawn icons in place of emoji** in the sidebar, the screen titles and the
+  header buttons. They are inline SVG in the bundle, not a font and not a
+  fetch, because this is a package people self-host and it should not depend on
+  a CDN to render its own navigation. Emoji stay where they read as content
+  rather than furniture: the attention cards, account rows and the Settings
+  module list.
+
+### Changed
+
+- **The cash-flow waterfall scales to fit instead of scrolling.** It was a
+  fixed 592-pixel box that scrolled sideways below 880 pixels, which cannot
+  work when the panel holding it can be resized to a quarter of the board. It
+  now lays out once and scales into whatever room it is given, labels and all.
+  Below about half width the leaf labels do get genuinely small; that is a
+  known limit rather than a defect.
+- **A panel's data is only computed when the panel is on your board.** Loading
+  thirteen panels' worth of queries on every visit would have been a real
+  regression from the four the fixed screen ran, so the loader builds exactly
+  what is being shown.
+- **The retirement projection's inputs moved into
+  `src/lib/server/retirement.ts`**, shared by the Retirement screen and the new
+  panel. Two copies of a forty-year amortisation drifting apart was not a risk
+  worth taking for one small panel.
+
+### Fixed
+
+- **The Overview offered a link to a switched-off Calendar.** The "Next 30
+  days" card rendered regardless of the module, and its "Open calendar" link
+  led to a 404 whenever Calendar was off. The panel is now gated on the module
+  like every other module-owned panel, and disappears with it.
+- **Every screen offered an "Import statement" button with the Import module
+  switched off**, which led to the same kind of 404. Both that button and the
+  new quick-add button now go with their module.
+- **A panel that could not load took the whole Overview down with it.** The
+  energy panel reaches Home Assistant over the network, so an unreachable box
+  turned the entire screen into an error — and because a panel's placement is
+  saved, it stayed that way. A panel that fails now says so in its own box and
+  the rest of the board carries on.
+- **Switching two panel-owning modules off left a band of empty space** at the
+  top of the board instead of closing it.
+- **The cash-flow waterfall stopped at 880 pixels** and left the rest of a wider
+  card empty. It fills the space again above that width and scales down below
+  it.
+
 ## 0.3.4 — 2026-08-15
 
 A pass over the first-run experience: the setup wizard, what a fresh install

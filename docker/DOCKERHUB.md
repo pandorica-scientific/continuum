@@ -12,6 +12,9 @@ cash, and loans.
 
 ## What it does
 
+- **An Overview you build yourself** — thirteen panels you drag, resize, add and remove;
+  the arrangement belongs to your profile, so two people sharing an install do not
+  share a dashboard
 - **Statement import** for Fio, Revolut, mBank (cp1250 CSV), Raiffeisenbank and
   Česká spořitelna (text-layer PDF) — idempotent, safe to re-upload, full history backfill
 - **Cash flow** — a waterfall from income to what you kept, with an explainable rule
@@ -73,6 +76,7 @@ configured in the app and stored in your own database. Nothing calls home.
 ## Tags
 
 - `latest` — current build from `main` (amd64 + arm64)
+- `0.3.5` — design system V2: an Overview you arrange yourself, areas and sub-tabs in place of a twelve-item sidebar, drawn icons
 - `0.3.4` — first-run pass: no shipped starter rules, a setup wizard that keeps what you typed, themed file fields
 - `0.3.3` — atomic imports and mutations, concurrency-safe authentication and autosave, dated multi-currency totals, and the full-review remediation
 - `0.3.2` — two whole-codebase reviews: a server-side WebAuthn challenge store, currency-correct amounts, and a long list of silently wrong figures put right

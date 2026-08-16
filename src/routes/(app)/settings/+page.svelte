@@ -11,7 +11,6 @@
 </script>
 
 <ScreenHeader
-	emoji="⚙️"
 	title="Settings"
 	caption="Everything visible in Continuum is configuration, not content."
 />

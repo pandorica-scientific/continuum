@@ -124,7 +124,6 @@
 </script>
 
 <ScreenHeader
-	emoji="🎯"
 	title="Retirement"
 	caption="All figures in today's money · returns are real, after inflation."
 />

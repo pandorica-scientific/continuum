@@ -20,7 +20,6 @@
 </script>
 
 <ScreenHeader
-	emoji="💳"
 	title="Loans"
 	caption="Every rate regime on record — a re-fix never rewrites booked interest."
 />

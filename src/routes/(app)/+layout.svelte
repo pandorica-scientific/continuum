@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { overlayFocus } from '$lib/actions/overlay';
 
 	let { data, children } = $props();
@@ -59,6 +60,16 @@
 	>
 		☰
 	</button>
+
+	<!-- Quick add: importing a statement is the one thing done from anywhere,
+	     so it gets a permanent target instead of a trip through the header.
+	     Hidden with its module, or it would lead to a 404. Named apart from the
+	     header button so the two links are distinguishable by name. -->
+	{#if data.modules.import}
+		<a href="/import" class="quick-add" aria-label="Quick add">
+			<Icon name="plus" size={24} />
+		</a>
+	{/if}
 </div>
 
 <style>
@@ -77,6 +88,23 @@
 	}
 	.menu-btn {
 		display: none;
+	}
+	.quick-add {
+		display: grid;
+		place-items: center;
+		position: fixed;
+		right: 24px;
+		bottom: 24px;
+		z-index: 30;
+		width: 52px;
+		height: 52px;
+		border-radius: 999px;
+		background: var(--brand);
+		color: var(--fg-inverse);
+	}
+	.quick-add:hover {
+		text-decoration: none;
+		filter: brightness(1.08);
 	}
 	.rate-warning {
 		margin: 0;
@@ -119,6 +147,14 @@
 			background: rgba(0, 0, 0, 0.45);
 			border: 0;
 			cursor: pointer;
+		}
+		/* The menu button owns the bottom-right corner on a narrow screen, so
+		   quick add stacks above it rather than on top of it. */
+		.quick-add {
+			right: 18px;
+			bottom: 72px;
+			width: 46px;
+			height: 46px;
 		}
 		.menu-btn {
 			display: grid;

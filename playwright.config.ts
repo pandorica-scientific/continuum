@@ -16,7 +16,7 @@ export default defineConfig({
 		{
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
-			testIgnore: /accounts|passkey/
+			testIgnore: /accounts|passkey|board/
 		},
 		// Account management and passkeys build on the household the wizard
 		// creates in flow.spec.ts, so they wait for `desktop` rather than relying
@@ -26,6 +26,15 @@ export default defineConfig({
 			use: { viewport: { width: 1440, height: 900 } },
 			testMatch: /accounts|passkey/,
 			dependencies: ['desktop']
+		},
+		// The board customises the administrator's Overview and toggles a module,
+		// so it runs last: after `accounts` has added a second person, which is
+		// what makes the per-person isolation check say anything.
+		{
+			name: 'board',
+			use: { viewport: { width: 1440, height: 900 } },
+			testMatch: /board/,
+			dependencies: ['accounts']
 		},
 		{ name: 'tablet', use: { viewport: { width: 900, height: 1200 } }, testMatch: /smoke/ },
 		{ name: 'mobile', use: { viewport: { width: 390, height: 844 } }, testMatch: /smoke/ }

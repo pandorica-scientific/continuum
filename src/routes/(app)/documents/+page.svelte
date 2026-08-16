@@ -28,7 +28,6 @@
 </script>
 
 <ScreenHeader
-	emoji="🗂️"
 	title="Documents"
 	caption="One archive for the household — columns follow whoever the documents are about."
 />

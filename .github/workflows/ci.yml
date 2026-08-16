@@ -3,6 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    # A release is a pushed tag: `git tag v0.3.5 && git push origin v0.3.5`.
+    # Main publishes `latest` continuously; only a tag publishes a version, so
+    # cutting a release stays a deliberate act rather than a side effect of
+    # merging. The tag must match the version in package.json — see the image
+    # job, which refuses the build otherwise.
+    tags: ['v*']
   pull_request:
 
 jobs:
@@ -83,13 +89,47 @@ jobs:
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # A tag push publishes the version *and* moves `latest`; a push to main
+      # moves `latest` alone.
       - id: tags
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          OWNER: ${{ github.repository_owner }}
+          REF: ${{ github.ref }}
         run: |
-          TAGS="ghcr.io/${{ github.repository_owner }}/continuum:latest"
-          if [ -n "${{ vars.DOCKERHUB_USERNAME }}" ]; then
-            TAGS="$TAGS,${{ vars.DOCKERHUB_USERNAME }}/continuum:latest"
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          LABELS="latest"
+
+          if [[ "$REF" == refs/tags/* ]]; then
+            TAG="${REF#refs/tags/}"
+            # The tag and package.json disagreeing means one of them is a
+            # mistake, and publishing either would be wrong. Releases have been
+            # cut by hand until now, which is exactly how that drift happens.
+            if [ "${TAG#v}" != "$VERSION" ]; then
+              echo "::error::tag $TAG does not match package.json version $VERSION"
+              exit 1
+            fi
+            # Docker Hub is where people pull from, so a release that quietly
+            # skipped it would be worse than a failed build.
+            if [ -z "${DOCKERHUB_USERNAME}" ]; then
+              echo "::error::releasing $TAG needs the DOCKERHUB_USERNAME variable and DOCKERHUB_TOKEN secret"
+              exit 1
+            fi
+            LABELS="$VERSION $LABELS"
           fi
+
+          TAGS=""
+          for label in $LABELS; do
+            TAGS="${TAGS:+$TAGS,}ghcr.io/${OWNER}/continuum:${label}"
+            if [ -n "${DOCKERHUB_USERNAME}" ]; then
+              TAGS="$TAGS,${DOCKERHUB_USERNAME}/continuum:${label}"
+            fi
+          done
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $TAGS"
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -97,3 +137,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.tags.outputs.tags }}
+          # So `docker inspect` can answer which version an image is without
+          # trusting whatever tag it happens to be pulled under.
+          labels: |
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

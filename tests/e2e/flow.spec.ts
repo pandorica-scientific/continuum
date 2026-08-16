@@ -395,18 +395,30 @@ test.describe('signed in', () => {
 		await expect(page.locator('.tax-row', { hasText: '2026' })).toContainText('1 305 000');
 	});
 
-	test('switching a module off removes it from the sidebar and 404s its routes', async ({
-		page
-	}) => {
+	test('switching a module off removes its sub-tab and 404s its routes', async ({ page }) => {
+		// The sidebar names areas, not screens. Property is a screen inside
+		// Assets, so switching it off takes away its sub-tab; the Assets row
+		// itself survives on Investments and Loans.
+		const propertyTab = page.locator('.subtabs').getByRole('link', { name: 'Property' });
+
+		await page.goto('/loans');
+		await expect(propertyTab).toBeVisible();
+
 		await page.goto('/settings');
 		await page.locator('.module-row', { hasText: 'Property' }).getByRole('switch').click();
-		await expect(page.locator('aside').getByText('Property')).toHaveCount(0, { timeout: 10000 });
+
 		const response = await page.goto('/property');
 		expect(response?.status()).toBe(404);
+
+		await page.goto('/loans');
+		await expect(propertyTab).toHaveCount(0, { timeout: 10000 });
+		await expect(page.locator('aside').getByRole('link', { name: /Assets/ })).toBeVisible();
+
 		// Switch it back on for later runs.
 		await page.goto('/settings');
 		await page.locator('.module-row', { hasText: 'Property' }).getByRole('switch').click();
-		await expect(page.locator('aside').getByText('Property')).toHaveCount(1, { timeout: 10000 });
+		await page.goto('/loans');
+		await expect(propertyTab).toBeVisible({ timeout: 10000 });
 	});
 
 	test('documents: adding one builds its shelf and person column', async ({ page }) => {

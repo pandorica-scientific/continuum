@@ -28,7 +28,6 @@
 </script>
 
 <ScreenHeader
-	emoji="🏠"
 	title="Home"
 	caption={data.livedInName
 		? `Bound to ${data.livedInName} — the flat you live in, never the rentals.`

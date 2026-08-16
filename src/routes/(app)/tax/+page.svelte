@@ -24,11 +24,7 @@
 	);
 </script>
 
-<ScreenHeader
-	emoji="🧾"
-	title="Tax"
-	caption="What each yearly statement said — recorded, never computed."
-/>
+<ScreenHeader title="Tax" caption="What each yearly statement said — recorded, never computed." />
 
 {#if form?.message}
 	<div class="error">{form.message}</div>

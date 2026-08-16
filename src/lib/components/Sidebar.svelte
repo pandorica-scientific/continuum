@@ -2,7 +2,8 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import BrandMark from './BrandMark.svelte';
-	import { visibleNavGroups, type ModuleToggles } from '$lib/modules/registry';
+	import Icon from './Icon.svelte';
+	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
 
 	interface Props {
 		modules: ModuleToggles;
@@ -26,7 +27,10 @@
 		onNavigate
 	}: Props = $props();
 
-	const groups = $derived(visibleNavGroups(modules));
+	const areas = $derived(visibleAreas(modules));
+	// An area is active when the screen you are on belongs to it, not when its
+	// own path matches — /loans lights up Assets.
+	const activeArea = $derived(areaForPath(page.url.pathname)?.key);
 
 	let theme: 'dark' | 'light' = $state(
 		browser && document.documentElement.dataset.ledgerTheme === 'light' ? 'light' : 'dark'
@@ -42,9 +46,11 @@
 		localStorage.setItem('ledger-theme', next);
 	}
 
-	function isActive(path: string): boolean {
-		return page.url.pathname === path || page.url.pathname.startsWith(path + '/');
-	}
+	// The Import badge counts transactions awaiting review. Import is a screen
+	// inside Money now, so the count surfaces on the area that holds it.
+	const badgeArea = $derived(
+		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key
+	);
 </script>
 
 <aside>
@@ -66,24 +72,22 @@
 	{/if}
 
 	<nav>
-		{#each groups as group (group.label)}
-			<div class="group">
-				<span class="group-label">{group.label}</span>
-				{#each group.items as item (item.path)}
-					<a
-						href={item.path}
-						class="nav-item"
-						class:active={isActive(item.path)}
-						onclick={onNavigate}
-					>
-						<span class="icon">{item.emoji}</span>
-						<span class="label">{item.label}</span>
-						{#if item.path === '/import' && importBadge > 0}
-							<span class="badge mono">{importBadge}</span>
-						{/if}
-					</a>
-				{/each}
-			</div>
+		{#each areas as area (area.key)}
+			<!-- An area opens on its first live screen, so a row never leads
+			     somewhere a switched-off module has emptied. -->
+			<a
+				href={area.screens[0].path}
+				class="nav-item"
+				class:active={activeArea === area.key}
+				aria-current={activeArea === area.key ? 'page' : undefined}
+				onclick={onNavigate}
+			>
+				<span class="icon"><Icon name={area.icon} /></span>
+				<span class="label">{area.label}</span>
+				{#if area.key === badgeArea && importBadge > 0}
+					<span class="badge mono">{importBadge}</span>
+				{/if}
+			</a>
 		{/each}
 	</nav>
 
@@ -155,22 +159,11 @@
 	.delta {
 		font-size: 11.5px;
 	}
+	/* One row per area, no group headings: the areas are the grouping now. */
 	nav {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
-	}
-	.group {
-		display: flex;
-		flex-direction: column;
 		gap: 2px;
-	}
-	.group-label {
-		font-size: 10.5px;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		padding: 0 10px 5px;
 	}
 	.nav-item {
 		display: grid;
@@ -193,8 +186,13 @@
 		font-weight: 500;
 	}
 	.icon {
-		font-size: 14.5px;
-		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--fg3);
+	}
+	.nav-item.active .icon {
+		color: var(--fg1);
 	}
 	.label {
 		min-width: 0;

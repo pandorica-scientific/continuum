@@ -20,18 +20,19 @@ approximation, never a future rate or a silent one-to-one conversion.
 
 ## Extension seams
 
-| Seam                    | Contract                                                                                          | Implementations                                                                   | Add one by                                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Bank statement formats  | `ParsedStatement` via `detectAndParse` (`src/lib/server/import/detect.ts`)                        | Fio CSV, Revolut CSV, mBank CSV, RB PDF, ČS PDF                                   | new adapter in `import/adapters/` + a sniff rule in `detect.ts`                                       |
-| Broker reports          | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                          | XTB XLSX                                                                          | sibling parser + ingest wiring                                                                        |
-| Smart-home platforms    | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory  | Home Assistant (REST + WebSocket), Demo                                           | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically |
-| Briefing strip          | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing.ts`)                            | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend    | append to `SOURCES`                                                                                   |
-| Ledger calendar events  | rule generators in `src/lib/server/calendar.ts`, individually switchable                          | import reminder, loan payments, property dates, quarterly report, expiry          | new block in `generateEvents` + `CALENDAR_RULES` entry                                                |
-| Categorisation rules    | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                             | counterparty/description contains, counter-account, variable symbol, amount range | new variant in `Condition` + a branch in `conditionHolds()`                                           |
-| Read-only API           | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`      | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls         |
-| FX rates                | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                    | CNB                                                                               | replace `refreshRates`; the rate table and conversion API stay                                        |
-| Modules / screens       | registry in `src/lib/modules/registry.ts` drives the sidebar and route guards                     | 9 modules                                                                         | add a nav item + module key; Settings toggle appears automatically                                    |
-| External calendar feeds | _(planned)_ `CalendarFeed` providers alongside the ledger's own events                            | —                                                                                 | Google / iCal two-way sync will be the first implementations                                          |
+| Seam                    | Contract                                                                                                             | Implementations                                                                   | Add one by                                                                                                 |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Bank statement formats  | `ParsedStatement` via `detectAndParse` (`src/lib/server/import/detect.ts`)                                           | Fio CSV, Revolut CSV, mBank CSV, RB PDF, ČS PDF                                   | new adapter in `import/adapters/` + a sniff rule in `detect.ts`                                            |
+| Broker reports          | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                                             | XTB XLSX                                                                          | sibling parser + ingest wiring                                                                             |
+| Smart-home platforms    | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory                     | Home Assistant (REST + WebSocket), Demo                                           | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically      |
+| Briefing strip          | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing.ts`)                                               | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend    | append to `SOURCES`                                                                                        |
+| Ledger calendar events  | rule generators in `src/lib/server/calendar.ts`, individually switchable                                             | import reminder, loan payments, property dates, quarterly report, expiry          | new block in `generateEvents` + `CALENDAR_RULES` entry                                                     |
+| Categorisation rules    | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                | counterparty/description contains, counter-account, variable symbol, amount range | new variant in `Condition` + a branch in `conditionHolds()`                                                |
+| Read-only API           | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                    | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`      | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls              |
+| FX rates                | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                       | CNB                                                                               | replace `refreshRates`; the rate table and conversion API stay                                             |
+| Modules / screens       | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes | 9 modules across 7 areas                                                          | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                   |
+| Overview panels         | registry in `src/lib/overview/panels.ts` (key, default and minimum size, required modules)                           | 13 panels                                                                         | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview.ts` |
+| External calendar feeds | _(planned)_ `CalendarFeed` providers alongside the ledger's own events                                               | —                                                                                 | Google / iCal two-way sync will be the first implementations                                               |
 
 ## Correctness anchors
 
@@ -197,8 +198,16 @@ active. Everything downstream — the session cookie, `validateSession`,
 
 - `src/lib/server/` — everything with database or network access
 - `src/lib/` (rest) — pure, client-safe logic (money, charts, retirement
-  model, rule matching, split resolution, tax arithmetic), unit-testable
-  without a database
+  model, rule matching, split resolution, tax arithmetic, the Overview grid),
+  unit-testable without a database
+- `src/lib/icons.ts` — the icon set as SVG primitives, rendered by
+  `Icon.svelte`. Authored data rather than a library or a font: nothing here
+  may require a network fetch to draw. Screens and areas name their icon in the
+  module registry, so no page passes one
+- `src/lib/overview/` — the Overview board: `layout.ts` holds every spatial
+  rule as pure functions, `panels.ts` is the registry, and the components know
+  nothing about the grid they sit on. Each person's arrangement is a jsonb
+  column on `person`, saved on discrete gestures and re-validated server-side
 - `src/routes/api/v1/` — the read-only JSON API, bearer-token authed, versioned
   in the path so a v2 can exist beside it
 - `drizzle/` — migrations, run automatically at boot; data backfills live

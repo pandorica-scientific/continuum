@@ -30,7 +30,6 @@
 </script>
 
 <ScreenHeader
-	emoji="📥"
 	title="Import"
 	caption="Statements in, transactions filed. Only the ambiguous ones ask for you."
 />
