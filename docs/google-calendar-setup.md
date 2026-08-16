@@ -90,6 +90,24 @@ reach.
 4. Press **Choose a calendar**. Continuum creates one called "Continuum" and
    selects it. Then press **Sync now**.
 
+## Does this need doing again?
+
+**No, provided the consent screen says "In production".** The refresh token
+Continuum stores does not expire. It stops working only if you revoke Continuum
+at myaccount.google.com/permissions, delete the OAuth client, or leave the
+connection unused for six months — and the app polls every 15 minutes, so the
+last of those cannot happen while it is running.
+
+**If the consent screen still says "Testing", the token expires after exactly 7
+days** and you would be reconnecting every week. That is the one thing worth
+checking before you walk away from this: **Google Auth Platform → Audience →
+Publishing status**.
+
+Publishing needs no verification and costs nothing. The "Google hasn't verified
+this app" screen you clicked through is unrelated to token lifetime — it is
+simply what an unverified app looks like, which is the correct state for
+something only your household uses.
+
 ## If something goes wrong
 
 **"The scopes you selected require approval."** You added the broad

@@ -2,6 +2,12 @@
    Dark is the default theme; light is an explicit opt-in (no system fallback). */
 
 :root {
+	/* Tells the browser to paint its OWN chrome — scrollbars above all — in the
+	   dark scheme. Without it the scrollbar track renders light, which showed as
+	   a white vertical bar down the right of every page long enough to scroll.
+	   Nothing in the app draws that bar, which is why it survived a search. */
+	color-scheme: dark;
+
 	--bg: #0e1117;
 	--bg2: #11161f;
 	--side: #0a0d13;
@@ -54,6 +60,8 @@
 }
 
 html[data-ledger-theme='light'] {
+	color-scheme: light;
+
 	/* Warm paper, crisp white cards. An off-white card on a grey-brown canvas
 	   reads dingy: the two surfaces sit too close together. */
 	--bg: #f3f0e9;
@@ -115,6 +123,17 @@ html,
 body {
 	margin: 0;
 	padding: 0;
+}
+
+/* The canvas beyond the body box — over-scroll, and any region a fixed-attachment
+   background does not reach. */
+html {
+	background: var(--bg);
+	/* Reserve the scrollbar's width whether or not one is showing. Otherwise the
+	   page widens by ~15px on every screen short enough not to scroll, and
+	   anything anchored to the right edge — the quick-add button — jumps sideways
+	   as you move between pages. */
+	scrollbar-gutter: stable;
 }
 
 body {

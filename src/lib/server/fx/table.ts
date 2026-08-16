@@ -106,19 +106,46 @@ export function convertMinorSync(
  * day or absent entirely, so the figure is approximate either way. Looking
  * only at today's fixing hides older totals that predate the first stored rate.
  */
+export interface ApproximateRates {
+	/** A rate exists, but this figure predates the first one on record. */
+	carried: string[];
+	/** No rate at all — the table has never been filled for this currency. */
+	none: string[];
+}
+
+/**
+ * Which currencies are being converted approximately, and WHY.
+ *
+ * The two reasons are genuinely different and want different advice. `none`
+ * means the rate table has nothing for that currency, which usually is a
+ * connectivity or refresh problem worth acting on. `carried` means a rate
+ * exists but this particular figure is older than the earliest fixing on
+ * record — which happens to every instance that imports history, is not a fault
+ * of any kind, and cannot be fixed by checking the internet.
+ *
+ * They used to be collapsed into one list under one message telling people to
+ * check their connection, which was wrong advice for the far more common case.
+ */
 export function missingRateCodes(
 	table: RateTable,
 	uses: CurrencyUse[],
 	baseCurrency: string
-): string[] {
-	const missing = new Set<string>();
+): ApproximateRates {
+	const carried = new Set<string>();
+	const none = new Set<string>();
+
 	for (const use of uses) {
 		if (!use.currency || use.currency === baseCurrency) continue;
-		if (conversionBasis(table, use.currency, baseCurrency, use.day) !== 'exact') {
-			missing.add(use.currency);
-		}
+		const basis = conversionBasis(table, use.currency, baseCurrency, use.day);
+		if (basis === 'none') none.add(use.currency);
+		else if (basis === 'carried') carried.add(use.currency);
 	}
-	return [...missing].sort();
+
+	// A currency with no rate at all is not also "carried": the stronger problem
+	// wins, so it is reported once and with the advice that helps.
+	for (const code of none) carried.delete(code);
+
+	return { carried: [...carried].sort(), none: [...none].sort() };
 }
 
 /**

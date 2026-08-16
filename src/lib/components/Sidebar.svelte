@@ -81,8 +81,9 @@
 				class:active={activeArea === area.key}
 				aria-current={activeArea === area.key ? 'page' : undefined}
 				onclick={onNavigate}
+				style:--row-hue="var(--{area.hue})"
 			>
-				<span class="icon" style:color="var(--{area.hue})"><Icon name={area.icon} /></span>
+				<span class="icon" style:color="var(--row-hue)"><Icon name={area.icon} /></span>
 				<span class="label">{area.label}</span>
 				{#if area.key === badgeArea && importBadge > 0}
 					<span class="badge mono">{importBadge}</span>
@@ -176,12 +177,16 @@
 		font-size: 13.5px;
 		font-weight: 400;
 	}
+	/* Tinted with the row's OWN colour rather than a neutral grey: the icon
+	   already carries that colour, so a grey wash underneath reads as a different
+	   element highlighting rather than this one. Mixed at low strength so the
+	   label stays readable in both themes. */
 	.nav-item:hover {
-		background: var(--card2);
+		background: color-mix(in srgb, var(--row-hue) 14%, transparent);
 		text-decoration: none;
 	}
 	.nav-item.active {
-		background: var(--card3);
+		background: color-mix(in srgb, var(--row-hue) 22%, transparent);
 		color: var(--fg1);
 		font-weight: 500;
 	}

@@ -810,7 +810,17 @@ describe('domain replacement writes', () => {
 			taxPaidMinor: 10n
 		});
 
-		expect(await missingRateCurrencies('CZK', testDb)).toEqual(['CHF', 'EUR', 'PLN', 'USD']);
+		// Reported by REASON now. Everything here is dated before this instance's
+		// first stored fixing, so it is a historical carry-back rather than a
+		// missing rate — which is the distinction the banner needs in order to give
+		// advice that is any use.
+		const approximate = await missingRateCurrencies('CZK', testDb);
+		expect([...approximate.carried, ...approximate.none].sort()).toEqual([
+			'CHF',
+			'EUR',
+			'PLN',
+			'USD'
+		]);
 	});
 
 	it('serializes tag deltas so a concurrent add cannot restore a removed tag', async () => {

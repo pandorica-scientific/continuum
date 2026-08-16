@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Icon from './Icon.svelte';
-	import {
-		areaForPath,
-		importOfferedAt,
-		visibleAreas,
-		type ModuleToggles
-	} from '$lib/modules/registry';
+	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
 	import type { IconName } from '$lib/icons';
 
 	let {
@@ -37,7 +32,6 @@
 	// a label pretending to be a choice.
 	const tabs = $derived(screens.length > 1 ? screens : []);
 	// Only where importing belongs — see the registry's offersImport.
-	const importable = $derived(modules ? importOfferedAt(page.url.pathname, modules) : false);
 
 	const current = $derived(
 		area?.screens.find(
@@ -66,11 +60,9 @@
 		{#if syncedAt}
 			<span class="synced"><Icon name="clock" size={14} /> synced {syncedAt}</span>
 		{/if}
-		<!-- Gated: without this the button leads to a 404 whenever the Import
-		     module is switched off. -->
-		{#if importable}
-			<a href="/import" class="btn"><Icon name="plus" size={16} /> Import statement</a>
-		{/if}
+		<!-- Importing lives on the floating quick-add button, which is on every
+		     screen that offers it. A second link in the header was the same
+		     destination twice. -->
 	</div>
 </header>
 
@@ -139,14 +131,6 @@
 		padding: 7px 11px;
 		background: var(--card);
 		white-space: nowrap;
-	}
-	a.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-	}
-	a.btn:hover {
-		text-decoration: none;
 	}
 	/* Money carries seven pills, which will not fit a narrow viewport on one
 	   line. They scroll sideways rather than wrapping into a second row that

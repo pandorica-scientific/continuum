@@ -141,11 +141,14 @@
 
 {#if data.backup}
 	<section class="section">
-		<Eyebrow
-			emoji="🛟"
-			label="Backups"
-			caption="One restorable database dump, overwritten each run, plus every uploaded file — point it at a cloud-sync folder and the copy leaves the machine by itself (the sync client keeps the file's version history)."
-		/>
+		<div class="eyebrow-row">
+			<Eyebrow emoji="🛟" label="Backups (one restorable dump plus every uploaded file)" />
+			<InfoHint label="How backups work">
+				One restorable database dump, overwritten each run, plus every uploaded file. Point it at a
+				cloud-sync folder and the copy leaves the machine by itself — the sync client keeps the
+				file's version history, so overwriting the dump each time still leaves you earlier ones.
+			</InfoHint>
+		</div>
 		<div class="card stack-card">
 			<form method="POST" action="?/saveBackup" use:enhance class="backup-form">
 				<label class="field dest">
@@ -461,8 +464,11 @@
 
 	<section class="section">
 		<div class="eyebrow-row">
-			<Eyebrow emoji="🔌" label="API tokens" />
-			<span class="eyebrow-caption">read-only access to the whole ledger</span>
+			<Eyebrow emoji="🔌" label="API tokens (read-only access to the whole ledger)" />
+			<InfoHint label="What an API token can do">
+				A token grants read access to every transaction, account and figure in this ledger. It
+				cannot change anything.
+			</InfoHint>
 		</div>
 
 		{#if form?.createdToken}
@@ -492,11 +498,6 @@
 				</form>
 			</div>
 		{/each}
-
-		<p class="quiet-note">
-			A token grants read access to every transaction, account and figure in this ledger. It cannot
-			change anything.
-		</p>
 	</section>
 {/if}
 
@@ -653,11 +654,6 @@
 	.tr-meta {
 		font-size: 12px;
 		color: var(--fg3);
-	}
-	.quiet-note {
-		font-size: 12px;
-		color: var(--fg3);
-		margin: 0;
 	}
 	.error {
 		border: 1px solid var(--red);

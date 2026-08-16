@@ -13,6 +13,20 @@
 
 	let open = $state(false);
 	let hovering = $state(false);
+	let wrap = $state<HTMLElement | null>(null);
+	/** Which side the bubble hangs from, decided by where the icon actually is. */
+	let side = $state<'left' | 'right'>('left');
+
+	// Measured rather than guessed. The icon sits at the right-hand end of an
+	// eyebrow row, so a bubble anchored to its left edge runs off the screen —
+	// which is exactly what it did. Nothing in CSS alone knows how much room is
+	// to the right of an element, so this checks before it opens.
+	function chooseSide() {
+		const box = wrap?.getBoundingClientRect();
+		if (!box) return;
+		const room = window.innerWidth - box.left;
+		side = room < 360 ? 'right' : 'left';
+	}
 
 	// Shown on hover OR when pinned open by a click or keyboard.
 	//
@@ -25,7 +39,11 @@
 
 <span
 	class="wrap"
-	onmouseenter={() => (hovering = true)}
+	bind:this={wrap}
+	onmouseenter={() => {
+		chooseSide();
+		hovering = true;
+	}}
 	onmouseleave={() => (hovering = false)}
 	role="presentation"
 >
@@ -34,13 +52,16 @@
 		class="dot"
 		aria-label={label}
 		aria-expanded={open}
-		onclick={() => (open = !open)}
+		onclick={() => {
+			chooseSide();
+			open = !open;
+		}}
 	>
 		<Icon name="info" />
 	</button>
 
 	{#if visible}
-		<span class="bubble" role="note">
+		<span class="bubble" class:from-right={side === 'right'} role="note">
 			{@render children()}
 		</span>
 	{/if}
@@ -73,8 +94,8 @@
 
 	.bubble {
 		position: absolute;
-		/* Below and left-aligned: above would clip inside a card that starts at
-		   the top of the viewport, and these hints are several lines long. */
+		/* Below rather than above: a card at the top of the viewport would clip it,
+		   and these hints run to several lines. */
 		top: 22px;
 		left: -4px;
 		z-index: 20;
@@ -99,10 +120,18 @@
 		white-space: normal;
 	}
 
+	/* Hanging from the icon's right edge instead, for an icon near the screen
+	   edge. */
+	.bubble.from-right {
+		left: auto;
+		right: -4px;
+	}
+
 	@media (max-width: 40rem) {
-		.bubble {
+		.bubble,
+		.bubble.from-right {
 			/* On a narrow screen a 340px bubble anchored to an icon runs off the
-			   edge, so it spans the card instead. */
+			   edge whichever way it hangs, so it spans the viewport instead. */
 			position: fixed;
 			left: 12px;
 			right: 12px;
