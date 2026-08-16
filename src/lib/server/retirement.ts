@@ -37,7 +37,7 @@ export async function retirementInputs(baseCurrency: string): Promise<RetireInpu
 			db.select().from(loanFixationPeriod),
 			db.select().from(property),
 			db.select().from(tenancy),
-			db.select().from(person).orderBy(asc(person.createdAt)),
+			db.select().from(person).orderBy(asc(person.createdAt), asc(person.id)),
 			monthlyHistory(),
 			loadRateTable()
 		]);

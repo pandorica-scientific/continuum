@@ -58,7 +58,7 @@ const EVENT_LABELS: Record<string, string> = {
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
 	const [loans, allPeriods, properties, links, allEvents] = await Promise.all([
-		db.select().from(loan).orderBy(loan.createdAt),
+		db.select().from(loan).orderBy(loan.createdAt, loan.id),
 		db.select().from(loanFixationPeriod),
 		db.select({ id: property.id, name: property.name }).from(property),
 		db.select().from(loanProperty),

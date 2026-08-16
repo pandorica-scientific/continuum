@@ -37,7 +37,7 @@ export const load: PageServerLoad = async () => {
 			})
 			.from(account)
 			.leftJoin(person, eq(account.ownerPersonId, person.id))
-			.orderBy(account.createdAt),
+			.orderBy(account.createdAt, account.id),
 		loadRateTable()
 	]);
 	const today = new Date().toISOString().slice(0, 10);

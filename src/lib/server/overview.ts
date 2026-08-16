@@ -156,7 +156,7 @@ const builders: Record<string, Builder> = {
 					balanceAsOf: account.balanceAsOf
 				})
 				.from(account)
-				.orderBy(account.createdAt),
+				.orderBy(account.createdAt, account.id),
 			ctx.rates()
 		]);
 

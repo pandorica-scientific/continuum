@@ -61,7 +61,7 @@ export const load: PageServerLoad = async () => {
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
-			.orderBy(account.createdAt)
+			.orderBy(account.createdAt, account.id)
 	]);
 
 	const total = readAgg[0].count;

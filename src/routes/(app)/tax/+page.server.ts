@@ -12,7 +12,10 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async () => {
 	const [statements, people, payslipDocs, slipOwners, taxDocs, base, rates] = await Promise.all([
 		loadStatements(),
-		db.select({ id: person.id, name: person.name }).from(person).orderBy(person.createdAt),
+		db
+			.select({ id: person.id, name: person.name })
+			.from(person)
+			.orderBy(person.createdAt, person.id),
 		db.select().from(document).where(eq(document.shelf, 'payslips')),
 		db.select().from(documentPerson),
 		db

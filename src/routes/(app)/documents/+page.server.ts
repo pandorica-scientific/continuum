@@ -40,7 +40,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	const [docs, people, properties, accounts, subjects, dp, dr, da, ds, dt, tags] =
 		await Promise.all([
 			db.select().from(document).orderBy(document.addedOn),
-			db.select({ id: person.id, name: person.name }).from(person).orderBy(person.createdAt),
+			db
+				.select({ id: person.id, name: person.name })
+				.from(person)
+				.orderBy(person.createdAt, person.id),
 			db.select({ id: property.id, name: property.name }).from(property).orderBy(property.name),
 			db
 				.select({ id: account.id, name: account.name })

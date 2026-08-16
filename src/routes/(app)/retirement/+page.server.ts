@@ -103,7 +103,7 @@ export const load: PageServerLoad = async () => {
 
 	const [inputs, people, stored, rates] = await Promise.all([
 		retirementInputs(baseCurrency),
-		db.select().from(person).orderBy(asc(person.createdAt)),
+		db.select().from(person).orderBy(asc(person.createdAt), asc(person.id)),
 		getRevisionedSetting<Partial<RetireConfig>>('retirement', {}),
 		loadRateTable()
 	]);

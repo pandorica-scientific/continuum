@@ -110,7 +110,26 @@
 			axis: [0, 0.5, 1].map((f) => ({
 				top: `${f * 100}%`,
 				label: (((1 - f) * max) / 1e6).toFixed(1)
-			}))
+			})),
+			// The horizontal scale carried no labels at all, so the one thing the
+			// chart is for — when the pot crosses the line — could be seen but not
+			// read off. Calendar years, not offsets: nobody thinks in "t + 13".
+			years: [0, 5, 10, 15, 20].map((t) => ({
+				left: `${(t / 20) * 100}%`,
+				label: String(data.inputs.year + t)
+			})),
+			// The crossing itself, marked where it falls inside the window.
+			crossing:
+				model.fire && model.fire.t >= 0 && model.fire.t <= 20
+					? {
+							left: `${(model.fire.t / 20) * 100}%`,
+							// Drawn inside the SVG, in its coordinates: the chart box is
+							// inset by the y-axis gutter, so a percentage against the
+							// container would sit to the right of the data it marks.
+							x: x(model.fire.t),
+							label: String(model.fire.year)
+						}
+					: null
 		};
 	});
 
@@ -336,6 +355,19 @@
 				<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
 			{/each}
 			<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
+			{#if chart.crossing}
+				<line
+					x1={chart.crossing.x}
+					y1="0"
+					x2={chart.crossing.x}
+					y2="200"
+					stroke="var(--green)"
+					stroke-width="1"
+					stroke-dasharray="4 4"
+					vector-effect="non-scaling-stroke"
+					opacity="0.6"
+				/>
+			{/if}
 			<polyline
 				points={chart.required}
 				fill="none"
@@ -353,6 +385,16 @@
 				vector-effect="non-scaling-stroke"
 			/>
 		</svg>
+		<div class="years mono">
+			{#each chart.years as year (year.label)}
+				<span class="year" style:left={year.left}>{year.label}</span>
+			{/each}
+			{#if chart.crossing}
+				<span class="year crossing" style:left={chart.crossing.left}>
+					{chart.crossing.label}
+				</span>
+			{/if}
+		</div>
 	</div>
 	<div class="legend">
 		<span class="l"
@@ -719,6 +761,25 @@
 		font-size: 11px;
 		color: var(--fg3);
 	}
+	.years {
+		position: relative;
+		height: 16px;
+		margin-top: 4px;
+	}
+	.year {
+		position: absolute;
+		transform: translateX(-50%);
+		font-size: 11px;
+		color: var(--fg3);
+		white-space: nowrap;
+	}
+	/* The year the pot clears the target reads as state, not decoration. */
+	.year.crossing {
+		color: var(--green);
+		font-weight: 600;
+		top: 0;
+	}
+
 	svg {
 		width: 100%;
 		height: auto;

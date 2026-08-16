@@ -26,6 +26,7 @@ import {
 	createTenancy,
 	setPropertyBillSource,
 	setPropertyDrawing,
+	removePropertyImage,
 	setPropertyImage
 } from '$lib/server/property/mutations';
 import { updatePropertyTags } from '$lib/server/tags';
@@ -33,6 +34,7 @@ import { periodForMonth } from '$lib/loans/amortise';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import { propertyFinancials, sharesForLoan } from '$lib/property/finance';
 import { activeTenanciesByProperty } from '$lib/property/tenancy';
+import { listProperties } from '$lib/server/property/queries';
 import type { Actions, PageServerLoad } from './$types';
 
 function daysUntil(date: string): number {
@@ -41,7 +43,7 @@ function daysUntil(date: string): number {
 
 export const load: PageServerLoad = async ({ url }) => {
 	const [properties, tenancies, bills, loans, periods, links, docs, rates] = await Promise.all([
-		db.select().from(property).orderBy(property.createdAt),
+		listProperties(),
 		db.select().from(tenancy),
 		db.select().from(propertyBill).orderBy(propertyBill.sort),
 		db.select().from(loan),
@@ -416,6 +418,21 @@ export const actions: Actions = {
 			await removeUpload(name);
 			return fail(result.status, { message: result.message });
 		}
+		return { ok: true };
+	},
+
+	removeImage: async ({ request }) => {
+		const form = await request.formData();
+		const propertyId = String(form.get('propertyId') ?? '');
+		const slot = String(form.get('slot') ?? '');
+		const expectedImage = String(form.get('expectedImage') ?? '');
+		if (!expectedImage) return fail(400, { message: 'Nothing to remove.' });
+
+		const result = await removePropertyImage({ propertyId, slot, expectedImage });
+		if (!result.ok) return fail(result.status, { message: result.message });
+		// Only once the row no longer points at it. Every upload gets its own
+		// randomUUID name, so nothing else can be referencing this file.
+		await removeUpload(result.removed);
 		return { ok: true };
 	},
 

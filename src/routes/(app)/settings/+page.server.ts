@@ -154,7 +154,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				pending: isAdmin ? sql<boolean>`${person.passwordHash} is null` : sql<boolean>`false`
 			})
 			.from(person)
-			.orderBy(person.createdAt),
+			.orderBy(person.createdAt, person.id),
 		isAdmin ? getBackupConfig() : null,
 		isAdmin ? getLastBackupRun() : null,
 		// Gated on passkeysAvailable() as well as on being signed in: a plain-HTTP

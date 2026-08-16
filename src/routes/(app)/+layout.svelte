@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { page } from '$app/state';
+	import { importOfferedAt } from '$lib/modules/registry';
 	import { overlayFocus } from '$lib/actions/overlay';
 
 	let { data, children } = $props();
@@ -61,11 +63,13 @@
 		☰
 	</button>
 
-	<!-- Quick add: importing a statement is the one thing done from anywhere,
-	     so it gets a permanent target instead of a trip through the header.
-	     Hidden with its module, or it would lead to a 404. Named apart from the
-	     header button so the two links are distinguishable by name. -->
-	{#if data.modules.import}
+	<!-- Quick add: a permanent target for the one thing done often, instead of a
+	     trip through the header. Scoped to the areas where importing belongs —
+	     Overview and Money — because a floating button over the Property or
+	     Retirement screen is just something in the way. Hidden with its module
+	     too, or it would lead to a 404. Named apart from the header button so
+	     the two links are distinguishable by name. -->
+	{#if importOfferedAt(page.url.pathname, data.modules)}
 		<a href="/import" class="quick-add" aria-label="Quick add">
 			<Icon name="plus" size={24} />
 		</a>

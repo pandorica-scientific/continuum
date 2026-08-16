@@ -25,7 +25,7 @@ export const load: PageServerLoad = async () => {
 		// behind a reverse proxy or Tailscale the whole household shares one
 		// address.
 		.where(and(isNull(person.deactivatedAt), isNotNull(person.passwordHash)))
-		.orderBy(person.createdAt);
+		.orderBy(person.createdAt, person.id);
 	return { people, passkeys: passkeysAvailable() };
 };
 

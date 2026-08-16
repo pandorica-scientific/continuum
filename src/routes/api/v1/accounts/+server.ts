@@ -5,7 +5,7 @@ import { money } from '$lib/api/serialise';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
-	const rows = await db.select().from(account).orderBy(account.createdAt);
+	const rows = await db.select().from(account).orderBy(account.createdAt, account.id);
 	return json({
 		accounts: rows.map((a) => ({
 			id: a.id,

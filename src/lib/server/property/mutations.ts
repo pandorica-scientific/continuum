@@ -181,6 +181,56 @@ export interface SetPropertyDrawingInput {
 	drawing: unknown;
 }
 
+export type RemovePropertyImageResult =
+	{ ok: true; removed: string } | { ok: false; status: 400 | 404 | 409; message: string };
+
+/**
+ * Detach an image from a property and report which stored file it was.
+ *
+ * Takes the same `expectedImage` as setting one does: a slot that changed under
+ * the person — a second tab, a replace that landed first — must refuse rather
+ * than delete whatever happens to be there now. The caller deletes the file
+ * only after this commits, so a failed transaction cannot destroy it.
+ */
+export async function removePropertyImage(
+	input: { propertyId: string; slot: string; expectedImage: string },
+	handle: Db = db
+): Promise<RemovePropertyImageResult> {
+	return handle.transaction(async (tx) => {
+		const rows = await tx
+			.select({ images: property.images })
+			.from(property)
+			.where(eq(property.id, input.propertyId))
+			.for('update');
+		const row = rows[0];
+		if (!row) return { ok: false as const, status: 404 as const, message: 'Property not found.' };
+
+		const images = { ...row.images, photos: row.images.photos.filter(Boolean) };
+		const stale = {
+			ok: false as const,
+			status: 409 as const,
+			message: 'That image changed. Try again.'
+		};
+
+		if (input.slot === 'plan') {
+			if ((images.plan ?? null) !== input.expectedImage) return stale;
+			images.plan = undefined;
+		} else {
+			const match = input.slot.match(/^photo(\d+)$/);
+			if (!match)
+				return { ok: false as const, status: 400 as const, message: 'Unknown image slot.' };
+			const index = Number(match[1]);
+			if (images.photos[index] !== input.expectedImage) return stale;
+			// Splice, not a hole: the strip renders a dense list, and leaving an
+			// empty slot behind would shift every later photo's index.
+			images.photos.splice(index, 1);
+		}
+
+		await tx.update(property).set({ images }).where(eq(property.id, input.propertyId));
+		return { ok: true as const, removed: input.expectedImage };
+	});
+}
+
 export async function setPropertyDrawing(
 	input: SetPropertyDrawingInput,
 	handle: Db = db

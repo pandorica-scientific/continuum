@@ -19,6 +19,7 @@
 	} = $props();
 
 	let input: HTMLInputElement | undefined = $state();
+	let confirming = $state(false);
 	let dragOver = $state(false);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -35,6 +36,27 @@
 			error = outcome.type === 'success' ? null : outcome.message;
 		} finally {
 			busy = false;
+		}
+	}
+
+	// Two taps rather than a browser confirm(): a modal dialog inside a drop
+	// target is easy to dismiss by accident, and this deletes a file.
+	async function remove() {
+		if (!confirming) {
+			confirming = true;
+			return;
+		}
+		const body = new FormData();
+		body.set('propertyId', propertyId);
+		body.set('slot', slot);
+		body.set('expectedImage', image ?? '');
+		busy = true;
+		try {
+			const outcome = await submitAction('/property?/removeImage', body);
+			error = outcome.type === 'success' ? null : outcome.message;
+		} finally {
+			busy = false;
+			confirming = false;
 		}
 	}
 </script>
@@ -75,15 +97,27 @@
 				<img src="/files/{image}" alt={placeholder} style:object-fit={fit} />
 			</a>
 		{/if}
-		<button
-			type="button"
-			class="replace"
-			class:drag={dragOver}
-			aria-label="Replace {placeholder}"
-			onclick={() => input?.click()}
-		>
-			{busy ? '…' : '↺'}
-		</button>
+		<div class="slot-actions">
+			<button
+				type="button"
+				class="slot-action"
+				class:drag={dragOver}
+				aria-label="Replace {placeholder}"
+				onclick={() => input?.click()}
+			>
+				{busy && !confirming ? '…' : '↺'}
+			</button>
+			<button
+				type="button"
+				class="slot-action"
+				class:confirming
+				aria-label={confirming ? `Confirm removing ${placeholder}` : `Remove ${placeholder}`}
+				onclick={remove}
+				onblur={() => (confirming = false)}
+			>
+				{confirming ? 'Sure?' : '✕'}
+			</button>
+		</div>
 	</div>
 {:else}
 	<div
@@ -161,11 +195,15 @@
 		color: var(--red);
 		font-size: 12px;
 	}
-	.replace {
+	.slot-actions {
 		position: absolute;
 		top: 6px;
 		right: 6px;
-		width: 26px;
+		display: flex;
+		gap: 4px;
+	}
+	.slot-action {
+		min-width: 26px;
 		height: 26px;
 		border-radius: 8px;
 		border: 1px solid var(--bd2);
@@ -176,7 +214,18 @@
 		display: grid;
 		place-items: center;
 	}
-	.replace.drag {
+	.slot-action.drag {
 		border-color: var(--blue);
+	}
+	.slot-action:hover {
+		background: var(--card3);
+	}
+	/* Armed, not done: red says the next tap deletes. */
+	.slot-action.confirming {
+		width: auto;
+		padding: 0 8px;
+		border-color: var(--red);
+		color: var(--red);
+		font-size: 11px;
 	}
 </style>

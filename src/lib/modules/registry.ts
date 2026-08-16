@@ -40,6 +40,10 @@ export interface Area {
 	key: string;
 	label: string;
 	icon: IconName;
+	/** Whether importing a statement is offered from this area's screens.
+	 *  Money owns the ledger and Overview is where you land, so the shortcut
+	 *  belongs there; on Property or Retirement it is noise. */
+	offersImport?: boolean;
 	screens: Screen[];
 }
 
@@ -59,12 +63,14 @@ export const AREAS: Area[] = [
 		key: 'overview',
 		label: 'Overview',
 		icon: 'compass',
+		offersImport: true,
 		screens: [{ path: '/overview', label: 'Overview', icon: 'compass' }]
 	},
 	{
 		key: 'money',
 		label: 'Money',
 		icon: 'flow',
+		offersImport: true,
 		// Cash flow, Accounts, Transactions, Rules and Tags are core: they stay
 		// whatever is switched off, which is why this area can never disappear.
 		screens: [
@@ -130,6 +136,11 @@ export function visibleAreas(modules: ModuleToggles): Area[] {
 		...area,
 		screens: area.screens.filter((screen) => !screen.module || modules[screen.module])
 	})).filter((area) => area.screens.length > 0);
+}
+
+/** Whether a statement import may be started from this path. */
+export function importOfferedAt(pathname: string, modules: ModuleToggles): boolean {
+	return modules.import && (areaForPath(pathname)?.offersImport ?? false);
 }
 
 /** The area a path belongs to, or undefined for a route outside the navigation. */

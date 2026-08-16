@@ -5,12 +5,13 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import LoanScenarioPreview from '$lib/components/LoanScenarioPreview.svelte';
 	import { applyFixation, project } from '$lib/loans/simulate';
+	import { paymentForRate, rateForPayment } from '$lib/loans/derive';
 	import {
 		decodeScenarioPayload,
 		defaultFixationStart,
 		type ScenarioPayload
 	} from '$lib/loans/scenario';
-	import { parseAmountToMinor } from '$lib/money';
+	import { formatMinor, parseAmountToMinor } from '$lib/money';
 	let {
 		loanId,
 		currency,
@@ -29,6 +30,45 @@
 
 	const scenario = $derived(decodeScenarioPayload(sim));
 	const base = $derived(project(scenario.terms, scenario.periods));
+	/** The month the loan clears on its present terms — the term a derived
+	 *  figure holds to, so an offer is compared like for like. */
+	const term = $derived(base.summary.debtFreeMonth);
+
+	// Whichever field was filled in for you. Kept so a derived value can be
+	// replaced when its counterpart changes, while anything typed is never
+	// overwritten — correcting a quoted payment must not move the rate.
+	let derivedField = $state<'rate' | 'payment' | null>(null);
+
+	function fillPaymentFromRate() {
+		if (derivedField === 'rate') return;
+		const annualRatePct = Number(rate.replace(',', '.'));
+		if (!rate.trim() || !Number.isFinite(annualRatePct) || annualRatePct < 0) return;
+		const derived = paymentForRate(
+			scenario.terms,
+			scenario.periods,
+			startDate,
+			annualRatePct,
+			term
+		);
+		if (derived === null) return;
+		payment = formatMinor(derived, currency);
+		derivedField = 'payment';
+	}
+
+	function fillRateFromPayment() {
+		if (derivedField === 'payment') return;
+		if (!payment.trim()) return;
+		let paymentMinor: bigint;
+		try {
+			paymentMinor = parseAmountToMinor(payment, currency);
+		} catch {
+			return;
+		}
+		const derived = rateForPayment(scenario.terms, scenario.periods, startDate, paymentMinor, term);
+		if (derived === null) return;
+		rate = String(derived);
+		derivedField = 'rate';
+	}
 
 	const whatIf = $derived.by(() => {
 		try {
@@ -67,16 +107,26 @@
 		<div class="fields">
 			<label><span>From</span><input name="startDate" type="date" bind:value={startDate} /></label>
 			<label
-				><span>Annual rate %</span><input
+				><span>Annual rate %{derivedField === 'rate' ? ' · derived' : ''}</span><input
 					name="rate"
+					oninput={() => {
+						if (derivedField === 'rate') derivedField = null;
+					}}
+					onchange={fillPaymentFromRate}
+					onblur={fillPaymentFromRate}
 					inputmode="decimal"
 					placeholder="3.89"
 					bind:value={rate}
 				/></label
 			>
 			<label
-				><span>New monthly payment</span><input
+				><span>New monthly payment{derivedField === 'payment' ? ' · derived' : ''}</span><input
 					name="payment"
+					oninput={() => {
+						if (derivedField === 'payment') derivedField = null;
+					}}
+					onchange={fillRateFromPayment}
+					onblur={fillRateFromPayment}
 					inputmode="decimal"
 					placeholder="52 300"
 					bind:value={payment}
@@ -96,7 +146,7 @@
 			alternative={whatIf}
 			{currency}
 			alternativeTitle="With this fixation"
-			emptyText="fill in rate and payment to preview the offer"
+			emptyText="name a rate or a payment — the other is worked out to hold the same term"
 			showCost={true}
 		/>
 
@@ -119,12 +169,19 @@
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: 12px;
 	}
+	/* Labels are grid items of equal height, so a caption that wraps to two
+	   lines pushed its own input down and out of line with its neighbours.
+	   Anchoring the control to the bottom lets the text grow upwards instead. */
 	label {
 		display: flex;
 		flex-direction: column;
+		justify-content: flex-end;
 		gap: 5px;
 		font-size: 12px;
 		color: var(--fg3);
+	}
+	label > input {
+		margin-top: auto;
 	}
 	input {
 		border: 1px solid var(--bd2);

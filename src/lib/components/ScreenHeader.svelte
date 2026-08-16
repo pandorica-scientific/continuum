@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Icon from './Icon.svelte';
-	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
+	import {
+		areaForPath,
+		importOfferedAt,
+		visibleAreas,
+		type ModuleToggles
+	} from '$lib/modules/registry';
 	import type { IconName } from '$lib/icons';
 
 	let {
@@ -31,7 +36,8 @@
 	// An area holding one screen renders no row at all — a single pill would be
 	// a label pretending to be a choice.
 	const tabs = $derived(screens.length > 1 ? screens : []);
-	const importable = $derived(modules?.import ?? false);
+	// Only where importing belongs — see the registry's offersImport.
+	const importable = $derived(modules ? importOfferedAt(page.url.pathname, modules) : false);
 
 	const current = $derived(
 		area?.screens.find(

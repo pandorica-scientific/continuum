@@ -109,12 +109,19 @@
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: 12px;
 	}
+	/* Labels are grid items of equal height, so a caption that wraps to two
+	   lines pushed its own input down and out of line with its neighbours.
+	   Anchoring the control to the bottom lets the text grow upwards instead. */
 	label {
 		display: flex;
 		flex-direction: column;
+		justify-content: flex-end;
 		gap: 5px;
 		font-size: 12px;
 		color: var(--fg3);
+	}
+	label > input {
+		margin-top: auto;
 	}
 	input {
 		border: 1px solid var(--bd2);
