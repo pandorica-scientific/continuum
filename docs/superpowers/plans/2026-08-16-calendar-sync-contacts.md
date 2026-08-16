@@ -1632,24 +1632,19 @@ Report results. Do not commit.
 
 ### Task 24: Code review of the whole release
 
-**Files:** the whole branch against `main` — not "the diff".
+**Files:** the whole branch against `main`.
 
-At the time this task was added the branch stood at 24 tracked files changed
-(+7335/−63) **plus 37 new files**, which is the largest change set the project
-has had and none of which has been read by anything but the process that wrote
-it.
+`main..HEAD` is now 81 files changed (+27997/−80), 57 of them new — the largest
+change set the project has had, and none of it has been read by anything but the
+process that wrote it.
 
-**The new files are untracked, and `git diff` does not show them.** A review
-pointed at the diff would silently skip most of the release — the entire sync
-engine, both adapters, the contacts module. Stage everything first so the
-review sees it:
+The work is committed, so `git diff main` covers it. Check for uncommitted
+stragglers before starting, and include them:
 
 ```
-git add -A
-git status --porcelain | wc -l    # sanity-check the count before reviewing
+git diff main --stat | tail -1
+git status --porcelain          # anything here is not in that diff
 ```
-
-Staging is not committing; commits remain Robert's.
 
 **Run it last.** A review before Phase F would miss write-back, the briefing
 sources and the documentation, which is where the remaining risk is.

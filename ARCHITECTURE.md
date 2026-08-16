@@ -20,19 +20,19 @@ approximation, never a future rate or a silent one-to-one conversion.
 
 ## Extension seams
 
-| Seam                    | Contract                                                                                                             | Implementations                                                                   | Add one by                                                                                                 |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Bank statement formats  | `ParsedStatement` via `detectAndParse` (`src/lib/server/import/detect.ts`)                                           | Fio CSV, Revolut CSV, mBank CSV, RB PDF, ČS PDF                                   | new adapter in `import/adapters/` + a sniff rule in `detect.ts`                                            |
-| Broker reports          | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                                             | XTB XLSX                                                                          | sibling parser + ingest wiring                                                                             |
-| Smart-home platforms    | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory                     | Home Assistant (REST + WebSocket), Demo                                           | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically      |
-| Briefing strip          | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing.ts`)                                               | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend    | append to `SOURCES`                                                                                        |
-| Ledger calendar events  | rule generators in `src/lib/server/calendar.ts`, individually switchable                                             | import reminder, loan payments, property dates, quarterly report, expiry          | new block in `generateEvents` + `CALENDAR_RULES` entry                                                     |
-| Categorisation rules    | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                | counterparty/description contains, counter-account, variable symbol, amount range | new variant in `Condition` + a branch in `conditionHolds()`                                                |
-| Read-only API           | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                    | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`      | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls              |
-| FX rates                | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                       | CNB                                                                               | replace `refreshRates`; the rate table and conversion API stay                                             |
-| Modules / screens       | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes | 9 modules across 7 areas                                                          | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                   |
-| Overview panels         | registry in `src/lib/overview/panels.ts` (key, default and minimum size, required modules)                           | 13 panels                                                                         | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview.ts` |
-| External calendar feeds | _(planned)_ `CalendarFeed` providers alongside the ledger's own events                                               | —                                                                                 | Google / iCal two-way sync will be the first implementations                                               |
+| Seam                   | Contract                                                                                                             | Implementations                                                                   | Add one by                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Bank statement formats | `ParsedStatement` via `detectAndParse` (`src/lib/server/import/detect.ts`)                                           | Fio CSV, Revolut CSV, mBank CSV, RB PDF, ČS PDF                                   | new adapter in `import/adapters/` + a sniff rule in `detect.ts`                                                       |
+| Broker reports         | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                                             | XTB XLSX                                                                          | sibling parser + ingest wiring                                                                                        |
+| Smart-home platforms   | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory                     | Home Assistant (REST + WebSocket), Demo                                           | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically                 |
+| Briefing strip         | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing.ts`)                                               | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend    | append to `SOURCES`                                                                                                   |
+| Ledger calendar events | rule generators in `src/lib/server/calendar.ts`, individually switchable                                             | import reminder, loan payments, property dates, quarterly report, expiry          | new block in `generateEvents` + `CALENDAR_RULES` entry                                                                |
+| Categorisation rules   | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                | counterparty/description contains, counter-account, variable symbol, amount range | new variant in `Condition` + a branch in `conditionHolds()`                                                           |
+| Read-only API          | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                    | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`      | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls                         |
+| FX rates               | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                       | CNB                                                                               | replace `refreshRates`; the rate table and conversion API stay                                                        |
+| Modules / screens      | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes | 9 modules across 7 areas                                                          | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                              |
+| Overview panels        | registry in `src/lib/overview/panels.ts` (key, default and minimum size, required modules)                           | 13 panels                                                                         | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview.ts`            |
+| Calendar providers     | `CalendarProvider` (`src/lib/server/calendar/sync/provider.ts`): probe / listCalendars / pull / push                 | iCloud (CalDAV), Google Calendar                                                  | `registerCalendarProvider(id, label, factory, fields, hint, oauth)` — the Settings panel renders itself from `fields` |
 
 ## Correctness anchors
 
@@ -112,6 +112,40 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   join tables. There is no free-text subject anywhere, so a rename follows
   every document and a typo cannot mint a phantom column; catch-all subjects
   are case-insensitively unique.
+- **Calendar identity**: every event has a stable key on both sides. Authored
+  events keep a UUID; generated events derive one from what produced them
+  (`gen:{rule}:{table}:{row}:{field}:{month}`), because they have no row and are
+  recomputed each request. The remote id is a deterministic encoding of that
+  key, so `calendar_sync_link` is a cache rather than the source of truth —
+  losing it triggers a reconcile that re-attaches, instead of a second copy of
+  every event on someone's phone. The published `.ics` feed uses the same keys;
+  it used to number UIDs by array position, so adding a loan renumbered every
+  later event on that day.
+- **Calendar merge**: the three-way merge is a pure function of
+  `(base, local, remote)` with no network, database or clock, where `base` is
+  the content we last successfully sent. Everything genuinely risky about
+  two-way sync is decided there and is exhaustively table-tested offline. The
+  content hash strips the marker and source tag we add on the way out —
+  decoration reaching the hash makes every event compare as changed on every
+  pass, and the resulting push loop is silent, surfacing as rate-limit
+  exhaustion rather than an error. It does _not_ strip an emoji the author
+  typed: that is content, and stripping it would make a rename hash identically
+  and never sync.
+- **Calendar convergence**: two invariants hold under any interleaving of local
+  and remote edits — nothing is duplicated, and nothing deleted ever comes back.
+  Both are pinned by a randomised convergence test against an in-memory
+  provider. Deletions are tombstones rather than removed rows, because sync must
+  tell "deleted here, push it" from "never existed"; tombstones are reaped once
+  no link references them. A generated event deleted remotely is _suppressed_
+  rather than re-created — the ledger does not overrule a deliberate act.
+- **Calendar write-back**: a remote date move may write exactly four ledger
+  fields — `loan.paymentDay`, `tenancy.endDate`, `tenancy.renewalNoticeDate`,
+  `document.expiresOn` — and nothing else. `loanFixationPeriod.endDate` has a
+  row and is deliberately excluded: moving it re-cuts the interest schedule,
+  which is not what dragging a calendar event means. `paymentDay` is a
+  day-of-month, so moving one month moves every month; that is applied and
+  announced rather than silently done. Every write-back is recorded and
+  surfaced in the briefing.
 
 ## Write boundaries
 

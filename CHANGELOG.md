@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.3.7 — unreleased
+
+A contacts module, and a calendar you can write in that stays in step with
+iCloud and Google.
+
+### Added
+
+- **Contacts.** The people and companies a household deals with — name, photo,
+  work place, job title, phone, email, address, notes — each linkable to the
+  tenancies, properties, loans and accounts they touch. Search folds diacritics,
+  so `rehor` finds Řehoř and `lukasz` finds Łukasz; an address book that only
+  answers to input with the háček already typed is no use to this household.
+- **A writable shared calendar.** Anyone in the household can add events, with
+  recurrence — daily, weekly on chosen days, monthly by date or by weekday
+  position, yearly — and edit or cancel a single occurrence, this and all later
+  ones, or the whole series. The ledger's own generated events keep appearing
+  alongside them.
+- **Two-way calendar sync** with iCloud (and any CalDAV server — Fastmail,
+  Nextcloud, Radicale) and with Google Calendar. Events written here appear
+  there and the other way round. Setup for iCloud is one app-specific password;
+  Google needs a Cloud project of your own, and `docs/google-calendar-setup.md`
+  walks through it.
+- **Continuum's own events are marked** with the module emoji and `· Continuum`,
+  so a mortgage payment is tellable from "dentist, 3pm" in a shared calendar.
+  Switchable off in Settings.
+- **Moving a date in a connected calendar can change the ledger.** Dragging a
+  loan payment, a lease end, a renewal notice or a document expiry writes that
+  date back. Nothing else does — a retitled payment is reverted, because the
+  ledger owns what its own events say.
+
+### Fixed
+
+- **The published `.ics` feed gave events unstable identities.** UIDs were
+  numbered by position in the generated list, so adding a loan renumbered every
+  later event on the same day and subscribers saw them deleted and recreated.
+  Cosmetic in a read-only feed; it would have been duplication and lost edits
+  once sync existed.
+- **Two events from one tenancy shared a UID.** A lease end and its renewal
+  notice come from the same rule and the same row, and the feed published both
+  under one identity — so a subscriber saw only one of them.
+
+### Upgrading
+
+Two things to know before updating an existing install.
+
+- **`tenancy.tenantContact` is gone.** The migration creates a real contact from
+  each non-empty value first — named after the tenant, with the original text
+  preserved verbatim in the contact's notes — and links it to the tenancy.
+  Nothing is parsed or guessed at, so nothing is lost; but the column itself is
+  dropped, and how to reach a tenant now lives in Contacts.
+- **PostgreSQL needs the `unaccent` extension.** Migration `0036` runs
+  `create extension if not exists unaccent`, which requires rights the
+  application user may not have on a locked-down server. If the migration stops
+  there, have someone with the rights run this once against the database and
+  then update again:
+
+  ```sql
+  create extension if not exists unaccent;
+  ```
+
+  The stock `postgres:17-alpine` image in `compose.yaml` needs nothing extra.
+
 ## 0.3.6 — unreleased
 
 A colour pass over both themes, and a run of fixes found by using the thing.
