@@ -66,6 +66,19 @@ async function boot(): Promise<void> {
 	void meterTick();
 	setInterval(meterTick, 60 * 60 * 1000);
 
+	// Connected calendars. The tick is every minute and cheap — whether a pass
+	// actually runs is decided by each account's own last-sync time against the
+	// configured interval, so changing that setting takes effect without a
+	// restart. An account with no calendar chosen is skipped rather than failed.
+	const calendars = async () => {
+		const { syncAllAccounts } = await import('$lib/server/calendar/sync');
+		return syncAllAccounts();
+	};
+	const calendarTick = () =>
+		calendars().catch((err) => console.warn('Calendar sync failed:', err.message ?? err));
+	void calendarTick();
+	setInterval(calendarTick, 60 * 1000);
+
 	// Today's net worth, for the month-on-month delta. One row per day, upserted
 	// — it used to be written by computeNetWorth() itself, which the app layout
 	// calls on every page and GET /api/v1/networth calls on every poll, so the

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
@@ -27,6 +27,16 @@ import {
 import { importConfig as importConfigFile } from '$lib/server/config-file';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
+import { getCalendarMarkers } from '$lib/server/calendar';
+import {
+	calendarProviderKinds,
+	listCalendarAccounts,
+	makeCalendarProvider as makeCalendarProviderChecked,
+	providerFor,
+	runSync
+} from '$lib/server/calendar/sync';
+import { startAuth } from '$lib/server/calendar/sync/google-oauth';
+import { calendarAccount } from '$lib/server/db/schema';
 import { serverStatus } from '$lib/server/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
@@ -131,7 +141,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		lastBackup,
 		myPasskeys,
 		status,
-		tokens
+		tokens,
+		calendarAccounts,
+		calendarMarkers
 	] = await Promise.all([
 		// All three render only inside the isAdmin branches of this page, so a
 		// member paid for three queries to fill sections their copy never draws.
@@ -172,11 +184,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 					.where(eq(credential.personId, locals.person.id))
 			: [],
 		isAdmin ? serverStatus() : null,
-		isAdmin ? listTokens() : []
+		isAdmin ? listTokens() : [],
+		// Administrator business: a connected calendar is a credential someone
+		// entered, and the account list names where the household's diary goes.
+		isAdmin ? listCalendarAccounts() : [],
+		isAdmin ? getCalendarMarkers() : true
 	]);
 
 	return {
 		isAdmin,
+		calendarAccounts,
+		calendarMarkers,
+		// Rendered straight from the registry, so a new provider needs no change
+		// to this screen.
+		calendarProviders: isAdmin ? calendarProviderKinds() : [],
 		passwordMinLength: passwordMinLength(),
 		enrollmentLinkDays: enrollmentLinkDays(),
 		moduleToggles: modules,
@@ -237,6 +258,125 @@ function administered<T extends Actions>(actions: T): T {
 }
 
 export const actions = administered({
+	connectCalendar: async ({ request }) => {
+		const form = await request.formData();
+		const provider = String(form.get('provider') ?? '');
+		const kind = calendarProviderKinds().find((k) => k.id === provider);
+		if (!kind) return fail(400, { message: 'Unknown calendar provider.' });
+		if (kind.oauth) return fail(400, { message: `${kind.label} is connected by authorising it.` });
+
+		// Only the fields this provider declared. Anything else in the form is
+		// ignored rather than stored, so a stray input cannot smuggle a value into
+		// the credential blob.
+		const config: Record<string, string> = {};
+		for (const field of kind.fields) {
+			const value = String(form.get(field.key) ?? '').trim();
+			if (field.required && !value) {
+				return fail(400, { message: `${field.label} is needed.` });
+			}
+			if (value) config[field.key] = value;
+		}
+
+		const built = makeCalendarProviderChecked(provider, config);
+		if (!built) return fail(400, { message: 'Could not build that provider.' });
+
+		// Probe BEFORE storing: a credential that does not work is worse than none,
+		// because the account then sits in the list looking connected.
+		const probe = await built.probe();
+		if (!probe.ok) return fail(400, { message: probe.detail });
+
+		const id = randomUUID();
+		await db.insert(calendarAccount).values({
+			id,
+			provider: provider as 'icloud' | 'google',
+			label: kind.label,
+			credential: JSON.stringify(config)
+		});
+		return { connected: true };
+	},
+
+	authoriseGoogle: async ({ request, url }) => {
+		const form = await request.formData();
+		const clientId = String(form.get('clientId') ?? '').trim();
+		const clientSecret = String(form.get('clientSecret') ?? '').trim();
+		if (!clientId || !clientSecret) {
+			return fail(400, { message: 'The OAuth client ID and secret are both needed.' });
+		}
+
+		// Derived from the request rather than configured: it has to match the
+		// authorised redirect URI in the Cloud console character for character, and
+		// the address the browser is on is the only thing that reliably does.
+		const redirectUri = `${url.origin}/settings/google/callback`;
+		const started = startAuth(clientId, clientSecret, redirectUri);
+
+		// A half-finished row, holding the secret and the state hash while the
+		// browser is away. Any earlier attempt is cleared first so a stale pending
+		// row cannot be matched by a later callback.
+		await db.delete(calendarAccount).where(eq(calendarAccount.provider, 'google'));
+		await db.insert(calendarAccount).values({
+			id: randomUUID(),
+			provider: 'google',
+			label: 'Google Calendar',
+			credential: JSON.stringify({
+				clientId,
+				clientSecret,
+				stateHash: started.pending.stateHash
+			})
+		});
+
+		redirect(303, started.url);
+	},
+
+	chooseCalendar: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const remoteCalId = String(form.get('remoteCalId') ?? '').trim();
+		if (!id || !remoteCalId) return fail(400, { message: 'Which calendar?' });
+
+		await db
+			.update(calendarAccount)
+			.set({ remoteCalId, cursor: null })
+			.where(eq(calendarAccount.id, id));
+		return { chosen: true };
+	},
+
+	listRemoteCalendars: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const provider = await providerFor(id);
+		if (!provider) return fail(404, { message: 'No such account.' });
+		try {
+			return { calendars: await provider.listCalendars() };
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not list calendars.'
+			});
+		}
+	},
+
+	syncCalendarNow: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const report = await runSync(id);
+		if (!report) return fail(400, { message: 'Sync failed — see the account for the reason.' });
+		return { synced: report };
+	},
+
+	disconnectCalendar: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		// Links and conflicts cascade. The events themselves stay: they are the
+		// household's, not the connection's.
+		await db.delete(calendarAccount).where(eq(calendarAccount.id, id));
+		return { disconnected: true };
+	},
+
+	toggleCalendarMarkers: async () => {
+		const now = await getCalendarMarkers();
+		await setSetting('calendarMarkers', !now);
+		return { ok: true };
+	},
+
 	createApiToken: async ({ request }) => {
 		const form = await request.formData();
 		const { raw } = await createToken(String(form.get('label') ?? ''));

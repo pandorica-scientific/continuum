@@ -66,7 +66,6 @@ describe('tenancy range overlap', () => {
 				id: 'invalid-day',
 				propertyId: 'flat-a',
 				tenantName: 'Tenant',
-				tenantContact: '',
 				rentMinor: 1n,
 				depositMinor: 0n,
 				startDate: '2026-99-99',

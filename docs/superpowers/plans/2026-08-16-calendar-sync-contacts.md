@@ -1630,6 +1630,69 @@ Report results. Do not commit.
 
 ---
 
+### Task 24: Code review of the whole release
+
+**Files:** the whole branch against `main` — not "the diff".
+
+At the time this task was added the branch stood at 24 tracked files changed
+(+7335/−63) **plus 37 new files**, which is the largest change set the project
+has had and none of which has been read by anything but the process that wrote
+it.
+
+**The new files are untracked, and `git diff` does not show them.** A review
+pointed at the diff would silently skip most of the release — the entire sync
+engine, both adapters, the contacts module. Stage everything first so the
+review sees it:
+
+```
+git add -A
+git status --porcelain | wc -l    # sanity-check the count before reviewing
+```
+
+Staging is not committing; commits remain Robert's.
+
+**Run it last.** A review before Phase F would miss write-back, the briefing
+sources and the documentation, which is where the remaining risk is.
+
+- [ ] **Step 1: Run the review**
+
+Run: `/code-review max` against the branch. `max` rather than a lower level
+because the failure modes here are subtle rather than obvious — a merge that
+silently drops an edit reads as correct code.
+
+- [ ] **Step 2: Read every finding against these four questions**
+
+The review has no way to know which invariants matter, so judge its output
+against the ones this release lives or dies by:
+
+1. **Does anything reach the content hash that should not?** Decoration reaching
+   it is the push loop; an author's own emoji being stripped from it is silent
+   data loss. Both were live bugs during the build.
+2. **Can any path duplicate or resurrect an event?** Those are the two
+   invariants the convergence test pins, and they are the two that destroy trust
+   in a calendar.
+3. **Can a credential leave?** `calendar_account.credential` must not reach a
+   load function, a page payload or the config export.
+4. **Does any comment claim something the code does not do?** Three were found
+   and corrected during the build (the MATERIALIZED claim, the iteration cap, the
+   sync interval). Assume more survive.
+
+- [ ] **Step 3: Verify each finding before acting on it**
+
+A review of this much unfamiliar code will report things that are not true. For
+each finding, reproduce it — write the failing test first — before changing
+anything. A finding that cannot be reproduced is recorded as rejected, with the
+reason, rather than silently dropped.
+
+- [ ] **Step 4: Fix, with a regression test per real finding**
+
+- [ ] **Step 5: Verification checkpoint**
+
+Run: `npm run build && npm run test:e2e && npm test && npm run check && npm run lint`
+Confirm both live suites still report as skipped. Report results. Do not commit.
+
+---
+
 ## Self-Review
 
 **Spec coverage.** Every section maps to a task: Schema → 1, 6, 14; Event identity → 8; Markers → 9; Provider seam → 15; Sync engine → 16; Write-back → 21; Contacts → 1–5; UI surfaces → 4, 11, 18; Google setup cost → 20; Briefing → 22; Testing → distributed with the feature each covers; Build order → the phase ordering.

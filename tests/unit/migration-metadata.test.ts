@@ -100,6 +100,33 @@ describe('Drizzle migration metadata', () => {
 		}
 	});
 
+	it('declares calendar_event with its timezone column and the exception table', () => {
+		const snapshot = readSnapshot();
+		const event = snapshot.tables['public.calendar_event'];
+		expect(event).toBeDefined();
+		// tz is not redundant beside a timestamptz: RRULE expansion is
+		// timezone-dependent, and a series expanded in UTC drifts an hour across
+		// DST for half the year. Losing this column is a silent correctness bug.
+		expect(event.columns).toHaveProperty('tz');
+		expect(event.columns).toHaveProperty('rrule');
+		expect(event.columns).toHaveProperty('deleted_at');
+		expect(snapshot.tables).toHaveProperty('public.calendar_event_exception');
+		expect(snapshot.tables['public.calendar_event_exception'].columns).toHaveProperty(
+			'recurrence_id'
+		);
+	});
+
+	it('declares the calendar sync tables', () => {
+		const snapshot = readSnapshot();
+		// pushed_hash is the merge base. Without it there is no way to tell which
+		// side of a difference changed — only that the two differ.
+		expect(snapshot.tables['public.calendar_sync_link'].columns).toHaveProperty('pushed_hash');
+		expect(snapshot.tables['public.calendar_sync_link'].columns).toHaveProperty('suppressed_at');
+		expect(snapshot.tables['public.calendar_account'].columns).toHaveProperty('cursor');
+		expect(snapshot.tables['public.calendar_account'].columns).toHaveProperty('credential');
+		expect(snapshot.tables).toHaveProperty('public.calendar_conflict');
+	});
+
 	it('lets the fingerprint repair stop at its first matching occurrence', () => {
 		const migration = readFileSync('drizzle/0027_repair_transaction_fingerprints.sql', 'utf8');
 		const candidateLookup = migration.match(

@@ -72,7 +72,6 @@ export interface CreateTenancyInput {
 	id: string;
 	propertyId: string;
 	tenantName: string;
-	tenantContact: string;
 	rentMinor: bigint;
 	depositMinor: bigint;
 	startDate: string | null;

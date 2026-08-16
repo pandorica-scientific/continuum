@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
@@ -8,6 +9,9 @@
 	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
+
+	// The Google callback redirects back with its outcome in the query string.
+	const calendarNotice = $derived(page.url.searchParams.get('calendar'));
 </script>
 
 <ScreenHeader
@@ -246,6 +250,131 @@
 {#if data.isAdmin}
 	<section class="section">
 		<div class="eyebrow-row">
+			<Eyebrow emoji="📆" label="Connected calendars" />
+			<span class="eyebrow-caption">two-way sync with iCloud and other CalDAV servers</span>
+		</div>
+
+		{#if form?.message}
+			<p class="form-error" role="alert">{form.message}</p>
+		{/if}
+
+		{#if calendarNotice}
+			<!-- The OAuth callback is a redirect, so its outcome arrives in the URL
+			     rather than as a form result. -->
+			<p class="calendar-notice" role="status">{calendarNotice}</p>
+		{/if}
+
+		{#each data.calendarAccounts as account (account.id)}
+			<div class="card cal-account">
+				<div class="ca-head">
+					<span class="ca-label">{account.label}</span>
+					{#if account.lastError}
+						<span class="ca-state bad">{account.lastError}</span>
+					{:else if account.lastSyncAt}
+						<span class="ca-state good">
+							last synced {new Date(account.lastSyncAt).toLocaleString('en-GB')}
+						</span>
+					{:else}
+						<span class="ca-state">never synced</span>
+					{/if}
+				</div>
+
+				{#if account.remoteCalId}
+					<span class="ca-cal mono">{account.remoteCalId}</span>
+				{:else}
+					<!-- Until a collection is chosen there is nowhere to write, so the
+					     account is connected but not yet syncing. -->
+					<form method="POST" action="?/listRemoteCalendars" use:enhance class="ca-row">
+						<input type="hidden" name="id" value={account.id} />
+						<button class="btn" type="submit">Choose a calendar</button>
+						<span class="quiet">No calendar chosen yet — nothing syncs until one is.</span>
+					</form>
+				{/if}
+
+				{#if form?.calendars}
+					<form method="POST" action="?/chooseCalendar" use:enhance class="ca-row">
+						<input type="hidden" name="id" value={account.id} />
+						<select name="remoteCalId">
+							{#each form.calendars as calendar (calendar.id)}
+								<option value={calendar.id}>{calendar.name}</option>
+							{/each}
+						</select>
+						<button class="btn btn-primary" type="submit">Use this calendar</button>
+					</form>
+				{/if}
+
+				<div class="ca-row">
+					<form method="POST" action="?/syncCalendarNow" use:enhance>
+						<input type="hidden" name="id" value={account.id} />
+						<button class="btn" type="submit" disabled={!account.remoteCalId}>Sync now</button>
+					</form>
+					<form method="POST" action="?/disconnectCalendar" use:enhance>
+						<input type="hidden" name="id" value={account.id} />
+						<button class="btn danger" type="submit">Disconnect</button>
+					</form>
+				</div>
+			</div>
+		{/each}
+
+		{#each data.calendarProviders as provider (provider.id)}
+			<!-- Which flow this provider needs comes from the registry, not from a
+			     name check here: CalDAV takes an app password, Google has to send the
+			     browser away and come back. -->
+			<form
+				method="POST"
+				action={provider.oauth ? '?/authoriseGoogle' : '?/connectCalendar'}
+				class="card cal-connect"
+			>
+				<input type="hidden" name="provider" value={provider.id} />
+				<span class="cc-title">Connect {provider.label}</span>
+				<div class="cc-fields">
+					<!-- Rendered from the provider's own field list. Adding a provider
+					     never edits this screen. -->
+					{#each provider.fields as field (field.key)}
+						<label class="field">
+							<span>{field.label}</span>
+							<input
+								name={field.key}
+								type={field.secret ? 'password' : field.kind === 'url' ? 'url' : 'text'}
+								placeholder={field.placeholder ?? ''}
+								required={field.required}
+								autocomplete="off"
+							/>
+						</label>
+					{/each}
+				</div>
+				{#if provider.hint}<span class="quiet">{provider.hint}</span>{/if}
+				<div class="ca-row">
+					<button class="btn btn-primary" type="submit">
+						{provider.oauth ? 'Authorise with Google' : 'Connect'}
+					</button>
+				</div>
+			</form>
+		{/each}
+
+		<form method="POST" action="?/toggleCalendarMarkers" use:enhance class="card marker-row">
+			<button
+				type="submit"
+				class="switch"
+				class:on={data.calendarMarkers}
+				role="switch"
+				aria-checked={data.calendarMarkers}
+				aria-label="Mark Continuum's own events"
+			>
+				<span class="knob"></span>
+			</button>
+			<span class="r-text">
+				<span class="r-label">Mark the ledger's own events</span>
+				<span class="r-detail">
+					Adds the module emoji and “· Continuum” to events this app writes, so they are tellable
+					apart from your own in a shared calendar.
+				</span>
+			</span>
+		</form>
+	</section>
+
+	<section class="section">
+		<div class="eyebrow-row">
 			<Eyebrow emoji="🔌" label="API tokens" />
 			<span class="eyebrow-caption">read-only access to the whole ledger</span>
 		</div>
@@ -286,6 +415,75 @@
 {/if}
 
 <style>
+	.calendar-notice {
+		color: var(--fg2);
+		font-size: 13px;
+	}
+
+	.cal-account,
+	.cal-connect {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.ca-head {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+	}
+
+	.ca-label {
+		font-weight: 600;
+	}
+
+	.ca-state {
+		font-size: 12px;
+		color: var(--fg3);
+	}
+
+	.ca-state.good {
+		color: var(--green);
+	}
+
+	.ca-state.bad {
+		color: var(--red);
+	}
+
+	.ca-cal {
+		font-size: 12px;
+		color: var(--fg3);
+	}
+
+	.ca-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.cc-title {
+		font-weight: 600;
+	}
+
+	.cc-fields {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px 14px;
+	}
+
+	.marker-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	@media (max-width: 40rem) {
+		.cc-fields {
+			grid-template-columns: 1fr;
+		}
+	}
+
 	.token-new {
 		border-color: var(--blue);
 		display: flex;

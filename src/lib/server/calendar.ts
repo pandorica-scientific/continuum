@@ -1,8 +1,10 @@
-import { db } from '$lib/server/db';
+import { db, type Db } from '$lib/server/db';
 import { document, loan, loanFixationPeriod, property, tenancy } from '$lib/server/db/schema';
 import { periodForMonth } from '$lib/loans/amortise';
 import { getSetting, setSetting } from '$lib/server/settings';
 import { formatMinor } from '$lib/money';
+import { generatedKey, type OriginBinding } from '$lib/calendar/keys';
+import { decorate, markerForGenerated } from '$lib/calendar/markers';
 import { randomBytes } from 'node:crypto';
 
 // The ledger writes its own events, generated from what it already knows —
@@ -39,9 +41,19 @@ const DEFAULT_RULES: CalendarRuleToggles = {
 	expiry: true
 };
 
-export async function getCalendarRules(): Promise<CalendarRuleToggles> {
-	const stored = await getSetting<Partial<CalendarRuleToggles>>('calendarRules', {});
+export async function getCalendarRules(handle: Db = db): Promise<CalendarRuleToggles> {
+	const stored = await getSetting<Partial<CalendarRuleToggles>>('calendarRules', {}, handle);
 	return { ...DEFAULT_RULES, ...stored };
+}
+
+/**
+ * Whether events carry their module emoji and the ` · Continuum` tag when they
+ * leave here. On by default — in a shared calendar the marker is what tells a
+ * ledger event apart from "dentist, 3pm" — but a household that does not want
+ * emoji in their calendar should not have to want them.
+ */
+export async function getCalendarMarkers(handle: Db = db): Promise<boolean> {
+	return getSetting<boolean>('calendarMarkers', true, handle);
 }
 
 export interface LedgerEvent {
@@ -51,6 +63,39 @@ export interface LedgerEvent {
 	/** amount in minor units of `currency`, when the event is a payment */
 	amountMinor?: bigint;
 	currency?: string;
+	/**
+	 * Stable identity, derived from what produced this event. Generated events
+	 * have no row, so nothing else can identify them across two requests — and
+	 * both the published feed and the sync engine key on exactly this.
+	 */
+	key: string;
+	/**
+	 * The ledger row behind the event, when there is one. Null for pure schedule
+	 * rules (the import reminder, the quarterly report) — they are derived from
+	 * the calendar itself rather than from any row, so there is nothing a remote
+	 * edit could be written back to.
+	 */
+	binding: OriginBinding | null;
+}
+
+/**
+ * The UID this event carries in the published feed.
+ *
+ * Derived from the event's key rather than its index in the generated array.
+ * The old form, `${day}-${i}@continuum-ledger`, changed for every later event on
+ * a day as soon as one was inserted before it, so subscribers saw a delete and a
+ * create. Harmless churn in a read-only feed; under two-way sync the remote side
+ * keys on this value, and a shifting UID means duplicates and lost edits.
+ */
+export function icsUid(key: string): string {
+	// The UID occupies its own folded line; a CR or LF inside it would terminate
+	// the property early and let whatever follows be parsed as iCalendar.
+	return `${key.replace(/[\r\n]/g, '')}@continuum-ledger`;
+}
+
+/** 'YYYY-MM' from a year and a zero-based month index. */
+function monthKey(year: number, monthIndex: number): string {
+	return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
 }
 
 function firstWorkingDay(year: number, monthIndex: number): string {
@@ -75,14 +120,18 @@ function* monthsIn(startIso: string, endIso: string): Generator<[number, number]
 }
 
 /** All ledger-generated events in [start, end], honouring the rule toggles. */
-export async function generateEvents(startIso: string, endIso: string): Promise<LedgerEvent[]> {
-	const rules = await getCalendarRules();
+export async function generateEvents(
+	startIso: string,
+	endIso: string,
+	handle: Db = db
+): Promise<LedgerEvent[]> {
+	const rules = await getCalendarRules(handle);
 	const [loans, periods, tenancies, properties, docs] = await Promise.all([
-		db.select().from(loan),
-		db.select().from(loanFixationPeriod),
-		db.select().from(tenancy),
-		db.select().from(property),
-		db.select().from(document)
+		handle.select().from(loan),
+		handle.select().from(loanFixationPeriod),
+		handle.select().from(tenancy),
+		handle.select().from(property),
+		handle.select().from(document)
 	]);
 
 	const events: LedgerEvent[] = [];
@@ -95,7 +144,9 @@ export async function generateEvents(startIso: string, endIso: string): Promise<
 				events.push({
 					date: day,
 					label: "Import last month's statements",
-					ruleKey: 'importReminder'
+					ruleKey: 'importReminder',
+					key: generatedKey('importReminder', null, monthKey(y, m)),
+					binding: null
 				});
 			}
 		}
@@ -105,7 +156,9 @@ export async function generateEvents(startIso: string, endIso: string): Promise<
 				events.push({
 					date: day,
 					label: 'Upload the quarterly XTB report',
-					ruleKey: 'investmentReport'
+					ruleKey: 'investmentReport',
+					key: generatedKey('investmentReport', null, monthKey(y, m)),
+					binding: null
 				});
 			}
 		}
@@ -128,12 +181,17 @@ export async function generateEvents(startIso: string, endIso: string): Promise<
 				const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
 				const day = `${month}-${String(Math.min(l.paymentDay, last)).padStart(2, '0')}`;
 				if (inRange(day)) {
+					const binding = { table: 'loan', rowId: l.id, field: 'paymentDay' } as const;
 					events.push({
 						date: day,
 						label: `${l.name} payment`,
 						ruleKey: 'loanPayments',
 						amountMinor: -period.paymentMinor,
-						currency: l.currency
+						currency: l.currency,
+						// The month belongs in the key: one loan emits twelve distinct
+						// payment events a year and they must not share an identity.
+						key: generatedKey('loanPayments', binding, month),
+						binding
 					});
 				}
 			}
@@ -146,17 +204,23 @@ export async function generateEvents(startIso: string, endIso: string): Promise<
 			if (t.endDate && inRange(t.endDate)) {
 				// No amountMinor: a lease ending is a date, not a movement of
 				// money, and the renderer prints amountMinor as a signed figure.
+				const binding = { table: 'tenancy', rowId: t.id, field: 'endDate' } as const;
 				events.push({
 					date: t.endDate,
 					label: `Lease ends · ${propertyName}`,
-					ruleKey: 'propertyDates'
+					ruleKey: 'propertyDates',
+					key: generatedKey('propertyDates', binding),
+					binding
 				});
 			}
 			if (t.renewalNoticeDate && inRange(t.renewalNoticeDate)) {
+				const binding = { table: 'tenancy', rowId: t.id, field: 'renewalNoticeDate' } as const;
 				events.push({
 					date: t.renewalNoticeDate,
 					label: `Renewal notice due · ${propertyName}`,
-					ruleKey: 'propertyDates'
+					ruleKey: 'propertyDates',
+					key: generatedKey('propertyDates', binding),
+					binding
 				});
 			}
 		}
@@ -165,14 +229,35 @@ export async function generateEvents(startIso: string, endIso: string): Promise<
 	if (rules.expiry) {
 		for (const d of docs) {
 			if (d.expiresOn && inRange(d.expiresOn)) {
-				events.push({ date: d.expiresOn, label: `${d.name} ${d.expiryVerb}`, ruleKey: 'expiry' });
+				const binding = { table: 'document', rowId: d.id, field: 'expiresOn' } as const;
+				events.push({
+					date: d.expiresOn,
+					label: `${d.name} ${d.expiryVerb}`,
+					ruleKey: 'expiry',
+					key: generatedKey('expiry', binding),
+					binding
+				});
 			}
 		}
 		for (const p of periods) {
 			if (p.endDate && inRange(p.endDate)) {
 				const l = loans.find((x) => x.id === p.loanId);
 				if (l && l.owedMinor > 0n) {
-					events.push({ date: p.endDate, label: `${l.name} fixation ends`, ruleKey: 'expiry' });
+					// The fixation PERIOD row, not the loan: p.id is a
+					// loan_fixation_period id, and binding it to 'loan' would name a
+					// loan row that does not exist.
+					const binding = {
+						table: 'loanFixationPeriod',
+						rowId: p.id,
+						field: 'endDate'
+					} as const;
+					events.push({
+						date: p.endDate,
+						label: `${l.name} fixation ends`,
+						ruleKey: 'expiry',
+						key: generatedKey('expiry', binding),
+						binding
+					});
 				}
 			}
 		}
@@ -213,7 +298,7 @@ export async function icsToken(): Promise<string> {
 export async function buildIcs(): Promise<string> {
 	const start = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
 	const end = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
-	const events = await generateEvents(start, end);
+	const [events, markers] = await Promise.all([generateEvents(start, end), getCalendarMarkers()]);
 	const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
 	const lines = [
 		'BEGIN:VCALENDAR',
@@ -221,14 +306,21 @@ export async function buildIcs(): Promise<string> {
 		'PRODID:-//Continuum//ledger//EN',
 		'X-WR-CALNAME:Continuum ledger'
 	];
-	events.forEach((e, i) => {
+	events.forEach((e) => {
 		const day = e.date.replace(/-/g, '');
+		// Composed here, at the edge, rather than stored on the event: decoration
+		// must never reach the content hash the sync merge compares against.
+		const summary = decorate(
+			e.label,
+			markers ? markerForGenerated(e.ruleKey, e.binding) : null,
+			markers
+		);
 		lines.push(
 			'BEGIN:VEVENT',
-			`UID:${day}-${i}@continuum-ledger`,
+			`UID:${icsUid(e.key)}`,
 			`DTSTAMP:${stamp}`,
 			`DTSTART;VALUE=DATE:${day}`,
-			`SUMMARY:${e.label.replace(/[,;\\]/g, ' ')}`,
+			`SUMMARY:${summary.replace(/[,;\\]/g, ' ')}`,
 			'END:VEVENT'
 		);
 	});

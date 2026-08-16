@@ -3,8 +3,10 @@ import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import { person, settings } from '$lib/server/db/schema';
 import { DEFAULT_MODULES, type ModuleToggles } from '$lib/modules/registry';
 
-export async function getSetting<T>(key: string, fallback: T): Promise<T> {
-	const rows = await db.select().from(settings).where(eq(settings.key, key));
+/** `handle` mirrors setSetting: a caller inside a transaction, or a test with
+ *  its own database, has to be able to read through the same connection. */
+export async function getSetting<T>(key: string, fallback: T, handle: Queryable = db): Promise<T> {
+	const rows = await handle.select().from(settings).where(eq(settings.key, key));
 	return rows.length > 0 ? (rows[0].value as T) : fallback;
 }
 

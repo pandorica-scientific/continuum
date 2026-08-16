@@ -485,7 +485,6 @@ describe('domain replacement writes', () => {
 		});
 		const base = {
 			propertyId: 'property-tenancy',
-			tenantContact: '',
 			rentMinor: 20_000n,
 			depositMinor: 40_000n,
 			startDate: '2026-01-01',
@@ -517,7 +516,6 @@ describe('domain replacement writes', () => {
 					id: 'tenancy-invalid',
 					propertyId: 'property-invalid-tenancy',
 					tenantName: 'Tenant',
-					tenantContact: '',
 					rentMinor: 20_000n,
 					depositMinor: 0n,
 					startDate: '2026-12-31',

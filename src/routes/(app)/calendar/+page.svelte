@@ -4,8 +4,22 @@
 	import { selectedDayForMonth } from '$lib/ui/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import EventDialog from '$lib/components/EventDialog.svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
+
+	// Which occurrence the editor is open on: an occurrence, 'new', or null.
+	let editing = $state<'new' | { eventId: string; recurrenceId: string } | null>(null);
+
+	const editingOccurrence = $derived.by(() => {
+		// Captured before the closure: narrowing `editing` in the condition does not
+		// survive into the callback, because it is a reassignable $state.
+		const target = editing;
+		if (!target || target === 'new') return undefined;
+		return data.occurrences.find(
+			(o) => o.eventId === target.eventId && o.recurrenceId === target.recurrenceId
+		);
+	});
 
 	// Clicking a day filters the agenda; clicking it again clears.
 	let selectedDay = $derived<string | null>(null);
@@ -16,16 +30,42 @@
 		);
 	});
 
+	// One list, both kinds, in date order. A day's agenda is what is happening
+	// that day; which half of the app wrote each line is a detail shown on the row.
 	const agenda = $derived(
-		selectedDay ? data.agenda.filter((e) => e.date === selectedDay) : data.agenda
+		[
+			...data.agenda.map((e) => ({
+				kind: 'ledger' as const,
+				date: e.date,
+				day: e.day,
+				time: null as string | null,
+				marker: e.marker,
+				label: e.label,
+				occurrence: undefined
+			})),
+			...data.occurrences.map((o) => ({
+				kind: 'authored' as const,
+				date: o.date,
+				day: o.date.slice(8),
+				time: o.time,
+				marker: o.marker,
+				label: o.title,
+				occurrence: o
+			}))
+		]
+			.filter((e) => !selectedDay || e.date === selectedDay)
+			.sort((a, b) =>
+				a.date === b.date ? (a.time ?? '').localeCompare(b.time ?? '') : a.date < b.date ? -1 : 1
+			)
 	);
 
 	const ledgerCount = $derived(data.agenda.length);
+	const ourCount = $derived(data.occurrences.length);
 </script>
 
 <ScreenHeader
 	title="Calendar"
-	caption="What the ledger knows is coming — written by itself, from your data."
+	caption="What the household has on, and what the ledger knows is coming."
 />
 
 <section class="sources">
@@ -52,7 +92,9 @@
 			<button type="button" class="btn" onclick={() => goto(`?m=${data.next}`, { noScroll: true })}
 				>→</button
 			>
-			<span class="count">{ledgerCount} events · all written by the ledger</span>
+			<span class="count">
+				{ledgerCount + ourCount} events · {ourCount} yours, {ledgerCount} from the ledger
+			</span>
 		</div>
 		<div class="grid">
 			{#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as w (w)}
@@ -87,14 +129,64 @@
 				<span class="eyebrow-caption">
 					{selectedDay ? 'click the day again to clear' : 'click a day to filter'}
 				</span>
+				<button class="btn" type="button" onclick={() => (editing = 'new')}>Add event</button>
 			</div>
+
+			{#if form?.message}
+				<p class="form-error" role="alert">{form.message}</p>
+			{/if}
+
+			{#if editing === 'new'}
+				<EventDialog
+					categories={data.categories}
+					tz={data.tz}
+					date={selectedDay ?? data.today}
+					onclose={() => (editing = null)}
+				/>
+			{/if}
+
 			{#each agenda as e, i (e.date + e.label + i)}
-				<div class="event">
-					<span class="mono e-date">{e.day}.</span>
-					<span class="dot" style="background: var(--yellow);"></span>
-					<span class="e-label">{e.label}</span>
-					<span class="e-source">Ledger</span>
-				</div>
+				{#if editingOccurrence && e.occurrence && e.occurrence.eventId === editingOccurrence.eventId && e.occurrence.recurrenceId === editingOccurrence.recurrenceId}
+					<!-- Keyed so opening a different occurrence remounts the form. The
+					     dialog seeds its own state from the occurrence on mount, so a
+					     reused instance would show the previous event's times. -->
+					{#key editingOccurrence.eventId + editingOccurrence.recurrenceId}
+						<EventDialog
+							categories={data.categories}
+							tz={data.tz}
+							occurrence={editingOccurrence}
+							date={e.date}
+							onclose={() => (editing = null)}
+						/>
+					{/key}
+				{:else if e.kind === 'authored'}
+					<button
+						type="button"
+						class="event event-authored"
+						onclick={() =>
+							(editing = {
+								eventId: e.occurrence!.eventId,
+								recurrenceId: e.occurrence!.recurrenceId
+							})}
+					>
+						<span class="mono e-date">{e.day}.</span>
+						<span class="dot" style="background: var(--indigo);"></span>
+						<span class="e-label">
+							{#if e.marker}<span class="e-marker">{e.marker}</span>{/if}{e.label}
+						</span>
+						{#if e.time}<span class="mono e-time">{e.time}</span>{/if}
+						<span class="e-source">{e.occurrence?.recurring ? 'Repeats' : 'Ours'}</span>
+					</button>
+				{:else}
+					<div class="event">
+						<span class="mono e-date">{e.day}.</span>
+						<span class="dot" style="background: var(--yellow);"></span>
+						<span class="e-label">
+							{#if e.marker}<span class="e-marker">{e.marker}</span>{/if}{e.label}
+						</span>
+						<span class="e-source">Ledger</span>
+					</div>
+				{/if}
 			{:else}
 				<span class="quiet">Nothing on the books {selectedDay ? 'that day' : 'this month'}.</span>
 			{/each}
@@ -145,6 +237,34 @@
 </section>
 
 <style>
+	.event-authored {
+		background: none;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		width: 100%;
+	}
+
+	.event-authored:hover {
+		background: var(--card2);
+	}
+
+	.e-marker {
+		margin-right: 5px;
+	}
+
+	.e-time {
+		color: var(--fg3);
+		font-size: 12px;
+	}
+
+	.form-error {
+		color: var(--red);
+		font-size: 13px;
+	}
+
 	.sources {
 		display: flex;
 		align-items: center;

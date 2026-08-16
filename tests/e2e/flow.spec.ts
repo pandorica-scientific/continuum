@@ -472,6 +472,54 @@ test.describe('signed in', () => {
 		expect(await response.text()).toContain('BEGIN:VCALENDAR');
 	});
 
+	// The first of next month, so a weekly series always has a full month to
+	// expand into whenever this suite happens to run.
+	const nextMonthFirst = () => {
+		const date = new Date();
+		date.setUTCMonth(date.getUTCMonth() + 1, 1);
+		return date.toISOString().slice(0, 10);
+	};
+
+	test('a weekly event is authored and every occurrence appears', async ({ page }) => {
+		const date = nextMonthFirst();
+		await page.goto(`/calendar?m=${date.slice(0, 7)}`);
+		await page.getByRole('button', { name: 'Add event' }).click();
+
+		// Scoped to the dialog: the rule toggles beside it carry aria-labels like
+		// "Property inspections and lease dates", which match a bare 'Date'.
+		const dialog = page.locator('form.editor');
+		await dialog.getByLabel('Title').fill('Bin day');
+		await dialog.getByLabel('Date').fill(date);
+		await dialog.getByLabel('Repeats').selectOption('weekly');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+
+		await page.goto(`/calendar?m=${date.slice(0, 7)}`);
+		// A weekly series covers at least four occurrences in any month.
+		await expect(page.getByText('Bin day').first()).toBeVisible();
+		expect(await page.getByText('Bin day').count()).toBeGreaterThanOrEqual(4);
+	});
+
+	test('editing one occurrence leaves the rest of the series alone', async ({ page }) => {
+		const month = nextMonthFirst().slice(0, 7);
+		await page.goto(`/calendar?m=${month}`);
+
+		const before = await page.getByText('Bin day').count();
+		expect(before).toBeGreaterThanOrEqual(4);
+
+		// The SECOND occurrence, so a scope bug that rewrites the whole series
+		// shows up as the first one changing too.
+		await page.getByText('Bin day').nth(1).click();
+		const dialog = page.locator('form.editor');
+		await dialog.getByLabel('Title').fill('Bin day moved');
+		await dialog.getByRole('radio', { name: 'This event only' }).check();
+		await dialog.getByRole('button', { name: 'Save' }).click();
+
+		await page.goto(`/calendar?m=${month}`);
+		await expect(page.getByText('Bin day moved')).toBeVisible();
+		// Exactly one renamed; the others untouched and none lost.
+		expect(await page.getByText('Bin day', { exact: true }).count()).toBe(before - 1);
+	});
+
 	test('retirement recomputes live when assumptions change', async ({ page }) => {
 		await page.goto('/retirement');
 		await expect(page.getByText('If you stopped working today')).toBeVisible();
@@ -498,6 +546,85 @@ test.describe('signed in', () => {
 		expect(sql).toContain('copy "person"');
 		expect(sql).toContain('truncate');
 		expect(sql.trim().endsWith('commit;')).toBe(true);
+	});
+
+	test('the calendar panel renders itself from the provider registry', async ({ page }) => {
+		await page.goto('/settings');
+		// Scoped: there is one connect form per registered provider.
+		const connect = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		await expect(connect).toBeVisible();
+
+		// Fields come from the provider's own declaration, so this asserts the
+		// registry contract rather than a hand-written form.
+		await expect(connect.getByLabel('Apple ID')).toBeVisible();
+		const password = connect.getByLabel('App-specific password');
+		await expect(password).toBeVisible();
+		// A secret field must never render as plain text.
+		await expect(password).toHaveAttribute('type', 'password');
+		// The hint has to say where to GET the app-specific password: it is the
+		// step people get wrong, and the 401 that follows explains nothing.
+		// Matched on the hint itself, since the field label says the same words.
+		await expect(connect.locator('.quiet')).toContainText(/appleid\.apple\.com/i);
+	});
+
+	test('connecting with credentials that do not work is refused, not stored', async ({ page }) => {
+		await page.goto('/settings');
+		const connect = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		await connect.getByLabel('Apple ID').fill('nobody@example.invalid');
+		await connect.getByLabel('App-specific password').fill('wrong-wrong-wrong');
+		await connect.getByLabel('Server').fill('https://caldav.example.invalid');
+		await connect.getByRole('button', { name: 'Connect' }).click();
+
+		// An account that does not work must not appear connected — that is worse
+		// than no account at all, because it sits in the list looking fine.
+		await expect(page.locator('.form-error')).toBeVisible();
+		await expect(page.locator('.cal-account')).toHaveCount(0);
+	});
+
+	test('each provider gets the connect flow it declared', async ({ page }) => {
+		await page.goto('/settings');
+
+		// CalDAV takes pasted credentials and is done.
+		const caldav = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		await expect(caldav.getByRole('button', { name: 'Connect' })).toBeVisible();
+
+		// Google has to send the browser away, so it asks for the client id and
+		// secret only — never a refresh token, which nobody should have to fetch by
+		// hand — and offers to authorise rather than to connect.
+		const google = page.locator('form.cal-connect', { hasText: 'Google' });
+		await expect(google.getByLabel('OAuth client ID')).toBeVisible();
+		await expect(google.getByLabel('OAuth client secret')).toHaveAttribute('type', 'password');
+		await expect(google.getByLabel(/refresh token/i)).toHaveCount(0);
+		await expect(google.getByRole('button', { name: 'Authorise with Google' })).toBeVisible();
+		// The hint must carry the publishing-status trap: left in Testing, sync
+		// dies after seven days and keeps dying weekly.
+		await expect(google.locator('.quiet')).toContainText(/production/i);
+	});
+
+	test('the OAuth callback refuses a state it never issued', async ({ page }) => {
+		// The defence against a third party completing an authorisation on this
+		// household's behalf. No pending flow exists, so any state must be refused.
+		const response = await page.goto('/settings/google/callback?code=abc&state=forged');
+		expect(response?.status()).toBeLessThan(400);
+		await expect(page).toHaveURL(/\/settings\?calendar=/);
+		await expect(page.locator('.calendar-notice')).toContainText(/did not match/i);
+		// And nothing was connected.
+		await expect(page.locator('.cal-account')).toHaveCount(0);
+	});
+
+	test('the ledger-marker toggle flips and sticks', async ({ page }) => {
+		await page.goto('/settings');
+		const toggle = page.getByRole('switch', { name: "Mark Continuum's own events" });
+		await expect(toggle).toHaveAttribute('aria-checked', 'true');
+		await toggle.click();
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		await page.reload();
+		await expect(page.getByRole('switch', { name: "Mark Continuum's own events" })).toHaveAttribute(
+			'aria-checked',
+			'false'
+		);
+		// Put it back: later tests read the published feed.
+		await page.getByRole('switch', { name: "Mark Continuum's own events" }).click();
 	});
 
 	test('settings export produces a config file with only whitelisted keys', async ({ page }) => {

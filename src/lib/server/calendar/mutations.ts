@@ -1,0 +1,236 @@
+import { randomUUID } from 'node:crypto';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db, type Db } from '$lib/server/db';
+import { calendarEvent, calendarEventException } from '$lib/server/db/schema';
+import { planScopeChange, type EditScope } from '$lib/calendar/scope';
+
+export type EventMutationResult =
+	{ ok: true; id: string } | { ok: false; status: 400 | 404; message: string };
+
+export interface EventInput {
+	title: string;
+	notes: string | null;
+	category: string | null;
+	allDay: boolean;
+	startsAt: Date;
+	endsAt: Date;
+	tz: string;
+	rrule: string | null;
+}
+
+function invalid(message: string): EventMutationResult {
+	return { ok: false, status: 400, message };
+}
+
+/** Shared validation, so create and update cannot disagree about what is legal. */
+function check(input: EventInput): string | null {
+	if (!input.title.trim()) return 'An event needs a title.';
+	if (Number.isNaN(input.startsAt.getTime()) || Number.isNaN(input.endsAt.getTime())) {
+		return 'That is not a valid date and time.';
+	}
+	if (input.endsAt.getTime() < input.startsAt.getTime())
+		return 'An event cannot end before it starts.';
+	if (!input.tz) return 'An event needs a timezone.';
+	return null;
+}
+
+export async function createEvent(
+	input: EventInput,
+	createdBy: string | null,
+	handle: Db = db
+): Promise<EventMutationResult> {
+	const problem = check(input);
+	if (problem) return invalid(problem);
+
+	const id = randomUUID();
+	await handle.insert(calendarEvent).values({
+		id,
+		title: input.title.trim(),
+		notes: input.notes?.trim() || null,
+		category: input.category || null,
+		allDay: input.allDay,
+		startsAt: input.startsAt,
+		endsAt: input.endsAt,
+		tz: input.tz,
+		rrule: input.rrule || null,
+		createdBy
+	});
+	return { ok: true, id };
+}
+
+/**
+ * Apply an edit at the chosen scope.
+ *
+ * `recurrenceId` is the ORIGINAL start of the occurrence that was touched, and
+ * is required for anything but a whole-series edit.
+ */
+export async function updateEvent(
+	id: string,
+	input: EventInput,
+	scope: EditScope,
+	recurrenceId: string | null,
+	handle: Db = db
+): Promise<EventMutationResult> {
+	const problem = check(input);
+	if (problem) return invalid(problem);
+
+	return handle.transaction(async (tx) => {
+		const [row] = await tx
+			.select()
+			.from(calendarEvent)
+			.where(and(eq(calendarEvent.id, id), isNull(calendarEvent.deletedAt)))
+			.limit(1);
+		if (!row) return { ok: false, status: 404, message: 'Event not found.' } as const;
+
+		const plan = planScopeChange(
+			scope,
+			row.rrule,
+			recurrenceId ?? row.startsAt.toISOString(),
+			row.startsAt.toISOString()
+		);
+
+		if (plan.kind === 'exception') {
+			// One occurrence overridden. onConflictDoUpdate rather than insert:
+			// moving the same occurrence twice must edit the existing override, not
+			// fail on the (event_id, recurrence_id) unique index.
+			await tx
+				.insert(calendarEventException)
+				.values({
+					id: randomUUID(),
+					eventId: id,
+					recurrenceId: plan.recurrenceId,
+					cancelled: false,
+					title: input.title.trim(),
+					startsAt: input.startsAt,
+					endsAt: input.endsAt,
+					notes: input.notes?.trim() || null
+				})
+				.onConflictDoUpdate({
+					target: [calendarEventException.eventId, calendarEventException.recurrenceId],
+					set: {
+						cancelled: false,
+						title: input.title.trim(),
+						startsAt: input.startsAt,
+						endsAt: input.endsAt,
+						notes: input.notes?.trim() || null
+					}
+				});
+			await touch(tx, id);
+			return { ok: true, id } as const;
+		}
+
+		if (plan.kind === 'split') {
+			// Truncate the original, then start a second series at the split. Any
+			// exception at or after the split belongs to the new series' span and
+			// would otherwise be stranded on a series that no longer reaches it.
+			await tx
+				.update(calendarEvent)
+				.set({ rrule: plan.truncatedRrule, updatedAt: new Date() })
+				.where(eq(calendarEvent.id, id));
+
+			const newId = randomUUID();
+			await tx.insert(calendarEvent).values({
+				id: newId,
+				title: input.title.trim(),
+				notes: input.notes?.trim() || null,
+				category: input.category || null,
+				allDay: input.allDay,
+				startsAt: input.startsAt,
+				endsAt: input.endsAt,
+				tz: input.tz,
+				rrule: row.rrule,
+				createdBy: row.createdBy
+			});
+			await tx
+				.delete(calendarEventException)
+				.where(eq(calendarEventException.eventId, id))
+				.returning();
+			return { ok: true, id: newId } as const;
+		}
+
+		await tx
+			.update(calendarEvent)
+			.set({
+				title: input.title.trim(),
+				notes: input.notes?.trim() || null,
+				category: input.category || null,
+				allDay: input.allDay,
+				startsAt: input.startsAt,
+				endsAt: input.endsAt,
+				tz: input.tz,
+				rrule: input.rrule || null,
+				updatedAt: new Date()
+			})
+			.where(eq(calendarEvent.id, id));
+		return { ok: true, id } as const;
+	});
+}
+
+/** Bump the merge clock so sync notices a change to an event's exceptions. */
+async function touch(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], id: string) {
+	await tx.update(calendarEvent).set({ updatedAt: new Date() }).where(eq(calendarEvent.id, id));
+}
+
+export async function deleteEvent(
+	id: string,
+	scope: EditScope,
+	recurrenceId: string | null,
+	handle: Db = db
+): Promise<EventMutationResult> {
+	return handle.transaction(async (tx) => {
+		const [row] = await tx
+			.select()
+			.from(calendarEvent)
+			.where(and(eq(calendarEvent.id, id), isNull(calendarEvent.deletedAt)))
+			.limit(1);
+		if (!row) return { ok: false, status: 404, message: 'Event not found.' } as const;
+
+		const plan = planScopeChange(
+			scope,
+			row.rrule,
+			recurrenceId ?? row.startsAt.toISOString(),
+			row.startsAt.toISOString()
+		);
+
+		if (plan.kind === 'exception') {
+			// A cancelled occurrence, not a removed row: the remote has to be told
+			// this instance is gone, and RFC 5545 says that with a cancelled
+			// RECURRENCE-ID rather than by the occurrence simply not appearing.
+			await tx
+				.insert(calendarEventException)
+				.values({ id: randomUUID(), eventId: id, recurrenceId: plan.recurrenceId, cancelled: true })
+				.onConflictDoUpdate({
+					target: [calendarEventException.eventId, calendarEventException.recurrenceId],
+					set: { cancelled: true }
+				});
+			await touch(tx, id);
+			return { ok: true, id } as const;
+		}
+
+		if (plan.kind === 'split') {
+			// "Delete this and following" ends the series at the split rather than
+			// removing it: everything before the split genuinely happened.
+			await tx
+				.update(calendarEvent)
+				.set({ rrule: plan.truncatedRrule, updatedAt: new Date() })
+				.where(eq(calendarEvent.id, id));
+			return { ok: true, id } as const;
+		}
+
+		// Whole series: a tombstone, never a removed row. Sync has to be able to
+		// tell "deleted here, push the deletion" from "never existed", and a row
+		// that is simply gone says nothing at all — the engine would treat the
+		// remote copy as a new event and pull it straight back.
+		//
+		// Tombstones are kept unconditionally rather than only when a sync link
+		// exists, so the answer does not depend on whether an account happened to
+		// be connected at the moment of deletion. Reaping them once every account
+		// has confirmed the deletion belongs to the sync engine (Task 16), not
+		// here.
+		await tx
+			.update(calendarEvent)
+			.set({ deletedAt: new Date(), updatedAt: new Date() })
+			.where(eq(calendarEvent.id, id));
+		return { ok: true, id } as const;
+	});
+}

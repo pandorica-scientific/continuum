@@ -253,6 +253,34 @@
       "when": 1786886331412,
       "tag": "0035_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786886332412,
+      "tag": "0036_contact_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786890611640,
+      "tag": "0037_tenant_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786891085871,
+      "tag": "0038_calendar_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786896130421,
+      "tag": "0039_calendar_sync",
+      "breakpoints": true
     }
   ]
 }

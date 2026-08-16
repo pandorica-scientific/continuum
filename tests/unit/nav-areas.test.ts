@@ -76,10 +76,23 @@ describe('the area structure', () => {
 	});
 
 	// Household was split so the calendar is one click away rather than two.
+	// What matters is that Home and Calendar are separate rows and that the
+	// calendar is the first screen of its own — an area opens on its first live
+	// screen, so anything ahead of /calendar would cost the extra click the split
+	// was made to remove. Which screens sit BEHIND it is free to change.
 	it('gives Home and Calendar a sidebar row each', () => {
 		expect(AREAS.find((a) => a.key === 'home')?.screens.map((s) => s.path)).toEqual(['/home']);
-		expect(AREAS.find((a) => a.key === 'calendar')?.screens.map((s) => s.path)).toEqual([
-			'/calendar'
+		expect(AREAS.find((a) => a.key === 'calendar')?.screens[0].path).toBe('/calendar');
+	});
+
+	it('keeps Contacts beside the Calendar, under one label', () => {
+		const calendar = AREAS.find((a) => a.key === 'calendar');
+		expect(calendar?.label).toBe('Calendar & Contacts');
+		expect(calendar?.screens.map((s) => s.path)).toEqual(['/calendar', '/contacts']);
+		// It moved out of Admin; Admin keeps the documents archive and settings.
+		expect(AREAS.find((a) => a.key === 'admin')?.screens.map((s) => s.path)).toEqual([
+			'/documents',
+			'/settings'
 		]);
 	});
 });
