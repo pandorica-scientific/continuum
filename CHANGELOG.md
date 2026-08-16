@@ -72,6 +72,21 @@ arrives when you press **Customise**, not when you upgrade.
   panel. Two copies of a forty-year amortisation drifting apart was not a risk
   worth taking for one small panel.
 
+### Security
+
+- **The spreadsheet parser behind broker imports is patched.** `xlsx` 0.18.5
+  carried a prototype-pollution flaw and a regular-expression denial of service,
+  both reachable by reading a crafted report. SheetJS stopped publishing to npm
+  after that version, so the fixed 0.20.3 is installed from their own
+  distribution — pinned by content hash in the lockfile like any other
+  dependency. Note that image scanners flag the npm `xlsx` package at every
+  version, since the abandoned package is itself the advisory; the two
+  underlying issues are fixed.
+- **npm is no longer in the shipped image.** Nothing ran it — the server starts
+  with `node build` and migrations run in-process — but it came with the base
+  image and its own bundled dependencies, which carried three high-severity
+  advisories of their own. Removing it takes those with it, and 18MB besides.
+
 ### Fixed
 
 - **The Overview offered a link to a switched-off Calendar.** The "Next 30

@@ -10,6 +10,16 @@ RUN npm run build && npm prune --omit=dev
 FROM node:26-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+
+# npm is never used here — the server starts with `node build` and migrations
+# run in-process through drizzle-orm — but it ships in the base image with its
+# own bundled dependencies, and those carry their own advisories. Three of the
+# five high-severity findings against 0.3.5 were npm's copies of
+# brace-expansion and ip-address, in an image that never runs npm. Removing it
+# takes them with it, and 18MB besides. Anything needing npm belongs in the
+# build stage above.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
