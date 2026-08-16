@@ -97,6 +97,17 @@ function dateStamp(iso: string): string {
 	return new Date(iso).toISOString().slice(0, 10).replace(/-/g, '');
 }
 
+/**
+ * The END of an all-day event, which RFC 5545 also treats as EXCLUSIVE: a
+ * one-day event on the 1st carries DTEND of the 2nd. iCloud tolerates the same
+ * date on both, but it is a zero-length event and other clients need not.
+ */
+function exclusiveEnd(iso: string): string {
+	const day = new Date(iso);
+	day.setUTCDate(day.getUTCDate() + 1);
+	return day.toISOString();
+}
+
 function dateProperty(name: string, iso: string, allDay: boolean, tz: string): string {
 	// All-day is a DATE, deliberately without a time or a zone: an all-day event
 	// carrying an instant lands on the wrong day either side of the date line.
@@ -131,7 +142,9 @@ function eventBlock(
 	}
 
 	lines.push(dateProperty('DTSTART', startsAt, series.allDay, series.tz));
-	lines.push(dateProperty('DTEND', endsAt, series.allDay, series.tz));
+	lines.push(
+		dateProperty('DTEND', series.allDay ? exclusiveEnd(endsAt) : endsAt, series.allDay, series.tz)
+	);
 	lines.push(`SUMMARY:${escapeText(title)}`);
 
 	if (notes) lines.push(`DESCRIPTION:${escapeText(notes)}`);
@@ -248,6 +261,12 @@ export function parseIcs(text: string): EventSeries | null {
 		};
 	});
 
+	// Undo the exclusive end, or every round trip shortens the event by a day.
+	const endsAt = end ? parseStamp(end) : parseStamp(start);
+	const inclusiveEnd = allDay
+		? new Date(new Date(endsAt).getTime() - 86_400_000).toISOString()
+		: endsAt;
+
 	return {
 		uid: unescapeText(find(master, 'UID')?.value ?? ''),
 		title: unescapeText(find(master, 'SUMMARY')?.value ?? ''),
@@ -255,7 +274,7 @@ export function parseIcs(text: string): EventSeries | null {
 		category: find(master, 'CATEGORIES') ? unescapeText(find(master, 'CATEGORIES')!.value) : null,
 		allDay,
 		startsAt: parseStamp(start),
-		endsAt: end ? parseStamp(end) : parseStamp(start),
+		endsAt: inclusiveEnd,
 		tz: start.params.get('TZID') ?? 'UTC',
 		rrule: find(master, 'RRULE')?.value.trim() ?? null,
 		exceptions,

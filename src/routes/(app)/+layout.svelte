@@ -171,7 +171,11 @@
 			height: 44px;
 			border-radius: 12px;
 			border: 1px solid var(--bd2);
-			background: var(--card3);
+			/* Opaque, because this floats over content that scrolls under it.
+			   --card3 is rgba(255,255,255,0.09) in the dark theme — a tint meant to
+			   sit on the page background — so the page showed through the button and
+			   the icon lost its contrast against whatever passed beneath. */
+			background: var(--bg2);
 			color: var(--fg1);
 			font-size: 18px;
 			cursor: pointer;

@@ -36,7 +36,10 @@ export interface GoogleTime {
 
 export interface GoogleEvent {
 	id: string;
+	/** Read-only on events.insert — present only on what Google hands back. */
 	iCalUID?: string;
+	/** Where our own uid travels. Unlike iCalUID, insert accepts this. */
+	extendedProperties?: { private?: Record<string, string> };
 	status?: string;
 	summary?: string;
 	description?: string;
@@ -52,6 +55,30 @@ export interface GoogleEvent {
 function time(iso: string, allDay: boolean, tz: string): GoogleTime {
 	if (allDay) return { date: new Date(iso).toISOString().slice(0, 10) };
 	return { dateTime: new Date(iso).toISOString(), timeZone: tz };
+}
+
+/**
+ * The END of an all-day event, which Google treats as EXCLUSIVE.
+ *
+ * A one-day event on the 1st ends on the 2nd. Sending the same date for both is
+ * a zero-length range and Google refuses it with a bare 400 — and since every
+ * event the ledger generates is all-day, it refused every single one.
+ */
+function endTime(iso: string, allDay: boolean, tz: string): GoogleTime {
+	if (!allDay) return time(iso, allDay, tz);
+	const day = new Date(iso);
+	day.setUTCDate(day.getUTCDate() + 1);
+	return { date: day.toISOString().slice(0, 10) };
+}
+
+/** Undo the exclusive end, so a round trip does not shorten the event daily. */
+function readEndTime(value: GoogleTime | undefined, allDay: boolean): string | null {
+	const read = readTime(value);
+	if (!read || !allDay) return read;
+	const day = new Date(read);
+	day.setUTCDate(day.getUTCDate() - 1);
+	// End of that day, matching how an all-day event is held internally.
+	return new Date(`${day.toISOString().slice(0, 10)}T23:59:59.000Z`).toISOString();
 }
 
 function readTime(value: GoogleTime | undefined): string | null {
@@ -71,13 +98,15 @@ function readTime(value: GoogleTime | undefined): string | null {
 export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEvent[] {
 	const master: GoogleEvent = {
 		id: remoteId,
-		// iCalUID carries OUR uid, which is what the engine keys on. Google's `id`
-		// is the resource address; the two are deliberately different things.
-		iCalUID: series.uid,
+		// Our uid rides in extendedProperties, NOT iCalUID: that field is writable
+		// on events.import but read-only on events.insert, and sending it there is
+		// another way to earn a 400. Google's `id` is the resource address; our uid
+		// is what the engine keys on, and the two are deliberately different.
+		extendedProperties: { private: { continuumUid: series.uid } },
 		summary: series.title,
 		description: series.notes ?? undefined,
 		start: time(series.startsAt, series.allDay, series.tz),
-		end: time(series.endsAt, series.allDay, series.tz),
+		end: endTime(series.endsAt, series.allDay, series.tz),
 		recurrence: series.rrule ? [`RRULE:${series.rrule}`] : undefined,
 		status: 'confirmed'
 	};
@@ -89,13 +118,13 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 			// Google assigns override ids itself on the server, but a deterministic
 			// one keeps a re-push idempotent rather than piling up duplicates.
 			id: `${remoteId}_${index}`,
-			iCalUID: series.uid,
+			extendedProperties: { private: { continuumUid: series.uid } },
 			recurringEventId: remoteId,
 			originalStartTime: time(exception.recurrenceId, series.allDay, series.tz),
 			summary: exception.title ?? series.title,
 			description: exception.notes ?? series.notes ?? undefined,
 			start: time(startsAt, series.allDay, series.tz),
-			end: time(endsAt, series.allDay, series.tz),
+			end: endTime(endsAt, series.allDay, series.tz),
 			status: exception.cancelled ? 'cancelled' : 'confirmed'
 		};
 	});
@@ -119,19 +148,20 @@ export function fromGoogleEvents(events: GoogleEvent[]): EventSeries | null {
 			cancelled: event.status === 'cancelled',
 			title: event.summary ?? null,
 			startsAt: readTime(event.start),
-			endsAt: readTime(event.end),
+			endsAt: readEndTime(event.end, Boolean(event.start?.date)),
 			notes: event.description ?? null
 		}))
 		.filter((exception) => exception.recurrenceId);
 
 	return {
-		uid: master.iCalUID ?? master.id,
+		// Ours first; iCalUID second for an event Google or another client made.
+		uid: master.extendedProperties?.private?.continuumUid ?? master.iCalUID ?? master.id,
 		title: master.summary ?? '',
 		notes: master.description ?? null,
 		category: null,
 		allDay,
 		startsAt: start,
-		endsAt: readTime(master.end) ?? start,
+		endsAt: readEndTime(master.end, allDay) ?? start,
 		tz: master.start?.timeZone ?? 'UTC',
 		rrule: master.recurrence?.[0]?.replace(/^RRULE:/, '') ?? null,
 		exceptions,
@@ -223,7 +253,11 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 			// removed occurrence, and belongs inside the series rather than as a
 			// deletion of the whole thing.
 			if (master && master.status === 'cancelled') {
-				changes.push({ uid: master.iCalUID ?? master.id, series: null, etag: null });
+				changes.push({
+					uid: master.extendedProperties?.private?.continuumUid ?? master.iCalUID ?? master.id,
+					series: null,
+					etag: null
+				});
 				continue;
 			}
 			const series = fromGoogleEvents(group);
@@ -249,9 +283,92 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		},
 
 		async listCalendars(): Promise<RemoteCalendar[]> {
-			const result = await api('/users/me/calendarList');
-			const items = (result.body.items ?? []) as Array<{ id: string; summary?: string }>;
-			return items.map((item) => ({ id: item.id, name: item.summary ?? item.id }));
+			interface Entry {
+				id: string;
+				summary?: string;
+				/** What the person renamed it to in their own list, if anything. */
+				summaryOverride?: string;
+				primary?: boolean;
+				deleted?: boolean;
+				accessRole?: string;
+			}
+
+			const entries: Entry[] = [];
+			let pageToken: string | undefined;
+
+			for (;;) {
+				const result = await api('/users/me/calendarList', {
+					query: {
+						// Calendars the person has hidden in Google's own sidebar are
+						// omitted by default — and hiding one there is exactly what
+						// somebody does with a calendar kept for an app.
+						showHidden: 'true',
+						showDeleted: 'false',
+						maxResults: '250',
+						...(pageToken ? { pageToken } : {})
+					}
+				});
+				if (result.status === 403) {
+					// Expected under calendar.app.created: the account's calendar list
+					// is not something this scope may read. There is nothing to choose
+					// from, which is why the provider creates its own instead.
+					return [];
+				}
+				if (result.status >= 400) {
+					throw new Error(`Google answered ${result.status} listing calendars.`);
+				}
+				entries.push(...((result.body.items ?? []) as Entry[]));
+				pageToken = result.body.nextPageToken as string | undefined;
+				if (!pageToken) break;
+			}
+
+			return (
+				entries
+					.filter((entry) => !entry.deleted)
+					// Under calendar.app.created this list already contains only what
+					// Continuum made. The filter stays as a second line: a scope change
+					// would otherwise silently start offering calendars it cannot write.
+					.filter((entry) => entry.accessRole === 'owner' || entry.accessRole === 'writer')
+					// Primary last: the point of choosing is usually to keep household
+					// events OUT of the personal calendar, so it should not be the
+					// default the dropdown lands on.
+					.sort((a, b) => Number(a.primary ?? false) - Number(b.primary ?? false))
+					.map((entry) => ({
+						id: entry.id,
+						// summaryOverride is what the person actually sees in Google.
+						name: entry.summaryOverride ?? entry.summary ?? entry.id
+					}))
+			);
+		},
+
+		/**
+		 * Create the calendar Continuum writes to.
+		 *
+		 * Deliberately does NOT list first. Under `calendar.app.created` the
+		 * calendarList endpoint answers 403 — the scope grants creating a calendar
+		 * and managing events on it, and nothing that would let an app enumerate
+		 * what else the account has. Listing first is what made this fail at step
+		 * one and left the button looking dead.
+		 *
+		 * Not creating a duplicate is therefore the CALLER's job: the account row
+		 * already records which calendar was made, so this is only ever called
+		 * when that is empty.
+		 */
+		async ensureCalendar(): Promise<RemoteCalendar | null> {
+			const created = await api('/calendars', {
+				method: 'POST',
+				body: {
+					summary: 'Continuum',
+					description:
+						'Household events from Continuum. Safe to hide or unsubscribe — nothing else writes here.'
+				}
+			});
+			if (created.status >= 400) {
+				throw new Error(`Google answered ${created.status} creating a calendar.`);
+			}
+			const id = created.body.id as string | undefined;
+			if (!id) throw new Error('Google created a calendar but did not name it.');
+			return { id, name: (created.body.summary as string) ?? 'Continuum' };
 		},
 
 		async pull(cursor: string | null): Promise<PullResult> {

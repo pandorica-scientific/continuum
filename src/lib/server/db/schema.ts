@@ -917,6 +917,10 @@ export const calendarAccount = pgTable('calendar_account', {
 	provider: text('provider').$type<'icloud' | 'google'>().notNull(),
 	label: text('label').notNull(),
 	remoteCalId: text('remote_cal_id'),
+	/** The chosen calendar's display name. Stored because the id is a CalDAV
+	 *  collection URL or a Google calendar id — neither of which tells a person
+	 *  which of their calendars this is. */
+	remoteCalName: text('remote_cal_name'),
 	/** App-specific password, or an OAuth refresh token. Never leaves this table. */
 	credential: text('credential').notNull(),
 	/** Opaque: a Google syncToken, a CalDAV sync-token, or a ctag. */

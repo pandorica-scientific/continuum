@@ -40,3 +40,46 @@ describe('calendar credentials cannot be exported', () => {
 		expect(source).not.toMatch(/calendarAccount|calendarSyncLink|calendarConflict/);
 	});
 });
+
+/**
+ * One account syncs with exactly one remote calendar.
+ *
+ * Syncing a whole account would write household events into every calendar the
+ * person owns. Picking one is what makes this usable — and the picker has to be
+ * tied to the account it was opened from, or with two accounts connected it
+ * appears on both cards and writes the wrong one.
+ */
+describe('choosing which calendar to sync', () => {
+	const settings = readFileSync('src/routes/(app)/settings/+page.svelte', 'utf8');
+	const server = readFileSync('src/routes/(app)/settings/+page.server.ts', 'utf8');
+
+	it('scopes the picker to the account the list was fetched for', () => {
+		expect(server).toContain('listedFor: id');
+		expect(settings).toContain('form?.listedFor === account.id');
+	});
+
+	it('lets the calendar be changed after it has been chosen', () => {
+		// The form used to be inside an {:else}, so a first pick was permanent
+		// short of disconnecting the account entirely.
+		expect(settings).toContain('Change calendar');
+	});
+
+	// The old cursor belongs to the old collection. Asking a different calendar
+	// for changes since a token it never issued resets at best, and at worst
+	// returns nothing while looking like it worked.
+	it('clears the sync cursor when the calendar changes', () => {
+		const action = server.slice(
+			server.indexOf('chooseCalendar:'),
+			server.indexOf('listRemoteCalendars:')
+		);
+		expect(action).toContain('cursor: null');
+		expect(action).toContain('lastSyncAt: null');
+	});
+
+	it('stores the calendar name, not just its id', () => {
+		expect(server).toContain('remoteCalName');
+		// A CalDAV collection URL or a Google calendar id names nothing a person
+		// would recognise.
+		expect(settings).toContain('account.remoteCalName');
+	});
+});

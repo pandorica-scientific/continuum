@@ -35,6 +35,11 @@ export interface SyncReport {
 	conflicts: number;
 	writeBacks: number;
 	reset: boolean;
+	/** Writes the provider refused. Recorded rather than skipped: a provider
+	 *  rejecting every write used to look exactly like having nothing to do. */
+	rejected: number;
+	/** The first refusal, for the account's error line. */
+	rejection: string | null;
 }
 
 /** A local event, in the shape the merge and the provider both understand. */
@@ -156,7 +161,9 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 		applied: 0,
 		conflicts: 0,
 		writeBacks: 0,
-		reset: false
+		reset: false,
+		rejected: 0,
+		rejection: null
 	};
 
 	const [account] = await handle
@@ -280,6 +287,14 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 	// ---- push ------------------------------------------------------------------
 	const results = pushOps.length > 0 ? await provider.push(pushOps.map((p) => p.op)) : [];
 	report.pushed = results.filter((r) => r.ok).length;
+
+	// A refusal that is not a conflict is a real failure — a malformed body, a
+	// permission, a calendar that cannot be written to. Conflicts are ordinary
+	// and resolve on the next pass; these do not, and staying quiet about them
+	// makes "rejected every write" indistinguishable from "nothing to send".
+	const refused = results.filter((r) => !r.ok && !r.conflict);
+	report.rejected = refused.length;
+	report.rejection = refused[0]?.ok === false ? refused[0].message : null;
 
 	// ---- commit ----------------------------------------------------------------
 	// Everything below runs in ONE transaction, and the cursor advances LAST. A
@@ -406,7 +421,13 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 		// Last, deliberately.
 		await tx
 			.update(calendarAccount)
-			.set({ cursor: pulled.cursor, lastSyncAt: new Date(), lastError: null })
+			.set({
+				cursor: pulled.cursor,
+				lastSyncAt: new Date(),
+				lastError: report.rejection
+					? `${report.rejected} of ${pushOps.length} writes refused — ${report.rejection}`
+					: null
+			})
 			.where(eq(calendarAccount.id, accountId));
 	});
 

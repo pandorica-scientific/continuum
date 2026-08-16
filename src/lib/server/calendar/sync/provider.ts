@@ -64,6 +64,15 @@ export interface CalendarProvider {
 	/** Cheap connectivity check with a human-readable outcome. */
 	probe(): Promise<{ ok: boolean; detail: string }>;
 	listCalendars(): Promise<RemoteCalendar[]>;
+	/**
+	 * Make sure there is at least one calendar this app may write to.
+	 *
+	 * Optional, because it is only meaningful where the provider's permission
+	 * model says an app may use only what it created. CalDAV has no such notion —
+	 * the household's existing calendars are all available — so it does not
+	 * implement this.
+	 */
+	ensureCalendar?(): Promise<RemoteCalendar | null>;
 	pull(cursor: string | null): Promise<PullResult>;
 	push(ops: PushOp[]): Promise<PushResult[]>;
 }
@@ -118,6 +127,9 @@ export interface CalendarProviderKind {
 	fields: ProviderField[];
 	hint: string;
 	oauth: boolean;
+	/** Whether this provider makes its own calendar rather than offering the
+	 *  account's existing ones. Drives the button's wording. */
+	createsOwnCalendar: boolean;
 }
 
 export function calendarProviderKinds(): CalendarProviderKind[] {
@@ -126,7 +138,10 @@ export function calendarProviderKinds(): CalendarProviderKind[] {
 		label: entry.label,
 		fields: entry.fields,
 		hint: entry.hint,
-		oauth: entry.oauth
+		oauth: entry.oauth,
+		// Read from the factory rather than configured separately: whether a
+		// provider creates its own calendar IS whether it implements this.
+		createsOwnCalendar: typeof entry.make({}).ensureCalendar === 'function'
 	}));
 }
 

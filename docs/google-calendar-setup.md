@@ -31,14 +31,31 @@ Cloud project already: skip to step 2 and add a second OAuth client to it.
 
 ## 3. Configure the OAuth consent screen
 
-1. Go to **APIs & Services → OAuth consent screen**.
+1. Go to **Google Auth Platform → Audience**. On older consoles this is
+   **APIs & Services → OAuth consent screen**.
 2. User type: **External**, unless your household is on Google Workspace — with
    Workspace, choose **Internal** and none of the warnings below apply at all.
 3. Fill in an app name and your own email address. Nothing here is shown to
    anyone but you.
-4. Add the scope `https://www.googleapis.com/auth/calendar`.
-5. **Set the publishing status to "In production".** This is the step in the
-   box above. Do not leave it at Testing.
+4. Add the scope **`https://www.googleapis.com/auth/calendar.app.created`**.
+
+   This is deliberately the narrow one. It lets Continuum create a calendar and
+   manage events on it, and reach nothing else — it cannot see, edit or delete
+   the personal calendars in the account. The blanket
+   `https://www.googleapis.com/auth/calendar` scope would grant all of that, is
+   far more than this app uses, and is what makes Google flag a consent screen
+   as needing approval.
+
+   The trade-off: you cannot point Continuum at a calendar you already made. It
+   creates one called **Continuum** the first time you press "Choose a
+   calendar", and syncs only that. For a household ledger that is the
+   arrangement you would want anyway — one calendar you can hide on your phone
+   in a single tap.
+
+5. **Press "Publish app" so the status reads "In production".** This is the step
+   in the box above, and the one people miss. Left on Testing, only accounts you
+   add under **Test users** may authorise at all — and their tokens expire after
+   7 days.
 
 You will see a "Google hasn't verified this app" screen once, when you
 authorise. Choose **Advanced → Go to Continuum (unsafe)**. That warning is what
@@ -70,9 +87,31 @@ reach.
 1. Open **Settings → Connected calendars**.
 2. Paste the client ID and secret into the Google Calendar form.
 3. Press **Connect**, and authorise in the window that opens.
-4. Choose which Google calendar to sync with, and press **Sync now**.
+4. Press **Choose a calendar**. Continuum creates one called "Continuum" and
+   selects it. Then press **Sync now**.
 
 ## If something goes wrong
+
+**"The scopes you selected require approval."** You added the broad
+`auth/calendar` scope. Remove it and add
+`https://www.googleapis.com/auth/calendar.app.created` instead, then reconnect
+the account so a token is issued for the new scope.
+
+**"Continuum has not completed the Google verification process. The app is
+currently being tested, and can only be accessed by developer-approved
+testers."** The consent screen is still on **Testing**, where only accounts on an
+explicit list may authorise. Go to **Google Auth Platform → Audience** (older
+consoles: **APIs & Services → OAuth consent screen**), press **Publish app**, and
+try again.
+
+Adding yourself under **Test users** also works and is quicker — but testing-mode
+refresh tokens expire after 7 days, so sync would stop a week later and keep
+stopping weekly. Publishing is the real fix and needs no verification.
+
+**"Google hasn't verified this app."** A different screen, and the expected one
+once published. Choose **Advanced → Go to Continuum (unsafe)**. It appears
+because the app is unverified, which is the correct state for something only your
+household uses.
 
 **Sync worked for a week and then stopped.** The consent screen is still at
 Testing. Set it to In production and reconnect the account.

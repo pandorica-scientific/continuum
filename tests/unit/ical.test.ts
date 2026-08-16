@@ -87,6 +87,37 @@ describe('serialising a series', () => {
 	});
 });
 
+describe('all-day events', () => {
+	// RFC 5545 treats DTEND as EXCLUSIVE for a DATE value: a one-day event on the
+	// 10th carries DTEND of the 11th. iCloud tolerates the same date on both, but
+	// it describes a zero-length event and other clients need not accept it.
+	it('ends on the following day', () => {
+		const ics = toIcs({ ...single, allDay: true });
+		expect(ics).toContain('DTSTART;VALUE=DATE:20260910');
+		expect(ics).toContain('DTEND;VALUE=DATE:20260911');
+	});
+
+	// And back: read as inclusive, every round trip would shorten it by a day.
+	it('round-trips without losing a day', () => {
+		const back = parseIcs(toIcs({ ...single, allDay: true }))!;
+		expect(back.allDay).toBe(true);
+		expect(back.startsAt.slice(0, 10)).toBe('2026-09-10');
+		expect(back.endsAt.slice(0, 10)).toBe('2026-09-10');
+	});
+
+	it('survives several round trips unchanged', () => {
+		let current = { ...single, allDay: true };
+		for (let i = 0; i < 3; i++) current = parseIcs(toIcs(current))!;
+		expect(current.startsAt.slice(0, 10)).toBe('2026-09-10');
+		expect(current.endsAt.slice(0, 10)).toBe('2026-09-10');
+	});
+
+	it('leaves the end of a timed event alone', () => {
+		const back = parseIcs(toIcs(single))!;
+		expect(new Date(back.endsAt).toISOString()).toBe(single.endsAt);
+	});
+});
+
 describe('line folding', () => {
 	// RFC 5545 caps a line at 75 octets. A long summary that is not folded is
 	// rejected outright by strict servers.

@@ -73,41 +73,113 @@ describe('authentication', () => {
 	});
 });
 
-describe('listing calendars', () => {
-	const home = `<?xml version="1.0"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-	<d:response>
-		<d:href>/123/principal/</d:href>
-	</d:response>
-</d:multistatus>`;
+describe('discovery', () => {
+	// Shaped like iCloud's actual answers. My first fixture returned only the
+	// property and no resource href, which hid the bug below entirely: a
+	// PROPFIND response ALWAYS opens with an href naming the resource that was
+	// asked about, and only then carries the answer.
+	const principalResponse = `<?xml version="1.0"?>
+<multistatus xmlns="DAV:">
+	<response>
+		<href>/</href>
+		<propstat>
+			<prop><current-user-principal><href>/123456789/principal/</href></current-user-principal></prop>
+			<status>HTTP/1.1 200 OK</status>
+		</propstat>
+	</response>
+</multistatus>`;
+
+	const homeResponse = `<?xml version="1.0"?>
+<multistatus xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+	<response>
+		<href>/123456789/principal/</href>
+		<propstat>
+			<prop><C:calendar-home-set><href>/123456789/calendars/</href></C:calendar-home-set></prop>
+			<status>HTTP/1.1 200 OK</status>
+		</propstat>
+	</response>
+</multistatus>`;
 
 	const collections = `<?xml version="1.0"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-	<d:response>
-		<d:href>/123/calendars/home/</d:href>
-		<d:propstat><d:prop>
-			<d:displayname>Home</d:displayname>
-			<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-			<c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-		</d:prop></d:propstat>
-	</d:response>
-	<d:response>
-		<d:href>/123/calendars/tasks/</d:href>
-		<d:propstat><d:prop>
-			<d:displayname>Reminders</d:displayname>
-			<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-			<c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
-		</d:prop></d:propstat>
-	</d:response>
-</d:multistatus>`;
+<multistatus xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+	<response>
+		<href>/123456789/calendars/</href>
+		<propstat><prop><resourcetype><collection/></resourcetype></prop></propstat>
+	</response>
+	<response>
+		<href>/123456789/calendars/home/</href>
+		<propstat><prop>
+			<displayname>Home</displayname>
+			<resourcetype><collection/><C:calendar/></resourcetype>
+			<C:supported-calendar-component-set><C:comp name="VEVENT"/></C:supported-calendar-component-set>
+		</prop></propstat>
+	</response>
+	<response>
+		<href>/123456789/calendars/tasks/</href>
+		<propstat><prop>
+			<displayname>Reminders</displayname>
+			<resourcetype><collection/><C:calendar/></resourcetype>
+			<C:supported-calendar-component-set><C:comp name="VTODO"/></C:supported-calendar-component-set>
+		</prop></propstat>
+	</response>
+</multistatus>`;
 
-	// A CalDAV home holds task lists and address books beside calendars. Writing
-	// an event into a VTODO collection fails confusingly rather than cleanly.
-	it('offers only collections that hold events', async () => {
-		let call = 0;
-		stubFetch(() => ({ body: [home, home, collections][call++] ?? collections }));
+	/** Answers each PROPFIND by what it asked for, as a real server does. */
+	function stubDiscovery(seen: string[] = []) {
+		stubFetch((url, init) => {
+			seen.push(String(url));
+			const body = String(init.body ?? '');
+			if (body.includes('current-user-principal')) return { body: principalResponse };
+			if (body.includes('calendar-home-set')) return { body: homeResponse };
+			return { body: collections };
+		});
+		return seen;
+	}
+
+	// THE BUG THAT LEFT THE PICKER EMPTY. Reading the first href in the document
+	// gets the resource we asked about — the principal — rather than the calendar
+	// home. The next PROPFIND then walks the principal collection, finds no
+	// calendars, and the dropdown has nothing in it.
+	it('walks to the calendar home rather than back to the principal', async () => {
+		const seen = stubDiscovery();
+		await makeCalDavProvider(config).listCalendars();
+
+		const last = seen[seen.length - 1];
+		expect(last, 'the final PROPFIND must be against the calendar home').toContain(
+			'/123456789/calendars/'
+		);
+		expect(last).not.toMatch(/\/principal\/$/);
+	});
+
+	it('finds the calendars', async () => {
+		stubDiscovery();
 		const calendars = await makeCalDavProvider(config).listCalendars();
 		expect(calendars.map((c) => c.name)).toEqual(['Home']);
+		expect(calendars[0].id).toBe('/123456789/calendars/home/');
+	});
+
+	// A CalDAV home holds task lists beside calendars, and the home collection
+	// itself. Writing an event into either fails confusingly rather than cleanly.
+	it('offers only collections that hold events', async () => {
+		stubDiscovery();
+		const calendars = await makeCalDavProvider(config).listCalendars();
+		expect(calendars.map((c) => c.name)).not.toContain('Reminders');
+		expect(calendars).toHaveLength(1);
+	});
+
+	it('says so when the server names no principal at all', async () => {
+		stubFetch(() => ({ body: '<multistatus xmlns="DAV:"></multistatus>' }));
+		await expect(makeCalDavProvider(config).listCalendars()).rejects.toThrow(/principal/i);
+	});
+
+	it('says so when the principal names no calendar home', async () => {
+		stubFetch((_url, init) => {
+			if (String(init.body ?? '').includes('current-user-principal')) {
+				return { body: principalResponse };
+			}
+			return { body: '<multistatus xmlns="DAV:"></multistatus>' };
+		});
+		await expect(makeCalDavProvider(config).listCalendars()).rejects.toThrow(/calendar home/i);
 	});
 });
 

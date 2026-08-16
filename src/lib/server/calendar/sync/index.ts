@@ -29,6 +29,7 @@ export async function listCalendarAccounts(handle: Db = db) {
 			provider: calendarAccount.provider,
 			label: calendarAccount.label,
 			remoteCalId: calendarAccount.remoteCalId,
+			remoteCalName: calendarAccount.remoteCalName,
 			cursor: calendarAccount.cursor,
 			lastSyncAt: calendarAccount.lastSyncAt,
 			lastError: calendarAccount.lastError,

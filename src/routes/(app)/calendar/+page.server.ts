@@ -14,6 +14,7 @@ import { allOccurrences, type ExceptionRow, type SeriesRow } from '$lib/calendar
 import { markerForCategory, markerForGenerated } from '$lib/calendar/markers';
 import { EVENT_CATEGORIES, EVENT_CATEGORY_KEYS } from '$lib/modules/registry';
 import type { EditScope } from '$lib/calendar/scope';
+import { listCalendarAccounts } from '$lib/server/calendar/sync';
 import { setSetting } from '$lib/server/settings';
 import { formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
@@ -35,7 +36,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const start = `${month}-01`;
 	const end = `${month}-${String(daysInMonth).padStart(2, '0')}`;
 
-	const [events, rules, token, eventRows, exceptionRows] = await Promise.all([
+	const [events, rules, token, eventRows, exceptionRows, accounts] = await Promise.all([
 		generateEvents(start, end),
 		getCalendarRules(),
 		icsToken(),
@@ -44,7 +45,8 @@ export const load: PageServerLoad = async ({ url }) => {
 			.from(calendarEvent)
 			.where(isNull(calendarEvent.deletedAt))
 			.orderBy(asc(calendarEvent.startsAt)),
-		db.select().from(calendarEventException)
+		db.select().from(calendarEventException),
+		listCalendarAccounts()
 	]);
 
 	const exceptionsByEvent = new Map<string, ExceptionRow[]>();
@@ -130,6 +132,16 @@ export const load: PageServerLoad = async ({ url }) => {
 			marker: markerForGenerated(e.ruleKey, e.binding)
 		})),
 		occurrences,
+		// Enough to say whether sync is live, without the credential going anywhere
+		// near a page payload.
+		accounts: accounts.map((account) => ({
+			id: account.id,
+			label: account.label,
+			connected: Boolean(account.remoteCalId),
+			calendarName: account.remoteCalName ?? null,
+			lastSyncAt: account.lastSyncAt ? account.lastSyncAt.toISOString() : null,
+			failing: Boolean(account.lastError)
+		})),
 		rules: CALENDAR_RULES.map((r) => ({ ...r, on: rules[r.key] })),
 		icsPath: `/ics/${token}`
 	};

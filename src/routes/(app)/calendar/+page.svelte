@@ -5,6 +5,7 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import EventDialog from '$lib/components/EventDialog.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 
 	let { data, form } = $props();
 
@@ -26,7 +27,8 @@
 	$effect(() => {
 		selectedDay = selectedDayForMonth(
 			selectedDay,
-			data.cells.flatMap((cell) => (cell ? [cell.date] : []))
+			data.cells.flatMap((cell) => (cell ? [cell.date] : [])),
+			data.today
 		);
 	});
 
@@ -71,15 +73,31 @@
 <section class="sources">
 	<div class="chips">
 		<span class="chip"><span class="dot" style="background: var(--yellow);"></span>Ledger</span>
-		<span class="chip muted"
-			><span class="dot" style="background: var(--blue);"></span>Google · not connected</span
-		>
-		<span class="chip muted"
-			><span class="dot" style="background: var(--purple);"></span>iCal · not connected</span
-		>
+		<span class="chip"><span class="dot" style="background: var(--indigo);"></span>Ours</span>
+		{#each data.accounts as account (account.id)}
+			<span class="chip" class:muted={!account.connected || account.failing}>
+				<span
+					class="dot"
+					style="background: {account.failing
+						? 'var(--red)'
+						: account.connected
+							? 'var(--green)'
+							: 'var(--fg3)'};"
+				></span>
+				{account.label}
+				{account.failing
+					? '· not syncing'
+					: account.connected
+						? '· syncing'
+						: '· no calendar chosen'}
+			</span>
+		{/each}
 	</div>
-	<span class="eyebrow-caption">external sync lands in Phase 4 · the ledger feed is live below</span
-	>
+	<span class="eyebrow-caption">
+		{data.accounts.length === 0
+			? 'no calendar connected yet'
+			: `${data.accounts.filter((a) => a.connected && !a.failing).length} of ${data.accounts.length} syncing`}
+	</span>
 </section>
 
 <section class="layout">
@@ -110,7 +128,7 @@
 						class:today={cell.isToday}
 						class:selected={selectedDay === cell.date}
 						class:has-events={cell.events > 0}
-						onclick={() => (selectedDay = selectedDay === cell.date ? null : cell.date)}
+						onclick={() => (selectedDay = cell.date)}
 					>
 						<span class="mono num">{cell.num}</span>
 						<span class="dots">
@@ -188,7 +206,7 @@
 					</div>
 				{/if}
 			{:else}
-				<span class="quiet">Nothing on the books {selectedDay ? 'that day' : 'this month'}.</span>
+				<span class="quiet">Nothing on the books that day.</span>
 			{/each}
 		</div>
 	</div>
@@ -218,7 +236,57 @@
 		</div>
 
 		<div class="card stack">
-			<Eyebrow emoji="🔗" label="Connected calendars" />
+			<div class="eyebrow-row">
+				<Eyebrow emoji="🔗" label="Connected calendars" />
+				<InfoHint label="What connecting a calendar does">
+					<strong class="warn">Two-way: what you write here appears there, and back.</strong>
+					<ol class="steps">
+						<li>iCloud needs one app-specific password from appleid.apple.com.</li>
+						<li>Google needs an OAuth client of your own — a few minutes in its console.</li>
+						<li>Each is set up in Settings, which explains its own steps.</li>
+					</ol>
+					<span class="docs">
+						Events this app writes are marked with their module emoji and “· Continuum”, so they are
+						tellable from your own.
+					</span>
+				</InfoHint>
+			</div>
+
+			{#each data.accounts as account (account.id)}
+				<div class="feed">
+					<span>{account.failing ? '⚠️' : account.connected ? '🔄' : '⏸️'}</span>
+					<div class="f-text">
+						<span class="f-name">{account.label}</span>
+						<span class="f-detail">
+							{#if account.failing}
+								not syncing — see Settings
+							{:else if !account.connected}
+								connected, but no calendar chosen yet
+							{:else if account.lastSyncAt}
+								{account.calendarName ? `${account.calendarName} · ` : ''}last synced
+								{new Date(account.lastSyncAt).toLocaleString('en-GB')}
+							{:else}
+								waiting for its first sync
+							{/if}
+						</span>
+					</div>
+					<span
+						class="f-state"
+						style="color: {account.failing
+							? 'var(--red)'
+							: account.connected
+								? 'var(--green)'
+								: 'var(--fg3)'};"
+					>
+						{account.failing ? 'error' : account.connected ? 'syncing' : 'paused'}
+					</span>
+				</div>
+			{/each}
+
+			<a class="btn add-calendar" href="/settings#calendars">
+				{data.accounts.length === 0 ? 'Connect Google or iCloud' : 'Add another calendar'}
+			</a>
+
 			<div class="feed">
 				<span>📆</span>
 				<div class="f-text">
@@ -228,15 +296,39 @@
 				<span class="f-state" style="color: var(--green);">published</span>
 			</div>
 			<span class="quiet">
-				Subscribe from Google or Apple Calendar with this server's address plus the path above. The
-				token in the URL is the only key — treat it like a password. Two-way Google and iCal sync
-				arrive in Phase 4.
+				The feed is read-only and needs no account: subscribe from any calendar app with this
+				server's address plus the path above. The token in the URL is the only key — treat it like a
+				password.
 			</span>
 		</div>
 	</div>
 </section>
 
 <style>
+	.add-calendar {
+		align-self: flex-start;
+		text-decoration: none;
+	}
+
+	.warn {
+		display: block;
+		margin-bottom: 6px;
+	}
+
+	.steps {
+		margin: 0;
+		padding-left: 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.docs {
+		display: block;
+		margin-top: 6px;
+		color: var(--fg3);
+	}
+
 	.event-authored {
 		background: none;
 		border: none;

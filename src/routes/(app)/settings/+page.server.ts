@@ -265,6 +265,19 @@ export const actions = administered({
 		if (!kind) return fail(400, { message: 'Unknown calendar provider.' });
 		if (kind.oauth) return fail(400, { message: `${kind.label} is connected by authorising it.` });
 
+		// One account per provider. The form is hidden once one exists, but a stale
+		// page or a direct POST would otherwise create a second — and two accounts
+		// pointed at the same calendar each keep their own view of what they have
+		// sent, so neither can see the other's writes.
+		const existing = await db
+			.select({ id: calendarAccount.id })
+			.from(calendarAccount)
+			.where(eq(calendarAccount.provider, provider as 'icloud' | 'google'))
+			.limit(1);
+		if (existing.length > 0) {
+			return fail(409, { message: `${kind.label} is already connected. Disconnect it first.` });
+		}
+
 		// Only the fields this provider declared. Anything else in the form is
 		// ignored rather than stored, so a stray input cannot smuggle a value into
 		// the credential blob.
@@ -331,11 +344,15 @@ export const actions = administered({
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
 		const remoteCalId = String(form.get('remoteCalId') ?? '').trim();
+		const remoteCalName = String(form.get('remoteCalName') ?? '').trim() || null;
 		if (!id || !remoteCalId) return fail(400, { message: 'Which calendar?' });
 
+		// The cursor is cleared because it belongs to the OLD collection. Carrying
+		// it over would ask the new calendar for changes since a token it never
+		// issued — which at best resets, and at worst silently returns nothing.
 		await db
 			.update(calendarAccount)
-			.set({ remoteCalId, cursor: null })
+			.set({ remoteCalId, remoteCalName, cursor: null, lastSyncAt: null })
 			.where(eq(calendarAccount.id, id));
 		return { chosen: true };
 	},
@@ -346,7 +363,34 @@ export const actions = administered({
 		const provider = await providerFor(id);
 		if (!provider) return fail(404, { message: 'No such account.' });
 		try {
-			return { calendars: await provider.listCalendars() };
+			// A provider that makes its own calendar has nothing to offer a picker:
+			// under Google's narrow scope the account's calendar list is not even
+			// readable. Create one and select it in the same press.
+			if (provider.ensureCalendar) {
+				const [row] = await db
+					.select({ remoteCalId: calendarAccount.remoteCalId })
+					.from(calendarAccount)
+					.where(eq(calendarAccount.id, id))
+					.limit(1);
+
+				// Guarded on the stored id rather than by listing, because listing is
+				// exactly what this scope forbids. Without the guard a second press
+				// would make a second calendar.
+				if (!row?.remoteCalId) {
+					const made = await provider.ensureCalendar();
+					if (!made) return fail(400, { message: 'Could not create a calendar.' });
+					await db
+						.update(calendarAccount)
+						.set({ remoteCalId: made.id, remoteCalName: made.name, cursor: null, lastSyncAt: null })
+						.where(eq(calendarAccount.id, id));
+				}
+				return { created: true };
+			}
+
+			// The account id travels with the list: without it the picker cannot
+			// tell which card it belongs to, and with two accounts connected it
+			// would appear on both — and write the wrong one.
+			return { listedFor: id, calendars: await provider.listCalendars() };
 		} catch (error) {
 			return fail(400, {
 				message: error instanceof Error ? error.message : 'Could not list calendars.'

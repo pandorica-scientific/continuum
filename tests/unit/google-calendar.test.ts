@@ -69,7 +69,8 @@ describe('fanning a series out to Google resources', () => {
 		const [master, ...overrides] = toGoogleEvents(series, 'remote-1');
 		for (const override of overrides) {
 			expect(override.recurringEventId).toBe(master.id);
-			expect(override.iCalUID).toBe('evt-1');
+			// Our uid, in the field insert actually accepts.
+			expect(override.extendedProperties?.private?.continuumUid).toBe('evt-1');
 		}
 	});
 
@@ -100,6 +101,56 @@ describe('fanning a series out to Google resources', () => {
 
 	it('sends a single event as exactly one resource', () => {
 		expect(toGoogleEvents({ ...series, rrule: null, exceptions: [] }, 'r')).toHaveLength(1);
+	});
+});
+
+describe('all-day events', () => {
+	const allDay: EventSeries = { ...series, allDay: true, rrule: null, exceptions: [] };
+
+	// THE 400. Google and RFC 5545 both treat an all-day end date as EXCLUSIVE:
+	// a one-day event on the 1st ends on the 2nd. Sending the same date for both
+	// is a zero-length range, which Google refuses outright — and every event the
+	// ledger generates is all-day, so it refused all of them.
+	it('ends an all-day event on the following day', () => {
+		const master = toGoogleEvents(allDay, 'r')[0];
+		expect(master.start?.date).toBe('2026-09-01');
+		expect(master.end?.date).toBe('2026-09-02');
+	});
+
+	it('keeps a multi-day event spanning the right number of days', () => {
+		const master = toGoogleEvents({ ...allDay, endsAt: '2026-09-03T23:59:59.000Z' }, 'r')[0];
+		expect(master.end?.date).toBe('2026-09-04');
+	});
+
+	// And back again: an exclusive end read as inclusive would shorten every
+	// event by a day each time it round-tripped.
+	it('round-trips without losing or gaining a day', () => {
+		const back = fromGoogleEvents(toGoogleEvents(allDay, 'r'))!;
+		expect(back.allDay).toBe(true);
+		expect(back.startsAt.slice(0, 10)).toBe('2026-09-01');
+		expect(back.endsAt.slice(0, 10)).toBe('2026-09-01');
+	});
+
+	it('survives several round trips unchanged', () => {
+		let current: EventSeries = allDay;
+		for (let i = 0; i < 3; i++) {
+			current = fromGoogleEvents(toGoogleEvents(current, 'r'))!;
+		}
+		expect(current.startsAt.slice(0, 10)).toBe('2026-09-01');
+		expect(current.endsAt.slice(0, 10)).toBe('2026-09-01');
+	});
+
+	// iCalUID is writable on events.import but read-only on events.insert, and
+	// sending it there is a 400. Our uid travels in extendedProperties instead,
+	// which insert does accept.
+	it('does not send iCalUID, which insert rejects', () => {
+		const master = toGoogleEvents(allDay, 'r')[0];
+		expect(master.iCalUID).toBeUndefined();
+		expect(master.extendedProperties?.private?.continuumUid).toBe('evt-1');
+	});
+
+	it('reads our uid back out of extendedProperties', () => {
+		expect(fromGoogleEvents(toGoogleEvents(allDay, 'r'))!.uid).toBe('evt-1');
 	});
 });
 
@@ -134,6 +185,156 @@ describe('reassembling Google resources into a series', () => {
 	it('returns null when there is no master among the resources', () => {
 		const onlyOverride = toGoogleEvents(series, 'r').slice(1);
 		expect(fromGoogleEvents(onlyOverride)).toBeNull();
+	});
+});
+
+describe('listing calendars', () => {
+	const entry = (over: Record<string, unknown> = {}) => ({
+		id: 'a@group.calendar.google.com',
+		summary: 'Household',
+		accessRole: 'owner',
+		...over
+	});
+
+	function stubList(pages: Array<{ items: unknown[]; nextPageToken?: string }>) {
+		let call = 0;
+		stubFetch((url) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			return { body: pages[Math.min(call++, pages.length - 1)] };
+		});
+	}
+
+	// The symptom that started this: only the primary calendar showed up. A
+	// calendar hidden in Google's own sidebar is omitted unless asked for — and
+	// hiding one there is exactly what someone does with a calendar kept for an
+	// app.
+	it('asks for hidden calendars', async () => {
+		let seen = '';
+		stubFetch((url) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			seen = url;
+			return { body: { items: [] } };
+		});
+		await makeGoogleProvider(config).listCalendars();
+		expect(seen).toContain('showHidden=true');
+	});
+
+	it('follows pagination', async () => {
+		stubList([
+			{ items: [entry({ id: 'one', summary: 'One' })], nextPageToken: 'p2' },
+			{ items: [entry({ id: 'two', summary: 'Two' })] }
+		]);
+		const calendars = await makeGoogleProvider(config).listCalendars();
+		expect(calendars.map((c) => c.id)).toEqual(['one', 'two']);
+	});
+
+	// A holiday feed or someone else's shared calendar would accept being chosen
+	// and then fail every single push.
+	it('offers only calendars that can be written to', async () => {
+		stubList([
+			{
+				items: [
+					entry({ id: 'mine', summary: 'Household', accessRole: 'owner' }),
+					entry({ id: 'theirs', summary: 'Shared with me', accessRole: 'writer' }),
+					entry({ id: 'holidays', summary: 'Holidays', accessRole: 'reader' }),
+					entry({ id: 'busy', summary: 'Free/busy only', accessRole: 'freeBusyReader' })
+				]
+			}
+		]);
+		const calendars = await makeGoogleProvider(config).listCalendars();
+		expect(calendars.map((c) => c.id)).toEqual(['mine', 'theirs']);
+	});
+
+	it('leaves out a deleted entry', async () => {
+		stubList([{ items: [entry({ id: 'gone', deleted: true }), entry({ id: 'live' })] }]);
+		expect((await makeGoogleProvider(config).listCalendars()).map((c) => c.id)).toEqual(['live']);
+	});
+
+	// The point of choosing is usually to keep household events OUT of the
+	// personal calendar, so the primary should not be what the dropdown lands on.
+	it('puts the primary calendar last', async () => {
+		stubList([
+			{
+				items: [
+					entry({ id: 'primary', summary: 'you@example.com', primary: true }),
+					entry({ id: 'household', summary: 'Household' })
+				]
+			}
+		]);
+		const calendars = await makeGoogleProvider(config).listCalendars();
+		expect(calendars.map((c) => c.id)).toEqual(['household', 'primary']);
+	});
+
+	// summaryOverride is what the person actually sees in Google's sidebar.
+	it('prefers the name the person gave it', async () => {
+		stubList([{ items: [entry({ summary: 'Original', summaryOverride: 'Renamed' })] }]);
+		expect((await makeGoogleProvider(config).listCalendars())[0].name).toBe('Renamed');
+	});
+
+	// 403 is the EXPECTED answer under calendar.app.created: reading the account's
+	// calendar list is not something that scope grants. Treating it as a failure
+	// made a healthy account look broken.
+	it('reports no calendars rather than failing when the list is not readable', async () => {
+		stubFetch((url) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			return { status: 403, body: { error: { code: 403 } } };
+		});
+		expect(await makeGoogleProvider(config).listCalendars()).toEqual([]);
+	});
+
+	it('still reports any other refusal', async () => {
+		stubFetch((url) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			return { status: 500, body: {} };
+		});
+		await expect(makeGoogleProvider(config).listCalendars()).rejects.toThrow(/500/);
+	});
+});
+
+describe('making a calendar to write to', () => {
+	// Under calendar.app.created the account's own calendars are invisible, so
+	// there is nothing to choose from until Continuum has made one. Creating it
+	// is the setup step, not a fallback.
+	it('creates one when the account has none yet', async () => {
+		let created: Record<string, unknown> | null = null;
+		stubFetch((url, init) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			if (init.method === 'POST') {
+				created = JSON.parse(String(init.body));
+				return { body: { id: 'made@group.calendar.google.com', summary: 'Continuum' } };
+			}
+			return { body: { items: [] } };
+		});
+
+		const calendar = await makeGoogleProvider(config).ensureCalendar!();
+		expect(calendar).toEqual({ id: 'made@group.calendar.google.com', name: 'Continuum' });
+		expect(created).toMatchObject({ summary: 'Continuum' });
+	});
+
+	// It does NOT list first. Under calendar.app.created the calendarList endpoint
+	// answers 403, so listing before creating fails at step one — which is exactly
+	// what left the button looking dead. Not creating twice is the caller's job,
+	// guarded on the calendar id already stored against the account.
+	it('creates without trying to enumerate first', async () => {
+		const calls: string[] = [];
+		stubFetch((url, init) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			calls.push(`${init.method ?? 'GET'} ${url}`);
+			return { body: { id: 'made', summary: 'Continuum' } };
+		});
+
+		await makeGoogleProvider(config).ensureCalendar!();
+		expect(calls.some((c) => c.includes('calendarList'))).toBe(false);
+		expect(calls.filter((c) => c.startsWith('POST'))).toHaveLength(1);
+	});
+
+	it('reports a refusal rather than returning nothing', async () => {
+		stubFetch((url, init) => {
+			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
+			if (init.method === 'POST') return { status: 403, body: {} };
+			return { body: { items: [] } };
+		});
+		await expect(makeGoogleProvider(config).ensureCalendar!()).rejects.toThrow(/403/);
 	});
 });
 

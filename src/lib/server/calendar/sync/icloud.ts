@@ -69,6 +69,29 @@ function xmlResponses(xml: string): string[] {
 	return xmlValues(xml, 'response');
 }
 
+/**
+ * The href INSIDE a named element, rather than the first href in the document.
+ *
+ * This distinction is the whole discovery flow. A PROPFIND response opens with
+ * an `<href>` naming the resource that was asked about, and only then carries
+ * the property that was requested — which contains its own `<href>`:
+ *
+ *   <response>
+ *     <href>/123/principal/</href>              ← the resource asked about
+ *     <propstat><prop><calendar-home-set>
+ *       <href>/123/calendars/</href>            ← the answer
+ *     </calendar-home-set></prop></propstat>
+ *   </response>
+ *
+ * Taking the first href gets the question back instead of the answer, and the
+ * next request then walks the wrong collection and finds no calendars at all.
+ */
+function hrefWithin(xml: string, element: string): string | null {
+	const inner = xmlValues(xml, element)[0];
+	if (inner === undefined) return null;
+	return xmlValues(inner, 'href')[0] ?? null;
+}
+
 function decodeEntities(value: string): string {
 	return value
 		.replace(/&lt;/g, '<')
@@ -97,9 +120,9 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 			body,
 			headers: { Depth: '0' }
 		});
-		const href =
-			xmlValues(result.text, 'href').find((h) => h.includes('principal')) ??
-			xmlValues(result.text, 'href')[0];
+		// From inside <current-user-principal>, not the first href in the document —
+		// that one is the resource we asked about, which is where we already are.
+		const href = hrefWithin(result.text, 'current-user-principal');
 		if (!href) throw new Error('CalDAV: the server did not name a principal.');
 		return absolute(decodeEntities(href));
 	}
@@ -113,7 +136,7 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 			body,
 			headers: { Depth: '0' }
 		});
-		const href = xmlValues(result.text, 'href')[0];
+		const href = hrefWithin(result.text, 'calendar-home-set');
 		if (!href) throw new Error('CalDAV: the server did not name a calendar home.');
 		return absolute(decodeEntities(href));
 	}

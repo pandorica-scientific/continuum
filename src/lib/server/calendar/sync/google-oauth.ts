@@ -6,8 +6,23 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-/** Read and write the household's own calendars. */
-export const SCOPE = 'https://www.googleapis.com/auth/calendar';
+/**
+ * The narrowest scope that can do this job.
+ *
+ * `calendar.app.created` lets Continuum create a secondary calendar and manage
+ * events on it — and reach nothing else. It cannot see, edit or delete the
+ * personal calendars in the account, which the blanket `auth/calendar` scope
+ * would have allowed and which this app has no business holding.
+ *
+ * It also avoids the approval flagging that broad scope attracts: Google asks
+ * for verification when an app requests access to data across a user's account,
+ * and this one only ever touches what it made itself.
+ *
+ * The cost is that an EXISTING calendar cannot be chosen — Continuum makes its
+ * own. For a household ledger that is the arrangement you would want anyway:
+ * one calendar you can switch off in your phone in a single tap.
+ */
+export const SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
 
 export interface PendingAuth {
 	clientId: string;

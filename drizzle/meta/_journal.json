@@ -281,6 +281,13 @@
       "when": 1786896130421,
       "tag": "0039_calendar_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1786905510777,
+      "tag": "0040_calendar_name",
+      "breakpoints": true
     }
   ]
 }

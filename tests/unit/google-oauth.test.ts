@@ -22,8 +22,22 @@ describe('starting the flow', () => {
 		expect(url.searchParams.get('prompt')).toBe('consent');
 	});
 
-	it('asks for the calendar scope and nothing else', () => {
-		expect(url.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/calendar');
+	// The narrowest scope that does the job: Continuum may create a calendar and
+	// manage events on it, and cannot see, edit or delete anything else in the
+	// account. Broad `auth/calendar` would grant read and delete over every
+	// calendar the person has — far more than this app uses, and what makes
+	// Google flag the consent screen for approval.
+	it('asks for the narrow app-created scope, not blanket calendar access', () => {
+		expect(url.searchParams.get('scope')).toBe(
+			'https://www.googleapis.com/auth/calendar.app.created'
+		);
+	});
+
+	it('never asks for access to calendars it did not make', () => {
+		const scope = url.searchParams.get('scope') ?? '';
+		expect(scope).not.toBe('https://www.googleapis.com/auth/calendar');
+		expect(scope).not.toContain('calendar.readonly');
+		expect(scope).not.toContain('calendar.events');
 	});
 
 	it('sends the redirect it will be checked against', () => {
