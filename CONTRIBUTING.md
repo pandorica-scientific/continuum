@@ -100,10 +100,29 @@ Two things fail the build rather than publishing something wrong:
 
 - **The tag must match `package.json`.** `v0.3.5` against a `0.3.4` package is
   one of the two being a mistake, and publishing either would be wrong.
-- **Docker Hub must be configured** for a tagged release — the
-  `DOCKERHUB_USERNAME` repository variable and the `DOCKERHUB_TOKEN` secret (an
-  access token, not the account password). A release that silently reached only
-  ghcr.io would be worse than one that failed loudly.
+- **Docker Hub must be configured** for a tagged release — `DOCKERHUB_USERNAME`
+  and `DOCKERHUB_TOKEN` (an access token, not the account password). A release
+  that silently reached only ghcr.io would be worse than one that failed loudly.
+
+Both live in **secrets** here. The username is half of a credential pair, and
+keeping it out of logs and out of forked pull requests costs nothing worth
+having. One practical effect to expect: GitHub masks it, so the build's
+`Publishing:` line reads `***/continuum:0.3.5` rather than naming the account.
+
+The workflow reads `DOCKERHUB_USERNAME` from a secret or a repository variable,
+whichever it finds, so moving it later does not break anything. The mechanism is
+less obvious than it looks: the `secrets` context cannot be used in a step's
+`if:` — the condition does not fail, it simply never matches — so the value is
+lifted into the job's `env`, which secrets may be read into and which `if:` can
+see. Anything conditional on Docker Hub being configured must go through `env`
+for that reason.
+
+The Docker Hub account has nothing to do with the GitHub organisation: images go
+to `<DOCKERHUB_USERNAME>/continuum`, and `compose.yaml` has to name the same
+place or installs will pull an image CI is no longer updating. If the account
+that signs in is ever not the account images live under — a Docker Hub
+organisation, say — set `DOCKERHUB_NAMESPACE` as well; it defaults to the
+sign-in account.
 
 ## The two rules the codebase follows
 

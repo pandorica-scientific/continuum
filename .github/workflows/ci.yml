@@ -72,6 +72,18 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Both credentials are secrets. The `secrets` context is not available in a
+    # step's `if:`, so a bare `secrets.DOCKERHUB_USERNAME != ''` never matches
+    # and the Docker Hub push is skipped without saying why — lifting the value
+    # into the job's `env`, which secrets may be read into and which `if:` can
+    # see, is what makes the condition work. A repository variable is accepted
+    # too, so moving it later breaks nothing. Expect the username to appear
+    # masked as *** in this job's log output.
+    env:
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+      # The account images live under, when that is not the account CI signs in
+      # as — a Docker Hub organisation, say. Defaults to the sign-in account.
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -82,23 +94,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Docker Hub (private repo) — publishes only when the secrets exist:
+      # Docker Hub (private repo) — publishes only when it is configured:
       # DOCKERHUB_USERNAME + DOCKERHUB_TOKEN (an access token, not the password)
       - uses: docker/login-action@v3
-        if: github.event_name == 'push' && vars.DOCKERHUB_USERNAME != ''
+        if: github.event_name == 'push' && env.DOCKERHUB_USERNAME != ''
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       # A tag push publishes the version *and* moves `latest`; a push to main
       # moves `latest` alone.
       - id: tags
         env:
-          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           OWNER: ${{ github.repository_owner }}
           REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
+          NAMESPACE="${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}"
           LABELS="latest"
 
           if [[ "$REF" == refs/tags/* ]]; then
@@ -113,7 +125,7 @@ jobs:
             # Docker Hub is where people pull from, so a release that quietly
             # skipped it would be worse than a failed build.
             if [ -z "${DOCKERHUB_USERNAME}" ]; then
-              echo "::error::releasing $TAG needs the DOCKERHUB_USERNAME variable and DOCKERHUB_TOKEN secret"
+              echo "::error::releasing $TAG needs DOCKERHUB_USERNAME and DOCKERHUB_TOKEN set on the repository"
               exit 1
             fi
             LABELS="$VERSION $LABELS"
@@ -122,8 +134,8 @@ jobs:
           TAGS=""
           for label in $LABELS; do
             TAGS="${TAGS:+$TAGS,}ghcr.io/${OWNER}/continuum:${label}"
-            if [ -n "${DOCKERHUB_USERNAME}" ]; then
-              TAGS="$TAGS,${DOCKERHUB_USERNAME}/continuum:${label}"
+            if [ -n "${NAMESPACE}" ]; then
+              TAGS="$TAGS,${NAMESPACE}/continuum:${label}"
             fi
           done
 
