@@ -29,6 +29,33 @@ iCloud and Google.
   loan payment, a lease end, a renewal notice or a document expiry writes that
   date back. Nothing else does — a retitled payment is reverted, because the
   ledger owns what its own events say.
+- **Error screens.** A wrong address, an expired session, a server that fell
+  over — each now gets a page that says what happened, what to do about it, and
+  the address and time to quote if it needs reporting, instead of the framework's
+  bare status line. A 500 also carries a short reference printed beside the stack
+  in the log, so a report can be matched to the entry; the stack itself never
+  reaches the browser, where it would name file paths and, in a query, real
+  figures. Nothing else earns a reference: a mistyped address is not a fault.
+  There is something hidden in the rings.
+- **Setup instructions live behind an ⓘ.** The three-line caption under a field
+  is read once and then in the way forever. The reasoning — what an API token
+  can reach, what a backup contains, what Google needs before it will authorise
+  anything — is now one hover away from a heading that stays short.
+
+### Changed
+
+- **One quick-add button, on every screen.** The header's Import statement
+  button is gone; the floating plus opens a menu of what can be added from here
+  — bank statement, XTB statement, calendar event, contact, document — filtered
+  to the modules that are switched on. Importing is no longer confined to
+  Overview and Money, which it was only because a bare unlabelled plus on the
+  Property screen said nothing; a named list says what it does.
+- **Google's setup instructions were rewritten from a connection that worked**,
+  in the order it worked in. Each line corresponds to something that went wrong
+  first: the narrow `calendar.app.created` scope rather than full calendar
+  access, publishing the consent screen so authorisation does not expire every
+  seven days, and creating the calendar rather than picking from a list the
+  scope will not let anyone read.
 
 ### Fixed
 
@@ -40,6 +67,47 @@ iCloud and Google.
 - **Two events from one tenancy shared a UID.** A lease end and its renewal
   notice come from the same rule and the same row, and the feed published both
   under one identity — so a subscriber saw only one of them.
+
+The rest of this list came out of connecting real iCloud and Google accounts.
+Every one of them was silent: the tests, the type checker and a code review all
+passed over them.
+
+- **Google refused every event.** All-day events were written ending on the day
+  they end. RFC 5545 makes `DTEND` exclusive for a date, so a one-day event ends
+  the following day; iCloud tolerated the difference, Google answered 400 and
+  the first sync of a real calendar wrote nothing at all.
+- **Sync rewrote every event, every pass, forever.** Events were pushed with the
+  module emoji and `· Continuum` on the title but hashed without them, so the
+  copy that came back never matched what was sent and the whole calendar looked
+  changed on each pass — dozens of writes a minute against an idle calendar.
+- **Events created in iCloud or Google never arrived.** Reconciliation walked
+  the local events and the known links, so anything that existed only at the far
+  end was never in the set being compared.
+- **A single rejected write wedged that event for good.** After a 412 the stored
+  ETag stayed stale, so every later attempt was refused for the same reason.
+- **A failed push reported success.** Refusals that were not conflicts were
+  counted and discarded, so a sync that wrote nothing said it had finished.
+- **No iCloud calendar could be chosen.** Discovery took the first `href` out of
+  each response rather than the one inside the property it asked for, which is
+  the principal's own address — so the list of calendars came back empty.
+- **"Choose a calendar" did nothing on Google.** It listed the account's
+  calendars first, which the narrow scope forbids; the 403 left the button dead
+  with nothing said. It creates the calendar instead, which is exactly what that
+  scope is for.
+- **Approximate exchange rates blamed the internet.** A figure older than the
+  first rate this instance ever stored and a currency with no rate at all were
+  reported as one thing, under one instruction to check the connection. They are
+  now told apart: one is worth checking, the other cannot be fixed by anyone,
+  because the Czech National Bank publishes forward and a past day cannot gain a
+  rate of its own. The warning can also be dismissed, and stays dismissed —
+  including across a reload, where it used to flash up before vanishing.
+- **A white bar down the right of every scrolling page**, and a floating button
+  that jumped as pages gained or lost a scrollbar. The document never declared
+  its colour scheme, so the browser drew a light scrollbar over a dark app; the
+  gutter is now always reserved, so nothing shifts when it appears.
+- **The ⓘ bubble was unreadable and opened off the edge of the screen.** It used
+  a translucent token meant to tint a page background, so the page showed through
+  the text, and it always opened the same way regardless of the room available.
 
 ### Upgrading
 

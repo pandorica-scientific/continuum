@@ -168,14 +168,17 @@
 		background-attachment: fixed;
 	}
 
-	/* The design set these 56px apart inside 1080px, which left the mark and the
-	   sentence reading as two separate things. Narrower, and closer. */
+	/* The design set these 56px apart in a 1080px grid of equal fractions, so the
+	   mark drifted to the far right while the sentence — capped at 46ch — ended
+	   well short of it, and the two read as separate things. Sizing both tracks
+	   to their content and centring the pair is what actually closes the gap: a
+	   fractional column would just re-open it on a wider screen. */
 	.layout {
-		width: 100%;
-		max-width: 880px;
+		max-width: 100%;
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
-		gap: clamp(12px, 2vw, 28px);
+		grid-template-columns: minmax(0, auto) auto;
+		gap: clamp(16px, 3vw, 40px);
+		justify-content: center;
 		align-items: center;
 	}
 
@@ -287,8 +290,13 @@
 
 	.mark {
 		position: relative;
-		width: 100%;
-		max-width: min(340px, 44vh);
+		width: clamp(190px, 24vw, 310px);
+		/* The drawing is right-biased inside its square: the arcs open rightward
+		   from x=150 of a 340 box, so the left ~42% of the mark is empty. Closing
+		   the gap in the grid alone does nothing about that — it moves an empty
+		   column closer. This pulls the square itself left so the INK lands where
+		   the eye expects it, which is what "closer to the text" means. */
+		margin-inline-start: clamp(-104px, -7vw, -36px);
 		aspect-ratio: 1 / 1;
 		display: grid;
 		place-items: center;
@@ -353,7 +361,10 @@
 		}
 
 		.mark {
-			max-width: min(220px, 30vh);
+			width: min(220px, 30vh);
+			/* Centred above the text here, so the crop-correction would only push
+			   it off-centre. */
+			margin-inline-start: 0;
 		}
 
 		h1 {

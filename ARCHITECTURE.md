@@ -242,6 +242,14 @@ active. Everything downstream — the session cookie, `validateSession`,
   rule as pure functions, `panels.ts` is the registry, and the components know
   nothing about the grid they sit on. Each person's arrangement is a jsonb
   column on `person`, saved on discrete gestures and re-validated server-side
+- `src/lib/errors/` — what each error screen says, as data. `states.ts` maps a
+  status to a screen and falls back by class, so a status nobody wrote a page
+  for still renders something a person can act on; `motifs.ts` is the line art.
+  One `+error.svelte` at the route root catches everything, including failures
+  in a layout's own load, which cannot be rendered inside that layout.
+  `handleError` in `hooks.server.ts` is the boundary between the two: the stack
+  goes to the log, the browser gets a reference to it and nothing more — a stack
+  can name file paths and, in a query, real figures
 - `src/routes/api/v1/` — the read-only JSON API, bearer-token authed, versioned
   in the path so a v2 can exist beside it
 - `drizzle/` — migrations, run automatically at boot; data backfills live

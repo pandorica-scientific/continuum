@@ -25,6 +25,11 @@ test('a wrong address gets a screen, not a stack trace', async ({ page }) => {
 
 	// SvelteKit's default page is gone: it prints the bare status and message.
 	await expect(page.locator('body')).not.toContainText('Internal Error');
+
+	// No reference on a 404. SvelteKit routes these through handleError like any
+	// other failure, and minting one here both invites somebody to report a typed
+	// address as a fault and writes a log line per bad URL.
+	await expect(page.locator('body')).not.toContainText('ref ');
 });
 
 test('the way back out is a real link', async ({ page }) => {

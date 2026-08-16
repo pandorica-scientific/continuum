@@ -157,9 +157,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 // reaches the browser — it can name file paths and, in a query, real figures —
 // and the reference is useless on its own without the log entry it points at.
 //
-// Only unexpected errors arrive here. A deliberate `error(400, '…')` is not an
-// exception and keeps its own message.
+// SvelteKit routes 404s through here as well, and those are neither unexpected
+// nor worth a stack in the log: a reference invites somebody to report a typed
+// address as a fault, and a log line per bad URL buries the real errors. So
+// only a server-side failure earns one.
 export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	if (status < 500) return { message };
+
 	// Two four-character groups: long enough not to collide within one log file,
 	// short enough to read down a phone to somebody.
 	const reference = `${rand()}·${rand()}`;
