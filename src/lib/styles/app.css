@@ -12,59 +12,103 @@
 	--bd2: rgba(255, 255, 255, 0.18);
 	--fg1: #e6e9ef;
 	--fg2: #c5ccd6;
-	--fg3: #8a96a6;
+	--fg3: #99a4b3;
 	--fg-inverse: #0e1117;
 	--green: #2ecc71;
-	--red: #e74c3c;
+	--red: #ef6a5c;
 	--yellow: #f1c40f;
-	--blue: #3498db;
-	--purple: #9b59b6;
+	--blue: #5aaee4;
+	--purple: #bd85d3;
 	--orange: #e67e22;
 	--teal: #1abc9c;
+	--indigo: #7b8ce8;
+	--brand: #4a86c8;
 	--plate: rgba(14, 17, 23, 0.86);
+
+	/* Pill fills: the hue itself at 0.18 over the card. */
 	--green-tint: rgba(46, 204, 113, 0.18);
 	--yellow-tint: rgba(241, 196, 15, 0.18);
-	--red-tint: rgba(231, 76, 60, 0.18);
-	--blue-tint: rgba(52, 152, 219, 0.18);
+	--red-tint: rgba(239, 106, 92, 0.18);
+	--blue-tint: rgba(90, 174, 228, 0.18);
 	--teal-tint: rgba(26, 188, 156, 0.18);
-	--purple-tint: rgba(155, 89, 182, 0.18);
+	--purple-tint: rgba(189, 133, 211, 0.18);
 	--orange-tint: rgba(230, 126, 34, 0.18);
+	--indigo-tint: rgba(123, 140, 232, 0.18);
+	--brand-tint: rgba(74, 134, 200, 0.18);
 	--grey-tint: rgba(138, 150, 166, 0.16);
-	--brand: #4a86c8;
+
+	/* One step below a tint: tile and card grounds that carry a hue without
+	   becoming a pill. */
+	--green-wash: rgba(46, 204, 113, 0.07);
+	--yellow-wash: rgba(241, 196, 15, 0.07);
+	--red-wash: rgba(239, 106, 92, 0.07);
+	--blue-wash: rgba(90, 174, 228, 0.07);
+	--teal-wash: rgba(26, 188, 156, 0.07);
+	--purple-wash: rgba(189, 133, 211, 0.07);
+	--orange-wash: rgba(230, 126, 34, 0.07);
+	--indigo-wash: rgba(123, 140, 232, 0.07);
+	--brand-wash: rgba(74, 134, 200, 0.07);
+
 	--font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: 'Source Code Pro', ui-monospace, monospace;
 }
 
 html[data-ledger-theme='light'] {
-	--bg: #edeae3;
-	--bg2: #e6e2d9;
-	--side: #e9e5dd;
-	--card: #f6f4ef;
-	--card2: #eeebe3;
-	--card3: #e2ddd2;
-	--bd: rgba(58, 50, 38, 0.13);
-	--bd2: rgba(58, 50, 38, 0.26);
-	--fg1: #23201b;
-	--fg2: #4b463d;
-	--fg3: #7d766a;
+	/* Warm paper, crisp white cards. An off-white card on a grey-brown canvas
+	   reads dingy: the two surfaces sit too close together. */
+	--bg: #f3f0e9;
+	--bg2: #eeeae1;
+	--side: #efebe2;
+	--card: #ffffff;
+	--card2: #f7f4ee;
+	--card3: #ebe6dc;
+	--bd: rgba(60, 52, 40, 0.1);
+	--bd2: rgba(60, 52, 40, 0.2);
+	--fg1: #1c1a16;
+	--fg2: #494339;
+	--fg3: #6b6559;
 	--fg-inverse: #ffffff;
-	--green: #12945a;
-	--red: #cf3b2c;
-	--yellow: #a8800a;
-	--blue: #2478b5;
-	--purple: #7c4795;
-	--orange: #bd6317;
-	--teal: #0f8a72;
-	--plate: rgba(237, 234, 227, 0.9);
-	--green-tint: rgba(18, 148, 90, 0.12);
-	--yellow-tint: rgba(168, 128, 10, 0.14);
-	--red-tint: rgba(207, 59, 44, 0.12);
-	--blue-tint: rgba(36, 120, 181, 0.12);
-	--teal-tint: rgba(15, 138, 114, 0.12);
-	--purple-tint: rgba(124, 71, 149, 0.12);
-	--orange-tint: rgba(189, 99, 23, 0.13);
-	--grey-tint: rgba(109, 120, 135, 0.12);
+
+	/* Ink only — used as text or a 1px border, never mixed into a tint. */
+	--green: #0e7a4a;
+	--red: #bd2e21;
+	--yellow: #8a5900;
+	--blue: #186294;
+	--purple: #743990;
+	--orange: #a2530f;
+	--teal: #087059;
+	--indigo: #454fb0;
 	--brand: #1b4f8a;
+	--plate: rgba(243, 240, 233, 0.9);
+
+	/* Tints are mixed from BRIGHT hues that exist nowhere else — never from the
+	   ink above. Two reasons, and the second is the counter-intuitive one:
+	   a tint mixed from dark ink is mud (amber from #8a5900 reads olive), and a
+	   brighter tint is a *lighter* ground, so the dark ink on it measures
+	   higher. Darkening an ink to rescue a failing pill chases its own tail if
+	   the tint was re-mixed from that ink, because the ground falls with the
+	   text. If a pill fails, darken the ink and leave the tint alone. */
+	--green-tint: rgba(34, 163, 102, 0.13);
+	--yellow-tint: rgba(232, 169, 4, 0.16);
+	--red-tint: rgba(224, 80, 63, 0.13);
+	--blue-tint: rgba(63, 143, 206, 0.13);
+	--teal-tint: rgba(20, 161, 132, 0.13);
+	--purple-tint: rgba(165, 101, 196, 0.13);
+	--orange-tint: rgba(224, 123, 30, 0.14);
+	--indigo-tint: rgba(112, 128, 224, 0.14);
+	--brand-tint: rgba(63, 124, 191, 0.13);
+	--grey-tint: rgba(120, 130, 145, 0.13);
+
+	/* The same bright values, one step lighter again. */
+	--green-wash: rgba(34, 163, 102, 0.06);
+	--yellow-wash: rgba(232, 169, 4, 0.06);
+	--red-wash: rgba(224, 80, 63, 0.05);
+	--blue-wash: rgba(63, 143, 206, 0.06);
+	--teal-wash: rgba(20, 161, 132, 0.06);
+	--purple-wash: rgba(165, 101, 196, 0.06);
+	--orange-wash: rgba(224, 123, 30, 0.06);
+	--indigo-wash: rgba(112, 128, 224, 0.06);
+	--brand-wash: rgba(63, 124, 191, 0.06);
 }
 
 html,

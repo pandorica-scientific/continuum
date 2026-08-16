@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Waterfall from './Waterfall.svelte';
+	import Sankey from './Sankey.svelte';
 	import { formatMinor, displayCurrency, fromMajor } from '$lib/money';
 	import type { FlowData } from '$lib/server/cashflow';
 
@@ -30,7 +30,16 @@
 	</div>
 
 	{#if flow.totals.in > 0}
-		<Waterfall input={flow.input} {currency} />
+		<Sankey
+			flow={{
+				sources: flow.input.sources,
+				stages: flow.input.stages,
+				remainderLabel: flow.input.remainderLabel,
+				kept: flow.totals.kept,
+				breakdown: flow.breakdown
+			}}
+			{currency}
+		/>
 	{:else}
 		<p class="empty">The waterfall appears once income lands in the selected period.</p>
 	{/if}

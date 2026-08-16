@@ -39,6 +39,8 @@ describe('loan scenario dialog rendering', () => {
 
 		expect(body).toContain('New fixation');
 		expect(body).toContain('Annual rate %');
-		expect(body).toContain('name a rate or a payment — the other is worked out to hold the same term');
+		expect(body).toContain(
+			'name a rate or a payment — the other is worked out to hold the same term'
+		);
 	});
 });

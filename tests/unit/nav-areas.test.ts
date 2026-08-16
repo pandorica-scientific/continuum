@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
 	AREAS,
@@ -156,5 +157,24 @@ describe('the icon set', () => {
 		for (const name of ['plus', 'clock']) {
 			expect(ICONS).toHaveProperty(name);
 		}
+	});
+});
+
+// The identity hue is a token name, so a typo renders an invisible colour
+// rather than failing. TypeScript catches it at build time; this says so at
+// test time too, and pins the palette a hue must exist in.
+describe('area identity hues', () => {
+	it('names a hue every area can be drawn with', () => {
+		const css = readFileSync('src/lib/styles/app.css', 'utf8');
+		for (const area of AREAS) {
+			expect(css, `--${area.hue} is not a token`).toContain(`--${area.hue}:`);
+		}
+	});
+
+	it('gives each subject area its own colour', () => {
+		// Admin is chrome rather than a subject, so it shares the muted
+		// foreground and is excluded from the uniqueness rule.
+		const subjects = AREAS.filter((a) => a.hue !== 'fg3').map((a) => a.hue);
+		expect(new Set(subjects).size).toBe(subjects.length);
 	});
 });

@@ -7,20 +7,12 @@ import { getBaseCurrency } from '$lib/server/settings';
 import { loadSplits } from '$lib/server/splits';
 import { effectiveLines } from '$lib/transactions/lines';
 import { CATEGORY_GROUPS } from '$lib/categories';
-import type { WaterfallInput } from '$lib/charts/waterfall';
+import type { FlowFigures } from '$lib/charts/flow-graph';
 
 export type Period = 'ytd' | 'month';
 
-const AFTER_LABEL: Record<string, string> = {
-	taxes: 'After tax',
-	bills: 'After bills',
-	transport: 'After transport',
-	living: 'After living',
-	housing: 'Saved & invested'
-};
-
 export interface FlowData {
-	input: WaterfallInput;
+	input: FlowFigures;
 	caption: string;
 	totals: { in: number; out: number; kept: number };
 	breakdown: {
@@ -127,7 +119,6 @@ export async function flowData(period: Period): Promise<FlowData> {
 	const stages = expenseGroups.map((g) => ({
 		key: g.key,
 		label: g.label,
-		after: AFTER_LABEL[g.key],
 		colorVar: g.colorVar,
 		// expenses are negative sums; the chart wants positive magnitudes
 		amount: Math.max(0, -groupTotal(g.key))

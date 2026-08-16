@@ -31,6 +31,7 @@ export default ts.config(
 			'drizzle/',
 			'design_system/',
 			'design_system_V2/',
+			'design_system_V3/',
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
 			'.remember/'

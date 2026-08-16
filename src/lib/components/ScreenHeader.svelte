@@ -55,7 +55,9 @@
 <header>
 	<div class="titles">
 		<h1>
-			{#if titleIcon}<span class="mark"><Icon name={titleIcon} size={26} /></span>{/if}
+			{#if titleIcon}<span class="mark" style:color="var(--{area?.hue ?? 'brand'})"
+					><Icon name={titleIcon} size={26} /></span
+				>{/if}
 			<span>{title}</span>
 		</h1>
 		<span class="caption">{caption}</span>
@@ -110,9 +112,10 @@
 		align-items: center;
 		gap: 11px;
 	}
-	/* The screen mark is the one place the brand colour appears in content. */
+	/* The mark carries the area's identity colour — the one place a hue appears
+	   in content that is not a traffic-light state. Falls back to the brand for
+	   a screen outside the navigation. */
 	.mark {
-		color: var(--brand);
 		display: flex;
 	}
 	.caption {

@@ -82,7 +82,7 @@
 				aria-current={activeArea === area.key ? 'page' : undefined}
 				onclick={onNavigate}
 			>
-				<span class="icon"><Icon name={area.icon} /></span>
+				<span class="icon" style:color="var(--{area.hue})"><Icon name={area.icon} /></span>
 				<span class="label">{area.label}</span>
 				{#if area.key === badgeArea && importBadge > 0}
 					<span class="badge mono">{importBadge}</span>
@@ -185,14 +185,17 @@
 		color: var(--fg1);
 		font-weight: 500;
 	}
+	/* The identity colour lives on the icon, set inline from the area's hue.
+	   Inactive rows hold it back so the lit row still stands out. */
 	.icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--fg3);
+		opacity: 0.75;
 	}
+	.nav-item:hover .icon,
 	.nav-item.active .icon {
-		color: var(--fg1);
+		opacity: 1;
 	}
 	.label {
 		min-width: 0;

@@ -36,10 +36,17 @@ export interface Screen {
 	module?: ModuleKey;
 }
 
+/** The hues an area may take. Every one is a token in app.css, so a name that
+ *  does not exist fails the build rather than rendering an invisible colour. */
+export type AreaHue = 'brand' | 'teal' | 'purple' | 'blue' | 'orange' | 'indigo' | 'fg3';
+
 export interface Area {
 	key: string;
 	label: string;
 	icon: IconName;
+	/** Identity colour, on the sidebar row's icon and the screen-title mark.
+	 *  Admin takes the muted foreground: it is chrome, not a subject. */
+	hue: AreaHue;
 	/** Whether importing a statement is offered from this area's screens.
 	 *  Money owns the ledger and Overview is where you land, so the shortcut
 	 *  belongs there; on Property or Retirement it is noise. */
@@ -63,6 +70,7 @@ export const AREAS: Area[] = [
 		key: 'overview',
 		label: 'Overview',
 		icon: 'compass',
+		hue: 'brand',
 		offersImport: true,
 		screens: [{ path: '/overview', label: 'Overview', icon: 'compass' }]
 	},
@@ -70,6 +78,7 @@ export const AREAS: Area[] = [
 		key: 'money',
 		label: 'Money',
 		icon: 'flow',
+		hue: 'teal',
 		offersImport: true,
 		// Cash flow, Accounts, Transactions, Rules and Tags are core: they stay
 		// whatever is switched off, which is why this area can never disappear.
@@ -87,6 +96,7 @@ export const AREAS: Area[] = [
 		key: 'assets',
 		label: 'Assets',
 		icon: 'buildings',
+		hue: 'purple',
 		screens: [
 			{ path: '/property', label: 'Property', icon: 'buildings', module: 'property' },
 			{ path: '/investments', label: 'Investments', icon: 'chart', module: 'investments' },
@@ -97,24 +107,28 @@ export const AREAS: Area[] = [
 		key: 'retirement',
 		label: 'Retirement',
 		icon: 'target',
+		hue: 'blue',
 		screens: [{ path: '/retirement', label: 'Retirement', icon: 'target', module: 'retirement' }]
 	},
 	{
 		key: 'home',
 		label: 'Home',
 		icon: 'house',
+		hue: 'orange',
 		screens: [{ path: '/home', label: 'Home', icon: 'house', module: 'home' }]
 	},
 	{
 		key: 'calendar',
 		label: 'Calendar',
 		icon: 'calendar',
+		hue: 'indigo',
 		screens: [{ path: '/calendar', label: 'Calendar', icon: 'calendar', module: 'calendar' }]
 	},
 	{
 		key: 'admin',
 		label: 'Admin',
 		icon: 'folders',
+		hue: 'fg3',
 		screens: [
 			{ path: '/documents', label: 'Documents', icon: 'folders', module: 'documents' },
 			{ path: '/settings', label: 'Settings', icon: 'gear' }

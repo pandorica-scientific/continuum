@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.3.6 — unreleased
+
+A colour pass over both themes, and a run of fixes found by using the thing.
+
+### Fixed
+
+- **Saving anything about a property silently switched you to a different
+  flat.** Save a floor plan and it looked as though the plan had been lost: the
+  page had quietly moved to the other property, which had none. Opening the
+  editor then edited _that_ flat, so it came up empty, and saving again flipped
+  the selection back — which is why the plan appeared to return. Properties
+  created together share a creation timestamp to the microsecond, and ordering
+  by that column alone is not a total order: PostgreSQL may return tied rows in
+  any order, and an update moves a row. Every list that picks by position now
+  has a tiebreak. Uploading a photo had the same cause.
+- **"Person one" and "person two" could swap between loads**, which quietly
+  changed whose birth year fed the retirement projection. Same cause as above.
+- **A panel whose module was switched off could leave a band of empty space** at
+  the top of the Overview instead of closing it.
+- **The move-up and move-down buttons on a narrow Overview did nothing.** They
+  wrote new positions and re-rendered the same order, because exchanging two
+  panels' cells leaves a short one overlapping a tall one and the board pushed
+  it straight back. Reordering now lays the column out in the order asked for.
+- **Adding a panel dropped you out of Customise mode** and threw away the
+  "not saved" notice along with the panel it referred to.
+- **The cash-flow waterfall stopped at 880 pixels wide** and left the rest of a
+  wider card empty.
+
+### Added
+
+- **A photo can be removed, not only replaced.** Two taps — the button arms
+  itself and says so — since it deletes the file.
+- **The retirement chart has years along the bottom**, and marks the year the
+  pot clears the target. Reading when that happens no longer means counting
+  gridlines.
+- **A new fixation fills in the half you did not type.** Give the annual rate
+  and the monthly payment that holds the loan's current term is worked out for
+  you, or the other way round; the field says it was derived, and correcting it
+  never moves the one you typed. Both directions are solved against the same
+  amortisation the app books interest with, so the figure matches the schedule
+  rather than approximating it.
+
+### Changed
+
+- **The cash-flow chart is a Sankey, and it fits the space it is given.** It
+  used to be one fixed drawing scaled to fit, so on a narrow panel the labels
+  shrank with it and the type became unreadable; it also left a large empty
+  corner, because the biggest outflow peeled off last and swung the diagram to
+  one side. It now lays out in the pixels it actually has — labels stay the size
+  they were designed at whatever the width — and reads as four columns: where
+  money came from, what came in, where it went, and what each of those was
+  spent on. Below about 560 pixels it drops the last column, and below 380 it
+  shows sources and groups only, rather than drawing something too small to
+  read. The full breakdown is still listed beneath the chart either way.
+- **Both palettes rebuilt, and both now meet WCAG AA.** They did not: ten
+  checks failed, including dark purple at 3.16:1 and light amber at 2.87:1
+  against a 4.5:1 bar. Light mode is now warm paper with crisp white cards, and
+  its tints are mixed from bright hues rather than from the dark ink they sit
+  under — which is what made amber read olive, and what left every attempt to
+  fix a failing pill chasing its own tail. A test measures every tint over its
+  card over the canvas and holds the line.
+- **Each area has its own colour**, on its sidebar icon and the mark beside the
+  screen title: Money teal, Assets purple, Retirement blue, Home orange,
+  Calendar indigo, Overview the brand blue. Admin stays muted — it is chrome,
+  not a subject.
+- **Import statement appears only on Overview and Money.** It was on every
+  screen, including ones where importing a bank statement means nothing.
+- **Fields in the loan dialogs line up** when a label wraps to two lines.
+
 ## 0.3.5 — 2026-08-16
 
 The Overview stops being a screen somebody else designed and becomes a board
