@@ -847,3 +847,83 @@ export const taxStatementLine = pgTable('tax_statement_line', {
 	amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 	sort: integer('sort').notNull().default(0)
 });
+
+// ---- Contacts ----
+
+// The household's address book: tenants, tradespeople, bank contacts. Replaces
+// tenancy.tenantContact, which was one free-text string with no structure and
+// nowhere to put a second number.
+export const contact = pgTable('contact', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	// A stored upload name from saveUpload(), served through /files/[name] —
+	// the same convention property photos use. Never a path or a URL.
+	photo: text('photo'),
+	// organisation and jobTitle are kept apart rather than as one "work" string:
+	// that is the vCard ORG/TITLE split, so a later CardDAV export is a mapping
+	// rather than a migration, and "everyone at Česká spořitelna" stays askable.
+	organisation: text('organisation'),
+	jobTitle: text('job_title'),
+	phone: text('phone'),
+	email: text('email'),
+	address: text('address'),
+	notes: text('notes'),
+	category: text('category'),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// One explicit link table per pair, as document_person and document_property
+// already do. More tables than a polymorphic column, and in exchange every link
+// keeps a real foreign key and stays typed end to end.
+export const contactTenancy = pgTable(
+	'contact_tenancy',
+	{
+		contactId: text('contact_id')
+			.notNull()
+			.references(() => contact.id, { onDelete: 'cascade' }),
+		tenancyId: text('tenancy_id')
+			.notNull()
+			.references(() => tenancy.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.contactId, t.tenancyId] })]
+);
+
+export const contactProperty = pgTable(
+	'contact_property',
+	{
+		contactId: text('contact_id')
+			.notNull()
+			.references(() => contact.id, { onDelete: 'cascade' }),
+		propertyId: text('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.contactId, t.propertyId] })]
+);
+
+export const contactLoan = pgTable(
+	'contact_loan',
+	{
+		contactId: text('contact_id')
+			.notNull()
+			.references(() => contact.id, { onDelete: 'cascade' }),
+		loanId: text('loan_id')
+			.notNull()
+			.references(() => loan.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.contactId, t.loanId] })]
+);
+
+export const contactAccount = pgTable(
+	'contact_account',
+	{
+		contactId: text('contact_id')
+			.notNull()
+			.references(() => contact.id, { onDelete: 'cascade' }),
+		accountId: text('account_id')
+			.notNull()
+			.references(() => account.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.contactId, t.accountId] })]
+);

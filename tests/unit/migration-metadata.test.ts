@@ -14,7 +14,26 @@ interface DrizzleSnapshot {
 	>;
 }
 
-const SNAPSHOT_NAME = '0032_snapshot.json';
+// Derived, not pinned by name. A hardcoded filename has to be bumped by hand on
+// every schema migration, and when someone forgets, this suite fails as "schema
+// drift" — the wrong diagnosis, which sends the next person looking in the wrong
+// place.
+//
+// Read from the snapshot FILES, not from the journal. Hand-written migrations
+// (0033_drop_seeded_rules, 0034_person_overview_layout) carry a journal entry
+// but generate no snapshot, because they change data or nothing drizzle models.
+// Taking the newest journal entry would therefore name a file that does not
+// exist, and this suite would die on ENOENT the first time someone writes SQL by
+// hand — which is exactly when it is most needed.
+function currentSnapshotName(): string {
+	const snapshots = readdirSync('drizzle/meta')
+		.filter((name) => /^\d{4}_snapshot\.json$/.test(name))
+		.sort();
+	if (snapshots.length === 0) throw new Error('No drizzle snapshot found in drizzle/meta.');
+	return snapshots[snapshots.length - 1];
+}
+
+const SNAPSHOT_NAME = currentSnapshotName();
 
 function readSnapshot(): DrizzleSnapshot {
 	return JSON.parse(readFileSync(`drizzle/meta/${SNAPSHOT_NAME}`, 'utf8')) as DrizzleSnapshot;
@@ -62,6 +81,22 @@ describe('Drizzle migration metadata', () => {
 			expect({ [name]: Object.keys(snapshot.tables[name].columns).sort() }).toEqual({
 				[name]: columns
 			});
+		}
+	});
+
+	it('declares the contact tables and their links', () => {
+		const snapshot = readSnapshot();
+		expect(snapshot.tables).toHaveProperty('public.contact');
+		expect(snapshot.tables['public.contact'].columns).toHaveProperty('organisation');
+		expect(snapshot.tables['public.contact'].columns).toHaveProperty('job_title');
+		expect(snapshot.tables['public.contact'].columns).toHaveProperty('photo');
+		for (const table of [
+			'contact_tenancy',
+			'contact_property',
+			'contact_loan',
+			'contact_account'
+		]) {
+			expect(snapshot.tables).toHaveProperty(`public.${table}`);
 		}
 	});
 
