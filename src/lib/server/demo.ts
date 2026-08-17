@@ -12,6 +12,7 @@ import {
 	contactTenancy,
 	account,
 	brokerImportState,
+	currencyRate,
 	document,
 	documentPerson,
 	documentProperty,
@@ -45,6 +46,26 @@ function monthShift(base: string, offset: number): string {
 export async function seedDemo(): Promise<void> {
 	await setSetting('householdName', 'Novák household (demo)');
 	await setSetting('baseCurrency', 'CZK');
+
+	// An opening fixing for every currency this household holds anything in.
+	//
+	// A real install backfills these from the Czech National Bank, but the demo
+	// is often looked at on a machine with no route out, and the earliest thing
+	// it seeds is a 2024 tax statement — years before any rate the app manages
+	// to fetch. So every screen carried an orange banner saying the exchange
+	// rate was approximate, which is true, and which says nothing about the
+	// software to someone seeing it for the first time.
+	//
+	// One row each is enough: a rate carries forward from its first fixing, and
+	// missingRateCodes only complains about a currency used BEFORE it has one.
+	// Later CNB fixings land on top of these and take over from their own date.
+	await db
+		.insert(currencyRate)
+		.values([
+			{ code: 'EUR', day: '2024-01-01', rate: '24.725' },
+			{ code: 'PLN', day: '2024-01-01', rate: '5.680' }
+		])
+		.onConflictDoNothing();
 
 	const jana = randomUUID();
 	const petr = randomUUID();
@@ -239,7 +260,12 @@ export async function seedDemo(): Promise<void> {
 		id: randomUUID(),
 		loanId: mortgage,
 		startDate: '2026-02-11',
-		endDate: '2031-02-11',
+		// Relative, and inside the horizon the briefing watches (30 months), so a
+		// demo household has the one thing every mortgage-holder actually has to
+		// think about ahead of time. A fixation running to a fixed 2031 was five
+		// years out from every angle: nothing to decide, nothing to show, and the
+		// first panel on the Overview read "nothing needs a decision right now".
+		endDate: monthShift(thisMonth, 24) + '-11',
 		annualRatePct: '4.44',
 		paymentMinor: 5445600n
 	});
@@ -252,8 +278,12 @@ export async function seedDemo(): Promise<void> {
 		rentMinor: 1650000n,
 		depositMinor: 3300000n,
 		startDate: '2025-06-01',
-		endDate: monthShift(thisMonth, 10) + '-01',
-		renewalNoticeDate: monthShift(thisMonth, 7) + '-01'
+		// Close enough that the lease and its renewal notice are live decisions.
+		// At ten months out both sat outside every window the briefing watches,
+		// so the demo's tenancy was invisible on the screen that exists to
+		// surface exactly this.
+		endDate: monthShift(thisMonth, 3) + '-01',
+		renewalNoticeDate: monthShift(thisMonth, 1) + '-01'
 	});
 
 	// The tenant, and one company the household deals with. Both carry diacritics
@@ -318,7 +348,10 @@ export async function seedDemo(): Promise<void> {
 		name: 'Renting contract · Karlín',
 		shelf: 'tenancy',
 		addedOn: today,
-		expiresOn: monthShift(thisMonth, 10) + '-01',
+		// The same day the tenancy ends, because it IS that tenancy's contract.
+		// The two drifting apart is how a demo ends up claiming a lease document
+		// outlives the lease.
+		expiresOn: monthShift(thisMonth, 3) + '-01',
 		expiryVerb: 'ends'
 	});
 	await db.insert(document).values(payslips);
