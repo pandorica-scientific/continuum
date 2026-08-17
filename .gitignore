@@ -54,3 +54,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# OCR language data — fetched at build time, never committed
+tessdata/

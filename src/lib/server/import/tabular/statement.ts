@@ -48,7 +48,25 @@ export interface TabularReading {
 }
 
 const AMOUNT_TOKEN = /-?\(?\d[\d\s.,'\u00A0\u202F]*\)?-?/g;
-const CURRENCY_TOKEN = /\b([A-Z]{3})\b/;
+/**
+ * A currency is a code or symbol sitting BESIDE an amount.
+ *
+ * Any three uppercase letters is not a currency: "Authorised by the PRA" in a
+ * British bank's address made every UK statement read as being denominated in
+ * PRA. Requiring adjacency to a number is what makes the token evidence rather
+ * than coincidence.
+ */
+const SYMBOL_CURRENCY: Record<string, string> = {
+	'£': 'GBP',
+	'€': 'EUR',
+	$: 'USD',
+	'¥': 'JPY',
+	zł: 'PLN',
+	Kč: 'CZK',
+	Ft: 'HUF'
+};
+const CURRENCY_NEAR_AMOUNT =
+	/(?:^|[\s(])([A-Z]{3})\s*-?\(?\d|\d[\d\s.,'\u00A0]*\s*([A-Z]{3})(?=$|[\s).,])/;
 const DATE_TOKEN = /\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d{4}-\d{2}-\d{2}/g;
 
 const rowText = (row: RawCell[]) =>
@@ -154,8 +172,25 @@ export function readEvidence(regions: Region[]): Evidence {
 			const key = normalise(text);
 
 			if (!evidence.currency) {
-				const currency = CURRENCY_TOKEN.exec(text);
-				if (currency) evidence.currency = currency[1];
+				// A labelled currency: "Währung: EUR", "Měna: CZK", "Currency: GBP".
+				const labelled =
+					/(?:wahrung|währung|currency|mena|měna|waluta|divisa|moneda|ccy)\s*[:\s]\s*([A-Z]{3})\b/i.exec(
+						text
+					);
+				if (labelled) evidence.currency = labelled[1].toUpperCase();
+			}
+			if (!evidence.currency) {
+				const beside = CURRENCY_NEAR_AMOUNT.exec(text);
+				if (beside) evidence.currency = beside[1] ?? beside[2];
+				else {
+					for (const [symbol, code] of Object.entries(SYMBOL_CURRENCY)) {
+						// The symbol must touch a figure, for the same reason.
+						if (new RegExp(`${symbol.replace(/[$]/g, '\\$')}\\s*-?\\(?\\d`).test(text)) {
+							evidence.currency = code;
+							break;
+						}
+					}
+				}
 			}
 			if (!evidence.periodStart) {
 				const dates = text.match(DATE_TOKEN);
@@ -183,6 +218,24 @@ export function readEvidence(regions: Region[]): Evidence {
 }
 
 const columnValues = (rows: RawCell[][], index: number) => rows.map((r) => r[index]?.text ?? '');
+
+/**
+ * The amount in a cell that may carry more than the amount.
+ *
+ * On a page recovered from geometry, a wrapped description can spill into the
+ * money column — `10,00 Kiewisz` — and demanding the whole cell parse loses a
+ * movement that is plainly there. The money-shaped token is taken instead, and
+ * only when exactly one is present: two figures in one cell means the columns
+ * are wrong, which is not something to paper over.
+ */
+function amountFromCell(text: string, decimal: DecimalMark, digits: number): bigint | null {
+	const whole = parseAmount(text, decimal, digits);
+	if (whole !== null) return whole;
+	const tokens = text.match(/-?\(?\d[\d\s.,'\u00A0]*\)?-?/g) ?? [];
+	const money = tokens.map((t) => t.trim()).filter((t) => /\d/.test(t));
+	if (money.length !== 1) return null;
+	return parseAmount(money[0], decimal, digits);
+}
 
 /**
  * Assign a role to every column: the header dictionary first, then shape for
@@ -218,7 +271,46 @@ function assignRoles(region: Region, body: RawCell[][]): (ColumnRole | undefined
 			named.add('amount');
 		}
 	}
+	repairNumericRoles(roles, body);
 	return roles;
+}
+
+const NUMERIC_ROLES: ColumnRole[] = ['amount', 'balance', 'debit', 'credit'];
+
+/**
+ * Move a numeric role onto the column that actually holds the numbers.
+ *
+ * Amounts are right-aligned and so are their headers, so a header word can
+ * start further right than the values beneath it and land in the next column.
+ * The German fixture puts "Saldo" over the Soll/Haben letter rather than over
+ * the balance, and the balance column then reads as empty — a whole statement
+ * unprovable because one label sits four millimetres too far right.
+ *
+ * Only ever moves a role to an unclaimed neighbour, and only when the named
+ * column holds no numbers at all while the neighbour does.
+ */
+function repairNumericRoles(roles: (ColumnRole | undefined)[], body: RawCell[][]): void {
+	const numericColumn = (index: number): boolean => {
+		const values = body.map((r) => r[index]?.text ?? '').filter(Boolean);
+		if (values.length === 0) return false;
+		const numbers = values.filter(
+			(v) => parseAmount(v, '.') !== null || parseAmount(v, ',') !== null
+		);
+		return numbers.length >= values.length * 0.8;
+	};
+
+	for (const [index, role] of roles.entries()) {
+		if (!role || !NUMERIC_ROLES.includes(role)) continue;
+		if (numericColumn(index)) continue;
+		for (const neighbour of [index - 1, index + 1]) {
+			if (neighbour < 0 || neighbour >= roles.length) continue;
+			if (roles[neighbour]) continue;
+			if (!numericColumn(neighbour)) continue;
+			roles[neighbour] = role;
+			roles[index] = undefined;
+			break;
+		}
+	}
 }
 
 const indexOfRole = (roles: (ColumnRole | undefined)[], role: ColumnRole) => roles.indexOf(role);
@@ -234,6 +326,17 @@ export interface ReadOptions {
 	dateOrder?: DateOrder;
 	decimalMark?: DecimalMark;
 	currency?: string;
+	/**
+	 * Regions to read the statement's own facts from, when they are not in the
+	 * same grid as its movements.
+	 *
+	 * A statement states its balances once, on the first page, and then runs its
+	 * table across the pages that follow. Reading evidence only from the grid
+	 * the table was found in therefore finds nothing — which is how banks that
+	 * plainly print an opening and closing balance came out as "nothing in this
+	 * statement could be checked".
+	 */
+	evidenceRegions?: Region[];
 }
 
 export function readTabular(
@@ -244,7 +347,7 @@ export function readTabular(
 	const body = transactionRows(region);
 	const roles = options.roles ?? assignRoles(region, body);
 	const questions: OpenQuestion[] = [];
-	const evidence = readEvidence(choice.regions);
+	const evidence = readEvidence(options.evidenceRegions ?? choice.regions);
 
 	const dateColumn = indexOfRole(roles, 'bookingDate');
 	const valueDateColumn = indexOfRole(roles, 'valueDate');
@@ -343,12 +446,12 @@ export function readTabular(
 
 		let amountMinor: bigint | null = null;
 		if (amountColumn >= 0) {
-			amountMinor = parseAmount(row[amountColumn]?.text ?? '', decimalMark, digits);
+			amountMinor = amountFromCell(row[amountColumn]?.text ?? '', decimalMark, digits);
 		} else {
 			// A debit/credit pair: direction comes from WHICH column holds the
 			// value, never from a sign.
-			const debit = parseAmount(row[debitColumn]?.text ?? '', decimalMark, digits);
-			const credit = parseAmount(row[creditColumn]?.text ?? '', decimalMark, digits);
+			const debit = amountFromCell(row[debitColumn]?.text ?? '', decimalMark, digits);
+			const credit = amountFromCell(row[creditColumn]?.text ?? '', decimalMark, digits);
 			if (debit !== null && debit !== 0n) amountMinor = -abs(debit);
 			else if (credit !== null) amountMinor = abs(credit);
 		}
@@ -374,7 +477,7 @@ export function readTabular(
 			currency: text('currency') ?? currency,
 			balanceAfterMinor:
 				balanceColumn >= 0
-					? (parseAmount(row[balanceColumn]?.text ?? '', decimalMark, digits) ?? undefined)
+					? (amountFromCell(row[balanceColumn]?.text ?? '', decimalMark, digits) ?? undefined)
 					: undefined,
 			counterparty: text('counterparty'),
 			counterpartyAccount: text('counterpartyAccount'),
@@ -406,6 +509,16 @@ export function readTabular(
 	}
 	if (questions.length > 0) return { questions, roles, dateOrder, decimalMark };
 
+	// Where a balance column exists, the BALANCE decides each movement's
+	// direction — not a sign we read off the amount.
+	//
+	// German statements print an unsigned amount beside a separate Soll/Haben
+	// letter; one glyph, no redundancy, and it carries the whole meaning. The
+	// balance column has many glyphs and moves in only one direction per row,
+	// so it is both more robust and self-checking. Adopted only if it makes the
+	// chain close, so a statement whose signs were already right is untouched.
+	deriveSignsFromBalance(rows, parseAmount(evidence.openingBalance ?? '', decimalMark, digits));
+
 	const parse = (value?: string) =>
 		value === undefined ? undefined : (parseAmount(value, decimalMark, digits) ?? undefined);
 
@@ -428,6 +541,37 @@ export function readTabular(
 
 const abs = (v: bigint) => (v < 0n ? -v : v);
 const absOrUndefined = (v?: bigint) => (v === undefined ? undefined : abs(v));
+
+/**
+ * Re-sign movements from the running balance, in place, when doing so makes
+ * the chain close and leaving them alone does not.
+ */
+function deriveSignsFromBalance(rows: ParsedRow[], opening: bigint | null): void {
+	if (rows.length < 2 || opening === null) return;
+	if (rows.some((r) => r.balanceAfterMinor === undefined)) return;
+
+	const closes = (candidate: ParsedRow[]) => {
+		let running = opening;
+		for (const row of candidate) {
+			if (running + row.amountMinor !== row.balanceAfterMinor) return false;
+			running = row.balanceAfterMinor!;
+		}
+		return true;
+	};
+	if (closes(rows)) return;
+
+	let running = opening;
+	const derived = rows.map((row) => {
+		const movement = row.balanceAfterMinor! - running;
+		running = row.balanceAfterMinor!;
+		// Only the SIGN is taken from the balance; a magnitude that disagrees
+		// means the columns are misread, which is not something to paper over.
+		const signed = movement < 0n ? -abs(row.amountMinor) : abs(row.amountMinor);
+		return { ...row, amountMinor: signed };
+	});
+	if (!closes(derived)) return;
+	for (const [index, row] of derived.entries()) rows[index].amountMinor = row.amountMinor;
+}
 
 /** True when a row names a balance rather than a movement. */
 export const isSummaryRow = (row: RawCell[]) => looksLikeSummary(rowText(row));

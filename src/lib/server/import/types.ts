@@ -68,4 +68,22 @@ export interface PdfLine {
 	page: number;
 	y: number;
 	cells: string[];
+	/**
+	 * Left edge of each cell, in PDF units.
+	 *
+	 * Kept because a PDF has no columns — only glyphs at coordinates — so the
+	 * only way to recover a table is to cluster cells by where they sit. The
+	 * existing per-bank parsers read cells positionally within a line and never
+	 * needed this; the generic reader cannot work without it.
+	 */
+	xs?: number[];
+	/**
+	 * Right edge of each cell.
+	 *
+	 * Money columns are RIGHT-aligned, so their cells share an ending position
+	 * and not a starting one: `3.250,00` begins further left than `87,45` and
+	 * clustering by left edge splits one column into two. The amounts of a real
+	 * statement landed in two different columns because of exactly this.
+	 */
+	xEnds?: number[];
 }

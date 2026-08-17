@@ -71,9 +71,10 @@ describe('proof classes', () => {
 		expect(proof.proofClass).toBe('P0');
 	});
 
-	it('ranks P2 above P1 because offsetting omissions survive the endpoints', () => {
-		// Drop a +200,00 and a -200,00: the endpoints still close, so P1 is
-		// reached — but the stated totals no longer match, so P2 is not.
+	it('refuses outright when stated totals CONTRADICT the rows', () => {
+		// Two movements dropped so the endpoints still close — but the stated
+		// totals no longer match. Evidence that disagrees is not weaker evidence;
+		// it is proof that something is wrong, so this is P0, not a lesser pass.
 		const base = chained();
 		const mutilated: ParsedStatement = {
 			...base,
@@ -86,7 +87,20 @@ describe('proof classes', () => {
 		const proof = proveStatement(mutilated);
 		expect(status(proof.checks, 'opening and closing')).toBe('pass');
 		expect(status(proof.checks, 'stated totals')).toBe('fail');
-		expect(proof.proofClass).toBe('P1');
+		expect(proof.proofClass).toBe('P0');
+	});
+
+	it('refuses a closing chain whose printed closing balance disagrees', () => {
+		// A chain closes over the rows it HAS, so a movement missing from the end
+		// leaves every remaining step following perfectly. Only the printed
+		// closing balance notices — a real German statement read 9 of its 10
+		// movements exactly this way and was rated strong enough to file.
+		const truncated = chained();
+		truncated.rows = truncated.rows.slice(0, 2);
+		const proof = proveStatement(truncated);
+		expect(status(proof.checks, 'running balance')).toBe('pass');
+		expect(status(proof.checks, 'opening and closing')).toBe('fail');
+		expect(proof.proofClass).toBe('P0');
 	});
 });
 

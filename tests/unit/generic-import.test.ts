@@ -158,3 +158,93 @@ describe('a bank with no adapter at all', () => {
 		expect(statement.bank).toBe('fio');
 	});
 });
+
+describe('PDF geometry', () => {
+	it('rejoins an amount the text layer split across items', async () => {
+		const { joinSplitNumbers } = await import('$lib/server/import/tabular/frompdf');
+		// CaixaBank prints "-1 000,00 €" and the text layer emits three items.
+		// A cell-wise reader sees "-1".
+		expect(joinSplitNumbers(['-1', '000,00', '€'], [100, 112, 150]).cells).toEqual(['-1 000,00 €']);
+	});
+
+	it('does NOT fuse two adjacent money columns', async () => {
+		const { joinSplitNumbers } = await import('$lib/server/import/tabular/frompdf');
+		// "300,00" then "377,93" is an amount and a balance, not one number —
+		// and it has the same shape as a thousands group. The left part already
+		// carrying a decimal is what tells them apart.
+		expect(joinSplitNumbers(['300,00', '377,93'], [100, 200]).cells).toEqual(['300,00', '377,93']);
+	});
+});
+
+describe('documents that are not bank statements', () => {
+	it('names a portfolio statement rather than reporting no transactions', async () => {
+		const { looksLikeHoldings } = await import('$lib/server/import/holdings');
+		const snapshot = [
+			'RHEU Statement June 2026',
+			'OPENING BALANCE €622.72',
+			'CLOSING BALANCE €509.15',
+			'PORTFOLIO POSITIONS',
+			'ASSETS HELD IN ACCOUNT QUANTITY CURRENCY SYMBOL',
+			'Bitcoin 0.00946006 EUR BTC €485.69'
+		].join('\n');
+		const verdict = looksLikeHoldings(snapshot);
+		expect(verdict.isHoldings).toBe(true);
+		expect(verdict.reason).toMatch(/portfolio statement/i);
+	});
+
+	it('does not divert a bank statement that merely mentions shares', async () => {
+		const { looksLikeHoldings } = await import('$lib/server/import/holdings');
+		const withShares = [
+			'Opening balance 1000,00',
+			'Closing balance 900,00',
+			'01/03/2025 PURCHASE SHARES QUANTITY 10 -50,00',
+			'05/03/2025 DIVIDEND -20,00',
+			'09/03/2025 BROKER FEE -30,00'
+		].join('\n');
+		expect(looksLikeHoldings(withShares).isHoldings).toBe(false);
+	});
+});
+
+describe('spreadsheets and photographs', () => {
+	it('reads a workbook sheet as a table like any other', async () => {
+		const XLSX = await import('xlsx');
+		const sheet = XLSX.utils.aoa_to_sheet([
+			['Saldo inicial', '1000,00 EUR'],
+			['Saldo final', '1150,00 EUR'],
+			[],
+			['Fecha', 'Concepto', 'Importe', 'Saldo'],
+			// A day above twelve, so the date order is settled by the data itself
+			// rather than left for someone to answer.
+			['17/03/2025', 'NOMINA', '300,00', '1300,00'],
+			['21/03/2025', 'COMPRA', '-50,00', '1250,00'],
+			['28/03/2025', 'ALQUILER', '-100,00', '1150,00']
+		]);
+		const book = XLSX.utils.book_new();
+		XLSX.utils.book_append_sheet(book, sheet, 'Movimientos');
+		const bytes = new Uint8Array(XLSX.write(book, { type: 'array', bookType: 'xlsx' }));
+
+		const [statement] = await detectAndParseAll(bytes);
+		expect(statement.format).toBe('xlsx');
+		expect(statement.rows).toHaveLength(3);
+		expect(statement.openingBalanceMinor).toBe(100000n);
+		const sum = statement.rows.reduce((a, r) => a + r.amountMinor, 0n);
+		expect(statement.openingBalanceMinor! + sum).toBe(statement.closingBalanceMinor);
+	});
+
+	it('will not read a photograph on the request path', async () => {
+		// Recognising a page takes seconds, and nothing that slow belongs on a
+		// request someone is waiting on — the background reader turns OCR on.
+		const png = new Uint8Array([
+			0x89,
+			0x50,
+			0x4e,
+			0x47,
+			0x0d,
+			0x0a,
+			0x1a,
+			0x0a,
+			...new Array(64).fill(0)
+		]);
+		await expect(detectAndParseAll(png)).rejects.toThrow(/background/i);
+	});
+});

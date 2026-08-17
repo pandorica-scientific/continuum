@@ -4,6 +4,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# OCR language data, fetched ONCE here so the running product never reaches the
+# network. ~7.4 MB for English, Czech, Polish, German and Spanish.
+RUN node scripts/fetch-tessdata.mjs
 RUN npm run build && npm prune --omit=dev
 
 # Runtime stage
@@ -24,6 +27,7 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/drizzle ./drizzle
+COPY --from=build /app/tessdata ./tessdata
 
 # Uploaded files (property photos, documents, statements) live on this volume
 RUN mkdir -p /data /backups && chown node:node /data /backups

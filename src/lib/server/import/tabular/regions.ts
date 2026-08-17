@@ -48,8 +48,15 @@ export interface Region {
  * integers, and Fio writes whole crowns plainly — `-20000`, `29760`. Three of
  * six real movements were dropped before this was widened, while a reduced
  * fixture using `240,00` passed happily.
+ *
+ * A currency mark is part of the amount, not a disqualification. CaixaBank
+ * prints `-3,37 €` and the PDF reader deliberately keeps the symbol with the
+ * figure — so a pattern that rejected any cell containing one meant no cell in
+ * that statement was money, the region was not a table, and a page whose
+ * columns had been recovered perfectly could not be read at all.
  */
-const AMOUNT_LIKE = /^-?\(?\s*\d+(?:[.,\s'\u00A0\u202F]\d{3})*(?:[.,]\d{1,2})?\s*\)?-?$/;
+const AMOUNT_LIKE =
+	/^[€$£¥]?\s*-?\(?\s*\d+(?:[.,\s'\u00A0\u202F]\d{3})*(?:[.,]\d{1,2})?\s*\)?-?\s*(?:[€$£¥]|[A-Z]{3}|z\u0142|K\u010d|Ft)?$/;
 
 const populatedWidth = (row: RawCell[]): number => {
 	let last = -1;
@@ -101,16 +108,31 @@ function split(grid: Grid): Omit<Region, 'role' | 'headerIndex'>[] {
 /**
  * A header is a row of labels: it names roles we recognise, and it carries no
  * date, because a date means it is already data.
+ *
+ * The BEST-matching row wins, not the first plausible one. CaixaBank's page
+ * opens with `Account holder | IBAN ES73…`, and "IBAN" is a role we recognise,
+ * so a first-match rule crowned that metadata line as the header — and the real
+ * `Item | Date | Amount | Balance` row below it became data. The statement then
+ * had no amount column and could not be read, from a grid that was perfect.
  */
 function findHeader(rows: RawCell[][]): number | undefined {
+	let best: { index: number; named: number } | undefined;
+
 	for (let i = 0; i < Math.min(rows.length, 3); i++) {
 		const row = rows[i];
-		if (hasDate(row)) return undefined;
+		// A row carrying a date is data, not a header — but only THIS row, so the
+		// search continues. Breaking here cost CaixaBank its header: its first
+		// line ends with the page number "1/8", which is indistinguishable from
+		// a two-component date, so the scan stopped before reaching
+		// `Item | Date | Amount | Balance` one line below.
+		if (hasDate(row)) continue;
 		const named = row.filter((c) => c.text && roleOfHeader(c.text)).length;
+		if (named === 0) continue;
 		const texty = row.filter((c) => c.text && !AMOUNT_LIKE.test(c.text)).length;
-		if (named >= 2 || (named >= 1 && texty >= row.filter((c) => c.text).length - 1)) return i;
+		const plausible = named >= 2 || texty >= row.filter((c) => c.text).length - 1;
+		if (plausible && (!best || named > best.named)) best = { index: i, named };
 	}
-	return undefined;
+	return best?.index;
 }
 
 function classify(region: Omit<Region, 'role' | 'headerIndex'>): Region {

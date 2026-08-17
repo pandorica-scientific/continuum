@@ -64,6 +64,35 @@
   a { color: var(--blue); text-decoration: none; }
   a:hover { color: var(--fg1); text-decoration: underline; }
   button { font-family: inherit; }
+  .error-visual {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    display: grid;
+    margin: 0;
+    padding: 0;
+    place-items: center;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+  }
+  .error-visual:focus-visible {
+    border-radius: 18px;
+    outline: 2px solid currentColor;
+    outline-offset: 8px;
+  }
+  .error-art {
+    animation: error-art-drift 9s ease-in-out infinite;
+    transform-origin: 50% 50%;
+  }
+  @keyframes error-art-drift {
+    0%, 100% { transform: translateY(0) rotate(-0.25deg); }
+    50% { transform: translateY(-7px) rotate(0.25deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .error-art { animation: none; }
+  }
 </style>
 </helmet>
 
@@ -128,27 +157,43 @@
         </div>
 
         <div style="width: 100%; max-width: min(420px, 46vh); justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 0;">
-        <div onClick="{{ revealEgg }}" title="{{ eggHint }}" style="position: relative; aspect-ratio: 1 / 1; width: 100%; display: grid; place-items: center; min-width: 0; cursor: {{ eggCursor }};">
-          <sc-if value="{{ eggRings }}" hint-placeholder-val="{{ true }}">
-            <svg viewBox="0 0 340 340" style="position: absolute; inset: 0; width: 100%; height: 100%; color: {{ e.hue }};" fill="none" stroke="currentColor" strokeLinecap="round" aria-hidden="true">
-              <path d="M150 136 A34 34 0 0 1 150 204" strokeWidth="7" opacity="0.95"></path>
-              <path d="M150 110 A60 60 0 0 1 150 230" strokeWidth="6.4" opacity="0.68"></path>
-              <path d="M150 84 A86 86 0 0 1 150 256" strokeWidth="5.8" opacity="0.47"></path>
-              <path d="M150 58 A112 112 0 0 1 150 282" strokeWidth="5.2" opacity="0.32"></path>
-              <path d="M150 32 A138 138 0 0 1 150 308" strokeWidth="4.6" opacity="0.2"></path>
-              <path d="M150 6 A164 164 0 0 1 150 334" strokeWidth="4" opacity="0.11"></path>
-              <circle cx="150" cy="170" r="6" fill="currentColor" stroke="none"></circle>
+        <button type="button" class="error-visual" onClick="{{ revealEgg }}" aria-label="{{ eggLabel }}" title="{{ eggLabel }}" style="color: {{ e.hue }}; cursor: {{ eggCursor }};">
+          <sc-if value="{{ eggLogo }}" hint-placeholder-val="{{ true }}">
+            <svg data-error-logo viewBox="0 0 56 56" style="width: 78%; height: 78%; display: block; overflow: visible; color: inherit;" aria-hidden="true">
+              <defs>
+                <filter id="error-logo-glow" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="1.8"></feGaussianBlur>
+                </filter>
+              </defs>
+              <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.34" filter="url(#error-logo-glow)">
+                <path d="M18 18 A10 10 0 0 1 18 38"></path>
+                <path d="M18 10 A18 18 0 0 1 18 46"></path>
+                <path d="M18 3 A25 25 0 0 1 18 53"></path>
+                <circle cx="18" cy="28" r="2.8" fill="currentColor" stroke="none"></circle>
+              </g>
+              <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M18 18 A10 10 0 0 1 18 38"></path>
+                <path d="M18 10 A18 18 0 0 1 18 46"></path>
+                <path d="M18 3 A25 25 0 0 1 18 53"></path>
+                <circle cx="18" cy="28" r="2.8" fill="currentColor" stroke="none"></circle>
+              </g>
             </svg>
-            <span style="position: relative; font-family: 'Source Code Pro', monospace; font-size: clamp(46px, 9vw, 74px); font-weight: 600; letter-spacing: -0.03em; color: var(--fg1); text-shadow: 0 0 14px var(--bg), 0 0 14px var(--bg), 0 0 8px var(--bg), 0 0 4px var(--bg);">{{ e.code }}</span>
           </sc-if>
           <sc-if value="{{ eggFound }}" hint-placeholder-val="{{ false }}">
-            <svg viewBox="0 0 340 340" style="position: absolute; inset: 0; width: 100%; height: 100%; color: {{ e.hue }};" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <sc-for list="{{ motif }}" as="m" hint-placeholder-count="5">
-                <path d="{{ m.d }}" strokeWidth="{{ m.w }}" opacity="{{ m.o }}" strokeDasharray="{{ m.dash }}" transform="{{ m.rot }}"></path>
-              </sc-for>
+            <svg data-error-artwork class="error-art" viewBox="0 0 1024 1024" style="width: 100%; height: 100%; display: block; overflow: visible; color: inherit;" aria-hidden="true">
+              <defs>
+                <filter id="error-art-glow" x="-18%" y="-18%" width="136%" height="136%">
+                  <feGaussianBlur stdDeviation="12"></feGaussianBlur>
+                </filter>
+                <mask id="error-art-mask" style="mask-type: luminance;">
+                  <image data-error-image x="0" y="0" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"></image>
+                </mask>
+              </defs>
+              <rect x="0" y="0" width="1024" height="1024" fill="currentColor" opacity="0.34" mask="url(#error-art-mask)" filter="url(#error-art-glow)"></rect>
+              <rect x="0" y="0" width="1024" height="1024" fill="currentColor" mask="url(#error-art-mask)"></rect>
             </svg>
           </sc-if>
-        </div>
+        </button>
           <div style="height: 3.2em; display: flex; align-items: flex-start; justify-content: center; width: 100%;">
             <sc-if value="{{ eggFound }}" hint-placeholder-val="{{ false }}">
               <span style="display: flex; align-items: flex-start; gap: 9px; max-width: 34ch; font-family: 'Source Code Pro', monospace; font-size: 12px; line-height: 1.55; color: {{ e.hue }}; text-align: left;">
@@ -195,7 +240,23 @@
 class Component extends DCLogic {
   state = { code: '404', theme: 'dark', sheet: false };
 
-  componentDidMount() { this.applyTheme(this.state.theme); }
+  componentDidMount() {
+    this.applyTheme(this.state.theme);
+    this.syncArtwork();
+  }
+
+  componentDidUpdate() { this.syncArtwork(); }
+
+  artworkPath() { return './assets/error-pages/' + this.state.code + '.webp'; }
+
+  syncArtwork() {
+    try {
+      const path = this.artworkPath();
+      document.querySelectorAll('svg[data-error-artwork] image[data-error-image]').forEach(image => {
+        image.setAttribute('href', path);
+      });
+    } catch (e) {}
+  }
 
   applyTheme(t) {
     try { document.documentElement.setAttribute('data-ledger-theme', t); } catch (e) {}
@@ -429,23 +490,23 @@ class Component extends DCLogic {
     const found = this.found();
     const n = errs.filter(e => found[e.code]).length;
 
+    const eggFound = eggsOn && !!s.open;
+    const eggLabel = eggsOn
+      ? (s.open ? 'Hide ' + cur.code + ' illustration' : 'Reveal ' + cur.code + ' illustration')
+      : cur.code + ' error logo';
+
     return {
       eggsOn: eggsOn,
-      eggFound: eggsOn && !!s.open,
-      eggRings: !(eggsOn && s.open),
+      eggFound: eggFound,
+      eggLogo: !eggFound,
       eggNote: Component.NOTES[cur.code] || '',
-      motif: (Component.MOTIFS[cur.code] || []).map(m => ({
-        d: m.d, w: m.w, o: m.o,
-        dash: m.dash || 'none',
-        rot: m.rot ? 'rotate(' + m.rot + ' 170 170)' : 'rotate(0 170 170)'
-      })),
       revealEgg: () => {
         if (!eggsOn) return;
         if (!s.open) this.reveal(cur.code);
         this.setState({ open: !s.open });
       },
       eggCursor: eggsOn ? 'pointer' : 'default',
-      eggHint: eggsOn ? (s.open ? 'Back to the rings' : 'Something is in the rings') : '',
+      eggLabel: eggLabel,
       showCount: eggsOn && n > 0,
       countLabel: n + ' of ' + errs.length + ' found',
 

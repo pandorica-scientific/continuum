@@ -293,10 +293,24 @@ export function proveStatement(statement: ParsedStatement, facts?: LexicalFacts)
 	checks.push(...lexical);
 	const lexicallyUnsound = lexical.some((c) => c.status === 'fail');
 
+	// Evidence that CONTRADICTS the rows is fatal, whatever else passed.
+	//
+	// A running chain closes over the rows it has, so it cannot see a movement
+	// missing from the END — every remaining step still follows. The printed
+	// closing balance can see it, and does. A real German statement read 9 of
+	// its 10 movements, closed its chain perfectly, disagreed with its own
+	// closing balance, and was rated P3: strong enough to file, with a
+	// transaction missing. Unavailable evidence is fine; contradicted evidence
+	// is not.
+	const contradicted =
+		(hasEndpoints && !endpointsHold) ||
+		(totalsStated && !(creditsHold && debitsHold)) ||
+		(countStated && !countHolds);
+
 	// Ranked lexicographically: the class is decided by evidence, never by a
 	// weighted score that could let a well-labelled failure outrank a proof.
 	let proofClass: ProofClass = 'P0';
-	if (!lexicallyUnsound) {
+	if (!lexicallyUnsound && !contradicted) {
 		const corroborated = (totalsStated && creditsHold && debitsHold) || (countStated && countHolds);
 		if (chain.holds && endpointsHold && corroborated) proofClass = 'P4';
 		else if (chain.holds) proofClass = 'P3';
