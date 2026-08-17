@@ -16,8 +16,33 @@ export const MODULES = {
 	home: { emoji: '🏠', label: 'Home Assistant', note: 'devices and meter readings' },
 	calendar: { emoji: '📅', label: 'Calendar', note: 'generated events and the ics feed' },
 	tax: { emoji: '🧾', label: 'Tax', note: 'yearly statements per person and country' },
-	documents: { emoji: '🗂️', label: 'Documents', note: 'the archive with expiry dates' }
+	documents: { emoji: '🗂️', label: 'Documents', note: 'the archive with expiry dates' },
+	contacts: {
+		emoji: '📇',
+		label: 'Contacts',
+		note: 'people and companies, linked to what they touch'
+	}
 } as const;
+
+/**
+ * Categories a hand-written calendar event may carry, each supplying a marker.
+ *
+ * A fixed registry rather than a free emoji field, for two reasons: the marker
+ * keeps a reliable meaning, and nothing unvalidated reaches a SUMMARY line that
+ * a calendar server will parse. Generated events do not use these — their marker
+ * comes from the module that produced them.
+ */
+export const EVENT_CATEGORIES = {
+	household: { label: 'Household', emoji: '🏠' },
+	money: { label: 'Money', emoji: '💰' },
+	travel: { label: 'Travel', emoji: '✈️' },
+	health: { label: 'Health', emoji: '🏥' },
+	admin: { label: 'Admin', emoji: '📋' },
+	social: { label: 'Social', emoji: '🎉' }
+} as const;
+
+export type EventCategoryKey = keyof typeof EVENT_CATEGORIES;
+export const EVENT_CATEGORY_KEYS = Object.keys(EVENT_CATEGORIES) as EventCategoryKey[];
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
 
@@ -119,10 +144,15 @@ export const AREAS: Area[] = [
 	},
 	{
 		key: 'calendar',
-		label: 'Calendar',
+		label: 'Calendar & Contacts',
 		icon: 'calendar',
 		hue: 'indigo',
-		screens: [{ path: '/calendar', label: 'Calendar', icon: 'calendar', module: 'calendar' }]
+		// Contacts lives here rather than in Admin: the people you have dates with
+		// and the people you call are the same people, and Admin is chrome.
+		screens: [
+			{ path: '/calendar', label: 'Calendar', icon: 'calendar', module: 'calendar' },
+			{ path: '/contacts', label: 'Contacts', icon: 'people', module: 'contacts' }
+		]
 	},
 	{
 		key: 'admin',

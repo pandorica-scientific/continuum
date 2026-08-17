@@ -4,6 +4,8 @@ import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
+	contact,
+	contactTenancy,
 	document,
 	documentProperty,
 	loan,
@@ -235,10 +237,20 @@ export const load: PageServerLoad = async ({ url }) => {
 		let lease = null;
 		if (currentTenancy) {
 			const days = currentTenancy.endDate ? daysUntil(currentTenancy.endDate) : null;
+			// How to reach the tenant now lives in the contacts module rather than in
+			// one free-text column, so a tenancy can carry a mobile, a landline and
+			// an agent without them being crammed into a single string.
+			const tenantContacts = await db
+				.select({ id: contact.id, name: contact.name, phone: contact.phone, email: contact.email })
+				.from(contactTenancy)
+				.innerJoin(contact, eq(contact.id, contactTenancy.contactId))
+				.where(eq(contactTenancy.tenancyId, currentTenancy.id))
+				.orderBy(contact.name);
+
 			lease = {
 				tenantName: currentTenancy.tenantName,
 				tenantInitials: initialsFor(currentTenancy.tenantName),
-				tenantContact: currentTenancy.tenantContact,
+				tenantContacts,
 				state: days === null ? 'open-ended' : days < 0 ? 'lease ended' : `ends in ${days} days`,
 				hue:
 					days === null
@@ -470,7 +482,6 @@ export const actions: Actions = {
 			id: randomUUID(),
 			propertyId,
 			tenantName,
-			tenantContact: String(form.get('tenantContact') ?? '').trim(),
 			rentMinor: rent,
 			depositMinor: deposit,
 			startDate: String(form.get('startDate') ?? '').trim() || null,

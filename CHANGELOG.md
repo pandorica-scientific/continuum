@@ -1,5 +1,205 @@
 # Changelog
 
+## 0.3.7 — unreleased
+
+A contacts module, and a calendar you can write in that stays in step with
+iCloud and Google.
+
+### Added
+
+- **Contacts.** The people and companies a household deals with — name, photo,
+  work place, job title, phone, email, address, notes — each linkable to the
+  tenancies, properties, loans and accounts they touch. Search folds diacritics,
+  so `rehor` finds Řehoř and `lukasz` finds Łukasz; an address book that only
+  answers to input with the háček already typed is no use to this household.
+- **A writable shared calendar.** Anyone in the household can add events, with
+  recurrence — daily, weekly on chosen days, monthly by date or by weekday
+  position, yearly — and edit or cancel a single occurrence, this and all later
+  ones, or the whole series. The ledger's own generated events keep appearing
+  alongside them.
+- **Two-way calendar sync** with iCloud (and any CalDAV server — Fastmail,
+  Nextcloud, Radicale) and with Google Calendar. Events written here appear
+  there and the other way round. Setup for iCloud is one app-specific password;
+  Google needs a Cloud project of your own, and `docs/google-calendar-setup.md`
+  walks through it.
+- **Continuum's own events are marked** with the module emoji and `· Continuum`,
+  so a mortgage payment is tellable from "dentist, 3pm" in a shared calendar.
+  Switchable off in Settings.
+- **Moving a date in a connected calendar can change the ledger.** Dragging a
+  loan payment, a lease end, a renewal notice or a document expiry writes that
+  date back. Nothing else does — a retitled payment is reverted, because the
+  ledger owns what its own events say.
+- **Error screens.** A wrong address, an expired session, a server that fell
+  over — each now gets a page that says what happened, what to do about it, and
+  the address and time to quote if it needs reporting, instead of the framework's
+  bare status line. A 500 also carries a short reference printed beside the stack
+  in the log, so a report can be matched to the entry; the stack itself never
+  reaches the browser, where it would name file paths and, in a query, real
+  figures. Nothing else earns a reference: a mistyped address is not a fault.
+  There is something hidden in the rings.
+- **Setup instructions live behind an ⓘ.** The three-line caption under a field
+  is read once and then in the way forever. The reasoning — what an API token
+  can reach, what a backup contains, what Google needs before it will authorise
+  anything — is now one hover away from a heading that stays short.
+
+### Changed
+
+- **One quick-add button, on every screen.** The header's Import statement
+  button is gone; the floating plus opens a menu of what can be added from here
+  — bank statement, XTB statement, calendar event, contact, document — filtered
+  to the modules that are switched on. Importing is no longer confined to
+  Overview and Money, which it was only because a bare unlabelled plus on the
+  Property screen said nothing; a named list says what it does.
+- **Google's setup instructions were rewritten from a connection that worked**,
+  in the order it worked in. Each line corresponds to something that went wrong
+  first: the narrow `calendar.app.created` scope rather than full calendar
+  access, publishing the consent screen so authorisation does not expire every
+  seven days, and creating the calendar rather than picking from a list the
+  scope will not let anyone read.
+
+### Fixed
+
+- **The published `.ics` feed gave events unstable identities.** UIDs were
+  numbered by position in the generated list, so adding a loan renumbered every
+  later event on the same day and subscribers saw them deleted and recreated.
+  Cosmetic in a read-only feed; it would have been duplication and lost edits
+  once sync existed.
+- **Two events from one tenancy shared a UID.** A lease end and its renewal
+  notice come from the same rule and the same row, and the feed published both
+  under one identity — so a subscriber saw only one of them.
+
+The rest of this list came out of connecting real iCloud and Google accounts.
+Every one of them was silent: the tests, the type checker and a code review all
+passed over them.
+
+- **Google refused every event.** All-day events were written ending on the day
+  they end. RFC 5545 makes `DTEND` exclusive for a date, so a one-day event ends
+  the following day; iCloud tolerated the difference, Google answered 400 and
+  the first sync of a real calendar wrote nothing at all.
+- **Sync rewrote every event, every pass, forever.** Events were pushed with the
+  module emoji and `· Continuum` on the title but hashed without them, so the
+  copy that came back never matched what was sent and the whole calendar looked
+  changed on each pass — dozens of writes a minute against an idle calendar.
+- **Events created in iCloud or Google never arrived.** Reconciliation walked
+  the local events and the known links, so anything that existed only at the far
+  end was never in the set being compared.
+- **A single rejected write wedged that event for good.** After a 412 the stored
+  ETag stayed stale, so every later attempt was refused for the same reason.
+- **A failed push reported success.** Refusals that were not conflicts were
+  counted and discarded, so a sync that wrote nothing said it had finished.
+- **No iCloud calendar could be chosen.** Discovery took the first `href` out of
+  each response rather than the one inside the property it asked for, which is
+  the principal's own address — so the list of calendars came back empty.
+- **"Choose a calendar" did nothing on Google.** It listed the account's
+  calendars first, which the narrow scope forbids; the 403 left the button dead
+  with nothing said. It creates the calendar instead, which is exactly what that
+  scope is for.
+- **Approximate exchange rates blamed the internet.** A figure older than the
+  first rate this instance ever stored and a currency with no rate at all were
+  reported as one thing, under one instruction to check the connection. They are
+  now told apart: one is worth checking, the other cannot be fixed by anyone,
+  because the Czech National Bank publishes forward and a past day cannot gain a
+  rate of its own. The warning can also be dismissed, and stays dismissed —
+  including across a reload, where it used to flash up before vanishing.
+- **A white bar down the right of every scrolling page**, and a floating button
+  that jumped as pages gained or lost a scrollbar. The document never declared
+  its colour scheme, so the browser drew a light scrollbar over a dark app; the
+  gutter is now always reserved, so nothing shifts when it appears.
+- **The ⓘ bubble was unreadable and opened off the edge of the screen.** It used
+  a translucent token meant to tint a page background, so the page showed through
+  the text, and it always opened the same way regardless of the room available.
+
+The rest came out of a review of the sync engine before it met a real account
+for long. None of them had a test; several would have destroyed data quietly.
+
+- **One conflict wedged an account for good.** An event edited here and deleted
+  on the phone is an ordinary outcome, and it is recorded as a conflict — where
+  one side is genuinely nothing. That was written as SQL NULL into a NOT NULL
+  column, inside the pass's single commit transaction, so the whole pass rolled
+  back: the cursor never advanced, nothing was applied, and every event was sent
+  again on the next pass, which failed in exactly the same place, every minute,
+  forever.
+- **An expired Google sync token deleted a year of events.** When Google retires
+  a sync token — routine, and documented — the recovery is to list everything
+  again. That listing reaches back ninety days, and anything it did not mention
+  was taken to have been deleted. Events older than the window are now left
+  alone: silence is not deletion. A failed reconcile no longer reports an empty
+  calendar either, which had the same effect on both providers at once.
+- **Past mortgage payments were deleted out of the household's own calendar.**
+  Generated events are published over a rolling window, and one ageing off the
+  back of it looked exactly like an event deleted here — so a deletion was sent
+  for it. One per loan per month, indefinitely, silently.
+- **A payment day was rewritten on every pass.** A CalDAV all-day event came back
+  a day shorter than it was sent, which read as somebody having moved it, which
+  wrote a new payment day into the loan. A loan paid on the 31st was moved to the
+  28th by February and stayed there.
+- **Deleting an event on a phone did nothing.** CalDAV reports a deletion as a
+  path and nothing else, and that path was never matched back to the event, so
+  the deletion was dropped while the cursor moved past it. The event stayed here
+  for good, and a Continuum event someone had deliberately deleted came back.
+- **No recurring event with an exception ever reached Google.** Its override ids
+  used a character Google refuses, so every one was rejected. They are also keyed
+  on the occurrence now, not on its position in a list, so removing one override
+  no longer renames the others.
+- **A remote change to a recurring event destroyed its exceptions.** An
+  incremental page carries only what changed, and it was read as the whole
+  series, so a retitled series lost every cancelled and moved occurrence — and a
+  changed occurrence with an unchanged series was dropped entirely.
+- **Weekly events from other calendars lost three of every four occurrences.** A
+  weekly rule that names no weekday is valid, and is what Apple Calendar sends;
+  it was expanded roughly monthly instead. Events in the first hours of a month
+  could also go missing from both that month and the one before.
+- **New events were saved at the wrong time.** An event's instant was built in
+  the server's timezone rather than the household's, so a 09:00 event showed as
+  11:00 — and 13:00 after the next edit, walking forward each time.
+- **"This and following" lost overrides and miscounted.** Splitting a series
+  deleted every exception including the ones before the split, and gave the
+  second half the original occurrence count rather than what was left of it, so
+  ten occurrences ran for twelve. Editing the recurrence during such an edit was
+  discarded outright.
+- **Two sync passes could run at once.** The lock meant to prevent it was taken
+  outside any transaction and released immediately, so it excluded nothing.
+- **A failed delete was recorded as a success**, orphaning the event on the
+  server, clearing the error and making sure nothing tried again.
+- **A rejected contact form pre-filled the next contact opened** with the details
+  from the one that failed — and saving wrote them onto that person's row.
+- **Dismissing the harmless exchange-rate warning silenced the serious one** for
+  the same currency, for a year, so holdings could be counted at face value with
+  nothing on screen to say so.
+- **Nothing could clear a sync conflict.** The briefing raised them and sent
+  people to the calendar, which had no way to mark them seen, so the first one
+  stayed up permanently.
+- **Sync events were written with a timezone declaration RFC 5545 forbids**, and
+  a strict client may refuse the whole event over it. A time sent by another
+  client with a named zone was also read as though it were UTC.
+- **How often calendars are polled could be read but never set.** It is a field
+  in Settings now.
+
+### Upgrading
+
+Three things to know before updating an existing install.
+
+- **`tenancy.tenantContact` is gone.** The migration creates a real contact from
+  each non-empty value first — named after the tenant, with the original text
+  preserved verbatim in the contact's notes — and links it to the tenancy.
+  Nothing is parsed or guessed at, so nothing is lost; but the column itself is
+  dropped, and how to reach a tenant now lives in Contacts.
+- **PostgreSQL needs the `unaccent` extension.** Migration `0036` runs
+  `create extension if not exists unaccent`, which requires rights the
+  application user may not have on a locked-down server. If the migration stops
+  there, have someone with the rights run this once against the database and
+  then update again:
+
+  ```sql
+  create extension if not exists unaccent;
+  ```
+
+  The stock `postgres:17-alpine` image in `compose.yaml` needs nothing extra.
+
+- **Migration `0041` adds one nullable column** to `calendar_account`, which
+  records the pass currently holding an account so two cannot run at once.
+  Nothing is rewritten and no existing data is touched.
+
 ## 0.3.6 — unreleased
 
 A colour pass over both themes, and a run of fixes found by using the thing.

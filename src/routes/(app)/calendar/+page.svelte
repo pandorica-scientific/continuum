@@ -4,43 +4,134 @@
 	import { selectedDayForMonth } from '$lib/ui/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import EventDialog from '$lib/components/EventDialog.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
+	import ActionError from '$lib/components/ActionError.svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
+
+	// Which occurrence the editor is open on: an occurrence, 'new', or null.
+	let editing = $state<'new' | { eventId: string; recurrenceId: string } | null>(null);
+
+	const editingOccurrence = $derived.by(() => {
+		// Captured before the closure: narrowing `editing` in the condition does not
+		// survive into the callback, because it is a reassignable $state.
+		const target = editing;
+		if (!target || target === 'new') return undefined;
+		return data.occurrences.find(
+			(o) => o.eventId === target.eventId && o.recurrenceId === target.recurrenceId
+		);
+	});
 
 	// Clicking a day filters the agenda; clicking it again clears.
 	let selectedDay = $derived<string | null>(null);
 	$effect(() => {
 		selectedDay = selectedDayForMonth(
 			selectedDay,
-			data.cells.flatMap((cell) => (cell ? [cell.date] : []))
+			data.cells.flatMap((cell) => (cell ? [cell.date] : [])),
+			data.today
 		);
 	});
 
+	// One list, both kinds, in date order. A day's agenda is what is happening
+	// that day; which half of the app wrote each line is a detail shown on the row.
 	const agenda = $derived(
-		selectedDay ? data.agenda.filter((e) => e.date === selectedDay) : data.agenda
+		[
+			...data.agenda.map((e) => ({
+				kind: 'ledger' as const,
+				date: e.date,
+				day: e.day,
+				time: null as string | null,
+				marker: e.marker,
+				label: e.label,
+				occurrence: undefined
+			})),
+			...data.occurrences.map((o) => ({
+				kind: 'authored' as const,
+				date: o.date,
+				day: o.date.slice(8),
+				time: o.time,
+				marker: o.marker,
+				label: o.title,
+				occurrence: o
+			}))
+		]
+			.filter((e) => !selectedDay || e.date === selectedDay)
+			.sort((a, b) =>
+				a.date === b.date ? (a.time ?? '').localeCompare(b.time ?? '') : a.date < b.date ? -1 : 1
+			)
 	);
 
 	const ledgerCount = $derived(data.agenda.length);
+	const ourCount = $derived(data.occurrences.length);
 </script>
 
 <ScreenHeader
 	title="Calendar"
-	caption="What the ledger knows is coming — written by itself, from your data."
+	caption="What the household has on, and what the ledger knows is coming."
 />
 
 <section class="sources">
 	<div class="chips">
 		<span class="chip"><span class="dot" style="background: var(--yellow);"></span>Ledger</span>
-		<span class="chip muted"
-			><span class="dot" style="background: var(--blue);"></span>Google · not connected</span
-		>
-		<span class="chip muted"
-			><span class="dot" style="background: var(--purple);"></span>iCal · not connected</span
-		>
+		<span class="chip"><span class="dot" style="background: var(--indigo);"></span>Ours</span>
+		{#each data.accounts as account (account.id)}
+			<span class="chip" class:muted={!account.connected || account.failing}>
+				<span
+					class="dot"
+					style="background: {account.failing
+						? 'var(--red)'
+						: account.connected
+							? 'var(--green)'
+							: 'var(--fg3)'};"
+				></span>
+				{account.label}
+				{account.failing
+					? '· not syncing'
+					: account.connected
+						? '· syncing'
+						: '· no calendar chosen'}
+			</span>
+		{/each}
 	</div>
-	<span class="eyebrow-caption">external sync lands in Phase 4 · the ledger feed is live below</span
-	>
+	<span class="eyebrow-caption">
+		{data.accounts.length === 0
+			? 'no calendar connected yet'
+			: `${data.accounts.filter((a) => a.connected && !a.failing).length} of ${data.accounts.length} syncing`}
+	</span>
 </section>
+
+{#if data.conflicts.length > 0}
+	<!-- The briefing raises these and sends people here, so here is where they can
+	     be cleared. Acknowledging is a button rather than a side effect of the
+	     page loading: a discarded edit and a date that changed in the ledger are
+	     things someone should have to say they have seen. -->
+	<section class="card conflicts" aria-labelledby="sync-conflicts">
+		<div class="eyebrow-row">
+			<span class="eyebrow" id="sync-conflicts">Sync noticed</span>
+			<form method="POST" action="?/acknowledgeConflicts">
+				<button class="btn" type="submit">
+					Mark {data.conflicts.length === 1 ? 'it' : 'all'} seen
+				</button>
+			</form>
+		</div>
+		{#each data.conflicts as conflict (conflict.id)}
+			<p class="conflict">
+				<span class="c-when mono">{conflict.detectedAt.slice(0, 10)}</span>
+				<span>
+					{#if conflict.resolution === 'wrote-back'}
+						<strong>{conflict.title}</strong> moved in a connected calendar, and the date was written
+						into the ledger.
+					{:else}
+						<strong>{conflict.title}</strong> was changed in two places at once; the
+						{conflict.resolution === 'local-won' ? 'version here' : 'remote version'} won and the other
+						was discarded.
+					{/if}
+				</span>
+			</p>
+		{/each}
+	</section>
+{/if}
 
 <section class="layout">
 	<div class="card cal">
@@ -52,7 +143,9 @@
 			<button type="button" class="btn" onclick={() => goto(`?m=${data.next}`, { noScroll: true })}
 				>→</button
 			>
-			<span class="count">{ledgerCount} events · all written by the ledger</span>
+			<span class="count">
+				{ledgerCount + ourCount} events · {ourCount} yours, {ledgerCount} from the ledger
+			</span>
 		</div>
 		<div class="grid">
 			{#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as w (w)}
@@ -68,7 +161,7 @@
 						class:today={cell.isToday}
 						class:selected={selectedDay === cell.date}
 						class:has-events={cell.events > 0}
-						onclick={() => (selectedDay = selectedDay === cell.date ? null : cell.date)}
+						onclick={() => (selectedDay = cell.date)}
 					>
 						<span class="mono num">{cell.num}</span>
 						<span class="dots">
@@ -87,16 +180,64 @@
 				<span class="eyebrow-caption">
 					{selectedDay ? 'click the day again to clear' : 'click a day to filter'}
 				</span>
+				<button class="btn" type="button" onclick={() => (editing = 'new')}>Add event</button>
 			</div>
+
+			<ActionError message={form?.message ?? null} />
+
+			{#if editing === 'new'}
+				<EventDialog
+					categories={data.categories}
+					tz={data.tz}
+					date={selectedDay ?? data.today}
+					onclose={() => (editing = null)}
+				/>
+			{/if}
+
 			{#each agenda as e, i (e.date + e.label + i)}
-				<div class="event">
-					<span class="mono e-date">{e.day}.</span>
-					<span class="dot" style="background: var(--yellow);"></span>
-					<span class="e-label">{e.label}</span>
-					<span class="e-source">Ledger</span>
-				</div>
+				{#if editingOccurrence && e.occurrence && e.occurrence.eventId === editingOccurrence.eventId && e.occurrence.recurrenceId === editingOccurrence.recurrenceId}
+					<!-- Keyed so opening a different occurrence remounts the form. The
+					     dialog seeds its own state from the occurrence on mount, so a
+					     reused instance would show the previous event's times. -->
+					{#key editingOccurrence.eventId + editingOccurrence.recurrenceId}
+						<EventDialog
+							categories={data.categories}
+							tz={data.tz}
+							occurrence={editingOccurrence}
+							date={e.date}
+							onclose={() => (editing = null)}
+						/>
+					{/key}
+				{:else if e.kind === 'authored'}
+					<button
+						type="button"
+						class="event event-authored"
+						onclick={() =>
+							(editing = {
+								eventId: e.occurrence!.eventId,
+								recurrenceId: e.occurrence!.recurrenceId
+							})}
+					>
+						<span class="mono e-date">{e.day}.</span>
+						<span class="dot" style="background: var(--indigo);"></span>
+						<span class="e-label">
+							{#if e.marker}<span class="e-marker">{e.marker}</span>{/if}{e.label}
+						</span>
+						{#if e.time}<span class="mono e-time">{e.time}</span>{/if}
+						<span class="e-source">{e.occurrence?.recurring ? 'Repeats' : 'Ours'}</span>
+					</button>
+				{:else}
+					<div class="event">
+						<span class="mono e-date">{e.day}.</span>
+						<span class="dot" style="background: var(--yellow);"></span>
+						<span class="e-label">
+							{#if e.marker}<span class="e-marker">{e.marker}</span>{/if}{e.label}
+						</span>
+						<span class="e-source">Ledger</span>
+					</div>
+				{/if}
 			{:else}
-				<span class="quiet">Nothing on the books {selectedDay ? 'that day' : 'this month'}.</span>
+				<span class="quiet">Nothing on the books that day.</span>
 			{/each}
 		</div>
 	</div>
@@ -126,7 +267,57 @@
 		</div>
 
 		<div class="card stack">
-			<Eyebrow emoji="🔗" label="Connected calendars" />
+			<div class="eyebrow-row">
+				<Eyebrow emoji="🔗" label="Connected calendars" />
+				<InfoHint label="What connecting a calendar does">
+					<strong class="warn">Two-way: what you write here appears there, and back.</strong>
+					<ol class="steps">
+						<li>iCloud needs one app-specific password from appleid.apple.com.</li>
+						<li>Google needs an OAuth client of your own — a few minutes in its console.</li>
+						<li>Each is set up in Settings, which explains its own steps.</li>
+					</ol>
+					<span class="docs">
+						Events this app writes are marked with their module emoji and “· Continuum”, so they are
+						tellable from your own.
+					</span>
+				</InfoHint>
+			</div>
+
+			{#each data.accounts as account (account.id)}
+				<div class="feed">
+					<span>{account.failing ? '⚠️' : account.connected ? '🔄' : '⏸️'}</span>
+					<div class="f-text">
+						<span class="f-name">{account.label}</span>
+						<span class="f-detail">
+							{#if account.failing}
+								not syncing — see Settings
+							{:else if !account.connected}
+								connected, but no calendar chosen yet
+							{:else if account.lastSyncAt}
+								{account.calendarName ? `${account.calendarName} · ` : ''}last synced
+								{new Date(account.lastSyncAt).toLocaleString('en-GB')}
+							{:else}
+								waiting for its first sync
+							{/if}
+						</span>
+					</div>
+					<span
+						class="f-state"
+						style="color: {account.failing
+							? 'var(--red)'
+							: account.connected
+								? 'var(--green)'
+								: 'var(--fg3)'};"
+					>
+						{account.failing ? 'error' : account.connected ? 'syncing' : 'paused'}
+					</span>
+				</div>
+			{/each}
+
+			<a class="btn add-calendar" href="/settings#calendars">
+				{data.accounts.length === 0 ? 'Connect Google or iCloud' : 'Add another calendar'}
+			</a>
+
 			<div class="feed">
 				<span>📆</span>
 				<div class="f-text">
@@ -136,15 +327,82 @@
 				<span class="f-state" style="color: var(--green);">published</span>
 			</div>
 			<span class="quiet">
-				Subscribe from Google or Apple Calendar with this server's address plus the path above. The
-				token in the URL is the only key — treat it like a password. Two-way Google and iCal sync
-				arrive in Phase 4.
+				The feed is read-only and needs no account: subscribe from any calendar app with this
+				server's address plus the path above. The token in the URL is the only key — treat it like a
+				password.
 			</span>
 		</div>
 	</div>
 </section>
 
 <style>
+	.add-calendar {
+		align-self: flex-start;
+		text-decoration: none;
+	}
+
+	.warn {
+		display: block;
+		margin-bottom: 6px;
+	}
+
+	.steps {
+		margin: 0;
+		padding-left: 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.docs {
+		display: block;
+		margin-top: 6px;
+		color: var(--fg3);
+	}
+
+	.event-authored {
+		background: none;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		width: 100%;
+	}
+
+	.event-authored:hover {
+		background: var(--card2);
+	}
+
+	.e-marker {
+		margin-right: 5px;
+	}
+
+	.e-time {
+		color: var(--fg3);
+		font-size: 12px;
+	}
+
+	.conflicts {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		border-color: var(--yellow);
+	}
+
+	.conflict {
+		display: flex;
+		gap: 10px;
+		margin: 0;
+		font-size: 13px;
+		color: var(--fg2);
+	}
+
+	.c-when {
+		color: var(--fg3);
+		white-space: nowrap;
+	}
+
 	.sources {
 		display: flex;
 		align-items: center;

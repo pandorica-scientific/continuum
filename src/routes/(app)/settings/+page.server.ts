@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { credential, person, session } from '$lib/server/db/schema';
@@ -27,6 +27,19 @@ import {
 import { importConfig as importConfigFile } from '$lib/server/config-file';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
+import { getCalendarMarkers } from '$lib/server/calendar';
+import {
+	calendarProviderKinds,
+	credentialIsPending,
+	deletePendingGoogleAccounts,
+	getSyncIntervalMinutes,
+	listCalendarAccounts,
+	makeCalendarProvider as makeCalendarProviderChecked,
+	providerFor,
+	runSync
+} from '$lib/server/calendar/sync';
+import { startAuth } from '$lib/server/calendar/sync/google-oauth';
+import { calendarAccount } from '$lib/server/db/schema';
 import { serverStatus } from '$lib/server/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
@@ -131,7 +144,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		lastBackup,
 		myPasskeys,
 		status,
-		tokens
+		tokens,
+		calendarAccounts,
+		calendarMarkers,
+		calendarSyncMinutes
 	] = await Promise.all([
 		// All three render only inside the isAdmin branches of this page, so a
 		// member paid for three queries to fill sections their copy never draws.
@@ -172,11 +188,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 					.where(eq(credential.personId, locals.person.id))
 			: [],
 		isAdmin ? serverStatus() : null,
-		isAdmin ? listTokens() : []
+		isAdmin ? listTokens() : [],
+		// Administrator business: a connected calendar is a credential someone
+		// entered, and the account list names where the household's diary goes.
+		isAdmin ? listCalendarAccounts() : [],
+		isAdmin ? getCalendarMarkers() : true,
+		isAdmin ? getSyncIntervalMinutes() : 15
 	]);
 
 	return {
 		isAdmin,
+		calendarAccounts,
+		calendarMarkers,
+		calendarSyncMinutes,
+		// Rendered straight from the registry, so a new provider needs no change
+		// to this screen.
+		calendarProviders: isAdmin ? calendarProviderKinds() : [],
 		passwordMinLength: passwordMinLength(),
 		enrollmentLinkDays: enrollmentLinkDays(),
 		moduleToggles: modules,
@@ -237,6 +264,220 @@ function administered<T extends Actions>(actions: T): T {
 }
 
 export const actions = administered({
+	connectCalendar: async ({ request }) => {
+		const form = await request.formData();
+		const provider = String(form.get('provider') ?? '');
+		const kind = calendarProviderKinds().find((k) => k.id === provider);
+		if (!kind) return fail(400, { message: 'Unknown calendar provider.' });
+		if (kind.oauth) return fail(400, { message: `${kind.label} is connected by authorising it.` });
+
+		// One account per provider. The form is hidden once one exists, but a stale
+		// page or a direct POST would otherwise create a second — and two accounts
+		// pointed at the same calendar each keep their own view of what they have
+		// sent, so neither can see the other's writes.
+		const existing = await db
+			.select({ id: calendarAccount.id })
+			.from(calendarAccount)
+			.where(eq(calendarAccount.provider, provider as 'icloud' | 'google'))
+			.limit(1);
+		if (existing.length > 0) {
+			return fail(409, { message: `${kind.label} is already connected. Disconnect it first.` });
+		}
+
+		// Only the fields this provider declared. Anything else in the form is
+		// ignored rather than stored, so a stray input cannot smuggle a value into
+		// the credential blob.
+		const config: Record<string, string> = {};
+		for (const field of kind.fields) {
+			const value = String(form.get(field.key) ?? '').trim();
+			if (field.required && !value) {
+				return fail(400, { message: `${field.label} is needed.` });
+			}
+			if (value) config[field.key] = value;
+		}
+
+		const built = makeCalendarProviderChecked(provider, config);
+		if (!built) return fail(400, { message: 'Could not build that provider.' });
+
+		// Probe BEFORE storing: a credential that does not work is worse than none,
+		// because the account then sits in the list looking connected.
+		const probe = await built.probe();
+		if (!probe.ok) return fail(400, { message: probe.detail });
+
+		const id = randomUUID();
+		await db.insert(calendarAccount).values({
+			id,
+			provider: provider as 'icloud' | 'google',
+			label: kind.label,
+			credential: JSON.stringify(config)
+		});
+		return { connected: true };
+	},
+
+	authoriseGoogle: async ({ request, url }) => {
+		const form = await request.formData();
+		const clientId = String(form.get('clientId') ?? '').trim();
+		const clientSecret = String(form.get('clientSecret') ?? '').trim();
+		if (!clientId || !clientSecret) {
+			return fail(400, { message: 'The OAuth client ID and secret are both needed.' });
+		}
+
+		// The same one-account-per-provider rule connectCalendar enforces, and for
+		// the same reason: the form is hidden once one exists, but a stale page or
+		// a direct POST would otherwise reach here — and here it would replace a
+		// working connection rather than create a second one.
+		const connected = await db
+			.select({ id: calendarAccount.id, credential: calendarAccount.credential })
+			.from(calendarAccount)
+			.where(eq(calendarAccount.provider, 'google'));
+		if (connected.some((row) => !credentialIsPending(row.credential))) {
+			return fail(409, { message: 'Google is already connected. Disconnect it first.' });
+		}
+
+		// Derived from the request rather than configured: it has to match the
+		// authorised redirect URI in the Cloud console character for character, and
+		// the address the browser is on is the only thing that reliably does.
+		const redirectUri = `${url.origin}/settings/google/callback`;
+		const started = startAuth(clientId, clientSecret, redirectUri);
+
+		// A half-finished row, holding the secret and the state hash while the
+		// browser is away. Any earlier ATTEMPT is cleared first so a stale pending
+		// row cannot be matched by a later callback.
+		//
+		// Only attempts. This used to delete every Google row, which meant pressing
+		// Authorise again on a WORKING connection destroyed it before the browser
+		// had even reached Google — cascading away every sync link (suppressions
+		// included, so events the household had deliberately deleted came back) and
+		// every unacknowledged conflict. Abandon the consent screen at that point
+		// and there was nothing left to go back to.
+		await deletePendingGoogleAccounts();
+		await db.insert(calendarAccount).values({
+			id: randomUUID(),
+			provider: 'google',
+			label: 'Google Calendar',
+			credential: JSON.stringify({
+				clientId,
+				clientSecret,
+				stateHash: started.pending.stateHash
+			})
+		});
+
+		redirect(303, started.url);
+	},
+
+	chooseCalendar: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const remoteCalId = String(form.get('remoteCalId') ?? '').trim();
+		const remoteCalName = String(form.get('remoteCalName') ?? '').trim() || null;
+		if (!id || !remoteCalId) return fail(400, { message: 'Which calendar?' });
+
+		// The cursor is cleared because it belongs to the OLD collection. Carrying
+		// it over would ask the new calendar for changes since a token it never
+		// issued — which at best resets, and at worst silently returns nothing.
+		await db
+			.update(calendarAccount)
+			.set({ remoteCalId, remoteCalName, cursor: null, lastSyncAt: null })
+			.where(eq(calendarAccount.id, id));
+		return { chosen: true };
+	},
+
+	listRemoteCalendars: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const provider = await providerFor(id);
+		if (!provider) return fail(404, { message: 'No such account.' });
+		try {
+			// A provider that makes its own calendar has nothing to offer a picker:
+			// under Google's narrow scope the account's calendar list is not even
+			// readable. Create one and select it in the same press.
+			if (provider.ensureCalendar) {
+				const [row] = await db
+					.select({ remoteCalId: calendarAccount.remoteCalId })
+					.from(calendarAccount)
+					.where(eq(calendarAccount.id, id))
+					.limit(1);
+
+				// Guarded on the stored id rather than by listing, because listing is
+				// exactly what this scope forbids. Without the guard a second press
+				// would make a second calendar.
+				if (!row?.remoteCalId) {
+					const made = await provider.ensureCalendar();
+					if (!made) return fail(400, { message: 'Could not create a calendar.' });
+					await db
+						.update(calendarAccount)
+						.set({ remoteCalId: made.id, remoteCalName: made.name, cursor: null, lastSyncAt: null })
+						.where(eq(calendarAccount.id, id));
+				}
+				return { created: true };
+			}
+
+			// The account id travels with the list: without it the picker cannot
+			// tell which card it belongs to, and with two accounts connected it
+			// would appear on both — and write the wrong one.
+			return { listedFor: id, calendars: await provider.listCalendars() };
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not list calendars.'
+			});
+		}
+	},
+
+	syncCalendarNow: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+
+		// The background poller skips an account with no calendar chosen; this had
+		// no such guard, so a press between authorising and creating the calendar
+		// reached the provider with nothing to write to.
+		const [row] = await db
+			.select({ remoteCalId: calendarAccount.remoteCalId })
+			.from(calendarAccount)
+			.where(eq(calendarAccount.id, id))
+			.limit(1);
+		if (!row) return fail(404, { message: 'No such account.' });
+		if (!row.remoteCalId) {
+			return fail(400, { message: 'Choose a calendar for that account first.' });
+		}
+
+		const report = await runSync(id);
+		if (!report) return fail(400, { message: 'Sync failed — see the account for the reason.' });
+		if (report.skipped) {
+			return fail(409, {
+				message: 'A sync is already running for that calendar. Give it a moment and try again.'
+			});
+		}
+		return { synced: report };
+	},
+
+	disconnectCalendar: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		// Links and conflicts cascade. The events themselves stay: they are the
+		// household's, not the connection's.
+		await db.delete(calendarAccount).where(eq(calendarAccount.id, id));
+		return { disconnected: true };
+	},
+
+	toggleCalendarMarkers: async () => {
+		const now = await getCalendarMarkers();
+		await setSetting('calendarMarkers', !now);
+		return { ok: true };
+	},
+
+	// getSyncIntervalMinutes has read this setting since sync was added and
+	// nothing anywhere wrote it, so the documented "a household on a metered
+	// connection may want it slower" was not actually available to anyone.
+	setCalendarInterval: async ({ request }) => {
+		const form = await request.formData();
+		const minutes = Number(form.get('minutes'));
+		if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+			return fail(400, { message: 'Poll between 1 and 1440 minutes.' });
+		}
+		await setSetting('calendarSyncMinutes', Math.round(minutes));
+		return { ok: true };
+	},
+
 	createApiToken: async ({ request }) => {
 		const form = await request.formData();
 		const { raw } = await createToken(String(form.get('label') ?? ''));

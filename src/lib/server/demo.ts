@@ -8,6 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { db } from '$lib/server/db';
 import { initialsFor } from '$lib/people';
 import {
+	contact,
+	contactTenancy,
 	account,
 	brokerImportState,
 	document,
@@ -242,17 +244,39 @@ export async function seedDemo(): Promise<void> {
 		paymentMinor: 5445600n
 	});
 
+	const tenancyB = randomUUID();
 	await db.insert(tenancy).values({
-		id: randomUUID(),
+		id: tenancyB,
 		propertyId: flatB,
 		tenantName: 'Martin Dvořák',
-		tenantContact: '+420 777 000 111',
 		rentMinor: 1650000n,
 		depositMinor: 3300000n,
 		startDate: '2025-06-01',
 		endDate: monthShift(thisMonth, 10) + '-01',
 		renewalNoticeDate: monthShift(thisMonth, 7) + '-01'
 	});
+
+	// The tenant, and one company the household deals with. Both carry diacritics
+	// on purpose: the demo is where someone first tries the search, and folding
+	// "dvorak" onto "Dvořák" is the thing worth discovering.
+	const tenantContactId = randomUUID();
+	await db.insert(contact).values([
+		{
+			id: tenantContactId,
+			name: 'Martin Dvořák',
+			phone: '+420 777 000 111',
+			email: 'martin.dvorak@example.cz',
+			notes: 'Tenant, Flat B.'
+		},
+		{
+			id: randomUUID(),
+			name: 'Jana Řehořová',
+			organisation: 'Česká spořitelna',
+			jobTitle: 'Mortgage adviser',
+			phone: '+420 800 207 207'
+		}
+	]);
+	await db.insert(contactTenancy).values({ contactId: tenantContactId, tenancyId: tenancyB });
 	await db.insert(propertyBill).values([
 		{ id: randomUUID(), propertyId: flatA, label: 'SVJ fee & repair fund', amountMinor: 485000n },
 		{ id: randomUUID(), propertyId: flatA, label: 'Electricity advance', amountMinor: 240000n },

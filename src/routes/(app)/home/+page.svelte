@@ -3,6 +3,7 @@
 	import { submitAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 
 	let { data, form } = $props();
@@ -41,12 +42,14 @@
 
 {#if !data.configured}
 	<section class="card setup">
-		<Eyebrow emoji="🔌" label="Connect your smart home" />
-		<p class="quiet">
-			Continuum reads energy, water, climate and sensors, controls devices, and feeds the lived-in
-			flat's meter readings into its bills. Platforms plug in behind one interface — Home Assistant
-			is the first; the demo home shows the screen without any hardware.
-		</p>
+		<div class="eyebrow-row">
+			<Eyebrow emoji="🔌" label="Connect your smart home" />
+			<InfoHint label="What connecting a smart home does">
+				Continuum reads energy, water, climate and sensors, controls devices, and feeds the lived-in
+				flat's meter readings into its bills. Platforms plug in behind one interface — Home
+				Assistant is the first; the demo home shows the screen without any hardware.
+			</InfoHint>
+		</div>
 		<form method="POST" action="?/configure" use:enhance class="stack">
 			<label
 				><span>Home for meter readings</span>

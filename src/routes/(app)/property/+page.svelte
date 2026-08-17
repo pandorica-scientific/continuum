@@ -191,7 +191,17 @@
 							<span class="avatar">{data.detail.lease.tenantInitials}</span>
 							<div class="t-names">
 								<span class="t-name">{data.detail.lease.tenantName}</span>
-								<span class="t-contact">{data.detail.lease.tenantContact}</span>
+								{#if data.detail.lease.tenantContacts.length}
+									{#each data.detail.lease.tenantContacts as c (c.id)}
+										<span class="t-contact">
+											<a href="/contacts?q={encodeURIComponent(c.name)}">{c.name}</a>
+											{#if c.phone}<a class="mono" href="tel:{c.phone}">{c.phone}</a>{/if}
+											{#if c.email}<a href="mailto:{c.email}">{c.email}</a>{/if}
+										</span>
+									{/each}
+								{:else}
+									<a class="t-contact" href="/contacts">Add a contact</a>
+								{/if}
 							</div>
 						</div>
 						<div class="facts">
@@ -213,12 +223,10 @@
 							<label
 								><span>Tenant</span><input name="tenantName" placeholder="Martin Dvořák" /></label
 							>
-							<label
-								><span>Contact</span><input
-									name="tenantContact"
-									placeholder="+420 … · email"
-								/></label
-							>
+							<!-- How to reach the tenant is a contact record now, not a string on
+						     the tenancy: it is attached from the Contacts screen once the
+						     tenancy exists, so a tenant with two numbers and an agent is
+						     representable. -->
 							<label
 								><span>Rent / month</span><input
 									name="rent"

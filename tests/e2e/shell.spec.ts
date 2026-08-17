@@ -82,33 +82,33 @@ test('the sub-tabs scroll rather than wrap when they do not fit', async ({ page 
 
 // Importing belongs to Overview and Money. On Property or Retirement a
 // floating button over the screen is just something in the way.
-test('quick add is offered where importing belongs, and nowhere else', async ({ page }) => {
-	await page.goto('/overview');
-	await expect(page.getByRole('link', { name: 'Quick add' })).toBeVisible();
+// Quick add is now on EVERY screen, because it opens a named menu rather than
+// being a bare plus whose meaning depended on where you were standing.
+test('quick add is offered on every screen', async ({ page }) => {
+	for (const path of ['/overview', '/cashflow', '/loans', '/retirement']) {
+		await page.goto(path);
+		await expect(page.getByRole('button', { name: 'Quick add' }), path).toBeVisible();
+	}
 
 	await page.goto('/loans');
-	await expect(page.getByRole('link', { name: 'Quick add' })).toHaveCount(0);
-	await expect(page.getByRole('link', { name: 'Import statement' })).toHaveCount(0);
-
-	await page.goto('/cashflow');
-	await page.getByRole('link', { name: 'Quick add' }).click();
+	await page.getByRole('button', { name: 'Quick add' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Bank statements' })).toBeVisible();
+	await page.getByRole('menuitem', { name: 'Bank statements' }).click();
 	await expect(page).toHaveURL(/\/import/);
 });
 
-// Both the quick-add button and the header button lead to /import, which 404s
-// when the module is off. Neither may be left pointing at it.
-test('quick add and the header button go with the import module', async ({ page }) => {
+test('the menu offers only what is switched on', async ({ page }) => {
 	await page.goto('/settings');
 	await page.locator('.module-row', { hasText: 'Import' }).getByRole('switch').click();
 
-	// A Money screen, where both would otherwise be offered.
+	// An entry leading to a switched-off module would 404.
 	await page.goto('/cashflow');
-	await expect(page.getByRole('link', { name: 'Quick add' })).toHaveCount(0);
-	await expect(page.getByRole('link', { name: 'Import statement' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Quick add' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Bank statements' })).toHaveCount(0);
 
 	await page.goto('/settings');
 	await page.locator('.module-row', { hasText: 'Import' }).getByRole('switch').click();
 	await page.goto('/cashflow');
-	await expect(page.getByRole('link', { name: 'Quick add' })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Import statement' })).toBeVisible();
+	await page.getByRole('button', { name: 'Quick add' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Bank statements' })).toBeVisible();
 });

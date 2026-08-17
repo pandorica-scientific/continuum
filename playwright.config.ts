@@ -16,7 +16,17 @@ export default defineConfig({
 		{
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
-			testIgnore: /accounts|passkey|board/
+			testIgnore: /accounts|passkey|board|errors/
+		},
+		// The error screens need a signed-in session, which the wizard in
+		// flow.spec.ts is what creates. Alphabetical order would put this file
+		// first, before that session exists, so it says so instead of relying on
+		// the name.
+		{
+			name: 'errors',
+			use: { viewport: { width: 1440, height: 900 } },
+			testMatch: /errors/,
+			dependencies: ['desktop']
 		},
 		// Account management and passkeys build on the household the wizard
 		// creates in flow.spec.ts, so they wait for `desktop` rather than relying

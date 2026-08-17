@@ -1,4 +1,4 @@
-import { redirect, type Handle, type ServerInit } from '@sveltejs/kit';
+import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
 import { building } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { validateSession } from '$lib/server/auth';
@@ -65,6 +65,19 @@ async function boot(): Promise<void> {
 		meter().catch((err) => console.warn('Meter bill sync failed:', err.message ?? err));
 	void meterTick();
 	setInterval(meterTick, 60 * 60 * 1000);
+
+	// Connected calendars. The tick is every minute and cheap — whether a pass
+	// actually runs is decided by each account's own last-sync time against the
+	// configured interval, so changing that setting takes effect without a
+	// restart. An account with no calendar chosen is skipped rather than failed.
+	const calendars = async () => {
+		const { syncAllAccounts } = await import('$lib/server/calendar/sync');
+		return syncAllAccounts();
+	};
+	const calendarTick = () =>
+		calendars().catch((err) => console.warn('Calendar sync failed:', err.message ?? err));
+	void calendarTick();
+	setInterval(calendarTick, 60 * 1000);
 
 	// Today's net worth, for the month-on-month delta. One row per day, upserted
 	// — it used to be written by computeNetWorth() itself, which the app layout
@@ -138,3 +151,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+// An unexpected error becomes a short reference, printed to the log beside the
+// stack and shown on the error screen. Two halves of one pair: the stack never
+// reaches the browser — it can name file paths and, in a query, real figures —
+// and the reference is useless on its own without the log entry it points at.
+//
+// SvelteKit routes 404s through here as well, and those are neither unexpected
+// nor worth a stack in the log: a reference invites somebody to report a typed
+// address as a fault, and a log line per bad URL buries the real errors. So
+// only a server-side failure earns one.
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	if (status < 500) return { message };
+
+	// Two four-character groups: long enough not to collide within one log file,
+	// short enough to read down a phone to somebody.
+	const reference = `${rand()}·${rand()}`;
+	console.error(`[${reference}] ${status} ${event.request.method} ${event.url.pathname}`, error);
+	return { message, reference };
+};
+
+function rand(): string {
+	return Math.random().toString(16).slice(2, 6).padStart(4, '0');
+}

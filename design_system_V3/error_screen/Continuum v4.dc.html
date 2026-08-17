@@ -16,34 +16,55 @@
     --bg: #0e1117; --bg2: #11161f; --side: #0a0d13;
     --card: rgba(255,255,255,0.03); --card2: rgba(255,255,255,0.06); --card3: rgba(255,255,255,0.09);
     --bd: rgba(255,255,255,0.08); --bd2: rgba(255,255,255,0.18);
-    --fg1: #e6e9ef; --fg2: #c5ccd6; --fg3: #8a96a6;
-    --green: #2ecc71; --red: #e74c3c; --yellow: #f1c40f; --blue: #3498db;
-    --purple: #9b59b6; --orange: #e67e22; --teal: #1abc9c;
+    --fg1: #e6e9ef; --fg2: #c5ccd6; --fg3: #99a4b3;
+    --green: #2ecc71; --red: #ef6a5c; --yellow: #f1c40f; --blue: #5aaee4;
+    --purple: #bd85d3; --orange: #e67e22; --teal: #1abc9c;
     --tint: rgba(52,152,219,0.18);
     --fg-inverse: #0e1117;
     --plate: rgba(14,17,23,0.86);
     --green-tint: rgba(46,204,113,0.18); --yellow-tint: rgba(241,196,15,0.18);
-    --red-tint: rgba(231,76,60,0.18); --blue-tint: rgba(52,152,219,0.18);
-    --teal-tint: rgba(26,188,156,0.18); --purple-tint: rgba(155,89,182,0.18);
+    --red-tint: rgba(239,106,92,0.18); --blue-tint: rgba(90,174,228,0.18);
+    --teal-tint: rgba(26,188,156,0.18); --purple-tint: rgba(189,133,211,0.18);
     --grey-tint: rgba(138,150,166,0.16);
+    --orange-tint: rgba(230,126,34,0.18);
+    --indigo: #7b8ce8;
+    --indigo-tint: rgba(123,140,232,0.18);
+    --brand-tint: rgba(74,134,200,0.18);
     --brand: #4a86c8;
+    --green-wash: rgba(46,204,113,0.07); --yellow-wash: rgba(241,196,15,0.07);
+    --red-wash: rgba(239,106,92,0.07); --blue-wash: rgba(90,174,228,0.07);
+    --teal-wash: rgba(26,188,156,0.07); --purple-wash: rgba(189,133,211,0.07);
+    --orange-wash: rgba(230,126,34,0.07); --indigo-wash: rgba(123,140,232,0.07);
+    --brand-wash: rgba(74,134,200,0.07);
   }
   html[data-ledger-theme="light"] {
-    --bg: #edeae3; --bg2: #e6e2d9; --side: #e9e5dd;
-    --card: #f6f4ef; --card2: #eeebe3; --card3: #e2ddd2;
-    --bd: rgba(58,50,38,0.13); --bd2: rgba(58,50,38,0.26);
-    --fg1: #23201b; --fg2: #4b463d; --fg3: #7d766a;
-    --green: #12945a; --red: #cf3b2c; --yellow: #a8800a; --blue: #2478b5;
-    --purple: #7c4795; --orange: #bd6317; --teal: #0f8a72;
-    --tint: rgba(36,120,181,0.12);
+    /* Warm paper, crisp white cards. Tints and washes are mixed from BRIGHT hues so a
+       wash reads as colour rather than mud; the dark ink values are separate and only
+       ever used as text or a 1px border on those grounds. */
+    --bg: #f3f0e9; --bg2: #eeeae1; --side: #efebe2;
+    --card: #ffffff; --card2: #f7f4ee; --card3: #ebe6dc;
+    --bd: rgba(60,52,40,0.10); --bd2: rgba(60,52,40,0.20);
+    --fg1: #1c1a16; --fg2: #494339; --fg3: #6b6559;
+    --green: #0e7a4a; --red: #bd2e21; --yellow: #8a5900; --blue: #186294;
+    --purple: #743990; --orange: #a2530f; --teal: #087059;
+    --indigo: #454fb0; --brand: #1b4f8a;
+    --tint: rgba(63,124,191,0.13);
     --fg-inverse: #ffffff;
-    --plate: rgba(237,234,227,0.9);
-    --green-tint: rgba(18,148,90,0.12); --yellow-tint: rgba(168,128,10,0.14);
-    --red-tint: rgba(207,59,44,0.12); --blue-tint: rgba(36,120,181,0.12);
-    --teal-tint: rgba(15,138,114,0.12); --purple-tint: rgba(124,71,149,0.12);
-    --grey-tint: rgba(109,120,135,0.12);
-    --brand: #1b4f8a;
+    --plate: rgba(243,240,233,0.9);
+    --green-tint: rgba(34,163,102,0.13); --yellow-tint: rgba(232,169,4,0.16);
+    --red-tint: rgba(224,80,63,0.13); --blue-tint: rgba(63,143,206,0.13);
+    --teal-tint: rgba(20,161,132,0.13); --purple-tint: rgba(165,101,196,0.13);
+    --grey-tint: rgba(120,130,145,0.13);
+    --orange-tint: rgba(224,123,30,0.14);
+    --indigo-tint: rgba(112,128,224,0.14);
+    --brand-tint: rgba(63,124,191,0.13);
+    --green-wash: rgba(34,163,102,0.05); --yellow-wash: rgba(232,169,4,0.06);
+    --red-wash: rgba(224,80,63,0.05); --blue-wash: rgba(63,143,206,0.05);
+    --teal-wash: rgba(20,161,132,0.05); --purple-wash: rgba(165,101,196,0.05);
+    --orange-wash: rgba(224,123,30,0.055); --indigo-wash: rgba(112,128,224,0.055);
+    --brand-wash: rgba(63,124,191,0.05);
   }
+
   html, body { margin: 0; padding: 0; }
   body {
     background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
@@ -87,8 +108,8 @@
 
     <nav style="display: flex; flex-direction: column; gap: 2px;">
       <sc-for list="{{ navAreas }}" as="a" hint-placeholder-count="7">
-        <button onClick="{{ a.go }}" style="display: grid; grid-template-columns: 19px minmax(0, 1fr) auto; align-items: center; gap: 11px; width: 100%; text-align: left; border: 0; cursor: pointer; padding: 9px 10px; border-radius: 8px; background: {{ a.bg }}; color: {{ a.fg }}; font-weight: {{ a.fw }}; font-family: inherit; font-size: 13.5px;" style-hover="background: var(--card2);">
-          <svg viewBox="0 0 24 24" style="width: 19px; height: 19px; flex: 0 0 19px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ a.paths }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg>
+        <button onClick="{{ a.go }}" style="position: relative; display: grid; grid-template-columns: 19px minmax(0, 1fr) auto; align-items: center; gap: 11px; width: 100%; text-align: left; border: 0; border-left: 2px solid {{ a.rail }}; cursor: pointer; padding: 9px 10px 9px 12px; border-radius: 8px; background: {{ a.chip }}; color: {{ a.fg }}; font-weight: {{ a.fw }}; font-family: inherit; font-size: 13.5px;" style-hover="background: var(--card2);">
+          <svg viewBox="0 0 24 24" style="width: 19px; height: 19px; flex: 0 0 19px; display: block; color: {{ a.iconColor }};" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ a.paths }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg>
           <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.label }}</span>
           <span style="font-family: 'Source Code Pro', monospace; font-size: 10.5px; color: var(--fg-inverse, #0e1117); background: {{ a.badgeBg }}; border-radius: 20px; padding: 1px 6px;">{{ a.badge }}</span>
         </button>
@@ -103,33 +124,38 @@
       </div>
       <div style="display: flex; align-items: center; gap: 8px; padding: 0 4px;">
         <span style="width: 24px; height: 24px; border-radius: 24px; background: var(--card3); display: grid; place-items: center; font-size: 11px;">R</span>
-        <span style="font-size: 12.5px; color: var(--fg2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ personOne }} &amp; {{ personTwo }}</span>
+        <span style="font-size: 12.5px; color: var(--fg2); min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ personOne }} &amp; {{ personTwo }}</span>
+        <button style="border: 0; background: transparent; color: var(--fg2); font-family: inherit; font-size: 11.5px; cursor: pointer; padding: 2px 0; white-space: nowrap;" style-hover="color: var(--fg1);">Sign out</button>
       </div>
     </div>
   </aside>
 
   <main style="padding: 26px 32px 60px; display: flex; flex-direction: column; gap: 26px; min-width: 0;">
 
-    <button onClick="{{ goImport }}" title="Import a statement" style="position: fixed; right: 26px; bottom: 26px; z-index: 30; width: 52px; height: 52px; border-radius: 52px; border: 1px solid var(--bd2); background: var(--brand); color: #fff; display: grid; place-items: center; cursor: pointer; font-family: inherit;" style-hover="opacity: 0.9;">
+    <sc-if value="{{ showImportButton }}" hint-placeholder-val="{{ true }}"><button onClick="{{ goImport }}" title="Import a statement" style="position: fixed; right: 26px; bottom: 26px; z-index: 30; width: 52px; height: 52px; border-radius: 52px; border: 1px solid var(--bd2); background: var(--brand); color: #fff; display: grid; place-items: center; cursor: pointer; font-family: inherit;" style-hover="opacity: 0.9;">
       <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><path d="M12,5v14"></path><path d="M5,12h14"></path></svg>
-    </button>
+    </button></sc-if>
 
+
+    <p style="margin: 0; padding: 12px 14px; border: 1px solid var(--bd2); border-left: 3px solid var(--orange); border-radius: 10px; background: var(--card3); color: var(--fg2); font-size: 13px; line-height: 1.5;">Approximate exchange rate for PLN. Amounts in that currency dated before the first stored fixing use the oldest rate on record. Rates come from the Czech National Bank and refresh every six hours.</p>
 
     <header style="display: flex; flex-direction: column; gap: 15px;">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap;">
         <div style="display: flex; flex-direction: column; gap: 4px;">
-          <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; display: flex; align-items: center; gap: 12px;"><svg viewBox="0 0 24 24" style="width: 26px; height: 26px; flex: 0 0 26px; display: block; color: var(--brand);" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ screenPaths }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg><span>{{ screenTitle }}</span></h1>
+          <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; display: flex; align-items: center; gap: 12px;"><span style="width: 42px; height: 42px; border-radius: 11px; background: {{ screenTint }}; display: grid; place-items: center; flex: 0 0 42px;"><svg viewBox="0 0 24 24" style="width: 23px; height: 23px; display: block; color: {{ screenHue }};" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ screenPaths }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg></span><span>{{ screenTitle }}</span></h1>
           <span style="font-size: 13.6px; color: var(--fg3);">{{ screenCaption }}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <span style="font-size: 12px; color: var(--fg3); border: 1px solid var(--bd); border-radius: 8px; padding: 7px 11px; background: var(--card); white-space: nowrap;">synced {{ syncedAt }}</span>
-          <button onClick="{{ goImport }}" style="display: flex; align-items: center; gap: 8px; border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);"><svg viewBox="0 0 24 24" style="width: 16px; height: 16px; flex: 0 0 16px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ iconImport }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg><span>Import statement</span></button>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg3); border: 1px solid var(--bd); border-radius: 8px; padding: 7px 11px; background: var(--card); white-space: nowrap;"><svg viewBox="0 0 24 24" style="width: 14px; height: 14px; flex: 0 0 14px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ iconClock }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg><span>synced {{ syncedAt }}</span></span>
+          <sc-if value="{{ showImportButton }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ goImport }}" style="display: flex; align-items: center; gap: 6px; border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);"><svg viewBox="0 0 24 24" style="width: 16px; height: 16px; flex: 0 0 16px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><sc-for list="{{ iconPlus }}" as="pd" hint-placeholder-count="2"><path d="{{ pd }}"></path></sc-for></svg><span>Import statement</span></button>
+          </sc-if>
         </div>
       </div>
       <sc-if value="{{ hasSubTabs }}" hint-placeholder-val="{{ false }}">
-        <div style="display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--bd); padding-bottom: 9px;">
-          <sc-for list="{{ subTabs }}" as="t" hint-placeholder-count="3">
-            <button onClick="{{ t.go }}" style="border: 0; background: {{ t.bg }}; color: {{ t.fg }}; font-weight: {{ t.fw }}; border-radius: 8px; padding: 7px 14px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">{{ t.label }}</button>
+        <div style="display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--bd); padding-bottom: 10px; margin-top: -8px; overflow-x: auto; scrollbar-width: none;">
+          <sc-for list="{{ subTabs }}" as="t" hint-placeholder-count="7">
+            <button onClick="{{ t.go }}" style="border: 0; background: {{ t.bg }}; color: {{ t.fg }}; font-weight: {{ t.fw }}; border-radius: 20px; padding: 5px 12px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; flex: none;" style-hover="background: var(--card2);">{{ t.label }}</button>
           </sc-for>
         </div>
       </sc-if>
@@ -153,7 +179,7 @@
             <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Add a panel</span>
             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
               <sc-for list="{{ addable }}" as="a" hint-placeholder-count="4">
-                <button onClick="{{ a.go }}" style="border: 1px solid var(--bd); background: var(--card); color: var(--fg2); border-radius: 20px; padding: 6px 14px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--brand); color: var(--fg1);">+ {{ a.label }}</button>
+                <button onClick="{{ a.go }}" style="border: 1px solid var(--bd); background: var(--card); color: var(--fg2); border-radius: 20px; padding: 6px 14px; font-family: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;" style-hover="border-color: var(--brand); color: var(--fg1);">+ {{ a.label }}</button>
               </sc-for>
             </div>
             <span style="font-size: 12px; color: var(--fg3); line-height: 1.5;">Drag a panel by its body to put it anywhere on the twelve-column grid — anything it lands on moves down out of the way. Pull the corner handle to reshape it, sideways for width and down for height. ✕ takes it off. The layout is yours, saved on this machine.</span>
@@ -164,6 +190,7 @@
           <sc-for list="{{ widgets }}" as="w" hint-placeholder-count="4">
             <div onPointerDown="{{ w.startMove }}" style="position: relative; grid-column: {{ w.gc }}; grid-row: {{ w.gr }}; z-index: {{ w.z }}; cursor: {{ w.cursor }}; overflow-x: hidden; overflow-y: auto; background: var(--card); border: 1px solid {{ w.bd }}; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
               <div style="display: flex; align-items: center; gap: 12px; min-height: 22px; min-width: 0;">
+                <span style="width: 7px; height: 7px; border-radius: 7px; background: {{ w.hue }}; flex: 0 0 auto;"></span>
                 <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ w.label }}</span>
                 <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}">
                   <span style="margin-left: auto; display: flex; align-items: center; gap: 5px;">
@@ -315,6 +342,72 @@
                     </sc-for>
                   </div>
                 </sc-if>
+                <sc-if value="{{ w.isPortfolio }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                      <span style="font-family: 'Source Code Pro', monospace; font-size: 22px; font-weight: 600;">{{ portfolio.value }}<span style="font-size: 12px; color: var(--fg3); margin-left: 5px;">Kč</span></span>
+                      <span style="font-size: 12.5px; color: var(--green);">{{ portfolio.gain }} · {{ portfolio.gainPct }}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      <sc-for list="{{ portfolio.rows }}" as="p" hint-placeholder-count="4">
+                        <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: baseline; font-size: 13px;">
+                          <span style="color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ p.label }}</span>
+                          <span style="font-family: 'Source Code Pro', monospace; color: var(--fg1);">{{ p.value }}</span>
+                          <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3); width: 52px; text-align: right;">{{ p.pct }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isOutlook }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                      <span style="font-family: 'Source Code Pro', monospace; font-size: 22px; font-weight: 600; color: var(--yellow);">{{ outlook.covered }}</span>
+                      <span style="font-size: 12.5px; color: var(--fg3);">{{ outlook.target }}</span>
+                    </div>
+                    <div style="height: 8px; background: var(--card3); border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: {{ outlook.width }}; background: var(--yellow); border-radius: 4px;"></div></div>
+                    <span style="font-size: 12.5px; color: var(--fg2); line-height: 1.55;">{{ outlook.line }}</span>
+                    <button onClick="{{ goRetire }}" style="align-self: flex-start; border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12.5px; cursor: pointer; padding: 0;">Open the projection →</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isTaxPanel }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <sc-for list="{{ taxPanel }}" as="t" hint-placeholder-count="3">
+                      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px;">
+                        <span style="font-size: 13px; color: var(--fg2);">{{ t.label }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 14px; text-align: right;">{{ t.value }}</span>
+                        <span style="grid-column: 1 / -1; font-size: 11.5px; color: var(--fg3);">{{ t.hint }}</span>
+                      </div>
+                    </sc-for>
+                    <span style="font-size: 11.5px; color: var(--fg3);">effective rate, from the statements you recorded</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isActivity }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column;">
+                    <sc-for list="{{ activityRows }}" as="a" hint-placeholder-count="6">
+                      <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--bd);">
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ a.date }}</span>
+                        <span style="font-size: 13px; color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.label }}</span>
+                        <span style="font-family: 'Source Code Pro', monospace; font-size: 13px; color: {{ a.color }};">{{ a.amount }}</span>
+                      </div>
+                    </sc-for>
+                    <button onClick="{{ goTransactions }}" style="align-self: flex-start; margin-top: 10px; border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12.5px; cursor: pointer; padding: 0;">Open the register →</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.isSavings }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                      <span style="font-family: 'Source Code Pro', monospace; font-size: 22px; font-weight: 600; color: var(--green);">{{ savingsRate }}</span>
+                      <span style="font-size: 12.5px; color: var(--fg3);">of everything earned, last twelve months</span>
+                    </div>
+                    <div style="display: flex; align-items: flex-end; gap: 5px; height: 74px;">
+                      <sc-for list="{{ savingsBars }}" as="b" hint-placeholder-count="12">
+                        <div style="flex: 1 1 0; height: {{ b.h }}; background: {{ b.color }}; border-radius: 2px; min-width: 0;"></div>
+                      </sc-for>
+                    </div>
+                    <span style="font-size: 11.5px; color: var(--fg3);">Aug 2025 → Jul 2026 · orange is a month that saved less than a fifth</span>
+                  </div>
+                </sc-if>
                 <sc-if value="{{ w.isEnergy }}" hint-placeholder-val="{{ false }}">
                   <div style="display: flex; flex-direction: column; gap: 12px;">
                     <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
@@ -354,7 +447,7 @@
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
           <sc-for list="{{ flow.metrics }}" as="m" hint-placeholder-count="4">
-            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+            <div style="background: {{ m.wash }}; border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
               <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
               <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
               <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
@@ -498,7 +591,7 @@
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
           <sc-for list="{{ importStats }}" as="s" hint-placeholder-count="4">
-            <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+            <div style="background: {{ s.wash }}; border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
               <span style="font-size: 12px; color: var(--fg3);">{{ s.label }}</span>
               <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ s.color }};">{{ s.value }}</span>
             </div>
@@ -529,6 +622,169 @@
       </section>
     </sc-if>
 
+    <!-- ═══════════════ TRANSACTIONS ═══════════════ -->
+    <sc-if value="{{ isTransactions }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+            <label style="grid-column: span 2; display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Search</span>
+              <input type="text" placeholder="counterparty, note, symbol" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box;" />
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 11.5px; color: var(--fg3);">From</span><input type="date" defaultValue="2026-07-01" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box;" /></label>
+            <label style="display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 11.5px; color: var(--fg3);">To</span><input type="date" defaultValue="2026-07-31" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box;" /></label>
+            <label style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Account</span>
+              <select style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; cursor: pointer;"><sc-for list="{{ txnAccounts }}" as="a" hint-placeholder-count="4"><option>{{ a }}</option></sc-for></select>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Category</span>
+              <select style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; cursor: pointer;"><sc-for list="{{ txnCategories }}" as="c" hint-placeholder-count="4"><option>{{ c }}</option></sc-for></select>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Direction</span>
+              <select style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; cursor: pointer;"><option>In and out</option><option>Money in</option><option>Money out</option></select>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 11.5px; color: var(--fg3);">Min CZK</span><input type="text" placeholder="0" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; font-family: 'Source Code Pro', monospace;" /></label>
+            <label style="display: flex; flex-direction: column; gap: 5px;"><span style="font-size: 11.5px; color: var(--fg3);">Max CZK</span><input type="text" placeholder="∞" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; font-family: 'Source Code Pro', monospace;" /></label>
+            <label style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">State</span>
+              <select style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; cursor: pointer;"><sc-for list="{{ txnStates }}" as="st" hint-placeholder-count="3"><option>{{ st }}</option></sc-for></select>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; align-self: end; padding-bottom: 9px;">
+              <input type="checkbox" style="accent-color: var(--blue);" />
+              <span style="font-size: 12.5px; color: var(--fg2);">Show own transfers</span>
+            </label>
+          </div>
+          <div style="display: flex; gap: 8px; border-top: 1px solid var(--bd); padding-top: 13px;">
+            <button style="border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="opacity: 0.9;">Apply</button>
+            <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">Clear</button>
+          </div>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Matching</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">{{ txnTotal }}</span>
+        </div>
+        <sc-for list="{{ txnRows }}" as="r" hint-placeholder-count="8">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: baseline; gap: 14px;">
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ r.date }}</span>
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px; font-weight: 500;">{{ r.merchant }}</span>
+                <span style="font-size: 12px; color: var(--fg3);">{{ r.reason }}</span>
+              </div>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 15px; color: {{ r.color }}; white-space: nowrap;">{{ r.amount }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 10px;">
+              <span style="font-size: 11.5px; color: {{ r.stateColor }}; background: {{ r.stateTint }}; border: 1px solid {{ r.stateColor }}; border-radius: 12px; padding: 2px 10px; white-space: nowrap;">{{ r.state }}</span>
+              <select style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 11px; font-family: inherit; font-size: 13.5px; width: 100%; box-sizing: border-box; width: auto; cursor: pointer; font-size: 13px;"><option>{{ r.filed }}</option><option>File as…</option><sc-for list="{{ txnCategories }}" as="c" hint-placeholder-count="4"><option>{{ c }}</option></sc-for></select>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">File</button>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">Split</button>
+            </div>
+          </div>
+        </sc-for>
+        <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.55;">A split transaction has no single category, so there is nothing for the categoriser to learn — the File control does not apply to it.</span>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ TAX ═══════════════ -->
+    <sc-if value="{{ isTax }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Statements</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">4 statements · recorded, never computed</span>
+        </div>
+        <div><button style="border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="opacity: 0.9;">Add statement</button></div>
+        <sc-for list="{{ taxGroups }}" as="g" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-size: 12.5px; font-weight: 500; color: var(--fg2); padding-top: 6px;">{{ g.head }}</span>
+            <sc-for list="{{ g.rows }}" as="t" hint-placeholder-count="2">
+              <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: baseline; gap: 14px;">
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 14px; color: var(--fg3);">{{ t.year }}</span>
+                <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+                  <span style="font-size: 13.5px;">{{ t.figures }} · <span style="font-family: 'Source Code Pro', monospace; color: var(--teal);">{{ t.rate }}</span> effective</span>
+                  <span style="font-size: 12px; color: var(--fg3);">{{ t.lines }}</span>
+                  <span style="font-size: 12px; color: var(--fg3);">{{ t.doc }}{{ t.note }}</span>
+                </div>
+                <span style="display: flex; gap: 6px;">
+                  <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">Edit</button>
+                  <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">Delete</button>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Effective rate over time</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">Robert · Czechia</span>
+        </div>
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+          <sc-for list="{{ taxBars }}" as="b" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 46px minmax(0, 1fr) 52px; align-items: center; gap: 12px;">
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ b.label }}</span>
+              <div style="height: 8px; background: var(--card3); border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: {{ b.width }}; background: var(--teal); border-radius: 4px;"></div></div>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 12.5px; text-align: right;">{{ b.pct }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ RULES ═══════════════ -->
+    <sc-if value="{{ isRules }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Rules</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">{{ rulesCaption }}</span>
+        </div>
+        <div><button style="border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="opacity: 0.9;">New rule</button></div>
+        <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.55;">Changes apply to future imports and to transactions still awaiting a category. Existing automatic filings stay as filed. An install begins with no rules at all — every one here was earned from a correction someone made.</span>
+        <sc-for list="{{ rulesList }}" as="r" hint-placeholder-count="5">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px 18px;">
+            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+              <span style="font-size: 13.5px; font-weight: 500;">{{ r.name }}</span>
+              <span style="font-size: 12px; color: var(--fg3);">{{ r.conditions }}</span>
+              <span style="font-size: 12px; color: var(--fg3);">{{ r.does }}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 13.5px; font-weight: 600; color: {{ r.pctColor }}; background: {{ r.pctTint }}; border: 1px solid {{ r.pctColor }}; border-radius: 12px; padding: 2px 10px; align-self: flex-end;">{{ r.pct }}</span>
+              <span style="font-size: 11.5px; color: var(--fg3); white-space: nowrap;">{{ r.counts }}</span>
+            </div>
+            <span style="display: flex; gap: 6px;">
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">Disable</button>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 13px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">Delete</button>
+            </span>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ TAGS ═══════════════ -->
+    <sc-if value="{{ isTags }}" hint-placeholder-val="{{ false }}">
+      <section style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;">Running totals</span>
+          <span style="font-size: 13.6px; color: var(--fg3);">4 tags · click one to open its transactions</span>
+        </div>
+        <sc-for list="{{ tagRows }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ goTransactions }}" style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, auto); align-items: baseline; gap: 6px 14px; text-align: left; cursor: pointer; color: var(--fg1); font-family: inherit;" style-hover="background: var(--card2);">
+            <span style="display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 500; min-width: 0; overflow: hidden;"><span style="width: 8px; height: 8px; border-radius: 8px; background: {{ t.dot }}; flex: 0 0 auto;"></span><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ t.name }}</span></span>
+            <span style="display: flex; align-items: baseline; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 14px;">{{ t.parts }}</span>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 12px; color: var(--fg3);">{{ t.converted }}</span>
+            </span>
+            <span style="grid-column: 1 / -1; font-size: 12px; color: var(--fg3);">{{ t.linked }}</span>
+          </button>
+        </sc-for>
+      </section>
+    </sc-if>
+
     <!-- ═══════════════ PROPERTY ═══════════════ -->
     <sc-if value="{{ isProperty }}" hint-placeholder-val="{{ false }}">
       <section style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -547,7 +803,7 @@
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
         <sc-for list="{{ prop.metrics }}" as="m" hint-placeholder-count="5">
-          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="background: {{ m.wash }}; border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
             <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
             <span style="font-family: 'Source Code Pro', monospace; font-size: 18px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
             <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
@@ -651,7 +907,7 @@
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
         <sc-for list="{{ invMetrics }}" as="m" hint-placeholder-count="4">
-          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="background: {{ m.wash }}; border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
             <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
             <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
             <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
@@ -727,7 +983,7 @@
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
         <sc-for list="{{ loanMetrics }}" as="m" hint-placeholder-count="4">
-          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="background: {{ m.wash }}; border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;">
             <span style="font-size: 12px; color: var(--fg3);">{{ m.label }}</span>
             <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ m.color }};">{{ m.value }}</span>
             <span style="font-size: 11.5px; color: var(--fg3);">{{ m.note }}</span>
@@ -888,7 +1144,7 @@
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px;">
         <sc-for list="{{ ha.tiles }}" as="t" hint-placeholder-count="5">
-          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+          <div style="background: {{ t.wash }}; border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
             <span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg3);"><span>{{ t.emoji }}</span><span>{{ t.label }}</span></span>
             <span style="font-family: 'Source Code Pro', monospace; font-size: 19px; font-weight: 600; color: {{ t.color }};">{{ t.value }}</span>
             <span style="font-size: 11.5px; color: var(--fg3);">{{ t.note }}</span>
@@ -935,8 +1191,8 @@
 
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 13px;">
-            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
-              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap; white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">⚡</span>Energy into the budget</span>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">⚡</span>Energy into the budget</span>
               <span style="font-size: 11.5px; color: var(--green);">live</span>
             </div>
             <div style="display: flex; align-items: flex-end; gap: 3px; height: 92px;">
@@ -944,7 +1200,7 @@
                 <div style="flex: 1 1 0; height: {{ b.h }}; background: {{ b.color }}; border-radius: 2px 2px 0 0;" title="{{ b.tip }}"></div>
               </sc-for>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--fg3);">
+            <div style="display: flex; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--fg3);">
               <span>14 days</span><span>{{ ha.energyNote }}</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--bd); padding-top: 12px;">
@@ -959,7 +1215,7 @@
           </div>
 
           <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
-            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap;">
               <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); white-space: nowrap;"><span style="font-size: 12px; margin-right: 7px;">🗓️</span>This week at home</span>
               <button onClick="{{ goCalendar }}" style="border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12.5px; cursor: pointer; padding: 0;">Calendar →</button>
             </div>
@@ -1048,7 +1304,7 @@
                 <span style="font-size: 13px;">{{ f.emoji }}</span>
                 <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
                   <span style="font-size: 13px;">{{ f.name }}</span>
-                  <span style="font-size: 11.5px; color: var(--fg3);">{{ f.detail }}</span>
+                  <span style="font-size: 11.5px; color: var(--fg3); overflow-wrap: anywhere;">{{ f.detail }}</span>
                 </div>
                 <span style="font-size: 11.5px; color: {{ f.color }};">{{ f.state }}</span>
               </div>
@@ -1064,7 +1320,7 @@
       <section style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
         <input type="text" value="{{ docs.query }}" onChange="{{ docs.setQuery }}" placeholder="Search by name, person, flat, year or tag" style="border: 1px solid var(--bd2); border-radius: 8px; padding: 9px 12px; font-size: 13.5px; color: var(--fg1); background: var(--card); flex: 1 1 260px; max-width: 440px;">
         <button onClick="{{ docs.clear }}" style="border: 1px solid var(--bd); background: transparent; color: var(--fg2); border-radius: 8px; padding: 9px 13px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">Clear</button>
-        <button style="margin-left: auto; border: 1px solid var(--blue); background: var(--blue); color: #fff; border-radius: 8px; padding: 9px 16px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="opacity: 0.9;">➕ Add document</button>
+        <button style="margin-left: auto; border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 9px 16px; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;" style-hover="opacity: 0.9;">➕ Add document</button>
       </section>
 
       <section style="display: grid; grid-template-columns: 218px minmax(0, 1fr); gap: 28px; align-items: start;">
@@ -1196,7 +1452,7 @@ class Component extends DCLogic {
     retire: null,
     devices: null,
     rules: null,
-    modules: { property: true, investments: true, loans: true, retirement: true, home: true, calendar: true, documents: true, imports: true }
+    modules: { import: true, property: true, investments: true, loans: true, retirement: true, home: true, calendar: true, tax: true, documents: true }
   };
 
   componentDidMount() {
@@ -1224,64 +1480,104 @@ class Component extends DCLogic {
 
   static get ICONS() {
     const rr = Component.rr;
-    const chart = ['M3.2,20.4h17.6', 'M5.4,16.4 9.9,11.1 13.5,14.4 20,6.8', 'M15.1,6.8H20v4.9'];
-    const house = ['M3.8,10.4 12,4 20.2,10.4v9.2a1.4,1.4 0 0 1-1.4,1.4H5.2a1.4,1.4 0 0 1-1.4-1.4Z'];
-    const sliders = ['M3.4,8.2h9.2', 'M17.4,8.2h3.2', 'M3.4,15.8h3.2', 'M11.4,15.8h9.2',
-      rr(12.9, 5.9, 4.2, 4.6, 1.4), rr(6.9, 13.5, 4.2, 4.6, 1.4)];
+    const c = (cx, cy, r) => 'M' + (cx - r) + ',' + cy + 'a' + r + ',' + r + ' 0 1 0 ' + (2 * r) + ',0a' + r + ',' + r + ' 0 1 0 ' + (-2 * r) + ',0';
+    const ln = (x1, y1, x2, y2) => 'M' + x1 + ',' + y1 + 'L' + x2 + ',' + y2;
     return {
-      overview: [rr(3.2, 3.2, 7.4, 7.4, 2), rr(13.4, 3.2, 7.4, 7.4, 2), rr(3.2, 13.4, 7.4, 7.4, 2), rr(13.4, 13.4, 7.4, 7.4, 2)],
-      money: [rr(2.8, 5.6, 18.4, 13.2, 3), 'M16.6,12.2h1.6'],
-      cashflow: ['M8.2,3.6v16.8', 'M4.4,7.4 8.2,3.6 12,7.4', 'M15.8,20.4V3.6', 'M12,16.6 15.8,20.4 19.6,16.6'],
-      accounts: ['M3,9.8 12,4.4 21,9.8', 'M5.2,9.8v8.2M9.7,9.8v8.2M14.3,9.8v8.2M18.8,9.8v8.2', 'M3,20.4h18'],
-      import: ['M12,3.6v10.8', 'M7.9,10.5 12,14.6 16.1,10.5', 'M4,17.4v2a1.4,1.4 0 0 0 1.4,1.4h13.2a1.4,1.4 0 0 0 1.4-1.4v-2'],
-      property: ['M3.4,20.6V7.8L10,4v16.6', 'M10,11.8h8.2a1.5,1.5 0 0 1 1.5,1.5v7.3', 'M6.1,10.8h1.5M6.1,14.2h1.5M6.1,17.6h1.5', 'M13.5,15.2h1.8M13.5,18.2h1.8'],
-      wealth: chart,
-      investments: chart,
-      loans: [rr(2.8, 5.4, 18.4, 13.2, 3), 'M2.8,10h18.4', 'M6.2,14.4h3.6'],
-      retire: ['M12,3.2v17.6', 'M2.9,12.4a9.1,9.1 0 0 1 18.2,0Z', 'M12,20.8a2.5,2.5 0 0 0 2.5-2.5'],
-      household: house,
-      home: house,
-      calendar: [rr(3.2, 5.2, 17.6, 15.6, 3), 'M8,3.2v4M16,3.2v4', 'M3.2,10.4h17.6'],
-      admin: sliders,
-      settings: sliders,
-      docs: ['M3.2,7.4a1.8,1.8 0 0 1 1.8-1.8h3.6l2.2,2.6h8a1.8,1.8 0 0 1 1.8,1.8v8.6a1.8,1.8 0 0 1-1.8,1.8H5a1.8,1.8 0 0 1-1.8-1.8Z']
+      compass: [c(12, 12, 9), 'M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z'],
+      flow: ['M3 12h5l4-7h9', 'M8 12l4 7h9', 'M18 2.5 21 5l-3 2.5'],
+      bank: ['M3 10 12 4.5 21 10', ln(5.5, 10.5, 5.5, 18), ln(12, 10.5, 12, 18), ln(18.5, 10.5, 18.5, 18), ln(3, 20.5, 21, 20.5)],
+      ledger: ['M5 4.8A1.8 1.8 0 0 1 6.8 3H19v18H6.8A1.8 1.8 0 0 1 5 19.2z', ln(9, 3, 9, 21)],
+      receipt: ['M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z', ln(9, 8, 15, 8), ln(9, 12, 15, 12)],
+      inbox: [ln(12, 3, 12, 13), 'M8 9.5l4 4 4-4', 'M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3'],
+      sliders: [ln(3.5, 8, 20.5, 8), c(9, 8, 2.2), ln(3.5, 16, 20.5, 16), c(15, 16, 2.2)],
+      tag: ['M3 12.6V4.4A1.4 1.4 0 0 1 4.4 3h8.2L21 11.4 12.6 21z', c(7.6, 7.6, 1.5)],
+      buildings: ['M4 21V8.5L11 5v16', 'M11 21V11l8-2.5V21', ln(3, 21, 21, 21), ln(7, 10.5, 7.8, 10.5), ln(14.5, 14, 15.3, 14)],
+      chart: ['M4 16l4.5-4.5 3 3L18 8', 'M14.5 8H18v3.5', 'M3 3v17h18'],
+      card: [rr(2.5, 5, 19, 14, 2.5), ln(2.5, 10, 21.5, 10), ln(6, 14.5, 10, 14.5)],
+      target: [c(12, 12, 9), c(12, 12, 5), c(12, 12, 1.4)],
+      house: ['M3 10.6 12 3.5l9 7.1', 'M5.6 9.6V20.5h12.8V9.6'],
+      calendar: [rr(3, 5, 18, 16, 2.5), ln(3, 10, 21, 10), ln(8, 3, 8, 7), ln(16, 3, 16, 7)],
+      folders: ['M3 7.6A1.6 1.6 0 0 1 4.6 6H9l2.2 2.6h8.2A1.6 1.6 0 0 1 21 10.2v8.2A1.6 1.6 0 0 1 19.4 20H4.6A1.6 1.6 0 0 1 3 18.4z'],
+      gear: [c(12, 12, 2.4), c(12, 12, 5.6), ln(17.6, 12, 20.4, 12), ln(15.96, 15.96, 17.94, 17.94), ln(12, 17.6, 12, 20.4), ln(8.04, 15.96, 6.06, 17.94), ln(6.4, 12, 3.6, 12), ln(8.04, 8.04, 6.06, 6.06), ln(12, 6.4, 12, 3.6), ln(15.96, 8.04, 17.94, 6.06)],
+      plus: [ln(12, 5.5, 12, 18.5), ln(5.5, 12, 18.5, 12)],
+      clock: [c(12, 12, 8.5), 'M12 7.2V12l3.2 2']
+    };
+  }
+
+  // Screen key → icon name, matching each Screen's `icon` in the registry.
+  static get SCREEN_ICON() {
+    return {
+      overview: 'compass', cashflow: 'flow', accounts: 'bank', transactions: 'ledger',
+      tax: 'receipt', import: 'inbox', rules: 'sliders', tags: 'tag',
+      property: 'buildings', investments: 'chart', loans: 'card', retire: 'target',
+      home: 'house', calendar: 'calendar', docs: 'folders', settings: 'gear'
     };
   }
 
   static get AREAS() {
     return [
-      { key: 'overview', label: 'Overview', icon: 'overview', screens: ['overview'] },
-      { key: 'money', label: 'Money', icon: 'money', screens: ['cashflow', 'accounts', 'import'] },
-      { key: 'property', label: 'Property', icon: 'property', screens: ['property'] },
-      { key: 'wealth', label: 'Wealth', icon: 'wealth', screens: ['investments', 'loans'] },
-      { key: 'retire', label: 'Retirement', icon: 'retire', screens: ['retire'] },
-      { key: 'household', label: 'Household', icon: 'household', screens: ['home', 'calendar'] },
-      { key: 'admin', label: 'Admin', icon: 'admin', screens: ['docs', 'settings'] }
+      { key: 'overview', label: 'Overview', icon: 'compass', hue: 'brand', screens: ['overview'] },
+      { key: 'money', label: 'Money', icon: 'flow', hue: 'teal', screens: ['cashflow', 'accounts', 'transactions', 'tax', 'import', 'rules', 'tags'] },
+      { key: 'assets', label: 'Assets', icon: 'buildings', hue: 'purple', screens: ['property', 'investments', 'loans'] },
+      { key: 'retirement', label: 'Retirement', icon: 'target', hue: 'blue', screens: ['retire'] },
+      { key: 'home', label: 'Home', icon: 'house', hue: 'orange', screens: ['home'] },
+      { key: 'calendar', label: 'Calendar', icon: 'calendar', hue: 'indigo', screens: ['calendar'] },
+      { key: 'admin', label: 'Admin', icon: 'folders', hue: 'fg3', screens: ['docs', 'settings'] }
     ];
   }
 
+  // One entry per module, exactly as the Settings toggles present them.
+  static get MODULES() {
+    return [
+      ['import', 'Import', 'statement upload and the review queue'],
+      ['property', 'Property', 'flats, tenancies and bills'],
+      ['investments', 'Investments', 'holdings from broker reports'],
+      ['loans', 'Loans', 'mortgages and fixation periods'],
+      ['retirement', 'Retirement', 'the projection model and salary history'],
+      ['home', 'Home Assistant', 'devices and meter readings'],
+      ['calendar', 'Calendar', 'generated events and the ics feed'],
+      ['tax', 'Tax', 'yearly statements per person and country'],
+      ['documents', 'Documents', 'the archive with expiry dates']
+    ];
+  }
+
+  // The panel registry: key, title, first-added size, and the modules that must
+  // be on for it to exist. Minimum size is four columns by three rows throughout.
+  static get PANELS() {
+    return [
+      ['briefing', 'Needs you', 12, 6, [], 'orange'],
+      ['flow', 'Where the money goes', 12, 19, [], 'blue'],
+      ['composition', 'What it is made of', 6, 6, [], 'teal'],
+      ['upcoming', 'Next 30 days', 6, 7, ['calendar'], 'purple'],
+      ['networth', 'Net worth over time', 6, 5, [], 'teal'],
+      ['accounts', 'Where the cash sits', 6, 6, [], 'blue'],
+      ['equity', 'Flats against mortgages', 6, 5, ['property', 'loans'], 'teal'],
+      ['energy', 'Energy this month', 6, 5, ['home'], 'orange'],
+      ['investments', 'Portfolio', 6, 5, ['investments'], 'teal'],
+      ['retirement', 'Retirement outlook', 6, 5, ['retirement'], 'blue'],
+      ['tax', 'Tax position', 6, 6, ['tax'], 'purple'],
+      ['activity', 'Recent activity', 6, 7, [], 'blue'],
+      ['savings', 'Saved each month', 6, 5, [], 'teal']
+    ].map(p => ({ key: p[0], label: p[1], w: p[2], h: p[3], minW: 4, minH: 3, modules: p[4], hue: p[5] }));
+  }
+
   static get WIDGETS() {
-    return {
-      briefing: { label: 'Needs you', def: 12 },
-      flow: { label: 'Where the money goes', def: 12 },
-      composition: { label: 'What it is made of', def: 6 },
-      upcoming: { label: 'Next 30 days', def: 6 },
-      networth: { label: 'Net worth over time', def: 6 },
-      accounts: { label: 'Where the cash sits', def: 6 },
-      equity: { label: 'Flats against mortgages', def: 6 },
-      energy: { label: 'Energy this month', def: 6 }
-    };
+    const m = {};
+    Component.PANELS.forEach(p => { m[p.key] = p; });
+    return m;
+  }
+
+  static panelAvailable(key, mods) {
+    const p = Component.WIDGETS[key];
+    return !!p && p.modules.every(k => mods[k]);
   }
 
   static get ROW() { return 40; }
   static get GAP() { return 16; }
 
   static cell(k) {
-    return ({
-      briefing: { w: 12, h: 6 }, flow: { w: 12, h: 19 }, composition: { w: 6, h: 6 },
-      upcoming: { w: 6, h: 7 }, networth: { w: 6, h: 5 }, accounts: { w: 6, h: 6 },
-      equity: { w: 6, h: 5 }, energy: { w: 6, h: 5 }
-    })[k] || { w: 6, h: 5 };
+    const p = Component.WIDGETS[k];
+    return p ? { w: p.w, h: p.h } : { w: 6, h: 5 };
   }
 
   static get DEFAULT_LAYOUT() {
@@ -1329,7 +1625,7 @@ class Component extends DCLogic {
 
   loadLayout() {
     try {
-      const raw = localStorage.getItem('continuum-overview');
+      const raw = localStorage.getItem('continuum-overview-v4');
       if (raw) {
         const p = JSON.parse(raw);
         const live = Array.isArray(p) ? p.filter(w => Component.WIDGETS[w.k]) : [];
@@ -1347,7 +1643,7 @@ class Component extends DCLogic {
 
   saveLayout(layout) {
     this.setState({ layout: layout });
-    try { localStorage.setItem('continuum-overview', JSON.stringify(layout)); } catch (e) {}
+    try { localStorage.setItem('continuum-overview-v4', JSON.stringify(layout)); } catch (e) {}
   }
 
   currentLayout() { return this.state.layout || this.loadLayout(); }
@@ -1374,8 +1670,8 @@ class Component extends DCLogic {
     const it = this.currentLayout()[i];
     const x0 = e.clientX, y0 = e.clientY, w0 = it.w, h0 = it.h;
     const move = ev => {
-      const w = Math.min(12 - it.x, Math.max(3, w0 + Math.round((ev.clientX - x0) / (m.col + m.gap))));
-      const h = Math.max(3, h0 + Math.round((ev.clientY - y0) / (m.row + m.gap)));
+      const w = Math.min(12 - it.x, Math.max(Component.WIDGETS[it.k].minW, w0 + Math.round((ev.clientX - x0) / (m.col + m.gap))));
+      const h = Math.max(Component.WIDGETS[it.k].minH, h0 + Math.round((ev.clientY - y0) / (m.row + m.gap)));
       this.setState({ ghost: { i: i, x: it.x, y: it.y, w: w, h: h } });
     };
     const up = () => {
@@ -1446,6 +1742,17 @@ class Component extends DCLogic {
     const next = this.currentLayout().slice();
     next.splice(to, 0, next.splice(from, 1)[0]);
     this.saveLayout(next);
+  }
+
+  // A metric tile is washed with the hue of its own figure, so a screenful of tiles
+  // reads as a palette rather than a grey grid. Neutral figures keep the card fill.
+  static wash(color) {
+    const m = /var\(--(green|red|yellow|blue|purple|orange|teal|indigo|brand)\)/.exec(color || '');
+    return m ? 'linear-gradient(var(--' + m[1] + '-wash), var(--' + m[1] + '-wash)), var(--card)' : 'var(--card)';
+  }
+
+  static washed(list) {
+    return list.map(o => Object.assign({}, o, { wash: Component.wash(o.color) }));
   }
 
   static fmt(n) {
@@ -1613,12 +1920,12 @@ class Component extends DCLogic {
       paths: paths, nodes: svgNodes, labels: labels, breakdown: breakdown,
       totalIn: Component.fmt(totalIn), totalOut: Component.fmt(totalIn - savings),
       kept: Component.fmt(savings),
-      metrics: [
+      metrics: Component.washed([
         { label: 'Money in', value: Component.fmt(totalIn), color: 'var(--green)', note: key === 'ytd' ? 'seven months' : 'July 2026' },
         { label: 'Money out', value: Component.fmt(totalIn - savings), color: 'var(--fg1)', note: 'living costs only' },
         { label: 'Saved and invested', value: Component.fmt(savings), color: 'var(--green)', note: (savings / totalIn * 100).toFixed(0) + '% of income' },
         { label: 'Biggest single line', value: Component.fmt(byName['Housing'].leaves[0][1]), color: 'var(--blue)', note: 'Mortgage · Karlín' }
-      ]
+      ])
     };
   }
 
@@ -1812,32 +2119,38 @@ class Component extends DCLogic {
     const money = v => Component.fmt(Math.round(v / 100) * 100);
 
     const screens = {
-      overview: ['Overview', 'August 2026 · everything reconciled to 31 July', '🧭'],
-      cashflow: ['Cash flow', 'Income traced to the category it ended up in', '💸'],
-      accounts: ['Accounts', 'Five banks, four currencies, one balance sheet', '🏦'],
-      import: ['Import', 'Drop a statement, correct what it got wrong, it learns', '📥'],
-      property: ['Property', 'Two flats · value, debt, tenants and paperwork', '🏢'],
-      investments: ['Investments', 'XTB, updated from your own report', '📈'],
-      loans: ['Loans', 'Mortgages with fixation periods, and everything else', '💳'],
-      retire: ['Retirement', 'In today\u2019s money · returns are real', '⛱️'],
-      home: ['Household', 'Karlín · Home Assistant, energy and the week ahead', '🏠'],
-      calendar: ['Calendar', 'Two-way with iCal and Google', '📅'],
-      docs: ['Documents', 'On your own server, filed by shelf and subject', '🗂️'],
-      settings: ['Settings', 'Every part of this is optional', '⚙️']
+      overview: ['Overview', 'August 2026 · everything reconciled to 31 July'],
+      cashflow: ['Cash flow', 'Income traced to the category it ended up in'],
+      accounts: ['Accounts', 'Five banks, four currencies, one balance sheet'],
+      transactions: ['Transactions', 'Every row the ledger holds. Search it, narrow it, file what the rules missed.'],
+      tax: ['Tax', 'What each yearly statement said — recorded, never computed.'],
+      import: ['Import', 'Drop a statement, correct what it got wrong, it learns'],
+      rules: ['Rules', 'What files itself, and how much each rule has earned your trust.'],
+      tags: ['Tags', 'What each project has cost so far, across every category it touches.'],
+      property: ['Property', 'Two flats · value, debt, tenants and paperwork'],
+      investments: ['Investments', 'XTB, updated from your own report'],
+      loans: ['Loans', 'Mortgages with fixation periods, and everything else'],
+      retire: ['Retirement', 'In today\u2019s money · returns are real'],
+      home: ['Home', 'Karlín · devices, energy and the week ahead'],
+      calendar: ['Calendar', 'Two-way with iCal and Google'],
+      docs: ['Documents', 'On your own server, filed by shelf and subject'],
+      settings: ['Settings', 'Every part of this is optional']
     };
     const cur = screens[s.screen] || screens.overview;
 
     const SUBLABEL = {
-      cashflow: 'Cash flow', accounts: 'Accounts', import: 'Import',
-      investments: 'Investments', loans: 'Loans', home: 'Home',
-      calendar: 'Calendar', docs: 'Documents', settings: 'Settings'
+      cashflow: 'Cash flow', accounts: 'Accounts', transactions: 'Transactions', tax: 'Tax',
+      import: 'Import', rules: 'Rules', tags: 'Tags', property: 'Property',
+      investments: 'Investments', loans: 'Loans', home: 'Home', calendar: 'Calendar',
+      docs: 'Documents', settings: 'Settings'
     };
-    const enabled = k => ({
-      cashflow: true, accounts: true, overview: true, settings: true,
-      import: mods.imports, property: mods.property, investments: mods.investments,
-      loans: mods.loans, retire: mods.retirement, home: mods.home,
-      calendar: mods.calendar, docs: mods.documents
-    })[k];
+    // Cash flow, Accounts, Transactions, Rules and Tags are core: they stay
+    // whatever is switched off, which is why Money can never disappear.
+    const SCREEN_MODULE = {
+      tax: 'tax', import: 'import', property: 'property', investments: 'investments',
+      loans: 'loans', retire: 'retirement', home: 'home', calendar: 'calendar', docs: 'documents'
+    };
+    const enabled = k => { const m = SCREEN_MODULE[k]; return m ? !!mods[m] : true; };
 
     const navAreas = Component.AREAS.map(a => {
       const live = a.screens.filter(enabled);
@@ -1845,6 +2158,10 @@ class Component extends DCLogic {
       const active = live.indexOf(s.screen) >= 0;
       return {
         label: a.label, paths: Component.ICONS[a.icon], go: go(live[0]),
+        hue: a.hue === 'fg3' ? 'var(--fg3)' : 'var(--' + a.hue + ')',
+        iconColor: a.hue === 'fg3' ? (active ? 'var(--fg1)' : 'var(--fg3)') : 'var(--' + a.hue + ')',
+        rail: active ? (a.hue === 'fg3' ? 'var(--fg3)' : 'var(--' + a.hue + ')') : 'transparent',
+        chip: active ? (a.hue === 'fg3' ? 'var(--grey-tint)' : 'var(--' + a.hue + '-tint)') : 'transparent',
         badge: live.indexOf('import') >= 0 && mods.imports ? '12' : '',
         badgeBg: live.indexOf('import') >= 0 && mods.imports ? 'var(--yellow)' : 'transparent',
         bg: active ? 'var(--card3)' : 'transparent',
@@ -1855,10 +2172,11 @@ class Component extends DCLogic {
 
     const areaOf = Component.AREAS.filter(a => a.screens.indexOf(s.screen) >= 0)[0];
     const subScreens = areaOf ? areaOf.screens.filter(enabled) : [];
+    const areaHue = areaOf && areaOf.hue !== 'fg3' ? areaOf.hue : null;
     const subTabs = subScreens.length > 1 ? subScreens.map(k => ({
       label: SUBLABEL[k] || k, go: go(k),
-      bg: s.screen === k ? 'var(--card3)' : 'transparent',
-      fg: s.screen === k ? 'var(--fg1)' : 'var(--fg3)',
+      bg: s.screen === k ? (areaHue ? 'var(--' + areaHue + '-tint)' : 'var(--card3)') : 'transparent',
+      fg: s.screen === k ? (areaHue ? 'var(--' + areaHue + ')' : 'var(--fg1)') : 'var(--fg3)',
       fw: s.screen === k ? '500' : '400'
     })) : [];
 
@@ -1974,15 +2292,24 @@ class Component extends DCLogic {
       screenTitle: cur[0], screenCaption: cur[1], screenIcon: cur[2],
       navGroups: navGroups, themeOptions: themeOptions,
       navAreas: navAreas, subTabs: subTabs, hasSubTabs: subTabs.length > 0,
-      screenPaths: Component.ICONS[s.screen] || Component.ICONS.overview,
-      iconImport: Component.ICONS.import, iconCalendar: Component.ICONS.calendar,
+      screenPaths: Component.ICONS[Component.SCREEN_ICON[s.screen]] || Component.ICONS.compass,
+      screenHue: (function () {
+        const a = Component.AREAS.filter(x => x.screens.indexOf(s.screen) >= 0)[0];
+        return !a || a.hue === 'fg3' ? 'var(--brand)' : 'var(--' + a.hue + ')';
+      })(),
+      screenTint: (function () {
+        const a = Component.AREAS.filter(x => x.screens.indexOf(s.screen) >= 0)[0];
+        return !a || a.hue === 'fg3' ? 'var(--brand-tint)' : 'var(--' + a.hue + '-tint)';
+      })(),
+      iconPlus: Component.ICONS.plus, iconClock: Component.ICONS.clock,
+      showImportButton: !!mods.import,
 
       customising: !!s.customising,
       customiseLabel: s.customising ? 'Done' : 'Customise',
       toggleCustomise: () => this.setState({ customising: !s.customising }),
       resetLayout: () => this.saveLayout(Component.DEFAULT_LAYOUT),
       addable: Object.keys(Component.WIDGETS)
-        .filter(k => !this.currentLayout().some(w => w.k === k))
+        .filter(k => Component.panelAvailable(k, mods) && !this.currentLayout().some(w => w.k === k))
         .map(k => ({
           label: Component.WIDGETS[k].label,
           go: () => {
@@ -1992,7 +2319,7 @@ class Component extends DCLogic {
             this.saveLayout(cur.concat([{ k: k, x: slot.x, y: slot.y, w: c.w, h: c.h }]));
           }
         })),
-      nothingToAdd: Object.keys(Component.WIDGETS).length === this.currentLayout().length,
+      nothingToAdd: Object.keys(Component.WIDGETS).filter(k => Component.panelAvailable(k, mods)).length === this.currentLayout().length,
 
       gridRef: el => { this._grid = el; },
       flowRefA: this._flowRefA || (this._flowRefA = this.observeFlow('A')),
@@ -2001,11 +2328,12 @@ class Component extends DCLogic {
       flowBoxB: Math.round(592 * (s.flowScaleB || 1)) + 'px',
       flowTransA: 'scale(' + (s.flowScaleA || 1) + ')',
       flowTransB: 'scale(' + (s.flowScaleB || 1) + ')',
-      widgets: this.currentLayout().map((w, i) => {
+      widgets: this.currentLayout().filter(w => Component.panelAvailable(w.k, mods)).map((w, i) => {
         const gh = s.ghost && s.ghost.i === i ? s.ghost : null;
         const c = gh || w;
         return {
         label: Component.WIDGETS[w.k].label,
+        hue: 'var(--' + Component.WIDGETS[w.k].hue + ')',
         gc: (c.x + 1) + ' / span ' + c.w,
         gr: (c.y + 1) + ' / span ' + c.h,
         sizeLabel: c.w + '/12',
@@ -2020,7 +2348,9 @@ class Component extends DCLogic {
         isBriefing: w.k === 'briefing', isFlow: w.k === 'flow',
         isComposition: w.k === 'composition', isUpcoming: w.k === 'upcoming',
         isNetworth: w.k === 'networth', isAccounts: w.k === 'accounts',
-        isEquity: w.k === 'equity', isEnergy: w.k === 'energy'
+        isEquity: w.k === 'equity', isEnergy: w.k === 'energy',
+        isPortfolio: w.k === 'investments', isOutlook: w.k === 'retirement',
+        isTaxPanel: w.k === 'tax', isActivity: w.k === 'activity', isSavings: w.k === 'savings'
         }; }),
 
       nwPoints: '0,86 60,80 120,74 180,60 240,58 300,47 360,41 420,30 480,22 540,14',
@@ -2041,9 +2371,105 @@ class Component extends DCLogic {
       })),
 
       goImport: go('import'), goCalendar: go('calendar'), goHome: go('home'), goLoans: go('loans'),
+      goTransactions: go('transactions'), goRules: go('rules'), goRetire: go('retire'),
+      goInvestments: go('investments'), goTax: go('tax'),
+
+      // ---- Transactions ----
+      txnAccounts: ['All accounts', 'Fio banka · current', 'Raiffeisenbank · savings', 'Česká spořitelna', 'Revolut · EUR', 'mBank · PLN'],
+      txnCategories: ['Any category', 'Uncategorised', 'Groceries', 'Eating out', 'Transport', 'Energy', 'Mortgage', 'Salary', 'Rent received'],
+      txnStates: ['Any state', 'filed by rule', 'needs a look', 'confirmed'],
+      txnTotal: '1 284 transactions · 486 210 CZK out · 251 400 CZK in',
+      txnRows: [
+        { date: '31 Jul', merchant: 'Albert Karlín', reason: 'Fio banka · card payment', amount: '−1 284', color: 'var(--fg1)', state: 'filed by rule', filed: 'Groceries' },
+        { date: '30 Jul', merchant: 'ČEZ Prodej', reason: 'Fio banka · direct debit · VS 4471820', amount: '−3 410', color: 'var(--fg1)', state: 'filed by rule', filed: 'Energy' },
+        { date: '29 Jul', merchant: 'Zásilkovna', reason: 'Revolut · EUR 18.40 at 24.82', amount: '−457', color: 'var(--fg1)', state: 'needs a look', filed: '' },
+        { date: '28 Jul', merchant: 'Martin Dvořák', reason: 'Raiffeisenbank · VS 202607 · rent, Brno', amount: '+18 500', color: 'var(--green)', state: 'confirmed', filed: 'Rent received' },
+        { date: '28 Jul', merchant: 'Own transfer → RB savings', reason: 'Fio banka · own transfer', amount: '−40 000', color: 'var(--fg3)', state: 'own transfer', filed: '' },
+        { date: '25 Jul', merchant: 'Bolt Food', reason: 'Revolut · split across two categories', amount: '−689', color: 'var(--fg1)', state: 'split', filed: '' },
+        { date: '25 Jul', merchant: 'Salary · Robert', reason: 'Fio banka · monthly credit', amount: '+78 400', color: 'var(--green)', state: 'confirmed', filed: 'Salary' },
+        { date: '24 Jul', merchant: 'Lékárna Palladium', reason: 'Česká spořitelna · card payment', amount: '−612', color: 'var(--fg1)', state: 'needs a look', filed: '' }
+      ].map(r => {
+        const hue = { 'filed by rule': 'teal', 'needs a look': 'yellow', confirmed: 'green', split: 'purple', 'own transfer': 'blue' }[r.state] || 'grey';
+        return Object.assign(r, {
+          stateColor: hue === 'grey' ? 'var(--fg3)' : 'var(--' + hue + ')',
+          stateTint: 'var(--' + hue + '-tint)'
+        });
+      }),
+      splitRow: { parent: 'Bolt Food · 689', lines: [
+        { label: 'Eating out', amount: '−489' }, { label: 'Kids', amount: '−200' }
+      ] },
+
+      // ---- Rules ----
+      rulesCaption: '68 rules · filing at 70% confidence and above',
+      rulesList: [
+        { name: 'Albert', conditions: 'counterparty contains “ALBERT”', does: 'files as Groceries · learned from a correction', pct: '96%', trusted: true, counts: '54 kept · 1 overridden' },
+        { name: 'ČEZ direct debit', conditions: 'variable symbol is 4471820', does: 'files as Energy · learned from a correction', pct: '94%', trusted: true, counts: '19 kept · 0 overridden' },
+        { name: 'Big Alza purchases', conditions: 'counterparty contains “ALZA” · amount between 5 000 and ∞', does: 'files as Home & garden · tags renovation · written by hand', pct: '78%', trusted: true, counts: '7 kept · 1 overridden' },
+        { name: 'Rent from Brno', conditions: 'counter-account is 2101106516/2010', does: 'files as Rent received · learned from a correction', pct: '92%', trusted: true, counts: '24 kept · 0 overridden' },
+        { name: 'Bolt', conditions: 'counterparty contains “BOLT”', does: 'files as Transport · learned from a correction', pct: '61%', trusted: false, counts: '11 kept · 6 overridden' }
+      ].map(r => Object.assign(r, {
+        pctColor: r.trusted ? 'var(--green)' : 'var(--yellow)',
+        pctTint: r.trusted ? 'var(--green-tint)' : 'var(--yellow-tint)'
+      })),
+
+      // ---- Tags ----
+      tagRows: [
+        { name: 'Karlín renovation', linked: '🏢 Karlín, Praha 8 · 🗂️ Kitchen quote 2026', parts: '−214 800 CZK', converted: '' },
+        { name: 'Italy 2026', linked: '', parts: '−1 840 EUR · −12 400 CZK', converted: '≈ −58 070 CZK' },
+        { name: 'Car service', linked: '🗂️ Škoda service book', parts: '−31 200 CZK', converted: '' },
+        { name: 'Wedding fund', linked: '', parts: 'nothing tagged yet', converted: '' }
+      ].map((t, i) => Object.assign(t, { dot: 'var(--' + ['teal', 'purple', 'orange', 'blue'][i % 4] + ')' })),
+
+      // ---- Tax ----
+      taxGroups: [
+        { head: 'Robert · Czechia', rows: [
+          { year: '2025', figures: 'gross 1 042 000 CZK · tax 152 300 CZK', rate: '14.6%', lines: 'employment 968 000 · rent 74 000', doc: '🗂️ Potvrzení 2025', note: '' },
+          { year: '2024', figures: 'gross 947 000 CZK · tax 139 800 CZK', rate: '14.8%', lines: 'employment 903 000 · rent 44 000', doc: '🗂️ Potvrzení 2024', note: '' }
+        ] },
+        { head: 'Tereza · Czechia', rows: [
+          { year: '2025', figures: 'gross 761 000 CZK · tax 104 900 CZK', rate: '13.8%', lines: 'employment 761 000', doc: '🗂️ Potvrzení 2025', note: '' }
+        ] },
+        { head: 'Robert · Poland', rows: [
+          { year: '2025', figures: 'gross 41 200 PLN · tax 5 300 PLN', rate: '12.9%', lines: 'contract work 41 200', doc: '', note: 'PIT-37 · mBank account, filed in Poland' }
+        ] }
+      ],
+      taxBars: [
+        { label: '2022', pct: '13.1%', width: '78%' }, { label: '2023', pct: '14.2%', width: '85%' },
+        { label: '2024', pct: '14.8%', width: '89%' }, { label: '2025', pct: '14.6%', width: '87%' }
+      ],
+
+      // ---- New Overview panels ----
+      portfolio: { value: '1 672 500', gain: '+336 400', gainPct: '+25.2%', rows: [
+        { label: 'VWCE.DE', value: '842 100', pct: '+28.4%' },
+        { label: 'CSPX.L', value: '514 900', pct: '+31.0%' },
+        { label: 'IWDA.AS', value: '215 300', pct: '+11.8%' },
+        { label: 'Cash · EUR', value: '100 200', pct: '—' }
+      ] },
+      outlook: { covered: '61%', width: '61%', line: 'Capital would pay 34 200 a month, the state pension adds 21 800.', target: 'against the 92 000 you say you need' },
+      taxPanel: [
+        { label: 'Robert · Czechia 2025', value: '14.6%', hint: 'tax 152 300 of 1 042 000' },
+        { label: 'Tereza · Czechia 2025', value: '13.8%', hint: 'tax 104 900 of 761 000' },
+        { label: 'Robert · Poland 2025', value: '12.9%', hint: 'tax 5 300 PLN of 41 200 PLN' }
+      ],
+      activityRows: [
+        { date: '31 Jul', label: 'Albert Karlín', amount: '−1 284', color: 'var(--fg1)' },
+        { date: '30 Jul', label: 'ČEZ Prodej', amount: '−3 410', color: 'var(--fg1)' },
+        { date: '29 Jul', label: 'Zásilkovna', amount: '−457', color: 'var(--fg1)' },
+        { date: '28 Jul', label: 'Martin Dvořák · rent', amount: '+18 500', color: 'var(--green)' },
+        { date: '25 Jul', label: 'Salary · Robert', amount: '+78 400', color: 'var(--green)' },
+        { date: '25 Jul', label: 'Bolt Food', amount: '−689', color: 'var(--fg1)' }
+      ],
+      savingsBars: [38, 44, 29, 51, 47, 12, 55, 49, 41, 58, 46, 53].map((v, i) => ({
+        h: v + '%', color: v < 20 ? 'var(--orange)' : 'var(--green)',
+        label: ['Aug', '', '', 'Nov', '', '', 'Feb', '', '', 'May', '', 'Jul'][i]
+      })),
+      savingsRate: '31%',
+
 
       isOverview: s.screen === 'overview', isCashflow: s.screen === 'cashflow',
       isAccounts: s.screen === 'accounts', isImport: s.screen === 'import',
+      isTransactions: s.screen === 'transactions', isTax: s.screen === 'tax',
+      isRules: s.screen === 'rules', isTags: s.screen === 'tags',
       isProperty: s.screen === 'property', isInvestments: s.screen === 'investments',
       isLoans: s.screen === 'loans', isRetire: s.screen === 'retire',
       isHome: s.screen === 'home', isCalendar: s.screen === 'calendar',
@@ -2104,12 +2530,12 @@ class Component extends DCLogic {
         { date: '18 Jul', route: 'Revolut → Fio banka · leftover holiday cash', amount: '310 €' }
       ],
 
-      importStats: [
+      importStats: Component.washed([
         { label: 'Files this month', value: '5', color: 'var(--fg1)' },
         { label: 'Transactions read', value: '412', color: 'var(--fg1)' },
         { label: 'Filed automatically', value: '97%', color: 'var(--green)' },
         { label: 'Transfers paired', value: '3', color: 'var(--teal)' }
-      ],
+      ]),
       review: [
         { date: '28 Jul', merchant: 'ALZA.CZ A.S.', reason: 'could be Kids or Everything else', amount: '\u22124 190 Kč',
           options: [{ label: 'Kids', go: () => {}, bg: 'var(--card2)', fg: 'var(--fg1)', bd: 'var(--bd2)' }, { label: 'Else', go: () => {}, bg: 'transparent', fg: 'var(--fg2)', bd: 'var(--bd)' }] },
@@ -2136,7 +2562,7 @@ class Component extends DCLogic {
         paidPct: prop.paidPct, paidNote: prop.paidNote,
         billsTotal: prop.billsTotal,
         photoSlots: ['Living room', 'Kitchen', 'Building'].map((l, i) => ({ id: prop.planSlot + '-photo-' + i, label: l })),
-        metrics: prop.metrics.map(m => ({ label: m[0], value: m[1], color: m[2], note: m[3] })),
+        metrics: prop.metrics.map(m => ({ label: m[0], value: m[1], color: m[2], note: m[3], wash: Component.wash(m[2]) })),
         bills: prop.bills.map(b => ({ label: b[0], value: b[1] })),
         tenantName: prop.tenantName || '', tenantInitials: prop.tenantInitials || '',
         tenantContact: prop.tenantContact || '',
@@ -2145,12 +2571,12 @@ class Component extends DCLogic {
         leaseFacts: (prop.leaseFacts || []).map(f => ({ label: f[0], value: f[1], color: f[2] }))
       },
 
-      invMetrics: [
+      invMetrics: Component.washed([
         { label: 'Portfolio', value: '1 672 500', color: 'var(--fg1)', note: 'Kč · 67 168 € at 24.90' },
         { label: 'Money in', value: '1 336 100', color: 'var(--fg2)', note: 'since 2019' },
         { label: 'Gain', value: '+336 400', color: 'var(--green)', note: '+25.2%' },
         { label: 'Annualised', value: '+7.4%', color: 'var(--green)', note: 'real, after inflation' }
-      ],
+      ]),
       invAxis: [[0, '2.0'], [25, '1.5'], [50, '1.0'], [75, '0.5'], [100, '0']].map(a => ({ top: a[0] + '%', label: a[1] })),
       holdings: [
         { ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', units: '412', value: '48 210 €', czk: '1 200 400', gain: '+27.1%', color: 'var(--green)' },
@@ -2161,12 +2587,12 @@ class Component extends DCLogic {
         { ticker: 'CASH', name: 'Uninvested balance', units: '—', value: '−1 000 €', czk: '\u221225 000', gain: '—', color: 'var(--fg3)' }
       ],
 
-      loanMetrics: [
+      loanMetrics: Component.washed([
         { label: 'Total owed', value: '6 818 000', color: 'var(--red)', note: 'across three loans' },
         { label: 'Monthly payments', value: '61 300', color: 'var(--fg1)', note: '34% of income' },
         { label: 'Interest this year', value: '191 400', color: 'var(--orange)', note: 'deductible: 141 200' },
         { label: 'Debt-free', value: '2049', color: 'var(--fg2)', note: 'at current payments' }
-      ],
+      ]),
       loans: [
         { name: 'Mortgage · Karlín', sub: 'Česká spořitelna · 4.29% · secured by the flat you live in',
           fixLabel: 'fixed to Mar 2029', fixColor: 'var(--green)', fixTint: 'var(--green-tint)',
@@ -2196,14 +2622,14 @@ class Component extends DCLogic {
           label: v.toFixed(1) + '%',
           go: () => this.setState(st => ({ retire: Object.assign({}, Component.RET_DEFAULTS, st.retire, { swr: v }) })),
           bg: cfg.swr === v ? 'var(--blue)' : 'transparent',
-          fg: cfg.swr === v ? '#fff' : 'var(--fg2)',
+          fg: cfg.swr === v ? 'var(--fg-inverse)' : 'var(--fg2)',
           bd: cfg.swr === v ? 'var(--blue)' : 'var(--bd)'
         })),
         planOptions: [['keep', 'Keep, live in it'], ['rent', 'Rent it out'], ['sell', 'Sell and invest']].map(o => ({
           label: o[1],
           go: () => this.setState(st => ({ retire: Object.assign({}, Component.RET_DEFAULTS, st.retire, { plan: o[0] }) })),
           bg: cfg.plan === o[0] ? 'var(--blue)' : 'transparent',
-          fg: cfg.plan === o[0] ? '#fff' : 'var(--fg2)',
+          fg: cfg.plan === o[0] ? 'var(--fg-inverse)' : 'var(--fg2)',
           bd: cfg.plan === o[0] ? 'var(--blue)' : 'var(--bd)'
         })),
         pensionSource: 'Rough placeholder until you paste the real figures from your ČSSZ personal account.',
@@ -2249,13 +2675,13 @@ class Component extends DCLogic {
       },
 
       ha: {
-        tiles: [
+        tiles: Component.washed([
           { emoji: '⚡', label: 'Power now', value: '0.62 kW', color: 'var(--fg1)', note: 'dishwasher running' },
           { emoji: '📊', label: 'This month', value: '184 kWh', color: 'var(--fg1)', note: '3 100 Kč · into the budget' },
           { emoji: '💧', label: 'Water', value: '4.1 m³', color: 'var(--teal)', note: '11% below last August' },
           { emoji: '🌡️', label: 'Indoors', value: '22.4 °C', color: 'var(--fg1)', note: '45% humidity' },
           { emoji: '🌫️', label: 'Air', value: 'PM2.5 6', color: 'var(--green)', note: 'good' }
-        ],
+        ]),
         hasAlerts: true,
         alerts: ['Balcony door has been open 2h 14m', 'Bathroom leak sensor battery at 9%'],
         onCount: String(Object.keys(devices).filter(k => devices[k]).length),
@@ -2342,16 +2768,7 @@ class Component extends DCLogic {
         columns: docColumns
       },
 
-      moduleRows: [
-        ['property', 'Property', 'Flats, floor plans, tenants, bills'],
-        ['investments', 'Investments', 'Holdings and long-run return'],
-        ['loans', 'Loans', 'Mortgages, car loans, schedules'],
-        ['retirement', 'Retirement', 'What your assets could pay you'],
-        ['home', 'Home Assistant', 'Only for the flat you live in'],
-        ['calendar', 'Calendar', 'iCal and Google, two-way'],
-        ['documents', 'Documents', 'Payslips, contracts, certificates'],
-        ['imports', 'Import', 'Bank statement ingestion']
-      ].map(m => toggleRow(mods[m[0]], () => this.setState(st => ({
+      moduleRows: Component.MODULES.map(m => toggleRow(mods[m[0]], () => this.setState(st => ({
         modules: Object.assign({}, st.modules, { [m[0]]: !st.modules[m[0]] })
       })), m[1], m[2])),
 

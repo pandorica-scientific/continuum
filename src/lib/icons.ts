@@ -75,6 +75,19 @@ export const ICONS = {
 			path: 'M3 7.6A1.6 1.6 0 0 1 4.6 6H9l2.2 2.6h8.2A1.6 1.6 0 0 1 21 10.2v8.2A1.6 1.6 0 0 1 19.4 20H4.6A1.6 1.6 0 0 1 3 18.4z'
 		}
 	],
+	// A ring with a stem and a dot, rather than a glyph "i": drawn as strokes it
+	// stays legible at 14px and matches the weight of every other icon here.
+	info: [{ circle: [12, 12, 9] }, { line: [12, 11, 12, 16.5] }, { line: [12, 7.8, 12, 8.2] }],
+	// Two figures rather than one: a single head-and-shoulders reads as "my
+	// profile", and this list is other people, not the person looking at it.
+	// The second figure is drawn as two open arcs so it stays legible at 18px
+	// without becoming a smudge behind the first.
+	people: [
+		{ circle: [9.2, 8.4, 3.1] },
+		{ path: 'M3.6 19.4a5.6 5.6 0 0 1 11.2 0' },
+		{ path: 'M15.6 5.7a3.1 3.1 0 0 1 0 5.4' },
+		{ path: 'M17.2 13.6a5.6 5.6 0 0 1 3.2 5.8' }
+	],
 	gear: [
 		{ circle: [12, 12, 2.4] },
 		{ circle: [12, 12, 5.6] },

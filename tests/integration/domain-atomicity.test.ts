@@ -1,10 +1,5 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import EmbeddedPostgres from 'embedded-postgres';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { createDocument } from '$lib/server/documents/mutations';
@@ -29,16 +24,10 @@ import { deleteSplits, saveSplits } from '$lib/server/splits';
 import { setSetting } from '$lib/server/settings';
 import { updateLoanTags, updatePropertyTags, updateTransactionTags } from '$lib/server/tags';
 import { saveStatement } from '$lib/server/tax';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
 
-const PORT = 55442;
-const DATABASE = 'continuum_domain_atomicity';
-const DATABASE_DIR = resolve('scratch-workspace/domain-atomicity-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
-
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let testDb: TestDb;
 
 const REPORT: BrokerReport = {
 	accountCurrency: 'EUR',
@@ -117,33 +106,10 @@ function delayedHomeProvider(): HomeProvider {
 	};
 }
 
-async function executeSqlFile(path: string): Promise<void> {
-	await sqlClient.unsafe(readFileSync(path, 'utf8'));
-}
-
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sqlClient = postgres(URL, { max: 10, onnotice: () => undefined });
-	testDb = drizzle(sqlClient, { schema });
-	const migrations = readdirSync('drizzle')
-		.filter(
-			(name) => /^\d{4}_.+\.sql$/.test(name) && name !== '0027_repair_transaction_fingerprints.sql'
-		)
-		.sort();
-	for (const name of migrations) await executeSqlFile(resolve('drizzle', name));
+	harness = await startPostgres('domain-atomicity');
+	testDb = harness.db;
+	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
 
 	registerBrokerAdapter({
 		id: 'domain-atomicity',
@@ -157,7 +123,7 @@ beforeAll(async () => {
 beforeEach(async () => {
 	activeReport = REPORT;
 	resetDelayedHomeProvider();
-	await sqlClient.unsafe(`
+	await harness.sql.unsafe(`
 		drop trigger if exists task_domain_fail_tax_line on tax_statement_line;
 		drop function if exists task_domain_fail_tax_line();
 		drop trigger if exists task_domain_fail_holding on holding;
@@ -258,9 +224,8 @@ describe('home meter sync freshness', () => {
 });
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
-}, 30_000);
+	await harness?.stop();
+});
 
 describe('domain replacement writes', () => {
 	async function seedSplit(): Promise<void> {
@@ -327,8 +292,8 @@ describe('domain replacement writes', () => {
 
 	it('locks the parent before unsplitting so a concurrent save cannot deadlock on child rows', async () => {
 		await seedSplit();
-		const blocker = postgres(URL, { max: 1 });
-		const probe = postgres(URL, { max: 1 });
+		const blocker = harness.connect({ max: 1 });
+		const probe = harness.connect({ max: 1 });
 		let releaseParent!: () => void;
 		let parentLocked!: () => void;
 		const release = new Promise<void>((resolveRelease) => (releaseParent = resolveRelease));
@@ -348,9 +313,9 @@ describe('domain replacement writes', () => {
 		try {
 			let waiting = false;
 			for (let attempt = 0; attempt < 100; attempt++) {
-				const rows = await sqlClient<{ query: string }[]>`
+				const rows = await harness.sql<{ query: string }[]>`
 					select query from pg_stat_activity
-					where datname = ${DATABASE} and wait_event_type = 'Lock'
+					where datname = ${harness.database} and wait_event_type = 'Lock'
 				`;
 				if (rows.some((row) => row.query.includes('transaction'))) {
 					waiting = true;
@@ -380,7 +345,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('rolls a document, its new subject, links, and tags back when a tag link fails', async () => {
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_fail_document_tag() returns trigger language plpgsql as $$
 			begin
 				if exists (select 1 from tag where id = new.tag_id and normalised_name = 'explode') then
@@ -434,7 +399,7 @@ describe('domain replacement writes', () => {
 			kind: 'lived',
 			currency: 'CZK'
 		});
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_fail_property_bill() returns trigger language plpgsql as $$
 			begin
 				if new.label = 'Explode' then raise exception 'injected property bill failure'; end if;
@@ -485,7 +450,6 @@ describe('domain replacement writes', () => {
 		});
 		const base = {
 			propertyId: 'property-tenancy',
-			tenantContact: '',
 			rentMinor: 20_000n,
 			depositMinor: 40_000n,
 			startDate: '2026-01-01',
@@ -517,7 +481,6 @@ describe('domain replacement writes', () => {
 					id: 'tenancy-invalid',
 					propertyId: 'property-invalid-tenancy',
 					tenantName: 'Tenant',
-					tenantContact: '',
 					rentMinor: 20_000n,
 					depositMinor: 0n,
 					startDate: '2026-12-31',
@@ -627,7 +590,7 @@ describe('domain replacement writes', () => {
 			{ id: 'bill-a', propertyId: 'property-meter', label: 'Power A' },
 			{ id: 'bill-b', propertyId: 'property-meter', label: 'Power B' }
 		]);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_slow_meter() returns trigger language plpgsql as $$
 			begin
 				if new.source = 'meter' then perform pg_sleep(0.2); end if;
@@ -676,7 +639,7 @@ describe('domain replacement writes', () => {
 				source: 'manual'
 			}
 		]);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_slow_meter() returns trigger language plpgsql as $$
 			begin
 				if old.source = 'meter' and new.source = 'manual' then perform pg_sleep(0.2); end if;
@@ -703,7 +666,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('migration 0030 deterministically keeps the first sorted meter bill', async () => {
-		await sqlClient.unsafe('drop index property_bill_meter_property_idx');
+		await harness.sql.unsafe('drop index property_bill_meter_property_idx');
 		await testDb.insert(schema.property).values({
 			id: 'property-meter-migration',
 			name: 'Meter flat',
@@ -727,7 +690,7 @@ describe('domain replacement writes', () => {
 			}
 		]);
 
-		await executeSqlFile(resolve('drizzle/0030_property_meter_bill_unique.sql'));
+		await harness.applyMigrationFile('0030_property_meter_bill_unique.sql');
 
 		expect(
 			await testDb
@@ -757,7 +720,7 @@ describe('domain replacement writes', () => {
 		]);
 		await testDb.insert(schema.settings).values({ key: 'home', value: { kind: 'demo' } });
 
-		await executeSqlFile(resolve('drizzle/0032_bind_home_meter_property.sql'));
+		await harness.applyMigrationFile('0032_bind_home_meter_property.sql');
 
 		expect((await testDb.select().from(schema.settings))[0].value).toEqual({
 			kind: 'demo',
@@ -812,7 +775,17 @@ describe('domain replacement writes', () => {
 			taxPaidMinor: 10n
 		});
 
-		expect(await missingRateCurrencies('CZK', testDb)).toEqual(['CHF', 'EUR', 'PLN', 'USD']);
+		// Reported by REASON now. Everything here is dated before this instance's
+		// first stored fixing, so it is a historical carry-back rather than a
+		// missing rate — which is the distinction the banner needs in order to give
+		// advice that is any use.
+		const approximate = await missingRateCurrencies('CZK', testDb);
+		expect([...approximate.carried, ...approximate.none].sort()).toEqual([
+			'CHF',
+			'EUR',
+			'PLN',
+			'USD'
+		]);
 	});
 
 	it('serializes tag deltas so a concurrent add cannot restore a removed tag', async () => {
@@ -840,7 +813,7 @@ describe('domain replacement writes', () => {
 			.values({ transactionId: 'transaction-tags', tagId: 'tag-base' });
 		// With no owner lock, both mutations load Base before either DELETE runs.
 		// The adder then re-inserts that stale name after the remover commits.
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_slow_tag_replace() returns trigger language plpgsql as $$
 			begin
 				perform pg_sleep(0.2);
@@ -914,7 +887,7 @@ describe('domain replacement writes', () => {
 			{ ...base, grossIncomeMinor: 10000n, lines: [{ label: 'Original', amountMinor: 500n }] },
 			testDb
 		);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_fail_tax_line() returns trigger language plpgsql as $$
 			begin
 				if new.label = 'Injected failure' then raise exception 'injected tax line failure'; end if;
@@ -958,7 +931,7 @@ describe('domain replacement writes', () => {
 			valueMinor: 7000n,
 			currency: 'EUR'
 		});
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task_domain_fail_holding() returns trigger language plpgsql as $$
 			begin
 				if new.ticker = 'BAD' then raise exception 'injected holding failure'; end if;
@@ -1192,7 +1165,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('backfills broker freshness from a newer empty snapshot instead of stale holdings', async () => {
-		await sqlClient.unsafe('drop table broker_import_state');
+		await harness.sql.unsafe('drop table broker_import_state');
 		await testDb.insert(schema.holding).values({
 			id: 'stale-holding',
 			ticker: 'OLD',
@@ -1210,7 +1183,7 @@ describe('domain replacement writes', () => {
 			currency: 'EUR'
 		});
 
-		await executeSqlFile(resolve('drizzle/0029_broker_import_state.sql'));
+		await harness.applyMigrationFile('0029_broker_import_state.sql');
 
 		expect(await testDb.select().from(schema.brokerImportState)).toMatchObject([
 			{

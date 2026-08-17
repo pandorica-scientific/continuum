@@ -9,7 +9,7 @@ import { pathDisabled } from '$lib/modules/registry';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ url }) => {
+export const load: LayoutServerLoad = async ({ url, cookies }) => {
 	const modules = await getModules();
 
 	if (pathDisabled(url.pathname, modules)) {
@@ -30,11 +30,15 @@ export const load: LayoutServerLoad = async ({ url }) => {
 	// the size of the rate. Naming the currencies here is what keeps it from
 	// being silent, on every screen at once.
 	const missingRates = await missingRateCurrencies(netWorth.baseCurrency);
+	// Read here rather than in the browser so a dismissed banner is never
+	// rendered at all — reading it after hydration made it flash on every load.
+	const rateWarningDismissed = cookies.get('continuum_rate_dismissed') ?? null;
 
 	return {
 		modules,
 		householdLabel,
 		missingRates,
+		rateWarningDismissed,
 		netWorth:
 			netWorth.totalMinor !== 0n ? formatMinor(netWorth.totalMinor, netWorth.baseCurrency) : null,
 		netWorthDelta:

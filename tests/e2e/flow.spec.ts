@@ -472,6 +472,67 @@ test.describe('signed in', () => {
 		expect(await response.text()).toContain('BEGIN:VCALENDAR');
 	});
 
+	// The first of next month, so a weekly series always has a full month to
+	// expand into whenever this suite happens to run.
+	const nextMonthFirst = () => {
+		const date = new Date();
+		date.setUTCMonth(date.getUTCMonth() + 1, 1);
+		return date.toISOString().slice(0, 10);
+	};
+
+	test('a weekly event is authored and every occurrence appears', async ({ page }) => {
+		const date = nextMonthFirst();
+		await page.goto(`/calendar?m=${date.slice(0, 7)}`);
+		await page.getByRole('button', { name: 'Add event' }).click();
+
+		// Scoped to the dialog: the rule toggles beside it carry aria-labels like
+		// "Property inspections and lease dates", which match a bare 'Date'.
+		const dialog = page.locator('form.editor');
+		await dialog.getByLabel('Title').fill('Bin day');
+		await dialog.getByLabel('Date').fill(date);
+		await dialog.getByLabel('Repeats').selectOption('weekly');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+
+		await page.goto(`/calendar?m=${date.slice(0, 7)}`);
+		// The agenda shows one day, so the MONTH is read from the grid: a weekly
+		// series marks at least four days in any month.
+		expect(await page.locator('.day.has-events').count()).toBeGreaterThanOrEqual(4);
+
+		// And the event itself is on the day it starts.
+		await page.locator('.day', { hasText: '1' }).first().click();
+		await expect(page.getByText('Bin day').first()).toBeVisible();
+	});
+
+	test('editing one occurrence leaves the rest of the series alone', async ({ page }) => {
+		const month = nextMonthFirst().slice(0, 7);
+		await page.goto(`/calendar?m=${month}`);
+
+		const markedDays = await page.locator('.day.has-events').count();
+		expect(markedDays).toBeGreaterThanOrEqual(4);
+
+		// Open a day that is NOT the first occurrence, so a scope bug that rewrites
+		// the whole series shows up as the untouched days changing too.
+		const marked = page.locator('.day.has-events');
+		await marked.nth(1).click();
+		await page.getByText('Bin day').first().click();
+
+		const dialog = page.locator('form.editor');
+		await dialog.getByLabel('Title').fill('Bin day moved');
+		await dialog.getByRole('radio', { name: 'This event only' }).check();
+		await dialog.getByRole('button', { name: 'Save' }).click();
+
+		// That day now shows the renamed occurrence…
+		await page.goto(`/calendar?m=${month}`);
+		await page.locator('.day.has-events').nth(1).click();
+		await expect(page.getByText('Bin day moved')).toBeVisible();
+
+		// …and the first occurrence is untouched, which is what 'this event only'
+		// has to mean.
+		await page.locator('.day.has-events').first().click();
+		await expect(page.getByText('Bin day', { exact: true })).toBeVisible();
+		await expect(page.getByText('Bin day moved')).toHaveCount(0);
+	});
+
 	test('retirement recomputes live when assumptions change', async ({ page }) => {
 		await page.goto('/retirement');
 		await expect(page.getByText('If you stopped working today')).toBeVisible();
@@ -498,6 +559,150 @@ test.describe('signed in', () => {
 		expect(sql).toContain('copy "person"');
 		expect(sql).toContain('truncate');
 		expect(sql.trim().endsWith('commit;')).toBe(true);
+	});
+
+	test('the calendar panel renders itself from the provider registry', async ({ page }) => {
+		await page.goto('/settings');
+		await page.mouse.move(0, 0);
+		// Scoped: there is one connect form per registered provider.
+		const connect = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		await expect(connect).toBeVisible();
+
+		// Fields come from the provider's own declaration, so this asserts the
+		// registry contract rather than a hand-written form.
+		await expect(connect.getByLabel('Apple ID')).toBeVisible();
+		const password = connect.getByLabel('App-specific password');
+		await expect(password).toBeVisible();
+		// A secret field must never render as plain text.
+		await expect(password).toHaveAttribute('type', 'password');
+		// The instructions live behind the info icon rather than always on screen —
+		// they are several lines and would bury the form. What matters is that they
+		// say where to GET the app-specific password: it is the step people get
+		// wrong, and the 401 that follows explains nothing.
+		await connect.getByRole('button', { name: /how to connect/i }).click();
+		await expect(connect.getByText(/appleid\.apple\.com/i)).toBeVisible();
+	});
+
+	test('connecting with credentials that do not work is refused, not stored', async ({ page }) => {
+		await page.goto('/settings');
+		const connect = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		await connect.getByLabel('Apple ID').fill('nobody@example.invalid');
+		await connect.getByLabel('App-specific password').fill('wrong-wrong-wrong');
+		await connect.getByLabel('Server').fill('https://caldav.example.invalid');
+		await connect.getByRole('button', { name: 'Connect', exact: true }).click();
+
+		// An account that does not work must not appear connected — that is worse
+		// than no account at all, because it sits in the list looking fine.
+		// ActionError's own class. It used to be `.form-error`, which this page had
+		// no scoped rule for — so the refusal rendered as unstyled body text and the
+		// assertion passed on something nobody would read as an error.
+		await expect(page.locator('.action-error')).toBeVisible();
+		await expect(page.locator('.cal-account')).toHaveCount(0);
+	});
+
+	test('each provider gets the connect flow it declared', async ({ page }) => {
+		await page.goto('/settings');
+		await page.mouse.move(0, 0);
+
+		// CalDAV takes pasted credentials and is done.
+		const caldav = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		await expect(caldav.getByRole('button', { name: 'Connect', exact: true })).toBeVisible();
+
+		// Google has to send the browser away, so it asks for the client id and
+		// secret only — never a refresh token, which nobody should have to fetch by
+		// hand — and offers to authorise rather than to connect. It also makes its
+		// own calendar rather than offering the account's, because the narrow scope
+		// it asks for cannot even read that list.
+		const google = page.locator('form.cal-connect', { hasText: 'Google' });
+		await expect(google.getByLabel('OAuth client ID')).toBeVisible();
+		await expect(google.getByLabel('OAuth client secret')).toHaveAttribute('type', 'password');
+		await expect(google.getByLabel(/refresh token/i)).toHaveCount(0);
+		await expect(google.getByRole('button', { name: 'Authorise with Google' })).toBeVisible();
+		// The instructions must carry the publishing-status trap: left in Testing,
+		// sync dies after seven days and keeps dying weekly.
+		await google.getByRole('button', { name: /how to connect/i }).click();
+		await expect(google.getByText(/production/i).first()).toBeVisible();
+	});
+
+	test('each provider explains how to connect it, behind an info icon', async ({ page }) => {
+		await page.goto('/settings');
+
+		// Park the pointer somewhere harmless first. The hint also opens on hover,
+		// and the pointer is left wherever the previous test clicked — so without
+		// this the bubble can already be open before the test does anything.
+		await page.mouse.move(0, 0);
+
+		const icloud = page.locator('form.cal-connect', { hasText: 'iCloud' });
+		const hint = icloud.getByRole('button', { name: /how to connect/i });
+		await expect(hint).toBeVisible();
+
+		// Asserted on the bubble itself rather than on its words: the same phrases
+		// appear in field labels, so matching text alone would pass whether or not
+		// the disclosure worked.
+		const bubble = icloud.locator('[role="note"]');
+		await expect(bubble).toHaveCount(0);
+		await expect(hint).toHaveAttribute('aria-expanded', 'false');
+
+		// A real button, not hover-only — there is no hover on a phone and a
+		// keyboard user never triggers one.
+		await hint.click();
+		await expect(hint).toHaveAttribute('aria-expanded', 'true');
+		await expect(bubble).toBeVisible();
+		await expect(bubble).toContainText(/appleid\.apple\.com/i);
+		// The mistake people actually make.
+		await expect(bubble).toContainText(/normal Apple ID password will not work/i);
+
+		// Un-pinning is not enough on its own: the pointer is still on the icon
+		// after the click, and hovering legitimately keeps it open. Move away first,
+		// which is what a person does.
+		await hint.click();
+		await expect(hint).toHaveAttribute('aria-expanded', 'false');
+		await page.mouse.move(0, 0);
+		await expect(bubble).toHaveCount(0);
+
+		// Google's warns about the trap that kills sync a week after setup.
+		const google = page.locator('form.cal-connect', { hasText: 'Google' });
+		await google.getByRole('button', { name: /how to connect/i }).click();
+		await expect(google.locator('[role="note"]')).toContainText(/7 days/i);
+	});
+
+	test('the calendar screen says whether sync is actually live', async ({ page }) => {
+		await page.goto('/calendar');
+		// No account connected in this journey, so it must say so rather than
+		// claiming sync is coming in a future phase.
+		await expect(page.getByText('no calendar connected yet')).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Connect Google or iCloud' })).toBeVisible();
+		await expect(page.getByText(/Phase 4/i)).toHaveCount(0);
+
+		// And the link lands on the panel that does it.
+		await page.getByRole('link', { name: 'Connect Google or iCloud' }).click();
+		await expect(page).toHaveURL(/\/settings#calendars/);
+	});
+
+	test('the OAuth callback refuses a state it never issued', async ({ page }) => {
+		// The defence against a third party completing an authorisation on this
+		// household's behalf. No pending flow exists, so any state must be refused.
+		const response = await page.goto('/settings/google/callback?code=abc&state=forged');
+		expect(response?.status()).toBeLessThan(400);
+		await expect(page).toHaveURL(/\/settings\?calendar=/);
+		await expect(page.locator('.calendar-notice')).toContainText(/did not match/i);
+		// And nothing was connected.
+		await expect(page.locator('.cal-account')).toHaveCount(0);
+	});
+
+	test('the ledger-marker toggle flips and sticks', async ({ page }) => {
+		await page.goto('/settings');
+		const toggle = page.getByRole('switch', { name: "Mark Continuum's own events" });
+		await expect(toggle).toHaveAttribute('aria-checked', 'true');
+		await toggle.click();
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		await page.reload();
+		await expect(page.getByRole('switch', { name: "Mark Continuum's own events" })).toHaveAttribute(
+			'aria-checked',
+			'false'
+		);
+		// Put it back: later tests read the published feed.
+		await page.getByRole('switch', { name: "Mark Continuum's own events" }).click();
 	});
 
 	test('settings export produces a config file with only whitelisted keys', async ({ page }) => {

@@ -14,7 +14,26 @@ interface DrizzleSnapshot {
 	>;
 }
 
-const SNAPSHOT_NAME = '0032_snapshot.json';
+// Derived, not pinned by name. A hardcoded filename has to be bumped by hand on
+// every schema migration, and when someone forgets, this suite fails as "schema
+// drift" — the wrong diagnosis, which sends the next person looking in the wrong
+// place.
+//
+// Read from the snapshot FILES, not from the journal. Hand-written migrations
+// (0033_drop_seeded_rules, 0034_person_overview_layout) carry a journal entry
+// but generate no snapshot, because they change data or nothing drizzle models.
+// Taking the newest journal entry would therefore name a file that does not
+// exist, and this suite would die on ENOENT the first time someone writes SQL by
+// hand — which is exactly when it is most needed.
+function currentSnapshotName(): string {
+	const snapshots = readdirSync('drizzle/meta')
+		.filter((name) => /^\d{4}_snapshot\.json$/.test(name))
+		.sort();
+	if (snapshots.length === 0) throw new Error('No drizzle snapshot found in drizzle/meta.');
+	return snapshots[snapshots.length - 1];
+}
+
+const SNAPSHOT_NAME = currentSnapshotName();
 
 function readSnapshot(): DrizzleSnapshot {
 	return JSON.parse(readFileSync(`drizzle/meta/${SNAPSHOT_NAME}`, 'utf8')) as DrizzleSnapshot;
@@ -63,6 +82,49 @@ describe('Drizzle migration metadata', () => {
 				[name]: columns
 			});
 		}
+	});
+
+	it('declares the contact tables and their links', () => {
+		const snapshot = readSnapshot();
+		expect(snapshot.tables).toHaveProperty('public.contact');
+		expect(snapshot.tables['public.contact'].columns).toHaveProperty('organisation');
+		expect(snapshot.tables['public.contact'].columns).toHaveProperty('job_title');
+		expect(snapshot.tables['public.contact'].columns).toHaveProperty('photo');
+		for (const table of [
+			'contact_tenancy',
+			'contact_property',
+			'contact_loan',
+			'contact_account'
+		]) {
+			expect(snapshot.tables).toHaveProperty(`public.${table}`);
+		}
+	});
+
+	it('declares calendar_event with its timezone column and the exception table', () => {
+		const snapshot = readSnapshot();
+		const event = snapshot.tables['public.calendar_event'];
+		expect(event).toBeDefined();
+		// tz is not redundant beside a timestamptz: RRULE expansion is
+		// timezone-dependent, and a series expanded in UTC drifts an hour across
+		// DST for half the year. Losing this column is a silent correctness bug.
+		expect(event.columns).toHaveProperty('tz');
+		expect(event.columns).toHaveProperty('rrule');
+		expect(event.columns).toHaveProperty('deleted_at');
+		expect(snapshot.tables).toHaveProperty('public.calendar_event_exception');
+		expect(snapshot.tables['public.calendar_event_exception'].columns).toHaveProperty(
+			'recurrence_id'
+		);
+	});
+
+	it('declares the calendar sync tables', () => {
+		const snapshot = readSnapshot();
+		// pushed_hash is the merge base. Without it there is no way to tell which
+		// side of a difference changed — only that the two differ.
+		expect(snapshot.tables['public.calendar_sync_link'].columns).toHaveProperty('pushed_hash');
+		expect(snapshot.tables['public.calendar_sync_link'].columns).toHaveProperty('suppressed_at');
+		expect(snapshot.tables['public.calendar_account'].columns).toHaveProperty('cursor');
+		expect(snapshot.tables['public.calendar_account'].columns).toHaveProperty('credential');
+		expect(snapshot.tables).toHaveProperty('public.calendar_conflict');
 	});
 
 	it('lets the fingerprint repair stop at its first matching occurrence', () => {

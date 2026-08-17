@@ -1,5 +1,5 @@
 import { isNull, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, type Queryable } from '$lib/server/db';
 import { groupMonthlySpending } from '$lib/briefing';
 import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
@@ -7,6 +7,8 @@ import { getBaseCurrency } from '$lib/server/settings';
 import { loadSplits } from '$lib/server/splits';
 import { effectiveLines } from '$lib/transactions/lines';
 import {
+	calendarAccount,
+	calendarConflict,
 	category,
 	document,
 	documentPerson,
@@ -34,7 +36,10 @@ export interface BriefingItem {
 // Each source scans one domain for things that need attention. Phase 2+
 // adds lease expiry, mortgage fixation, document expiry and overspend
 // sources to this list — the strip itself never changes.
-type Source = () => Promise<BriefingItem[]>;
+// The optional handle is what lets a source be exercised against a test
+// database. Sources that do not take one still satisfy this — a function of
+// fewer parameters is assignable — so the older five are untouched.
+type Source = (handle?: Queryable) => Promise<BriefingItem[]>;
 
 const unreviewedImports: Source = async () => {
 	const rows = await db
@@ -224,12 +229,110 @@ const overspend: Source = async () => {
 	return items;
 };
 
+/**
+ * Edits that sync discarded, and dates it wrote back into the ledger.
+ *
+ * THIS IS WHAT MAKES LAST-WRITER-WINS ACCEPTABLE RATHER THAN RECKLESS. When two
+ * people edit the same event on two devices, one version loses. Losing it
+ * silently would mean someone's change simply evaporating with nothing to show
+ * for it; recording it and saying so here is the difference.
+ *
+ * Write-backs are surfaced for a different reason: a calendar edit that moved a
+ * mortgage payment day is a change to household finances, and it should not be
+ * possible for that to happen without anyone being told.
+ */
+export const calendarConflicts: Source = async (handle: Queryable = db) => {
+	const rows = await handle
+		.select()
+		.from(calendarConflict)
+		.where(isNull(calendarConflict.acknowledgedAt))
+		.orderBy(calendarConflict.detectedAt);
+	if (rows.length === 0) return [];
+
+	const wroteBack = rows.filter((row) => row.resolution === 'wrote-back');
+	const discarded = rows.filter((row) => row.resolution !== 'wrote-back');
+	const items: BriefingItem[] = [];
+
+	if (wroteBack.length > 0) {
+		items.push({
+			emoji: '📆',
+			kind: 'calendar',
+			pill: wroteBack.length === 1 ? '1 change' : `${wroteBack.length} changes`,
+			// Red, not yellow: this changed ledger data, from outside the ledger.
+			hue: 'red',
+			title:
+				wroteBack.length === 1
+					? 'A calendar edit changed a date in the ledger'
+					: `${wroteBack.length} calendar edits changed dates in the ledger`,
+			detail: 'Moved in a connected calendar and applied here. Check it was meant.',
+			href: '/calendar',
+			rank: 5
+		});
+	}
+
+	if (discarded.length > 0) {
+		items.push({
+			emoji: '📆',
+			kind: 'calendar',
+			pill: discarded.length === 1 ? '1 edit' : `${discarded.length} edits`,
+			hue: 'yellow',
+			title:
+				discarded.length === 1
+					? 'One calendar edit was overwritten'
+					: `${discarded.length} calendar edits were overwritten`,
+			detail: 'The same event was changed in two places; the later change won.',
+			href: '/calendar',
+			rank: 45
+		});
+	}
+
+	return items;
+};
+
+/**
+ * A connected calendar that has stopped working.
+ *
+ * A sync that fails quietly is worse than one that never ran: the calendar goes
+ * on showing what it last saw, so it looks correct while drifting further from
+ * the truth every day.
+ */
+export const calendarSyncFailures: Source = async (handle: Queryable = db) => {
+	const accounts = await handle.select().from(calendarAccount);
+	const failing = accounts.filter((account) => account.lastError);
+	if (failing.length === 0) return [];
+
+	const stale = failing.filter(
+		(account) =>
+			!account.lastSyncAt || Date.now() - account.lastSyncAt.getTime() > 24 * 60 * 60 * 1000
+	);
+
+	return [
+		{
+			emoji: '📆',
+			kind: 'calendar',
+			pill: failing.length === 1 ? '1 account' : `${failing.length} accounts`,
+			// A connection that has been broken for over a day has stopped being a
+			// blip; below that it may just be a router.
+			hue: stale.length > 0 ? 'red' : 'yellow',
+			title:
+				failing.length === 1
+					? `${failing[0].label} is not syncing`
+					: `${failing.length} calendars are not syncing`,
+			detail: failing[0].lastError ?? 'The last sync failed.',
+			href: '/settings',
+			rank: 15
+		}
+	];
+};
+
 const SOURCES: Source[] = [
 	unreviewedImports,
 	leaseExpiry,
 	fixationHorizon,
 	documentExpiry,
-	overspend
+	overspend,
+	calendarConflicts,
+	calendarSyncFailures
 ];
 
 export async function buildBriefing(): Promise<{ items: BriefingItem[]; caption: string }> {

@@ -1,13 +1,35 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
+	import InfoHint from '$lib/components/InfoHint.svelte';
+	import { SETUP_GUIDES } from '$lib/calendar/setup-steps';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
 	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
 	import { passwordHint } from '$lib/password-policy';
 	import { currencyLabel } from '$lib/currencies';
 
 	let { data, form } = $props();
+
+	// The Google callback redirects back with its outcome in the query string.
+	const calendarNotice = $derived(page.url.searchParams.get('calendar'));
+
+	// The name is submitted alongside the id so it can be stored and shown later:
+	// a CalDAV collection URL or a Google calendar id tells a person nothing about
+	// which of their calendars they picked.
+	// Which account is mid-sync. A pass can take several seconds against a real
+	// server, and with no feedback the button looks like it did nothing.
+	let syncing = $state<string | null>(null);
+
+	let pickedName = $state<string | null>(null);
+	const rememberName = (event: Event) => {
+		const select = event.currentTarget as HTMLSelectElement;
+		pickedName = select.options[select.selectedIndex]?.dataset.name ?? null;
+	};
+	const chosenName = (calendars: { id: string; name: string }[]) =>
+		pickedName ?? calendars[0]?.name ?? '';
 </script>
 
 <ScreenHeader
@@ -15,9 +37,11 @@
 	caption="Everything visible in Continuum is configuration, not content."
 />
 
-{#if form?.message}
-	<div class="error">{form.message}</div>
-{/if}
+<!-- One place, one component. The calendar section used to draw its own copy
+     with a `.form-error` class this file has no rule for — and Svelte scopes
+     styles per component, so a failed calendar connection rendered as unstyled
+     body text below the form. -->
+<ActionError message={form?.message ?? null} />
 
 {#if data.isAdmin}
 	<section class="section">
@@ -120,11 +144,14 @@
 
 {#if data.backup}
 	<section class="section">
-		<Eyebrow
-			emoji="🛟"
-			label="Backups"
-			caption="One restorable database dump, overwritten each run, plus every uploaded file — point it at a cloud-sync folder and the copy leaves the machine by itself (the sync client keeps the file's version history)."
-		/>
+		<div class="eyebrow-row">
+			<Eyebrow emoji="🛟" label="Backups (one restorable dump plus every uploaded file)" />
+			<InfoHint label="How backups work">
+				One restorable database dump, overwritten each run, plus every uploaded file. Point it at a
+				cloud-sync folder and the copy leaves the machine by itself — the sync client keeps the
+				file's version history, so overwriting the dump each time still leaves you earlier ones.
+			</InfoHint>
+		</div>
 		<div class="card stack-card">
 			<form method="POST" action="?/saveBackup" use:enhance class="backup-form">
 				<label class="field dest">
@@ -244,10 +271,227 @@
 {/if}
 
 {#if data.isAdmin}
+	<section class="section" id="calendars">
+		<div class="eyebrow-row">
+			<Eyebrow emoji="📆" label="Connected calendars" />
+			<span class="eyebrow-caption">two-way sync with iCloud and other CalDAV servers</span>
+		</div>
+
+		{#if form?.created}
+			<p class="calendar-notice" role="status">Calendar created. Press “Sync now” to fill it.</p>
+		{/if}
+
+		{#if calendarNotice}
+			<!-- The OAuth callback is a redirect, so its outcome arrives in the URL
+			     rather than as a form result. -->
+			<p class="calendar-notice" role="status">{calendarNotice}</p>
+		{/if}
+
+		{#each data.calendarAccounts as account (account.id)}
+			{@const makesOwn = data.calendarProviders.find(
+				(p) => p.id === account.provider
+			)?.createsOwnCalendar}
+			<div class="card cal-account">
+				<div class="ca-head">
+					<span class="ca-label">{account.label}</span>
+					{#if syncing === account.id}
+						<span class="ca-state busy">syncing now…</span>
+					{:else if account.lastError}
+						<span class="ca-state bad">{account.lastError}</span>
+					{:else if account.lastSyncAt}
+						<span class="ca-state good">
+							last synced {new Date(account.lastSyncAt).toLocaleString('en-GB')}
+						</span>
+					{:else}
+						<span class="ca-state">never synced</span>
+					{/if}
+				</div>
+
+				<!-- One calendar per account, always changeable. Syncing a whole
+				     account would mean writing household events into every calendar
+				     someone owns; picking one is how this stays usable. -->
+				<form method="POST" action="?/listRemoteCalendars" use:enhance class="ca-row">
+					<input type="hidden" name="id" value={account.id} />
+					{#if account.remoteCalId}
+						<span class="ca-cal">
+							Syncing with <strong>{account.remoteCalName ?? account.remoteCalId}</strong>
+						</span>
+						<!-- A provider that makes its own calendar has nothing to change
+						     to: it may only touch what it created. -->
+						{#if !makesOwn}
+							<button class="btn" type="submit">Change calendar</button>
+						{/if}
+					{:else}
+						<button class="btn btn-primary" type="submit">
+							{makesOwn ? 'Create a calendar' : 'Choose a calendar'}
+						</button>
+						<span class="quiet">
+							{makesOwn
+								? 'Continuum makes its own calendar — it cannot see or touch your others.'
+								: 'No calendar chosen yet — nothing syncs until one is.'}
+						</span>
+					{/if}
+				</form>
+
+				<!-- Scoped to the account the list was fetched for. Without listedFor
+				     this picker appeared on every card, and choosing on the wrong one
+				     wrote the wrong account's calendar. -->
+				{#if form?.calendars && form?.listedFor === account.id}
+					<form method="POST" action="?/chooseCalendar" use:enhance class="ca-row">
+						<input type="hidden" name="id" value={account.id} />
+						<select name="remoteCalId" onchange={rememberName}>
+							{#each form.calendars as calendar (calendar.id)}
+								<option value={calendar.id} data-name={calendar.name}>{calendar.name}</option>
+							{/each}
+						</select>
+						<input type="hidden" name="remoteCalName" value={chosenName(form.calendars)} />
+						<button class="btn btn-primary" type="submit">Use this calendar</button>
+					</form>
+					<span class="quiet">
+						Point this at a calendar of its own — make one called “Household” in
+						{account.label.includes('Google') ? 'Google' : 'iCloud'} first. Sharing it with a personal
+						calendar works, but everything this app writes lands among your own events.
+					</span>
+				{/if}
+
+				<div class="ca-row">
+					<form
+						method="POST"
+						action="?/syncCalendarNow"
+						use:enhance={() => {
+							syncing = account.id;
+							return async ({ update }) => {
+								await update();
+								syncing = null;
+							};
+						}}
+					>
+						<input type="hidden" name="id" value={account.id} />
+						<button class="btn" type="submit" disabled={!account.remoteCalId || syncing !== null}>
+							{syncing === account.id ? 'Syncing…' : 'Sync now'}
+						</button>
+					</form>
+					<form method="POST" action="?/disconnectCalendar" use:enhance>
+						<input type="hidden" name="id" value={account.id} />
+						<button class="btn danger" type="submit">Disconnect</button>
+					</form>
+				</div>
+			</div>
+		{/each}
+
+		{#each data.calendarProviders.filter((p) => !data.calendarAccounts.some((a) => a.provider === p.id)) as provider (provider.id)}
+			<!-- Which flow this provider needs comes from the registry, not from a
+			     name check here: CalDAV takes an app password, Google has to send the
+			     browser away and come back. -->
+			<form
+				method="POST"
+				action={provider.oauth ? '?/authoriseGoogle' : '?/connectCalendar'}
+				class="card cal-connect"
+			>
+				<input type="hidden" name="provider" value={provider.id} />
+				<span class="cc-title">
+					Connect {provider.label}
+					{#if SETUP_GUIDES[provider.id]}
+						<InfoHint label="How to connect {provider.label}">
+							{#if SETUP_GUIDES[provider.id].warning}
+								<strong class="warn">{SETUP_GUIDES[provider.id].warning}</strong>
+							{/if}
+							<ol class="steps">
+								{#each SETUP_GUIDES[provider.id].steps as step (step)}
+									<li>{step}</li>
+								{/each}
+							</ol>
+							{#if SETUP_GUIDES[provider.id].docs}
+								<span class="docs mono">{SETUP_GUIDES[provider.id].docs}</span>
+							{/if}
+						</InfoHint>
+					{:else if provider.hint}
+						<InfoHint label="How to connect {provider.label}">{provider.hint}</InfoHint>
+					{/if}
+				</span>
+				<div class="cc-fields">
+					<!-- Rendered from the provider's own field list. Adding a provider
+					     never edits this screen. -->
+					{#each provider.fields as field (field.key)}
+						<label class="field">
+							<span>{field.label}</span>
+							<input
+								name={field.key}
+								type={field.secret ? 'password' : field.kind === 'url' ? 'url' : 'text'}
+								placeholder={field.placeholder ?? ''}
+								required={field.required}
+								autocomplete="off"
+							/>
+						</label>
+					{/each}
+				</div>
+				<div class="ca-row">
+					<button class="btn btn-primary" type="submit">
+						{provider.oauth ? 'Authorise with Google' : 'Connect'}
+					</button>
+				</div>
+			</form>
+		{/each}
+
+		{#if data.calendarProviders.every( (p) => data.calendarAccounts.some((a) => a.provider === p.id) )}
+			<span class="quiet">
+				Both providers are connected. One account each — disconnect above to connect a different
+				Apple ID or Google account.
+			</span>
+		{/if}
+
+		<form method="POST" action="?/toggleCalendarMarkers" use:enhance class="card marker-row">
+			<button
+				type="submit"
+				class="switch"
+				class:on={data.calendarMarkers}
+				role="switch"
+				aria-checked={data.calendarMarkers}
+				aria-label="Mark Continuum's own events"
+			>
+				<span class="knob"></span>
+			</button>
+			<span class="r-text">
+				<span class="r-label">Mark the ledger's own events</span>
+				<span class="r-detail">
+					Adds the module emoji and “· Continuum” to events this app writes, so they are tellable
+					apart from your own in a shared calendar.
+				</span>
+			</span>
+		</form>
+
+		<form method="POST" action="?/setCalendarInterval" use:enhance class="card marker-row">
+			<label class="interval">
+				<span class="r-label">Check connected calendars every</span>
+				<span class="interval-input">
+					<input
+						type="number"
+						name="minutes"
+						min="1"
+						max="1440"
+						step="1"
+						value={data.calendarSyncMinutes}
+						aria-label="Minutes between calendar sync passes"
+					/>
+					<span>minutes</span>
+				</span>
+				<span class="r-detail">
+					Each pass is one request per connected calendar. Slower is kinder to a metered connection;
+					faster is only useful while setting something up. Takes effect without a restart — the
+					interval is measured against each account's own last sync.
+				</span>
+			</label>
+			<button class="btn" type="submit">Save</button>
+		</form>
+	</section>
+
 	<section class="section">
 		<div class="eyebrow-row">
-			<Eyebrow emoji="🔌" label="API tokens" />
-			<span class="eyebrow-caption">read-only access to the whole ledger</span>
+			<Eyebrow emoji="🔌" label="API tokens (read-only access to the whole ledger)" />
+			<InfoHint label="What an API token can do">
+				A token grants read access to every transaction, account and figure in this ledger. It
+				cannot change anything.
+			</InfoHint>
 		</div>
 
 		{#if form?.createdToken}
@@ -277,15 +521,125 @@
 				</form>
 			</div>
 		{/each}
-
-		<p class="quiet-note">
-			A token grants read access to every transaction, account and figure in this ledger. It cannot
-			change anything.
-		</p>
 	</section>
 {/if}
 
 <style>
+	.calendar-notice {
+		color: var(--fg2);
+		font-size: 13px;
+	}
+
+	.cal-account,
+	.cal-connect {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.ca-head {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+	}
+
+	.ca-label {
+		font-weight: 600;
+	}
+
+	.ca-state {
+		font-size: 12px;
+		color: var(--fg3);
+	}
+
+	.ca-state.good {
+		color: var(--green);
+	}
+
+	.ca-state.bad {
+		color: var(--red);
+	}
+
+	.ca-state.busy {
+		color: var(--yellow);
+	}
+
+	.ca-cal {
+		font-size: 12px;
+		color: var(--fg3);
+	}
+
+	.ca-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.cc-title {
+		font-weight: 600;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.warn {
+		display: block;
+		color: var(--red);
+		margin-bottom: 6px;
+	}
+
+	.steps {
+		margin: 0;
+		padding-left: 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.docs {
+		display: block;
+		margin-top: 6px;
+		color: var(--fg3);
+	}
+
+	.cc-fields {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px 14px;
+	}
+
+	.marker-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.interval {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		flex: 1;
+	}
+
+	.interval-input {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--fg3);
+		font-size: 13px;
+	}
+
+	.interval-input input {
+		width: 5.5rem;
+	}
+
+	@media (max-width: 40rem) {
+		.cc-fields {
+			grid-template-columns: 1fr;
+		}
+	}
+
 	.token-new {
 		border-color: var(--blue);
 		display: flex;
@@ -342,19 +696,6 @@
 	.tr-meta {
 		font-size: 12px;
 		color: var(--fg3);
-	}
-	.quiet-note {
-		font-size: 12px;
-		color: var(--fg3);
-		margin: 0;
-	}
-	.error {
-		border: 1px solid var(--red);
-		background: var(--red-tint);
-		color: var(--red);
-		border-radius: 12px;
-		padding: 9px 14px;
-		font-size: 13px;
 	}
 	.modules {
 		display: flex;

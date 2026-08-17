@@ -118,7 +118,7 @@ export async function convertOrFace(
 export async function missingRateCurrencies(
 	baseCurrency: string,
 	handle: Queryable = db
-): Promise<string[]> {
+): Promise<import('./table').ApproximateRates> {
 	// Every table computeNetWorth converts from. Property and the portfolio
 	// snapshot were missing, which are the two largest figures on the net-worth
 	// screen — so a flat valued in EUR with no EUR rate was counted at face

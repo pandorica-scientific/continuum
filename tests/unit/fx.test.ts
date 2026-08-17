@@ -61,12 +61,44 @@ describe('missing-rate fallback', () => {
 		expect(convertOrFace(new Map(), 12345n, 'KWD', 'JPY', '2020-01-01')).toBe(12n);
 	});
 
-	it('reports a historical fallback even when a current fixing exists', () => {
+	// The two reasons are reported apart, because they want different advice. A
+	// currency with no rate at all may be a connectivity problem worth acting on;
+	// a figure older than the first stored fixing is nobody's fault and cannot be
+	// fixed by checking the internet.
+	it('separates a historical fallback from having no rate at all', () => {
 		const table = rates([['EUR', [{ day: '2026-01-02', rate: 25 }]]]);
 
-		expect(missingRateCodes(table, [{ currency: 'EUR', day: '2020-01-01' }], 'CZK')).toEqual([
-			'EUR'
-		]);
-		expect(missingRateCodes(table, [{ currency: 'EUR', day: '2026-01-02' }], 'CZK')).toEqual([]);
+		// A rate exists, but this figure predates it.
+		expect(missingRateCodes(table, [{ currency: 'EUR', day: '2020-01-01' }], 'CZK')).toEqual({
+			carried: ['EUR'],
+			none: []
+		});
+
+		// On or after the fixing: exact, and nothing is reported.
+		expect(missingRateCodes(table, [{ currency: 'EUR', day: '2026-01-02' }], 'CZK')).toEqual({
+			carried: [],
+			none: []
+		});
+
+		// Nothing stored for this currency at all.
+		expect(missingRateCodes(table, [{ currency: 'PLN', day: '2026-01-02' }], 'CZK')).toEqual({
+			carried: [],
+			none: ['PLN']
+		});
+	});
+
+	// The stronger problem wins: a currency used both before and after its first
+	// fixing is reported once, under the advice that helps.
+	it('reports a currency with no rate only once', () => {
+		const table = rates([['EUR', [{ day: '2026-01-02', rate: 25 }]]]);
+		const result = missingRateCodes(
+			table,
+			[
+				{ currency: 'PLN', day: '2020-01-01' },
+				{ currency: 'PLN', day: '2026-06-01' }
+			],
+			'CZK'
+		);
+		expect(result).toEqual({ carried: [], none: ['PLN'] });
 	});
 });
