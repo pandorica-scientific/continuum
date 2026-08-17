@@ -295,6 +295,13 @@
       "when": 1786929036759,
       "tag": "0041_calendar_sync_lease",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786939855980,
+      "tag": "0042_exception_overrides",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expand } from '$lib/calendar/rrule';
+import { expand, formatRrule, isKnownTimeZone, localDate, parseRrule } from '$lib/calendar/rrule';
 
 describe('RRULE expansion', () => {
 	it('expands a weekly rule on a chosen weekday', () => {
@@ -176,5 +176,83 @@ describe('RRULE expansion', () => {
 		expect(() =>
 			expand('FREQ=DAILY', '1900-01-01T09:00:00Z', 'UTC', '1900-01-01', '2200-01-01')
 		).toThrow(/too many occurrences/i);
+	});
+
+	// WEEKS RUN MONDAY→SUNDAY. The epoch is a Thursday, so bucketing by
+	// `time / 604800000` put the Monday and the Friday of one calendar week into
+	// different weeks — and with INTERVAL=2 that pushed every Friday a week late.
+	// Only a single-weekday interval rule was covered before, which is exactly the
+	// shape that cannot see it.
+	it('measures a multi-weekday interval from Monday, not from the epoch', () => {
+		expect(
+			expand(
+				'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR',
+				'2026-01-05T09:00:00Z',
+				'UTC',
+				'2026-01-01',
+				'2026-02-15'
+			)
+		).toEqual([
+			'2026-01-05T09:00:00.000Z',
+			'2026-01-09T09:00:00.000Z',
+			'2026-01-19T09:00:00.000Z',
+			'2026-01-23T09:00:00.000Z',
+			'2026-02-02T09:00:00.000Z',
+			'2026-02-06T09:00:00.000Z'
+		]);
+	});
+
+	// Google and Apple both write "monthly on the second Tuesday" this way. The
+	// ordinal prefix was filtered out as an unknown weekday code, which left the
+	// rule with no BYDAY and no BYMONTHDAY — so it fell through to "the day of the
+	// month the series started on" and an imported series recurred on the 13th.
+	it('honours a BYDAY ordinal prefix', () => {
+		expect(
+			expand('FREQ=MONTHLY;BYDAY=2TU', '2026-01-13T09:00:00Z', 'UTC', '2026-03-01', '2026-03-31')
+		).toEqual(['2026-03-10T09:00:00.000Z']);
+	});
+
+	it('honours a negative BYDAY ordinal', () => {
+		expect(
+			expand('FREQ=MONTHLY;BYDAY=-1FR', '2026-01-30T09:00:00Z', 'UTC', '2026-03-01', '2026-03-31')
+		).toEqual(['2026-03-27T09:00:00.000Z']);
+	});
+
+	it('round-trips an ordinal BYDAY through parse and format', () => {
+		expect(formatRrule(parseRrule('FREQ=MONTHLY;BYDAY=2TU')!)).toBe('FREQ=MONTHLY;BYDAY=2TU');
+	});
+
+	// Math.max(0, NaN) is NaN, and `emitted >= NaN` is false forever — so a
+	// malformed COUNT silently REMOVED the limit rather than being ignored, and
+	// formatRrule then wrote `COUNT=NaN` back out for a provider to reject.
+	it('ignores a COUNT that is not a number', () => {
+		expect(parseRrule('FREQ=DAILY;COUNT=x')?.count).toBeNull();
+		expect(formatRrule(parseRrule('FREQ=DAILY;COUNT=x')!)).toBe('FREQ=DAILY');
+	});
+
+	// A zone name arrives from other people's calendars, not only from this app.
+	// Intl throws a RangeError on one it does not know, and every read path
+	// expands through here — so one imported Outlook event used to 500 the whole
+	// calendar screen, with nothing on it to reach the event and correct it.
+	it('falls back to UTC for a zone Intl does not recognise', () => {
+		expect(isKnownTimeZone('Europe/Prague')).toBe(true);
+		expect(isKnownTimeZone('W. Europe Standard Time')).toBe(false);
+		expect(() =>
+			expand(
+				'FREQ=DAILY;COUNT=1',
+				'2026-09-10T09:00:00Z',
+				'W. Europe Standard Time',
+				'2026-09-01',
+				'2026-09-30'
+			)
+		).not.toThrow();
+	});
+
+	// The inverse of instantOfWall's date half, and the reason `slice(0, 10)` is
+	// not it: in a zone ahead of UTC an event at local midnight reports the day
+	// before.
+	it('reads a calendar date on the event own clock', () => {
+		expect(localDate('2026-09-09T22:00:00.000Z', 'Europe/Prague')).toBe('2026-09-10');
+		expect(localDate('2026-09-09T22:00:00.000Z', 'UTC')).toBe('2026-09-09');
 	});
 });

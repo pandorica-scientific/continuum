@@ -1,10 +1,6 @@
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	createLoan,
 	recordRepayment,
@@ -12,14 +8,8 @@ import {
 	type CreateLoanInput
 } from '$lib/server/loans/mutations';
 
-const PORT = 55444;
-const DATABASE = 'continuum_loan_mutations';
-const DATABASE_DIR = resolve('scratch-workspace/loan-mutations-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
-
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let testDb: TestDb;
 
 async function seedLoan(id = 'loan-a'): Promise<void> {
 	await testDb.insert(schema.loan).values({
@@ -66,78 +56,16 @@ function validLoanInput(overrides: Partial<CreateLoanInput> = {}): CreateLoanInp
 }
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sqlClient = postgres(URL, { max: 5, onnotice: () => undefined });
-	testDb = drizzle(sqlClient, { schema });
-	await sqlClient.unsafe(`
-		create table property (
-			id text primary key,
-			name text not null,
-			value_minor bigint not null default 0
-		);
-		create table loan (
-			id text primary key,
-			name text not null,
-			lender text not null default '',
-			kind text not null default 'mortgage',
-			currency text not null default 'CZK',
-			principal_minor bigint not null,
-			owed_minor bigint not null,
-			owed_as_of date,
-			owner_person_id text,
-			start_date date,
-			end_date date,
-			regime text not null default 'fixed_period',
-			day_count text not null default '30/360',
-			accrual_style text not null default 'payment',
-			payment_day integer,
-			interest_deductible integer not null default 0,
-			created_at timestamptz not null default now()
-		);
-		create table loan_property (
-			id text primary key,
-			loan_id text not null references loan(id) on delete cascade,
-			property_id text not null references property(id) on delete cascade,
-			share_pct numeric(6, 3),
-			unique (loan_id, property_id)
-		);
-		create table loan_fixation_period (
-			id text primary key,
-			loan_id text not null references loan(id) on delete cascade,
-			start_date date not null,
-			end_date date,
-			annual_rate_pct numeric(6, 3) not null,
-			payment_minor bigint not null,
-			unique (loan_id, start_date)
-		);
-		create table loan_event (
-			id text primary key,
-			loan_id text not null references loan(id) on delete cascade,
-			happened_on date not null,
-			kind text not null,
-			amount_minor bigint not null,
-			interest_minor bigint,
-			note text,
-			transaction_id text
-		);
-	`);
+	harness = await startPostgres('loan-mutations');
+	testDb = harness.db;
+	// The real schema, not a hand-written subset of it. The subset that used
+	// to live here had to be kept in step with schema.ts by hand, and a test
+	// passing against a stale copy of a table says nothing about the real one.
+	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
 }, 30_000);
 
 beforeEach(async () => {
-	await sqlClient.unsafe(`
+	await harness.sql.unsafe(`
 		drop trigger if exists fail_loan_update on loan;
 		drop function if exists fail_loan_update();
 		drop trigger if exists fail_refix_event on loan_event;
@@ -149,9 +77,8 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
-}, 30_000);
+	await harness?.stop();
+});
 
 describe('loan mutation transactions', () => {
 	it('rejects invalid and backdated repayments without moving the balance anchor', async () => {
@@ -282,9 +209,9 @@ describe('loan mutation transactions', () => {
 	});
 
 	it('requires explicit shares when several secured properties have no values', async () => {
-		await sqlClient.unsafe(`
-			insert into property (id, name, value_minor)
-			values ('home-a', 'Home A', 0), ('home-b', 'Home B', 0)
+		await harness.sql.unsafe(`
+			insert into property (id, name, kind, value_minor)
+			values ('home-a', 'Home A', 'lived', 0), ('home-b', 'Home B', 'lived', 0)
 		`);
 
 		expect(
@@ -303,7 +230,7 @@ describe('loan mutation transactions', () => {
 
 	it('rejects a replacement fixation that outlasts the loan agreement', async () => {
 		await seedLoan();
-		await sqlClient.unsafe(`update loan set end_date = '2028-12-31' where id = 'loan-a'`);
+		await harness.sql.unsafe(`update loan set end_date = '2028-12-31' where id = 'loan-a'`);
 
 		expect(
 			await replaceFixation(
@@ -326,7 +253,7 @@ describe('loan mutation transactions', () => {
 
 	it('rejects repayments and fixation replacements before the loan agreement starts', async () => {
 		await seedLoan();
-		await sqlClient.unsafe(`update loan set owed_as_of = null where id = 'loan-a'`);
+		await harness.sql.unsafe(`update loan set owed_as_of = null where id = 'loan-a'`);
 		await testDb.insert(schema.loanFixationPeriod).values({
 			id: 'original',
 			loanId: 'loan-a',
@@ -372,7 +299,7 @@ describe('loan mutation transactions', () => {
 
 	it('rolls the event back when updating a repayment balance fails', async () => {
 		await seedLoan();
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function fail_loan_update() returns trigger language plpgsql as $$
 			begin
 				raise exception 'injected loan update failure';
@@ -595,7 +522,7 @@ describe('loan mutation transactions', () => {
 				paymentMinor: 22_000n
 			}
 		]);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function fail_refix_event() returns trigger language plpgsql as $$
 			begin
 				if new.kind = 'refix' then raise exception 'injected refix event failure'; end if;
@@ -626,8 +553,10 @@ describe('loan mutation transactions', () => {
 	});
 
 	it('rolls loan and secured links back when the initial fixation fails', async () => {
-		await sqlClient.unsafe(`insert into property (id, name) values ('home', 'Home')`);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(
+			`insert into property (id, name, kind) values ('home', 'Home', 'lived')`
+		);
+		await harness.sql.unsafe(`
 			create function fail_initial_fixation() returns trigger language plpgsql as $$
 			begin
 				raise exception 'injected initial fixation failure';

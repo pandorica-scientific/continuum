@@ -15,7 +15,15 @@ export type Freq = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 export interface Rrule {
 	freq: Freq;
 	interval: number;
-	/** RFC two-letter weekday codes, e.g. ['TU'] or ['MO','WE']. */
+	/**
+	 * RFC BYDAY tokens, e.g. ['TU'], ['MO','WE'] or ['2TU'] / ['-1FR'].
+	 *
+	 * The ORDINAL PREFIX is kept rather than stripped. Google and Apple both
+	 * write "monthly on the second Tuesday" as `BYDAY=2TU`, and dropping the
+	 * prefix left the rule with no BYDAY and no BYMONTHDAY at all — which fell
+	 * through to "the day of the month the series started on", so an imported
+	 * second-Tuesday series silently recurred on the 13th instead.
+	 */
 	byDay: string[];
 	byMonthDay: number[];
 	/** Which of the matching days in the period; negative counts from the end. */
@@ -26,6 +34,36 @@ export interface Rrule {
 }
 
 const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+/** A BYDAY entry: an optional ordinal (`2`, `-1`) then the two-letter code. */
+const BYDAY_TOKEN = /^([+-]?\d{1,2})?(SU|MO|TU|WE|TH|FR|SA)$/;
+
+/** The two-letter code of a BYDAY token, ordinal or not. */
+function dayCode(token: string): string {
+	return token.slice(-2);
+}
+
+/** The ordinal of a BYDAY token, or 0 when it names every such weekday. */
+function dayOrdinal(token: string): number {
+	const n = Number(token.slice(0, -2));
+	return Number.isInteger(n) ? n : 0;
+}
+
+// Weeks run Monday→Sunday, not Thursday→Wednesday.
+//
+// The epoch (1970-01-01) is a THURSDAY, so `time / 604800000` buckets Monday and
+// Friday of the same calendar week into different weeks. With INTERVAL=2 that
+// made `FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR` fire on the Monday of one week and
+// the Friday of the NEXT — every second occurrence a week late, on screen and in
+// what was pushed to the provider alike.
+//
+// RFC 5545 counts the interval from WKST, which defaults to MO. Shifting the
+// origin back three days puts week boundaries on Mondays.
+const MONDAY_EPOCH = -3 * 86_400_000;
+
+function weekIndex(time: number): number {
+	return Math.floor((time - MONDAY_EPOCH) / 604800000);
+}
 
 // A backstop, not a business rule. The walk is already bounded by the window, so
 // this catches a caller asking for something absurd — or a bug in the stepping
@@ -61,11 +99,15 @@ export function parseRrule(rule: string): Rrule | null {
 		interval: Math.max(1, Number(parts.get('INTERVAL') ?? 1) || 1),
 		byDay: (parts.get('BYDAY') ?? '')
 			.split(',')
-			.map((d) => d.trim().toUpperCase())
-			.filter((d) => WEEKDAYS.includes(d)),
+			.map((d) => d.trim().toUpperCase().replace(/^\+/, ''))
+			.filter((d) => BYDAY_TOKEN.test(d)),
 		byMonthDay: numbers('BYMONTHDAY'),
 		bySetPos: numbers('BYSETPOS'),
-		count: parts.has('COUNT') ? Math.max(0, Number(parts.get('COUNT'))) : null,
+		// A COUNT that is not a number is no COUNT at all. Math.max(0, NaN) is NaN,
+		// and `emitted >= NaN` is false forever — so a malformed value silently
+		// removed the limit instead of being ignored, and formatRrule then wrote
+		// `COUNT=NaN` back out for a provider to reject.
+		count: parts.has('COUNT') ? countOf(parts.get('COUNT')!) : null,
 		until: parts.has('UNTIL') ? parseUntil(parts.get('UNTIL')!) : null
 	};
 }
@@ -89,6 +131,11 @@ export function toBasicUtc(iso: string): string {
 		.replace(/\.\d{3}/, '');
 }
 
+function countOf(value: string): number | null {
+	const count = Number(value);
+	return Number.isFinite(count) ? Math.max(0, count) : null;
+}
+
 function parseUntil(value: string): string | null {
 	const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?$/);
 	if (!m) return null;
@@ -100,10 +147,29 @@ function parseUntil(value: string): string | null {
 
 const offsetCache = new Map<string, Intl.DateTimeFormat>();
 
+/**
+ * The formatter for a zone, falling back to UTC for a name Intl refuses.
+ *
+ * A zone name arrives from a remote calendar, not only from this app: CalDAV
+ * events written by Outlook carry Windows names like "W. Europe Standard Time",
+ * and a TZID may legally be quoted. Either is stored verbatim in
+ * `calendar_event.tz`, and `new Intl.DateTimeFormat` throws a RangeError on
+ * both — which, since every read path expands recurrence through here, turned
+ * one imported event into a 500 on the whole calendar screen with no way to
+ * reach the event and fix it.
+ */
 function formatterFor(tz: string): Intl.DateTimeFormat {
 	let formatter = offsetCache.get(tz);
 	if (!formatter) {
-		formatter = new Intl.DateTimeFormat('en-US', {
+		formatter = buildFormatter(tz) ?? buildFormatter('UTC')!;
+		offsetCache.set(tz, formatter);
+	}
+	return formatter;
+}
+
+function buildFormatter(tz: string): Intl.DateTimeFormat | null {
+	try {
+		return new Intl.DateTimeFormat('en-US', {
 			timeZone: tz,
 			hour12: false,
 			year: 'numeric',
@@ -113,9 +179,14 @@ function formatterFor(tz: string): Intl.DateTimeFormat {
 			minute: '2-digit',
 			second: '2-digit'
 		});
-		offsetCache.set(tz, formatter);
+	} catch {
+		return null;
 	}
-	return formatter;
+}
+
+/** Whether Intl recognises this zone name, for validating one off the wire. */
+export function isKnownTimeZone(tz: string): boolean {
+	return buildFormatter(tz) !== null;
 }
 
 export interface Wall {
@@ -172,6 +243,21 @@ export function instantOfWall(wall: Wall, tz: string): Date {
 	return instant;
 }
 
+/**
+ * The calendar date an instant falls on in a zone, as YYYY-MM-DD.
+ *
+ * The exact inverse of the date half of `instantOfWall`, and the reason it is
+ * here rather than spelled `iso.slice(0, 10)` at each call site: that slice
+ * reads the UTC date, so in any zone ahead of UTC an all-day event stored at
+ * local midnight — and any timed event before the offset — reports the day
+ * BEFORE the one it was authored for.
+ */
+export function localDate(instant: string | Date, tz: string): string {
+	const wall = wallOf(instant instanceof Date ? instant : new Date(instant), tz);
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${String(wall.year).padStart(4, '0')}-${pad(wall.month)}-${pad(wall.day)}`;
+}
+
 // ---- expansion --------------------------------------------------------------
 
 function daysInMonth(year: number, month: number): number {
@@ -194,10 +280,29 @@ function monthlyCandidates(rule: Rrule, year: number, month: number, anchorDay: 
 
 	let days: number[];
 	if (rule.byDay.length > 0) {
-		days = [];
+		// An ordinal token names ONE day in the period — `2TU` is the second
+		// Tuesday, `-1FR` the last Friday. A bare code names every such weekday.
+		// Both spellings can appear in the same rule.
+		const plain = new Set(rule.byDay.filter((d) => dayOrdinal(d) === 0).map(dayCode));
+		const picked = new Set<number>();
+
 		for (let day = 1; day <= last; day++) {
-			if (rule.byDay.includes(weekdayCode(year, month, day))) days.push(day);
+			if (plain.has(weekdayCode(year, month, day))) picked.add(day);
 		}
+
+		for (const token of rule.byDay) {
+			const ordinal = dayOrdinal(token);
+			if (ordinal === 0) continue;
+			const code = dayCode(token);
+			const matching: number[] = [];
+			for (let day = 1; day <= last; day++) {
+				if (weekdayCode(year, month, day) === code) matching.push(day);
+			}
+			const day = ordinal < 0 ? matching[matching.length + ordinal] : matching[ordinal - 1];
+			if (day !== undefined) picked.add(day);
+		}
+
+		days = [...picked].sort((a, b) => a - b);
 	} else if (rule.byMonthDay.length > 0) {
 		// A day the month does not have is SKIPPED, per RFC 5545 — never rolled
 		// into the next month. 31 February simply does not occur.
@@ -295,7 +400,7 @@ export function expand(
 		const cursor = new Date(Date.UTC(anchor.year, anchor.month - 1, anchor.day));
 		// WEEKLY with BYDAY walks days and filters; the INTERVAL applies to weeks,
 		// measured from the week the series started in.
-		const startWeek = Math.floor(cursor.getTime() / 604800000);
+		const startWeek = weekIndex(cursor.getTime());
 		for (;;) {
 			if (++iterations > MAX_ITERATIONS) {
 				throw new Error(
@@ -308,7 +413,7 @@ export function expand(
 
 			let matches = true;
 			if (parsed.freq === 'WEEKLY') {
-				const week = Math.floor(cursor.getTime() / 604800000);
+				const week = weekIndex(cursor.getTime());
 				matches =
 					(week - startWeek) % parsed.interval === 0 &&
 					// WEEKLY with no BYDAY recurs on the WEEKDAY the series started on,
@@ -318,7 +423,7 @@ export function expand(
 					// four occurrences, on screen and in the published feed alike.
 					(parsed.byDay.length === 0
 						? weekdayCode(year, month, day) === weekdayCode(anchor.year, anchor.month, anchor.day)
-						: parsed.byDay.includes(weekdayCode(year, month, day)));
+						: parsed.byDay.some((token) => dayCode(token) === weekdayCode(year, month, day)));
 			}
 
 			if (matches && !consider(year, month, day)) break;

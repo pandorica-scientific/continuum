@@ -4,7 +4,7 @@
 // through here, because two expansions that disagreed would show one thing and
 // send another.
 
-import { expand } from '$lib/calendar/rrule';
+import { expand, localDate } from '$lib/calendar/rrule';
 
 export interface SeriesRow {
 	id: string;
@@ -25,6 +25,10 @@ export interface ExceptionRow {
 	startsAt: string | null;
 	endsAt: string | null;
 	notes: string | null;
+	/** Null on all three means inherit, exactly as title and notes do. */
+	category: string | null;
+	allDay: boolean | null;
+	tz: string | null;
 }
 
 export interface Occurrence {
@@ -42,6 +46,8 @@ export interface Occurrence {
 	recurring: boolean;
 	/** Whether this particular occurrence has been overridden. */
 	overridden: boolean;
+	/** The zone this occurrence is read on — the series', unless it overrides it. */
+	tz: string;
 }
 
 /**
@@ -67,11 +73,20 @@ export function occurrencesFor(
 
 	// A moved occurrence may land inside the window from a recurrence that fell
 	// outside it, so the overrides are swept too rather than only the expansion.
+	//
+	// Read on the event's own clock, matching how expand() builds the window:
+	// slicing the UTC date compared a UTC day against a zone-local boundary, so
+	// in a zone ahead of UTC an occurrence dragged to 00:30 on the 1st was
+	// rejected here AND absent from the expansion — it appeared on neither
+	// month's grid while still existing in the database.
+	const inWindow = new Set(starts);
 	const movedIn = exceptions.filter((e) => {
 		if (e.cancelled || !e.startsAt) return false;
 		const original = new Date(e.recurrenceId).toISOString();
-		if (starts.includes(original)) return false;
-		const day = e.startsAt.slice(0, 10);
+		if (inWindow.has(original)) return false;
+		// On the occurrence's own zone when it overrides one, since that is the
+		// clock the grid will place it by.
+		const day = localDate(e.startsAt, e.tz ?? event.tz);
 		return day >= from && day <= to;
 	});
 
@@ -94,8 +109,13 @@ export function occurrencesFor(
 			// as an empty string: an override to nothing is a different statement.
 			title: override?.title ?? event.title,
 			notes: override?.notes ?? event.notes,
-			category: event.category,
-			allDay: event.allDay,
+			// Read through the override for the same reason as title and notes: a
+			// "this event only" edit that retagged or un-all-dayed ONE occurrence
+			// was saved and then drawn from the series values anyway, so the screen
+			// disagreed with what the person had just pressed save on.
+			category: override?.category ?? event.category,
+			allDay: override?.allDay ?? event.allDay,
+			tz: override?.tz ?? event.tz,
 			recurring: Boolean(event.rrule),
 			overridden: Boolean(override)
 		});

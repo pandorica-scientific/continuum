@@ -1,9 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import {
@@ -25,21 +20,10 @@ import { pruneExpiredSessions, validateSession } from '$lib/server/auth';
 import { verifyToken } from '$lib/server/api/tokens';
 import { hashToken } from '$lib/server/auth/token-hash';
 import type { Cookies } from '@sveltejs/kit';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { before, startPostgres, type Harness, type TestDb } from './harness';
 
-const PORT = 55440;
-const DATABASE = 'continuum_task2';
-const DATABASE_DIR = resolve('scratch-workspace/task2-auth-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
-const AUTH_MIGRATION = resolve('drizzle/0028_auth_concurrency.sql');
-
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
-
-async function executeSqlFile(path: string): Promise<void> {
-	await sqlClient.unsafe(readFileSync(path, 'utf8'));
-}
+let harness: Harness;
+let testDb: TestDb;
 
 function testCookies(): Cookies {
 	const values = new Map<string, string>();
@@ -53,44 +37,27 @@ function testCookies(): Cookies {
 }
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
+	harness = await startPostgres('auth-concurrency');
+	testDb = harness.db;
 
-	sqlClient = postgres(URL, { max: 10 });
-	testDb = drizzle(sqlClient, { schema });
-
-	const baseMigrations = readdirSync('drizzle')
-		.filter((name) => /^\d{4}_.+\.sql$/.test(name) && name < '0027_')
-		.sort();
-	for (const name of baseMigrations) await executeSqlFile(resolve('drizzle', name));
-	if (existsSync(AUTH_MIGRATION)) await executeSqlFile(AUTH_MIGRATION);
+	// The world as it was before the migration under test, then that migration.
+	await harness.applyMigrations(before('0027_'));
+	await harness.applyMigrationFile('0028_auth_concurrency.sql');
 	// The baseline stops before this one, but every insert here goes through the
 	// current Drizzle schema, which names every person column including this.
-	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
+	await harness.applyMigrationFile('0034_person_overview_layout.sql');
 }, 30_000);
 
 beforeEach(async () => {
-	await sqlClient.unsafe(`
+	await harness.sql.unsafe(`
 		truncate table webauthn_challenge, credential, session, person, setup_claim, api_token
 			restart identity cascade;
 	`);
 });
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
-}, 30_000);
+	await harness?.stop();
+});
 
 describe('authentication concurrency', () => {
 	it('allows exactly one initial setup transaction to claim the instance', async () => {

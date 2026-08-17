@@ -23,6 +23,7 @@ import {
 	type RemoteChange
 } from '$lib/server/calendar/sync/provider';
 import type { EventSeries, SeriesException } from '$lib/server/calendar/series';
+import { mapPool, PUSH_CONCURRENCY } from '$lib/server/calendar/sync/pool';
 import { overrideRemoteId } from '$lib/calendar/keys';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -104,6 +105,23 @@ function readTime(value: GoogleTime | undefined): string | null {
 }
 
 /**
+ * What rides in extendedProperties.private, because Google has nowhere else.
+ *
+ * Every field here is part of the content hash, so anything that cannot make
+ * the round trip reads as a remote edit on the very next pull.
+ */
+function privateProps(
+	uid: string,
+	category: string | null,
+	tz: string | null
+): Record<string, string> {
+	const props: Record<string, string> = { continuumUid: uid };
+	if (category) props.continuumCategory = category;
+	if (tz) props.continuumTz = tz;
+	return props;
+}
+
+/**
  * A series as Google resources: the master, then one per exception.
  *
  * Every override carries `recurringEventId` pointing at the master and
@@ -118,7 +136,16 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 		// on events.import but read-only on events.insert, and sending it there is
 		// another way to earn a 400. Google's `id` is the resource address; our uid
 		// is what the engine keys on, and the two are deliberately different.
-		extendedProperties: { private: { continuumUid: series.uid } },
+		//
+		// The category and the zone travel the same way, and they have to. Both are
+		// part of the content hash, and Google has nowhere else to put either: it
+		// has no category field at all, and an all-day start carries no timeZone.
+		// So the echo of our own push came back with category null and tz 'UTC',
+		// which the merge could only read as a remote edit — and `apply` then wiped
+		// the category (and its marker) and rewrote the zone, on an event nobody
+		// had touched. The CalDAV adapter carries both, so the same event survived
+		// on iCloud and was quietly stripped on Google.
+		extendedProperties: { private: privateProps(series.uid, series.category, series.tz) },
 		summary: series.title,
 		description: series.notes ?? undefined,
 		start: time(series.startsAt, series.allDay, series.tz),
@@ -130,6 +157,14 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 	const overrides = series.exceptions.map((exception): GoogleEvent => {
 		const startsAt = exception.startsAt ?? exception.recurrenceId;
 		const endsAt = exception.endsAt ?? startsAt;
+		// An override may depart from its series here too, and each one changes the
+		// SHAPE of what Google is sent: all-day picks `date` over `dateTime`, and
+		// the zone says what the dateTime means. Sending the series' values instead
+		// published the occurrence wrongly and left nothing for the next pull to
+		// read the override back from.
+		const allDay = exception.allDay ?? series.allDay;
+		const tz = exception.tz ?? series.tz;
+		const category = exception.category ?? series.category;
 		return {
 			// Google assigns override ids itself on the server, but a deterministic
 			// one keeps a re-push idempotent rather than piling up duplicates.
@@ -142,13 +177,16 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 			// three overrides renamed the other two, leaving duplicates behind at the
 			// times they used to name.
 			id: overrideRemoteId(remoteId, exception.recurrenceId),
-			extendedProperties: { private: { continuumUid: series.uid } },
+			extendedProperties: { private: privateProps(series.uid, category, tz) },
 			recurringEventId: remoteId,
+			// On the SERIES' clock, because a recurrence id names an occurrence of
+			// the master rule — it is not the override's own time and does not move
+			// when the override re-zones or un-all-days the occurrence.
 			originalStartTime: time(exception.recurrenceId, series.allDay, series.tz),
 			summary: exception.title ?? series.title,
 			description: exception.notes ?? series.notes ?? undefined,
-			start: time(startsAt, series.allDay, series.tz),
-			end: endTime(endsAt, series.allDay, series.tz),
+			start: time(startsAt, allDay, tz),
+			end: endTime(endsAt, allDay, tz),
 			status: exception.cancelled ? 'cancelled' : 'confirmed'
 		};
 	});
@@ -164,40 +202,97 @@ export function fromGoogleEvents(events: GoogleEvent[]): EventSeries | null {
 	const start = readTime(master.start);
 	if (!start) return null;
 	const allDay = Boolean(master.start?.date);
+	const masterCategory = master.extendedProperties?.private?.continuumCategory ?? null;
+	const masterTz =
+		master.start?.timeZone ?? master.extendedProperties?.private?.continuumTz ?? 'UTC';
+	const masterTitle = master.summary ?? '';
+	const masterNotes = master.description ?? null;
 
 	const exceptions: SeriesException[] = events
 		.filter((event) => event.recurringEventId)
-		.map((event) => ({
-			recurrenceId: readTime(event.originalStartTime) ?? '',
-			cancelled: event.status === 'cancelled',
-			title: event.summary ?? null,
-			startsAt: readTime(event.start),
-			endsAt: readEndTime(event.end, Boolean(event.start?.date)),
-			notes: event.description ?? null
-		}))
+		.map((event) => {
+			// Stored ONLY where the override genuinely departs from the master.
+			//
+			// Google gives every override its own resource, so each one carries a
+			// summary, a zone and a category of its own — including the ones it
+			// merely inherited from the series we sent. Reading those back as
+			// overrides turns our own push into a difference on the very next pull:
+			// the hash we stored says "inherits", the hash of what came back says
+			// "overrides", and the merge can only read that as a remote edit. It
+			// then writes the inherited values in as real overrides, so a later
+			// rename of the series stops reaching that occurrence — a cancelled
+			// occurrence, which never carries a title of its own, acquired one on
+			// the first pass after it was created.
+			const overrideAllDay = Boolean(event.start?.date);
+			const overrideCategory = event.extendedProperties?.private?.continuumCategory ?? null;
+			const overrideTz =
+				event.start?.timeZone ?? event.extendedProperties?.private?.continuumTz ?? 'UTC';
+			const overrideTitle = event.summary ?? null;
+			const overrideNotes = event.description ?? null;
+			return {
+				recurrenceId: readTime(event.originalStartTime) ?? '',
+				cancelled: event.status === 'cancelled',
+				title: overrideTitle === masterTitle ? null : overrideTitle,
+				startsAt: readTime(event.start),
+				endsAt: readEndTime(event.end, overrideAllDay),
+				notes: overrideNotes === masterNotes ? null : overrideNotes,
+				category: overrideCategory === masterCategory ? null : overrideCategory,
+				allDay: overrideAllDay === allDay ? null : overrideAllDay,
+				tz: overrideTz === masterTz ? null : overrideTz
+			};
+		})
 		.filter((exception) => exception.recurrenceId);
 
 	return {
 		// Ours first; iCalUID second for an event Google or another client made.
 		uid: master.extendedProperties?.private?.continuumUid ?? master.iCalUID ?? master.id,
-		title: master.summary ?? '',
-		notes: master.description ?? null,
-		category: null,
+		title: masterTitle,
+		notes: masterNotes,
+		// Ours first; Google itself has no category field, so an event created in
+		// another client legitimately has none.
+		category: masterCategory,
 		allDay,
 		startsAt: start,
 		endsAt: readEndTime(master.end, allDay) ?? start,
-		tz: master.start?.timeZone ?? 'UTC',
+		// The zone Google reports, then the one we sent — an all-day start carries
+		// no timeZone at all, so without the fallback every all-day event came back
+		// claiming UTC and the row's own zone was overwritten with it.
+		tz: masterTz,
 		rrule: master.recurrence?.[0]?.replace(/^RRULE:/, '') ?? null,
 		exceptions,
 		updatedAt: master.updated ?? new Date(0).toISOString()
 	};
 }
 
+function safeJson(text: string): Record<string, unknown> {
+	try {
+		const parsed = JSON.parse(text) as unknown;
+		return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+	} catch {
+		return {};
+	}
+}
+
 export function makeGoogleProvider(raw: Record<string, string>): CalendarProvider {
 	const clientId = raw.clientId ?? '';
 	const clientSecret = raw.clientSecret ?? '';
 	const refreshToken = raw.refreshToken ?? '';
-	const calendarId = raw.calendarUrl || 'primary';
+	const calendarId = raw.calendarUrl || '';
+
+	/**
+	 * The chosen calendar, or a refusal.
+	 *
+	 * Defaulting to `primary` was a silent way to touch the wrong calendar: the
+	 * OAuth callback leaves remoteCalId null until someone presses "Create a
+	 * calendar", and "Sync now" has no guard of its own — so a press in between
+	 * would have pulled the account's entire personal calendar in and pushed
+	 * every ledger event out to it. CalDAV refuses in the same situation; this
+	 * now does too.
+	 */
+	function requireCalendar(): string {
+		if (!calendarId) throw new Error('Google: no calendar has been created yet.');
+		return calendarId;
+	}
 
 	let accessToken: string | null = null;
 	let expiresAt = 0;
@@ -243,25 +338,38 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 
 	async function api(
 		path: string,
-		init: { method?: string; body?: unknown; query?: Record<string, string> } = {}
+		init: {
+			method?: string;
+			body?: unknown;
+			query?: Record<string, string>;
+			/** Sent as If-Match, so a resource that moved underneath us answers 412. */
+			etag?: string | null;
+		} = {}
 	): Promise<{ status: number; body: Record<string, unknown> }> {
 		const url = new URL(`${API}${path}`);
 		for (const [key, value] of Object.entries(init.query ?? {})) {
 			if (value) url.searchParams.set(key, value);
 		}
+		const headers: Record<string, string> = {
+			Authorization: `Bearer ${await token()}`,
+			'Content-Type': 'application/json'
+		};
+		if (init.etag) headers['If-Match'] = init.etag;
+
 		const response = await fetch(url, {
 			method: init.method ?? 'GET',
-			headers: {
-				Authorization: `Bearer ${await token()}`,
-				'Content-Type': 'application/json'
-			},
+			headers,
 			body: init.body ? JSON.stringify(init.body) : undefined,
 			signal: AbortSignal.timeout(TIMEOUT_MS)
 		});
 		const text = await response.text();
 		return {
 			status: response.status,
-			body: text ? (JSON.parse(text) as Record<string, unknown>) : {}
+			// A 502 from a proxy, or Google's own front end, answers with HTML. An
+			// unguarded parse turned that into a SyntaxError thrown out of the pull —
+			// so the account's error line read "Unexpected token <" instead of the
+			// status, and the pass died rather than failing with something actionable.
+			body: text ? safeJson(text) : {}
 		};
 	}
 
@@ -449,7 +557,7 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 			const syncToken = cursor ?? undefined;
 
 			for (;;) {
-				const result = await api(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+				const result = await api(`/calendars/${encodeURIComponent(requireCalendar())}/events`, {
 					query: {
 						...(syncToken ? { syncToken } : { timeMin: resetWindowStart() }),
 						...(pageToken ? { pageToken } : {}),
@@ -492,38 +600,37 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		},
 
 		async push(ops: PushOp[]): Promise<PushResult[]> {
-			const results: PushResult[] = [];
-
-			for (const op of ops) {
+			// A few at a time, in input order. The engine pairs each result with the
+			// op at the same index, so the order is load-bearing — see pool.ts.
+			return mapPool(ops, PUSH_CONCURRENCY, async (op): Promise<PushResult> => {
 				try {
 					if (op.kind === 'delete') {
 						const result = await api(
-							`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(op.remoteId)}`,
-							{ method: 'DELETE' }
+							`/calendars/${encodeURIComponent(requireCalendar())}/events/${encodeURIComponent(op.remoteId)}`,
+							{ method: 'DELETE', etag: op.etag }
 						);
 						if (result.status === 412) {
-							results.push({
+							return {
 								ok: false,
 								remoteId: op.remoteId,
 								conflict: true,
 								message: 'Changed in Google since we last read it.'
-							});
-						} else if (result.status < 300 || result.status === 404 || result.status === 410) {
+							};
+						}
+						if (result.status < 300 || result.status === 404 || result.status === 410) {
 							// 404/410 both mean it is already gone, which is the outcome asked
 							// for rather than a failure.
-							results.push({ ok: true, remoteId: op.remoteId, etag: null });
-						} else {
-							// Anything else — 401, 403, 429, 500 — is a real failure. Calling
-							// it success orphaned the event in Google, cleared the account's
-							// error line, and made sure nothing ever tried again.
-							results.push({
-								ok: false,
-								remoteId: op.remoteId,
-								conflict: false,
-								message: `Google answered ${result.status} deleting an event.`
-							});
+							return { ok: true, remoteId: op.remoteId, etag: null };
 						}
-						continue;
+						// Anything else — 401, 403, 429, 500 — is a real failure. Calling
+						// it success orphaned the event in Google, cleared the account's
+						// error line, and made sure nothing ever tried again.
+						return {
+							ok: false,
+							remoteId: op.remoteId,
+							conflict: false,
+							message: `Google answered ${result.status} deleting an event.`
+						};
 					}
 
 					// The fan-out. The master goes first so an override never arrives
@@ -533,20 +640,34 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 					let conflicted = false;
 
 					for (const event of events) {
-						const path = `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(event.id)}`;
+						const path = `/calendars/${encodeURIComponent(requireCalendar())}/events/${encodeURIComponent(event.id)}`;
 						// PUT is an upsert when we supply the id, so a create and an update
 						// are the same call and a re-push is idempotent.
-						const result = await api(path, { method: 'PUT', body: event });
+						//
+						// The etag goes with it as If-Match. Without it the write was
+						// unconditional, so the 412 branch below could never fire and an
+						// edit made on someone's phone between our pull and our push was
+						// overwritten silently — no conflict row, nothing in the briefing.
+						// Only on the MASTER: an override carries its own etag on the
+						// remote and we hold none for it.
+						const result = await api(path, {
+							method: 'PUT',
+							body: event,
+							etag: event.recurringEventId ? null : op.etag
+						});
 
 						if (result.status === 412) {
 							conflicted = true;
 							break;
 						}
 						if (result.status === 404) {
-							const created = await api(`/calendars/${encodeURIComponent(calendarId)}/events`, {
-								method: 'POST',
-								body: event
-							});
+							const created = await api(
+								`/calendars/${encodeURIComponent(requireCalendar())}/events`,
+								{
+									method: 'POST',
+									body: event
+								}
+							);
 							if (created.status >= 400) {
 								throw new Error(`Google answered ${created.status} creating an event.`);
 							}
@@ -559,26 +680,23 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 						if (!event.recurringEventId) etag = (result.body.etag as string) ?? etag;
 					}
 
-					results.push(
-						conflicted
-							? {
-									ok: false,
-									remoteId: op.remoteId,
-									conflict: true,
-									message: 'Changed in Google since we last read it.'
-								}
-							: { ok: true, remoteId: op.remoteId, etag }
-					);
+					return conflicted
+						? {
+								ok: false,
+								remoteId: op.remoteId,
+								conflict: true,
+								message: 'Changed in Google since we last read it.'
+							}
+						: { ok: true, remoteId: op.remoteId, etag };
 				} catch (error) {
-					results.push({
+					return {
 						ok: false,
 						remoteId: op.remoteId,
 						conflict: false,
 						message: error instanceof Error ? error.message : 'Request failed.'
-					});
+					};
 				}
-			}
-			return results;
+			});
 		}
 	};
 
@@ -596,7 +714,7 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		const collected: GoogleEvent[] = [];
 		let pageToken: string | undefined;
 		for (;;) {
-			const result = await api(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+			const result = await api(`/calendars/${encodeURIComponent(requireCalendar())}/events`, {
 				query: {
 					timeMin: resetWindowStart(),
 					showDeleted: 'true',

@@ -19,6 +19,7 @@ import {
 	type RemoteChange
 } from '$lib/server/calendar/sync/provider';
 import { parseIcs, toIcs } from '$lib/server/calendar/sync/ical';
+import { mapPool, PUSH_CONCURRENCY } from '$lib/server/calendar/sync/pool';
 
 const DEFAULT_HOST = 'https://caldav.icloud.com';
 const TIMEOUT_MS = 20_000;
@@ -242,6 +243,24 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 				}
 
 				const fetched = await request(config, absolute(href), { method: 'GET' });
+
+				// THROWS rather than skipping, matching fullReconcile. The status was
+				// not read at all, so a 503 or a rate-limited GET produced an error
+				// document, parseIcs returned null, the resource was quietly skipped —
+				// and the pass then COMMITTED the new sync-token, so that change was
+				// never listed again. One transient failure left the local copy
+				// permanently divergent with nothing recorded anywhere.
+				//
+				// 404 and 410 are the exception: the resource went between the REPORT
+				// and this GET, which is a deletion and is reported as one.
+				if (fetched.status === 404 || fetched.status === 410) {
+					changes.push({ uid: '', remoteId: uidFromHref(href), series: null, etag: null });
+					continue;
+				}
+				if (fetched.status >= 400) {
+					throw new Error(`Server answered ${fetched.status} reading ${href}.`);
+				}
+
 				const series = parseIcs(fetched.text);
 				if (!series) continue;
 				changes.push({
@@ -257,9 +276,10 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 
 		async push(ops: PushOp[]): Promise<PushResult[]> {
 			const calendar = requireCalendar();
-			const results: PushResult[] = [];
 
-			for (const op of ops) {
+			// A few at a time, in input order. The engine pairs each result with the
+			// op at the same index, so the order is load-bearing — see pool.ts.
+			return mapPool(ops, PUSH_CONCURRENCY, async (op): Promise<PushResult> => {
 				const url = `${calendar.replace(/\/$/, '')}/${encodeURIComponent(op.remoteId)}.ics`;
 				try {
 					if (op.kind === 'delete') {
@@ -268,28 +288,27 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 							headers: op.etag ? { 'If-Match': op.etag } : {}
 						});
 						if (result.status === 412) {
-							results.push({
+							return {
 								ok: false,
 								remoteId: op.remoteId,
 								conflict: true,
 								message: 'Changed on the server since we last read it.'
-							});
-						} else if (result.status < 300 || result.status === 404 || result.status === 410) {
+							};
+						}
+						if (result.status < 300 || result.status === 404 || result.status === 410) {
 							// 404 and 410 mean it is already gone, which is the outcome that
 							// was asked for rather than a failure.
-							results.push({ ok: true, remoteId: op.remoteId, etag: null });
-						} else {
-							// Everything else — 401, 403, 429, 500 — is a REAL failure, and
-							// calling it success orphaned the remote event, cleared the
-							// account's error line and never retried.
-							results.push({
-								ok: false,
-								remoteId: op.remoteId,
-								conflict: false,
-								message: `Server answered ${result.status} deleting an event.`
-							});
+							return { ok: true, remoteId: op.remoteId, etag: null };
 						}
-						continue;
+						// Everything else — 401, 403, 429, 500 — is a REAL failure, and
+						// calling it success orphaned the remote event, cleared the
+						// account's error line and never retried.
+						return {
+							ok: false,
+							remoteId: op.remoteId,
+							conflict: false,
+							message: `Server answered ${result.status} deleting an event.`
+						};
 					}
 
 					const result = await request(config, url, {
@@ -304,38 +323,35 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 						// On a create this means "already there", which is not an error —
 						// the next pull will reconcile it. On an update it is a genuine
 						// concurrent write.
-						results.push({
+						return {
 							ok: false,
 							remoteId: op.remoteId,
 							conflict: true,
 							message: op.etag ? 'Changed on the server since we last read it.' : 'Already exists.'
-						});
-						continue;
+						};
 					}
 					if (result.status >= 400) {
-						results.push({
+						return {
 							ok: false,
 							remoteId: op.remoteId,
 							conflict: false,
 							message: `Server answered ${result.status}.`
-						});
-						continue;
+						};
 					}
-					results.push({
+					return {
 						ok: true,
 						remoteId: op.remoteId,
 						etag: result.headers.get('etag')
-					});
+					};
 				} catch (error) {
-					results.push({
+					return {
 						ok: false,
 						remoteId: op.remoteId,
 						conflict: false,
 						message: error instanceof Error ? error.message : 'Request failed.'
-					});
+					};
 				}
-			}
-			return results;
+			});
 		}
 	};
 

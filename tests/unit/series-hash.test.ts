@@ -101,6 +101,46 @@ describe('what the hash notices', () => {
 	it('notices all-day being switched on', () => {
 		expect(hash({ allDay: true })).not.toBe(hash());
 	});
+
+	it.each([
+		['category', { category: 'health' }],
+		['all-day', { allDay: true }],
+		['timezone', { tz: 'UTC' }]
+	])('notices one occurrence overriding the series %s', (_label, override) => {
+		const plain = { recurrenceId: base.startsAt, cancelled: false };
+		expect(hash({ exceptions: [{ ...plain, ...override }] })).not.toBe(
+			hash({ exceptions: [plain] })
+		);
+	});
+});
+
+// The three per-occurrence override fields were added to an exception long after
+// events had been pushed and their hashes stored as the merge base. Writing them
+// into the canonical form unconditionally would have changed the hash of every
+// series that has ever been synced, so on the first pass after the upgrade no
+// stored hash would match, both sides would read as changed, and the household's
+// whole calendar would arrive as conflicts.
+describe('canonical form across the upgrade that added per-occurrence overrides', () => {
+	const inherits = { recurrenceId: base.startsAt, cancelled: false, title: 'Moved' };
+
+	it('hashes an exception that inherits exactly as it did before the fields existed', () => {
+		expect(hash({ exceptions: [{ ...inherits, category: null, allDay: null, tz: null }] })).toBe(
+			hash({ exceptions: [inherits] })
+		);
+	});
+
+	it('leaves no trace of them in the canonical string when nothing is overridden', () => {
+		expect(canonical({ ...base, exceptions: [inherits] })).not.toMatch(/"(ca|ad|z)":/);
+	});
+
+	// Undefined and null both mean inherit; the two spellings arrive from
+	// different places (a column read, a provider that omitted the field) and
+	// must not hash apart.
+	it('does not distinguish an absent override from a null one', () => {
+		expect(hash({ exceptions: [{ ...inherits, category: undefined }] })).toBe(
+			hash({ exceptions: [{ ...inherits, category: null }] })
+		);
+	});
 });
 
 describe('canonical form', () => {

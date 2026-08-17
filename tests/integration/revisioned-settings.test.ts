@@ -1,88 +1,40 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
 import { exportConfig, importConfig } from '$lib/server/config-file';
 import { lockTransferPairing } from '$lib/server/import/ingest';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rule-mutations';
 import { loadRules } from '$lib/server/rules';
 import { getRevisionedSetting, setRevisionedSetting } from '$lib/server/settings';
 
-const PORT = 55445;
-const DATABASE = 'continuum_revisioned_settings';
-const DATABASE_DIR = resolve('scratch-workspace/revisioned-settings-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
 const migrationJournal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as {
 	entries: Array<{ idx: number; tag: string }>;
 };
 const moneyCurrencyTag = migrationJournal.entries.find((entry) => entry.idx === 31)?.tag;
 if (!moneyCurrencyTag) throw new Error('Migration journal is missing index 31');
 
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let testDb: TestDb;
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sqlClient = postgres(URL, { max: 5, onnotice: () => undefined });
-	testDb = drizzle(sqlClient, { schema });
-	await sqlClient.unsafe(`
-		create table settings (
-			key text primary key,
-			value jsonb not null
-		);
-		create table rule (
-			id text primary key,
-			name text not null,
-			enabled boolean not null default true,
-			provenance text not null default 'learned',
-			conditions jsonb not null,
-			category_id text,
-			accepted_count integer not null default 0,
-			corrected_count integer not null default 0,
-			created_at timestamptz not null default now()
-		);
-		create table tag (
-			id text primary key,
-			name text not null,
-			normalised_name text not null unique,
-			created_at timestamptz not null default now()
-		);
-		create table rule_tag (
-			rule_id text not null references rule(id) on delete cascade,
-			tag_id text not null references tag(id) on delete cascade,
-			primary key (rule_id, tag_id)
-		);
-	`);
+	harness = await startPostgres('revisioned-settings');
+	testDb = harness.db;
+	// The real schema, not a hand-written subset of it. The subset that used
+	// to live here had to be kept in step with schema.ts by hand, and a test
+	// passing against a stale copy of a table says nothing about the real one.
+	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
 }, 30_000);
 
 beforeEach(async () => {
-	await sqlClient.unsafe('truncate table rule_tag, tag, rule, settings cascade;');
+	await harness.sql.unsafe('truncate table rule_tag, tag, rule, settings cascade;');
 });
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
-}, 30_000);
+	await harness?.stop();
+});
 
 describe('revisioned settings', () => {
 	it('does not let an older in-flight autosave overwrite a newer exit snapshot', async () => {
@@ -374,7 +326,7 @@ describe('legacy monetary currency migration', () => {
 		for (const statement of readMigrationFiles({ migrationsFolder: 'drizzle' })[
 			migrationJournal.entries.findIndex((entry) => entry.idx === 31)
 		].sql) {
-			await sqlClient.unsafe(statement);
+			await harness.sql.unsafe(statement);
 		}
 		await testDb
 			.update(schema.settings)

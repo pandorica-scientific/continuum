@@ -1,10 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { createEvent, deleteEvent, updateEvent } from '$lib/server/calendar/mutations';
@@ -12,18 +7,13 @@ import { syncAccount } from '$lib/server/calendar/sync/engine';
 import type { EventSeries } from '$lib/server/calendar/series';
 import { toRemoteId } from '$lib/calendar/keys';
 import { calendarConflicts, calendarSyncFailures } from '$lib/server/briefing';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
 import { FakeCalendarProvider } from './fake-calendar-provider';
 
-const PORT = 55448;
-const DATABASE = 'continuum_calendar_sync';
-const DATABASE_DIR = resolve('scratch-workspace/calendar-sync-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
 const ACCOUNT = 'acct-1';
 
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let testDb: TestDb;
 let fake: FakeCalendarProvider;
 
 const event = (over: Partial<Parameters<typeof createEvent>[0]> = {}) => ({
@@ -56,45 +46,17 @@ const remoteSeries = (uid: string, over: Partial<EventSeries> = {}): EventSeries
 const sync = () => syncAccount(ACCOUNT, fake, testDb);
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sqlClient = postgres(URL, { max: 5, onnotice: () => undefined });
-	testDb = drizzle(sqlClient, { schema });
-
-	const migrations = readdirSync('drizzle')
-		.filter(
-			(name) => /^\d{4}_.+\.sql$/.test(name) && name !== '0027_repair_transaction_fingerprints.sql'
-		)
-		.sort();
-	for (const name of migrations) {
-		const sql = readFileSync(resolve('drizzle', name), 'utf8');
-		for (const part of sql.split('--> statement-breakpoint')) {
-			if (part.split('\n').some((l) => l.trim() && !l.trim().startsWith('--'))) {
-				await sqlClient.unsafe(part);
-			}
-		}
-	}
+	harness = await startPostgres('calendar-sync');
+	testDb = harness.db;
+	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
 }, 60_000);
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
+	await harness?.stop();
 });
 
 beforeEach(async () => {
-	await sqlClient.unsafe(`
+	await harness.sql.unsafe(`
 		delete from calendar_conflict;
 		delete from calendar_sync_link;
 		delete from calendar_event_exception;
@@ -157,7 +119,7 @@ describe('no duplicates', () => {
 		await sync();
 		const before = fake.uids();
 
-		await sqlClient.unsafe('delete from calendar_sync_link');
+		await harness.sql.unsafe('delete from calendar_sync_link');
 		fake.forceReset();
 		await sync();
 

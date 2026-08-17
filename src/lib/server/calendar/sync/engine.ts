@@ -9,7 +9,7 @@ import {
 } from '$lib/server/db/schema';
 import { generateEvents, getCalendarMarkers } from '$lib/server/calendar';
 import { hashSeries, type EventSeries } from '$lib/server/calendar/series';
-import { decorate, markerForCategory, markerForGenerated } from '$lib/calendar/markers';
+import { decorate, markerForCategory, markerForGenerated, strip } from '$lib/calendar/markers';
 import { merge, type MergeOutcome } from '$lib/calendar/merge';
 import { fromRemoteId, isGeneratedKey, toRemoteId, type OriginBinding } from '$lib/calendar/keys';
 import { applyWriteBack } from '$lib/server/calendar/bindings';
@@ -117,14 +117,25 @@ async function localItems(handle: Db): Promise<Map<string, LocalItem>> {
 		});
 	}
 
-	const rows = await handle.select().from(calendarEvent);
-	const exceptions = await handle.select().from(calendarEventException);
+	const [rows, exceptions] = await Promise.all([
+		handle.select().from(calendarEvent),
+		handle.select().from(calendarEventException)
+	]);
+
+	// Grouped once rather than re-scanned per row: filtering the whole exception
+	// list inside the loop is rows × exceptions comparisons on every pass.
+	const exceptionsByEvent = new Map<string, typeof exceptions>();
+	for (const exception of exceptions) {
+		const list = exceptionsByEvent.get(exception.eventId);
+		if (list) list.push(exception);
+		else exceptionsByEvent.set(exception.eventId, [exception]);
+	}
 
 	for (const row of rows) {
 		// A tombstone is carried, not skipped: the engine has to be able to push a
 		// deletion, and an absent item is indistinguishable from one that never
 		// existed.
-		const mine = exceptions.filter((e) => e.eventId === row.id);
+		const mine = exceptionsByEvent.get(row.id) ?? [];
 		items.set(row.id, {
 			localKey: row.id,
 			generated: false,
@@ -148,7 +159,10 @@ async function localItems(handle: Db): Promise<Map<string, LocalItem>> {
 							title: e.title,
 							startsAt: e.startsAt?.toISOString() ?? null,
 							endsAt: e.endsAt?.toISOString() ?? null,
-							notes: e.notes
+							notes: e.notes,
+							category: e.category,
+							allDay: e.allDay,
+							tz: e.tz
 						})),
 						updatedAt: row.updatedAt.toISOString()
 					}
@@ -264,8 +278,14 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 			const link = linkByKey.get(key);
 			if (link?.suppressedAt) continue; // deliberately deleted on the remote
 
-			const remoteId = link?.remoteId ?? toRemoteId(key);
 			const change = remoteByKey.get(key);
+			// The name the PROVIDER uses wins over the one we would have chosen.
+			// An event created on someone's phone lives at a resource name that
+			// server picked; addressing a push at toRemoteId(key) instead sent it
+			// to an address that does not exist, so the provider created a SECOND
+			// copy of an event we were only trying to update. The link's recorded
+			// name comes first because it is the one we last wrote to.
+			const remoteId = link?.remoteId ?? change?.remoteId ?? toRemoteId(key);
 
 			const localSeries = item?.series ?? null;
 			const localHash = localSeries ? hashSeries(localSeries, item?.marker ?? null) : null;
@@ -323,7 +343,14 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 			// The etag we just pulled beats the one stored from last time: when the
 			// remote has moved, writing against the stale value fails as a conflict and
 			// the correction is delayed a whole pass for no reason.
-			const currentEtag = change?.etag ?? link?.remoteEtag ?? null;
+			//
+			// `change ? change.etag : …` rather than `change?.etag ?? …`, because a
+			// DELETION arrives with a null etag and that null is the answer, not a
+			// missing value. Falling back to the stored one made the next write send
+			// `If-Match: <etag of a resource that no longer exists>`, which is a 412
+			// every time — so an event edited here and deleted there could never be
+			// re-created, and retried identically on every pass forever.
+			const currentEtag = change ? change.etag : (link?.remoteEtag ?? null);
 
 			if (outcome.kind === 'push' && localSeries) {
 				pushOps.push({
@@ -429,7 +456,7 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 				const change = remoteByKey.get(key);
 
 				if (outcome.kind === 'apply' && change?.series) {
-					await applyRemote(tx, key, change.series);
+					await applyRemote(tx, key, change.series, item?.marker ?? null);
 					await upsertLink(tx, {
 						localKey: key,
 						accountId,
@@ -484,7 +511,21 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 						resolution: outcome.winner === 'local' ? 'local-won' : 'remote-won'
 					});
 					if (outcome.winner === 'remote' && change?.series) {
-						await applyRemote(tx, key, change.series);
+						await applyRemote(tx, key, change.series, item?.marker ?? null);
+						// The remote's version is now the agreed one, exactly as in the
+						// write-back branch below. Without this the base hash still
+						// described what we had pushed BEFORE the conflict, so the next
+						// pass saw both sides changed again and filed a SECOND conflict
+						// row for an edit that had already been resolved.
+						const agreed = hashSeries(change.series, item?.marker ?? null);
+						await upsertLink(tx, {
+							localKey: key,
+							accountId,
+							remoteId: change.remoteId ?? linkByKey.get(key)?.remoteId ?? toRemoteId(key),
+							remoteEtag: change.etag ?? linkByKey.get(key)?.remoteEtag ?? null,
+							pushedHash: agreed,
+							seenHash: agreed
+						});
 					}
 					report.conflicts += 1;
 				}
@@ -696,14 +737,24 @@ async function upsertLink(
 		});
 }
 
-/** Write a remote series into our own tables. */
+/**
+ * Write a remote series into our own tables.
+ *
+ * The marker comes off the title on the way IN, mirroring decorate() on the way
+ * out. Storing the title as the remote returned it baked our own decoration
+ * into the row — and since the calendar screen draws the marker separately from
+ * the title, the event then showed two of them, with another added every time a
+ * remote edit came back. markers.ts is explicit that decoration is composed at
+ * the edge and never stored, for exactly this reason.
+ */
 async function applyRemote(
 	tx: Parameters<Parameters<Db['transaction']>[0]>[0],
 	localKey: string,
-	series: EventSeries
+	series: EventSeries,
+	marker: string | null
 ) {
 	const values = {
-		title: series.title,
+		title: strip(series.title, marker),
 		notes: series.notes,
 		category: series.category,
 		allDay: series.allDay,
@@ -733,7 +784,10 @@ async function applyRemote(
 				title: e.title ?? null,
 				startsAt: e.startsAt ? new Date(e.startsAt) : null,
 				endsAt: e.endsAt ? new Date(e.endsAt) : null,
-				notes: e.notes ?? null
+				notes: e.notes ?? null,
+				category: e.category ?? null,
+				allDay: e.allDay ?? null,
+				tz: e.tz ?? null
 			}))
 		);
 	}

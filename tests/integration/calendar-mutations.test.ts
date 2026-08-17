@@ -1,23 +1,12 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { createEvent, deleteEvent, updateEvent } from '$lib/server/calendar/mutations';
 import { expand } from '$lib/calendar/rrule';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
 
-const PORT = 55447;
-const DATABASE = 'continuum_calendar_mutations';
-const DATABASE_DIR = resolve('scratch-workspace/calendar-mutations-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
-
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let testDb: TestDb;
 
 const WEEKLY = 'FREQ=WEEKLY;BYDAY=TU';
 const base = {
@@ -32,45 +21,17 @@ const base = {
 };
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sqlClient = postgres(URL, { max: 5, onnotice: () => undefined });
-	testDb = drizzle(sqlClient, { schema });
-
-	const migrations = readdirSync('drizzle')
-		.filter(
-			(name) => /^\d{4}_.+\.sql$/.test(name) && name !== '0027_repair_transaction_fingerprints.sql'
-		)
-		.sort();
-	for (const name of migrations) {
-		const sql = readFileSync(resolve('drizzle', name), 'utf8');
-		for (const part of sql.split('--> statement-breakpoint')) {
-			if (part.split('\n').some((l) => l.trim() && !l.trim().startsWith('--'))) {
-				await sqlClient.unsafe(part);
-			}
-		}
-	}
+	harness = await startPostgres('calendar-mutations');
+	testDb = harness.db;
+	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
 }, 60_000);
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
+	await harness?.stop();
 });
 
 beforeEach(async () => {
-	await sqlClient.unsafe('delete from calendar_event_exception; delete from calendar_event;');
+	await harness.sql.unsafe('delete from calendar_event_exception; delete from calendar_event;');
 });
 
 async function seed() {
@@ -163,6 +124,53 @@ describe('editing one occurrence', () => {
 		const after = await septemberOccurrences(id);
 		expect(after).toHaveLength(4);
 		expect(after).not.toContain('2026-09-15T09:00:00.000Z');
+	});
+
+	/** The override row for the 15th, or undefined if none was written. */
+	async function overrideRow(id: string) {
+		const rows = await testDb
+			.select()
+			.from(schema.calendarEventException)
+			.where(eq(schema.calendarEventException.eventId, id));
+		return rows.find((r) => new Date(r.recurrenceId).toISOString() === '2026-09-15T09:00:00.000Z');
+	}
+
+	const editOccurrence = (id: string, over: Partial<typeof base>) =>
+		updateEvent(id, { ...base, ...over }, 'this', '2026-09-15T09:00:00.000Z', testDb);
+
+	// The form has always submitted these three; the exception table had nowhere
+	// to put them, so a "this event only" edit that retagged, un-all-dayed or
+	// re-zoned one occurrence was accepted and silently discarded.
+	it.each([
+		['category', { category: 'health' }, 'category'],
+		['all-day', { allDay: true }, 'allDay'],
+		['timezone', { tz: 'UTC' }, 'tz']
+	] as const)('stores an overridden %s on the occurrence', async (_label, over, column) => {
+		const id = await seed();
+		expect((await editOccurrence(id, over)).ok).toBe(true);
+		const row = await overrideRow(id);
+		expect({ [column]: row?.[column] }).toEqual({ [column]: Object.values(over)[0] });
+	});
+
+	// Null means inherit, so an edit that did not touch these must leave them
+	// null — otherwise the occurrence freezes at today's category and zone, and
+	// retagging the series later stops reaching it.
+	it('leaves what the edit did not change inheriting from the series', async () => {
+		const id = await seed();
+		expect((await editOccurrence(id, { title: 'Recycling only' })).ok).toBe(true);
+		const row = await overrideRow(id);
+		expect({ category: row?.category, allDay: row?.allDay, tz: row?.tz }).toEqual({
+			category: null,
+			allDay: null,
+			tz: null
+		});
+	});
+
+	it('clears an override again when the occurrence is edited back to the series value', async () => {
+		const id = await seed();
+		expect((await editOccurrence(id, { category: 'health' })).ok).toBe(true);
+		expect((await editOccurrence(id, { category: base.category })).ok).toBe(true);
+		expect((await overrideRow(id))?.category).toBeNull();
 	});
 });
 

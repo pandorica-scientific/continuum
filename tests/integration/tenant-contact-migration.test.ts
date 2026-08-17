@@ -1,10 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
-import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { startPostgres, type Harness } from './harness';
 
 /**
  * The tenant_contact migration, run against a real PostgreSQL.
@@ -22,41 +18,15 @@ import { removeStalePostgresDirectory } from './embedded-postgres';
 // tests/integration/** — with no `services:` block, so every pull request went
 // red here while the only Postgres in the workflow belonged to the separate e2e
 // job.
-const PORT = 55449;
-const DB_NAME = 'continuum_tenant_contact_migration';
-const DATABASE_DIR = resolve('scratch-workspace/tenant-contact-migration-postgres');
-const url = `postgres://postgres:password@127.0.0.1:${PORT}/${DB_NAME}`;
 
-let embedded: EmbeddedPostgres;
-let sql: postgres.Sql;
-
-/** The migration, split the way drizzle's migrator splits it. */
-function statements(file: string): string[] {
-	return readFileSync(file, 'utf8')
-		.split('--> statement-breakpoint')
-		.filter((part) => part.split('\n').some((l) => l.trim() && !l.trim().startsWith('--')));
-}
+let harness: Harness;
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DB_NAME);
-
-	sql = postgres(url, { max: 1, onnotice: () => {} });
+	harness = await startPostgres('tenant-contact-migration', { max: 1 });
 
 	// The narrowest schema this migration touches. Building the whole schema here
 	// would couple the test to 37 unrelated migrations.
-	await sql.unsafe(`
+	await harness.sql.unsafe(`
 		create table property (id text primary key, name text not null);
 		create table tenancy (
 			id text primary key,
@@ -80,9 +50,9 @@ beforeAll(async () => {
 	`);
 
 	const propertyId = randomUUID();
-	await sql`insert into property (id, name) values (${propertyId}, 'Flat 2')`;
+	await harness.sql`insert into property (id, name) values (${propertyId}, 'Flat 2')`;
 
-	await sql`
+	await harness.sql`
 		insert into tenancy (id, property_id, tenant_name, tenant_contact) values
 			(${randomUUID()}, ${propertyId}, 'Řehoř Novák', '+420 777 000 111'),
 			(${randomUUID()}, ${propertyId}, 'Jan Kowalski', 'jan@example.test, +48 600 100 200'),
@@ -90,24 +60,22 @@ beforeAll(async () => {
 			(${randomUUID()}, ${propertyId}, 'Blank Contact', '   ')
 	`;
 
-	for (const statement of statements('drizzle/0037_tenant_contacts.sql')) {
-		await sql.unsafe(statement);
-	}
+	await harness.applyMigrationFile('0037_tenant_contacts.sql');
 }, 120_000);
 
 afterAll(async () => {
-	await sql?.end();
-	await embedded?.stop();
+	await harness?.stop();
 });
 
 describe('tenant_contact migration', () => {
 	it('creates one contact per tenancy that had contact text', async () => {
-		const rows = await sql`select name, notes from contact order by name`;
+		const rows = await harness.sql`select name, notes from contact order by name`;
 		expect(rows.map((r) => r.name)).toEqual(['Jan Kowalski', 'Řehoř Novák']);
 	});
 
 	it('preserves the original text verbatim, without parsing it', async () => {
-		const [row] = await sql`select notes, phone, email from contact where name = 'Jan Kowalski'`;
+		const [row] =
+			await harness.sql`select notes, phone, email from contact where name = 'Jan Kowalski'`;
 		expect(row.notes).toBe('jan@example.test, +48 600 100 200');
 		// Deliberately NOT split into columns — see the migration's comment.
 		expect(row.phone).toBeNull();
@@ -115,7 +83,7 @@ describe('tenant_contact migration', () => {
 	});
 
 	it('leaves tenancies with empty or whitespace-only contact text alone', async () => {
-		const [{ n }] = await sql`select count(*)::int as n from contact`;
+		const [{ n }] = await harness.sql`select count(*)::int as n from contact`;
 		expect(n).toBe(2);
 	});
 
@@ -124,7 +92,7 @@ describe('tenant_contact migration', () => {
 	// column it replaced. (This does not prove AS MATERIALIZED is doing the work —
 	// PostgreSQL materializes this CTE regardless, and the migration says so.)
 	it('links every contact to the tenancy it came from', async () => {
-		const rows = await sql`
+		const rows = await harness.sql`
 			select c.name as contact_name, t.tenant_name
 			from contact_tenancy ct
 			join contact c on c.id = ct.contact_id
@@ -136,7 +104,7 @@ describe('tenant_contact migration', () => {
 	});
 
 	it('leaves no link row pointing at a contact that does not exist', async () => {
-		const orphans = await sql`
+		const orphans = await harness.sql`
 			select ct.contact_id from contact_tenancy ct
 			left join contact c on c.id = ct.contact_id
 			where c.id is null
@@ -145,7 +113,7 @@ describe('tenant_contact migration', () => {
 	});
 
 	it('drops the column', async () => {
-		const columns = await sql`
+		const columns = await harness.sql`
 			select column_name from information_schema.columns
 			where table_name = 'tenancy'
 		`;

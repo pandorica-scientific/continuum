@@ -899,7 +899,19 @@ export const calendarEventException = pgTable(
 		title: text('title'),
 		startsAt: timestamp('starts_at', { withTimezone: true }),
 		endsAt: timestamp('ends_at', { withTimezone: true }),
-		notes: text('notes')
+		notes: text('notes'),
+		// The rest of what an edit can change. Without these three, a "this event
+		// only" edit that retagged, un-all-dayed or re-zoned one occurrence was
+		// accepted by the form, silently dropped on the way to the table, and the
+		// occurrence came back rendered from the series values — so the screen
+		// disagreed with what had just been saved and nothing was pushed.
+		//
+		// Nullable, and null means inherit, exactly as title and notes do. That is
+		// what lets a later series-level change still reach an overridden
+		// occurrence: only the fields the edit actually differed on are stored.
+		category: text('category'),
+		allDay: boolean('all_day'),
+		tz: text('tz')
 	},
 	(t) => [uniqueIndex('calendar_event_exception_occurrence_idx').on(t.eventId, t.recurrenceId)]
 );
@@ -967,7 +979,15 @@ export const calendarSyncLink = pgTable(
 		suppressedAt: timestamp('suppressed_at', { withTimezone: true }),
 		deletedAt: timestamp('deleted_at', { withTimezone: true })
 	},
-	(t) => [primaryKey({ columns: [t.localKey, t.accountId] })]
+	(t) => [
+		primaryKey({ columns: [t.localKey, t.accountId] }),
+		// The primary key leads with local_key, so it cannot serve a lookup that
+		// only knows the account — and every one of them does. A sync pass reads
+		// this table by account, disconnecting an account cascades by account, and
+		// both were sequential scans that grow with the whole household's history
+		// rather than with one account's share of it.
+		index('calendar_sync_link_account_idx').on(t.accountId)
+	]
 );
 
 // A discarded version, kept so last-writer-wins is not silent.

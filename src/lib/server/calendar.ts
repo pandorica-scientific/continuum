@@ -5,6 +5,7 @@ import { getSetting, setSetting } from '$lib/server/settings';
 import { formatMinor } from '$lib/money';
 import { generatedKey, type OriginBinding } from '$lib/calendar/keys';
 import { decorate, markerForGenerated } from '$lib/calendar/markers';
+import { toIcsCalendar } from '$lib/server/calendar/sync/ical';
 import { randomBytes } from 'node:crypto';
 
 // The ledger writes its own events, generated from what it already knows —
@@ -294,36 +295,38 @@ export async function icsToken(): Promise<string> {
 	return token;
 }
 
-/** The published feed: a year back, a year ahead, all-day events. */
+/**
+ * The published feed: a year back, a year ahead, all-day events.
+ *
+ * Serialised by the SAME code that writes what the sync engine pushes, rather
+ * than by a second hand-rolled builder living here. Each generated event is
+ * described in exactly the shape the engine's localItems gives it — all-day,
+ * anchored to UTC midnight through end of day — so a household that subscribes
+ * to this feed and a household that connects a calendar account see the same
+ * events, at the same times, escaped and folded the same way.
+ */
 export async function buildIcs(): Promise<string> {
 	const start = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
 	const end = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
 	const [events, markers] = await Promise.all([generateEvents(start, end), getCalendarMarkers()]);
-	const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
-	const lines = [
-		'BEGIN:VCALENDAR',
-		'VERSION:2.0',
-		'PRODID:-//Continuum//ledger//EN',
-		'X-WR-CALNAME:Continuum ledger'
-	];
-	events.forEach((e) => {
-		const day = e.date.replace(/-/g, '');
-		// Composed here, at the edge, rather than stored on the event: decoration
-		// must never reach the content hash the sync merge compares against.
-		const summary = decorate(
-			e.label,
-			markers ? markerForGenerated(e.ruleKey, e.binding) : null,
-			markers
-		);
-		lines.push(
-			'BEGIN:VEVENT',
-			`UID:${icsUid(e.key)}`,
-			`DTSTAMP:${stamp}`,
-			`DTSTART;VALUE=DATE:${day}`,
-			`SUMMARY:${summary.replace(/[,;\\]/g, ' ')}`,
-			'END:VEVENT'
-		);
-	});
-	lines.push('END:VCALENDAR');
-	return lines.join('\r\n');
+	const updatedAt = new Date().toISOString();
+
+	return toIcsCalendar(
+		events.map((e) => ({
+			uid: icsUid(e.key),
+			// Composed here, at the edge, rather than stored on the event: decoration
+			// must never reach the content hash the sync merge compares against.
+			title: decorate(e.label, markers ? markerForGenerated(e.ruleKey, e.binding) : null, markers),
+			notes: null,
+			category: null,
+			allDay: true,
+			startsAt: `${e.date}T00:00:00.000Z`,
+			endsAt: `${e.date}T23:59:59.000Z`,
+			tz: 'UTC',
+			rrule: null,
+			exceptions: [],
+			updatedAt
+		})),
+		'Continuum ledger'
+	);
 }

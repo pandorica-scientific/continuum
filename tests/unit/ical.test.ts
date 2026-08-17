@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fold, parseIcs, toIcs, unescapeText } from '$lib/server/calendar/sync/ical';
-import type { EventSeries } from '$lib/server/calendar/series';
+import { fold, parseIcs, toIcs, toIcsCalendar, unescapeText } from '$lib/server/calendar/sync/ical';
+import { hashSeries, type EventSeries, type SeriesException } from '$lib/server/calendar/series';
 
 const single: EventSeries = {
 	uid: 'evt-1',
@@ -190,9 +190,23 @@ describe('round trip', () => {
 		expect(back!.notes).toBe('one\ntwo');
 	});
 
+	// The instants, not just the flag. DTEND is exclusive, so a one-day event on
+	// the 28th goes out as the 1st; reading it back as midnight rather than end of
+	// day made every all-day event come back a day short, which hashes
+	// differently, which the engine reads as a remote date move.
 	it('round-trips an all-day event', () => {
-		const back = parseIcs(toIcs({ ...single, allDay: true }));
+		const allDay = {
+			...single,
+			allDay: true,
+			startsAt: '2026-02-28T00:00:00.000Z',
+			endsAt: '2026-02-28T23:59:59.000Z'
+		};
+		const back = parseIcs(toIcs(allDay));
 		expect(back!.allDay).toBe(true);
+		expect({ startsAt: back!.startsAt, endsAt: back!.endsAt }).toEqual({
+			startsAt: allDay.startsAt,
+			endsAt: allDay.endsAt
+		});
 	});
 
 	it('round-trips a long summary through folding', () => {
@@ -202,6 +216,130 @@ describe('round trip', () => {
 
 	it('returns null for something that is not a calendar', () => {
 		expect(parseIcs('not an ics at all')).toBeNull();
+	});
+});
+
+// A "this event only" edit can change more than the title and the time. Each of
+// these three changes the SHAPE of the block — all-day picks DATE over
+// DATE-TIME, the zone says what the digits mean — so writing the series' values
+// into an override published the occurrence wrongly, and there was nothing in
+// the resource for the next pull to read the override back from.
+describe('an occurrence that overrides more than its time', () => {
+	const tagged: EventSeries = { ...series, category: 'household', exceptions: [] };
+	const override = {
+		recurrenceId: '2026-09-15T09:00:00.000Z',
+		cancelled: false,
+		startsAt: '2026-09-15T09:00:00.000Z',
+		endsAt: '2026-09-15T09:30:00.000Z'
+	};
+	const withOverride = (over: Partial<SeriesException>): EventSeries => ({
+		...tagged,
+		exceptions: [{ ...override, ...over }]
+	});
+
+	it('writes an all-day override as a DATE while the series stays timed', () => {
+		const block = toIcs(withOverride({ allDay: true, endsAt: '2026-09-15T23:59:59.000Z' }))
+			.split('BEGIN:VEVENT')
+			.find((part) => part.includes('RECURRENCE-ID'))!;
+		expect(block).toContain('DTSTART;VALUE=DATE:20260915');
+		// Exclusive, exactly as an all-day master's end is: the 16th for a
+		// one-day event on the 15th.
+		expect(block).toContain('DTEND;VALUE=DATE:20260916');
+	});
+
+	it.each([
+		['a category', { category: 'health' } as Partial<SeriesException>],
+		['a timezone', { tz: 'UTC' } as Partial<SeriesException>],
+		['all-day', { allDay: true, endsAt: '2026-09-15T23:59:59.000Z' } as Partial<SeriesException>]
+	])('round-trips %s the occurrence overrides', (_label, over) => {
+		const back = parseIcs(toIcs(withOverride(over)));
+		const [exception] = back!.exceptions;
+		for (const [field, value] of Object.entries(over)) {
+			if (field === 'endsAt') continue;
+			expect({ [field]: exception[field as keyof SeriesException] }).toEqual({ [field]: value });
+		}
+	});
+
+	// THE PHANTOM OVERRIDE. Every override block has to stand alone as a VEVENT,
+	// so it carries a zone and a category even when it merely inherited them.
+	// Reading those back as overrides turns our own push into a difference on the
+	// very next pull: the hash we stored says "inherits", the hash of what came
+	// back says "overrides", and the merge can only read that as a remote edit.
+	it('does not invent overrides for what the occurrence only inherited', () => {
+		const [exception] = parseIcs(toIcs(withOverride({})))!.exceptions;
+		expect({
+			category: exception.category,
+			allDay: exception.allDay,
+			tz: exception.tz
+		}).toEqual({ category: null, allDay: null, tz: null });
+	});
+
+	it('keeps the content hash stable across a full round trip', () => {
+		for (const over of [{}, { category: 'health' }, { tz: 'UTC' }, { title: 'Recycling' }]) {
+			const sent = withOverride(over);
+			expect(hashSeries(parseIcs(toIcs(sent))!)).toBe(hashSeries(sent));
+		}
+	});
+
+	// A deliberate, and unavoidable, collapse. iCalendar has no way to say "this
+	// occurrence overrides the title, to the same string the series already
+	// uses" — the wire form of that is identical to inheriting it. So it comes
+	// back as inherit, which is the reading that keeps the hash stable, and the
+	// only visible consequence is that renaming the series later reaches this
+	// occurrence too.
+	it('reads an override equal to the series as inheriting it', () => {
+		const [exception] = parseIcs(toIcs(withOverride({ title: tagged.title })))!.exceptions;
+		expect(exception.title).toBeNull();
+	});
+
+	// The master's exclusive all-day end has always been undone on the way back
+	// in; an override's was not, so every override of an all-day series came back
+	// a day shorter than it was sent and hashed as a remote edit.
+	it('undoes the exclusive all-day end on an override too', () => {
+		const allDaySeries: EventSeries = {
+			...tagged,
+			allDay: true,
+			startsAt: '2026-09-01T00:00:00.000Z',
+			endsAt: '2026-09-01T23:59:59.000Z',
+			exceptions: [
+				{
+					recurrenceId: '2026-09-15T00:00:00.000Z',
+					cancelled: false,
+					startsAt: '2026-09-16T00:00:00.000Z',
+					endsAt: '2026-09-16T23:59:59.000Z'
+				}
+			]
+		};
+		const [exception] = parseIcs(toIcs(allDaySeries))!.exceptions;
+		expect(exception.endsAt).toBe('2026-09-16T23:59:59.000Z');
+	});
+});
+
+// The published feed used to build its own iCalendar by hand — its own PRODID,
+// no DTEND, and commas replaced with spaces instead of escaped. Everything
+// learned about folding, escaping and exclusive all-day ends applied only to
+// what we push, and not to what the household actually subscribes to.
+describe('serialising many series as one document', () => {
+	const feed = toIcsCalendar([single, { ...single, uid: 'evt-3', title: 'Vet' }], 'Continuum');
+
+	it('wraps every event in one calendar', () => {
+		expect(feed.match(/BEGIN:VCALENDAR/g)).toHaveLength(1);
+		expect(feed.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+		expect(feed).toContain('X-WR-CALNAME:Continuum');
+	});
+
+	it('is the same serialiser a single resource goes through', () => {
+		expect(toIcsCalendar([single])).toBe(toIcs(single));
+	});
+
+	it('gives every event an end, which the hand-rolled feed never did', () => {
+		expect(feed.match(/DTEND/g)).toHaveLength(2);
+	});
+
+	it('escapes a comma in a title rather than replacing it', () => {
+		const titled = toIcsCalendar([{ ...single, title: 'Vet, then dentist' }]);
+		expect(titled).toContain('SUMMARY:Vet\\, then dentist');
+		expect(parseIcs(titled)!.title).toBe('Vet, then dentist');
 	});
 });
 

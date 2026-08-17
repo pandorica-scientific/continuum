@@ -23,6 +23,10 @@ export interface SeriesException {
 	startsAt?: string | null;
 	endsAt?: string | null;
 	notes?: string | null;
+	/** Null on all three means "inherit from the series", as it does above. */
+	category?: string | null;
+	allDay?: boolean | null;
+	tz?: string | null;
 }
 
 export interface EventSeries {
@@ -72,7 +76,16 @@ export function canonical(series: EventSeries, marker: string | null = null): st
 			t: text(exception.title),
 			s: instant(exception.startsAt),
 			e: instant(exception.endsAt),
-			n: text(exception.notes)
+			n: text(exception.notes),
+			// Present ONLY when the occurrence actually overrides them. Adding three
+			// unconditional keys would have changed the canonical form of every
+			// series that has ever been pushed, so on the first pass after the
+			// upgrade no stored hash would match, both sides would read as changed,
+			// and the whole calendar would arrive as conflicts. An override to null
+			// is not expressible here, and does not need to be: null IS inherit.
+			...(exception.category != null ? { ca: text(exception.category) } : {}),
+			...(exception.allDay != null ? { ad: exception.allDay } : {}),
+			...(exception.tz != null ? { z: text(exception.tz) } : {})
 		}))
 		// Sorted, because Google returns overrides in no particular order and two
 		// orderings of the same set are the same series.

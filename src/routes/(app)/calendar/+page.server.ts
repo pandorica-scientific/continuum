@@ -14,7 +14,7 @@ import { allOccurrences, type ExceptionRow, type SeriesRow } from '$lib/calendar
 import { markerForCategory, markerForGenerated } from '$lib/calendar/markers';
 import { EVENT_CATEGORIES, EVENT_CATEGORY_KEYS } from '$lib/modules/registry';
 import type { EditScope } from '$lib/calendar/scope';
-import { instantOfWall } from '$lib/calendar/rrule';
+import { instantOfWall, localDate } from '$lib/calendar/rrule';
 import { listCalendarAccounts } from '$lib/server/calendar/sync';
 import { acknowledgeConflicts } from '$lib/server/calendar/conflicts';
 import { setSetting } from '$lib/server/settings';
@@ -65,7 +65,10 @@ export const load: PageServerLoad = async ({ url }) => {
 			title: row.title,
 			startsAt: row.startsAt?.toISOString() ?? null,
 			endsAt: row.endsAt?.toISOString() ?? null,
-			notes: row.notes
+			notes: row.notes,
+			category: row.category,
+			allDay: row.allDay,
+			tz: row.tz
 		});
 		exceptionsByEvent.set(row.eventId, list);
 	}
@@ -82,25 +85,43 @@ export const load: PageServerLoad = async ({ url }) => {
 		rrule: row.rrule
 	}));
 
-	const occurrences = allOccurrences(series, exceptionsByEvent, start, end).map((o) => ({
-		...o,
-		date: o.startsAt.slice(0, 10),
-		time: o.allDay
-			? null
-			: new Date(o.startsAt).toLocaleTimeString('en-GB', {
-					hour: '2-digit',
-					minute: '2-digit',
-					timeZone: HOUSEHOLD_TZ
-				}),
-		marker: markerForCategory(o.category),
-		rrule: series.find((s) => s.id === o.eventId)?.rrule ?? null
-	}));
+	// One lookup rather than a `find` per occurrence. The rule comes from here;
+	// the zone comes off the occurrence itself, which may override the series'.
+	const seriesById = new Map(series.map((s) => [s.id, s]));
+
+	const occurrences = allOccurrences(series, exceptionsByEvent, start, end).map((o) => {
+		// The OCCURRENCE's zone, which is the series' unless this one overrides it.
+		// Reading the series' zone here ignored a "this event only" edit that moved
+		// one occurrence to another zone, and printed it at the wrong hour.
+		const tz = o.tz || HOUSEHOLD_TZ;
+		return {
+			...o,
+			// Read on the event's OWN clock, not UTC. `slice(0, 10)` put anything
+			// before the offset — an all-day event at local midnight, a 00:30
+			// alarm — on the previous day, so the dot, the agenda row and the
+			// per-cell count all disagreed with the time printed beside them.
+			date: localDate(o.startsAt, tz),
+			time: o.allDay
+				? null
+				: new Date(o.startsAt).toLocaleTimeString('en-GB', {
+						hour: '2-digit',
+						minute: '2-digit',
+						timeZone: tz
+					}),
+			marker: markerForCategory(o.category),
+			rrule: seriesById.get(o.eventId)?.rrule ?? null
+		};
+	});
 
 	// Monday-first grid with leading blanks. Both kinds of event count towards a
 	// day's dot, because the grid answers "is anything happening", not "did the
 	// ledger write anything".
 	const lead = (first.getUTCDay() + 6) % 7;
-	const today = now.toISOString().slice(0, 10);
+	// The household's today, not UTC's. Between local midnight and the offset the
+	// two are different days, and this one both highlights a cell and pre-fills
+	// the date on a new event — so a note made just after midnight was filed on
+	// the day before.
+	const today = localDate(now, HOUSEHOLD_TZ);
 	const cells = [
 		...Array.from({ length: lead }, () => null),
 		...Array.from({ length: daysInMonth }, (_, i) => {
@@ -200,20 +221,46 @@ function readEvent(form: FormData) {
 	const text = (key: string) => String(form.get(key) ?? '').trim();
 	const allDay = form.get('allDay') === 'on';
 	const date = text('date');
-	// An all-day event still needs an instant: midnight through end of day, in the
-	// household's zone, so it lands on the right day in every client.
-	const startTime = allDay ? '00:00' : text('startTime') || '09:00';
-	const endTime = allDay ? '23:59' : text('endTime') || startTime;
 
-	return {
+	const common = {
 		title: text('title'),
 		notes: text('notes') || null,
 		category: text('category') || null,
 		allDay,
+		rrule: text('rrule') || null
+	};
+
+	// AN ALL-DAY EVENT IS A DATE, NOT AN INSTANT, so it is anchored to UTC.
+	//
+	// Anchoring it to the household's wall clock stored "6 August, all day" as
+	// 2026-08-05T22:00:00Z, and every consumer that reads a date back off the
+	// instant then reported the fifth: the month grid (`startsAt.slice(0, 10)`),
+	// Google's `{ date }`, and iCalendar's `VALUE=DATE`. The event showed up a
+	// day early on screen before any calendar was even connected, and the first
+	// sync round trip wrote that wrong day back into the row.
+	//
+	// UTC midnight through end of day is also exactly how the ledger's own
+	// generated all-day events are held (see the sync engine's localItems), so
+	// authored and generated events now round-trip through both providers the
+	// same way instead of only one of them being right.
+	if (allDay) {
+		const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+		return {
+			...common,
+			startsAt: valid ? new Date(`${date}T00:00:00.000Z`) : new Date(NaN),
+			endsAt: valid ? new Date(`${date}T23:59:59.000Z`) : new Date(NaN),
+			tz: 'UTC'
+		};
+	}
+
+	const startTime = text('startTime') || '09:00';
+	const endTime = text('endTime') || startTime;
+
+	return {
+		...common,
 		startsAt: householdInstant(date, startTime),
 		endsAt: householdInstant(date, endTime),
-		tz: HOUSEHOLD_TZ,
-		rrule: text('rrule') || null
+		tz: HOUSEHOLD_TZ
 	};
 }
 

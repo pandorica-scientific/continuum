@@ -91,30 +91,43 @@ export async function updateEvent(
 		);
 
 		if (plan.kind === 'exception') {
-			// One occurrence overridden. onConflictDoUpdate rather than insert:
-			// moving the same occurrence twice must edit the existing override, not
-			// fail on the (event_id, recurrence_id) unique index.
+			// Only what this occurrence actually says DIFFERENTLY from the series.
+			//
+			// Null means inherit, so storing the submitted value unconditionally
+			// would freeze the occurrence at today's category and zone: retag the
+			// series later and every overridden occurrence would keep the old tag.
+			// Storing the difference keeps a "this event only" edit narrow — which
+			// is what the person asked for — and lets everything they did not touch
+			// go on following the series.
+			//
+			// These three used to be dropped outright: the form submitted them, the
+			// insert had nowhere to put them, and the occurrence was re-rendered
+			// from the series values, so the screen contradicted the save.
+			const override = {
+				cancelled: false,
+				title: input.title.trim(),
+				startsAt: input.startsAt,
+				endsAt: input.endsAt,
+				notes: input.notes?.trim() || null,
+				category: (input.category || null) === row.category ? null : input.category || null,
+				allDay: input.allDay === row.allDay ? null : input.allDay,
+				tz: input.tz === row.tz ? null : input.tz
+			};
+
+			// onConflictDoUpdate rather than insert: moving the same occurrence twice
+			// must edit the existing override, not fail on the (event_id,
+			// recurrence_id) unique index.
 			await tx
 				.insert(calendarEventException)
 				.values({
 					id: randomUUID(),
 					eventId: id,
 					recurrenceId: plan.recurrenceId,
-					cancelled: false,
-					title: input.title.trim(),
-					startsAt: input.startsAt,
-					endsAt: input.endsAt,
-					notes: input.notes?.trim() || null
+					...override
 				})
 				.onConflictDoUpdate({
 					target: [calendarEventException.eventId, calendarEventException.recurrenceId],
-					set: {
-						cancelled: false,
-						title: input.title.trim(),
-						startsAt: input.startsAt,
-						endsAt: input.endsAt,
-						notes: input.notes?.trim() || null
-					}
+					set: override
 				});
 			await touch(tx, id);
 			return { ok: true, id } as const;
@@ -241,6 +254,30 @@ export async function deleteEvent(
 				.update(calendarEvent)
 				.set({ rrule: plan.truncatedRrule, updatedAt: new Date() })
 				.where(eq(calendarEvent.id, id));
+
+			// And the overrides on the far side of the split go with it. Truncating
+			// the rule alone left them behind, and occurrencesFor sweeps overrides
+			// whose new time lands in the window even when the rule no longer
+			// produces them — so a moved occurrence the household had just deleted
+			// came straight back on the next render, and was pushed to the provider
+			// as a RECURRENCE-ID naming an occurrence that no longer exists.
+			//
+			// Compared as instants for the same reason the update path does: the
+			// column is text and the same moment arrives spelled more than one way.
+			const splitAt = new Date(plan.newSeriesStart).getTime();
+			const existing = await tx
+				.select({
+					id: calendarEventException.id,
+					recurrenceId: calendarEventException.recurrenceId
+				})
+				.from(calendarEventException)
+				.where(eq(calendarEventException.eventId, id));
+			const dropped = existing
+				.filter((e) => new Date(e.recurrenceId).getTime() >= splitAt)
+				.map((e) => e.id);
+			if (dropped.length > 0) {
+				await tx.delete(calendarEventException).where(inArray(calendarEventException.id, dropped));
+			}
 			return { ok: true, id } as const;
 		}
 

@@ -28,12 +28,24 @@
 
 	const parsed = parseRrule(value ?? '');
 
+	/** The ordinal of a BYDAY token — 2 in `2TU`, -1 in `-1FR`, 0 for a bare code. */
+	function ordinalOf(token: string): number {
+		const n = Number(token.slice(0, -2));
+		return Number.isInteger(n) ? n : 0;
+	}
+
+	// Google and Apple write "the second Tuesday" as `BYDAY=2TU`; this editor
+	// writes the equivalent `BYDAY=TU;BYSETPOS=2`. Both have to open as
+	// "monthly on a weekday", or an imported series is shown as — and saved back
+	// as — "monthly on the 13th".
+	const ordinalDay = parsed?.byDay.find((d) => ordinalOf(d) !== 0) ?? null;
+
 	function initialPattern(): Pattern {
 		if (!parsed) return 'none';
 		if (parsed.freq === 'DAILY') return 'daily';
 		if (parsed.freq === 'WEEKLY') return 'weekly';
 		if (parsed.freq === 'YEARLY') return 'yearly';
-		return parsed.bySetPos.length > 0 ? 'monthlyWeekday' : 'monthlyDate';
+		return parsed.bySetPos.length > 0 || ordinalDay ? 'monthlyWeekday' : 'monthlyDate';
 	}
 
 	const dayOfMonth = $derived(Number(startDate.slice(8, 10)) || 1);
@@ -43,8 +55,8 @@
 
 	let pattern = $state<Pattern>(initialPattern());
 	let interval = $state(parsed?.interval ?? 1);
-	let byDay = $state<string[]>(parsed?.byDay.length ? [...parsed.byDay] : []);
-	let setPos = $state(parsed?.bySetPos[0] ?? 1);
+	let byDay = $state<string[]>(parsed?.byDay.length ? parsed.byDay.map((d) => d.slice(-2)) : []);
+	let setPos = $state(parsed?.bySetPos[0] ?? (ordinalDay ? ordinalOf(ordinalDay) : 1));
 	let ending = $state<'never' | 'count' | 'until'>(
 		parsed?.count != null ? 'count' : parsed?.until ? 'until' : 'never'
 	);

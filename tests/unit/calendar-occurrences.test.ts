@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { occurrencesFor, type ExceptionRow, type SeriesRow } from '$lib/calendar/occurrences';
+import {
+	occurrencesFor,
+	type ExceptionRow,
+	type Occurrence,
+	type SeriesRow
+} from '$lib/calendar/occurrences';
 
 const weekly: SeriesRow = {
 	id: 'e1',
@@ -20,6 +25,9 @@ const exception = (over: Partial<ExceptionRow>): ExceptionRow => ({
 	startsAt: null,
 	endsAt: null,
 	notes: null,
+	category: null,
+	allDay: null,
+	tz: null,
 	...over
 });
 
@@ -96,6 +104,43 @@ describe('expanding a series into occurrences', () => {
 			'2026-10-31'
 		);
 		expect(out.map((o) => o.startsAt)).toContain('2026-10-02T09:00:00.000Z');
+	});
+
+	// The same "null means inherit" rule the title has always followed. These
+	// three used to be read off the series regardless, so a "this event only"
+	// edit that retagged or un-all-dayed one occurrence was accepted by the form
+	// and then drawn from the series values anyway — the screen contradicted the
+	// save, and nothing was pushed.
+	it.each([
+		['category', { category: 'health' }, (o: Occurrence) => o.category, 'household'],
+		['all-day', { allDay: true }, (o: Occurrence) => o.allDay, false],
+		['timezone', { tz: 'UTC' }, (o: Occurrence) => o.tz, 'Europe/Prague']
+	])('takes an overridden %s and leaves the rest inheriting', (_label, over, read, inherited) => {
+		const out = occurrencesFor(weekly, [exception(over)], '2026-09-01', '2026-09-30');
+		const overridden = out.find((o) => o.recurrenceId === '2026-09-15T09:00:00.000Z')!;
+		const untouched = out.find((o) => o.recurrenceId === '2026-09-01T09:00:00.000Z')!;
+		expect(read(overridden)).toEqual(Object.values(over)[0]);
+		expect(read(untouched)).toEqual(inherited);
+	});
+
+	// The grid places an occurrence by its LOCAL date, and an override that
+	// re-zones changes which day that is.
+	it('sweeps a moved occurrence into the window on its own zone', () => {
+		const out = occurrencesFor(
+			weekly,
+			[
+				exception({
+					recurrenceId: '2026-09-29T09:00:00.000Z',
+					// 00:30 on 1 October in Prague is still 30 September in UTC.
+					startsAt: '2026-09-30T22:30:00.000Z',
+					endsAt: '2026-09-30T23:00:00.000Z',
+					tz: 'Europe/Prague'
+				})
+			],
+			'2026-10-01',
+			'2026-10-31'
+		);
+		expect(out.map((o) => o.startsAt)).toContain('2026-09-30T22:30:00.000Z');
 	});
 
 	it('handles a single event with no rule', () => {

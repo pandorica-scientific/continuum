@@ -30,6 +30,8 @@ import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { getCalendarMarkers } from '$lib/server/calendar';
 import {
 	calendarProviderKinds,
+	credentialIsPending,
+	deletePendingGoogleAccounts,
 	getSyncIntervalMinutes,
 	listCalendarAccounts,
 	makeCalendarProvider as makeCalendarProviderChecked,
@@ -320,6 +322,18 @@ export const actions = administered({
 			return fail(400, { message: 'The OAuth client ID and secret are both needed.' });
 		}
 
+		// The same one-account-per-provider rule connectCalendar enforces, and for
+		// the same reason: the form is hidden once one exists, but a stale page or
+		// a direct POST would otherwise reach here — and here it would replace a
+		// working connection rather than create a second one.
+		const connected = await db
+			.select({ id: calendarAccount.id, credential: calendarAccount.credential })
+			.from(calendarAccount)
+			.where(eq(calendarAccount.provider, 'google'));
+		if (connected.some((row) => !credentialIsPending(row.credential))) {
+			return fail(409, { message: 'Google is already connected. Disconnect it first.' });
+		}
+
 		// Derived from the request rather than configured: it has to match the
 		// authorised redirect URI in the Cloud console character for character, and
 		// the address the browser is on is the only thing that reliably does.
@@ -327,9 +341,16 @@ export const actions = administered({
 		const started = startAuth(clientId, clientSecret, redirectUri);
 
 		// A half-finished row, holding the secret and the state hash while the
-		// browser is away. Any earlier attempt is cleared first so a stale pending
+		// browser is away. Any earlier ATTEMPT is cleared first so a stale pending
 		// row cannot be matched by a later callback.
-		await db.delete(calendarAccount).where(eq(calendarAccount.provider, 'google'));
+		//
+		// Only attempts. This used to delete every Google row, which meant pressing
+		// Authorise again on a WORKING connection destroyed it before the browser
+		// had even reached Google — cascading away every sync link (suppressions
+		// included, so events the household had deliberately deleted came back) and
+		// every unacknowledged conflict. Abandon the consent screen at that point
+		// and there was nothing left to go back to.
+		await deletePendingGoogleAccounts();
 		await db.insert(calendarAccount).values({
 			id: randomUUID(),
 			provider: 'google',
@@ -405,6 +426,20 @@ export const actions = administered({
 	syncCalendarNow: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
+
+		// The background poller skips an account with no calendar chosen; this had
+		// no such guard, so a press between authorising and creating the calendar
+		// reached the provider with nothing to write to.
+		const [row] = await db
+			.select({ remoteCalId: calendarAccount.remoteCalId })
+			.from(calendarAccount)
+			.where(eq(calendarAccount.id, id))
+			.limit(1);
+		if (!row) return fail(404, { message: 'No such account.' });
+		if (!row.remoteCalId) {
+			return fail(400, { message: 'Choose a calendar for that account first.' });
+		}
+
 		const report = await runSync(id);
 		if (!report) return fail(400, { message: 'Sync failed — see the account for the reason.' });
 		if (report.skipped) {

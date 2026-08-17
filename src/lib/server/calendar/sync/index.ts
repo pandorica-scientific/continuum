@@ -9,7 +9,7 @@
 import './icloud';
 import './google';
 
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { calendarAccount } from '$lib/server/db/schema';
 import { getSetting } from '$lib/server/settings';
@@ -63,6 +63,44 @@ export async function providerFor(
 	});
 }
 
+/**
+ * Whether a stored credential is a half-finished authorisation.
+ *
+ * The state hash is written when the browser is sent to the provider and
+ * removed the moment a token arrives, so its presence is exactly "this row is
+ * an attempt, not a connection".
+ */
+export function credentialIsPending(credential: string): boolean {
+	try {
+		return Boolean((JSON.parse(credential) as { stateHash?: string }).stateHash);
+	} catch {
+		// Unreadable is not pending. A row nobody can parse is left for a human
+		// rather than deleted on a guess.
+		return false;
+	}
+}
+
+/**
+ * Remove abandoned Google authorisations, and ONLY those.
+ *
+ * Shared by the action that starts a flow and the callback that finishes one,
+ * because both used to clear "every Google row" and both therefore destroyed a
+ * live connection — with its sync links and conflict history — on a press or a
+ * Cancel. Deleting by id keeps the predicate in one place.
+ */
+export async function deletePendingGoogleAccounts(handle: Db = db): Promise<number> {
+	const rows = await handle
+		.select({ id: calendarAccount.id, credential: calendarAccount.credential })
+		.from(calendarAccount)
+		.where(eq(calendarAccount.provider, 'google'));
+
+	const pending = rows.filter((row) => credentialIsPending(row.credential)).map((row) => row.id);
+	if (pending.length === 0) return 0;
+
+	await handle.delete(calendarAccount).where(inArray(calendarAccount.id, pending));
+	return pending.length;
+}
+
 /** Run one pass, recording the outcome on the account either way. */
 export async function runSync(accountId: string, handle: Db = db): Promise<SyncReport | null> {
 	const provider = await providerFor(accountId, handle);
@@ -73,9 +111,18 @@ export async function runSync(accountId: string, handle: Db = db): Promise<SyncR
 	} catch (error) {
 		// A failing account records why and backs off; it must not take the other
 		// accounts down with it, so the error is stored rather than rethrown.
+		//
+		// `lastSyncAt` is stamped on failure as well as on success, and that is what
+		// the backing off actually IS: syncDue reads only that column, so leaving it
+		// alone meant a never-successful account was due unconditionally and the
+		// sixty-second tick presented a dead credential to Apple or Google 1,440
+		// times a day, forever. An attempt was made; the interval now applies to it.
 		await handle
 			.update(calendarAccount)
-			.set({ lastError: error instanceof Error ? error.message : 'Sync failed.' })
+			.set({
+				lastError: error instanceof Error ? error.message : 'Sync failed.',
+				lastSyncAt: new Date()
+			})
 			.where(eq(calendarAccount.id, accountId));
 		return null;
 	}

@@ -1,61 +1,59 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import type postgres from 'postgres';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { parseRevolut } from '$lib/server/import/adapters/revolut';
 import { fingerprintAll } from '$lib/server/import/fingerprint';
 import type { ParsedRow } from '$lib/server/import/types';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import {
+	before,
+	migrationFiles,
+	startPostgres,
+	statements,
+	type Harness,
+	type TestDb
+} from './harness';
 
-const PORT = 55439;
-const DATABASE = 'continuum_task1';
-const DATABASE_DIR = resolve('scratch-workspace/task1-import-postgres');
-const URL = `postgres://postgres:password@127.0.0.1:${PORT}/${DATABASE}`;
 const REPAIR_MIGRATION = resolve('drizzle/0027_repair_transaction_fingerprints.sql');
 
-let embedded: EmbeddedPostgres;
-let sqlClient: postgres.Sql;
-let testDb: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let testDb: TestDb;
 
-async function executeSqlFile(path: string, client: postgres.Sql = sqlClient): Promise<void> {
-	const statements = readFileSync(path, 'utf8')
-		.split('--> statement-breakpoint')
-		.filter((statement) => statement.trim().length > 0);
+/**
+ * One migration file, all of it in ONE transaction.
+ *
+ * The harness applies statements one at a time, as the migrator does. This suite
+ * needs the whole file to commit or roll back together, because it runs the
+ * fingerprint repair against deliberately broken data and asserts that a repair
+ * which fails partway leaves nothing behind.
+ */
+async function executeSqlFile(path: string, client: postgres.Sql = harness.sql): Promise<void> {
+	const parts = statements(readFileSync(path, 'utf8'));
 	await client.begin(async (tx) => {
-		for (const statement of statements) await tx.unsafe(statement);
+		for (const statement of parts) await tx.unsafe(statement);
 	});
 }
 
 async function withLegacyDatabase<T>(
 	name: string,
-	run: (client: postgres.Sql, database: ReturnType<typeof drizzle<typeof schema>>) => Promise<T>
+	run: (client: postgres.Sql, database: TestDb) => Promise<T>
 ): Promise<T> {
-	await embedded.createDatabase(name);
-	const client = postgres(`postgres://postgres:password@127.0.0.1:${PORT}/${name}`, {
-		max: 1,
-		onnotice: () => undefined
-	});
+	const legacy = await harness.createDatabase(name);
 	try {
-		const legacyMigrations = readdirSync('drizzle')
-			.filter((migration) => /^\d{4}_.+\.sql$/.test(migration) && migration < '0027_')
-			.sort();
-		for (const migration of legacyMigrations) {
-			await executeSqlFile(resolve('drizzle', migration), client);
+		for (const migration of migrationFiles().filter(before('0027_'))) {
+			await executeSqlFile(resolve('drizzle', migration), legacy.sql);
 		}
-		return await run(client, drizzle(client, { schema }));
+		return await run(legacy.sql, legacy.db);
 	} finally {
-		await client.end();
-		await embedded.dropDatabase(name);
+		await legacy.drop();
 	}
 }
 
 async function count(table: string): Promise<number> {
-	const rows = await sqlClient.unsafe<{ count: number }[]>(
+	const rows = await harness.sql.unsafe<{ count: number }[]>(
 		`select count(*)::int as count from "${table}"`
 	);
 	return rows[0].count;
@@ -106,36 +104,23 @@ function fioStatement({
 }
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sqlClient = postgres(URL, { max: 10, onnotice: () => undefined });
-	testDb = drizzle(sqlClient, { schema });
-	process.env.DATABASE_URL = URL;
+	harness = await startPostgres('import-integrity');
+	testDb = harness.db;
+	process.env.DATABASE_URL = harness.url;
 	process.env.UPLOAD_DIR = resolve('scratch-workspace/task1-import-uploads');
 
-	const baseMigrations = readdirSync('drizzle')
-		.filter((name) => /^\d{4}_.+\.sql$/.test(name) && name < '0029_')
-		.sort();
-	for (const name of baseMigrations) await executeSqlFile(resolve('drizzle', name));
+	// The world as it was before the migrations under test, which this suite
+	// applies itself against data it has deliberately broken.
+	for (const name of migrationFiles().filter(before('0029_'))) {
+		await executeSqlFile(resolve('drizzle', name));
+	}
 	// The baseline stops before this one, but every insert here goes through the
 	// current Drizzle schema, which names every person column including this.
 	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
 }, 30_000);
 
 beforeEach(async () => {
-	await sqlClient.unsafe(`
+	await harness.sql.unsafe(`
 		drop trigger if exists task1_fail_second_transaction on "transaction";
 		drop function if exists task1_fail_second_transaction();
 		drop trigger if exists task1_fail_leg_update on "transaction";
@@ -160,9 +145,8 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	await sqlClient?.end();
-	await embedded?.stop();
-}, 30_000);
+	await harness?.stop();
+});
 
 describe('import database integrity', () => {
 	it('repairs rescaled transaction fingerprints in a forward migration', async () => {
@@ -868,7 +852,7 @@ describe('import database integrity', () => {
 
 	it('rolls back the import record and all rows when a later insert fails', async () => {
 		await insertAccount('fio-czk', 'CZK', ['1234567890/2010']);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_fail_second_transaction() returns trigger language plpgsql as $$
 			begin
 				if (select count(*) from "transaction" where import_file_id = new.import_file_id) >= 1 then
@@ -965,7 +949,7 @@ describe('import database integrity', () => {
 	});
 
 	it('serialises concurrent first imports onto one canonical account', async () => {
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_delay_account_insert() returns trigger language plpgsql as $$
 			begin
 				perform pg_sleep(0.15);
@@ -987,7 +971,7 @@ describe('import database integrity', () => {
 		expect(results.every((result) => result.error === undefined)).toBe(true);
 		expect(await count('account')).toBe(1);
 		expect(await count('import_file')).toBe(2);
-		const assignedAccounts = await sqlClient<{ account_id: string }[]>`
+		const assignedAccounts = await harness.sql<{ account_id: string }[]>`
 			select distinct account_id from import_file
 		`;
 		expect(assignedAccounts).toHaveLength(1);
@@ -995,7 +979,7 @@ describe('import database integrity', () => {
 
 	it('does not let a slower older statement overwrite a newer closing balance', async () => {
 		await insertAccount('fio-czk', 'CZK', ['1234567890/2010']);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_delay_old_import() returns trigger language plpgsql as $$
 			begin
 				if exists (
@@ -1086,7 +1070,7 @@ describe('import database integrity', () => {
 	it('pairs opposite transfer legs imported concurrently without a later retry', async () => {
 		await insertAccount('racing-out-account', 'CZK', ['33333333/0100']);
 		await insertAccount('racing-in-account', 'CZK', ['44444444/0300']);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create sequence task1_import_leg_arrivals;
 			create function task1_delay_import_leg() returns trigger language plpgsql as $$
 			declare
@@ -1217,7 +1201,7 @@ describe('import database integrity', () => {
 			counterpartyAccount: '88888888/0300',
 			dedupFingerprint: 'tagged-out'
 		});
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create sequence task1_tag_lock_arrivals;
 			create function task1_delay_transaction_tag() returns trigger language plpgsql as $$
 			begin
@@ -1234,7 +1218,7 @@ describe('import database integrity', () => {
 		const tagEdit = updateTransactionTags('tagged-out', { add: 'Race tag' }, testDb);
 		let tagLockReached = false;
 		for (let attempt = 0; attempt < 100; attempt++) {
-			const [arrival] = await sqlClient<{ is_called: boolean }[]>`
+			const [arrival] = await harness.sql<{ is_called: boolean }[]>`
 				select is_called from task1_tag_lock_arrivals
 			`;
 			if (arrival.is_called) {
@@ -1293,7 +1277,7 @@ describe('import database integrity', () => {
 			inTransactionId: 'proposal-in',
 			state: 'proposed'
 		});
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_fail_leg_update() returns trigger language plpgsql as $$
 			begin
 				if new.id = 'proposal-in' and new.transfer_pair_id is not null then
@@ -1354,7 +1338,7 @@ describe('import database integrity', () => {
 			inTransactionId: 'reject-in',
 			state: 'proposed'
 		});
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_fail_leg_update() returns trigger language plpgsql as $$
 			begin
 				if old.review_reason = 'transfer rejected — pick a category'
@@ -1411,7 +1395,7 @@ describe('import database integrity', () => {
 			inTransactionId: 'decision-in',
 			state: 'proposed'
 		});
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_delay_pair_transition() returns trigger language plpgsql as $$
 			begin
 				perform pg_sleep(0.15);
@@ -1467,7 +1451,7 @@ describe('import database integrity', () => {
 				dedupFingerprint: 'in-leg'
 			}
 		]);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_delay_pair_insert() returns trigger language plpgsql as $$
 			begin
 				perform pg_sleep(0.15);
@@ -1481,7 +1465,7 @@ describe('import database integrity', () => {
 		await Promise.all([pairAndCategorise(testDb), pairAndCategorise(testDb)]);
 
 		expect(await count('transfer_pair')).toBe(1);
-		const claims = await sqlClient<{ transaction_id: string; claims: number }[]>`
+		const claims = await harness.sql<{ transaction_id: string; claims: number }[]>`
 			select leg.transaction_id, count(*)::int as claims
 			from (
 				select out_transaction_id as transaction_id from transfer_pair where state <> 'rejected'
@@ -1591,7 +1575,7 @@ describe('import database integrity', () => {
 				dedupFingerprint: 'locked-review-in'
 			}
 		]);
-		await sqlClient.unsafe(`
+		await harness.sql.unsafe(`
 			create function task1_delay_pair_insert() returns trigger language plpgsql as $$
 			begin
 				perform pg_sleep(0.15);

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { account, loan, property, tenancy } from '$lib/server/db/schema';
-import { saveUpload } from '$lib/server/files';
+import { removeUpload, saveUpload } from '$lib/server/files';
 import {
 	createContact,
 	deleteContact,
@@ -111,6 +111,14 @@ export const actions: Actions = {
 		const result = id ? await updateContact(id, input) : await createContact(contactId, input);
 
 		if (!result.ok) {
+			// The upload landed on the volume before the row was validated, and no
+			// row will now point at it — nothing else tracks avatars, so a rejected
+			// save left a file unreachable and permanent. Only a file THIS
+			// submission wrote is removed; one carried through unchanged still
+			// belongs to the stored row.
+			if (photo.photo && photo.photo !== form.get('existingPhoto')) {
+				await removeUpload(photo.photo);
+			}
 			return fail(result.status, { values: fields, valuesFor: id, message: result.message });
 		}
 

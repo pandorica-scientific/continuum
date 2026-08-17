@@ -1,12 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import EmbeddedPostgres from 'embedded-postgres';
 import { asc } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import * as schema from '$lib/server/db/schema';
-import { removeStalePostgresDirectory } from './embedded-postgres';
+import { startPostgres, type Harness, type TestDb } from './harness';
 import { person, property } from '$lib/server/db/schema';
 import { listProperties } from '$lib/server/property/queries';
 
@@ -17,50 +11,17 @@ import { listProperties } from '$lib/server/property/queries';
 // and "person two" in the retirement projection — silently changed subject
 // after any edit. Saving a floor plan swapped the flat under the user.
 
-const DATABASE_DIR = resolve('scratch-workspace/list-ordering-postgres');
-// 55439-55445 are taken by the other integration suites, which run in
-// parallel; a shared port makes whichever starts second fail.
-const PORT = 55446;
-const DATABASE = 'ordering';
-const URL = `postgres://postgres:password@localhost:${PORT}/${DATABASE}`;
-
-let embedded: EmbeddedPostgres;
-let sql: postgres.Sql;
-let db: ReturnType<typeof drizzle<typeof schema>>;
+let harness: Harness;
+let db: TestDb;
 
 beforeAll(async () => {
-	removeStalePostgresDirectory(DATABASE_DIR);
-	embedded = new EmbeddedPostgres({
-		databaseDir: DATABASE_DIR,
-		port: PORT,
-		user: 'postgres',
-		password: 'password',
-		persistent: false,
-		onLog: () => undefined,
-		onError: () => undefined
-	});
-	await embedded.initialise();
-	await embedded.start();
-	await embedded.createDatabase(DATABASE);
-
-	sql = postgres(URL, { max: 4, onnotice: () => undefined });
-	db = drizzle(sql, { schema });
-
-	for (const name of readdirSync('drizzle')
-		.filter((n) => /^\d{4}_.+\.sql$/.test(n))
-		.sort()) {
-		const statements = readFileSync(resolve('drizzle', name), 'utf8').split(
-			'--> statement-breakpoint'
-		);
-		for (const statement of statements) {
-			if (statement.trim()) await sql.unsafe(statement);
-		}
-	}
+	harness = await startPostgres('list-ordering');
+	db = harness.db;
+	await harness.applyMigrations();
 }, 120_000);
 
 afterAll(async () => {
-	await sql?.end();
-	await embedded?.stop();
+	await harness?.stop();
 });
 
 describe('lists ordered by creation time', () => {
@@ -79,7 +40,7 @@ describe('lists ordered by creation time', () => {
 		expect(new Set(before)).toEqual(new Set(['p-first', 'p-second']));
 
 		// Saving a floor plan is exactly this: an update to the images column.
-		await sql`update property set images = '{"photos":[]}'::jsonb where id = ${before[0]}`;
+		await harness.sql`update property set images = '{"photos":[]}'::jsonb where id = ${before[0]}`;
 
 		expect(await read()).toEqual(before);
 	});
@@ -96,7 +57,7 @@ describe('lists ordered by creation time', () => {
 			);
 
 		const before = await read();
-		await sql`update person set name = 'One edited' where id = 'q-one'`;
+		await harness.sql`update person set name = 'One edited' where id = 'q-one'`;
 
 		// The retirement projection reads people[0] and people[1] for the two
 		// birth years; swapping them silently changes the whole forecast.

@@ -6,7 +6,7 @@ import {
 	type GoogleEvent
 } from '$lib/server/calendar/sync/google';
 import { calendarProviderKinds } from '$lib/server/calendar/sync/provider';
-import type { EventSeries } from '$lib/server/calendar/series';
+import { hashSeries, type EventSeries, type SeriesException } from '$lib/server/calendar/series';
 
 const config = {
 	clientId: 'cid',
@@ -185,6 +185,77 @@ describe('reassembling Google resources into a series', () => {
 	it('returns null when there is no master among the resources', () => {
 		const onlyOverride = toGoogleEvents(series, 'r').slice(1);
 		expect(fromGoogleEvents(onlyOverride)).toBeNull();
+	});
+});
+
+// A "this event only" edit can change more than the title and the time. Each of
+// these three changes the shape of the resource Google is sent — all-day picks
+// `date` over `dateTime`, the zone says what the dateTime means — so writing the
+// series' values into an override published the occurrence wrongly and left
+// nothing for the next pull to read the override back from.
+describe('an occurrence that overrides more than its time', () => {
+	const tagged: EventSeries = { ...series, category: 'household', exceptions: [] };
+	const base = {
+		recurrenceId: '2026-09-08T09:00:00.000Z',
+		cancelled: false,
+		startsAt: '2026-09-08T09:00:00.000Z',
+		endsAt: '2026-09-08T09:30:00.000Z'
+	};
+	const withOverride = (over: Partial<SeriesException>): EventSeries => ({
+		...tagged,
+		exceptions: [{ ...base, ...over }]
+	});
+
+	it('sends an all-day override as a date while the series stays timed', () => {
+		const [, override] = toGoogleEvents(
+			withOverride({ allDay: true, endsAt: '2026-09-08T23:59:59.000Z' }),
+			'r'
+		);
+		expect(override.start).toEqual({ date: '2026-09-08' });
+		// Exclusive, exactly as an all-day master's end is. Google refuses a
+		// zero-length range with a bare 400.
+		expect(override.end).toEqual({ date: '2026-09-09' });
+	});
+
+	it('leaves the recurrence id on the series clock when the override re-zones', () => {
+		const [, override] = toGoogleEvents(withOverride({ tz: 'UTC' }), 'r');
+		// The recurrence id names an occurrence of the MASTER rule. Moving it with
+		// the override makes Google create a second event rather than move one.
+		expect(override.originalStartTime).toEqual(
+			toGoogleEvents(withOverride({}), 'r')[1].originalStartTime
+		);
+	});
+
+	it.each([
+		['a category', { category: 'health' } as Partial<SeriesException>],
+		['a timezone', { tz: 'UTC' } as Partial<SeriesException>],
+		['all-day', { allDay: true, endsAt: '2026-09-08T23:59:59.000Z' } as Partial<SeriesException>]
+	])('round-trips %s the occurrence overrides', (_label, over) => {
+		const [exception] = fromGoogleEvents(toGoogleEvents(withOverride(over), 'r'))!.exceptions;
+		for (const [field, value] of Object.entries(over)) {
+			if (field === 'endsAt') continue;
+			expect({ [field]: exception[field as keyof SeriesException] }).toEqual({ [field]: value });
+		}
+	});
+
+	// THE PHANTOM OVERRIDE. Google gives every override its own resource, so each
+	// carries a zone and a category of its own — including the ones it merely
+	// inherited from the series we sent. Reading those back as overrides turns
+	// our own push into a difference on the very next pull.
+	it('does not invent overrides for what the occurrence only inherited', () => {
+		const [exception] = fromGoogleEvents(toGoogleEvents(withOverride({}), 'r'))!.exceptions;
+		expect({
+			category: exception.category,
+			allDay: exception.allDay,
+			tz: exception.tz
+		}).toEqual({ category: null, allDay: null, tz: null });
+	});
+
+	it('keeps the content hash stable across a full round trip', () => {
+		for (const over of [{}, { category: 'health' }, { tz: 'UTC' }]) {
+			const sent = withOverride(over);
+			expect(hashSeries(fromGoogleEvents(toGoogleEvents(sent, 'r'))!)).toBe(hashSeries(sent));
+		}
 	});
 });
 
