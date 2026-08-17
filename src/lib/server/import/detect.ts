@@ -5,6 +5,8 @@ import { parseMbank } from './adapters/mbank';
 import { parseRbLines } from './adapters/rb';
 import { parseCsLines } from './adapters/cs';
 import { extractPdfLines } from './pdftext';
+import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
+import { assertSafeToParse } from './safety';
 import type { ParsedStatement } from './types';
 
 /**
@@ -36,13 +38,61 @@ function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatemen
  * Sniff the bank and format from the file body and parse it. Throws a
  * user-facing Error when nothing matches.
  */
-export async function detectAndParse(buffer: Uint8Array): Promise<ParsedStatement> {
-	return assertRowsExplainTheBalance(await parseByFormat(buffer));
+export async function detectAndParseAll(buffer: Uint8Array): Promise<ParsedStatement[]> {
+	const sniff = sniffFormat(buffer);
+	assertSafeToParse(buffer, sniff.format);
+	const parsed = await parseByFormat(buffer, sniff.format);
+	const statements = Array.isArray(parsed) ? parsed : [parsed];
+	return statements.map(assertRowsExplainTheBalance);
 }
 
-async function parseByFormat(buffer: Uint8Array): Promise<ParsedStatement> {
-	// PDF?
-	if (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44) {
+/**
+ * One statement from one file — the shape every current parser produces.
+ *
+ * CAMT.053 carries several `<Stmt>` blocks and a workbook can hold a sheet per
+ * account, so the pipeline's real entry point is `detectAndParseAll`. This
+ * wrapper exists because nothing yet produces more than one, and it refuses
+ * rather than silently discarding the rest the day something does.
+ */
+export async function detectAndParse(buffer: Uint8Array): Promise<ParsedStatement> {
+	const statements = await detectAndParseAll(buffer);
+	if (statements.length > 1) {
+		throw new Error(
+			`That file contains ${statements.length} statements. Importing several from one file is being built.`
+		);
+	}
+	return statements[0];
+}
+
+/**
+ * Formats we can name but cannot yet read. Saying which one it is beats
+ * "unrecognised": the user learns their export is understood and simply not
+ * covered, which is a different problem from a corrupt file.
+ */
+const NOT_YET_READABLE: Partial<Record<StatementFormat, string>> = {
+	camt053: 'CAMT.053 support is being built — it will read this without any per-bank setup.',
+	xml: 'This is XML, but not a CAMT.053 statement.',
+	ofx: 'OFX/QFX support is being built.',
+	mt940: 'MT940 support is being built.',
+	abo: 'ABO/GPC support is being built.',
+	ods: 'OpenDocument spreadsheets are not read yet — export as CSV or XLSX.',
+	xls: 'Legacy .xls workbooks are not read yet — re-save as .xlsx.',
+	image: 'Reading statements from photographs and scans is being built.'
+};
+
+/** A parser may return one statement or many; callers normalise to an array. */
+async function parseByFormat(
+	buffer: Uint8Array,
+	format: StatementFormat
+): Promise<ParsedStatement | ParsedStatement[]> {
+	const pending = NOT_YET_READABLE[format];
+	if (pending) throw new Error(pending);
+
+	if (format === 'unknown') {
+		throw new Error('That file is not a statement in any format Continuum recognises.');
+	}
+
+	if (format === 'pdf') {
 		const lines = await extractPdfLines(buffer);
 		const text = lines.map((l) => l.cells.join(' ')).join('\n');
 		// Sniff the issuer from the statement's own header, not from anywhere in
@@ -76,8 +126,7 @@ async function parseByFormat(buffer: Uint8Array): Promise<ParsedStatement> {
 		throw new Error('PDF statement from an unrecognised bank.');
 	}
 
-	// XLSX (zip container) — the XTB investment report, which is Phase 2.
-	if (buffer.length > 2 && buffer[0] === 0x50 && buffer[1] === 0x4b) {
+	if (format === 'xlsx') {
 		throw new Error('This looks like an XLSX broker report — investment import lands in Phase 2.');
 	}
 
@@ -93,5 +142,7 @@ async function parseByFormat(buffer: Uint8Array): Promise<ParsedStatement> {
 		return parseMbank(iconv.decode(Buffer.from(buffer), 'win1250'));
 	}
 
-	throw new Error('Unrecognised statement format.');
+	throw new Error(
+		`This is ${FORMAT_LABEL[format] === 'delimited text' ? 'a delimited text file' : `a ${FORMAT_LABEL[format]}`}, but it matches no bank Continuum knows. Teaching it a new layout is being built.`
+	);
 }

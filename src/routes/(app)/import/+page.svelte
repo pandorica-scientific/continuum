@@ -40,7 +40,7 @@
 
 <section class="section">
 	<UploadDropzone
-		accept=".csv,.pdf,.xml,.ofx,.abo"
+		accept=".csv,.pdf"
 		multiple={true}
 		idleText="Drop statements here, or click to browse"
 		busyText="Reading statements…"
