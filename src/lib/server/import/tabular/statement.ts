@@ -37,6 +37,14 @@ export interface TabularReading {
 	roles: (ColumnRole | undefined)[];
 	dateOrder?: DateOrder;
 	decimalMark?: DecimalMark;
+	/**
+	 * The money columns exactly as the file displayed them.
+	 *
+	 * The proof engine needs these, not the parsed values: a uniform scale error
+	 * is invisible once the text has become a number, and this is the only trace
+	 * of how it was actually written.
+	 */
+	amountTexts?: string[];
 }
 
 const AMOUNT_TOKEN = /-?\(?\d[\d\s.,'\u00A0\u202F]*\)?-?/g;
@@ -215,9 +223,26 @@ function assignRoles(region: Region, body: RawCell[][]): (ColumnRole | undefined
 
 const indexOfRole = (roles: (ColumnRole | undefined)[], role: ColumnRole) => roles.indexOf(role);
 
-export function readTabular(choice: GridChoice, region: Region): TabularReading {
+export interface ReadOptions {
+	/**
+	 * Roles a confirmed profile supplies, resolved by header NAME upstream. When
+	 * present these replace inference entirely — that is the whole value of
+	 * remembering a layout — but they do not exempt the statement from proving
+	 * itself.
+	 */
+	roles?: (ColumnRole | undefined)[];
+	dateOrder?: DateOrder;
+	decimalMark?: DecimalMark;
+	currency?: string;
+}
+
+export function readTabular(
+	choice: GridChoice,
+	region: Region,
+	options: ReadOptions = {}
+): TabularReading {
 	const body = transactionRows(region);
-	const roles = assignRoles(region, body);
+	const roles = options.roles ?? assignRoles(region, body);
 	const questions: OpenQuestion[] = [];
 	const evidence = readEvidence(choice.regions);
 
@@ -253,7 +278,11 @@ export function readTabular(choice: GridChoice, region: Region): TabularReading 
 			: undefined;
 
 	const dateValues = columnValues(body, dateColumn).filter(Boolean);
-	const order = resolveDateOrder(dateValues, period);
+	// A profile carries a date order a person already confirmed, so the file no
+	// longer has to settle it on its own evidence.
+	const order = options.dateOrder
+		? ({ kind: 'determined', value: options.dateOrder, evidence: 'a confirmed layout' } as const)
+		: resolveDateOrder(dateValues, period);
 	if (order.kind !== 'determined') {
 		questions.push({
 			dimension: 'dateOrder',
@@ -272,13 +301,15 @@ export function readTabular(choice: GridChoice, region: Region): TabularReading 
 	// balances alike. Fio's amounts are ungrouped integers that settle nothing,
 	// while its balance line reads `382,38` — consulting only the columns picked
 	// "." and turned that balance into 38 238,00.
-	const mark = resolveDecimalMark([
-		...amountValues,
-		evidence.openingBalance ?? '',
-		evidence.closingBalance ?? '',
-		evidence.creditTotal ?? '',
-		evidence.debitTotal ?? ''
-	]);
+	const mark = options.decimalMark
+		? ({ kind: 'determined', value: options.decimalMark, evidence: 'a confirmed layout' } as const)
+		: resolveDecimalMark([
+				...amountValues,
+				evidence.openingBalance ?? '',
+				evidence.closingBalance ?? '',
+				evidence.creditTotal ?? '',
+				evidence.debitTotal ?? ''
+			]);
 	// "Unavailable" means every reading agrees — integers with no separator —
 	// which is settled, not open.
 	const decimalMark: DecimalMark = mark.kind === 'determined' ? mark.value : '.';
@@ -296,14 +327,19 @@ export function readTabular(choice: GridChoice, region: Region): TabularReading 
 	}
 
 	const dateOrder = (order as { value: DateOrder }).value;
-	const currency = evidence.currency ?? 'CZK';
+	const currency = options.currency ?? evidence.currency ?? 'CZK';
 	const digits = minorDigits(currency);
 	const periodYear = period?.start ? Number(period.start.slice(0, 4)) : undefined;
 
 	const rows: ParsedRow[] = [];
+	let undatedRows = 0;
+	let unpricedRows = 0;
 	for (const row of body) {
 		const bookedAt = applyDateOrder(row[dateColumn]?.text ?? '', dateOrder, periodYear);
-		if (!bookedAt) continue;
+		if (!bookedAt) {
+			undatedRows++;
+			continue;
+		}
 
 		let amountMinor: bigint | null = null;
 		if (amountColumn >= 0) {
@@ -316,7 +352,10 @@ export function readTabular(choice: GridChoice, region: Region): TabularReading 
 			if (debit !== null && debit !== 0n) amountMinor = -abs(debit);
 			else if (credit !== null) amountMinor = abs(credit);
 		}
-		if (amountMinor === null) continue;
+		if (amountMinor === null) {
+			unpricedRows++;
+			continue;
+		}
 
 		const text = (role: ColumnRole) => {
 			const index = indexOfRole(roles, role);
@@ -347,6 +386,26 @@ export function readTabular(choice: GridChoice, region: Region): TabularReading 
 		});
 	}
 
+	// A row the reader could not turn into a movement is a QUESTION, never a
+	// quiet omission. Dropping them silently produced a statement with no rows
+	// at all — from a file whose every line was a perfectly good transaction
+	// written as MM/DD with no year and no period to borrow one from.
+	if (undatedRows > 0) {
+		questions.push({
+			dimension: 'dateColumn',
+			reason:
+				`${undatedRows} of ${body.length} rows have a date this layout cannot complete` +
+				' — they carry no year, and the statement prints no period to take one from'
+		});
+	}
+	if (unpricedRows > 0) {
+		questions.push({
+			dimension: 'amountColumn',
+			reason: `${unpricedRows} of ${body.length} rows have no readable amount`
+		});
+	}
+	if (questions.length > 0) return { questions, roles, dateOrder, decimalMark };
+
 	const parse = (value?: string) =>
 		value === undefined ? undefined : (parseAmount(value, decimalMark, digits) ?? undefined);
 
@@ -364,7 +423,7 @@ export function readTabular(choice: GridChoice, region: Region): TabularReading 
 		rows
 	};
 
-	return { statement, questions: [], roles, dateOrder, decimalMark };
+	return { statement, questions: [], roles, dateOrder, decimalMark, amountTexts: amountValues };
 }
 
 const abs = (v: bigint) => (v < 0n ? -v : v);

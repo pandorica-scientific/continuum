@@ -12,6 +12,7 @@ import { candidateGrids } from './tabular/grid';
 import { chooseGrid } from './tabular/regions';
 import { readTabular } from './tabular/statement';
 import { decideImport, proveStatement } from './proof';
+import { headersOf, matchProfile, rolesFromProfile, type ImportProfile } from './tabular/profile';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
 import { assertSafeToParse } from './safety';
 import type { ParsedStatement } from './types';
@@ -45,10 +46,25 @@ function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatemen
  * Sniff the bank and format from the file body and parse it. Throws a
  * user-facing Error when nothing matches.
  */
-export async function detectAndParseAll(buffer: Uint8Array): Promise<ParsedStatement[]> {
+export interface ParseOptions {
+	/**
+	 * Layouts this household has confirmed, fetched lazily.
+	 *
+	 * A function rather than an array because profiles matter only for a layout
+	 * no adapter recognises — which is rare. Loading them eagerly put a query on
+	 * the path of every import, including the ones that never look at a profile,
+	 * and coupled the whole ingest path to a table that need not exist yet.
+	 */
+	profiles?: () => Promise<ImportProfile[]>;
+}
+
+export async function detectAndParseAll(
+	buffer: Uint8Array,
+	options: ParseOptions = {}
+): Promise<ParsedStatement[]> {
 	const sniff = sniffFormat(buffer);
 	assertSafeToParse(buffer, sniff.format);
-	const parsed = await parseByFormat(buffer, sniff.format);
+	const parsed = await parseByFormat(buffer, sniff.format, options);
 	const statements = Array.isArray(parsed) ? parsed : [parsed];
 	return statements.map(assertRowsExplainTheBalance);
 }
@@ -87,7 +103,8 @@ const NOT_YET_READABLE: Partial<Record<StatementFormat, string>> = {
 /** A parser may return one statement or many; callers normalise to an array. */
 async function parseByFormat(
 	buffer: Uint8Array,
-	format: StatementFormat
+	format: StatementFormat,
+	options: ParseOptions = {}
 ): Promise<ParsedStatement | ParsedStatement[]> {
 	const pending = NOT_YET_READABLE[format];
 	if (pending) throw new Error(pending);
@@ -168,7 +185,7 @@ async function parseByFormat(
 	// human having checked each one against real exports; an unknown layout has
 	// no such warrant, so arithmetic is the only thing standing between a
 	// plausible misreading and the ledger.
-	const generic = readGenerically(buffer);
+	const generic = await readGenerically(buffer, options.profiles);
 	if (generic.statements.length > 0) return generic.statements;
 
 	throw new Error(
@@ -185,27 +202,56 @@ async function parseByFormat(
  * that could not be settled — which is what the mapping wizard will ask about
  * rather than a shrug.
  */
-function readGenerically(buffer: Uint8Array): { statements: ParsedStatement[]; reason?: string } {
+async function readGenerically(
+	buffer: Uint8Array,
+	loadProfiles?: () => Promise<ImportProfile[]>
+): Promise<{ statements: ParsedStatement[]; reason?: string }> {
 	const choice = chooseGrid(candidateGrids(buffer));
 	if (!choice) {
 		return { statements: [], reason: 'No table of dated movements could be found in that file.' };
 	}
+	// Only now — a file that never reaches here never pays for the lookup.
+	const profiles = loadProfiles ? await loadProfiles() : [];
 
 	const statements: ParsedStatement[] = [];
 	const reasons: string[] = [];
 
 	for (const region of choice.transactions) {
-		const reading = readTabular(choice, region);
+		// A remembered layout answers the questions a person already answered.
+		const headers = headersOf(region);
+		const match = headers.length ? matchProfile(headers, profiles) : ({ kind: 'none' } as const);
+		const guided =
+			match.kind === 'match'
+				? {
+						roles: rolesFromProfile(match.profile, headers),
+						dateOrder: match.profile.mapping.dateOrder,
+						decimalMark: match.profile.mapping.decimalMark,
+						currency: match.profile.mapping.currency
+					}
+				: {};
+
+		if (match.kind === 'drifted') {
+			reasons.push(
+				`the layout for ${match.profile.name} changed — ${match.added.length} column(s) appeared and ${match.removed.length} went away`
+			);
+		}
+
+		const reading = readTabular(choice, region, guided);
 		if (!reading.statement) {
 			reasons.push(reading.questions.map((q) => q.reason).join('; '));
 			continue;
 		}
 		const proof = proveStatement(reading.statement, {
 			currency: reading.statement.currency,
+			// The displayed text, not the parsed values — a scale error leaves no
+			// trace once the numbers have been parsed.
+			amountTexts: reading.amountTexts,
 			decimalMarkSettled: reading.decimalMark !== undefined,
 			dateOrderSettled: reading.dateOrder !== undefined
 		});
-		const decision = decideImport(proof, reading.questions.length);
+		const decision = decideImport(proof, reading.questions.length, {
+			verifiedProfile: match.kind === 'match' && match.profile.verified
+		});
 		if (decision.autoImport) statements.push(reading.statement);
 		else reasons.push(`${decision.reason} (${proof.proofClass})`);
 	}

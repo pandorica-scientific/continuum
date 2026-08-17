@@ -17,6 +17,7 @@ import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
 import { saveUpload } from '$lib/server/files';
 import { detectAndParseAll } from './detect';
+import { loadProfiles } from './profiles';
 import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
 import {
 	accountKeysMatch,
@@ -492,7 +493,10 @@ export async function ingestFile(
 
 	let statements: ParsedStatement[];
 	try {
-		statements = await detectAndParseAll(buffer);
+		// Layouts this household has already confirmed. A saved profile is what
+		// stops the second statement from a bank asking the same question again.
+		// Fetched only if the file turns out to need one.
+		statements = await detectAndParseAll(buffer, { profiles: () => loadProfiles(handle) });
 	} catch (err) {
 		return {
 			filename,

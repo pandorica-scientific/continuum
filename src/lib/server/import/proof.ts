@@ -324,12 +324,25 @@ export interface ImportDecision {
  * something IS open, the answer is one specific question, never a refusal to
  * import at all.
  */
-export function decideImport(proof: Proof, openQuestions: number): ImportDecision {
+export function decideImport(
+	proof: Proof,
+	openQuestions: number,
+	context: { verifiedProfile?: boolean } = {}
+): ImportDecision {
+	// Lexical soundness is never waived. A confirmed layout says the columns
+	// mean what we think; it says nothing about the numbers being written at
+	// the scale we read them.
 	if (proof.lexicallyUnsound) {
 		return { autoImport: false, reason: 'the numbers are not written the way they were read' };
 	}
 	if (openQuestions > 0) {
 		return { autoImport: false, reason: 'something about the layout is still undecided' };
+	}
+	// A profile a person confirmed against a preview of their own rows IS the
+	// human check the weak classes would otherwise demand. The mapping is what
+	// can be wrong, and someone has already looked at it.
+	if (context.verifiedProfile) {
+		return { autoImport: true, reason: 'this layout was confirmed for this bank already' };
 	}
 	if (proof.proofClass === 'P4' || proof.proofClass === 'P3') {
 		return { autoImport: true, reason: 'every movement sits on a running balance that closes' };

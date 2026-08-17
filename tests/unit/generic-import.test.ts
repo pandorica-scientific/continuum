@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectAndParseAll } from '$lib/server/import/detect';
+import { profileFromReading } from '$lib/server/import/tabular/profile';
 
 const file = (text: string) => new TextEncoder().encode(text);
 
@@ -78,6 +79,68 @@ describe('a bank with no adapter at all', () => {
 			'09/03;ALQUILER;-100,00;1150,00'
 		].join('\n');
 		await expect(detectAndParseAll(file(ambiguous))).rejects.toThrow(/not confidently enough/i);
+	});
+
+	it('a confirmed layout answers the question the file cannot', async () => {
+		// Every date is 12 or lower and no period is printed, so unaided this is
+		// refused. A profile is a person's answer to exactly that question,
+		// recorded once.
+		const ambiguous = [
+			'Saldo inicial;1000,00 EUR',
+			'Saldo final;1150,00 EUR',
+			'',
+			'Fecha;Concepto;Importe;Saldo',
+			'01/03/2025;NOMINA;300,00;1300,00',
+			'05/03/2025;COMPRA;-50,00;1250,00',
+			'09/03/2025;ALQUILER;-100,00;1150,00'
+		].join('\n');
+		await expect(detectAndParseAll(file(ambiguous))).rejects.toThrow(/not confidently enough/i);
+
+		const saved = profileFromReading({
+			id: 'p1',
+			name: 'Banco Ficticio',
+			source: 'delimited',
+			delimiter: ';',
+			headers: ['Fecha', 'Concepto', 'Importe', 'Saldo'],
+			roles: ['bookingDate', 'description', 'amount', 'balance'],
+			dateOrder: 'day-first',
+			decimalMark: ','
+		});
+		const [statement] = await detectAndParseAll(file(ambiguous), {
+			profiles: async () => [saved]
+		});
+		expect(statement.rows).toHaveLength(3);
+		expect(statement.rows[0].bookedAt).toBe('2025-03-01');
+	});
+
+	it('does not let a confirmed layout excuse numbers read at the wrong scale', async () => {
+		// A profile says what the columns MEAN. It cannot vouch for amounts
+		// carrying more decimals than the currency has, so the lexical gate
+		// stands whatever the profile says.
+		// HUF has no minor unit, so a two-decimal forint amount is money-shaped
+		// but cannot be a forint figure — the scale is wrong.
+		const overPrecise = [
+			'Saldo inicial;1000,00 HUF',
+			'Saldo final;1150,00 HUF',
+			'',
+			'Fecha;Concepto;Importe;Saldo',
+			'01/03/2025;NOMINA;300,00;1300,00',
+			'05/03/2025;COMPRA;-50,00;1250,00',
+			'09/03/2025;ALQUILER;-100,00;1150,00'
+		].join('\n');
+		const saved = profileFromReading({
+			id: 'p2',
+			name: 'Banco Ficticio',
+			source: 'delimited',
+			delimiter: ';',
+			headers: ['Fecha', 'Concepto', 'Importe', 'Saldo'],
+			roles: ['bookingDate', 'description', 'amount', 'balance'],
+			dateOrder: 'day-first',
+			decimalMark: ','
+		});
+		await expect(
+			detectAndParseAll(file(overPrecise), { profiles: async () => [saved] })
+		).rejects.toThrow(/not confidently enough/i);
 	});
 
 	it('does not divert a file a real adapter already handles', async () => {

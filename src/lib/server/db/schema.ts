@@ -209,6 +209,39 @@ export const importFile = pgTable('import_file', {
 	uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+/**
+ * A remembered statement layout.
+ *
+ * Matched by `signature` — a hash over the header LABELS, not their positions.
+ * Position-based mapping breaks silently the moment a bank inserts a column;
+ * a label-based signature turns that same change into a mismatch we can ask
+ * the user about.
+ */
+export const importProfile = pgTable('import_profile', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	bank: text('bank'),
+	// 'delimited' | 'xlsx'
+	source: text('source').notNull(),
+	encoding: text('encoding'),
+	delimiter: text('delimiter'),
+	signature: text('signature').notNull(),
+	headers: jsonb('headers').$type<string[]>().notNull().default([]),
+	// { columns: [{header, role}], dateOrder, decimalMark, currency? } — typed
+	// at the import layer, which owns the shape
+	mapping: jsonb('mapping').notNull(),
+	// bumped when a drifted layout is re-confirmed; earlier files keep parsing
+	// under the version they were imported with
+	version: integer('version').notNull().default(1),
+	// a person confirmed this mapping against a preview of their own rows
+	verified: boolean('verified').notNull().default(false),
+	// 'builtin' | 'user' | 'imported'
+	origin: text('origin').notNull().default('user'),
+	filenamePattern: text('filename_pattern'),
+	lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const category = pgTable('category', {
 	id: text('id').primaryKey(),
 	// group drives colour and the waterfall stage: income | taxes | bills |
