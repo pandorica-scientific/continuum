@@ -926,6 +926,18 @@ export const calendarAccount = pgTable('calendar_account', {
 	/** Opaque: a Google syncToken, a CalDAV sync-token, or a ctag. */
 	cursor: text('cursor'),
 	lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+	/**
+	 * When the pass currently running took this account, or null when none is.
+	 *
+	 * A lease rather than a lock. The middle of a sync pass is network I/O that
+	 * can run for minutes, and no database lock belongs open across that — but
+	 * two overlapping passes each decide what to push from a snapshot the other
+	 * is invalidating, pull the same cursor and send the same writes twice. The
+	 * claim is taken under an advisory lock, so it is atomic and holds across
+	 * processes; a stale one is taken over after LEASE_MINUTES, so a process
+	 * killed mid-pass does not strand the account.
+	 */
+	syncingSince: timestamp('syncing_since', { withTimezone: true }),
 	lastError: text('last_error'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

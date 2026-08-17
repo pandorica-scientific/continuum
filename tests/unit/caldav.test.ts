@@ -246,8 +246,49 @@ describe('pulling', () => {
 		expect(result.reset).toBe(false);
 		expect(result.changes).toHaveLength(1);
 		expect(result.changes[0].series).toBeNull();
-		expect(result.changes[0].uid).toBe('evt-9');
+		// The RESOURCE NAME, and an empty uid — a deleted resource has no body left
+		// to read a UID out of, so the only honest thing to report is the path. It
+		// used to be reported as though it were the uid, which matched no local key
+		// and no link: the deletion merged to a no-op and the cursor advanced past
+		// it, so an event deleted on a phone stayed in Continuum for good.
+		expect(result.changes[0].uid).toBe('');
+		expect(result.changes[0].remoteId).toBe('evt-9');
 		expect(result.cursor).toBe('tok-2');
+	});
+
+	// The resource name is how a push addressed it, so it has to come back with
+	// every change and not only with deletions — otherwise the next push goes to
+	// a URL of our own choosing rather than the one the server actually holds.
+	it('reports the resource name alongside a changed event', async () => {
+		stubFetch((_url, init) => {
+			if (String(init.body ?? '').includes('sync-collection')) {
+				return {
+					body: `<d:multistatus xmlns:d="DAV:">
+						<d:response>
+							<d:href>/123/calendars/home/abc123.ics</d:href>
+							<d:propstat><d:prop><d:getetag>"e1"</d:getetag></d:prop></d:propstat>
+						</d:response>
+						<d:sync-token>tok-2</d:sync-token>
+					</d:multistatus>`
+				};
+			}
+			return {
+				body: [
+					'BEGIN:VCALENDAR',
+					'BEGIN:VEVENT',
+					'UID:evt-7',
+					'DTSTART:20260910T090000Z',
+					'DTEND:20260910T100000Z',
+					'SUMMARY:Dentist',
+					'END:VEVENT',
+					'END:VCALENDAR'
+				].join('\r\n')
+			};
+		});
+
+		const result = await makeCalDavProvider(config).pull('tok-1');
+		expect(result.changes[0].uid).toBe('evt-7');
+		expect(result.changes[0].remoteId).toBe('abc123');
 	});
 });
 

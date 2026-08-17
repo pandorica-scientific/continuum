@@ -69,8 +69,21 @@ describe('serialising a series', () => {
 		expect(ics).not.toMatch(/DTSTART;VALUE=DATE:\d{8}T/);
 	});
 
+	// RFC 5545 forbids TZID on a UTC value — the two say contradictory things
+	// about what the digits mean — and no VTIMEZONE was written to define the zone
+	// either. Continuum's own round trip hid it because parseStamp reads the Z; a
+	// stricter client may refuse the whole resource.
+	it('does not put a TZID on a UTC value', () => {
+		const ics = toIcs(single);
+		expect(ics).toContain('DTSTART:20260910T090000Z');
+		expect(ics).not.toMatch(/DTSTART;[^:\r\n]*TZID/);
+	});
+
+	// The zone still has to travel: recurrence expands against wall-clock time, so
+	// a series that comes back as UTC drifts by an hour for half the year.
 	it('carries the timezone on a timed event', () => {
-		expect(toIcs(single)).toContain('TZID=Europe/Prague');
+		expect(toIcs(single)).toContain('X-CONTINUUM-TZID:Europe/Prague');
+		expect(parseIcs(toIcs(single))?.tz).toBe('Europe/Prague');
 	});
 
 	// A comma, semicolon or backslash left raw ends the property early, and

@@ -5,6 +5,7 @@
 	import { SETUP_GUIDES } from '$lib/calendar/setup-steps';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
 	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
 	import { passwordHint } from '$lib/password-policy';
@@ -36,9 +37,11 @@
 	caption="Everything visible in Continuum is configuration, not content."
 />
 
-{#if form?.message}
-	<div class="error">{form.message}</div>
-{/if}
+<!-- One place, one component. The calendar section used to draw its own copy
+     with a `.form-error` class this file has no rule for — and Svelte scopes
+     styles per component, so a failed calendar connection rendered as unstyled
+     body text below the form. -->
+<ActionError message={form?.message ?? null} />
 
 {#if data.isAdmin}
 	<section class="section">
@@ -274,10 +277,6 @@
 			<span class="eyebrow-caption">two-way sync with iCloud and other CalDAV servers</span>
 		</div>
 
-		{#if form?.message}
-			<p class="form-error" role="alert">{form.message}</p>
-		{/if}
-
 		{#if form?.created}
 			<p class="calendar-notice" role="status">Calendar created. Press “Sync now” to fill it.</p>
 		{/if}
@@ -460,6 +459,30 @@
 				</span>
 			</span>
 		</form>
+
+		<form method="POST" action="?/setCalendarInterval" use:enhance class="card marker-row">
+			<label class="interval">
+				<span class="r-label">Check connected calendars every</span>
+				<span class="interval-input">
+					<input
+						type="number"
+						name="minutes"
+						min="1"
+						max="1440"
+						step="1"
+						value={data.calendarSyncMinutes}
+						aria-label="Minutes between calendar sync passes"
+					/>
+					<span>minutes</span>
+				</span>
+				<span class="r-detail">
+					Each pass is one request per connected calendar. Slower is kinder to a metered connection;
+					faster is only useful while setting something up. Takes effect without a restart — the
+					interval is measured against each account's own last sync.
+				</span>
+			</label>
+			<button class="btn" type="submit">Save</button>
+		</form>
 	</section>
 
 	<section class="section">
@@ -592,6 +615,25 @@
 		gap: 10px;
 	}
 
+	.interval {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		flex: 1;
+	}
+
+	.interval-input {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--fg3);
+		font-size: 13px;
+	}
+
+	.interval-input input {
+		width: 5.5rem;
+	}
+
 	@media (max-width: 40rem) {
 		.cc-fields {
 			grid-template-columns: 1fr;
@@ -654,14 +696,6 @@
 	.tr-meta {
 		font-size: 12px;
 		color: var(--fg3);
-	}
-	.error {
-		border: 1px solid var(--red);
-		background: var(--red-tint);
-		color: var(--red);
-		border-radius: 12px;
-		padding: 9px 14px;
-		font-size: 13px;
 	}
 	.modules {
 		display: flex;

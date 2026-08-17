@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { asc, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { calendarEvent, calendarEventException } from '$lib/server/db/schema';
+import { calendarConflict, calendarEvent, calendarEventException } from '$lib/server/db/schema';
 import {
 	CALENDAR_RULES,
 	generateEvents,
@@ -14,7 +14,9 @@ import { allOccurrences, type ExceptionRow, type SeriesRow } from '$lib/calendar
 import { markerForCategory, markerForGenerated } from '$lib/calendar/markers';
 import { EVENT_CATEGORIES, EVENT_CATEGORY_KEYS } from '$lib/modules/registry';
 import type { EditScope } from '$lib/calendar/scope';
+import { instantOfWall } from '$lib/calendar/rrule';
 import { listCalendarAccounts } from '$lib/server/calendar/sync';
+import { acknowledgeConflicts } from '$lib/server/calendar/conflicts';
 import { setSetting } from '$lib/server/settings';
 import { formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
@@ -36,7 +38,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const start = `${month}-01`;
 	const end = `${month}-${String(daysInMonth).padStart(2, '0')}`;
 
-	const [events, rules, token, eventRows, exceptionRows, accounts] = await Promise.all([
+	const [events, rules, token, eventRows, exceptionRows, accounts, conflicts] = await Promise.all([
 		generateEvents(start, end),
 		getCalendarRules(),
 		icsToken(),
@@ -46,7 +48,12 @@ export const load: PageServerLoad = async ({ url }) => {
 			.where(isNull(calendarEvent.deletedAt))
 			.orderBy(asc(calendarEvent.startsAt)),
 		db.select().from(calendarEventException),
-		listCalendarAccounts()
+		listCalendarAccounts(),
+		db
+			.select()
+			.from(calendarConflict)
+			.where(isNull(calendarConflict.acknowledgedAt))
+			.orderBy(asc(calendarConflict.detectedAt))
 	]);
 
 	const exceptionsByEvent = new Map<string, ExceptionRow[]>();
@@ -142,10 +149,51 @@ export const load: PageServerLoad = async ({ url }) => {
 			lastSyncAt: account.lastSyncAt ? account.lastSyncAt.toISOString() : null,
 			failing: Boolean(account.lastError)
 		})),
+		// Edits sync discarded, and dates a calendar edit wrote into the ledger.
+		// Surfaced HERE and not only in the briefing, because the briefing raises
+		// them and this is the screen it sends people to — with nothing on it to
+		// clear them, the card stayed up forever and taught the household to ignore
+		// the briefing.
+		conflicts: conflicts.map((row) => ({
+			id: row.id,
+			detectedAt: row.detectedAt.toISOString(),
+			resolution: row.resolution,
+			title:
+				(row.ours as { title?: string } | null)?.title ??
+				(row.theirs as { title?: string } | null)?.title ??
+				'An event'
+		})),
 		rules: CALENDAR_RULES.map((r) => ({ ...r, on: rules[r.key] })),
 		icsPath: `/ics/${token}`
 	};
 };
+
+/**
+ * The instant at which the household's clock reads this date and time.
+ *
+ * `new Date('2026-08-17T09:00:00')` — no offset — is parsed in the SERVER's
+ * zone, which in the shipped image is UTC. The row records tz: Europe/Prague and
+ * every read path renders in Prague, so a 09:00 event was stored as 09:00Z and
+ * read back as 11:00; saving it again stored 11:00Z and read back as 13:00, and
+ * the event walked forward by the offset on every single edit.
+ */
+function householdInstant(date: string, time: string): Date {
+	const [hour, minute] = time.split(':').map(Number);
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(hour) || !Number.isFinite(minute)) {
+		return new Date(NaN);
+	}
+	return instantOfWall(
+		{
+			year: Number(date.slice(0, 4)),
+			month: Number(date.slice(5, 7)),
+			day: Number(date.slice(8, 10)),
+			hour,
+			minute,
+			second: 0
+		},
+		HOUSEHOLD_TZ
+	);
+}
 
 /** Read the event form into the shape the mutations take. */
 function readEvent(form: FormData) {
@@ -162,8 +210,8 @@ function readEvent(form: FormData) {
 		notes: text('notes') || null,
 		category: text('category') || null,
 		allDay,
-		startsAt: new Date(`${date}T${startTime}:00`),
-		endsAt: new Date(`${date}T${endTime}:00`),
+		startsAt: householdInstant(date, startTime),
+		endsAt: householdInstant(date, endTime),
 		tz: HOUSEHOLD_TZ,
 		rrule: text('rrule') || null
 	};
@@ -200,6 +248,11 @@ export const actions: Actions = {
 
 		if (!result.ok) return fail(result.status, { values, message: result.message });
 		return { saved: true };
+	},
+
+	acknowledgeConflicts: async () => {
+		await acknowledgeConflicts();
+		return { acknowledged: true };
 	},
 
 	deleteEvent: async ({ request }) => {

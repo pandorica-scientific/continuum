@@ -6,6 +6,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import EventDialog from '$lib/components/EventDialog.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
+	import ActionError from '$lib/components/ActionError.svelte';
 
 	let { data, form } = $props();
 
@@ -100,6 +101,38 @@
 	</span>
 </section>
 
+{#if data.conflicts.length > 0}
+	<!-- The briefing raises these and sends people here, so here is where they can
+	     be cleared. Acknowledging is a button rather than a side effect of the
+	     page loading: a discarded edit and a date that changed in the ledger are
+	     things someone should have to say they have seen. -->
+	<section class="card conflicts" aria-labelledby="sync-conflicts">
+		<div class="eyebrow-row">
+			<span class="eyebrow" id="sync-conflicts">Sync noticed</span>
+			<form method="POST" action="?/acknowledgeConflicts">
+				<button class="btn" type="submit">
+					Mark {data.conflicts.length === 1 ? 'it' : 'all'} seen
+				</button>
+			</form>
+		</div>
+		{#each data.conflicts as conflict (conflict.id)}
+			<p class="conflict">
+				<span class="c-when mono">{conflict.detectedAt.slice(0, 10)}</span>
+				<span>
+					{#if conflict.resolution === 'wrote-back'}
+						<strong>{conflict.title}</strong> moved in a connected calendar, and the date was written
+						into the ledger.
+					{:else}
+						<strong>{conflict.title}</strong> was changed in two places at once; the
+						{conflict.resolution === 'local-won' ? 'version here' : 'remote version'} won and the other
+						was discarded.
+					{/if}
+				</span>
+			</p>
+		{/each}
+	</section>
+{/if}
+
 <section class="layout">
 	<div class="card cal">
 		<div class="cal-head">
@@ -150,9 +183,7 @@
 				<button class="btn" type="button" onclick={() => (editing = 'new')}>Add event</button>
 			</div>
 
-			{#if form?.message}
-				<p class="form-error" role="alert">{form.message}</p>
-			{/if}
+			<ActionError message={form?.message ?? null} />
 
 			{#if editing === 'new'}
 				<EventDialog
@@ -352,9 +383,24 @@
 		font-size: 12px;
 	}
 
-	.form-error {
-		color: var(--red);
+	.conflicts {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		border-color: var(--yellow);
+	}
+
+	.conflict {
+		display: flex;
+		gap: 10px;
+		margin: 0;
 		font-size: 13px;
+		color: var(--fg2);
+	}
+
+	.c-when {
+		color: var(--fg3);
+		white-space: nowrap;
 	}
 
 	.sources {

@@ -118,7 +118,7 @@ function formatterFor(tz: string): Intl.DateTimeFormat {
 	return formatter;
 }
 
-interface Wall {
+export interface Wall {
 	year: number;
 	month: number; // 1-12
 	day: number;
@@ -152,7 +152,7 @@ function wallOf(instant: Date, tz: string): Wall {
  * transition. Where a local time is skipped (the spring-forward gap) this lands
  * on the instant just after the jump, which is what calendar clients do.
  */
-function instantOfWall(wall: Wall, tz: string): Date {
+export function instantOfWall(wall: Wall, tz: string): Date {
 	const asUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second);
 	let instant = new Date(asUtc);
 	for (let pass = 0; pass < 2; pass++) {
@@ -233,7 +233,23 @@ export function expand(
 	to: string
 ): string[] {
 	const start = new Date(dtStart);
-	const windowStart = new Date(`${from}T00:00:00Z`).getTime();
+	// BOTH ends read on the same clock — the event's own zone, never UTC for one
+	// and the zone for the other. Mixing them opens a hole the width of the
+	// offset at the start of every window: in a zone ahead of UTC an event at
+	// 00:30 local on the 1st is before this month's UTC midnight and after last
+	// month's zone-local end of day, so it appears in neither; in a zone behind
+	// UTC the same event appears in both.
+	const windowStart = instantOfWall(
+		{
+			year: Number(from.slice(0, 4)),
+			month: Number(from.slice(5, 7)),
+			day: Number(from.slice(8, 10)),
+			hour: 0,
+			minute: 0,
+			second: 0
+		},
+		tz
+	).getTime();
 	// Inclusive of the whole final day, in the event's own zone rather than UTC.
 	const windowEnd = instantOfWall(
 		{
@@ -295,8 +311,13 @@ export function expand(
 				const week = Math.floor(cursor.getTime() / 604800000);
 				matches =
 					(week - startWeek) % parsed.interval === 0 &&
+					// WEEKLY with no BYDAY recurs on the WEEKDAY the series started on,
+					// per RFC 5545 — never on its day of the month. Comparing days of the
+					// month made the rule fire roughly monthly, so a weekly event pulled
+					// from a calendar that omits BYDAY (Apple's does) lost three of every
+					// four occurrences, on screen and in the published feed alike.
 					(parsed.byDay.length === 0
-						? day === anchor.day
+						? weekdayCode(year, month, day) === weekdayCode(anchor.year, anchor.month, anchor.day)
 						: parsed.byDay.includes(weekdayCode(year, month, day)));
 			}
 

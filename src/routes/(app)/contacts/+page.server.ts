@@ -98,14 +98,21 @@ export const actions: Actions = {
 
 		// Echo the submitted values back on every failure path. A rejected form
 		// that clears itself makes the reader retype work they already did.
+		//
+		// WHICH contact they belong to travels with them. Without it the page hands
+		// one rejected submission's values to every editor on the screen, so the
+		// next contact opened is pre-filled with somebody else's phone and email —
+		// and saving that writes them onto the wrong row.
 		const photo = await readPhoto(form);
-		if (!photo.ok) return fail(400, { values: fields, message: photo.message });
+		if (!photo.ok) return fail(400, { values: fields, valuesFor: id, message: photo.message });
 
 		const input: ContactInput = { ...fields, photo: photo.photo };
 		const contactId = id ?? randomUUID();
 		const result = id ? await updateContact(id, input) : await createContact(contactId, input);
 
-		if (!result.ok) return fail(result.status, { values: fields, message: result.message });
+		if (!result.ok) {
+			return fail(result.status, { values: fields, valuesFor: id, message: result.message });
+		}
 
 		await replaceContactLinks(result.id, readLinks(form));
 		return { saved: true };

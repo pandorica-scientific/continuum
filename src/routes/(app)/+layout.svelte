@@ -16,10 +16,21 @@
 	// today's warning does not hide a different one tomorrow — and it is kept in
 	// localStorage, because a banner that comes back on every page load has not
 	// really been dismissed.
-	// Which currencies this warning is about. Dismissing is remembered against
-	// that, so hiding today's does not hide a different one tomorrow.
+	// Which currencies this warning is about, AND WHY — the two buckets are kept
+	// apart in the key, not merged into one list. Flattened, a dismissal of the
+	// harmless "converts at the oldest rate on record" warning for EUR produced
+	// the key 'EUR', so when the refresh later failed and EUR moved to "no rate at
+	// all" the key was still 'EUR', the banner never drew, and net worth counted
+	// EUR holdings at face value with nothing on screen to say so — for a year,
+	// which is how long the cookie lasts.
 	const warningKey = $derived(
-		[...data.missingRates.none, ...data.missingRates.carried].sort().join(',')
+		[
+			`none:${[...data.missingRates.none].sort().join(',')}`,
+			`carried:${[...data.missingRates.carried].sort().join(',')}`
+		].join('|')
+	);
+	const anyMissingRates = $derived(
+		data.missingRates.none.length + data.missingRates.carried.length > 0
 	);
 
 	// Seeded from the SERVER, not from localStorage. localStorage is invisible
@@ -27,7 +38,7 @@
 	// every page load of a thing already dismissed. A cookie the server can read
 	// means it is simply never rendered.
 	let rateDismissed = $derived(data.rateWarningDismissed);
-	const showRateWarning = $derived(warningKey.length > 0 && rateDismissed !== warningKey);
+	const showRateWarning = $derived(anyMissingRates && rateDismissed !== warningKey);
 
 	function dismissRateWarning() {
 		rateDismissed = warningKey;

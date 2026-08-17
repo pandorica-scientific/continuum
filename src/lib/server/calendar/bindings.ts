@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
-import { calendarConflict, document, loan, tenancy } from '$lib/server/db/schema';
-import type { OriginBinding } from '$lib/calendar/keys';
+import { document, loan, tenancy } from '$lib/server/db/schema';
+import { bindingIsWritable, type OriginBinding } from '$lib/calendar/keys';
+import { recordConflict } from '$lib/server/calendar/conflicts';
 
 // Write-back: a date moved in Google or iCloud, applied to the ledger row that
 // produced the event.
@@ -12,30 +12,12 @@ import type { OriginBinding } from '$lib/calendar/keys';
 // scheduling fact, and every write is recorded — a household should be able to
 // find out later why a lease end changed.
 
-/**
- * The fields a remote date move may write, and nothing else.
- *
- * Not a list of "fields that happen to hold a date". Each of these is something
- * a person moving an event in their calendar plausibly MEANT to change:
- *
- *   loan.paymentDay          — the day of the month a payment leaves
- *   tenancy.endDate          — when a lease ends
- *   tenancy.renewalNoticeDate — when notice must be given
- *   document.expiresOn       — when a passport or policy lapses
- *
- * loanFixationPeriod.endDate is deliberately absent: it has a row, and moving it
- * re-cuts the interest schedule. That is not what dragging an event means.
- */
-const WRITABLE: Record<string, ReadonlySet<string>> = {
-	loan: new Set(['paymentDay']),
-	tenancy: new Set(['endDate', 'renewalNoticeDate']),
-	document: new Set(['expiresOn'])
-};
-
-export function bindingIsWritable(binding: OriginBinding | null): boolean {
-	if (!binding) return false;
-	return WRITABLE[binding.table]?.has(binding.field) ?? false;
-}
+// WRITABLE_BINDINGS lives in $lib/calendar/keys beside OriginBinding, because
+// the pure merge decides whether to propose a write-back and this file decides
+// whether to perform one. Two copies of that table is two chances for one of
+// them to start allowing a field the other refuses. Re-exported so callers that
+// think of write-back as belonging here keep working.
+export { bindingIsWritable };
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -126,12 +108,11 @@ export async function applyWriteBack(
 			message = `${row.name}: the expiry moved to ${value}, from a calendar edit.`;
 		}
 
-		await tx.insert(calendarConflict).values({
-			id: randomUUID(),
+		await recordConflict(tx, {
 			localKey: context.localKey,
 			accountId: context.accountId,
-			ours: (context.ours ?? null) as never,
-			theirs: (context.theirs ?? null) as never,
+			ours: context.ours,
+			theirs: context.theirs,
 			resolution: 'wrote-back'
 		});
 

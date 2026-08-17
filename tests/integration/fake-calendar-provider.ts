@@ -34,7 +34,11 @@ export class FakeCalendarProvider implements CalendarProvider {
 	private etagCounter = 0;
 
 	private forceResetNext = false;
+	/** When set, the next reset lists only events starting at or after this. */
+	private resetFromNext: string | null = null;
 	private failNextPushOnce = false;
+	/** Resource ids whose deletion is reported WITHOUT a uid, as CalDAV does. */
+	private unnamedDeletions = new Set<string>();
 
 	/** Counters a test can assert on — the push-loop guard reads pushCount. */
 	pushCount = 0;
@@ -76,9 +80,27 @@ export class FakeCalendarProvider implements CalendarProvider {
 		return [...this.store.keys()];
 	}
 
-	/** Invalidate the cursor, as Google does with 410 Gone on a stale syncToken. */
-	forceReset(): void {
+	/**
+	 * Invalidate the cursor, as Google does with 410 Gone on a stale syncToken.
+	 *
+	 * `from` models a WINDOWED reset: Google's reset listing reaches back only
+	 * ninety days, so it says nothing at all about anything older. The engine has
+	 * to be told where the listing starts, or it reads that silence as deletion.
+	 */
+	forceReset(from: string | null = null): void {
 		this.forceResetNext = true;
+		this.resetFromNext = from;
+	}
+
+	/**
+	 * Delete an event and report it the way CalDAV must: by resource path only.
+	 *
+	 * There is no body left to read a UID out of, so the provider genuinely
+	 * cannot name it. The engine has to map the path back to a local key itself.
+	 */
+	deleteRemoteUnnamed(resourceId: string): void {
+		this.unnamedDeletions.add(resourceId);
+		this.deleteRemote(resourceId);
 	}
 
 	/** Make the next push throw, to leave a pass half-finished. */
@@ -101,17 +123,26 @@ export class FakeCalendarProvider implements CalendarProvider {
 
 		if (this.forceResetNext) {
 			this.forceResetNext = false;
+			const from = this.resetFromNext;
+			this.resetFromNext = null;
 			// A reset hands back EVERYTHING the server holds and no deletions —
 			// exactly what a real full resync gives you, and the reason the engine
 			// cannot infer "deleted remotely" from absence during one.
 			return {
-				changes: [...this.store.values()].map((held) => ({
-					uid: held.series.uid,
-					series: held.series,
-					etag: held.etag
-				})),
+				changes: [...this.store.entries()]
+					.filter(
+						([, held]) =>
+							!from || new Date(held.series.startsAt).getTime() >= new Date(from).getTime()
+					)
+					.map(([resourceId, held]) => ({
+						uid: held.series.uid,
+						remoteId: resourceId,
+						series: held.series,
+						etag: held.etag
+					})),
 				cursor: String(this.log.length),
-				reset: true
+				reset: true,
+				resetFrom: from
 			};
 		}
 
@@ -121,7 +152,14 @@ export class FakeCalendarProvider implements CalendarProvider {
 		return {
 			changes: [...touched].map(([resourceId, uid]) => {
 				const held = this.store.get(resourceId);
-				return { uid, series: held?.series ?? null, etag: held?.etag ?? null };
+				return {
+					// An unnamed deletion reports the path and nothing else, because
+					// that is genuinely all a CalDAV server has left to report.
+					uid: !held && this.unnamedDeletions.has(resourceId) ? '' : uid,
+					remoteId: resourceId,
+					series: held?.series ?? null,
+					etag: held?.etag ?? null
+				};
 			}),
 			cursor: String(this.log.length),
 			reset: false

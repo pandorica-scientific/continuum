@@ -398,6 +398,37 @@ describe('write-back into the ledger', () => {
 	// The ledger owns a generated event's CONTENT. Retitling one in a phone
 	// calendar is not a fact about the amortisation schedule, so it is reverted
 	// rather than accepted — and it must not be mistaken for a date move.
+	// The link was never updated after a write-back, so the base hash still
+	// described the date BEFORE the move: the same move was rediscovered on every
+	// pass, writing the ledger again and filing another conflict row every fifteen
+	// minutes, without end.
+	it('does not write the same remote move back twice', async () => {
+		await seedLoan(15);
+		await sync();
+		const { resourceId, series } = pushedLoanPayment();
+
+		const moved = new Date(series.startsAt);
+		moved.setUTCDate(20);
+		fake.setRemote(resourceId, {
+			...series,
+			startsAt: moved.toISOString(),
+			endsAt: moved.toISOString(),
+			updatedAt: new Date().toISOString()
+		});
+
+		const first = await sync();
+		expect(first.writeBacks).toBe(1);
+
+		const second = await sync();
+		expect(second.writeBacks).toBe(0);
+
+		const written = await testDb
+			.select()
+			.from(schema.calendarConflict)
+			.where(eq(schema.calendarConflict.resolution, 'wrote-back'));
+		expect(written).toHaveLength(1);
+	});
+
 	it('re-asserts a remote retitle instead of writing anything back', async () => {
 		const loanId = await seedLoan(15);
 		await sync();
@@ -547,4 +578,231 @@ describe('convergence', () => {
 			if (deletedLocally) expect(fake.has(remoteId)).toBe(false);
 		}
 	}, 60_000);
+});
+
+// Every case below shipped broken. They are grouped by what went wrong rather
+// than by the function, because what makes them worth keeping is the failure.
+describe('regressions', () => {
+	// "Edited here, deleted there" is an ordinary outcome, and merge routes it to
+	// a conflict — where one side is genuinely null. `ours` and `theirs` are jsonb
+	// NOT NULL, so writing a JavaScript null raised 23502 INSIDE the single commit
+	// transaction and rolled the WHOLE pass back: no cursor, no links, everything
+	// re-pushed next time, failing in exactly the same place. One event was enough
+	// to wedge an account for good.
+	it('records a conflict whose other side is a deletion', async () => {
+		const created = await createEvent(event(), null, testDb);
+		if (!created.ok) throw new Error('setup failed');
+		await sync();
+
+		const remoteId = toRemoteId(created.id);
+		await updateEvent(created.id, event({ title: 'Dentist, moved' }), 'all', null, testDb);
+		fake.deleteRemote(remoteId);
+
+		const report = await sync();
+		expect(report.conflicts).toBe(1);
+
+		const rows = await testDb.select().from(schema.calendarConflict);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].theirs).toBeNull();
+		expect(rows[0].ours).not.toBeNull();
+
+		// The pass FINISHED: the cursor advanced and the account is not in error.
+		const [account] = await testDb
+			.select()
+			.from(schema.calendarAccount)
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+		expect(account.cursor).not.toBeNull();
+		expect(account.lastSyncAt).not.toBeNull();
+	});
+
+	// A reset listing that reaches back ninety days says nothing whatsoever about
+	// what came before. Reading that silence as deletion is how one expired
+	// syncToken — routine and documented — destroyed every authored event older
+	// than the window, hard-deleted rather than tombstoned.
+	it('does not delete events older than a windowed reset', async () => {
+		const old = await createEvent(
+			event({
+				title: 'Last year',
+				startsAt: new Date('2025-01-15T09:00:00.000Z'),
+				endsAt: new Date('2025-01-15T10:00:00.000Z')
+			}),
+			null,
+			testDb
+		);
+		if (!old.ok) throw new Error('setup failed');
+		await sync();
+
+		// The listing starts well after the event, so the event is simply unlisted.
+		fake.forceReset('2026-06-01T00:00:00.000Z');
+		await sync();
+
+		const [row] = await testDb
+			.select()
+			.from(schema.calendarEvent)
+			.where(eq(schema.calendarEvent.id, old.id));
+		expect(row).toBeDefined();
+		expect(row.deletedAt).toBeNull();
+	});
+
+	// The control: a reset that genuinely covered the whole calendar still means
+	// what it says. Fixing the window must not have made deletion undetectable.
+	it('still applies a deletion found by an unwindowed reset', async () => {
+		const created = await createEvent(event(), null, testDb);
+		if (!created.ok) throw new Error('setup failed');
+		await sync();
+
+		fake.deleteRemote(toRemoteId(created.id));
+		fake.forceReset(null);
+		await sync();
+
+		const [row] = await testDb
+			.select()
+			.from(schema.calendarEvent)
+			.where(eq(schema.calendarEvent.id, created.id));
+		expect(row?.deletedAt).not.toBeNull();
+	});
+
+	// CalDAV reports a deletion as a resource path and nothing else, because the
+	// body is gone. Filed under the path, it matched no local key and no link, so
+	// it merged to a no-op while the cursor advanced past it: the event stayed
+	// here for good and was never seen again.
+	it('applies a deletion the provider could only report by path', async () => {
+		const created = await createEvent(event(), null, testDb);
+		if (!created.ok) throw new Error('setup failed');
+		await sync();
+
+		fake.deleteRemoteUnnamed(toRemoteId(created.id));
+		const report = await sync();
+		expect(report.applied).toBe(1);
+
+		const [row] = await testDb
+			.select()
+			.from(schema.calendarEvent)
+			.where(eq(schema.calendarEvent.id, created.id));
+		expect(row?.deletedAt).not.toBeNull();
+	});
+
+	// A tombstone reaped in the same transaction that created it is a deletion
+	// nobody can undo. The row survives its grace period, so a mistaken remote
+	// deletion is still there to be found.
+	it('keeps a freshly tombstoned row rather than reaping it in the same pass', async () => {
+		const created = await createEvent(event(), null, testDb);
+		if (!created.ok) throw new Error('setup failed');
+		await sync();
+
+		fake.deleteRemote(toRemoteId(created.id));
+		await sync();
+
+		const rows = await testDb
+			.select()
+			.from(schema.calendarEvent)
+			.where(eq(schema.calendarEvent.id, created.id));
+		expect(rows).toHaveLength(1);
+	});
+
+	// A link pointing at an event that no longer exists is not a cache, it is
+	// rubbish — and while it is there reapTombstones can never fire, so tombstones
+	// and links both accumulate with nothing able to clear either.
+	it('drops the link after successfully pushing a deletion', async () => {
+		const created = await createEvent(event(), null, testDb);
+		if (!created.ok) throw new Error('setup failed');
+		await sync();
+
+		await deleteEvent(created.id, 'all', null, testDb);
+		await sync();
+
+		expect(fake.has(toRemoteId(created.id))).toBe(false);
+		const links = await testDb
+			.select()
+			.from(schema.calendarSyncLink)
+			.where(eq(schema.calendarSyncLink.localKey, created.id));
+		expect(links).toHaveLength(0);
+	});
+
+	// A generated event that has aged past the trailing horizon is simply absent,
+	// and the engine took that to mean "authored, and deleted here" — so it pushed
+	// a deletion for every past mortgage payment out to the household's own
+	// calendar, one per loan per month, forever. The file's own header promises
+	// the opposite.
+	//
+	// Modelled directly: a link and a remote copy for a `gen:` key that no ledger
+	// row currently produces, which is exactly what a payment past the horizon
+	// looks like.
+	it('never deletes a generated event that has aged out of the horizon', async () => {
+		const key = 'gen:loanPayments:loan:gone:paymentDay:2024-01';
+		const remoteId = toRemoteId(key);
+		const series = remoteSeries(key, {
+			title: 'Mortgage payment',
+			startsAt: '2024-01-15T00:00:00.000Z',
+			endsAt: '2024-01-15T23:59:59.000Z'
+		});
+
+		fake.setRemote(remoteId, series);
+		await testDb.insert(schema.calendarSyncLink).values({
+			localKey: key,
+			accountId: ACCOUNT,
+			remoteId,
+			pushedHash: 'stale',
+			seenHash: 'stale'
+		});
+
+		await sync();
+
+		// Still in the household's calendar.
+		expect(fake.has(remoteId)).toBe(true);
+		// And no longer tracked, so it will not be looked at again.
+		const links = await testDb
+			.select()
+			.from(schema.calendarSyncLink)
+			.where(eq(schema.calendarSyncLink.localKey, key));
+		expect(links).toHaveLength(0);
+	});
+
+	// The advisory lock was taken on the pool handle outside any transaction, so
+	// its own implicit transaction committed as the statement returned and the
+	// xact-scoped lock was gone before the pull began. It excluded nothing.
+	it('refuses a second pass while one is already running', async () => {
+		await testDb
+			.update(schema.calendarAccount)
+			.set({ syncingSince: new Date() })
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+
+		fake.resetCounters();
+		const report = await sync();
+		expect(fake.pullCount).toBe(0);
+		expect(report.pulled).toBe(0);
+	});
+
+	// A lease, not a lock: a process killed mid-pass must not lock the account out
+	// for good.
+	it('takes over a lease left behind by a pass that died', async () => {
+		await testDb
+			.update(schema.calendarAccount)
+			.set({ syncingSince: new Date(Date.now() - 60 * 60_000) })
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+
+		fake.resetCounters();
+		await sync();
+		expect(fake.pullCount).toBe(1);
+
+		const [account] = await testDb
+			.select()
+			.from(schema.calendarAccount)
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+		expect(account.syncingSince).toBeNull();
+	});
+
+	// A pass that throws has to give the claim up on the way out, or the account
+	// is locked out until the lease expires.
+	it('releases the lease when a pass fails', async () => {
+		await createEvent(event(), null, testDb);
+		fake.failNextPush();
+		await expect(sync()).rejects.toThrow();
+
+		const [account] = await testDb
+			.select()
+			.from(schema.calendarAccount)
+			.where(eq(schema.calendarAccount.id, ACCOUNT));
+		expect(account.syncingSince).toBeNull();
+	});
 });

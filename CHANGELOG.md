@@ -109,9 +109,75 @@ passed over them.
   a translucent token meant to tint a page background, so the page showed through
   the text, and it always opened the same way regardless of the room available.
 
+The rest came out of a review of the sync engine before it met a real account
+for long. None of them had a test; several would have destroyed data quietly.
+
+- **One conflict wedged an account for good.** An event edited here and deleted
+  on the phone is an ordinary outcome, and it is recorded as a conflict — where
+  one side is genuinely nothing. That was written as SQL NULL into a NOT NULL
+  column, inside the pass's single commit transaction, so the whole pass rolled
+  back: the cursor never advanced, nothing was applied, and every event was sent
+  again on the next pass, which failed in exactly the same place, every minute,
+  forever.
+- **An expired Google sync token deleted a year of events.** When Google retires
+  a sync token — routine, and documented — the recovery is to list everything
+  again. That listing reaches back ninety days, and anything it did not mention
+  was taken to have been deleted. Events older than the window are now left
+  alone: silence is not deletion. A failed reconcile no longer reports an empty
+  calendar either, which had the same effect on both providers at once.
+- **Past mortgage payments were deleted out of the household's own calendar.**
+  Generated events are published over a rolling window, and one ageing off the
+  back of it looked exactly like an event deleted here — so a deletion was sent
+  for it. One per loan per month, indefinitely, silently.
+- **A payment day was rewritten on every pass.** A CalDAV all-day event came back
+  a day shorter than it was sent, which read as somebody having moved it, which
+  wrote a new payment day into the loan. A loan paid on the 31st was moved to the
+  28th by February and stayed there.
+- **Deleting an event on a phone did nothing.** CalDAV reports a deletion as a
+  path and nothing else, and that path was never matched back to the event, so
+  the deletion was dropped while the cursor moved past it. The event stayed here
+  for good, and a Continuum event someone had deliberately deleted came back.
+- **No recurring event with an exception ever reached Google.** Its override ids
+  used a character Google refuses, so every one was rejected. They are also keyed
+  on the occurrence now, not on its position in a list, so removing one override
+  no longer renames the others.
+- **A remote change to a recurring event destroyed its exceptions.** An
+  incremental page carries only what changed, and it was read as the whole
+  series, so a retitled series lost every cancelled and moved occurrence — and a
+  changed occurrence with an unchanged series was dropped entirely.
+- **Weekly events from other calendars lost three of every four occurrences.** A
+  weekly rule that names no weekday is valid, and is what Apple Calendar sends;
+  it was expanded roughly monthly instead. Events in the first hours of a month
+  could also go missing from both that month and the one before.
+- **New events were saved at the wrong time.** An event's instant was built in
+  the server's timezone rather than the household's, so a 09:00 event showed as
+  11:00 — and 13:00 after the next edit, walking forward each time.
+- **"This and following" lost overrides and miscounted.** Splitting a series
+  deleted every exception including the ones before the split, and gave the
+  second half the original occurrence count rather than what was left of it, so
+  ten occurrences ran for twelve. Editing the recurrence during such an edit was
+  discarded outright.
+- **Two sync passes could run at once.** The lock meant to prevent it was taken
+  outside any transaction and released immediately, so it excluded nothing.
+- **A failed delete was recorded as a success**, orphaning the event on the
+  server, clearing the error and making sure nothing tried again.
+- **A rejected contact form pre-filled the next contact opened** with the details
+  from the one that failed — and saving wrote them onto that person's row.
+- **Dismissing the harmless exchange-rate warning silenced the serious one** for
+  the same currency, for a year, so holdings could be counted at face value with
+  nothing on screen to say so.
+- **Nothing could clear a sync conflict.** The briefing raised them and sent
+  people to the calendar, which had no way to mark them seen, so the first one
+  stayed up permanently.
+- **Sync events were written with a timezone declaration RFC 5545 forbids**, and
+  a strict client may refuse the whole event over it. A time sent by another
+  client with a named zone was also read as though it were UTC.
+- **How often calendars are polled could be read but never set.** It is a field
+  in Settings now.
+
 ### Upgrading
 
-Two things to know before updating an existing install.
+Three things to know before updating an existing install.
 
 - **`tenancy.tenantContact` is gone.** The migration creates a real contact from
   each non-empty value first — named after the tenant, with the original text
@@ -129,6 +195,10 @@ Two things to know before updating an existing install.
   ```
 
   The stock `postgres:17-alpine` image in `compose.yaml` needs nothing extra.
+
+- **Migration `0041` adds one nullable column** to `calendar_account`, which
+  records the pass currently holding an account so two cannot run at once.
+  Nothing is rewritten and no existing data is touched.
 
 ## 0.3.6 — unreleased
 

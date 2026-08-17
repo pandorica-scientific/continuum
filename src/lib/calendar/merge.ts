@@ -6,7 +6,7 @@
 // Google account. The adapters stay thin and I/O-shaped; this stays reasoned
 // about.
 
-import type { OriginBinding } from '$lib/calendar/keys';
+import { bindingIsWritable, type OriginBinding } from '$lib/calendar/keys';
 
 export interface MergeInput {
 	/** What we last successfully sent. Null if this pair has never synced. */
@@ -37,24 +37,6 @@ export type MergeOutcome =
 	| { kind: 'conflict'; winner: 'local' | 'remote' }
 	| { kind: 'write-back'; field: string; value: string };
 
-/**
- * Which ledger fields a remote date move may write.
- *
- * loanFixationPeriod is deliberately absent. The row exists and the binding
- * names it for identity, but moving a fixation end re-cuts the interest
- * schedule, and dragging an event in a phone calendar is not a statement about
- * that.
- */
-const WRITABLE_BACK: Record<string, ReadonlySet<string>> = {
-	loan: new Set(['paymentDay']),
-	tenancy: new Set(['endDate', 'renewalNoticeDate']),
-	document: new Set(['expiresOn'])
-};
-
-function writable(binding: OriginBinding | null): boolean {
-	return Boolean(binding && WRITABLE_BACK[binding.table]?.has(binding.field));
-}
-
 export function merge(input: MergeInput): MergeOutcome {
 	const { baseHash, localHash, remoteHash } = input;
 
@@ -76,11 +58,15 @@ export function merge(input: MergeInput): MergeOutcome {
 			return localHash === null ? { kind: 'drop-link' } : { kind: 'suppress' };
 		}
 		if (localHash === null) {
-			// Fell out of the rolling horizon. Nothing to assert any more.
-			return remoteHash === null ? { kind: 'drop-link' } : { kind: 'push-delete' };
+			// Fell off the trailing edge of the rolling horizon. Stop tracking it and
+			// LEAVE THE REMOTE COPY ALONE: the event is a mortgage payment that
+			// genuinely happened, and deleting someone's history out of their own
+			// calendar because our window moved is not ours to do. Pushing a deletion
+			// here is what quietly erased one event per loan per month, forever.
+			return { kind: 'drop-link' };
 		}
 		if (remoteChanged) {
-			if (input.dateOnlyChange && input.newDate && writable(input.binding)) {
+			if (input.dateOnlyChange && input.newDate && bindingIsWritable(input.binding)) {
 				return { kind: 'write-back', field: input.binding!.field, value: input.newDate };
 			}
 			// Any other remote edit — a retitled payment, an edited amount — is not

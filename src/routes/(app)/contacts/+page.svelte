@@ -2,13 +2,36 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import ContactForm from '$lib/components/ContactForm.svelte';
+	import ActionError from '$lib/components/ActionError.svelte';
 
 	let { data, form } = $props();
 
+	// Which contact the editor was opened on by a click; undefined means nobody
+	// has clicked anything yet on this render.
+	let opened = $state<string | null | undefined>(undefined);
+
 	// Which contact the editor is open on: an id, 'new', or null for closed.
-	let editing = $state<string | null>(null);
+	//
+	// Falls back to whichever editor was just rejected, so a failed save reopens
+	// the form it came from rather than closing and stranding the typed values.
+	// The form is a plain POST, so a rejection is a fresh render of this page.
+	const editing = $derived(
+		opened === undefined ? (form?.values ? (form.valuesFor ?? 'new') : null) : opened
+	);
 
 	const options = $derived(data.options);
+
+	/**
+	 * The echoed values, but ONLY for the editor they came from.
+	 *
+	 * ContactForm prefers an echoed value over the stored row — which is right for
+	 * the form that was rejected and catastrophic for any other, because the
+	 * fields it pre-fills are then saved onto a different person's row.
+	 */
+	function echoFor(id: string | null): NonNullable<typeof form>['values'] | undefined {
+		if (!form?.values) return undefined;
+		return (form.valuesFor ?? null) === id ? form.values : undefined;
+	}
 
 	function labelsFor(contact: (typeof data.contacts)[number]): string[] {
 		const name = (list: { id: string; name: string }[], ids: string[]) =>
@@ -41,14 +64,12 @@
 			aria-label="Search contacts"
 		/>
 		<button class="btn" type="submit">Search</button>
-		<button class="btn btn-primary" type="button" onclick={() => (editing = 'new')}>
+		<button class="btn btn-primary" type="button" onclick={() => (opened = 'new')}>
 			New contact
 		</button>
 	</form>
 
-	{#if form?.message}
-		<p class="form-error" role="alert">{form.message}</p>
-	{/if}
+	<ActionError message={form?.message ?? null} />
 
 	<div class="eyebrow-row">
 		<Eyebrow emoji="📇" label="Address book" />
@@ -59,7 +80,7 @@
 	</div>
 
 	{#if editing === 'new'}
-		<ContactForm {options} values={form?.values} onclose={() => (editing = null)} />
+		<ContactForm {options} values={echoFor(null)} onclose={() => (opened = null)} />
 	{/if}
 
 	{#if data.contacts.length === 0}
@@ -74,7 +95,12 @@
 
 	{#each data.contacts as contact (contact.id)}
 		{#if editing === contact.id}
-			<ContactForm {options} {contact} values={form?.values} onclose={() => (editing = null)} />
+			<ContactForm
+				{options}
+				{contact}
+				values={echoFor(contact.id)}
+				onclose={() => (opened = null)}
+			/>
 		{:else}
 			<article class="card contact-row">
 				{#if contact.photo}
@@ -105,7 +131,7 @@
 					</div>
 				{/if}
 
-				<button class="btn" type="button" onclick={() => (editing = contact.id)}>Edit</button>
+				<button class="btn" type="button" onclick={() => (opened = contact.id)}>Edit</button>
 			</article>
 		{/if}
 	{/each}
@@ -182,10 +208,6 @@
 		border: 1px solid var(--bd2);
 		border-radius: 999px;
 		padding: 2px 8px;
-	}
-
-	.form-error {
-		color: var(--red);
 	}
 
 	@media (max-width: 40rem) {

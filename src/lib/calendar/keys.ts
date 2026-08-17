@@ -36,6 +36,8 @@ export interface OriginBinding {
  * only, a tenancy end and a document expiry would collide and overwrite each
  * other on every sync.
  */
+const GENERATED_PREFIX = 'gen:';
+
 export function generatedKey(
 	ruleKey: string,
 	binding: OriginBinding | null,
@@ -50,6 +52,42 @@ export function generatedKey(
 	if (binding) parts.push(binding.table, binding.rowId, binding.field);
 	if (month) parts.push(month);
 	return parts.join(':');
+}
+
+/**
+ * Whether a local key belongs to a generated event.
+ *
+ * Read from the KEY rather than from whether the event is currently in hand.
+ * Generated events are recomputed over a rolling horizon, so one that has aged
+ * past the trailing edge is simply absent — and something absent is otherwise
+ * indistinguishable from an authored event that was deleted, which is how a
+ * mortgage payment ends up being deleted out of the household's own calendar.
+ */
+export function isGeneratedKey(key: string): boolean {
+	return key.startsWith(GENERATED_PREFIX);
+}
+
+/**
+ * Which ledger fields a remote date move may write.
+ *
+ * Lives here, beside OriginBinding, because both the pure merge and the server
+ * write-back have to agree on it. Two copies of this table is two chances for
+ * one of them to start allowing a field the other refuses.
+ *
+ * loanFixationPeriod is deliberately absent. The row exists and the binding
+ * names it for identity, but moving a fixation end re-cuts the interest
+ * schedule, and dragging an event in a phone calendar is not a statement about
+ * that.
+ */
+export const WRITABLE_BINDINGS: Record<string, ReadonlySet<string>> = {
+	loan: new Set(['paymentDay']),
+	tenancy: new Set(['endDate', 'renewalNoticeDate']),
+	document: new Set(['expiresOn'])
+};
+
+export function bindingIsWritable(binding: OriginBinding | null): boolean {
+	if (!binding) return false;
+	return WRITABLE_BINDINGS[binding.table]?.has(binding.field) ?? false;
 }
 
 // RFC 4648 base32hex, lowercase. Google requires event ids to use exactly this
@@ -72,6 +110,23 @@ function encodeBase32Hex(bytes: Uint8Array): string {
 	}
 	if (bits > 0) out += B32HEX[(value << (5 - bits)) & 31];
 	return out;
+}
+
+function decodeBase32Hex(text: string): Uint8Array | null {
+	let bits = 0;
+	let value = 0;
+	const out: number[] = [];
+	for (const character of text) {
+		const index = B32HEX.indexOf(character);
+		if (index < 0) return null;
+		value = (value << 5) | index;
+		bits += 5;
+		if (bits >= 8) {
+			out.push((value >>> (bits - 8)) & 0xff);
+			bits -= 8;
+		}
+	}
+	return new Uint8Array(out);
 }
 
 /**
@@ -119,4 +174,47 @@ export function toRemoteId(localKey: string): string {
 	if (encoded.length > MAX_LENGTH) return `v${digest(localKey)}`;
 
 	return encoded.padEnd(MIN_LENGTH, '0');
+}
+
+/**
+ * The local key a remote id was built from, or null if it was not built here.
+ *
+ * CalDAV reports a deletion as the resource path and nothing else — no UID, no
+ * body, because the body is gone. The resource name is the remote id, so this
+ * is what turns "something at /cal/<id>.ics was deleted" back into a key the
+ * engine can match; without it a deletion made on someone's phone matches
+ * nothing local and is dropped while the cursor advances past it.
+ *
+ * Verified by re-encoding rather than trusted: an event created in another
+ * client carries whatever name that client chose, and decoding one of those
+ * would invent a key that never existed.
+ */
+export function fromRemoteId(remoteId: string): string | null {
+	const bytes = decodeBase32Hex(remoteId);
+	if (!bytes || bytes.length === 0) return null;
+
+	let decoded: string;
+	try {
+		decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+	} catch {
+		return null;
+	}
+
+	return toRemoteId(decoded) === remoteId ? decoded : null;
+}
+
+/**
+ * The remote id of one overridden occurrence of a series.
+ *
+ * Two properties, both load-bearing. It stays inside base32hex — Google refuses
+ * anything else with a bare 400, which used to reject every recurring event that
+ * had an exception. And it is keyed on the RECURRENCE-ID rather than on the
+ * override's position in a list: indexed by position, deleting the first of
+ * three overrides renames the other two, leaving the events they used to name
+ * orphaned at their old times.
+ */
+export function overrideRemoteId(remoteId: string, recurrenceId: string): string {
+	const suffix = digest(recurrenceId);
+	const head = remoteId.slice(0, Math.max(MIN_LENGTH, MAX_LENGTH - suffix.length));
+	return `${head}${suffix}`;
 }

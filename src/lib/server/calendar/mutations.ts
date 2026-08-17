@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { calendarEvent, calendarEventException } from '$lib/server/db/schema';
 import { planScopeChange, type EditScope } from '$lib/calendar/scope';
@@ -86,7 +86,8 @@ export async function updateEvent(
 			scope,
 			row.rrule,
 			recurrenceId ?? row.startsAt.toISOString(),
-			row.startsAt.toISOString()
+			row.startsAt.toISOString(),
+			row.tz
 		);
 
 		if (plan.kind === 'exception') {
@@ -120,9 +121,7 @@ export async function updateEvent(
 		}
 
 		if (plan.kind === 'split') {
-			// Truncate the original, then start a second series at the split. Any
-			// exception at or after the split belongs to the new series' span and
-			// would otherwise be stranded on a series that no longer reaches it.
+			// Truncate the original, then start a second series at the split.
 			await tx
 				.update(calendarEvent)
 				.set({ rrule: plan.truncatedRrule, updatedAt: new Date() })
@@ -138,13 +137,40 @@ export async function updateEvent(
 				startsAt: input.startsAt,
 				endsAt: input.endsAt,
 				tz: input.tz,
-				rrule: row.rrule,
+				// The tail's own rule, which is the original MINUS what the first half
+				// already used up. Copying row.rrule restarted a COUNT from zero, so a
+				// ten-occurrence series split in the middle produced twelve. An edited
+				// recurrence still wins — that was being discarded outright, so
+				// changing the rule in a "this and following" edit did nothing at all.
+				rrule: input.rrule && input.rrule !== row.rrule ? input.rrule : plan.newSeriesRrule,
 				createdBy: row.createdBy
 			});
-			await tx
-				.delete(calendarEventException)
-				.where(eq(calendarEventException.eventId, id))
-				.returning();
+
+			// Exceptions at or after the split MOVE to the new series; the ones before
+			// it stay where they are. Deleting them all took the earlier ones with it,
+			// so a cancelled occurrence reappeared and a renamed one reverted to the
+			// series title — silently, in the half of the series nobody was editing.
+			// Compared as instants, not as text. recurrence_id is a text column and
+			// the same moment arrives spelled more than one way ('…:00Z' from a
+			// server, '…:00.000Z' from us), so a SQL string comparison would sort
+			// some of them to the wrong side of the split.
+			const splitAt = new Date(plan.newSeriesStart).getTime();
+			const existing = await tx
+				.select({
+					id: calendarEventException.id,
+					recurrenceId: calendarEventException.recurrenceId
+				})
+				.from(calendarEventException)
+				.where(eq(calendarEventException.eventId, id));
+			const moving = existing
+				.filter((e) => new Date(e.recurrenceId).getTime() >= splitAt)
+				.map((e) => e.id);
+			if (moving.length > 0) {
+				await tx
+					.update(calendarEventException)
+					.set({ eventId: newId })
+					.where(inArray(calendarEventException.id, moving));
+			}
 			return { ok: true, id: newId } as const;
 		}
 
@@ -189,7 +215,8 @@ export async function deleteEvent(
 			scope,
 			row.rrule,
 			recurrenceId ?? row.startsAt.toISOString(),
-			row.startsAt.toISOString()
+			row.startsAt.toISOString(),
+			row.tz
 		);
 
 		if (plan.kind === 'exception') {

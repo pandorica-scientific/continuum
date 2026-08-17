@@ -28,6 +28,10 @@ describe('edit scope planning', () => {
 			// the occurrence itself would leave it in the old series as well as the
 			// new one — the same event twice, on the same day.
 			truncatedRrule: 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20260915T085959Z',
+			// The tail carries its own rule. With no COUNT to divide it is the same
+			// rule, but it is returned rather than left to the caller to guess —
+			// which is what the caller was doing, by copying the ORIGINAL rule.
+			newSeriesRrule: 'FREQ=WEEKLY;BYDAY=TU',
 			newSeriesStart: OCCURRENCE
 		});
 	});
@@ -48,6 +52,24 @@ describe('edit scope planning', () => {
 		const rule = (plan as { truncatedRrule: string }).truncatedRrule;
 		expect(rule).toContain('UNTIL=');
 		expect(rule).not.toContain('COUNT');
+	});
+
+	// A COUNT belongs to the SERIES, so splitting one has to divide it. The tail
+	// used to be given the original rule verbatim, so it restarted the count from
+	// zero: a ten-occurrence series split after the second ran for twelve.
+	it("'following' gives the tail what is left of a COUNT, not the whole of it", () => {
+		// Tuesdays from 1 September 2026: the 1st, 8th, 15th… so splitting at the
+		// 15th leaves two behind and eight to go.
+		const plan = planScopeChange(
+			'following',
+			`${WEEKLY};COUNT=10`,
+			OCCURRENCE,
+			'2026-09-01T09:00:00.000Z'
+		);
+		expect(plan.kind).toBe('split');
+		expect((plan as { newSeriesRrule: string }).newSeriesRrule).toBe(
+			'FREQ=WEEKLY;BYDAY=TU;COUNT=8'
+		);
 	});
 
 	// Nothing to except and nothing to split when there is only one occurrence.

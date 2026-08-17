@@ -7,6 +7,7 @@
 // detail.
 
 import type { EventSeries, SeriesException } from '$lib/server/calendar/series';
+import { instantOfWall } from '$lib/calendar/rrule';
 
 const CRLF = '\r\n';
 /** RFC 5545: a content line is at most 75 OCTETS, excluding the line break. */
@@ -108,13 +109,24 @@ function exclusiveEnd(iso: string): string {
 	return day.toISOString();
 }
 
-function dateProperty(name: string, iso: string, allDay: boolean, tz: string): string {
+/** Where the event's zone travels, since a UTC value may not carry a TZID. */
+const TZ_PROPERTY = 'X-CONTINUUM-TZID';
+
+function dateProperty(name: string, iso: string, allDay: boolean): string {
 	// All-day is a DATE, deliberately without a time or a zone: an all-day event
 	// carrying an instant lands on the wrong day either side of the date line.
 	if (allDay) return `${name};VALUE=DATE:${dateStamp(iso)}`;
-	// TZID names the zone the wall-clock time belongs to. The value stays UTC so
-	// a server that does not know the zone still places the instant correctly.
-	return `${name};TZID=${tz}:${utcStamp(iso)}`;
+	// A bare UTC value, and NO TZID. RFC 5545 forbids TZID on a UTC value — the
+	// two say contradictory things about what the digits mean — and this file was
+	// emitting `DTSTART;TZID=Europe/Prague:20260910T070000Z` with no VTIMEZONE
+	// component to define the zone either. Continuum's own round trip hid it
+	// because parseStamp reads the Z and ignores the rest; a stricter client has
+	// every right to refuse the whole resource.
+	//
+	// The zone still has to travel: recurrence expands against wall-clock time,
+	// so a series that comes back as UTC drifts by an hour for half the year. It
+	// goes in an X- property, which is the RFC's own extension mechanism.
+	return `${name}:${utcStamp(iso)}`;
 }
 
 function eventBlock(
@@ -138,13 +150,16 @@ function eventBlock(
 
 	if (exception) {
 		// The ORIGINAL start, never where the occurrence moved to.
-		lines.push(dateProperty('RECURRENCE-ID', exception.recurrenceId, series.allDay, series.tz));
+		lines.push(dateProperty('RECURRENCE-ID', exception.recurrenceId, series.allDay));
 	}
 
-	lines.push(dateProperty('DTSTART', startsAt, series.allDay, series.tz));
-	lines.push(
-		dateProperty('DTEND', series.allDay ? exclusiveEnd(endsAt) : endsAt, series.allDay, series.tz)
-	);
+	lines.push(dateProperty('DTSTART', startsAt, series.allDay));
+	lines.push(dateProperty('DTEND', series.allDay ? exclusiveEnd(endsAt) : endsAt, series.allDay));
+	// On an all-day event too, even though its DATE value carries no time. The
+	// zone is part of what the content hash covers, so an event authored in
+	// Prague that comes back saying UTC compares as changed on every single pass —
+	// push, echo, push — which is the exact loop this design exists to avoid.
+	if (series.tz) lines.push(`${TZ_PROPERTY}:${escapeText(series.tz)}`);
 	lines.push(`SUMMARY:${escapeText(title)}`);
 
 	if (notes) lines.push(`DESCRIPTION:${escapeText(notes)}`);
@@ -194,7 +209,14 @@ function parseLine(line: string): Property | null {
 	return { name: name.toUpperCase(), params, value };
 }
 
-/** An iCalendar date or date-time to an ISO instant. */
+/**
+ * An iCalendar date or date-time to an ISO instant.
+ *
+ * A value ending in Z is UTC and says so. A value with neither Z nor TZID is
+ * floating local time, which has no better reading than UTC here. A value with a
+ * TZID and no Z is wall-clock time in that zone — which is what most CalDAV
+ * clients send — and reading its digits as UTC puts the event out by the offset.
+ */
 function parseStamp(property: Property): string {
 	const value = property.value.trim();
 	const dateOnly = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
@@ -204,7 +226,28 @@ function parseStamp(property: Property): string {
 	}
 	const full = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/.exec(value);
 	if (!full) return new Date(value).toISOString();
-	const [, y, m, d, hh, mm, ss] = full;
+	const [, y, m, d, hh, mm, ss, zulu] = full;
+
+	const tzid = property.params.get('TZID');
+	if (!zulu && tzid) {
+		try {
+			return instantOfWall(
+				{
+					year: Number(y),
+					month: Number(m),
+					day: Number(d),
+					hour: Number(hh),
+					minute: Number(mm),
+					second: Number(ss)
+				},
+				tzid
+			).toISOString();
+		} catch {
+			// An unknown zone name. Fall through to the UTC reading rather than
+			// dropping the event.
+		}
+	}
+
 	return new Date(`${y}-${m}-${d}T${hh}:${mm}:${ss}.000Z`).toISOString();
 }
 
@@ -262,9 +305,17 @@ export function parseIcs(text: string): EventSeries | null {
 	});
 
 	// Undo the exclusive end, or every round trip shortens the event by a day.
+	//
+	// END OF THAT DAY, not its midnight — this has to be the exact inverse of
+	// what toIcs wrote, and an all-day event is held internally as 00:00:00 to
+	// 23:59:59. Landing on midnight made every generated all-day event come back
+	// twenty-four hours short, which hashed differently, which the engine read as
+	// a remote DATE MOVE, which wrote a new payment day into the loan on every
+	// single pass. Google's readEndTime has always been the correct inverse; only
+	// this side drifted.
 	const endsAt = end ? parseStamp(end) : parseStamp(start);
 	const inclusiveEnd = allDay
-		? new Date(new Date(endsAt).getTime() - 86_400_000).toISOString()
+		? `${new Date(new Date(endsAt).getTime() - 86_400_000).toISOString().slice(0, 10)}T23:59:59.000Z`
 		: endsAt;
 
 	return {
@@ -275,7 +326,9 @@ export function parseIcs(text: string): EventSeries | null {
 		allDay,
 		startsAt: parseStamp(start),
 		endsAt: inclusiveEnd,
-		tz: start.params.get('TZID') ?? 'UTC',
+		// TZID first, for an event another client wrote; our own X- property next,
+		// since a UTC value may not legally carry a TZID.
+		tz: start.params.get('TZID') ?? find(master, TZ_PROPERTY)?.value.trim() ?? 'UTC',
 		rrule: find(master, 'RRULE')?.value.trim() ?? null,
 		exceptions,
 		updatedAt: find(master, 'DTSTAMP')

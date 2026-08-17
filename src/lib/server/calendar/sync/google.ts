@@ -23,10 +23,26 @@ import {
 	type RemoteChange
 } from '$lib/server/calendar/sync/provider';
 import type { EventSeries, SeriesException } from '$lib/server/calendar/series';
+import { overrideRemoteId } from '$lib/calendar/keys';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://www.googleapis.com/calendar/v3';
 const TIMEOUT_MS = 20_000;
+
+/**
+ * How far back a full listing reaches when the syncToken is no good.
+ *
+ * Named and reported rather than inlined twice, because the engine has to know
+ * it. Under a reset an absent event means a deleted one; an event older than
+ * this window is merely unlisted, and the two were indistinguishable, so one
+ * expired syncToken — an ordinary, documented event — hard-deleted every
+ * authored event older than ninety days.
+ */
+const RESET_WINDOW_DAYS = 90;
+
+function resetWindowStart(): string {
+	return new Date(Date.now() - RESET_WINDOW_DAYS * 86_400_000).toISOString();
+}
 
 export interface GoogleTime {
 	date?: string;
@@ -111,13 +127,21 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 		status: 'confirmed'
 	};
 
-	const overrides = series.exceptions.map((exception, index): GoogleEvent => {
+	const overrides = series.exceptions.map((exception): GoogleEvent => {
 		const startsAt = exception.startsAt ?? exception.recurrenceId;
 		const endsAt = exception.endsAt ?? startsAt;
 		return {
 			// Google assigns override ids itself on the server, but a deterministic
 			// one keeps a re-push idempotent rather than piling up duplicates.
-			id: `${remoteId}_${index}`,
+			//
+			// Built by overrideRemoteId, which stays inside base32hex and keys on the
+			// RECURRENCE-ID. The old `${remoteId}_${index}` failed both ways: `_` is
+			// outside the alphabet Google requires, so every override was refused
+			// with a bare 400 and no recurring event with an exception ever reached
+			// Google at all; and indexing by position meant deleting the first of
+			// three overrides renamed the other two, leaving duplicates behind at the
+			// times they used to name.
+			id: overrideRemoteId(remoteId, exception.recurrenceId),
 			extendedProperties: { private: { continuumUid: series.uid } },
 			recurringEventId: remoteId,
 			originalStartTime: time(exception.recurrenceId, series.allDay, series.tz),
@@ -177,6 +201,9 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 
 	let accessToken: string | null = null;
 	let expiresAt = 0;
+	// One full listing per pass at most. A provider instance is built per sync
+	// pass, so this cache lives and dies with it and never goes stale.
+	let fullListCache: GoogleEvent[] | null = null;
 
 	async function token(): Promise<string> {
 		if (accessToken && Date.now() < expiresAt - 30_000) return accessToken;
@@ -238,8 +265,23 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		};
 	}
 
-	/** Group a flat list of resources by the series each belongs to. */
-	function groupChanges(items: GoogleEvent[]): RemoteChange[] {
+	/**
+	 * Group a flat list of resources by the series each belongs to.
+	 *
+	 * `complete` says whether the list is the WHOLE truth — a full listing — or
+	 * an incremental page carrying only what changed. That distinction is the
+	 * one this function used to get wrong, and it cost data both ways.
+	 *
+	 * An incremental page holds only changed resources, so retitling the master
+	 * of a recurring event yields a group of exactly one: the series is rebuilt
+	 * with `exceptions: []`, and applyRemote replaces the exception set with
+	 * that, destroying every cancelled and moved occurrence the series had.
+	 * Change only an override and the group has no master at all, so
+	 * fromGoogleEvents returns null, the change is silently dropped — and the
+	 * syncToken still advances past it, so the move is never learned. Neither
+	 * was recoverable without a 410.
+	 */
+	async function groupChanges(items: GoogleEvent[], complete: boolean): Promise<RemoteChange[]> {
 		const bySeries = new Map<string, GoogleEvent[]>();
 		for (const item of items) {
 			const key = item.recurringEventId ?? item.id;
@@ -247,7 +289,16 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		}
 
 		const changes: RemoteChange[] = [];
-		for (const group of bySeries.values()) {
+		for (const [masterId, page] of bySeries) {
+			let group = page;
+
+			if (!complete && mayBeIncomplete(page)) {
+				// Re-read the series whole. Costs one full listing per pass, cached,
+				// and only when a recurring event actually changed.
+				const whole = await seriesResources(masterId);
+				if (whole.length > 0) group = whole;
+			}
+
 			const master = group.find((event) => !event.recurringEventId);
 			// A cancelled MASTER is a deleted event. A cancelled override is only a
 			// removed occurrence, and belongs inside the series rather than as a
@@ -255,15 +306,36 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 			if (master && master.status === 'cancelled') {
 				changes.push({
 					uid: master.extendedProperties?.private?.continuumUid ?? master.iCalUID ?? master.id,
+					remoteId: master.id,
 					series: null,
 					etag: null
 				});
 				continue;
 			}
 			const series = fromGoogleEvents(group);
-			if (series) changes.push({ uid: series.uid, series, etag: master?.etag ?? null });
+			if (series) {
+				changes.push({
+					uid: series.uid,
+					remoteId: master?.id ?? masterId,
+					series,
+					etag: master?.etag ?? null
+				});
+			}
 		}
 		return changes;
+	}
+
+	/**
+	 * Whether a page's view of a series might be missing resources.
+	 *
+	 * A single non-recurring event that came back on its own is complete. A group
+	 * with no master, or one whose master carries a recurrence rule, may have
+	 * overrides that simply did not change this time and so were not sent.
+	 */
+	function mayBeIncomplete(page: GoogleEvent[]): boolean {
+		const master = page.find((event) => !event.recurringEventId);
+		if (!master) return true;
+		return Boolean(master.recurrence?.length) || page.length > 1;
 	}
 
 	return {
@@ -379,9 +451,7 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 			for (;;) {
 				const result = await api(`/calendars/${encodeURIComponent(calendarId)}/events`, {
 					query: {
-						...(syncToken
-							? { syncToken }
-							: { timeMin: new Date(Date.now() - 90 * 86_400_000).toISOString() }),
+						...(syncToken ? { syncToken } : { timeMin: resetWindowStart() }),
 						...(pageToken ? { pageToken } : {}),
 						showDeleted: 'true',
 						singleEvents: 'false',
@@ -391,8 +461,17 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 
 				// 410 Gone: the syncToken is too old. Not an error — it means start
 				// over, and treating it as a failure stalls sync permanently.
+				//
+				// resetFrom is what keeps starting over from being destructive: the
+				// listing reaches back ninety days, so it says nothing about anything
+				// older, and the engine must not read that silence as deletion.
 				if (result.status === 410) {
-					return { changes: await fullList(), cursor: null, reset: true };
+					return {
+						changes: await groupChanges(await fullList(), true),
+						cursor: null,
+						reset: true,
+						resetFrom: resetWindowStart()
+					};
 				}
 				if (result.status >= 400) {
 					throw new Error(`Google answered ${result.status} listing events.`);
@@ -402,7 +481,9 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 				pageToken = result.body.nextPageToken as string | undefined;
 				if (!pageToken) {
 					return {
-						changes: groupChanges(collected),
+						// A pull with no syncToken already listed everything in the window,
+						// so its groups are whole and no re-read is needed.
+						changes: await groupChanges(collected, !syncToken),
 						cursor: (result.body.nextSyncToken as string) ?? cursor,
 						reset: false
 					};
@@ -420,8 +501,6 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 							`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(op.remoteId)}`,
 							{ method: 'DELETE' }
 						);
-						// 404/410 both mean it is already gone, which is the outcome asked
-						// for rather than a failure.
 						if (result.status === 412) {
 							results.push({
 								ok: false,
@@ -429,8 +508,20 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 								conflict: true,
 								message: 'Changed in Google since we last read it.'
 							});
-						} else {
+						} else if (result.status < 300 || result.status === 404 || result.status === 410) {
+							// 404/410 both mean it is already gone, which is the outcome asked
+							// for rather than a failure.
 							results.push({ ok: true, remoteId: op.remoteId, etag: null });
+						} else {
+							// Anything else — 401, 403, 429, 500 — is a real failure. Calling
+							// it success orphaned the event in Google, cleared the account's
+							// error line, and made sure nothing ever tried again.
+							results.push({
+								ok: false,
+								remoteId: op.remoteId,
+								conflict: false,
+								message: `Google answered ${result.status} deleting an event.`
+							});
 						}
 						continue;
 					}
@@ -491,25 +582,53 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		}
 	};
 
-	/** Everything in the window, for when the syncToken is no good. */
-	async function fullList(): Promise<RemoteChange[]> {
+	/**
+	 * Everything in the window, for when the syncToken is no good.
+	 *
+	 * THROWS on a bad page rather than returning what it had collected. Its result
+	 * is handed to the engine with `reset` set, and under reset an absent event is
+	 * a deleted one — so answering a 500 on page two with "here are the first 250,
+	 * and by the way the rest are gone" deletes everything after page one.
+	 */
+	async function fullList(): Promise<GoogleEvent[]> {
+		if (fullListCache) return fullListCache;
+
 		const collected: GoogleEvent[] = [];
 		let pageToken: string | undefined;
 		for (;;) {
 			const result = await api(`/calendars/${encodeURIComponent(calendarId)}/events`, {
 				query: {
-					timeMin: new Date(Date.now() - 90 * 86_400_000).toISOString(),
+					timeMin: resetWindowStart(),
+					showDeleted: 'true',
 					singleEvents: 'false',
 					maxResults: '250',
 					...(pageToken ? { pageToken } : {})
 				}
 			});
-			if (result.status >= 400) break;
+			if (result.status >= 400) {
+				throw new Error(`Google answered ${result.status} reconciling the calendar.`);
+			}
 			collected.push(...((result.body.items ?? []) as GoogleEvent[]));
 			pageToken = result.body.nextPageToken as string | undefined;
 			if (!pageToken) break;
 		}
-		return groupChanges(collected);
+
+		fullListCache = collected;
+		return collected;
+	}
+
+	/**
+	 * Every resource belonging to one series: the master and all its overrides.
+	 *
+	 * Read out of a single full listing, cached for the pass. Google's events.list
+	 * is the only view that shows overrides as their own resources alongside the
+	 * master — events.instances expands the rule instead, and cannot tell a
+	 * modified occurrence from an ordinary one — so this is what makes a series
+	 * whole again after an incremental page delivered a piece of it.
+	 */
+	async function seriesResources(masterId: string): Promise<GoogleEvent[]> {
+		const all = await fullList();
+		return all.filter((event) => (event.recurringEventId ?? event.id) === masterId);
 	}
 }
 

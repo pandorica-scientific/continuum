@@ -25,8 +25,19 @@ export interface RemoteCalendar {
 }
 
 export interface RemoteChange {
-	/** Our own uid, which we chose — see keys.ts. */
+	/** Our own uid, which we chose — see keys.ts. Empty when the provider could
+	 *  not know it, which is what a CalDAV deletion looks like: the resource is
+	 *  gone, so there is no body left to read a UID out of. */
 	uid: string;
+	/**
+	 * How the provider addresses this resource.
+	 *
+	 * Recorded so a later deletion, which arrives as nothing but a path, can be
+	 * matched back to a local key — and so pushes go to the resource we actually
+	 * pulled rather than to the name we would have chosen. Null when the provider
+	 * does not name resources separately from their uid.
+	 */
+	remoteId?: string | null;
 	/** The series as it now stands remotely, or null if it was deleted there. */
 	series: EventSeries | null;
 	etag: string | null;
@@ -46,6 +57,18 @@ export interface PullResult {
 	 * a background job at three in the morning.
 	 */
 	reset: boolean;
+	/**
+	 * The earliest instant a `reset` listing actually covers, as ISO. Null means
+	 * "everything the server holds".
+	 *
+	 * LOAD-BEARING. Under reset, an event's absence from the listing means it was
+	 * deleted — that is the whole point of a full reconcile. But a provider that
+	 * lists only the last ninety days is not saying anything at all about what
+	 * came before, and reading its silence as deletion is how a year of authored
+	 * events gets destroyed the first time Google expires a syncToken. The engine
+	 * only lets absence mean deletion inside this window.
+	 */
+	resetFrom?: string | null;
 }
 
 export type PushOp =

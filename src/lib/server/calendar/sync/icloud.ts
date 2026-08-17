@@ -217,7 +217,11 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 			// longer recognises and a server with no sync-collection support at all.
 			const invalid = result.status === 507 || result.status === 400 || result.status === 403;
 			if (invalid || result.status >= 500) {
-				return { changes: await fullReconcile(), cursor: null, reset: true };
+				// The reconcile covers the whole collection, so absence in it genuinely
+				// does mean deleted — hence no resetFrom. It THROWS rather than
+				// returning what it managed to read, which is the point: an empty list
+				// with reset set is the engine being told the server holds nothing.
+				return { changes: await fullReconcile(), cursor: null, reset: true, resetFrom: null };
 			}
 
 			const token = xmlValues(result.text, 'sync-token')[0] ?? cursor;
@@ -227,9 +231,13 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 				const href = decodeEntities(xmlValues(block, 'href')[0] ?? '');
 				if (!href) continue;
 
-				// A 404 inside a multistatus is how a deletion is reported.
+				// A 404 inside a multistatus is how a deletion is reported. All that
+				// survives is the path, so the RESOURCE NAME is reported and the uid is
+				// left empty — reporting the resource name as though it were the uid is
+				// what made every deletion made on a phone match nothing local and get
+				// dropped while the cursor advanced past it.
 				if (/HTTP\/1\.[01] 404/i.test(block)) {
-					changes.push({ uid: uidFromHref(href), series: null, etag: null });
+					changes.push({ uid: '', remoteId: uidFromHref(href), series: null, etag: null });
 					continue;
 				}
 
@@ -238,6 +246,7 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 				if (!series) continue;
 				changes.push({
 					uid: series.uid,
+					remoteId: uidFromHref(href),
 					series,
 					etag: fetched.headers.get('etag') ?? xmlValues(block, 'getetag')[0] ?? null
 				});
@@ -258,7 +267,6 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 							method: 'DELETE',
 							headers: op.etag ? { 'If-Match': op.etag } : {}
 						});
-						// 404 means it is already gone, which is the outcome we wanted.
 						if (result.status === 412) {
 							results.push({
 								ok: false,
@@ -266,8 +274,20 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 								conflict: true,
 								message: 'Changed on the server since we last read it.'
 							});
-						} else {
+						} else if (result.status < 300 || result.status === 404 || result.status === 410) {
+							// 404 and 410 mean it is already gone, which is the outcome that
+							// was asked for rather than a failure.
 							results.push({ ok: true, remoteId: op.remoteId, etag: null });
+						} else {
+							// Everything else — 401, 403, 429, 500 — is a REAL failure, and
+							// calling it success orphaned the remote event, cleared the
+							// account's error line and never retried.
+							results.push({
+								ok: false,
+								remoteId: op.remoteId,
+								conflict: false,
+								message: `Server answered ${result.status} deleting an event.`
+							});
 						}
 						continue;
 					}
@@ -319,7 +339,18 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 		}
 	};
 
-	/** Everything in the collection, for when the cursor is no good. */
+	/**
+	 * Everything in the collection, for when the cursor is no good.
+	 *
+	 * THROWS on a bad answer rather than returning what it managed to read. Its
+	 * result is handed to the engine with `reset` set, and under reset an absent
+	 * event means a deleted one — so an empty list from a transient 503 is the
+	 * engine being told, with authority, that the server holds nothing at all.
+	 * That deleted every authored event and suppressed every generated one, and
+	 * the household's ledger events stopped being published for good. The old
+	 * code issued this REPORT and iterated the response without ever looking at
+	 * its status.
+	 */
 	async function fullReconcile(): Promise<RemoteChange[]> {
 		const calendar = requireCalendar();
 		const body = `<?xml version="1.0"?>
@@ -333,13 +364,28 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 			headers: { Depth: '1' }
 		});
 
+		if (result.status >= 400) {
+			throw new Error(`CalDAV answered ${result.status} reconciling the calendar.`);
+		}
+		// A 207 carrying no <response> at all is not "the calendar is empty" — an
+		// empty collection still answers with a multistatus naming itself. It is an
+		// error document, or a body this parser did not understand.
+		if (!/<[^>]*\bmultistatus\b/i.test(result.text)) {
+			throw new Error('CalDAV answered the reconcile with something that was not a multistatus.');
+		}
+
 		const changes: RemoteChange[] = [];
 		for (const block of xmlResponses(result.text)) {
 			const data = xmlValues(block, 'calendar-data')[0];
 			if (!data) continue;
 			const series = parseIcs(decodeEntities(data));
 			if (!series) continue;
-			changes.push({ uid: series.uid, series, etag: xmlValues(block, 'getetag')[0] ?? null });
+			changes.push({
+				uid: series.uid,
+				remoteId: uidFromHref(decodeEntities(xmlValues(block, 'href')[0] ?? '')),
+				series,
+				etag: xmlValues(block, 'getetag')[0] ?? null
+			});
 		}
 		return changes;
 	}

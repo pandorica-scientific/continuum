@@ -30,6 +30,7 @@ import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { getCalendarMarkers } from '$lib/server/calendar';
 import {
 	calendarProviderKinds,
+	getSyncIntervalMinutes,
 	listCalendarAccounts,
 	makeCalendarProvider as makeCalendarProviderChecked,
 	providerFor,
@@ -143,7 +144,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		status,
 		tokens,
 		calendarAccounts,
-		calendarMarkers
+		calendarMarkers,
+		calendarSyncMinutes
 	] = await Promise.all([
 		// All three render only inside the isAdmin branches of this page, so a
 		// member paid for three queries to fill sections their copy never draws.
@@ -188,13 +190,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Administrator business: a connected calendar is a credential someone
 		// entered, and the account list names where the household's diary goes.
 		isAdmin ? listCalendarAccounts() : [],
-		isAdmin ? getCalendarMarkers() : true
+		isAdmin ? getCalendarMarkers() : true,
+		isAdmin ? getSyncIntervalMinutes() : 15
 	]);
 
 	return {
 		isAdmin,
 		calendarAccounts,
 		calendarMarkers,
+		calendarSyncMinutes,
 		// Rendered straight from the registry, so a new provider needs no change
 		// to this screen.
 		calendarProviders: isAdmin ? calendarProviderKinds() : [],
@@ -403,6 +407,11 @@ export const actions = administered({
 		const id = String(form.get('id') ?? '');
 		const report = await runSync(id);
 		if (!report) return fail(400, { message: 'Sync failed — see the account for the reason.' });
+		if (report.skipped) {
+			return fail(409, {
+				message: 'A sync is already running for that calendar. Give it a moment and try again.'
+			});
+		}
 		return { synced: report };
 	},
 
@@ -418,6 +427,19 @@ export const actions = administered({
 	toggleCalendarMarkers: async () => {
 		const now = await getCalendarMarkers();
 		await setSetting('calendarMarkers', !now);
+		return { ok: true };
+	},
+
+	// getSyncIntervalMinutes has read this setting since sync was added and
+	// nothing anywhere wrote it, so the documented "a household on a metered
+	// connection may want it slower" was not actually available to anyone.
+	setCalendarInterval: async ({ request }) => {
+		const form = await request.formData();
+		const minutes = Number(form.get('minutes'));
+		if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+			return fail(400, { message: 'Poll between 1 and 1440 minutes.' });
+		}
+		await setSetting('calendarSyncMinutes', Math.round(minutes));
 		return { ok: true };
 	},
 

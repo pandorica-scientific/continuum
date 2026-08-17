@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import EmbeddedPostgres from 'embedded-postgres';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { removeStalePostgresDirectory } from './embedded-postgres';
 
 /**
  * The tenant_contact migration, run against a real PostgreSQL.
@@ -13,10 +16,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * that is observable without running the SQL.
  */
 
-const ADMIN_URL = 'postgres://continuum:continuum@localhost:5432/postgres';
-const DB_NAME = `continuum_tcm_${Date.now().toString(36)}`;
-const url = `postgres://continuum:continuum@localhost:5432/${DB_NAME}`;
+// An EMBEDDED server on a private port, exactly as every sibling integration
+// test does it. This file used to reach for postgres://…@localhost:5432, which
+// is not something CI has: the `checks` job runs `npm test` — and that includes
+// tests/integration/** — with no `services:` block, so every pull request went
+// red here while the only Postgres in the workflow belonged to the separate e2e
+// job.
+const PORT = 55449;
+const DB_NAME = 'continuum_tenant_contact_migration';
+const DATABASE_DIR = resolve('scratch-workspace/tenant-contact-migration-postgres');
+const url = `postgres://postgres:password@127.0.0.1:${PORT}/${DB_NAME}`;
 
+let embedded: EmbeddedPostgres;
 let sql: postgres.Sql;
 
 /** The migration, split the way drizzle's migrator splits it. */
@@ -27,9 +38,19 @@ function statements(file: string): string[] {
 }
 
 beforeAll(async () => {
-	const admin = postgres(ADMIN_URL, { max: 1, onnotice: () => {} });
-	await admin.unsafe(`CREATE DATABASE ${DB_NAME}`);
-	await admin.end();
+	removeStalePostgresDirectory(DATABASE_DIR);
+	embedded = new EmbeddedPostgres({
+		databaseDir: DATABASE_DIR,
+		port: PORT,
+		user: 'postgres',
+		password: 'password',
+		persistent: false,
+		onLog: () => undefined,
+		onError: () => undefined
+	});
+	await embedded.initialise();
+	await embedded.start();
+	await embedded.createDatabase(DB_NAME);
 
 	sql = postgres(url, { max: 1, onnotice: () => {} });
 
@@ -72,13 +93,11 @@ beforeAll(async () => {
 	for (const statement of statements('drizzle/0037_tenant_contacts.sql')) {
 		await sql.unsafe(statement);
 	}
-}, 60_000);
+}, 120_000);
 
 afterAll(async () => {
 	await sql?.end();
-	const admin = postgres(ADMIN_URL, { max: 1, onnotice: () => {} });
-	await admin.unsafe(`DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE)`);
-	await admin.end();
+	await embedded?.stop();
 });
 
 describe('tenant_contact migration', () => {

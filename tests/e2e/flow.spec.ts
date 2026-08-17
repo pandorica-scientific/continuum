@@ -593,7 +593,10 @@ test.describe('signed in', () => {
 
 		// An account that does not work must not appear connected — that is worse
 		// than no account at all, because it sits in the list looking fine.
-		await expect(page.locator('.form-error')).toBeVisible();
+		// ActionError's own class. It used to be `.form-error`, which this page had
+		// no scoped rule for — so the refusal rendered as unstyled body text and the
+		// assertion passed on something nobody would read as an error.
+		await expect(page.locator('.action-error')).toBeVisible();
 		await expect(page.locator('.cal-account')).toHaveCount(0);
 	});
 
