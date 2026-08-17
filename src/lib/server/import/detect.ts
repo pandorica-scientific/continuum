@@ -8,6 +8,10 @@ import { extractPdfLines } from './pdftext';
 import { parseAbo } from './standards/abo';
 import { parseMt940 } from './standards/mt940';
 import { parseCamt053 } from './standards/camt053';
+import { candidateGrids } from './tabular/grid';
+import { chooseGrid } from './tabular/regions';
+import { readTabular } from './tabular/statement';
+import { decideImport, proveStatement } from './proof';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
 import { assertSafeToParse } from './safety';
 import type { ParsedStatement } from './types';
@@ -159,7 +163,58 @@ async function parseByFormat(
 		return parseMbank(iconv.decode(Buffer.from(buffer), 'win1250'));
 	}
 
+	// No bank matched. Read it generically — and file it ONLY if the statement
+	// proves itself. The hand-written adapters above are verified mappings, a
+	// human having checked each one against real exports; an unknown layout has
+	// no such warrant, so arithmetic is the only thing standing between a
+	// plausible misreading and the ledger.
+	const generic = readGenerically(buffer);
+	if (generic.statements.length > 0) return generic.statements;
+
 	throw new Error(
-		`This is ${FORMAT_LABEL[format] === 'delimited text' ? 'a delimited text file' : `a ${FORMAT_LABEL[format]}`}, but it matches no bank Continuum knows. Teaching it a new layout is being built.`
+		generic.reason ??
+			`This is ${FORMAT_LABEL[format] === 'delimited text' ? 'a delimited text file' : `a ${FORMAT_LABEL[format]}`}, but it matches no bank Continuum knows.`
 	);
+}
+
+/**
+ * The generic tabular reader, behind the proof gate.
+ *
+ * Returns statements only when each proves itself and the reading left nothing
+ * ambiguous. Otherwise it returns the reason, phrased as the specific thing
+ * that could not be settled — which is what the mapping wizard will ask about
+ * rather than a shrug.
+ */
+function readGenerically(buffer: Uint8Array): { statements: ParsedStatement[]; reason?: string } {
+	const choice = chooseGrid(candidateGrids(buffer));
+	if (!choice) {
+		return { statements: [], reason: 'No table of dated movements could be found in that file.' };
+	}
+
+	const statements: ParsedStatement[] = [];
+	const reasons: string[] = [];
+
+	for (const region of choice.transactions) {
+		const reading = readTabular(choice, region);
+		if (!reading.statement) {
+			reasons.push(reading.questions.map((q) => q.reason).join('; '));
+			continue;
+		}
+		const proof = proveStatement(reading.statement, {
+			currency: reading.statement.currency,
+			decimalMarkSettled: reading.decimalMark !== undefined,
+			dateOrderSettled: reading.dateOrder !== undefined
+		});
+		const decision = decideImport(proof, reading.questions.length);
+		if (decision.autoImport) statements.push(reading.statement);
+		else reasons.push(`${decision.reason} (${proof.proofClass})`);
+	}
+
+	if (statements.length > 0) return { statements };
+	return {
+		statements: [],
+		reason: reasons.length
+			? `That layout was read, but not confidently enough to file: ${reasons[0]}.`
+			: undefined
+	};
 }

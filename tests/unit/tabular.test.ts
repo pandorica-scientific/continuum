@@ -176,3 +176,92 @@ describe('choosing between readings', () => {
 		expect(transactionRows(table)).toHaveLength(3);
 	});
 });
+
+describe('reading a statement from a grid', () => {
+	it('reads the value beside a label cell-wise, not from the joined row', async () => {
+		const { readEvidence } = await import('$lib/server/import/tabular/statement');
+		// mBank writes "Uznania;2;310,00 PLN". Joined to text that reads
+		// "2 310,00" — a perfectly good space-grouped number — and the operation
+		// count silently merges into the value, ten times too large.
+		const grid = gridFromText(
+			[
+				'#Podsumowanie;#Liczba operacji;#Wartość',
+				'Uznania;2;310,00 PLN',
+				'Obciążenia;3;271,34 PLN'
+			].join('\n'),
+			';'
+		);
+		const evidence = readEvidence(detectRegions(grid));
+		expect(evidence.creditTotal).toBe('310,00');
+		expect(evidence.debitTotal).toBe('271,34');
+	});
+
+	it('resolves the decimal mark from the balances when the amounts cannot settle it', async () => {
+		const { readTabular } = await import('$lib/server/import/tabular/statement');
+		// Fio's movements are ungrouped integers that settle nothing; its balance
+		// line reads "382,38". Consulting only the columns picked "." and turned
+		// that balance into 38 238,00.
+		const fio = [
+			'"Počáteční stav účtu k 01.07.2026: 382,38 CZK"',
+			'"Koncový stav účtu k 31.07.2026: 12984,38 CZK"',
+			'',
+			'"Datum";"Objem";"Měna"',
+			'"04.07.2026";"-50";"CZK"',
+			'"13.07.2026";"29760";"CZK"'
+		].join('\n');
+		const choice = chooseGrid(candidateGrids(new TextEncoder().encode(fio)))!;
+		const reading = readTabular(choice, choice.transactions[0]);
+		expect(reading.decimalMark).toBe(',');
+		expect(reading.statement?.openingBalanceMinor).toBe(38238n);
+		expect(reading.statement?.closingBalanceMinor).toBe(1298438n);
+	});
+
+	it('asks about the date order rather than guessing when nothing settles it', async () => {
+		const { readTabular } = await import('$lib/server/import/tabular/statement');
+		const ambiguous = [
+			'Date;Description;Amount',
+			'03/04;Payroll;2480.00',
+			'03/07;Groceries;-92.34',
+			'03/11;Cash;-200.00'
+		].join('\n');
+		const choice = chooseGrid(candidateGrids(new TextEncoder().encode(ambiguous)))!;
+		const reading = readTabular(choice, choice.transactions[0]);
+		expect(reading.statement).toBeUndefined();
+		expect(reading.questions.map((q) => q.dimension)).toContain('dateOrder');
+	});
+
+	it('takes direction from which column holds the value, for a debit/credit pair', async () => {
+		const { readTabular } = await import('$lib/server/import/tabular/statement');
+		const uk = [
+			'Date;Description;Paid out;Paid in;Balance',
+			'02/04/2025;SALARY;;2850.00;4995.80',
+			'03/04/2025;BRITISH GAS;88.40;;4907.40',
+			'17/04/2025;J SMITH;;120.00;5027.40'
+		].join('\n');
+		const choice = chooseGrid(candidateGrids(new TextEncoder().encode(uk)))!;
+		const reading = readTabular(choice, choice.transactions[0]);
+		const rows = reading.statement!.rows;
+		expect(rows[0].amountMinor).toBe(285000n);
+		expect(rows[1].amountMinor).toBe(-8840n);
+		expect(rows[2].amountMinor).toBe(12000n);
+	});
+});
+
+describe('the vocabulary itself', () => {
+	it('never lists one term under two roles', async () => {
+		// A duplicated term makes the winning role depend on object key order,
+		// which is how Spanish "Concepto" silently became a counterparty name
+		// instead of the description it actually is.
+		const { HEADER_TERMS } = await import('$lib/server/import/tabular/vocabulary');
+		const seen = new Map<string, string>();
+		const clashes: string[] = [];
+		for (const [role, terms] of Object.entries(HEADER_TERMS)) {
+			for (const term of terms) {
+				const existing = seen.get(term);
+				if (existing) clashes.push(`"${term}" is both ${existing} and ${role}`);
+				else seen.set(term, role);
+			}
+		}
+		expect(clashes).toEqual([]);
+	});
+});

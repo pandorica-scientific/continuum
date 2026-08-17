@@ -19,6 +19,7 @@
  * Metadata and summary regions are kept, not discarded: they hold the opening
  * balance and the stated totals, which is the evidence the proof engine needs.
  */
+import { isDateLike } from './determinacy';
 import type { Grid, RawCell } from './grid';
 import { looksLikeFooter, looksLikeSummary, roleOfHeader } from './vocabulary';
 
@@ -36,8 +37,9 @@ export interface Region {
 	headerIndex?: number;
 }
 
-const DATE_LIKE =
-	/^\s*(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\s?[./-]\s?\d{1,2}\s?[./-]\s?\d{2,4}\.?)(?:[T\s]+\d{1,2}:\d{2}(?::\d{2})?)?\s*$/;
+// Date recognition lives in determinacy.ts: a second copy here drifted, and
+// this one still demanded a year — so a US column of bare MM/DD dates found
+// no transaction table at all.
 /**
  * A money-shaped token: digits, optionally grouped, with an optional decimal
  * tail, and a sign that may lead, trail, or be parentheses.
@@ -58,7 +60,7 @@ const populatedWidth = (row: RawCell[]): number => {
 const isBlank = (row: RawCell[]) => row.every((c) => !c.text);
 const rowText = (row: RawCell[]) => row.map((c) => c.text).join(' ');
 
-const hasDate = (row: RawCell[]) => row.some((c) => DATE_LIKE.test(c.text));
+const hasDate = (row: RawCell[]) => row.some((c) => isDateLike(c.text));
 const hasAmount = (row: RawCell[]) =>
 	row.some((c) => c.text.length > 0 && AMOUNT_LIKE.test(c.text) && /\d/.test(c.text));
 

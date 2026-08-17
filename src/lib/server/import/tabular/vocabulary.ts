@@ -99,7 +99,6 @@ export const HEADER_TERMS: Record<ColumnRole, string[]> = {
 		'empfanger',
 		'auftraggeber',
 		'beneficiario',
-		'concepto',
 		'name'
 	],
 	counterpartyAccount: [
