@@ -4,8 +4,8 @@ Read this before writing or changing any interface code in this repository.
 
 Building the v0.3.8 ingest UI? The elements to build — queue and progress, the
 single-question resolver, the mapping wizard, drift, arbitration review, provenance — are
-specified in [`v0.3.8-ui-spec.md`](./v0.3.8-ui-spec.md). This document covers *how*; that
-one covers *what*.
+specified in [`v0.3.8-ui-spec.md`](./v0.3.8-ui-spec.md). This document covers _how_; that
+one covers _what_.
 
 ## Source of truth
 
@@ -13,44 +13,40 @@ one covers *what*.
 `src/lib/components/` holds the primitives, and the routes under `src/routes/(app)/` hold
 the screens. When anything disagrees with them, they win.
 
-`design_system_V3/` is a **historical handoff**, not a specification. It records the design
+`design_system/` is a **historical handoff**, not a specification. It records the design
 intent the product was built against and has since drifted from the code in measurable
-ways. Treat it as background and as a source of *rationale* — it explains why things are
+ways. Treat it as background and as a source of _rationale_ — it explains why things are
 the way they are far better than the code does — but never as the authority on a value.
 
 ---
 
-## Task zero: refresh the design system from the code
+## The handoff, and what it still owes
 
-Before doing design work here, reconcile the handoff with reality. Confirmed drift, as a
-starting worklist — each verified against the code:
+`design_system/README.md` was refreshed for this branch: it gained the **Ingest — v0.3.8**
+section (eleven elements, the proof-hue vocabulary, the modal-vs-screen split, the mapping
+wizard's four bands) and an error/empty-states chapter. That part is current and
+authoritative for _design intent_ — build from it.
 
-| `design_system_V3/README.md` claims | The code does |
-|---|---|
-| Inter "loaded from Google Fonts"; "self-host them in the real implementation" (L242, L919) | Already self-hosted — `@fontsource-variable/inter` and `@fontsource/source-code-pro` imported in `src/routes/+layout.svelte`. **The CDN sentence now contradicts the product's "Nothing calls home" promise.** |
-| Inter weights 400/500/600/700; Source Code Pro 400/500/600 (L242) | Inter is the **variable** face (full range); Source Code Pro loads 400/500/600 only |
-| Traffic-light pill `padding: 3px 11px` (L281) | `Pill.svelte` → `padding: 2px 10px`, plus `font-weight: 600`, `line-height: 1.2`, `white-space: nowrap`, none of which the handoff records |
-| Tints "0.18 alpha dark, 0.12 light" (L279) | Dark tints 0.18 ✓; **light tints are 0.13–0.16**, and the bright-hue mixing rule is missing from the pill section entirely |
-| Metric tile card padding `14px 16px` (L267) | `MetricTile.svelte` → `12px 14px` |
-| "Seven areas hold twelve screens" (L291, L338) | **19 route directories** under `src/routes/(app)/` — `calendar`, `contacts` and `files` arrived in v0.3.6–0.3.7 and are undocumented |
-| Sidebar fixed `252px` (L265) | ✓ still accurate — `src/routes/(app)/+layout.svelte:213` |
+The older chapters were **not** reconciled with the code in that pass. Six factual values
+have since been corrected in place against the source:
 
-**Method for the refresh:**
+| Was                                         | Now                                      | Verified against            |
+| ------------------------------------------- | ---------------------------------------- | --------------------------- |
+| Inter "loaded from Google Fonts"            | self-hosted `@fontsource-variable/inter` | `src/routes/+layout.svelte` |
+| Pill `padding: 3px 11px`                    | `2px 10px`                               | `Pill.svelte`               |
+| Metric tile padding `14px 16px`             | `12px 14px`                              | `MetricTile.svelte`         |
+| Tints "0.18 dark, 0.12 light"               | "0.18 dark, 0.13–0.16 light"             | `app.css`                   |
+| "Seven areas hold twelve screens"           | nineteen screens                         | `src/routes/(app)/`         |
+| "Self-host them in the real implementation" | already done                             | `package.json`              |
 
-1. Extract every token from `app.css` — both themes — and regenerate the colour and
-   typography tables from the file rather than editing prose. Keep the long explanatory
-   comments; they carry reasoning the values cannot.
-2. Read each component in `src/lib/components/` and record its *actual* geometry. The
-   components are the primitives; the handoff's numbers are aspirations.
-3. Walk `src/routes/(app)/` for the real screen inventory and navigation structure.
-4. For each drift, decide explicitly: **was the code right, or the design?** Fix whichever
-   is wrong. Do not silently rewrite the doc to match a value that was a mistake — the
-   metric-tile padding may be drift worth reverting, while the font change is the code
-   correctly outgrowing the doc.
-5. Delete claims that are now false. A handoff that says "self-host them in the real
-   implementation" reads as an open task when it is finished work.
+**Still outstanding** — worth a design pass, not a code pass:
 
-Keep everything below in sync as you go — it is written from the code as of this pass.
+- `calendar`, `contacts` and `files` have no screen chapter (arrived v0.3.6–0.3.7).
+- The bright-hue tint-mixing rule (below) is in `app.css` comments but not in the handoff's
+  pill section, which is where a designer would look for it.
+
+When the two disagree on a value, **the code wins** and the handoff gets corrected — never
+the reverse, unless the code is the thing that drifted.
 
 ---
 
@@ -73,8 +69,12 @@ Dark is the **default and the base**; light is an **explicit opt-in** with no sy
 fallback, deliberately.
 
 ```css
-:root { color-scheme: dark;  /* dark tokens */ }
-html[data-ledger-theme='light'] { color-scheme: light; /* light tokens */ }
+:root {
+	color-scheme: dark; /* dark tokens */
+}
+html[data-ledger-theme='light'] {
+	color-scheme: light; /* light tokens */
+}
 ```
 
 Define nothing theme-specific inside a component — style through tokens and both themes
@@ -91,18 +91,18 @@ In light theme, tints are mixed from **bright hues that appear nowhere else**, n
 the ink used for text. Two reasons, and the second bites:
 
 - a tint mixed from dark ink is mud — amber from `#8a5900` reads olive;
-- a brighter tint is a **lighter ground**, so dark ink on it measures *higher* contrast.
+- a brighter tint is a **lighter ground**, so dark ink on it measures _higher_ contrast.
 
 So **if a pill fails contrast, darken the ink and leave the tint alone.** Re-mixing the tint
 from the darkened ink chases its own tail: the ground falls with the text.
 
 Three levels per hue, not interchangeable:
 
-| Token | Alpha | Use |
-|---|---|---|
-| `--<hue>` | — | text, or a 1px border |
-| `--<hue>-tint` | 0.18 dark / 0.13–0.16 light | pill fills |
-| `--<hue>-wash` | ~0.06 | tile and card grounds carrying a hue without becoming a pill |
+| Token          | Alpha                       | Use                                                          |
+| -------------- | --------------------------- | ------------------------------------------------------------ |
+| `--<hue>`      | —                           | text, or a 1px border                                        |
+| `--<hue>-tint` | 0.18 dark / 0.13–0.16 light | pill fills                                                   |
+| `--<hue>-wash` | ~0.06                       | tile and card grounds carrying a hue without becoming a pill |
 
 ---
 
@@ -111,18 +111,18 @@ Three levels per hue, not interchangeable:
 Inter variable for text, Source Code Pro for figures — **both self-hosted**, imported in
 `src/routes/+layout.svelte`. Body base 16px / 1.55.
 
-| Role | Size | Weight | Notes |
-|---|---|---|---|
-| Screen title `h1` | 28px | 600 | `letter-spacing: -0.02em`, emoji-prefixed |
-| Screen caption | 13.6px | 400 | `--fg3` |
-| Section heading | 22px | 600 | `letter-spacing: -0.01em` |
-| Eyebrow (section or card) | 11px | 400 | uppercase, `letter-spacing: 0.1em`, `--fg3` |
-| Metric value | 18–19px | 600 | **mono** |
-| Metric label | 12px | 400 | `--fg3` |
-| Body / list row | 13–13.5px | 400 | |
-| Small caption | 11.5–12px | 400 | `--fg3` |
-| Sidebar nav item | 13.5px | 400 (500 active) | |
-| Sidebar group label | 10.5px | 400 | uppercase, `letter-spacing: 0.1em` |
+| Role                      | Size      | Weight           | Notes                                       |
+| ------------------------- | --------- | ---------------- | ------------------------------------------- |
+| Screen title `h1`         | 28px      | 600              | `letter-spacing: -0.02em`, emoji-prefixed   |
+| Screen caption            | 13.6px    | 400              | `--fg3`                                     |
+| Section heading           | 22px      | 600              | `letter-spacing: -0.01em`                   |
+| Eyebrow (section or card) | 11px      | 400              | uppercase, `letter-spacing: 0.1em`, `--fg3` |
+| Metric value              | 18–19px   | 600              | **mono**                                    |
+| Metric label              | 12px      | 400              | `--fg3`                                     |
+| Body / list row           | 13–13.5px | 400              |                                             |
+| Small caption             | 11.5–12px | 400              | `--fg3`                                     |
+| Sidebar nav item          | 13.5px    | 400 (500 active) |                                             |
+| Sidebar group label       | 10.5px    | 400              | uppercase, `letter-spacing: 0.1em`          |
 
 Foreground ramp: `--fg1` primary, `--fg2` secondary, `--fg3` muted. Never dim text with
 opacity.
@@ -213,7 +213,7 @@ that button and it inherits nothing.
       sideways.
 - [ ] Columns of digits use `font-variant-numeric: tabular-nums`.
 - [ ] `npm run lint` and `npm run check` pass.
-- [ ] If you changed a primitive, updated `design_system_V3/` in the same pass.
+- [ ] If you changed a primitive, updated `design_system/` in the same pass.
 
 ---
 
@@ -241,5 +241,5 @@ don't rediscover them.
 Say so, and choose deliberately rather than defaulting. Derive the new value from a
 neighbour already in the system — the next step on the type scale, an existing radius —
 rather than inventing a number. If it will recur, add a token, record it here, and record it
-in `design_system_V3/`. Both documents are meant to grow; only one of them is authoritative,
+in `design_system/`. Both documents are meant to grow; only one of them is authoritative,
 and it is the code.

@@ -36,6 +36,19 @@ export interface ParsedStatement {
 	periodEnd?: string;
 	openingBalanceMinor?: bigint;
 	closingBalanceMinor?: bigint;
+	/**
+	 * Totals the statement states for itself, when it prints them. These are
+	 * independent evidence, not a convenience: opening + credits − debits =
+	 * closing can still hold when two transactions are missing and happen to
+	 * offset each other, but that pair cannot also leave both stated totals
+	 * intact. Every bank sampled prints at least these two — Fio as "Suma
+	 * příjmů/výdajů", Raiffeisenbank as "Příjmy/Výdaje celkem", Česká spořitelna
+	 * as "Celkem přišlo/odešlo", mBank as "Uznania/Obciążenia".
+	 */
+	statedCreditTotalMinor?: bigint;
+	statedDebitTotalMinor?: bigint;
+	/** Movements the statement says it contains; mBank prints one per direction. */
+	statedRowCount?: number;
 	rows: ParsedRow[];
 }
 

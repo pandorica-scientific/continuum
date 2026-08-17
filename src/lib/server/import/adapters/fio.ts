@@ -19,6 +19,8 @@ export function parseFio(text: string): ParsedStatement {
 	let currency = 'CZK';
 	let openingBalanceMinor: bigint | undefined;
 	let closingBalanceMinor: bigint | undefined;
+	let statedCreditTotalMinor: bigint | undefined;
+	let statedDebitTotalMinor: bigint | undefined;
 	let periodStart: string | undefined;
 	let periodEnd: string | undefined;
 
@@ -39,6 +41,17 @@ export function parseFio(text: string): ParsedStatement {
 		if (closing) {
 			currency = closing[2];
 			closingBalanceMinor = parseAmountToMinor(closing[1], currency);
+		}
+		// "Suma příjmů: +62652 CZK" / "Suma výdajů: -50050 CZK" — independent
+		// corroboration Fio prints but we previously discarded. Fio never prints a
+		// per-row running balance, so these are the only evidence beyond the two
+		// endpoints that the row set is complete.
+		const credits = line.match(/Suma příjmů:\s*([-+\d\s,.]+) ([A-Z]{3})/);
+		if (credits) statedCreditTotalMinor = parseAmountToMinor(credits[1], credits[2]);
+		const debits = line.match(/Suma výdajů:\s*([-+\d\s,.]+) ([A-Z]{3})/);
+		if (debits) {
+			const v = parseAmountToMinor(debits[1], debits[2]);
+			statedDebitTotalMinor = v < 0n ? -v : v;
 		}
 		if (line.includes('"ID operace"') && line.includes('"Datum"')) {
 			headerIndex = i;
@@ -99,6 +112,8 @@ export function parseFio(text: string): ParsedStatement {
 		periodEnd,
 		openingBalanceMinor,
 		closingBalanceMinor,
+		statedCreditTotalMinor,
+		statedDebitTotalMinor,
 		rows
 	};
 }

@@ -15,6 +15,10 @@ export function parseMbank(text: string): ParsedStatement {
 	let accountNumber: string | undefined;
 	let openingBalanceMinor: bigint | undefined;
 	let closingBalanceMinor: bigint | undefined;
+	let statedCreditTotalMinor: bigint | undefined;
+	let statedDebitTotalMinor: bigint | undefined;
+	let creditCount: number | undefined;
+	let debitCount: number | undefined;
 	let periodStart: string | undefined;
 	let periodEnd: string | undefined;
 
@@ -33,6 +37,19 @@ export function parseMbank(text: string): ParsedStatement {
 		}
 		const opening = line.match(/#Saldo początkowe;([-\d\s,.]+) ([A-Z]{3})/);
 		if (opening) openingBalanceMinor = parseAmountToMinor(opening[1], opening[2]);
+		// mBank is the only sampled bank printing a COUNT per direction as well as
+		// a value: "Uznania;2;310,00 PLN". The count is the strongest single check
+		// against a dropped row, and costs nothing to read.
+		const credits = line.match(/Uznania;(\d+);([-\d\s,.]+) ([A-Z]{3})/);
+		if (credits) {
+			statedCreditTotalMinor = parseAmountToMinor(credits[2], credits[3]);
+			creditCount = Number(credits[1]);
+		}
+		const debits = line.match(/Obciążenia;(\d+);([-\d\s,.]+) ([A-Z]{3})/);
+		if (debits) {
+			statedDebitTotalMinor = parseAmountToMinor(debits[2], debits[3]);
+			debitCount = Number(debits[1]);
+		}
 		const closing = line.match(/#Saldo końcowe;([-\d\s,.]+) ([A-Z]{3})/);
 		if (closing) closingBalanceMinor = parseAmountToMinor(closing[1], closing[2]);
 		if (line.startsWith('#Data księgowania')) headerIndex = i;
@@ -70,6 +87,10 @@ export function parseMbank(text: string): ParsedStatement {
 		periodEnd,
 		openingBalanceMinor,
 		closingBalanceMinor,
+		statedCreditTotalMinor,
+		statedDebitTotalMinor,
+		statedRowCount:
+			creditCount !== undefined && debitCount !== undefined ? creditCount + debitCount : undefined,
 		rows
 	};
 }

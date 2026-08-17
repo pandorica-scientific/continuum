@@ -22,6 +22,8 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 	let currency = 'CZK';
 	let openingBalanceMinor: bigint | undefined;
 	let closingBalanceMinor: bigint | undefined;
+	let statedCreditTotalMinor: bigint | undefined;
+	let statedDebitTotalMinor: bigint | undefined;
 	let periodStart: string | undefined;
 	let periodEnd: string | undefined;
 
@@ -44,6 +46,16 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 		const closing = line.text.match(/Konečný zůstatek:\s*([-\d\s  ]+\.\d{2})/);
 		if (closing && closingBalanceMinor === undefined)
 			closingBalanceMinor = parseAmountToMinor(closing[1], currency);
+		// "Celkem odešlo" is printed already negative; the statement model wants
+		// both totals as positive magnitudes.
+		const credits = line.text.match(/Celkem přišlo:\s*([-\d\s  ]+\.\d{2})/);
+		if (credits && statedCreditTotalMinor === undefined)
+			statedCreditTotalMinor = parseAmountToMinor(credits[1], currency);
+		const debits = line.text.match(/Celkem odešlo:\s*([-\d\s  ]+\.\d{2})/);
+		if (debits && statedDebitTotalMinor === undefined) {
+			const v = parseAmountToMinor(debits[1], currency);
+			statedDebitTotalMinor = v < 0n ? -v : v;
+		}
 	}
 
 	// Collect movement start indices: date-led lines whose last cell is an amount.
@@ -128,6 +140,8 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 		periodEnd,
 		openingBalanceMinor,
 		closingBalanceMinor,
+		statedCreditTotalMinor,
+		statedDebitTotalMinor,
 		rows
 	};
 }

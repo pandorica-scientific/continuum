@@ -8,10 +8,39 @@ import { extractPdfLines } from './pdftext';
 import type { ParsedStatement } from './types';
 
 /**
+ * A statement that prints a change in its own balance but yields no movements
+ * was not read — it was misread, and silently.
+ *
+ * This is not hypothetical. Raiffeisenbank's January 2025 template writes its
+ * dates without spaces; the adapter required them, matched no movement line,
+ * and returned a statement with correct balances and zero rows. Nothing
+ * complained. The file imported "successfully", its content hash was recorded,
+ * and the corrected re-import would then have been refused as a duplicate —
+ * losing a month of real transactions behind a clean success message.
+ *
+ * An empty month is legitimate, so the test is not "no rows": it is "no rows
+ * while the statement's own arithmetic says money moved".
+ */
+function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatement {
+	const { openingBalanceMinor: opening, closingBalanceMinor: closing, rows } = statement;
+	if (rows.length > 0) return statement;
+	if (opening === undefined || closing === undefined) return statement;
+	if (opening === closing) return statement;
+	const moved = closing - opening;
+	throw new Error(
+		`This ${statement.bank} statement reports a balance change of ${moved < 0n ? '-' : ''}${(moved < 0n ? -moved : moved).toString().replace(/(\d{2})$/, '.$1')} ${statement.currency} but no transactions could be read from it. The layout has probably changed. The file has not been imported.`
+	);
+}
+
+/**
  * Sniff the bank and format from the file body and parse it. Throws a
  * user-facing Error when nothing matches.
  */
 export async function detectAndParse(buffer: Uint8Array): Promise<ParsedStatement> {
+	return assertRowsExplainTheBalance(await parseByFormat(buffer));
+}
+
+async function parseByFormat(buffer: Uint8Array): Promise<ParsedStatement> {
 	// PDF?
 	if (buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44) {
 		const lines = await extractPdfLines(buffer);

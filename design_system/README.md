@@ -239,8 +239,9 @@ net-worth card. No tagline, no container, no shadow.
 
 ### Typography
 
-- **Sans:** Inter (variable), weights 400 / 500 / 600 / 700. Loaded from Google Fonts.
-- **Mono:** Source Code Pro, weights 400 / 500 / 600. **Every number in the product is
+- **Sans:** Inter (variable). **Self-hosted** — `@fontsource-variable/inter`, imported in
+  `src/routes/+layout.svelte`. No CDN: the product promises it never calls home.
+- **Mono:** Source Code Pro, weights 400 / 500 / 600 — self-hosted, same import. **Every number in the product is
   mono** — balances, percentages, dates in lists, tickers. This is load-bearing for
   scannability; do not set figures in the sans face.
 - Body base 16px, line-height 1.55.
@@ -264,7 +265,8 @@ net-worth card. No tagline, no container, no shadow.
 - Main content padding: `26px 32px 60px`. Gap between sections: `26px`.
 - Sidebar: fixed `252px`, padding `20px 14px 22px`, internal gap `22px`,
   `position: sticky; top: 0; height: 100vh; overflow-y: auto`.
-- Card padding: `14px 16px` for metric tiles, `16px 18px` for content cards.
+- Card padding: `12px 14px` for metric tiles (per `MetricTile.svelte`), `16px 18px` for
+  content cards.
 - Grid gaps: `12px` for metric rows, `16px` for card grids.
 - Radii: `8px` buttons and inputs, `9–10px` cards and tiles, `12px` traffic-light pills,
   `20px` chips, `999px` avatars.
@@ -276,9 +278,9 @@ net-worth card. No tagline, no container, no shadow.
 
 ```
 border: 1px solid <hue>;
-background: <hue>-tint;      /* 0.18 alpha dark, 0.12 light */
+background: <hue>-tint;      /* 0.18 alpha dark, 0.13-0.16 light */
 border-radius: 12px;
-padding: 3px 11px;
+padding: 2px 10px;           /* per Pill.svelte */
 font-size: 11.5px;
 color: <hue>;
 ```
@@ -292,7 +294,8 @@ attention strip, and the retirement verdict panel.
 
 **Two levels: areas in the sidebar, screens as sub-tabs in the page header.** A flat
 twelve-item sidebar was tried first and abandoned — the product has too many screens for one
-list to stay legible. Seven areas hold twelve screens.
+list to stay legible. The areas hold nineteen screens; `calendar`, `contacts` and `files`
+arrived in v0.3.6-0.3.7 and are not yet written up below.
 
 ```
 ◗ Continuum          (time-layers mark + wordmark)
@@ -1155,7 +1158,7 @@ when nothing is pressing.
 
 ## Assets
 
-- **Fonts**: Inter and Source Code Pro, both from Google Fonts. Self-host them in the real
+- **Fonts**: Inter and Source Code Pro, both already self-hosted via `@fontsource*` in the real
   build — this ships as a self-hosted package and should not depend on a CDN.
 - **Icons**: inline SVG paths in the Phosphor manner (24 viewBox, 1.7 stroke, round caps),
   written directly into the markup — no icon library, no CDN. Emoji survive only at card
