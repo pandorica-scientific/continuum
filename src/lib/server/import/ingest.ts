@@ -16,7 +16,7 @@ import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
 import { saveUpload } from '$lib/server/files';
-import { detectAndParse } from './detect';
+import { detectAndParseAll } from './detect';
 import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
 import {
 	accountKeysMatch,
@@ -71,6 +71,8 @@ export interface IngestResult {
 	/** set when the statement could not be assigned to an account — the user
 	 * must pick one and re-upload with it */
 	needsAccount?: boolean;
+	/** One entry per statement in the file; a CAMT or ABO export may hold many. */
+	statements?: StatementOutcome[];
 	error?: string;
 }
 
@@ -79,7 +81,10 @@ const BANK_LABEL: Record<string, string> = {
 	revolut: 'Revolut',
 	mbank: 'mBank',
 	rb: 'Raiffeisenbank',
-	cs: 'Česká spořitelna'
+	cs: 'Česká spořitelna',
+	// ABO names no issuer, so the format is the honest label. The user can
+	// rename the account; inventing a bank would be a guess stored as fact.
+	abo: 'Bank (ABO/GPC)'
 };
 
 type Resolution =
@@ -222,6 +227,244 @@ async function resolveAccount(
 	return { kind: 'ok', account: created };
 }
 
+/**
+ * Thrown to roll the file's transaction back when a statement cannot be
+ * assigned to an account.
+ *
+ * Importing what resolved and asking about the rest sounds friendlier, but it
+ * records the file's content hash — and the corrected re-upload is then refused
+ * as a duplicate, stranding the unresolved statements permanently. Until a
+ * statement can be re-imported on its own, a file is all or nothing.
+ */
+class NeedsAccount extends Error {
+	constructor(readonly result: IngestResult) {
+		super(result.error ?? 'An account is needed.');
+	}
+}
+
+/** What one statement inside an uploaded file did. */
+export interface StatementOutcome {
+	accountId: string | null;
+	bank: string;
+	currency: string;
+	accountNumber?: string;
+	periodStart?: string;
+	periodEnd?: string;
+	rowsRead: number;
+	rowsAdded: number;
+	rowsDuplicate: number;
+	/** The statement could not be assigned to an account — the user must choose. */
+	needsAccount?: boolean;
+	error?: string;
+}
+
+/**
+ * Resolve one statement to an account and write its rows. Runs inside the
+ * file's transaction, once per statement — a CAMT export or an ABO file may
+ * carry several, each with its own account, period and balances.
+ */
+async function ingestStatement(
+	tx: DatabaseHandle,
+	statement: ParsedStatement,
+	fileId: string,
+	explicitAccountId?: string
+): Promise<StatementOutcome> {
+	const base = {
+		bank: statement.bank,
+		currency: statement.currency,
+		accountNumber: statement.accountNumber,
+		periodStart: statement.periodStart,
+		periodEnd: statement.periodEnd,
+		rowsRead: statement.rows.length
+	};
+
+	const resolution = await resolveAccount(statement, explicitAccountId, tx);
+	if (resolution.kind === 'ambiguous') {
+		return {
+			...base,
+			accountId: null,
+			rowsAdded: 0,
+			rowsDuplicate: 0,
+			needsAccount: true,
+			error: resolution.reason
+		};
+	}
+
+	let acct = resolution.account;
+	if (
+		explicitAccountId &&
+		statement.accountNumber &&
+		!acct.numbers.includes(statement.accountNumber)
+	) {
+		const numbers = [...acct.numbers, statement.accountNumber];
+		await tx.update(account).set({ numbers }).where(eq(account.id, acct.id));
+		acct = { ...acct, numbers };
+	}
+
+	const fingerprints = fingerprintAll(statement.rows);
+	let added = 0;
+	let duplicate = 0;
+
+	const knownFingerprints = new Set(
+		(
+			await tx
+				.select({ fingerprint: transaction.dedupFingerprint })
+				.from(transaction)
+				.where(
+					and(
+						eq(transaction.accountId, acct.id),
+						inArray(transaction.dedupFingerprint, fingerprints)
+					)
+				)
+		).map((row) => row.fingerprint)
+	);
+	const knownAliases = new Map(
+		(
+			await tx
+				.select({
+					fingerprint: transactionFingerprintAlias.fingerprint,
+					transactionId: transactionFingerprintAlias.transactionId
+				})
+				.from(transactionFingerprintAlias)
+				.where(
+					and(
+						eq(transactionFingerprintAlias.accountId, acct.id),
+						inArray(transactionFingerprintAlias.fingerprint, fingerprints)
+					)
+				)
+		).map((row) => [row.fingerprint, row.transactionId] as const)
+	);
+	const usedLegacyIds = new Set(knownAliases.values());
+	const legacyRevolut = new Map<string, string[]>();
+	if (statement.bank === 'revolut') {
+		const replayDays = [...new Set(statement.rows.map((row) => row.bookedAt))];
+		const replayCurrencies = [...new Set(statement.rows.map((row) => row.currency))];
+		const legacyRows = await tx
+			.select({
+				id: transaction.id,
+				bookedAt: transaction.bookedAt,
+				amountMinor: transaction.amount,
+				currency: transaction.currency,
+				bankRef: transaction.bankRef,
+				counterpartyAccount: transaction.counterpartyAccount,
+				counterparty: transaction.counterparty,
+				description: transaction.description,
+				balanceAfterMinor: transaction.balanceAfterMinor,
+				variableSymbol: transaction.variableSymbol,
+				constantSymbol: transaction.constantSymbol,
+				specificSymbol: transaction.specificSymbol,
+				originalAmountMinor: transaction.originalAmountMinor,
+				originalCurrency: transaction.originalCurrency
+			})
+			.from(transaction)
+			.where(
+				and(
+					eq(transaction.accountId, acct.id),
+					eq(transaction.fingerprintVersion, 1),
+					inArray(transaction.bookedAt, replayDays),
+					inArray(transaction.currency, replayCurrencies),
+					sql`not exists (
+							select 1 from ${transactionFingerprintAlias} existing_alias
+							where existing_alias.transaction_id = ${transaction.id}
+						)`
+				)
+			)
+			.orderBy(transaction.id);
+		for (const legacy of legacyRows) {
+			const key = legacyRevolutKey(legacy);
+			const candidates = legacyRevolut.get(key) ?? [];
+			candidates.push(legacy.id);
+			legacyRevolut.set(key, candidates);
+		}
+	}
+
+	for (let i = 0; i < statement.rows.length; i++) {
+		const row = statement.rows[i];
+		const currentFingerprint = fingerprints[i];
+		if (knownFingerprints.has(currentFingerprint)) {
+			duplicate++;
+			continue;
+		}
+		const knownLegacyId = knownAliases.get(currentFingerprint);
+		if (knownLegacyId) {
+			usedLegacyIds.add(knownLegacyId);
+			duplicate++;
+			continue;
+		}
+
+		// V1 Revolut stored amount - fee but discarded the fee itself, so its
+		// current fingerprint cannot be reconstructed by a SQL migration.
+		// Replay supplies the missing fee: bind the v3 fingerprint to the
+		// exact legacy source facts and keep the historical row untouched.
+		if (statement.bank === 'revolut') {
+			const fee = row.feeMinor ?? 0n;
+			const key = legacyRevolutKey({ ...row, amountMinor: row.amountMinor - fee });
+			const candidates = legacyRevolut.get(key);
+			let legacyId = candidates?.shift();
+			while (legacyId && usedLegacyIds.has(legacyId)) {
+				legacyId = candidates?.shift();
+			}
+			if (legacyId) {
+				await tx
+					.insert(transactionFingerprintAlias)
+					.values({ accountId: acct.id, fingerprint: currentFingerprint, transactionId: legacyId })
+					.onConflictDoNothing({
+						target: [transactionFingerprintAlias.accountId, transactionFingerprintAlias.fingerprint]
+					});
+				knownAliases.set(currentFingerprint, legacyId);
+				usedLegacyIds.add(legacyId);
+				duplicate++;
+				continue;
+			}
+		}
+
+		const inserted = await tx
+			.insert(transaction)
+			.values({
+				id: randomUUID(),
+				accountId: acct.id,
+				bookedAt: row.bookedAt,
+				valueDate: row.valueDate,
+				amount: row.amountMinor,
+				feeMinor: row.feeMinor,
+				currency: row.currency,
+				balanceAfterMinor: row.balanceAfterMinor,
+				originalAmountMinor: row.originalAmountMinor,
+				originalCurrency: row.originalCurrency,
+				counterparty: row.counterparty,
+				counterpartyAccount: row.counterpartyAccount,
+				variableSymbol: row.variableSymbol,
+				constantSymbol: row.constantSymbol,
+				specificSymbol: row.specificSymbol,
+				description: row.description,
+				bankRef: row.bankRef,
+				dedupFingerprint: currentFingerprint,
+				fingerprintVersion: FINGERPRINT_VERSION,
+				importFileId: fileId
+			})
+			.onConflictDoNothing({ target: [transaction.accountId, transaction.dedupFingerprint] })
+			.returning({ id: transaction.id });
+		if (inserted.length > 0) {
+			knownFingerprints.add(currentFingerprint);
+			added++;
+		} else duplicate++;
+	}
+
+	if (statement.closingBalanceMinor !== undefined && statement.periodEnd) {
+		await tx
+			.update(account)
+			.set({ balanceMinor: statement.closingBalanceMinor, balanceAsOf: statement.periodEnd })
+			.where(
+				and(
+					eq(account.id, acct.id),
+					or(isNull(account.balanceAsOf), lte(account.balanceAsOf, statement.periodEnd))
+				)
+			);
+	}
+
+	return { ...base, accountId: acct.id, rowsAdded: added, rowsDuplicate: duplicate };
+}
+
 /** Ingest one uploaded statement file end to end. */
 export async function ingestFile(
 	filename: string,
@@ -247,9 +490,9 @@ export async function ingestFile(
 		};
 	}
 
-	let statement: ParsedStatement;
+	let statements: ParsedStatement[];
 	try {
-		statement = await detectAndParse(buffer);
+		statements = await detectAndParseAll(buffer);
 	} catch (err) {
 		return {
 			filename,
@@ -261,14 +504,16 @@ export async function ingestFile(
 		};
 	}
 
+	const totalRows = statements.reduce((n, s) => n + s.rows.length, 0);
+
 	// A parse that found nothing is a parser problem, not an import. Recording
 	// it would store the content hash and make the correct re-import — after a
 	// sniffing or adapter fix — look like a duplicate forever, and resolving an
 	// account below would mint one for a bank the user may not even have.
-	if (statement.rows.length === 0) {
+	if (totalRows === 0) {
 		return {
 			filename,
-			bank: statement.bank,
+			bank: statements[0]?.bank,
 			rowsRead: 0,
 			rowsAdded: 0,
 			rowsDuplicate: 0,
@@ -277,15 +522,23 @@ export async function ingestFile(
 				'No transactions were found in this file, so nothing was imported. The file was not recorded — you can upload it again once the format is supported.'
 		};
 	}
+
+	// An explicit account answers one question — "which account is THIS
+	// statement for" — so it can only apply when the file holds one. A CAMT
+	// export carrying three accounts must resolve each on its own evidence;
+	// applying the choice to all three would file two of them into the wrong
+	// account, which dedup cannot undo because the fingerprint is per account.
+	const explicitAppliesTo = statements.length === 1 ? explicitAccountId : undefined;
+
 	// Validate a user selection before writing the original file. The same
 	// validation runs again in the transaction in case the account changes.
-	if (explicitAccountId) {
-		const preflightResolution = await resolveAccount(statement, explicitAccountId, handle);
+	if (explicitAppliesTo) {
+		const preflightResolution = await resolveAccount(statements[0], explicitAppliesTo, handle);
 		if (preflightResolution.kind === 'ambiguous') {
 			return {
 				filename,
-				bank: statement.bank,
-				rowsRead: statement.rows.length,
+				bank: statements[0].bank,
+				rowsRead: totalRows,
 				rowsAdded: 0,
 				rowsDuplicate: 0,
 				rowsPaired: 0,
@@ -304,7 +557,6 @@ export async function ingestFile(
 		storedName = null; // unexpected extension — the import still proceeds
 	}
 
-	const fingerprints = fingerprintAll(statement.rows);
 	try {
 		return await inTransaction(handle, async (tx) => {
 			// Serialise the same body before checking the unique content hash. The
@@ -331,227 +583,80 @@ export async function ingestFile(
 				};
 			}
 
-			const resolution = await resolveAccount(statement, explicitAccountId, tx);
-			if (resolution.kind === 'ambiguous') {
-				return {
-					filename,
-					bank: statement.bank,
-					rowsRead: statement.rows.length,
-					rowsAdded: 0,
-					rowsDuplicate: 0,
-					rowsPaired: 0,
-					needsAccount: true,
-					error: resolution.reason
-				};
-			}
-			let acct = resolution.account;
-			if (
-				explicitAccountId &&
-				statement.accountNumber &&
-				!acct.numbers.includes(statement.accountNumber)
-			) {
-				const numbers = [...acct.numbers, statement.accountNumber];
-				await tx.update(account).set({ numbers }).where(eq(account.id, acct.id));
-				acct = { ...acct, numbers };
-			}
 			const fileId = randomUUID();
-			let added = 0;
-			let duplicate = 0;
-
+			// The file row must exist before any transaction references it. Its
+			// account is filled in once the first statement resolves one — a file
+			// holding several accounts has no single owner, and the transactions
+			// carry their own account anyway.
 			await tx.insert(importFile).values({
 				id: fileId,
 				filename,
-				bank: statement.bank,
-				format: statement.format,
-				accountId: acct.id,
+				bank: statements[0].bank,
+				format: statements[0].format,
+				accountId: null,
 				contentHash,
 				storedName,
-				rowsRead: statement.rows.length
+				rowsRead: totalRows
 			});
 
-			const knownFingerprints = new Set(
-				(
-					await tx
-						.select({ fingerprint: transaction.dedupFingerprint })
-						.from(transaction)
-						.where(
-							and(
-								eq(transaction.accountId, acct.id),
-								inArray(transaction.dedupFingerprint, fingerprints)
-							)
-						)
-				).map((row) => row.fingerprint)
-			);
-			const knownAliases = new Map(
-				(
-					await tx
-						.select({
-							fingerprint: transactionFingerprintAlias.fingerprint,
-							transactionId: transactionFingerprintAlias.transactionId
-						})
-						.from(transactionFingerprintAlias)
-						.where(
-							and(
-								eq(transactionFingerprintAlias.accountId, acct.id),
-								inArray(transactionFingerprintAlias.fingerprint, fingerprints)
-							)
-						)
-				).map((row) => [row.fingerprint, row.transactionId] as const)
-			);
-			const usedLegacyIds = new Set(knownAliases.values());
-			const legacyRevolut = new Map<string, string[]>();
-			if (statement.bank === 'revolut') {
-				const replayDays = [...new Set(statement.rows.map((row) => row.bookedAt))];
-				const replayCurrencies = [...new Set(statement.rows.map((row) => row.currency))];
-				const legacyRows = await tx
-					.select({
-						id: transaction.id,
-						bookedAt: transaction.bookedAt,
-						amountMinor: transaction.amount,
-						currency: transaction.currency,
-						bankRef: transaction.bankRef,
-						counterpartyAccount: transaction.counterpartyAccount,
-						counterparty: transaction.counterparty,
-						description: transaction.description,
-						balanceAfterMinor: transaction.balanceAfterMinor,
-						variableSymbol: transaction.variableSymbol,
-						constantSymbol: transaction.constantSymbol,
-						specificSymbol: transaction.specificSymbol,
-						originalAmountMinor: transaction.originalAmountMinor,
-						originalCurrency: transaction.originalCurrency
-					})
-					.from(transaction)
-					.where(
-						and(
-							eq(transaction.accountId, acct.id),
-							eq(transaction.fingerprintVersion, 1),
-							inArray(transaction.bookedAt, replayDays),
-							inArray(transaction.currency, replayCurrencies),
-							sql`not exists (
-									select 1 from ${transactionFingerprintAlias} existing_alias
-									where existing_alias.transaction_id = ${transaction.id}
-								)`
-						)
-					)
-					.orderBy(transaction.id);
-				for (const legacy of legacyRows) {
-					const key = legacyRevolutKey(legacy);
-					const candidates = legacyRevolut.get(key) ?? [];
-					candidates.push(legacy.id);
-					legacyRevolut.set(key, candidates);
-				}
+			const outcomes: StatementOutcome[] = [];
+			let added = 0;
+			let duplicate = 0;
+			let firstAccountId: string | null = null;
+
+			for (const statement of statements) {
+				const outcome = await ingestStatement(tx, statement, fileId, explicitAppliesTo);
+				outcomes.push(outcome);
+				added += outcome.rowsAdded;
+				duplicate += outcome.rowsDuplicate;
+				if (!firstAccountId && outcome.accountId) firstAccountId = outcome.accountId;
 			}
 
-			for (let i = 0; i < statement.rows.length; i++) {
-				const row = statement.rows[i];
-				const currentFingerprint = fingerprints[i];
-				if (knownFingerprints.has(currentFingerprint)) {
-					duplicate++;
-					continue;
-				}
-				const knownLegacyId = knownAliases.get(currentFingerprint);
-				if (knownLegacyId) {
-					usedLegacyIds.add(knownLegacyId);
-					duplicate++;
-					continue;
-				}
-
-				// V1 Revolut stored amount - fee but discarded the fee itself, so its
-				// current fingerprint cannot be reconstructed by a SQL migration.
-				// Replay supplies the missing fee: bind the v3 fingerprint to the
-				// exact legacy source facts and keep the historical row untouched.
-				if (statement.bank === 'revolut') {
-					const fee = row.feeMinor ?? 0n;
-					const key = legacyRevolutKey({ ...row, amountMinor: row.amountMinor - fee });
-					const candidates = legacyRevolut.get(key);
-					let legacyId = candidates?.shift();
-					while (legacyId && usedLegacyIds.has(legacyId)) {
-						legacyId = candidates?.shift();
-					}
-					if (legacyId) {
-						await tx
-							.insert(transactionFingerprintAlias)
-							.values({
-								accountId: acct.id,
-								fingerprint: currentFingerprint,
-								transactionId: legacyId
-							})
-							.onConflictDoNothing({
-								target: [
-									transactionFingerprintAlias.accountId,
-									transactionFingerprintAlias.fingerprint
-								]
-							});
-						knownAliases.set(currentFingerprint, legacyId);
-						usedLegacyIds.add(legacyId);
-						duplicate++;
-						continue;
-					}
-				}
-
-				const inserted = await tx
-					.insert(transaction)
-					.values({
-						id: randomUUID(),
-						accountId: acct.id,
-						bookedAt: row.bookedAt,
-						valueDate: row.valueDate,
-						amount: row.amountMinor,
-						feeMinor: row.feeMinor,
-						currency: row.currency,
-						balanceAfterMinor: row.balanceAfterMinor,
-						originalAmountMinor: row.originalAmountMinor,
-						originalCurrency: row.originalCurrency,
-						counterparty: row.counterparty,
-						counterpartyAccount: row.counterpartyAccount,
-						variableSymbol: row.variableSymbol,
-						constantSymbol: row.constantSymbol,
-						specificSymbol: row.specificSymbol,
-						description: row.description,
-						bankRef: row.bankRef,
-						dedupFingerprint: currentFingerprint,
-						fingerprintVersion: FINGERPRINT_VERSION,
-						importFileId: fileId
-					})
-					.onConflictDoNothing({ target: [transaction.accountId, transaction.dedupFingerprint] })
-					.returning({ id: transaction.id });
-				if (inserted.length > 0) {
-					knownFingerprints.add(currentFingerprint);
-					added++;
-				} else duplicate++;
-			}
-
-			if (statement.closingBalanceMinor !== undefined && statement.periodEnd) {
-				await tx
-					.update(account)
-					.set({ balanceMinor: statement.closingBalanceMinor, balanceAsOf: statement.periodEnd })
-					.where(
-						and(
-							eq(account.id, acct.id),
-							or(isNull(account.balanceAsOf), lte(account.balanceAsOf, statement.periodEnd))
-						)
-					);
-			}
-
+			// Pair once, across every day any statement in this file touched, so a
+			// transfer between two accounts in the SAME export pairs immediately.
 			const paired = await pairAndCategorise(
 				tx,
-				pairingWindowAround(statement.rows.map((row) => row.bookedAt))
+				pairingWindowAround(statements.flatMap((s) => s.rows.map((row) => row.bookedAt)))
 			);
 			await tx
 				.update(importFile)
-				.set({ rowsAdded: added, rowsDuplicate: duplicate, rowsPaired: paired })
+				.set({
+					accountId: firstAccountId,
+					rowsAdded: added,
+					rowsDuplicate: duplicate,
+					rowsPaired: paired
+				})
 				.where(eq(importFile.id, fileId));
+
+			const unresolved = outcomes.find((o) => o.needsAccount);
+			if (unresolved) {
+				throw new NeedsAccount({
+					filename,
+					bank: statements[0].bank,
+					rowsRead: totalRows,
+					rowsAdded: 0,
+					rowsDuplicate: 0,
+					rowsPaired: 0,
+					statements: outcomes,
+					needsAccount: true,
+					error: unresolved.error
+				});
+			}
 
 			return {
 				filename,
-				bank: statement.bank,
-				rowsRead: statement.rows.length,
+				bank: statements[0].bank,
+				rowsRead: totalRows,
 				rowsAdded: added,
 				rowsDuplicate: duplicate,
-				rowsPaired: paired
+				rowsPaired: paired,
+				statements: outcomes
 			};
 		});
 	} catch (error) {
+		// The transaction has rolled back, so nothing — importFile included — was
+		// written; the user can choose an account and upload the same file again.
+		if (error instanceof NeedsAccount) return error.result;
 		// Filesystem writes cannot join the database transaction. Retain the
 		// UUID-named original as an explicitly logged orphan so a transient
 		// database failure never destroys the user's only copy of a statement.

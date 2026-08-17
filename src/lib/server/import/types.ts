@@ -1,4 +1,15 @@
-export type BankId = 'fio' | 'revolut' | 'mbank' | 'rb' | 'cs';
+/**
+ * Which institution a statement came from.
+ *
+ * No longer a closed union. Format-first routing means a single parser serves
+ * every bank exporting that format, and there is often no way to tell which
+ * bank issued the file — an ABO export names no issuer at all. Where the
+ * issuer is unknown the format itself is the honest label.
+ */
+export type BankId = string;
+
+/** The issuers and formats with a parser today. */
+export const KNOWN_BANK_IDS = ['fio', 'revolut', 'mbank', 'rb', 'cs', 'abo'] as const;
 
 export interface ParsedRow {
 	/** ISO date the bank booked the movement. */
@@ -28,7 +39,7 @@ export interface ParsedRow {
 
 export interface ParsedStatement {
 	bank: BankId;
-	format: 'csv' | 'pdf';
+	format: 'csv' | 'pdf' | 'abo' | 'mt940' | 'camt053' | 'ofx' | 'xlsx';
 	/** Account number as the statement prints it (no IBAN normalisation). */
 	accountNumber?: string;
 	currency: string;

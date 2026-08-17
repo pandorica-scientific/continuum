@@ -921,6 +921,55 @@ describe('import database integrity', () => {
 		expect(await count('transaction')).toBe(0);
 	});
 
+	it('imports every statement in a file that carries several accounts', async () => {
+		// A CAMT export with two accounts is one file and two statements. Each
+		// resolves on its own evidence, and both must land — this is the case the
+		// pipeline's array shape exists for.
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const camt = multiAccountCamt();
+		const result = await ingestFile('camt-two-accounts.xml', camt, undefined, testDb);
+
+		expect(result.error).toBeUndefined();
+		expect(result.statements).toHaveLength(2);
+		expect(result.rowsAdded).toBe(3);
+
+		const accounts = await testDb.select().from(schema.account);
+		expect(accounts).toHaveLength(2);
+		expect(accounts.map((a) => a.currency).sort()).toEqual(['CZK', 'EUR']);
+
+		// Every transaction belongs to the account of ITS OWN statement, never to
+		// whichever account happened to resolve first.
+		for (const outcome of result.statements ?? []) {
+			const rows = await testDb
+				.select()
+				.from(schema.transaction)
+				.where(eq(schema.transaction.accountId, outcome.accountId!));
+			expect(rows).toHaveLength(outcome.rowsAdded);
+			expect(rows.every((r) => r.currency === outcome.currency)).toBe(true);
+		}
+
+		// One file, one import_file row, holding the total across statements.
+		expect(await count('import_file')).toBe(1);
+		const [file] = await testDb.select().from(schema.importFile);
+		expect(file.rowsRead).toBe(3);
+	});
+
+	it('writes nothing at all when one statement in a multi-account file cannot be placed', async () => {
+		// Two accounts already share the EUR statement's identity, so that half is
+		// ambiguous. Importing the CZK half anyway would record the file's content
+		// hash and the corrected re-upload would be refused as a duplicate,
+		// stranding the EUR statement for good. All or nothing.
+		await insertAccount('camt-eur-a', 'EUR', ['CZ2010000000002500834780'], 'camt053');
+		await insertAccount('camt-eur-b', 'EUR', ['CZ2010000000002500834780'], 'camt053');
+		const { ingestFile } = await import('$lib/server/import/ingest');
+
+		const result = await ingestFile('camt-ambiguous.xml', multiAccountCamt(), undefined, testDb);
+
+		expect(result).toMatchObject({ needsAccount: true, rowsAdded: 0 });
+		expect(await count('import_file')).toBe(0);
+		expect(await count('transaction')).toBe(0);
+	});
+
 	it('learns a statement number assigned to a compatible account for later automatic imports', async () => {
 		await insertAccount('manual-fio-account', 'CZK');
 		const { ingestFile } = await import('$lib/server/import/ingest');
@@ -1723,3 +1772,39 @@ describe('import database integrity', () => {
 		expect(pairingWindowAround([])).toBeNull();
 	});
 });
+
+/**
+ * A CAMT.053 file holding two statements for two different accounts — the
+ * shape a bank produces when you export "all accounts" at once.
+ */
+function multiAccountCamt(): Uint8Array {
+	const entry = (amount: string, ind: 'CRDT' | 'DBIT', date: string, ccy: string, ref: string) => `
+		<Ntry>
+			<Amt Ccy="${ccy}">${amount}</Amt>
+			<CdtDbtInd>${ind}</CdtDbtInd>
+			<BookgDt><Dt>${date}</Dt></BookgDt>
+			<ValDt><Dt>${date}</Dt></ValDt>
+			<AcctSvcrRef>${ref}</AcctSvcrRef>
+		</Ntry>`;
+	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+	<BkToCstmrStmt>
+		<Stmt>
+			<Id>CZK-1</Id>
+			<Acct><Id><IBAN>CZ6955000000000093531803</IBAN></Id><Ccy>CZK</Ccy></Acct>
+			<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CZK">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-01</Dt></Dt></Bal>
+			<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CZK">1150.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-31</Dt></Dt></Bal>
+			${entry('50.00', 'DBIT', '2025-03-03', 'CZK', 'CZK-A')}
+			${entry('200.00', 'CRDT', '2025-03-04', 'CZK', 'CZK-B')}
+		</Stmt>
+		<Stmt>
+			<Id>EUR-1</Id>
+			<Acct><Id><IBAN>CZ2010000000002500834780</IBAN></Id><Ccy>EUR</Ccy></Acct>
+			<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">10.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-01</Dt></Dt></Bal>
+			<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">35.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-31</Dt></Dt></Bal>
+			${entry('25.00', 'CRDT', '2025-03-05', 'EUR', 'EUR-A')}
+		</Stmt>
+	</BkToCstmrStmt>
+</Document>`;
+	return new TextEncoder().encode(xml);
+}

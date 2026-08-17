@@ -5,6 +5,9 @@ import { parseMbank } from './adapters/mbank';
 import { parseRbLines } from './adapters/rb';
 import { parseCsLines } from './adapters/cs';
 import { extractPdfLines } from './pdftext';
+import { parseAbo } from './standards/abo';
+import { parseMt940 } from './standards/mt940';
+import { parseCamt053 } from './standards/camt053';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
 import { assertSafeToParse } from './safety';
 import type { ParsedStatement } from './types';
@@ -70,11 +73,8 @@ export async function detectAndParse(buffer: Uint8Array): Promise<ParsedStatemen
  * covered, which is a different problem from a corrupt file.
  */
 const NOT_YET_READABLE: Partial<Record<StatementFormat, string>> = {
-	camt053: 'CAMT.053 support is being built — it will read this without any per-bank setup.',
 	xml: 'This is XML, but not a CAMT.053 statement.',
 	ofx: 'OFX/QFX support is being built.',
-	mt940: 'MT940 support is being built.',
-	abo: 'ABO/GPC support is being built.',
 	ods: 'OpenDocument spreadsheets are not read yet — export as CSV or XLSX.',
 	xls: 'Legacy .xls workbooks are not read yet — re-save as .xlsx.',
 	image: 'Reading statements from photographs and scans is being built.'
@@ -90,6 +90,23 @@ async function parseByFormat(
 
 	if (format === 'unknown') {
 		throw new Error('That file is not a statement in any format Continuum recognises.');
+	}
+
+	if (format === 'camt053') {
+		// CAMT is UTF-8 by specification; the BOM is stripped by the reader.
+		return parseCamt053(new TextDecoder('utf-8', { fatal: false }).decode(buffer));
+	}
+
+	if (format === 'mt940') {
+		// MT940 is ASCII by specification; a bank that slips diacritics in still
+		// decodes here, since win1250 agrees with ASCII on every SWIFT character.
+		return parseMt940(iconv.decode(Buffer.from(buffer), 'win1250'));
+	}
+
+	if (format === 'abo') {
+		// ABO is win1250 when it carries diacritics and ASCII otherwise; decoding
+		// as win1250 is safe for both, since ASCII is a subset.
+		return parseAbo(iconv.decode(Buffer.from(buffer), 'win1250'));
 	}
 
 	if (format === 'pdf') {
