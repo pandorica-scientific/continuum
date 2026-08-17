@@ -925,6 +925,125 @@ documents on a shelf, no holdings — belong inside their screens and are not de
 
 ---
 
+## Ingest — v0.3.8 branch
+
+A third design file, `Continuum Ingest v0.3.8.dc.html`, covers the whole statement-ingest
+branch: eleven elements built on the app's real primitives (`Pill`, `MetricTile`, `Modal`,
+`Segmented`) and `app.css` tokens, in both themes. Chips across the top switch element.
+
+### The organising idea
+
+**A statement proves itself, or it says it could not.** Every result carries a proof state,
+and the pill hue is that state — never decoration:
+
+| Hue | Meaning | Phrases used |
+|---|---|---|
+| green | proven against the statement's own arithmetic | `balances check out` |
+| amber | partly proven, or proven a weaker way | `totals agree`, `3 rows unproven`, `layout changed` |
+| red | nothing could be proven; a person is needed | `couldn't verify`, `needs a person` |
+| grey | not a proof question at all | `not a statement` |
+
+A red-class phrase must never appear on an amber pill or vice versa. When a statement is
+partly proven, say what remains (`3 rows unproven`) rather than borrowing the red wording.
+
+### The elements
+
+1. **Import screen** — drop zone, read queue, this batch, four metric tiles.
+2. **Read queue** — four per-file states: `queued` → `reading page x of y` → a resolved
+   result row → **or `failed` with a reason and the way out**. A failed file keeps its place
+   in the list and shows no progress bar; the header counts it separately (`2 waiting` +
+   red `1 failed`). Every row has an ✕ — *Cancel this read* while reading, *Remove from the
+   queue* otherwise — and removing one offers **N removed · undo**.
+3. **One question** — the single-question resolver, for a file where exactly one thing is
+   ambiguous (day-first vs. month-first dates). Shows both readings against real rows.
+4. **Mapping wizard** — teach Continuum an unrecognised layout. See below.
+5. **Drift** — the bank changed its export; the previous mapping is pre-filled with the new
+   columns highlighted, saved as a new profile version so already-imported files keep
+   parsing under the old one.
+6. **Arbitration** — the text layer and the OCR read disagree; both reads side by side.
+7. **Evidence** — how one statement proved itself, line by line.
+8. **Provenance** — where one transaction came from, back to the file and row.
+9. **Layouts** — saved bank profiles and their versions.
+10. **Not a statement** — the file is a portfolio report, not a bank statement.
+11. **Scan warning** — an inline advisory card on the import screen (never a dialog, never
+    blocking): this scan is coarser than reading usually needs.
+
+### Modal or screen
+
+**Pop-ups** (fixed overlay, 860px, drop shadow, the Import screen live behind, dismissed by
+✕ or scrim click): One question, Drift, Evidence, Provenance, Not a statement. These are all
+responses to one file, so the list they came from stays visible behind them. Tall ones scroll
+inside the overlay, not the page.
+
+**Full screens**: Mapping wizard and Arbitration need table width that 860px cannot give
+without inner scrolling — and the preview table *is* the design, so it must not scroll.
+Layouts is a management screen, not a response to a file.
+
+### The mapping wizard
+
+Four bands: what the file told us, what each column is, how it will look in your ledger,
+and what to remember it as.
+
+**What the file told us** — four parser facts in an auto-fit grid (190px minimum, so they
+spread on a wide window and wrap on a narrow one). **Adjust** flips them into selects:
+
+| Fact | Options | What a change actually does |
+|---|---|---|
+| Separator | `;` `,` tab `\|` | splits the columns differently |
+| Encoding | windows-1250, utf-8, iso-8859-2, utf-16le | re-decodes the text |
+| Header row | line 1–3, no header row | changes which line is the header |
+| Numbers | `1 234,56` `1.234,56` `1'234,56` `1,234.56` `1234.56` | re-reads every figure |
+
+An overruled fact renders in `--yellow` — it is no longer something the file said — the
+caption admits it (*read from the file — you have changed 1 of these*), and **Back to what
+the file said** restores the parser's reading.
+
+**How it will look in your ledger** — five real rows, with a proof banner above them driven
+by the mapping:
+
+| Condition | Mark | Hue | Says |
+|---|---|---|---|
+| balance chain closes | ✓ | green | the running balance closes on all five rows |
+| no amount column | ✕ | red | nothing to file |
+| no date column | ✕ | red | every transaction needs a date |
+| no balance column | — | grey | *not a failure* — plenty of exports omit it; filed as agreeing on totals |
+| **any fact overridden** | — | amber | not re-read yet; these rows use what the file said |
+
+That last row is the rule the rest of the file exists to protect: **green is only claimable
+when the shown preview was produced by the shown settings.** Overrule a fact and the preview
+has not been re-read, so the proof belongs to the earlier reading and must say so.
+
+### Generated copy — two traps
+
+Both of these were built wrong first, and both are the same mistake: injecting a raw label
+into a sentence that asserts a mechanism.
+
+**Name the true consequence per fact, not a shared one.** Only *Separator* re-tokenises a
+CSV. *Header row* changes which line supplies the column names and where the data starts.
+*Encoding* and *Numbers* do not touch the columns at all — for those the note says the
+opposite, and stays grey: *the columns are unchanged — your changes to encoding and numbers
+only affect what is read inside them*.
+
+**Compose lists and agreement by construction.** Build `a, b and c`, not `a and b and c`.
+Phrase around *your changes to X and Y* so the subject is plural whatever the count — a
+template that pluralises the verb but not its noun produces *your encoding and numbers
+change only affect*. And spell out a consequence only when one fact changed; stacking
+relative clauses per item turns the sentence into comma-soup, so several changes are named
+and the effect left general.
+
+### Domain rules this branch encodes
+
+- **One file may hold several statements**, each proving itself separately (a Fio export with
+  a CZK and an EUR account is two results from one file).
+- **Transfers between the household's own accounts** are paired and dropped, never counted as
+  income or expense.
+- **A statement with no printed running balance is not a failure** — it is filed as agreeing
+  on totals rather than proven row by row. Do not render this as an error.
+- **Corrections train the categoriser**; only genuinely ambiguous rows reach the review queue.
+- **Errors say what happened and what to do**, in that order, and admit what was not written.
+
+---
+
 ## Interactions and behaviour
 
 | Interaction | Behaviour |
@@ -959,6 +1078,10 @@ There are **no animations or transitions** anywhere. This is intentional.
 |---|---|---|
 | `screen` | enum of 16 | current screen; its area drives the sidebar and sub-tabs |
 | `code` | error code | which error state is showing (error pages file) |
+| `view` | enum of 9 | which ingest element is showing (ingest file) |
+| `overrides` | `{factLabel: value}` | parser facts the user has overruled; empty means the preview's proof is trustworthy |
+| `adjusting` | boolean | detected facts are editable |
+| `dropped` | `[filename]` | files removed from the read queue |
 | `open` | boolean | whether the ring graphic is showing its scene |
 | `layout` | `[{k, x, y, w, h}]` | Overview panels, persisted to `continuum-overview` |
 | `customising` | boolean | Overview edit mode |
@@ -1052,6 +1175,7 @@ when nothing is pressing.
 | `Continuum v4.dc.html` | The design. Open it in a browser — it runs standalone. All sixteen screens, both themes, all interactions. |
 | `support.js` | Runtime the design file loads. Must sit beside it for the HTML to open. Prototype scaffolding — nothing to port. |
 | `Continuum Error Pages.dc.html` | The ten error states. Opens standalone; chips in the header switch state, and the rings hide an easter egg. |
+| `Continuum Ingest v0.3.8.dc.html` | The statement-ingest branch — eleven elements, both themes. Chips in the header switch element. |
 | `image-slot.js` | The drop-target component the property image slots use. Reference only. |
 | `colors_and_type.css` | The Stock Watcher design system's token file, for the values the design inherits. |
 | `README.md` | This document. |
