@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { normalise } from '$lib/overview/layout';
-import { DEFAULT_LAYOUT, PANELS, PANEL_BOUNDS, panelAvailable } from '$lib/overview/panels';
+import {
+	DEFAULT_LAYOUT,
+	PANELS,
+	PANEL_BOUNDS,
+	panelAvailable,
+	panelDefinition
+} from '$lib/overview/panels';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
 
 const allModules = (on: boolean): ModuleToggles =>
@@ -65,10 +71,36 @@ describe('the panel registry', () => {
 });
 
 describe('the default layout', () => {
-	// It ships as a literal, so nothing but this stops a typo reaching everyone
-	// who has never customised — which on upgrade is everyone.
+	// Nothing but this stops a mistake reaching everyone who has never
+	// customised — which on upgrade is everyone.
 	it('survives normalisation unchanged', () => {
 		expect(normalise(DEFAULT_LAYOUT, PANEL_BOUNDS)).toEqual(DEFAULT_LAYOUT);
+	});
+
+	// The default board used to restate every panel's size. Reducing the
+	// briefing panel's default height then changed the definition and not the
+	// board, so the screen went on drawing the old size and looked for all the
+	// world like a rendering bug. Sizes belong to the panel; only x and y belong
+	// to the arrangement.
+	it('takes every size from the panel it places, not from a second copy', () => {
+		for (const placed of DEFAULT_LAYOUT) {
+			const panel = panelDefinition(placed.k);
+			expect(panel, `${placed.k} is placed but not defined`).toBeDefined();
+			expect({ k: placed.k, w: placed.w, h: placed.h }).toEqual({
+				k: placed.k,
+				w: panel!.defaultW,
+				h: panel!.defaultH
+			});
+		}
+	});
+
+	it('stacks without leaving a gap between the rows it fills', () => {
+		const bottom = Math.max(...DEFAULT_LAYOUT.map((p) => p.y + p.h));
+		const covered = new Set<number>();
+		for (const p of DEFAULT_LAYOUT) for (let y = p.y; y < p.y + p.h; y++) covered.add(y);
+		// Every row from the top to the tallest panel's bottom has something on
+		// it: an empty band across the whole board is dead space nobody chose.
+		for (let y = 0; y < bottom; y++) expect(covered.has(y), `row ${y} is empty`).toBe(true);
 	});
 
 	it('places no panel on top of another', () => {

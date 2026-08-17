@@ -36,7 +36,21 @@ export const PANELS: PanelDefinition[] = [
 		title: 'Needs you',
 		emoji: '🔔',
 		defaultW: 12,
-		defaultH: 6,
+		// One row of cards, and no more. At six rows (320px of grid plus the
+		// panel's own chrome) this owned the top third of the first screen
+		// whatever was in it — and what is in it is usually one line saying
+		// nothing needs a decision. It sits above everything else precisely
+		// because it is the first thing to read, which is the worst place to
+		// spend empty space: it pushed the cash-flow chart, the reason most
+		// people open the app at all, entirely below the fold.
+		//
+		// Four rows, which is what a full row of briefing cards actually needs:
+		// at three the panel is 152px all-in, and once the header and padding
+		// take their share the cards are clipped mid-sentence — a card whose
+		// last line is cut off is worse than the empty space this is trimming.
+		// A household with more than a row's worth can drag it taller, and that
+		// choice is stored against them.
+		defaultH: 4,
 		minW: MIN_W,
 		minH: MIN_H,
 		modules: []
@@ -193,15 +207,29 @@ export function panelAvailable(key: string, modules: ModuleToggles): boolean {
 /**
  * What a person sees before they ever press Customise.
  *
- * This reproduces the pre-V2 Overview exactly — briefing full width, the
- * waterfall full width, then composition and upcoming side by side — so
- * upgrading to 0.3.5 changes nobody's screen. The other nine panels wait in the
- * tray: the board is opt-in, and arrives when someone customises rather than
- * when they upgrade.
+ * Briefing full width, the cash-flow chart full width, then composition and
+ * upcoming side by side. The other nine panels wait in the tray: the board is
+ * opt-in, and arrives when someone customises rather than when they upgrade.
+ *
+ * Only the ARRANGEMENT lives here. Every size is read from the panel's own
+ * definition, because this list used to restate them — and the moment the
+ * briefing panel's default height was reduced, the definition said three rows,
+ * this said six, and the screen went on drawing six. A default board that
+ * disagrees with the panels it is made of is the kind of thing that looks like
+ * a rendering bug for a week.
  */
-export const DEFAULT_LAYOUT: OverviewPlacement[] = [
-	{ k: 'briefing', x: 0, y: 0, w: 12, h: 6 },
-	{ k: 'flow', x: 0, y: 6, w: 12, h: 19 },
-	{ k: 'composition', x: 0, y: 25, w: 6, h: 6 },
-	{ k: 'upcoming', x: 6, y: 25, w: 6, h: 7 }
-];
+export const DEFAULT_LAYOUT: OverviewPlacement[] = (() => {
+	const stack: OverviewPlacement[] = [];
+	const place = (k: string, x: number, y: number): number => {
+		const panel = panelDefinition(k);
+		if (!panel) throw new Error(`Default layout names a panel that does not exist: ${k}`);
+		stack.push({ k, x, y, w: panel.defaultW, h: panel.defaultH });
+		return y + panel.defaultH;
+	};
+
+	let y = place('briefing', 0, 0);
+	y = place('flow', 0, y);
+	place('composition', 0, y);
+	place('upcoming', 6, y);
+	return stack;
+})();

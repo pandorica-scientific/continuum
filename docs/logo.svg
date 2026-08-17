@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="56" height="56" role="img" aria-label="Continuum">
 	<title>Continuum</title>
-	<!-- The app's own mark, from src/lib/components/BrandMark.svelte. This was
-	     SvelteKit's stock logo until now, so every browser tab, bookmark and
-	     phone home screen shortcut for a household's own finances carried the
-	     framework's branding instead of the app's. -->
+	<!-- The app's own mark, from src/lib/components/BrandMark.svelte. Kept in
+	     step by hand: this copy is standalone so GitHub and any docs page can
+	     render it without the app's CSS variables. -->
 	<g fill="none" stroke="#4a86c8" stroke-width="3.2" stroke-linecap="round">
 		<path d="M18 18 A10 10 0 0 1 18 38" />
 		<path d="M18 10 A18 18 0 0 1 18 46" opacity="0.62" />
