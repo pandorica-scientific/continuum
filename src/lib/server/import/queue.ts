@@ -19,7 +19,7 @@
  * forever in `running`.
  */
 import { randomUUID } from 'node:crypto';
-import { and, asc, count, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { importJob } from '$lib/server/db/schema';
 import { ingestFile, type IngestResult } from './ingest';
@@ -104,6 +104,8 @@ async function claimNext(handle: Handle = db): Promise<typeof importJob.$inferSe
  * burst of workers.
  */
 export async function runQueue(handle: Handle = db): Promise<number> {
+	// Settled work from earlier sweeps, cleared before this one starts.
+	await clearFinished(KEEP_FINISHED_MS, handle);
 	let done = 0;
 	for (;;) {
 		const job = await claimNext(handle);
@@ -117,7 +119,12 @@ export async function runQueue(handle: Handle = db): Promise<number> {
 				job.filename,
 				bytes,
 				job.appliesToAccountId ?? undefined,
-				handle as Db
+				handle as Db,
+				// This is the whole reason the queue exists. Reading a page as an
+				// image takes seconds per page, which is unacceptable on a request
+				// and perfectly acceptable here — and it is only ever reached when
+				// the text layer could not prove itself.
+				{ ocr: true }
 			);
 		} catch (error) {
 			// A reader that throws is a defect, not a rejected statement — those
@@ -133,8 +140,11 @@ export async function runQueue(handle: Handle = db): Promise<number> {
 				finishedAt: new Date(),
 				result: result ?? null,
 				error: failure ?? null,
-				// The bytes have done their job; `import_file` keeps the original.
-				payload: null
+				// Kept when the file was NOT read: mapping it by hand needs the bytes,
+				// and asking someone to upload the same statement again because we
+				// could not read it the first time is a poor apology. Cleared once
+				// the job is swept away.
+				payload: (result?.rowsAdded ?? 0) > 0 ? null : job.payload
 			})
 			.where(eq(importJob.id, job.id));
 		done++;
@@ -148,12 +158,14 @@ export async function queueStatus(
 	const [[waiting], [running], recent] = await Promise.all([
 		handle.select({ n: count() }).from(importJob).where(eq(importJob.state, 'queued')),
 		handle.select({ n: count() }).from(importJob).where(eq(importJob.state, 'running')),
-		handle.select().from(importJob).orderBy(asc(importJob.queuedAt)).limit(50)
+		// Newest first, so a fresh upload is never pushed off the end by settled
+		// work not yet swept up; reversed below into the order the files arrived.
+		handle.select().from(importJob).orderBy(desc(importJob.queuedAt)).limit(20)
 	]);
 	return {
 		waiting: waiting?.n ?? 0,
 		running: running?.n ?? 0,
-		recent: recent.map((job) => ({
+		recent: recent.reverse().map((job) => ({
 			id: job.id,
 			filename: job.filename,
 			state: job.state,
@@ -165,11 +177,49 @@ export async function queueStatus(
 	};
 }
 
-/** Forget finished jobs once their outcome has been seen. */
-export async function clearFinished(handle: Handle = db): Promise<number> {
+/**
+ * The bytes of a job that has not been swept away yet.
+ *
+ * A file that could not be read is still in the queue with its payload intact,
+ * which is what makes mapping it possible without asking for the upload again —
+ * the person has already handed it over once, and being asked twice because we
+ * could not read it the first time is a poor apology.
+ */
+export async function jobBytes(
+	id: string,
+	handle: Handle = db
+): Promise<{ filename: string; bytes: Uint8Array; accountId?: string } | null> {
+	const [job] = await handle.select().from(importJob).where(eq(importJob.id, id));
+	if (!job?.payload) return null;
+	return {
+		filename: job.filename,
+		bytes: new Uint8Array(Buffer.from(job.payload, 'base64')),
+		accountId: job.appliesToAccountId ?? undefined
+	};
+}
+
+/**
+ * Forget finished jobs once their outcome has had time to be seen.
+ *
+ * The queue is a view of work in flight, not a history — `import_file` is the
+ * record of what was imported. Left alone this table would grow with every
+ * upload forever, and the page's list of recent files would fill with months of
+ * settled work.
+ */
+export const KEEP_FINISHED_MS = 60 * 60 * 1000;
+
+export async function clearFinished(
+	olderThanMs = KEEP_FINISHED_MS,
+	handle: Handle = db
+): Promise<number> {
 	const removed = await handle
 		.delete(importJob)
-		.where(or(eq(importJob.state, 'done'), eq(importJob.state, 'failed')))
+		.where(
+			and(
+				or(eq(importJob.state, 'done'), eq(importJob.state, 'failed')),
+				lt(importJob.finishedAt, new Date(Date.now() - olderThanMs))
+			)
+		)
 		.returning({ id: importJob.id });
 	return removed.length;
 }

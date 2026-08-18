@@ -17,6 +17,31 @@ const digitCache = new Map<string, number>();
  * zero) and CLDR follows how the currency is actually written, which is what a
  * ledger showing a person their own money should do.
  */
+/**
+ * Is this actually a currency?
+ *
+ * Three capital letters is a shape, not a fact. `SYN-0001` is an account
+ * number, and the pattern that finds a currency beside a figure matched its
+ * first three characters — so a workbook imported with a currency of "SYN",
+ * past a guard that checked the shape and nothing else.
+ *
+ * The list comes from the platform's own locale data rather than a table
+ * written here, so it neither goes stale nor has to be maintained: ICU knows
+ * what the currencies are, and it is already what `minorDigits` asks how many
+ * decimal places each one has.
+ */
+const KNOWN = new Set(
+	typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('currency') : []
+);
+
+export function isCurrencyCode(value: string): boolean {
+	const code = value.trim().toUpperCase();
+	if (!/^[A-Z]{3}$/.test(code)) return false;
+	// An older runtime without `supportedValuesOf` falls back to the shape test
+	// rather than rejecting every currency there is.
+	return KNOWN.size === 0 || KNOWN.has(code);
+}
+
 export function minorDigits(currency: string): number {
 	const cached = digitCache.get(currency);
 	if (cached !== undefined) return cached;

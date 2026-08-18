@@ -5,12 +5,7 @@ import {
 	delimiterCandidates,
 	gridFromText
 } from '$lib/server/import/tabular/grid';
-import {
-	chooseGrid,
-	detectRegions,
-	excludedRows,
-	transactionRows
-} from '$lib/server/import/tabular/regions';
+import { chooseGrid, detectRegions, transactionRows } from '$lib/server/import/tabular/regions';
 import { looksLikeSummary, roleOfHeader } from '$lib/server/import/tabular/vocabulary';
 
 /**
@@ -119,13 +114,24 @@ describe('region detection', () => {
 		expect(regions.some((r) => r.role === 'footer')).toBe(true);
 	});
 
-	it('excludes the closing-balance row that shares the transaction width', () => {
+	it('files the closing-balance row as evidence rather than as a movement', () => {
+		// mBank prints its closing balance in a row the same width as a movement
+		// and directly below them, which is why a width-based reader imports it as
+		// a transaction that does not exist.
+		//
+		// It used to be caught inside the transaction region and filtered out
+		// there, which kept it from being imported but also threw it away. Now the
+		// region split notices that it fills different columns and gives it a
+		// region of its own, where it is read for what it is — the statement's own
+		// closing balance, and therefore something the arithmetic can check the
+		// movements against.
 		const table = regions.find((r) => r.role === 'transactions')!;
-		const rows = transactionRows(table);
-		expect(rows).toHaveLength(5);
-		// The phantom row is reported, not silently dropped.
-		const excluded = excludedRows(table).map((r) => r.map((c) => c.text).join(' '));
-		expect(excluded.join(' ')).toMatch(/Saldo końcowe/);
+		expect(transactionRows(table)).toHaveLength(5);
+
+		const summaries = regions
+			.filter((r) => r.role === 'summary')
+			.map((r) => r.rows.map((row) => row.map((c) => c.text).join(' ')).join(' '));
+		expect(summaries.join(' ')).toMatch(/Saldo końcowe/);
 	});
 
 	it('identifies the header row', () => {

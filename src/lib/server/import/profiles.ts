@@ -29,12 +29,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { importProfile } from '$lib/server/db/schema';
-import {
-	fromDocument,
-	toDocument,
-	type ImportProfile,
-	type ProfileDocument
-} from './tabular/profile';
+import { type ImportProfile } from './tabular/profile';
 
 type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -137,12 +132,4 @@ export async function recordProfileUse(id: string, handle: Handle = db): Promise
 
 export async function deleteProfile(id: string, handle: Handle = db): Promise<void> {
 	await handle.delete(importProfile).where(eq(importProfile.id, id));
-}
-
-/** Export for sharing. */
-export const exportProfile = (profile: ImportProfile): ProfileDocument => toDocument(profile);
-
-/** Import a shared profile, refusing anything that is not one. */
-export function importProfileDocument(raw: unknown): ImportProfile {
-	return fromDocument(raw, randomUUID());
 }

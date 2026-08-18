@@ -10,10 +10,11 @@
  * Where the file does not settle something, this returns the open question
  * rather than a guess. That is what the single-question resolver asks about.
  */
-import { minorDigits } from '$lib/money';
+import { isCurrencyCode, minorDigits } from '$lib/money';
 import type { ParsedRow, ParsedStatement } from '../types';
 import {
 	applyDateOrder,
+	isDateLike,
 	parseAmount,
 	resolveDateOrder,
 	resolveDecimalMark,
@@ -22,7 +23,7 @@ import {
 } from './determinacy';
 import type { RawCell } from './grid';
 import { droppedMovements, transactionRows, type GridChoice, type Region } from './regions';
-import { looksLikeSummary, normalise, roleOfHeader, type ColumnRole } from './vocabulary';
+import { normalise, roleOfHeader, type ColumnRole } from './vocabulary';
 
 export interface OpenQuestion {
 	dimension:
@@ -178,11 +179,18 @@ export function readEvidence(regions: Region[]): Evidence {
 					/(?:wahrung|währung|currency|mena|měna|waluta|divisa|moneda|ccy)\s*[:\s]\s*([A-Z]{3})\b/i.exec(
 						text
 					);
-				if (labelled) evidence.currency = labelled[1].toUpperCase();
+				if (labelled && isCurrencyCode(labelled[1])) {
+					evidence.currency = labelled[1].toUpperCase();
+				}
 			}
 			if (!evidence.currency) {
+				// Three capital letters beside a figure is a shape, not a fact:
+				// `SYN-0001` is an account number, and its first three characters sit
+				// beside a digit exactly as a currency code would. Asking whether the
+				// code is a currency at all is what separates them.
 				const beside = CURRENCY_NEAR_AMOUNT.exec(text);
-				if (beside) evidence.currency = beside[1] ?? beside[2];
+				const code = beside?.[1] ?? beside?.[2];
+				if (code && isCurrencyCode(code)) evidence.currency = code.toUpperCase();
 				else {
 					for (const [symbol, code] of Object.entries(SYMBOL_CURRENCY)) {
 						// The symbol must touch a figure, for the same reason — and it
@@ -272,17 +280,76 @@ function assignRoles(region: Region, body: RawCell[][]): (ColumnRole | undefined
 			named.add('bookingDate');
 			continue;
 		}
-		const numeric = values.filter(
-			(v) => parseAmount(v, '.') !== null || parseAmount(v, ',') !== null
-		);
-		if (numeric.length >= values.length * 0.8 && !named.has('amount')) {
-			roles[c] = 'amount';
+	}
+
+	// The amount column is the best-covered one, not the first one that parses.
+	//
+	// Two faults met here, and together they picked exactly the wrong column on
+	// two real statements.
+	//
+	// Coverage was measured against a column's NON-EMPTY cells, so a column with
+	// one populated cell in a hundred and four scored 1 of 1 and passed the 80%
+	// test outright — then claimed `amount`, and the real amount column, filled
+	// on every row, was blocked because the role was taken. Coverage now means
+	// coverage of the BODY, as `pairAmountWithBalance` has always measured it.
+	//
+	// And a date parses as money: `28. 2. 2025` under a comma convention reads as
+	// 282202500. A value-date column therefore satisfied the numeric test, and
+	// being further left it was reached first. Dates are excluded from the test
+	// rather than relied on to fail it.
+	//
+	// Taking the best-covered column instead of the first also stops a sparse
+	// reference column beating a full one purely by sitting to its left.
+	if (!named.has('amount')) {
+		let best: { column: number; covered: number } | undefined;
+		for (let c = 0; c < width; c++) {
+			if (roles[c]) continue;
+			const values = columnValues(body, c).filter(Boolean);
+			const numeric = values.filter(holdsFigure);
+			if (numeric.length < body.length * 0.8) continue;
+			if (!best || numeric.length > best.covered) best = { column: c, covered: numeric.length };
+		}
+		if (best) {
+			roles[best.column] = 'amount';
 			named.add('amount');
 		}
 	}
+	preferCompleteDateColumn(roles, body);
+	keepOneAmountColumn(roles, body);
 	repairNumericRoles(roles, body);
 	pairAmountWithBalance(roles, body);
 	return roles;
+}
+
+/**
+ * One amount column: the one that is actually filled.
+ *
+ * A statement can print more than one column whose label says "amount".
+ * Česká spořitelna heads its foreign-currency original `Částka obratu cizí
+ * měny` and the movement itself `Částka`, and the dictionary recognises both —
+ * so two columns claimed the role and the reader took the first, which is the
+ * one that is blank on every movement that was not in a foreign currency. One
+ * row in a hundred and four had a readable amount.
+ *
+ * The movement's own amount is on every movement; anything qualifying it is
+ * not. Coverage separates them without needing a word for what the other column
+ * is.
+ */
+function keepOneAmountColumn(roles: (ColumnRole | undefined)[], body: RawCell[][]): void {
+	const claimed = roles.flatMap((role, at) => (role === 'amount' ? [at] : []));
+	if (claimed.length < 2) return;
+
+	// Counted as FIGURES, not as filled cells. Both of Česká spořitelna's
+	// candidates are populated on every movement — one with the amount and the
+	// other with a description, because a stacked header does not put every label
+	// over the column it names. Only one of them holds numbers.
+	let best = claimed[0];
+	let bestCovered = -1;
+	for (const at of claimed) {
+		const covered = columnValues(body, at).filter(holdsFigure).length;
+		if (covered > bestCovered) [best, bestCovered] = [at, covered];
+	}
+	for (const at of claimed) if (at !== best) roles[at] = undefined;
 }
 
 /**
@@ -346,6 +413,43 @@ function pairAmountWithBalance(roles: (ColumnRole | undefined)[], body: RawCell[
 	}
 }
 
+/**
+ * Does this cell hold a figure, however the statement dresses it?
+ *
+ * `parseAmount` reads a bare number and nothing else, so `-6 103.00 CZK` — a
+ * Raiffeisenbank amount, with the currency printed beside every one of them —
+ * is not a number to it. Every shape test that asked it directly therefore
+ * decided that a column full of amounts held none, and a statement whose only
+ * fault was naming its own currency could not be read.
+ *
+ * `amountFromCell` already knows how to find the one figure in a cell that says
+ * more than the figure. Asking through it means the question is answered the
+ * same way wherever it is asked.
+ */
+const holdsFigure = (value: string): boolean => {
+	if (!value || isDateLike(value)) return false;
+	// The cell must BE a figure, not merely contain one. `amountFromCell` digs
+	// the single money-looking token out of a cell that says more than the
+	// figure, which is right when reading a value and far too generous when
+	// deciding what a column is: it finds the `1` in `REF-1` and a reference
+	// column then claims to hold amounts.
+	//
+	// A currency written beside the number is the one dressing that still leaves
+	// a figure, so it is removed and the strict test applied to what is left.
+	//
+	// The label has to be a real currency, not merely three letters: `REF-1` ends
+	// up as `-1` if any three-letter token counts, and a reference column then
+	// passes as a column of amounts.
+	let bare = value.trim().replace(/^(?:[€$£¥]|zł|Kč|Ft)\s*/, '');
+	bare = bare.replace(/\s*(?:[€$£¥]|zł|Kč|Ft)$/, '');
+	const leading = /^([A-Za-z]{3})\s*(?=[-+(]?\d)/.exec(bare);
+	if (leading && isCurrencyCode(leading[1])) bare = bare.slice(leading[0].length);
+	const trailing = /(?<=\d[\s)]?)\s*([A-Za-z]{3})$/.exec(bare);
+	if (trailing && isCurrencyCode(trailing[1])) bare = bare.slice(0, -trailing[0].length);
+	bare = bare.trim();
+	return parseAmount(bare, '.') !== null || parseAmount(bare, ',') !== null;
+};
+
 const NUMERIC_ROLES: ColumnRole[] = ['amount', 'balance', 'debit', 'credit'];
 
 /**
@@ -361,25 +465,38 @@ const NUMERIC_ROLES: ColumnRole[] = ['amount', 'balance', 'debit', 'credit'];
  * column holds no numbers at all while the neighbour does.
  */
 function repairNumericRoles(roles: (ColumnRole | undefined)[], body: RawCell[][]): void {
+	const figures = (index: number): number =>
+		body.map((r) => r[index]?.text ?? '').filter(holdsFigure).length;
 	const numericColumn = (index: number): boolean => {
 		const values = body.map((r) => r[index]?.text ?? '').filter(Boolean);
 		if (values.length === 0) return false;
-		const numbers = values.filter(
-			(v) => parseAmount(v, '.') !== null || parseAmount(v, ',') !== null
-		);
-		return numbers.length >= values.length * 0.8;
+		return figures(index) >= values.length * 0.8;
 	};
 
 	for (const [index, role] of roles.entries()) {
 		if (!role || !NUMERIC_ROLES.includes(role)) continue;
 		if (numericColumn(index)) continue;
-		for (const neighbour of [index - 1, index + 1]) {
-			if (neighbour < 0 || neighbour >= roles.length) continue;
-			if (roles[neighbour]) continue;
-			if (!numericColumn(neighbour)) continue;
-			roles[neighbour] = role;
+		// The nearest unclaimed column that actually holds figures, and among
+		// equals the fullest.
+		//
+		// This used to look only at the two columns either side, on the reasoning
+		// that a label lands beside the values it names. It lands further away
+		// than that: a stacked header merges three labels into one cell whose
+		// midpoint is nowhere near the right edge its numbers share, and one
+		// Raiffeisenbank statement put `Částka` two columns from its amounts. The
+		// role belongs on the column with the numbers in it, however far that is.
+		let best: { at: number; covered: number; distance: number } | undefined;
+		for (let at = 0; at < roles.length; at++) {
+			if (at === index || roles[at]) continue;
+			const covered = figures(at);
+			if (covered === 0 || !numericColumn(at)) continue;
+			const distance = Math.abs(at - index);
+			if (!best || covered > best.covered || (covered === best.covered && distance < best.distance))
+				best = { at, covered, distance };
+		}
+		if (best) {
+			roles[best.at] = role;
 			roles[index] = undefined;
-			break;
 		}
 	}
 }
@@ -426,6 +543,7 @@ export function readTabular(
 	const debitColumn = indexOfRole(roles, 'debit');
 	const creditColumn = indexOfRole(roles, 'credit');
 	const balanceColumn = indexOfRole(roles, 'balance');
+	const feeColumn = indexOfRole(roles, 'fee');
 
 	// A movement-shaped row was filtered out as a summary line. Say so rather
 	// than quietly filing a statement with a hole in it.
@@ -556,7 +674,32 @@ export function readTabular(
 
 		let amountMinor: bigint | null = null;
 		if (amountColumn >= 0) {
-			amountMinor = amountFromCell(row[amountColumn]?.text ?? '', decimalMark, digits);
+			const cell = row[amountColumn]?.text ?? '';
+
+			// A figure in another currency is not a movement in this ledger.
+			//
+			// Raiffeisenbank prints the foreign original of a card payment —
+			// `509 UAH` — right-aligned to the same edge as the koruna amounts, so
+			// it beats as a movement of its own and the statement gains a
+			// transaction that never happened, for 509 CZK. The account's currency
+			// is what separates them: this ledger moves in CZK, and a figure
+			// labelled UAH is the same money said twice, not more of it.
+			//
+			// It belongs to the movement above it, which is where `ParsedRow` has
+			// always said a foreign original goes.
+			const beside = CURRENCY_NEAR_AMOUNT.exec(cell);
+			const stated = beside?.[1] ?? beside?.[2];
+			if (stated && isCurrencyCode(stated) && stated.toUpperCase() !== currency) {
+				const previous = rows[rows.length - 1];
+				const original = amountFromCell(cell, decimalMark, minorDigits(stated.toUpperCase()));
+				if (previous && original !== null && previous.originalAmountMinor === undefined) {
+					previous.originalAmountMinor = original;
+					previous.originalCurrency = stated.toUpperCase();
+				}
+				continue;
+			}
+
+			amountMinor = amountFromCell(cell, decimalMark, digits);
 		} else {
 			// A debit/credit pair: direction comes from WHICH column holds the
 			// value, never from a sign.
@@ -586,6 +729,18 @@ export function readTabular(
 					? applyDateOrder(row[valueDateColumn]?.text ?? '', dateOrder, periodYear)
 					: undefined,
 			amountMinor,
+			// A charge stated in its own column, kept apart from the movement.
+			//
+			// The chain steps by `amount - fee`, so folding the fee into the amount
+			// here would close the chain and lose the fee; leaving it out entirely
+			// leaves a chain that misses by exactly the fees, which is how a bank
+			// that states them separately came to need a hand-written parser.
+			...(() => {
+				if (feeColumn < 0) return {};
+				const charged = amountFromCell(row[feeColumn]?.text ?? '', decimalMark, digits);
+				// Fees are stated as magnitudes; the direction is the movement's.
+				return charged ? { feeMinor: charged < 0n ? -charged : charged } : {};
+			})(),
 			// The ledger entry is denominated in the ACCOUNT's currency, always.
 			//
 			// A per-row currency column names the ORIGINAL of a foreign movement —
@@ -699,5 +854,40 @@ function deriveSignsFromBalance(rows: ParsedRow[], opening: bigint | null): void
 	for (const [index, row] of derived.entries()) rows[index].amountMinor = row.amountMinor;
 }
 
-/** True when a row names a balance rather than a movement. */
-export const isSummaryRow = (row: RawCell[]) => looksLikeSummary(rowText(row));
+/**
+ * The booking date is on every movement; a second date may not be.
+ *
+ * A statement that prints both a booking date and a transaction date names them
+ * with labels a stacked header can easily land on one column — Komerční banka
+ * writes `Datum zúčtování` and `Datum transakce` two printed lines apart, and
+ * both were mapped onto the second of the two columns. The first column, which
+ * carried a date on all 28 movements, was left unnamed; the second, which
+ * carried one on 25, became the booking date. Three movements then had no date
+ * the reader could complete and the whole statement was refused.
+ *
+ * Which is which is not a question of labels. Every movement has a booking
+ * date, so the column that holds one on every row is it; a date missing from
+ * some rows is the other kind, whatever it is called.
+ */
+function preferCompleteDateColumn(roles: (ColumnRole | undefined)[], body: RawCell[][]): void {
+	const booking = roles.indexOf('bookingDate');
+	if (booking < 0 || body.length < 3) return;
+
+	const dated = (column: number) =>
+		columnValues(body, column).filter((value) => value && isDateLike(value)).length;
+
+	const current = dated(booking);
+	if (current === body.length) return;
+
+	let better: number | undefined;
+	for (let column = 0; column < roles.length; column++) {
+		if (column === booking || (roles[column] && roles[column] !== 'valueDate')) continue;
+		if (dated(column) > current) better = column;
+	}
+	if (better === undefined) return;
+
+	// The fuller column takes the role; the one it replaces becomes the value
+	// date, which is what a second date on a movement almost always is.
+	roles[booking] = roles[booking] === 'bookingDate' ? 'valueDate' : roles[booking];
+	roles[better] = 'bookingDate';
+}

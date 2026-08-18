@@ -26,6 +26,15 @@ export interface RegisterFilter {
 	tagId: string | null;
 	/** Own-account transfers are hidden unless asked for, as in cash flow. */
 	includeTransfers: boolean;
+	/**
+	 * How the row was read — `adapter`, `standard`, `pdf-rhythm`, and so on.
+	 *
+	 * Worth filtering on because the readings are not equally strong: a row that
+	 * came from pixels, or from a reading whose fields had to be rejoined, is
+	 * worth a second look in a way that a row from a CAMT.053 export is not. The
+	 * ledger records this per row precisely so the question can be asked.
+	 */
+	sourceMethod: string | null;
 	page: number;
 }
 
@@ -87,6 +96,7 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		reviewState: review && REVIEW_STATES.includes(review as never) ? review : null,
 		tagId: text(params, 'tag'),
 		includeTransfers: params.get('transfers') === '1',
+		sourceMethod: text(params, 'source'),
 		// Clamped, not merely checked for integerness: Number.isInteger(1e21) is
 		// true, so ?page=1e21 rendered as OFFSET 5e+22 and Postgres rejected the
 		// statement — a 500 from a hand-edited URL.

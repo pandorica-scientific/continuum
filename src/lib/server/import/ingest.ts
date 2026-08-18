@@ -547,7 +547,14 @@ export async function ingestFile(
 	filename: string,
 	buffer: Uint8Array,
 	explicitAccountId?: string,
-	handle: DatabaseHandle = db
+	handle: DatabaseHandle = db,
+	/**
+	 * Allow the page to be read as an image when its text layer cannot be
+	 * proven. Rasterising and recognising a statement takes seconds per page, so
+	 * only a caller that is not holding a request open may ask for it — in
+	 * practice, the queue.
+	 */
+	options: { ocr?: boolean } = {}
 ): Promise<IngestResult> {
 	const contentHash = createHash('sha256').update(buffer).digest('hex');
 
@@ -572,7 +579,23 @@ export async function ingestFile(
 		// Layouts this household has already confirmed. A saved profile is what
 		// stops the second statement from a bank asking the same question again.
 		// Fetched only if the file turns out to need one.
-		statements = await detectAndParseAll(buffer, { profiles: () => loadProfiles(handle) });
+		// The account states its currency, and when the person named one at upload
+		// we know it before a byte is parsed. That is the authority — the document
+		// is corroboration — and passing it here is what stops a statement whose
+		// figures name no currency being refused for want of one, or worse, read
+		// under a guess.
+		//
+		// Only the explicit case: an account resolved FROM the statement is not
+		// known until after parsing, and for a first import there is no account to
+		// ask. Both remain questions, which is the honest answer for them.
+		const chosen = explicitAccountId
+			? await handle.select().from(account).where(eq(account.id, explicitAccountId))
+			: [];
+		statements = await detectAndParseAll(buffer, {
+			profiles: () => loadProfiles(handle),
+			ocr: options.ocr,
+			currency: chosen[0]?.currency
+		});
 	} catch (err) {
 		return {
 			filename,

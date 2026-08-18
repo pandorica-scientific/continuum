@@ -237,7 +237,8 @@ monthly fee. Continuum puts it in one place that belongs to you.
 ## What it does
 
 All five phases are functional: setup wizard and per-person sign-in; statement
-import for five banks with automatic categorisation and transfer pairing across
+import from any bank — the layout is worked out from the file and checked against
+its own balances, with automatic categorisation and transfer pairing across
 your own accounts; a searchable transaction register where a receipt can be split
 between categories and anything can be tagged into projects with running totals; a
 rules engine whose rules earn (and lose) trust from whether their suggestions
@@ -254,15 +255,55 @@ behind bearer tokens for dashboards and Home Assistant; Home Assistant itself
 behind a pluggable provider interface; and scheduled backups straight into a
 cloud-synced folder.
 
-### Supported statement formats
+### Statement import
 
-| Bank             | Format                                                 |
-| ---------------- | ------------------------------------------------------ |
-| Fio banka        | CSV (Internetbanking export)                           |
-| Revolut          | CSV (account statement)                                |
-| mBank            | CSV (elektroniczne zestawienie operacji, windows-1250) |
-| Raiffeisenbank   | PDF (text layer, no OCR)                               |
-| Česká spořitelna | PDF (text layer, no OCR)                               |
+**Any bank.** There is no list of supported banks, because nothing in the reader
+knows which bank wrote a file. A statement is read by working out its structure
+from the file itself, and it is filed only if it then agrees with its own
+arithmetic — the printed opening and closing balances, the running balance, the
+stated totals, the movement count. Whatever the reader cannot prove, it refuses.
+
+| What you upload                   | How it is read                                |
+| --------------------------------- | --------------------------------------------- |
+| CSV, TSV, or any delimited export | encoding, delimiter and columns worked out    |
+| Excel workbook (`.xlsx`)          | a statement per sheet                         |
+| PDF                               | the table recovered from the page geometry    |
+| CAMT.053, MT940, ABO/GPC, OFX/QFX | read directly — these declare their own shape |
+
+Measured on real statements from ten institutions across Poland, Czechia, Spain and
+the United States, on synthetic British, German and American layouts, and on a
+294-file corpus spanning 24 locales and 20 currencies: **every real statement is read
+without knowing which bank wrote it**, and 274 of the 294 are read exactly. The five
+banks that once had hand-written parsers still have them as a fast path, but nothing
+depends on them any more.
+
+**When it cannot work something out, it asks.** A layout nobody recognises opens a
+mapping wizard: you say which column is the date and which is the amount, it
+remembers the answer, and the next statement from that bank arrives already
+understood. If the bank later adds a column, you are asked again with your previous
+answers filled in — never silently misread, which is what mapping by column
+_position_ would do.
+
+#### What it will not do
+
+- **It refuses what it cannot check.** A statement that prints no balances, no
+  totals and no count cannot be verified by anyone, so it is refused rather than
+  taken on trust. QIF is the common case: it records a date, an amount and a payee,
+  and nothing that could confirm them.
+- **It refuses when a file is genuinely ambiguous.** A date column where every day
+  and month is twelve or lower, with no period printed, has no correct reading; so
+  does a CSV whose delimiter is also its decimal mark and whose figures happen to
+  survive both readings.
+- **Not yet read:** OpenDocument spreadsheets (`.ods`), and legacy `.xls`
+  workbooks — re-save either as `.xlsx`.
+- **Scanned statements and photographs** are read from the page image, in the
+  background, and held to the same arithmetic as everything else. This is the newest
+  part and the least reliable: on a rendered-page corpus it reads about two in five
+  exactly and refuses the rest. Nothing it cannot prove is filed, so a poor scan
+  costs you a refusal rather than a wrong number.
+
+How the reader works, and the twenty files it still cannot read with the reason for
+each, are documented in [`docs/statement-import.md`](docs/statement-import.md).
 
 Statements are deduplicated by content and by transaction, so re-uploading
 overlapping exports is always safe — including concurrent uploads and exports that

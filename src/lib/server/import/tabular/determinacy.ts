@@ -186,7 +186,17 @@ export function applyDateOrder(
 	return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
-const NUMBER_SHAPE = /^-?\(?\s*[\d.,\s'\u00A0\u202F]+\s*\)?-?$/;
+/**
+ * The shape of a figure, including an explicit plus.
+ *
+ * A statement that writes its credits `+249.00` and its debits `-11.50` is
+ * saying the same thing as one that writes `249.00` — and this pattern used to
+ * accept only the second. Every shape test downstream is built on it, so a bank
+ * with that habit had its credits fail "is this a number", which silently
+ * removed those rows from the table and cost one real statement 100 498.00
+ * across four movements.
+ */
+const NUMBER_SHAPE = /^[-+]?\(?\s*[\d.,\s'\u00A0\u202F]+\s*\)?[-+]?$/;
 
 /**
  * Comma or dot for the decimal?
@@ -263,6 +273,20 @@ export function resolveDecimalMark(
 			kind: 'ambiguous',
 			candidates: [',', '.'],
 			reason: 'both separators appear with fractional digits, so the column mixes conventions'
+		};
+	}
+	// A currency with no fractional part has no decimal mark to find.
+	//
+	// A yen is not divided, so `5,577,139` can only be a grouped whole number and
+	// there is nothing to decide — yet this asked which separator was the decimal
+	// one and refused the statement when the file could not say. It never could:
+	// the question does not arise for the currency. Kuwait's dinar makes the same
+	// point from the other end, with three fractional digits where two are
+	// assumed.
+	if (fractionDigits === 0 && commaDecimal === 0 && dotDecimal === 0) {
+		return {
+			kind: 'unavailable',
+			reason: 'this currency has no fractional part, so every separator groups digits'
 		};
 	}
 	if (commaGroup > 0 && dotGroup === 0) {

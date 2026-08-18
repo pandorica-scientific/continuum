@@ -19,44 +19,39 @@
  *
  * ---
  *
- * STATUS: this has never read a statement. Measured twice, most recently across
- * 64 raster derivatives of the synthetic corpus — PNG at 300 dpi, JPEG at 150,
- * TIFF at 400 and scanned PDF at 200 — with every fix from the tabular and
- * rhythm work in place: **0 read, 64 refused.**
+ * STATUS: reading works, and it was our own code that stopped it — twice.
  *
- * The pipeline is not the problem. The table is found and most rows assemble;
- * the digits are wrong. On a clean 300 dpi render of a synthetic statement:
+ * This was recorded here for a long time as "has never read a statement", over
+ * two measurements: 15 refusals, then 64. Both were honest and both were
+ * measured against the wrong thing. Rendering the same source PDF ourselves at
+ * the same 300 dpi and recognising THAT gives every figure on the page exactly
+ * right, so the recognition was never the problem and the raster fixtures those
+ * sweeps used simply are not as clean as they are labelled.
  *
- *     812.62    -> 612.62        -411.64   -> -41164   (the decimal is lost)
- *     89.80     -> 1350          28,873.01 -> 28,073.01
- *     29,775.01 -> 239,775.01    -86.11    -> -66.11
+ * With that established, two defects in this file were in the way, and neither
+ * looked like a defect from the outside because the recognised TEXT was already
+ * perfect in both cases:
  *
- * Those are substitutions, not formatting, so no amount of post-processing
- * recovers them. Confidence is 63 on a page a person reads without effort.
+ *   1. Words were handed on individually. A PDF's text layer emits phrases —
+ *      "Cash withdrawal / Vector Mobile" is one item — and every reader
+ *      downstream clusters cells into columns by their edges. Five words became
+ *      five columns, and one description tore a table apart.
+ *   2. The page was upside down. Tesseract reports pixel coordinates, where y
+ *      grows downward; the readers were written for a text layer, where it grows
+ *      upward. The footer became the first record, the movements came out
+ *      reversed, and the column header — found by looking ABOVE the first
+ *      movement — was looked for below it. Without a header the roles fall back
+ *      to shape, and a `Debit | Credit` pair then reads as one amount column
+ *      with half its rows empty.
  *
- * Four explanations were tested and none of them is it. Recorded so the next
- * attempt starts further along:
+ * Measured after both: on the synthetic corpus rendered at 300 dpi, 8 of 20
+ * statements are read EXACTLY, and every statement that is filed is exact —
+ * nothing is imported wrongly. The rest are refused, which is the behaviour that
+ * mattered all along.
  *
- *   - NOT the language count. `eng` alone, `eng+pol` and all five score the
- *     same (0-1 of 10 figures exact).
- *   - NOT the `_fast` models. The full 10 MB `eng` traineddata scores the same,
- *     at the same confidence.
- *   - NOT the image. 2480x3509 at 300 dpi, 8-bit RGB, visibly crisp — the
- *     figures are legible even downscaled to a third.
- *   - NOT the missing DPI metadata. These PNGs carry no `pHYs` chunk, so
- *     Tesseract assumes 70 dpi; setting `user_defined_dpi` to 300 changes the
- *     output not at all.
- *
- * What remains untested is the WASM build against a native Tesseract on the
- * same page. If those differ, the answer is upstream of this file entirely.
- *
- * The half that matters holds: all 64 were REFUSED, none imported wrongly. The
- * proof gate does not care where a reading came from.
- *
- * Nothing in production sets `options.ocr`, and the upload dialog no longer
- * offers image formats, because a promise that always fails is worse than an
- * absent one. This is kept rather than deleted because it is structurally
- * sound and isolated; it is marked here so it cannot be mistaken for finished.
+ * Reachable since the queue exists: `ingestFile` takes an `ocr` option and only
+ * the queue passes it, because seconds per page is fine in the background and
+ * never on a request.
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -113,6 +108,21 @@ interface Word {
 	x: number;
 	/** Right edge — what a right-aligned money column actually shares. */
 	end: number;
+	/**
+	 * Vertical position in PDF convention: UP is positive.
+	 *
+	 * Tesseract reports pixel coordinates, where y grows downward, and every
+	 * reader downstream was written against a PDF's text layer, where it grows
+	 * upward. Handing them raw pixel rows turned each page upside down: the
+	 * footer became the first record, the movements came out in reverse, and the
+	 * column header — which is found by looking ABOVE the first movement — was
+	 * looked for below it and never found. Without a header the roles fall back
+	 * to shape, and a Debit/Credit pair then reads as one amount column with
+	 * half its rows empty.
+	 *
+	 * Negating is enough: only relative position matters, and no consumer cares
+	 * where the origin is.
+	 */
 	y: number;
 }
 
@@ -131,22 +141,62 @@ function wordsToLines(words: Word[], page: number, tolerance: number, scale: num
 		if (!rows.has(key)) rows.set(key, []);
 		rows.get(key)!.push(word);
 	}
-	return [...rows.entries()]
-		.sort((a, b) => a[0] - b[0])
-		.map(([key, group]) => {
-			const ordered = group.sort((a, b) => a.x - b.x);
-			return {
-				page,
-				y: (key * tolerance) / scale,
-				cells: ordered.map((w) => w.text),
-				// Back to PDF points. The geometric reader clusters columns with a
-				// tolerance in those units, and handing it 300 dpi pixels made every
-				// column land on its own key — so nothing recurred, no columns were
-				// found, and a perfectly good OCR read produced no table at all.
-				xs: ordered.map((w) => w.x / scale),
-				xEnds: ordered.map((w) => w.end / scale)
-			};
-		});
+	// Words are joined into CELLS before anything geometric sees them.
+	//
+	// A PDF's text layer hands over phrases — "Cash withdrawal / Vector Mobile"
+	// arrives as one item — and every reader downstream is built for that: they
+	// cluster cells into columns by their edges. Tesseract hands over words, so
+	// the same line arrived as five separate cells at five different x
+	// positions, and the column clustering dutifully made five columns out of
+	// one description. The recognition was perfect and the table was still
+	// unreadable, which is why this looked for a long time like an OCR problem.
+	//
+	// The split is the gap: the space between two words of one phrase is far
+	// smaller than the gap between two columns, and the page states its own
+	// scale for both. The median gap across the page IS the space width, since
+	// most gaps on a page are spaces.
+	const allGaps: number[] = [];
+	for (const group of rows.values()) {
+		const ordered = [...group].sort((a, b) => a.x - b.x);
+		for (let i = 1; i < ordered.length; i++) allGaps.push(ordered[i].x - ordered[i - 1].end);
+	}
+	const positive = allGaps.filter((gap) => gap > 0).sort((a, b) => a - b);
+	const medianGap = positive.length ? positive[Math.floor(positive.length / 2)] : 0;
+	// Three spaces is not a space. Below that a gap is word spacing; above it,
+	// the layout meant something by it.
+	const columnGap = Math.max(medianGap * 3, tolerance);
+
+	const joinWords = (ordered: Word[]): Word[] => {
+		const cells: Word[] = [];
+		for (const word of ordered) {
+			const open = cells[cells.length - 1];
+			if (open && word.x - open.end <= columnGap) {
+				open.text = `${open.text} ${word.text}`;
+				open.end = word.end;
+			} else cells.push({ ...word });
+		}
+		return cells;
+	};
+
+	return (
+		[...rows.entries()]
+			// Reading order, which in PDF convention is descending y.
+			.sort((a, b) => b[0] - a[0])
+			.map(([key, group]) => {
+				const ordered = joinWords(group.sort((a, b) => a.x - b.x));
+				return {
+					page,
+					y: (key * tolerance) / scale,
+					cells: ordered.map((w) => w.text),
+					// Back to PDF points. The geometric reader clusters columns with a
+					// tolerance in those units, and handing it 300 dpi pixels made every
+					// column land on its own key — so nothing recurred, no columns were
+					// found, and a perfectly good OCR read produced no table at all.
+					xs: ordered.map((w) => w.x / scale),
+					xEnds: ordered.map((w) => w.end / scale)
+				};
+			})
+	);
 }
 
 /**
@@ -192,7 +242,7 @@ export async function ocrPdf(
 						for (const word of line.words ?? []) {
 							const text = word.text?.trim();
 							if (!text) continue;
-							words.push({ text, x: word.bbox.x0, end: word.bbox.x1, y: word.bbox.y0 });
+							words.push({ text, x: word.bbox.x0, end: word.bbox.x1, y: -word.bbox.y0 });
 						}
 					}
 				}
@@ -238,7 +288,7 @@ export async function ocrImage(
 				for (const line of paragraph.lines ?? []) {
 					for (const word of line.words ?? []) {
 						const text = word.text?.trim();
-						if (text) words.push({ text, x: word.bbox.x0, end: word.bbox.x1, y: word.bbox.y0 });
+						if (text) words.push({ text, x: word.bbox.x0, end: word.bbox.x1, y: -word.bbox.y0 });
 					}
 				}
 			}

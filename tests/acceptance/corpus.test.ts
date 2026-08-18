@@ -170,6 +170,27 @@ const CORPUS: Expectation[] = [
 		proof: 'P3'
 	},
 
+	{
+		file: 'RK_Bank_01:2025.pdf',
+		note: 'Komerční banka — three physical lines per movement, read by record rhythm with no bank-specific code; it kept a hand-written parser for years on the belief that this was impossible',
+		outcome: 'imports',
+		bank: 'tabular',
+		currency: 'CZK',
+		rows: 28,
+		proof: 'P1',
+		reconciles: true
+	},
+	{
+		file: 'RK_mbank_08_24 2.pdf',
+		note: 'mBank CZ — the same multi-line shape, and the same assembler reads it',
+		outcome: 'imports',
+		bank: 'tabular',
+		currency: 'CZK',
+		rows: 18,
+		proof: 'P3',
+		reconciles: true
+	},
+
 	// ---- documents that must be REFUSED, and for the stated reason ----
 	{
 		file: 'RHC-Account statement-2026-06-30.pdf',
@@ -210,18 +231,6 @@ const CORPUS: Expectation[] = [
 	{
 		file: 'RK_3_month_bank_statment.pdf',
 		note: 'GAP: Nickel ES',
-		outcome: 'refuses',
-		because: /No table|confidently/i
-	},
-	{
-		file: 'RK_Bank_01:2025.pdf',
-		note: 'GAP: Komerční banka — multi-line movements',
-		outcome: 'refuses',
-		because: /No table|confidently/i
-	},
-	{
-		file: 'RK_mbank_08_24 2.pdf',
-		note: 'GAP: mBank CZ',
 		outcome: 'refuses',
 		because: /No table|confidently/i
 	}

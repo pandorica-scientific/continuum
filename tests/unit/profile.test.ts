@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { candidateGrids } from '$lib/server/import/tabular/grid';
 import { chooseGrid } from '$lib/server/import/tabular/regions';
 import {
-	fromDocument,
 	headerSignature,
 	headersOf,
 	matchProfile,
 	profileFromReading,
 	rolesFromProfile,
-	toDocument,
 	type ImportProfile
 } from '$lib/server/import/tabular/profile';
 import { readTabular } from '$lib/server/import/tabular/statement';
@@ -123,29 +121,5 @@ describe('applying a profile', () => {
 		expect(guided.statement!.openingBalanceMinor! + sum).toBe(
 			guided.statement!.closingBalanceMinor
 		);
-	});
-});
-
-describe('sharing a profile', () => {
-	it('round-trips through its portable document', () => {
-		const document = toDocument(profile());
-		const restored = fromDocument(document, 'p2');
-		expect(restored.signature).toBe(profile().signature);
-		expect(restored.mapping.columns).toEqual(profile().mapping.columns);
-	});
-
-	it('carries no ids or timestamps that mean nothing elsewhere', () => {
-		expect(Object.keys(toDocument(profile()))).not.toContain('id');
-		expect(Object.keys(toDocument(profile()))).not.toContain('version');
-	});
-
-	it("marks an imported profile unverified — it is somebody else's confirmation", () => {
-		expect(fromDocument(toDocument(profile()), 'p3').verified).toBe(false);
-		expect(fromDocument(toDocument(profile()), 'p3').origin).toBe('imported');
-	});
-
-	it('refuses a file that is not a profile', () => {
-		expect(() => fromDocument({ hello: 'world' }, 'x')).toThrow(/not a Continuum import profile/);
-		expect(() => fromDocument({ continuumProfile: 1 }, 'x')).toThrow(/missing/);
 	});
 });

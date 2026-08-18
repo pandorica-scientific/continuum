@@ -180,9 +180,15 @@
 			</form>
 			<div class="backup-status">
 				<form method="POST" action="?/runBackupNow" use:enhance>
-					<button type="submit" class="btn">Back up now</button>
+					<button type="submit" class="btn" disabled={data.backupRunning}>
+						{data.backupRunning ? 'Backing up…' : 'Back up now'}
+					</button>
 				</form>
-				{#if data.lastBackup}
+				{#if data.backupRunning}
+					<span class="note">
+						Running in the background — the result appears here when it finishes.
+					</span>
+				{:else if data.lastBackup}
 					<span class="note" style:color={data.lastBackup.ok ? 'var(--green)' : 'var(--red)'}>
 						{data.lastBackup.ok ? 'Last backup' : 'Last attempt failed'}
 						· {data.lastBackup.at.slice(0, 16).replace('T', ' ')} · {data.lastBackup.note}

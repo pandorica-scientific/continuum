@@ -131,6 +131,7 @@ beforeAll(async () => {
 	// The baseline stops before these, but every insert here goes through the
 	// current Drizzle schema, which names every column they add.
 	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
+	await executeSqlFile(resolve('drizzle/0043_import_profiles.sql'));
 	await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'));
 	await executeSqlFile(resolve('drizzle/0045_import_queue.sql'));
 }, 30_000);
@@ -155,8 +156,9 @@ beforeEach(async () => {
 		drop trigger if exists task1_delay_transaction_tag on transaction_tag;
 		drop function if exists task1_delay_transaction_tag();
 		drop sequence if exists task1_tag_lock_arrivals;
-		truncate table transfer_pair, "transaction", import_file, account, person,
-			settings, rule, tag, currency_rate restart identity cascade;
+		truncate table transfer_pair, "transaction", import_file, import_job,
+			import_profile, account, person, settings, rule, tag, currency_rate
+			restart identity cascade;
 	`);
 });
 
@@ -1109,6 +1111,220 @@ describe('import database integrity', () => {
 		expect(first + second).toBe(1);
 		expect(await count('transaction')).toBe(5);
 		expect(await count('import_file')).toBe(1);
+	}, 30_000);
+
+	it('imports every account in a workbook rather than one of them', async () => {
+		// A workbook with a sheet per account is not several readings of one
+		// statement — it is several statements. Picking a winner there is not
+		// arbitration, it is losing an account: the file imported one of them,
+		// recorded its content hash, and the corrected re-upload was then refused
+		// as a duplicate.
+		const { detectAndParseAll } = await import('$lib/server/import/detect');
+		const bytes = new Uint8Array(
+			await readFile(resolve('tests/fixtures/synthetic/xlsx/multi-account-ambiguous-workbook.xlsx'))
+		);
+
+		const statements = await detectAndParseAll(bytes);
+		expect(statements).toHaveLength(2);
+		expect(statements.map((statement) => statement.currency).sort()).toEqual(['CZK', 'EUR']);
+		// The sheet that is not a statement is left out rather than guessed at.
+		expect(statements.every((statement) => statement.rows.length > 0)).toBe(true);
+	}, 30_000);
+
+	it('refuses a currency that is only shaped like one', async () => {
+		// Three capital letters is a shape, not a fact. `SYN-0001` is an account
+		// number, and its first three characters sit beside a digit exactly as a
+		// currency code would — so a workbook imported with a currency of "SYN",
+		// past a guard that checked the shape and nothing else.
+		const { isCurrencyCode } = await import('$lib/money');
+		expect(isCurrencyCode('SYN')).toBe(false);
+		expect(isCurrencyCode('PRA')).toBe(false);
+		expect(isCurrencyCode('CZK')).toBe(true);
+		expect(isCurrencyCode('KWD')).toBe(true);
+	}, 15_000);
+
+	it('lets a person map a layout the reader could not, and still checks the arithmetic', async () => {
+		// A statement in a layout nothing recognises: headers in a language the
+		// dictionary does not carry, so no column can be named by inference.
+		// Whole rupiah, because IDR has no subunit — a fact the reader takes from
+		// the account and applies to every figure it parses.
+		const csv = [
+			'Tanggal,Keterangan,Jumlah,Sisa',
+			'2026-03-14,Gaji bulanan,1500000,2500000',
+			'2026-03-15,Belanja harian,-320500,2179500',
+			'2026-03-16,Tagihan listrik,-179500,2000000'
+		].join('\n');
+		const bytes = new TextEncoder().encode(csv);
+
+		const { previewLayout } = await import('$lib/server/import/detect');
+		const { confirmMapping } = await import('$lib/server/import/wizard');
+		await insertAccount('bank-id', 'IDR', [], 'tabular');
+
+		// The reader refuses it — but it can still say what it saw, which is what
+		// makes a mapping possible at all.
+		const preview = await previewLayout(bytes, { currency: 'IDR' });
+		expect(preview).not.toBeNull();
+		expect(preview!.headers).toEqual(['Tanggal', 'Keterangan', 'Jumlah', 'Sisa']);
+		expect(preview!.sample).toHaveLength(3);
+
+		const result = await confirmMapping(
+			{
+				name: 'Bank Indonesia export',
+				source: preview!.source,
+				encoding: preview!.encoding,
+				delimiter: preview!.delimiter,
+				headers: preview!.headers,
+				roles: ['bookingDate', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'id.csv', bytes, accountId: 'bank-id' },
+			testDb
+		);
+
+		expect(result.error).toBeUndefined();
+		expect(result.rowsAdded).toBe(3);
+
+		// The mapping said what the columns ARE. Whether the movements add up was
+		// still decided by the balances.
+		const [file] = await testDb.select().from(schema.importFile);
+		expect(file.proofClass).toBe('P3');
+
+		// And it is remembered, so the next statement from this bank arrives
+		// already understood.
+		const [saved] = await testDb.select().from(schema.importProfile);
+		expect(saved.verified).toBe(true);
+		expect(saved.headers).toEqual(['Tanggal', 'Keterangan', 'Jumlah', 'Sisa']);
+	}, 30_000);
+
+	it('asks again, pre-filled, when a remembered layout gains a column', async () => {
+		// A bank adding a column is the commonest change there is, and the one a
+		// positional mapping gets silently wrong: every role shifts one to the
+		// right and the import still looks fine. Matching on labels turns it into
+		// a question.
+		const { previewLayout } = await import('$lib/server/import/detect');
+		const { confirmMapping } = await import('$lib/server/import/wizard');
+		const { loadProfiles } = await import('$lib/server/import/profiles');
+		await insertAccount('bank-drift', 'IDR', [], 'tabular');
+
+		const before = new TextEncoder().encode(
+			[
+				'Tanggal,Keterangan,Jumlah,Sisa',
+				'2026-03-14,Gaji bulanan,1500000,2500000',
+				'2026-03-15,Belanja harian,-320500,2179500',
+				'2026-03-16,Tagihan listrik,-179500,2000000'
+			].join('\n')
+		);
+		const first = await confirmMapping(
+			{
+				name: 'Mandiri current',
+				source: 'delimited',
+				delimiter: ',',
+				headers: ['Tanggal', 'Keterangan', 'Jumlah', 'Sisa'],
+				roles: ['bookingDate', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'before.csv', bytes: before, accountId: 'bank-drift' },
+			testDb
+		);
+		expect(first.rowsAdded).toBe(3);
+
+		// The same export, with a reference column inserted in the middle.
+		const after = new TextEncoder().encode(
+			[
+				'Tanggal,Referensi,Keterangan,Jumlah,Sisa',
+				'2026-04-14,REF-1,Gaji bulanan,1500000,2500000',
+				'2026-04-15,REF-2,Belanja harian,-320500,2179500',
+				'2026-04-16,REF-3,Tagihan listrik,-179500,2000000'
+			].join('\n')
+		);
+
+		const preview = await previewLayout(after, {
+			currency: 'IDR',
+			profiles: () => loadProfiles(testDb)
+		});
+		expect(preview!.drift?.profileName).toBe('Mandiri current');
+		expect(preview!.drift?.added).toEqual(['referensi']);
+
+		// The columns it already knew arrive answered; only the new one is blank,
+		// so confirming a changed export is a glance rather than the whole
+		// questionnaire again.
+		expect(preview!.roles).toEqual(['bookingDate', undefined, 'counterparty', 'amount', 'balance']);
+
+		// Confirming replaces the old layout rather than leaving two for one bank.
+		const second = await confirmMapping(
+			{
+				name: 'Mandiri current',
+				supersedes: preview!.drift!.profileId,
+				source: 'delimited',
+				delimiter: ',',
+				headers: preview!.headers,
+				roles: ['bookingDate', 'reference', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'after.csv', bytes: after, accountId: 'bank-drift' },
+			testDb
+		);
+		expect(second.error).toBeUndefined();
+		expect(second.rowsAdded).toBe(3);
+		expect(await count('import_profile')).toBe(1);
+	}, 30_000);
+
+	it('refuses a confirmed mapping whose rows contradict the balances', async () => {
+		// A mapping is not permission to skip the proof. Here the person names the
+		// columns correctly and the file itself is inconsistent — its running
+		// balance does not follow from its own movements — so it is refused
+		// exactly as an inferred reading would be.
+		const csv = [
+			'Tanggal,Keterangan,Jumlah,Sisa',
+			'2026-03-14,Gaji bulanan,1500000,2500000',
+			'2026-03-15,Belanja harian,-320500,9999999',
+			'2026-03-16,Tagihan listrik,-179500,1111111'
+		].join('\n');
+		const { confirmMapping } = await import('$lib/server/import/wizard');
+		await insertAccount('bank-id2', 'IDR', [], 'tabular');
+
+		const result = await confirmMapping(
+			{
+				name: 'Broken export',
+				source: 'delimited',
+				delimiter: ',',
+				headers: ['Tanggal', 'Keterangan', 'Jumlah', 'Sisa'],
+				roles: ['bookingDate', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'broken.csv', bytes: new TextEncoder().encode(csv), accountId: 'bank-id2' },
+			testDb
+		);
+
+		expect(result.rowsAdded).toBe(0);
+		expect(result.error).toBeTruthy();
+	}, 30_000);
+
+	it('shows what a statement was checked against, in words', async () => {
+		// The proof engine used to decide whether to file a statement and then
+		// discard its reasoning, so "accepted" was something to take on trust.
+		// These are the fields the evidence panel reads.
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const { PROOF_LABELS, sourceLabel } = await import('$lib/transactions/provenance');
+		await insertAccount('fio-evidence', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+
+		await ingestFile('fio.csv', source, 'fio-evidence', testDb);
+		const [file] = await testDb.select().from(schema.importFile);
+
+		expect(sourceLabel(file.sourceMethod)).toBe('bank format');
+		expect(PROOF_LABELS[file.proofClass!]).toMatch(/opening and closing balances agree/i);
+
+		// Only checks that said something are worth showing: "unavailable" means
+		// the statement never printed that figure, which is neither evidence nor
+		// a failure.
+		const said = (file.reconciliation ?? []).filter((check) => check.status !== 'unavailable');
+		expect(said.map((check) => check.name)).toEqual(['opening and closing', 'stated totals']);
+		expect(said.every((check) => check.status === 'pass')).toBe(true);
 	}, 30_000);
 
 	it('records how each statement was read and what proved it', async () => {

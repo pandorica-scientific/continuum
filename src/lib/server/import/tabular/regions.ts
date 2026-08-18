@@ -55,8 +55,10 @@ export interface Region {
  * that statement was money, the region was not a table, and a page whose
  * columns had been recovered perfectly could not be read at all.
  */
+// A leading `+` is how plenty of statements write a credit; rejecting it made
+// those rows fail "does this row carry an amount" and vanish from the table.
 const AMOUNT_LIKE =
-	/^[€$£¥]?\s*-?\(?\s*\d+(?:[.,\s'\u00A0\u202F]\d{3})*(?:[.,]\d{1,2})?\s*\)?-?\s*(?:[€$£¥]|[A-Z]{3}|z\u0142|K\u010d|Ft)?$/;
+	/^[€$£¥]?\s*[-+]?\(?\s*\d+(?:[.,\s'\u00A0\u202F]\d{3})*(?:[.,]\d{1,2})?\s*\)?[-+]?\s*(?:[€$£¥]|[A-Z]{3}|z\u0142|K\u010d|Ft)?$/;
 
 const populatedWidth = (row: RawCell[]): number => {
 	let last = -1;
@@ -71,38 +73,124 @@ const hasDate = (row: RawCell[]) => row.some((c) => isDateLike(c.text));
 const hasAmount = (row: RawCell[]) =>
 	row.some((c) => c.text.length > 0 && AMOUNT_LIKE.test(c.text) && /\d/.test(c.text));
 
-/**
- * Split into runs of consecutive non-blank rows that share a populated width.
- * A blank row or a change of width ends a region — both are how statements
- * separate one block from the next.
- */
+const populatedColumns = (row: RawCell[]): Set<number> => {
+	const filled = new Set<number>();
+	row.forEach((cell, index) => {
+		if (cell.text.trim()) filled.add(index);
+	});
+	return filled;
+};
+
+const shapeOverlap = (a: Set<number>, b: Set<number>): number => {
+	if (a.size === 0 || b.size === 0) return 0;
+	let shared = 0;
+	for (const column of a) if (b.has(column)) shared++;
+	return shared / (a.size + b.size - shared);
+};
+
+const SAME_SHAPE = 0.5;
+
+/** A row that carries both a date and a figure is a movement. */
+const isMovement = (row: RawCell[]) => hasDate(row) && hasAmount(row);
+
 function split(grid: Grid): Omit<Region, 'role' | 'headerIndex'>[] {
 	const regions: Omit<Region, 'role' | 'headerIndex'>[] = [];
 	let current: RawCell[][] = [];
 	let start = 0;
-	let width = -1;
+	let previous: Set<number> | undefined;
+	let previousRow: RawCell[] | undefined;
 
 	const flush = (end: number) => {
-		if (current.length) regions.push({ start, end, rows: current, width });
+		if (current.length) {
+			const width = current.reduce((widest, row) => Math.max(widest, populatedWidth(row)), 0);
+			regions.push({ start, end, rows: current, width });
+		}
 		current = [];
 	};
 
 	for (const [index, row] of grid.rows.entries()) {
 		if (isBlank(row)) {
 			flush(index - 1);
-			width = -1;
+			previous = undefined;
+			previousRow = undefined;
 			continue;
 		}
-		const w = populatedWidth(row);
-		if (w !== width) {
+		const shape = populatedColumns(row);
+		// Two movements are one block, whatever columns each of them happens to
+		// fill.
+		//
+		// Shape is the right test for telling a metadata block from a table, and
+		// the wrong one for telling two movements apart. A statement recovered
+		// from page geometry populates only the columns each movement uses — a
+		// card payment fills nine, a transfer four — so on one real statement 58
+		// of 103 adjacent pairs shared under half their columns, and a 104-movement
+		// table became 23 regions of two to six rows, each then asked to prove
+		// itself alone against balances printed once for all of them.
+		const bothMovements = previousRow !== undefined && isMovement(previousRow) && isMovement(row);
+		if (previous && !bothMovements && shapeOverlap(previous, shape) < SAME_SHAPE) {
 			flush(index - 1);
 			start = index;
-			width = w;
-		}
+		} else if (!previous) start = index;
+		previous = shape;
+		previousRow = row;
 		current.push(row);
 	}
 	flush(grid.rows.length - 1);
-	return regions;
+	return rejoinHeaders(regions);
+}
+
+/**
+ * A row of labels belongs to the table it names.
+ *
+ * Splitting on shape is right for blocks and wrong for headers: a header
+ * populates every column the table HAS, while the rows below it populate only
+ * the columns they use, so the very first data row often overlaps it least. A
+ * UK statement whose first movement carries no "Paid out" value shares two
+ * columns out of five with its own header — which reads as a change of block,
+ * and the header ends up in a region of its own.
+ *
+ * The table then has no names to work from, roles fall back to shape, and a
+ * `Paid out | Paid in` pair reads as one amount column with half its rows
+ * empty. That is the same failure the OCR path had for the same reason, and it
+ * is worth stating twice: losing the header is not a small loss, because
+ * everything downstream depends on it.
+ *
+ * So a lone row that looks like a header is folded into the block beneath it.
+ * `findHeader` decides what looks like one — the same judgement used to locate
+ * a header inside a region — so there is one definition and not two.
+ */
+function rejoinHeaders(
+	regions: Omit<Region, 'role' | 'headerIndex'>[]
+): Omit<Region, 'role' | 'headerIndex'>[] {
+	const out: Omit<Region, 'role' | 'headerIndex'>[] = [];
+	for (let i = 0; i < regions.length; i++) {
+		const region = regions[i];
+		const next = regions[i + 1];
+		const isLoneHeader =
+			region.rows.length === 1 &&
+			next !== undefined &&
+			// Adjacent: a header does not skip a blank line to reach its table.
+			next.start === region.end + 1 &&
+			// A header is ALL labels. `findHeader` alone is too generous for a row
+			// standing on its own: "Balance carried forward  £3,521.59" names a
+			// role and carries no date, so it reads as a header — and folding that
+			// into the table below buries the real header inside a summary block,
+			// which is worse than leaving it where it was.
+			!region.rows[0].some((cell) => cell.text && AMOUNT_LIKE.test(cell.text)) &&
+			findHeader(region.rows) === 0;
+		if (isLoneHeader) {
+			out.push({
+				start: region.start,
+				end: next.end,
+				rows: [...region.rows, ...next.rows],
+				width: Math.max(region.width, next.width)
+			});
+			i++;
+			continue;
+		}
+		out.push(region);
+	}
+	return out;
 }
 
 /**
@@ -192,14 +280,6 @@ export function droppedMovements(region: Region): RawCell[][] {
 	const body =
 		region.headerIndex === undefined ? region.rows : region.rows.slice(region.headerIndex + 1);
 	return body.filter((row) => hasDate(row) && hasAmount(row) && looksLikeSummary(rowText(row)));
-}
-
-/** Rows a transaction region contained but did not file, for reporting. */
-export function excludedRows(region: Region): RawCell[][] {
-	const body =
-		region.headerIndex === undefined ? region.rows : region.rows.slice(region.headerIndex + 1);
-	const kept = new Set(transactionRows(region));
-	return body.filter((row) => !kept.has(row));
 }
 
 export interface GridChoice {

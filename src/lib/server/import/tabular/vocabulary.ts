@@ -22,6 +22,7 @@ export type ColumnRole =
 	| 'debit'
 	| 'credit'
 	| 'balance'
+	| 'fee'
 	| 'currency'
 	| 'counterparty'
 	| 'counterpartyAccount'
@@ -87,6 +88,30 @@ export const HEADER_TERMS: Record<ColumnRole, string[]> = {
 		'bilanz',
 		'kontostand',
 		'stav uctu'
+	],
+	/**
+	 * A charge stated beside the movement rather than folded into it.
+	 *
+	 * `ParsedRow` has carried `feeMinor` since it was written, and the proof
+	 * engine has always netted it out — `amount - fee` is what a balance chain
+	 * steps by. There was simply no ROLE for it, so the generic reader could
+	 * never populate it, and a bank that states its fees separately had a chain
+	 * that would not close by exactly the fees. That is one of the three layouts
+	 * still needing a hand-written parser, and it needed a word rather than an
+	 * algorithm.
+	 */
+	fee: [
+		'fee',
+		'fees',
+		'poplatek',
+		'poplatky',
+		'oplata',
+		'gebuhr',
+		'gebuhren',
+		'comision',
+		'frais',
+		'commissione',
+		'avgift'
 	],
 	currency: ['mena', 'currency', 'waluta', 'wahrung', 'divisa', 'moneda'],
 	counterparty: [

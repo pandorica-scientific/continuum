@@ -173,6 +173,7 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 	// Own-account transfers are noise in a ledger view, as they are in cash
 	// flow, so they stay out unless explicitly asked for.
 	if (!filter.includeTransfers) clauses.push(isNull(transaction.transferPairId));
+	if (filter.sourceMethod) clauses.push(eq(transaction.sourceMethod, filter.sourceMethod));
 
 	return clauses.length > 0 ? and(...clauses) : undefined;
 }
@@ -198,6 +199,9 @@ export interface RegisterRow {
 	accountId: string;
 	accountName: string;
 	isTransfer: boolean;
+	/** How this row was read, and how strongly it was proven. */
+	sourceMethod: string | null;
+	proofClass: string | null;
 }
 
 export interface RegisterPage {
@@ -242,7 +246,9 @@ export async function registerPage(
 				reviewState: transaction.reviewState,
 				accountId: transaction.accountId,
 				accountName: account.name,
-				transferPairId: transaction.transferPairId
+				transferPairId: transaction.transferPairId,
+				sourceMethod: transaction.sourceMethod,
+				proofClass: transaction.proofClass
 			})
 			.from(transaction)
 			.innerJoin(account, eq(transaction.accountId, account.id))
@@ -284,6 +290,8 @@ export async function registerPage(
 			reviewState: r.reviewState,
 			accountId: r.accountId,
 			accountName: r.accountName,
+			sourceMethod: r.sourceMethod,
+			proofClass: r.proofClass,
 			isTransfer: r.transferPairId !== null
 		})),
 		total,

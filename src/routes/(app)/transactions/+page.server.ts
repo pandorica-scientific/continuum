@@ -11,6 +11,12 @@ import {
 	updateTransactionTags
 } from '$lib/server/tags';
 import { parseFilter, REVIEW_STATES } from '$lib/transactions/filter';
+import {
+	INFERRED_SOURCES,
+	PROOF_LABELS,
+	SOURCE_LABELS,
+	sourceLabel
+} from '$lib/transactions/provenance';
 import { CATEGORY_GROUPS } from '$lib/categories';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
@@ -68,6 +74,13 @@ export const load: PageServerLoad = async ({ url }) => {
 				reviewState: r.reviewState,
 				account: r.accountName,
 				isTransfer: r.isTransfer,
+				// Only shown when the structure was worked out rather than declared:
+				// a row from a published format has nothing interesting to say here,
+				// and saying it on every row would be noise.
+				readAs: INFERRED_SOURCES.includes(r.sourceMethod as never)
+					? sourceLabel(r.sourceMethod)
+					: null,
+				proofClass: r.proofClass,
 				// The dialog works in the transaction's own currency and needs the
 				// raw figure to compute a remainder against.
 				currency: r.currency,
@@ -96,6 +109,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		pageSize: PAGE_SIZE,
 		knownTags,
 		reviewStates: REVIEW_STATES,
+		// Offered as a filter because these are the readings whose structure was
+		// worked out rather than declared — the ones worth being able to review.
+		sourceMethods: INFERRED_SOURCES.map((method) => ({
+			value: method,
+			label: SOURCE_LABELS[method] ?? method
+		})),
+		proofLabels: PROOF_LABELS,
 		accounts,
 		categories: CATEGORY_GROUPS.map((group) => ({
 			key: group.key,

@@ -42,73 +42,7 @@ interface Gap {
 
 const KNOWN_GAPS: Gap[] = [
 	{
-		why: 'Comma as both delimiter and decimal mark, unquoted: `799,56` is indistinguishable from two fields `799` and `56`, so the field boundaries are genuinely ambiguous. Real exports using comma decimals ship semicolons for exactly this reason.',
-		files: [
-			'csv/statement-001-comma-utf8-bom.csv',
-			'csv/statement-002-comma-utf8-bom.csv',
-			'csv/statement-003-comma-utf8-bom.csv',
-			'csv/statement-004-comma-utf8-bom.csv',
-			'csv/statement-005-comma-utf8-bom.csv',
-			'csv/statement-006-comma-utf8-bom.csv',
-			'csv/statement-007-comma-utf8-bom.csv',
-			'csv/statement-015-comma-utf8-bom.csv',
-			'csv/statement-016-comma-utf8-bom.csv',
-			'csv/statement-017-comma-utf8-bom.csv',
-			'csv/statement-024-comma-utf8-bom.csv',
-			'csv/statement-025-comma-utf8-bom.csv',
-			'csv/statement-026-comma-utf8-bom.csv',
-			'csv/statement-027-comma-utf8-bom.csv',
-			'csv/statement-028-comma-utf8-bom.csv',
-			'csv/statement-029-comma-utf8-bom.csv',
-			'csv/statement-030-comma-utf8-bom.csv',
-			'csv/statement-031-comma-utf8-bom.csv',
-			'csv/statement-032-comma-utf8-bom.csv',
-			'csv/statement-039-comma-utf8-bom.csv',
-			'csv/statement-040-comma-utf8-bom.csv',
-			'csv/statement-041-comma-utf8-bom.csv',
-			'csv/statement-048-comma-utf8-bom.csv',
-			'csv/statement-049-comma-utf8-bom.csv',
-			'csv/statement-050-comma-utf8-bom.csv',
-			'csv/statement-051-comma-utf8-bom.csv',
-			'csv/statement-052-comma-utf8-bom.csv',
-			'csv/statement-053-comma-utf8-bom.csv',
-			'csv/statement-054-comma-utf8-bom.csv',
-			'csv/statement-055-comma-utf8-bom.csv'
-		]
-	},
-	{
-		why: 'A dot-decimal PDF whose every figure has three digits after the separator, in a two-decimal currency: the separator could be a decimal point or a thousands group, and nothing in the file settles it.',
-		files: ['pdf-text/statement-018.pdf', 'pdf-text/statement-042.pdf']
-	},
-	{
-		why: "Three-decimal currency in a PDF: the amounts parse, but three of eight rows carry a figure the reader cannot resolve to KWD's 1000 fils.",
-		files: ['pdf-text/statement-022.pdf', 'pdf-text/statement-046.pdf']
-	},
-	{
-		why: 'A statement with no movements at all, in a format with no header and no metadata. There is nothing in the file to read, and refusing is right.',
-		files: [
-			'tsv/statement-016-tab-headerless.tsv',
-			'tsv/statement-032-tab-headerless.tsv',
-			'tsv/statement-048-tab-headerless.tsv'
-		]
-	},
-	{
-		why: 'OFX/QFX is not implemented.',
-		files: [
-			'ofx/statement-001.ofx',
-			'ofx/statement-007.ofx',
-			'ofx/statement-013.ofx',
-			'ofx/statement-019.ofx',
-			'ofx/statement-025.ofx',
-			'ofx/statement-031.ofx',
-			'ofx/statement-037.ofx',
-			'ofx/statement-043.ofx',
-			'ofx/statement-049.ofx',
-			'ofx/statement-055.ofx'
-		]
-	},
-	{
-		why: 'QIF is not implemented.',
+		why: 'QIF records a date, an amount, a payee and a memo and nothing else \u2014 no balances, no totals, no count. There is nothing in the file for the arithmetic to check, so it is refused rather than taken on trust. A property of the format, not a gap in the reader.',
 		files: [
 			'qif/statement-001.qif',
 			'qif/statement-009.qif',
@@ -119,6 +53,25 @@ const KNOWN_GAPS: Gap[] = [
 			'qif/statement-049.qif',
 			'qif/statement-057.qif'
 		]
+	},
+	{
+		why: 'A statement with no movements at all, in a format that carries no balances either \u2014 a headerless ledger, or a comma-on-comma CSV whose header cannot be split. There is nothing in the file to read and nothing to check it against, so refusing is right.',
+		files: [
+			'csv/statement-016-comma-utf8-bom.csv',
+			'csv/statement-032-comma-utf8-bom.csv',
+			'csv/statement-048-comma-utf8-bom.csv',
+			'tsv/statement-016-tab-headerless.tsv',
+			'tsv/statement-032-tab-headerless.tsv',
+			'tsv/statement-048-tab-headerless.tsv'
+		]
+	},
+	{
+		why: 'A dot-decimal PDF whose every figure has three digits after the separator, in a two-decimal currency: the separator could be a decimal point or a thousands group, and nothing in the file settles it.',
+		files: ['pdf-text/statement-018.pdf', 'pdf-text/statement-042.pdf']
+	},
+	{
+		why: "Three-decimal currency in a PDF: the amounts parse, but three of eight rows carry a figure the reader cannot resolve to KWD's 1000 fils.",
+		files: ['pdf-text/statement-022.pdf', 'pdf-text/statement-046.pdf']
 	},
 	{
 		why: 'OpenDocument spreadsheets are not read yet.',

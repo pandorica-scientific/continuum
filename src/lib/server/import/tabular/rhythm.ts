@@ -41,6 +41,7 @@
  * document.
  */
 import { isDateLike } from './determinacy';
+import { looksLikeSummary } from './vocabulary';
 import type { Grid, RawCell } from './grid';
 import type { PdfLine } from '../types';
 
@@ -90,9 +91,6 @@ export const kindOf = (text: string): Kind => {
 	if (INT.test(t)) return 'int';
 	return 'text';
 };
-
-/** Does this cell hold a figure at all, quoted or not? */
-export const holdsMoney = (text: string): boolean => MONEY.test(text) && !isDateLike(text);
 
 /**
  * One-dimensional clustering by chaining, with a width cap.
@@ -591,20 +589,62 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 	const centre = new Map([...midpoints.entries()].map(([key, at]) => [key, at.total / at.count]));
 
 	const firstMovement = ordered[0];
-	const above = [...leftovers.entries()]
+
+	/**
+	 * A header is often written over several lines, not one.
+	 *
+	 * Taking only the nearest line above the movements is right for a statement
+	 * that prints `Date | Description | Amount` on one row, and wrong for the two
+	 * that stack their labels. Česká spořitelna writes four lines — `Popis`, then
+	 * `Částka obratu cizí měny…`, then `Provedeno | Název protiúčtu…`, then
+	 * `Zaúčtováno | Položka | … | Částka` — and the nearest one carries a single
+	 * label. Raiffeisenbank writes three, and the nearest names the amount column
+	 * `Kurz`, which is the exchange rate.
+	 *
+	 * In both cases the column that says `Částka` is two lines further up, so the
+	 * amount column arrived unnamed, the roles fell back to shape, and the table
+	 * could not be read at all — from an assembly that was perfectly correct.
+	 *
+	 * So the whole contiguous run is taken. It stops at a jump in the line pitch,
+	 * which is where the header block ends and the page furniture above it
+	 * begins, and at a line carrying a figure — ČS prints
+	 * `Počáteční zůstatek: 114 820.44` directly above its header, and that is a
+	 * balance, not a label.
+	 */
+	const carriesMoney = (line: Cell[]) => line.some((cell) => cell.kind === 'money');
+	const isMovementLine = (line: Cell[]) =>
+		line.some((cell) => cell.kind === 'date') && carriesMoney(line);
+
+	const candidates = [...leftovers.entries()]
 		.map(([key, line]) => ({ key, line }))
 		.filter(({ line }) => line[0].page === firstMovement.page && line[0].y > firstMovement.y)
-		.sort((a, b) => a.line[0].y - b.line[0].y)[0];
+		.sort((a, b) => a.line[0].y - b.line[0].y);
 
-	// A line carrying both a date and a figure is a movement, not a label for
-	// one — and consuming it as a header would lose the movement twice over:
-	// once from the table, and once again by naming the columns after it.
-	const looksLikeAMovement =
-		above !== undefined &&
-		above.line.some((cell) => cell.kind === 'date') &&
-		above.line.some((cell) => cell.kind === 'money');
+	const headerLines: { key: number; line: Cell[] }[] = [];
+	let previousY: number | undefined;
+	for (const candidate of candidates) {
+		const y = candidate.line[0].y;
+		// A movement, a figure, or a stated balance: not a label, and the run ends
+		// here. The third case needs its own test — mBank prints
+		// `Saldo początkowe: 67,93` as ONE cell, so it reads as text rather than
+		// as money, and swallowing it into the header both lost the opening
+		// balance as evidence and put a figure among the column names.
+		const text = candidate.line.map((cell) => cell.text).join(' ');
+		if (isMovementLine(candidate.line) || carriesMoney(candidate.line) || looksLikeSummary(text)) {
+			break;
+		}
+		if (previousY !== undefined) {
+			const step = y - previousY;
+			const first = headerLines[0].line[0].y - firstMovement.y;
+			// The run keeps its own rhythm; a wider jump is the page above it.
+			if (step > Math.max(first, 1) * 2.5) break;
+		}
+		headerLines.push(candidate);
+		previousY = y;
+		if (headerLines.length >= 6) break;
+	}
 
-	if (above && !looksLikeAMovement) {
+	if (headerLines.length > 0) {
 		const nearest = (cell: Cell) => {
 			const mid = (cell.x + cell.xEnd) / 2;
 			let best: string | undefined;
@@ -617,17 +657,25 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 			// label for any of them.
 			return distance <= 60 ? best : undefined;
 		};
-		const placedLabels = above.line.map((cell) => ({ cell, slot: nearest(cell) }));
-		const named = placedLabels.filter((entry) => entry.slot).length;
-		if (named >= above.line.length * 0.6) {
-			const header: string[] = new Array(order.length).fill('');
-			for (const { cell, slot } of placedLabels) {
+
+		// Topmost line first, so a stacked header reads the way it is printed and
+		// `roleOfHeader` still finds the term it knows in the joined text.
+		const header: string[] = new Array(order.length).fill('');
+		let placed = 0;
+		let offered = 0;
+		for (const { line } of [...headerLines].reverse()) {
+			for (const cell of [...line].sort((a, b) => a.x - b.x)) {
+				offered++;
+				const slot = nearest(cell);
 				const at = slot === undefined ? undefined : index.get(slot);
 				if (at === undefined) continue;
+				placed++;
 				header[at] = header[at] ? `${header[at]} ${cell.text}` : cell.text;
 			}
+		}
+		if (placed >= offered * 0.6) {
 			rows.unshift(header.map((text) => ({ text: text.trim() })));
-			leftovers.delete(above.key);
+			for (const { key } of headerLines) leftovers.delete(key);
 		}
 	}
 
@@ -640,5 +688,61 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 		}
 	}
 
+	mergeSplitDateColumns(rows, records.length);
 	return [{ source: 'delimited', origin: 'pdf-rhythm', rows }];
+}
+
+/**
+ * Two date columns that never appear together are one date column.
+ *
+ * Clustering places a cell by its left edge, and a proportional font moves that
+ * edge by a point or two between rows — enough, occasionally, for one
+ * statement's booking dates to land in two adjacent slots. On a Komerční banka
+ * statement 25 of 28 movements put their date in one column and three put it in
+ * the next, so the date column had three holes in it and the reading was refused
+ * for rows "carrying no year" that in fact carried a perfectly good date one
+ * column to the left.
+ *
+ * The test is co-occurrence, not similarity. A record has one booking date, so
+ * two slots that are never both filled within a record cannot be two different
+ * dates — they are one column that drifted. Money columns are deliberately NOT
+ * merged on this rule: a debit and a credit column are also never both filled,
+ * and there the emptiness is the meaning.
+ */
+function mergeSplitDateColumns(rows: RawCell[][], movements: number): void {
+	if (rows.length === 0 || movements < 3) return;
+	const width = rows[0].length;
+	const body = rows.slice(0, movements + 1);
+
+	const dateRows: Set<number>[] = [];
+	for (let column = 0; column < width; column++) {
+		const filled = new Set<number>();
+		let dates = 0;
+		for (const [at, row] of body.entries()) {
+			const text = row[column]?.text.trim();
+			if (!text) continue;
+			filled.add(at);
+			if (isDateLike(text)) dates++;
+		}
+		// A date column, allowing for the header sitting in it.
+		dateRows[column] = filled.size > 0 && dates >= filled.size - 1 ? filled : new Set();
+	}
+
+	for (let left = 0; left < width; left++) {
+		if (dateRows[left].size === 0) continue;
+		for (let right = left + 1; right < width; right++) {
+			if (dateRows[right].size === 0) continue;
+			const overlap = [...dateRows[right]].some((at) => dateRows[left].has(at));
+			if (overlap) continue;
+			for (const row of rows) {
+				const moving = row[right]?.text.trim();
+				if (moving && !row[left]?.text.trim()) {
+					row[left] = { ...row[right] };
+					row[right] = { text: '' };
+				}
+			}
+			for (const at of dateRows[right]) dateRows[left].add(at);
+			dateRows[right] = new Set();
+		}
+	}
 }

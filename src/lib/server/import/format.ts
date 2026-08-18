@@ -20,6 +20,7 @@ export type StatementFormat =
 	| 'camt053'
 	| 'xml'
 	| 'ofx'
+	| 'qif'
 	| 'mt940'
 	| 'abo'
 	| 'delimited'
@@ -41,6 +42,7 @@ export const FORMAT_LABEL: Record<StatementFormat, string> = {
 	camt053: 'CAMT.053 (ISO 20022)',
 	xml: 'XML',
 	ofx: 'OFX/QFX',
+	qif: 'QIF',
 	mt940: 'MT940',
 	abo: 'ABO/GPC',
 	delimited: 'delimited text',
@@ -110,6 +112,13 @@ export function sniffFormat(buffer: Uint8Array): FormatSniff {
 	}
 	if (/^OFXHEADER/i.test(trimmed) || /<OFX>/i.test(head)) {
 		return { format: 'ofx', evidence: 'OFX header' };
+	}
+	// QIF: a `!Type:` header, then one-letter fields terminated by a lone `^`.
+	// Recognised so it can be REFUSED for the right reason — see the note in
+	// `detect.ts`. Without this it reads as an unknown delimited file and is
+	// turned away with a message about banks, which explains nothing.
+	if (/^!Type:/im.test(head) && /^\^\s*$/m.test(head)) {
+		return { format: 'qif', evidence: 'QIF header and record terminator' };
 	}
 	// MT940: tag-led lines. :20: is the reference and :61: a statement line;
 	// requiring both keeps a document that merely quotes a tag from matching.

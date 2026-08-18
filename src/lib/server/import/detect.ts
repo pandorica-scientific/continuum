@@ -6,18 +6,28 @@ import { parseRbLines } from './adapters/rb';
 import { parseCsLines } from './adapters/cs';
 import { extractPdfLines } from './pdftext';
 import { parseAbo } from './standards/abo';
+import { parseOfx } from './standards/ofx';
 import { parseMt940 } from './standards/mt940';
 import { parseCamt053 } from './standards/camt053';
 import { candidateGrids, gridsFromWorkbook, type Grid } from './tabular/grid';
-import { chooseGrid, detectRegions, type Region } from './tabular/regions';
+import {
+	chooseGrid,
+	detectRegions,
+	transactionRows,
+	type GridChoice,
+	type Region
+} from './tabular/regions';
 import { readTabular } from './tabular/statement';
 import { PROOF_RANK, decideImport, proveStatement, type ProofClass } from './proof';
 import { headersOf, matchProfile, rolesFromProfile, type ImportProfile } from './tabular/profile';
+import type { ColumnRole } from './tabular/vocabulary';
+import type { DateOrder, DecimalMark } from './tabular/determinacy';
 import { gridsFromPdfLines } from './tabular/frompdf';
 import { gridsFromRhythm } from './tabular/rhythm';
 import { looksLikeHoldings } from './holdings';
 import { OCR_LANGUAGES, languagesFor, ocrAvailable, ocrImage, ocrPdf } from './ocr';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
+import { isCurrencyCode } from '$lib/money';
 import { assertSafeToParse } from './safety';
 import type { ParsedStatement } from './types';
 
@@ -72,9 +82,9 @@ function assertAgreesWithItsOwnNumbers(
 	// escaped its own module — a label, a heading, a fragment of a metadata row
 	// — and it must never become the denomination of a stored transaction,
 	// because everything downstream treats it as fact.
-	if (!/^[A-Z]{3}$/.test(statement.currency)) {
+	if (!isCurrencyCode(statement.currency)) {
 		throw new Error(
-			`This ${statement.bank} statement was read with "${statement.currency}" as its currency, which is not a currency code, so it has not been imported.`
+			`This ${statement.bank} statement was read with "${statement.currency}" as its currency, which is not a currency, so it has not been imported.`
 		);
 	}
 	const proof = proveStatement(statement, { currency: statement.currency });
@@ -126,7 +136,11 @@ async function adapterOrGeneric(
 		// end the import.
 		const generic = await readAsUnknownLayout();
 		if (generic.statements.length > 0) return generic.statements;
-		throw error;
+		// Nothing read it. Say what the general reader made of it rather than
+		// what the adapter complained about: its claim on this file was never
+		// established, so naming that bank in the error points the person who
+		// uploaded it at an institution they may have nothing to do with.
+		throw generic.reason ? new Error(generic.reason) : error;
 	}
 
 	const rows = statements.reduce((total, statement) => total + statement.rows.length, 0);
@@ -185,31 +199,18 @@ export async function detectAndParseAll(
 }
 
 /**
- * One statement from one file — the shape every current parser produces.
- *
- * CAMT.053 carries several `<Stmt>` blocks and a workbook can hold a sheet per
- * account, so the pipeline's real entry point is `detectAndParseAll`. This
- * wrapper exists because nothing yet produces more than one, and it refuses
- * rather than silently discarding the rest the day something does.
- */
-export async function detectAndParse(buffer: Uint8Array): Promise<ParsedStatement> {
-	const statements = await detectAndParseAll(buffer);
-	if (statements.length > 1) {
-		throw new Error(
-			`That file contains ${statements.length} statements. Importing several from one file is being built.`
-		);
-	}
-	return statements[0];
-}
-
-/**
  * Formats we can name but cannot yet read. Saying which one it is beats
  * "unrecognised": the user learns their export is understood and simply not
  * covered, which is a different problem from a corrupt file.
  */
 const NOT_YET_READABLE: Partial<Record<StatementFormat, string>> = {
 	xml: 'This is XML, but not a CAMT.053 statement.',
-	ofx: 'OFX/QFX support is being built.',
+	// Not "being built". QIF records a date, an amount, a payee and a memo, and
+	// nothing else: no opening balance, no closing balance, no totals, no count.
+	// There is nothing in the file for the arithmetic to check, so a QIF could
+	// only ever be taken on trust — which is the one thing this reader does not
+	// do. Saying so is more useful than implying it is coming.
+	qif: 'A QIF file records movements but no balances, so nothing in it can be checked against anything. Export CSV, OFX, CAMT.053 or MT940 from the same bank instead — all of them carry the figures that make an import verifiable.',
 	ods: 'OpenDocument spreadsheets are not read yet — export as CSV or XLSX.',
 	xls: 'Legacy .xls workbooks are not read yet — re-save as .xlsx.'
 };
@@ -238,6 +239,14 @@ async function parseByFormat(
 		// MT940 is ASCII by specification; a bank that slips diacritics in still
 		// decodes here, since win1250 agrees with ASCII on every SWIFT character.
 		return parseMt940(iconv.decode(Buffer.from(buffer), 'win1250')).map((statement) =>
+			assertAgreesWithItsOwnNumbers(statement, 'standard')
+		);
+	}
+
+	if (format === 'ofx') {
+		// OFX 1.x is SGML and OFX 2.x is XML; both are ASCII-compatible, and a
+		// bank that slips a diacritic into a payee name still decodes here.
+		return parseOfx(iconv.decode(Buffer.from(buffer), 'win1250')).map((statement) =>
 			assertAgreesWithItsOwnNumbers(statement, 'standard')
 		);
 	}
@@ -341,11 +350,15 @@ async function parseByFormat(
 	if (format === 'xlsx') {
 		// A workbook is a table like any other: one grid per sheet, then the same
 		// regions, determinacy and proof as a CSV.
+		// One group per sheet, collected rather than chosen between: a workbook may
+		// hold a statement per account, and they are not competing accounts of the
+		// same thing.
 		const fromSheets = await readGenerically(
 			buffer,
 			options.profiles,
-			[gridsFromWorkbook(buffer)],
-			options.currency
+			gridsFromWorkbook(buffer).map((sheet) => [sheet]),
+			options.currency,
+			'collect'
 		);
 		if (fromSheets.statements.length > 0) return fromSheets.statements;
 		throw new Error(
@@ -427,7 +440,21 @@ async function readGenerically(
 	 */
 	prebuilt?: Grid[][],
 	/** The destination account's currency, when the import names one. */
-	accountCurrency?: string
+	accountCurrency?: string,
+	/**
+	 * What the groups ARE, which decides what to do when several of them read.
+	 *
+	 * `choose` — the groups are alternative readings of one document, and at most
+	 * one of them is right. A PDF read by two assemblers, a delimited file under
+	 * two encodings.
+	 *
+	 * `collect` — the groups are separate parts, each potentially its own
+	 * statement. A workbook with a sheet per account is the case: picking a
+	 * winner there is not arbitration, it is losing an account. That happened —
+	 * a two-account workbook imported one of them, recorded the content hash, and
+	 * the corrected re-upload was then refused as a duplicate.
+	 */
+	combine: 'choose' | 'collect' = 'choose'
 ): Promise<{ statements: ParsedStatement[]; reason?: string }> {
 	// One group per assembly of the document.
 	//
@@ -471,6 +498,11 @@ async function readGenerically(
 	}
 
 	if (readings.length === 0) return { statements: [], reason: firstReason };
+
+	// Separate parts: every one of them belongs in the ledger.
+	if (combine === 'collect') {
+		return { statements: readings.flatMap((reading) => reading.statements) };
+	}
 
 	// Proof first, then coverage — and disagreement is a question.
 	//
@@ -599,5 +631,126 @@ async function readOneGrid(
 		reason: reasons.length
 			? `That layout was read, but not confidently enough to file: ${reasons[0]}.`
 			: undefined
+	};
+}
+
+/**
+ * What the reader saw in a file it could not file.
+ *
+ * A refusal is the right answer when a layout cannot prove itself, but it is a
+ * dead end for the person holding the statement: the reader worked out a table,
+ * found columns, and then threw all of it away with the error. There was no way
+ * to say "the fourth column is the amount" because nothing survived to point at.
+ *
+ * This returns the best candidate reading whether or not it proved itself, so a
+ * mapping can be built on top of it. It decides nothing and imports nothing —
+ * everything it returns is a proposal for a person to correct, and whatever
+ * they confirm still has to pass the same arithmetic as any other reading.
+ */
+export interface LayoutPreview {
+	/** The header labels, which are what a profile is keyed on. */
+	headers: string[];
+	/** Roles the reader inferred, in header order, for the person to correct. */
+	roles: (ColumnRole | undefined)[];
+	/** A few body rows, so the mapping can be checked against real values. */
+	sample: string[][];
+	source: 'delimited' | 'xlsx';
+	encoding?: string;
+	delimiter?: string;
+	dateOrder?: DateOrder;
+	decimalMark?: DecimalMark;
+	/** What stopped it, phrased for the person who uploaded the file. */
+	questions: string[];
+	/**
+	 * The layout this nearly is, when a saved profile almost fits.
+	 *
+	 * A bank adding a column is the commonest change there is, and it is the one
+	 * that must never pass silently — matching by position would shift every role
+	 * one to the right and read plausibly. Matching by label turns it into this:
+	 * a named difference, and a mapping already filled in with the answers the
+	 * person gave last time, so confirming a changed export is a glance rather
+	 * than the whole questionnaire again.
+	 */
+	drift?: {
+		profileId: string;
+		profileName: string;
+		added: string[];
+		removed: string[];
+	};
+}
+
+export async function previewLayout(
+	buffer: Uint8Array,
+	options: ParseOptions = {}
+): Promise<LayoutPreview | null> {
+	const format = sniffFormat(buffer).format;
+	const grids =
+		format === 'xlsx'
+			? gridsFromWorkbook(buffer)
+			: format === 'pdf'
+				? await (async () => {
+						const lines = await extractPdfLines(buffer);
+						return [...gridsFromPdfLines(lines), ...gridsFromRhythm(lines)];
+					})()
+				: candidateGrids(buffer);
+
+	// The fullest table anyone found. Not the best-proven — nothing here proved
+	// itself, which is why we are asking.
+	let best: { choice: GridChoice; region: Region; rows: number } | undefined;
+	for (const grid of grids) {
+		const choice = chooseGrid([grid]);
+		if (!choice) continue;
+		for (const region of choice.transactions) {
+			const rows = transactionRows(region).length;
+			if (!best || rows > best.rows) best = { choice, region, rows };
+		}
+	}
+	if (!best) return null;
+
+	const reading = readTabular(best.choice, best.region, {
+		currency: options.currency,
+		evidenceRegions: grids.flatMap((grid) => detectRegions(grid))
+	});
+
+	// A layout we nearly know. `matchProfile` already works out exactly what
+	// changed; this carries it through so the answers can be pre-filled.
+	const headersForMatch = headersOf(best.region);
+	const profiles = options.profiles ? await options.profiles() : [];
+	const match = headersForMatch.length
+		? matchProfile(headersForMatch, profiles)
+		: ({ kind: 'none' } as const);
+	const drift =
+		match.kind === 'drifted'
+			? {
+					profileId: match.profile.id,
+					profileName: match.profile.name,
+					added: match.added,
+					removed: match.removed
+				}
+			: undefined;
+	const body = transactionRows(best.region);
+
+	// `headersOf` falls back to the first row that is not a movement, so a
+	// layout whose labels nothing recognised still has something to point at —
+	// and the profile saved from it is keyed on the same labels the matcher will
+	// look for next time.
+	const headers = headersOf(best.region);
+
+	// A drifted profile already knows most of these columns; only the ones it has
+	// never seen are left for the person to answer.
+	const remembered =
+		match.kind === 'drifted' ? rolesFromProfile(match.profile, headers) : undefined;
+
+	return {
+		headers,
+		roles: headers.map((_, at) => remembered?.[at] ?? reading.roles[at]),
+		sample: body.slice(0, 5).map((row) => row.map((cell) => cell.text)),
+		source: best.choice.grid.source,
+		encoding: best.choice.grid.encoding,
+		delimiter: best.choice.grid.delimiter,
+		dateOrder: reading.dateOrder,
+		decimalMark: reading.decimalMark,
+		questions: reading.questions.map((question) => question.reason),
+		drift
 	};
 }

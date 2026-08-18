@@ -132,13 +132,87 @@ export function gridFromText(text: string, delimiter: string, encoding?: string)
  * the plausible delimiters. Later stages choose between them on evidence, so
  * this deliberately does not guess.
  */
+/**
+ * A reading in which fields that look like one split number are rejoined.
+ *
+ * Delimited files are not always well formed. When the delimiter and the
+ * decimal mark are the same character, `799,56` is indistinguishable from two
+ * fields `799` and `56` by any reader that only looks at the text — and an
+ * unquoted comma inside a description does the same thing for a different
+ * reason.
+ *
+ * Only looking at the text is the mistake. The statement states its own
+ * balances, so whether a particular set of joins was the right one is a
+ * question the ARITHMETIC can answer, and that is the instrument used
+ * everywhere else here: this is offered as an extra CANDIDATE beside the
+ * unrepaired reading, and it survives only if it proves itself. A wrong join
+ * produces a chain that does not close, and the proof gate refuses it exactly
+ * as it refuses any other misreading.
+ *
+ * Nothing here tries to work out how many joins are needed. Guessing the
+ * table's width from the rows is circular — on a file where every movement row
+ * has split, the split rows ARE the majority, and the width they agree on is
+ * the broken one. So every pair that could be a split number is joined, and the
+ * balances decide whether that was right.
+ *
+ * One limit is worth knowing, because it decides when this can be settled at
+ * all: dropping the cents from an amount AND from the balance beside it leaves
+ * a chain that still closes. `6127 - 425 = 5702` exactly as
+ * `6127.92 - 425.23 = 5702.69` does. What separates the two readings is a
+ * BORROW across the decimal point — `6127.92 - 425.99 = 5701.93`, where the
+ * truncated figures give 5702 and the broken chain breaks. Over a real
+ * statement that occurs within the first few movements, which is why the
+ * repaired reading wins on proof class there. Over a handful of rows that
+ * happen not to borrow, both readings prove themselves, and the reading is
+ * refused as genuinely undecided rather than guessed at.
+ */
+const SPLIT_LEFT = /^[-+(]?\s*\d[\d\s.'\u00A0]*$/;
+/**
+ * The right half of a split amount: the fractional digits alone.
+ *
+ * Exactly two, because that is what a comma-decimal currency prints and what
+ * makes this ambiguity arise at all. Allowing a longer run would let two
+ * genuinely separate numeric columns — a reference beside an amount — be welded
+ * into one number that happens to parse.
+ */
+const SPLIT_RIGHT = /^\d{2}\)?-?$/;
+
+function rejoinSplitNumbers(fields: string[]): string[] | null {
+	const out: string[] = [];
+	let joined = false;
+	for (const field of fields) {
+		const open = out[out.length - 1];
+		if (open !== undefined && SPLIT_LEFT.test(open) && SPLIT_RIGHT.test(field.trim())) {
+			out[out.length - 1] = `${open.trim()},${field.trim()}`;
+			joined = true;
+			continue;
+		}
+		out.push(field);
+	}
+	return joined ? out : null;
+}
+
+/** The rejoined reading of a delimited grid, when there is anything to rejoin. */
+export function repairedGrids(grid: Grid): Grid[] {
+	let changed = false;
+	const rows: RawCell[][] = grid.rows.map((row) => {
+		const rejoined = rejoinSplitNumbers(row.map((entry) => entry.text));
+		if (!rejoined) return row;
+		changed = true;
+		return rejoined.map((text) => cell(text));
+	});
+	if (!changed) return [];
+	return [{ ...grid, origin: `${grid.origin ?? 'delimited'}-rejoined`, rows }];
+}
+
 export function candidateGrids(buffer: Uint8Array): Grid[] {
 	const encodings = decodeCandidates(buffer).slice(0, 2);
 	const grids: Grid[] = [];
 	for (const candidate of encodings) {
 		const lines = csvLines(candidate.text);
 		for (const delimiter of delimiterCandidates(lines).slice(0, 3)) {
-			grids.push(gridFromText(candidate.text, delimiter.delimiter, candidate.encoding));
+			const grid = gridFromText(candidate.text, delimiter.delimiter, candidate.encoding);
+			grids.push(grid, ...repairedGrids(grid));
 		}
 	}
 	return grids;
@@ -151,6 +225,37 @@ export function candidateGrids(buffer: Uint8Array): Grid[] {
  * rather than its own coercion, which is the whole point. The typed value is
  * kept alongside as a hint for later stages that want it.
  */
+/**
+ * A label written once across several columns still names all of them.
+ *
+ * A spreadsheet merges cells to write one heading over a group — `Amount` above
+ * a pair of `Debit` and `Credit` columns, or an account name spanning a block.
+ * The file stores that value in the top-left cell only and leaves the rest
+ * empty, so the row arrives as a label followed by blanks: the header detector
+ * counts one named column where the sheet shows several, and every column but
+ * the first loses its name.
+ *
+ * Only HORIZONTAL merges are spread, and that restriction is the whole safety
+ * of this. A merge across columns is a label written wide; a merge DOWN rows is
+ * one value that applies to a group of rows, and copying it into each of them
+ * would manufacture data — a date repeated onto movements that never carried
+ * one, which the reader would then happily file.
+ */
+function spreadMergedHeaders(worksheet: XLSX.WorkSheet, rows: string[][]): void {
+	const merges = worksheet['!merges'];
+	if (!merges) return;
+	for (const range of merges) {
+		if (range.s.r !== range.e.r) continue;
+		const row = rows[range.s.r];
+		const value = row?.[range.s.c];
+		if (!row || !value) continue;
+		for (let column = range.s.c + 1; column <= range.e.c; column++) {
+			// Never over a value the sheet actually holds.
+			if (!row[column]) row[column] = value;
+		}
+	}
+}
+
 export function gridsFromWorkbook(buffer: Uint8Array): Grid[] {
 	const workbook = XLSX.read(buffer, {
 		type: 'array',
@@ -189,6 +294,7 @@ export function gridsFromWorkbook(buffer: Uint8Array): Grid[] {
 			defval: '',
 			blankrows: true
 		});
+		spreadMergedHeaders(worksheet, displayed);
 		const typed = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
 			header: 1,
 			raw: true,
@@ -211,12 +317,3 @@ export function gridsFromWorkbook(buffer: Uint8Array): Grid[] {
 		return { source: 'xlsx' as const, origin: 'workbook', sheet, rows };
 	});
 }
-
-/** Fields whose displayed text is authoritative — never the typed value. */
-export const IDENTIFIER_ROLES = new Set([
-	'counterpartyAccount',
-	'reference',
-	'variableSymbol',
-	'constantSymbol',
-	'specificSymbol'
-]);

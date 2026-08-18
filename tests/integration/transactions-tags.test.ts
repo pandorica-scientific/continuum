@@ -20,6 +20,7 @@ const filter = (overrides: Partial<RegisterFilter> = {}): RegisterFilter => ({
 	reviewState: null,
 	tagId: null,
 	includeTransfers: false,
+	sourceMethod: null,
 	page: 1,
 	...overrides
 });

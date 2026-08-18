@@ -247,6 +247,13 @@ export function assembleRecords(
 			previous.cells.push(...line.cells);
 			previous.xs.push(...line.xs);
 			previous.xEnds.push(...line.xEnds);
+			// The window measures the gap to the line just absorbed, not to the
+			// one that opened the record. Leaving `y` at the record's start capped
+			// every record at three pitches from its first line however many lines
+			// it actually had — so a movement printed over four or five of them,
+			// which is ordinary for the banks that keep hand-written parsers, lost
+			// its tail to a record of its own.
+			previous.y = line.y;
 			continue;
 		}
 		records.push({

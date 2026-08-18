@@ -8,9 +8,6 @@
  */
 export type BankId = string;
 
-/** The issuers and formats with a parser today. */
-export const KNOWN_BANK_IDS = ['fio', 'revolut', 'mbank', 'rb', 'cs', 'abo'] as const;
-
 /**
  * How a statement was read, and what proved it.
  *

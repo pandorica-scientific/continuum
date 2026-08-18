@@ -91,6 +91,17 @@
 					{/each}
 				</select>
 			</label>
+			<label class="field">
+				<span>Read as</span>
+				<select name="source">
+					<option value="">However it was read</option>
+					{#each data.sourceMethods as method (method.value)}
+						<option value={method.value} selected={data.filter.sourceMethod === method.value}>
+							{method.label}
+						</option>
+					{/each}
+				</select>
+			</label>
 			<label class="f-check">
 				<input type="checkbox" name="transfers" value="1" checked={data.filter.includeTransfers} />
 				<span>Show own transfers</span>
@@ -129,6 +140,15 @@
 						{r.account}
 						{#if r.detail}· {r.detail}{/if}
 						{#if r.isTransfer}· own transfer{/if}
+						{#if r.readAs}
+							<!-- Only for readings whose structure was inferred. Every row
+							     here still proved itself against the statement's balances;
+							     this says where to start if a figure ever looks wrong. -->
+							·
+							<span class="r-read" title={r.proofClass ? data.proofLabels[r.proofClass] : undefined}
+								>{r.readAs}</span
+							>
+						{/if}
 					</span>
 				</div>
 				<span class="mono r-amount" style:color={r.negative ? 'var(--fg1)' : 'var(--green)'}>
@@ -322,6 +342,11 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.r-read {
+		font-style: italic;
+		opacity: 0.85;
+	}
+
 	.r-reason {
 		font-size: 12px;
 		color: var(--fg3);
