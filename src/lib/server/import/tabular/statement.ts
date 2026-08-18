@@ -21,11 +21,12 @@ import {
 	type DecimalMark
 } from './determinacy';
 import type { RawCell } from './grid';
-import { transactionRows, type GridChoice, type Region } from './regions';
+import { droppedMovements, transactionRows, type GridChoice, type Region } from './regions';
 import { looksLikeSummary, normalise, roleOfHeader, type ColumnRole } from './vocabulary';
 
 export interface OpenQuestion {
-	dimension: 'dateOrder' | 'decimalMark' | 'dateColumn' | 'amountColumn';
+	dimension:
+		'dateOrder' | 'decimalMark' | 'dateColumn' | 'amountColumn' | 'currency' | 'excludedRow';
 	reason: string;
 	candidates?: string[];
 }
@@ -184,8 +185,16 @@ export function readEvidence(regions: Region[]): Evidence {
 				if (beside) evidence.currency = beside[1] ?? beside[2];
 				else {
 					for (const [symbol, code] of Object.entries(SYMBOL_CURRENCY)) {
-						// The symbol must touch a figure, for the same reason.
-						if (new RegExp(`${symbol.replace(/[$]/g, '\\$')}\\s*-?\\(?\\d`).test(text)) {
+						// The symbol must touch a figure, for the same reason — and it
+						// may sit on EITHER side of it. Testing only symbol-then-digit
+						// is the US and UK order and almost nowhere else: `600,41 €`,
+						// `1 234,56 Kč`, `500 zł` and `12 500 Ft` are all invisible to
+						// it, which is to say most of the continent. A 140-row euro
+						// statement imported as koruna on the strength of this.
+						const glyph = symbol.replace(/[$]/g, '\\$');
+						const before = `${glyph}\\s*-?\\(?\\d`;
+						const after = `\\d[\\d\\s.,'\\u00A0]*\\s*${glyph}`;
+						if (new RegExp(`${before}|${after}`).test(text)) {
 							evidence.currency = code;
 							break;
 						}
@@ -272,7 +281,69 @@ function assignRoles(region: Region, body: RawCell[][]): (ColumnRole | undefined
 		}
 	}
 	repairNumericRoles(roles, body);
+	pairAmountWithBalance(roles, body);
 	return roles;
+}
+
+/**
+ * Amount and balance identify each other.
+ *
+ * If one column's consecutive differences ARE another column's values, then the
+ * first is a running balance and the second is the movement, and neither
+ * needed a header to say so. This is the strongest signal a table can offer,
+ * because a coincidence would have to hold on every row at once — and it is
+ * what makes a headerless ledger readable at all.
+ *
+ * Written from the plan and then not built, which cost the whole
+ * `headerless-ledger` shape: a five-column export with no header row had its
+ * date and amount found by shape, its balance column left unnamed, and was
+ * refused with "nothing in the statement could be checked" — while its own
+ * fifth column proved every movement in it.
+ *
+ * Both row orders are tried, because plenty of banks list newest first, and
+ * both decimal conventions, because the mark is not settled at this stage. A
+ * convention that makes the chain close is evidence for that convention too.
+ */
+function pairAmountWithBalance(roles: (ColumnRole | undefined)[], body: RawCell[][]): void {
+	if (roles.includes('balance') || body.length < 3) return;
+
+	const numeric: number[] = [];
+	for (let c = 0; c < roles.length; c++) {
+		if (roles[c] && roles[c] !== 'amount') continue;
+		const values = columnValues(body, c).filter(Boolean);
+		if (values.length < body.length * 0.8) continue;
+		const parsed = values.filter(
+			(v) => parseAmount(v, '.') !== null || parseAmount(v, ',') !== null
+		);
+		if (parsed.length >= values.length * 0.8) numeric.push(c);
+	}
+	if (numeric.length < 2) return;
+
+	const column = (index: number, mark: DecimalMark) =>
+		body.map((row) => parseAmount(row[index]?.text ?? '', mark));
+
+	for (const mark of ['.', ','] as const) {
+		for (const balance of numeric) {
+			const balances = column(balance, mark);
+			if (balances.some((v) => v === null)) continue;
+			for (const amount of numeric) {
+				if (amount === balance) continue;
+				const amounts = column(amount, mark);
+				if (amounts.some((v) => v === null)) continue;
+				const steps = (order: 'as listed' | 'newest first') => {
+					const b = order === 'as listed' ? balances : [...balances].reverse();
+					const a = order === 'as listed' ? amounts : [...amounts].reverse();
+					for (let i = 1; i < b.length; i++) if (b[i]! - b[i - 1]! !== a[i]!) return false;
+					return true;
+				};
+				if (steps('as listed') || steps('newest first')) {
+					roles[amount] = 'amount';
+					roles[balance] = 'balance';
+					return;
+				}
+			}
+		}
+	}
 }
 
 const NUMERIC_ROLES: ColumnRole[] = ['amount', 'balance', 'debit', 'credit'];
@@ -356,6 +427,16 @@ export function readTabular(
 	const creditColumn = indexOfRole(roles, 'credit');
 	const balanceColumn = indexOfRole(roles, 'balance');
 
+	// A movement-shaped row was filtered out as a summary line. Say so rather
+	// than quietly filing a statement with a hole in it.
+	const dropped = droppedMovements(region);
+	if (dropped.length > 0) {
+		questions.push({
+			dimension: 'excludedRow',
+			reason: `${dropped.length} row(s) carry a date and an amount but read as a summary line, so they were left out — check whether they are movements`
+		});
+	}
+
 	if (dateColumn === -1) {
 		questions.push({
 			dimension: 'dateColumn',
@@ -420,6 +501,29 @@ export function readTabular(
 		questions.push({ dimension: 'decimalMark', reason: mark.reason, candidates: mark.candidates });
 	}
 
+	// The account first, the document second, a guess never.
+	//
+	// `?? 'CZK'` used to close this expression, and it was a fabricated fact
+	// about someone's money: a 140-row CaixaBank statement denominated in euro
+	// imported as Czech koruna, auto-imported, with the acceptance suite green
+	// because it asserted row counts and never currency. The symbol test could
+	// not see it either — it required symbol-then-digit, so `600,41 €`,
+	// `1 234,56 Kč`, `500 zł` and `12 500 Ft` were all invisible, which is to
+	// say most of Europe.
+	//
+	// A statement is imported INTO an account whose currency the user stated, so
+	// `options.currency` is the authority and the page is corroboration. Only a
+	// first import, for an account that does not exist yet, arrives without one
+	// — and that is a question, because the answer becomes permanent metadata
+	// every later import is checked against.
+	const detectedCurrency = options.currency ?? evidence.currency;
+	if (!detectedCurrency) {
+		questions.push({
+			dimension: 'currency',
+			reason: 'nothing in this file names the currency, and no account was given to take it from'
+		});
+	}
+
 	if (questions.length > 0) {
 		return {
 			questions,
@@ -430,7 +534,9 @@ export function readTabular(
 	}
 
 	const dateOrder = (order as { value: DateOrder }).value;
-	const currency = options.currency ?? evidence.currency ?? 'CZK';
+	// The question raised above is in `questions`, so reaching here means one
+	// was found.
+	const currency = detectedCurrency as string;
 	const digits = minorDigits(currency);
 	const periodYear = period?.start ? Number(period.start.slice(0, 4)) : undefined;
 
@@ -467,6 +573,8 @@ export function readTabular(
 			return index >= 0 ? row[index]?.text || undefined : undefined;
 		};
 
+		const rowCurrency = text('currency');
+
 		rows.push({
 			bookedAt,
 			valueDate:
@@ -474,7 +582,21 @@ export function readTabular(
 					? applyDateOrder(row[valueDateColumn]?.text ?? '', dateOrder, periodYear)
 					: undefined,
 			amountMinor,
-			currency: text('currency') ?? currency,
+			// The ledger entry is denominated in the ACCOUNT's currency, always.
+			//
+			// A per-row currency column names the ORIGINAL of a foreign movement —
+			// `ParsedRow` has said so since it was written ("Original amount for FX
+			// card payments billed in the account currency"). Writing that value
+			// into `currency` broke the contract and cost a factor of a hundred: the
+			// minor-unit digits were taken from the statement's currency while the
+			// row was labelled with its own, so `3 000,00 HUF` inside a CZK
+			// statement — HUF having no minor unit — was stored as -300000.
+			//
+			// The amounts themselves are already proven to be in the ledger
+			// currency: if they were not, the running balance in that same column
+			// could not close, and an unclosed chain never reaches this point.
+			currency,
+			...(rowCurrency && rowCurrency !== currency ? { originalCurrency: rowCurrency } : {}),
 			balanceAfterMinor:
 				balanceColumn >= 0
 					? (amountFromCell(row[balanceColumn]?.text ?? '', decimalMark, digits) ?? undefined)

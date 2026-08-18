@@ -239,7 +239,9 @@ describe('reading a statement from a grid', () => {
 			'17/04/2025;J SMITH;;120.00;5027.40'
 		].join('\n');
 		const choice = chooseGrid(candidateGrids(new TextEncoder().encode(uk)))!;
-		const reading = readTabular(choice, choice.transactions[0]);
+		// The account supplies the currency: this fixture prints none, and a
+		// reader that invented one would be the bug this argument exists to stop.
+		const reading = readTabular(choice, choice.transactions[0], { currency: 'GBP' });
 		const rows = reading.statement!.rows;
 		expect(rows[0].amountMinor).toBe(285000n);
 		expect(rows[1].amountMinor).toBe(-8840n);

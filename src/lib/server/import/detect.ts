@@ -11,7 +11,7 @@ import { parseCamt053 } from './standards/camt053';
 import { candidateGrids, gridsFromWorkbook, type Grid } from './tabular/grid';
 import { chooseGrid, detectRegions, type Region } from './tabular/regions';
 import { readTabular } from './tabular/statement';
-import { decideImport, proveStatement } from './proof';
+import { PROOF_RANK, decideImport, proveStatement, type ProofClass } from './proof';
 import { headersOf, matchProfile, rolesFromProfile, type ImportProfile } from './tabular/profile';
 import { gridsFromPdfLines } from './tabular/frompdf';
 import { looksLikeHoldings } from './holdings';
@@ -46,6 +46,78 @@ function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatemen
 }
 
 /**
+ * Every route into the ledger meets the same arithmetic.
+ *
+ * A hand-written adapter is a VERIFIED MAPPING — a person checked these columns
+ * against a real export — and that earns it the right to skip discovery. It
+ * does not earn the right to skip proof. The two are different claims: "these
+ * columns mean what I say" is not "every movement on this page is in my
+ * output", and only the second one protects the ledger.
+ *
+ * Measured before this existed: deleting one movement from a Fio, mBank,
+ * Revolut, MT940 or CAMT.053 statement — each of which prints its own closing
+ * balance — was accepted without a word. A statement one row short of a hundred
+ * reconciles against nothing, and nothing looked.
+ *
+ * Only CONTRADICTED evidence throws. A statement that prints no balances at all
+ * is not wrong, it is unprovable, and refusing it would reject formats that are
+ * simply terse.
+ */
+function assertAgreesWithItsOwnNumbers(statement: ParsedStatement): ParsedStatement {
+	const proof = proveStatement(statement, { currency: statement.currency });
+	const failed = proof.checks.filter((check) => check.status === 'fail');
+	if (failed.length === 0) return statement;
+	throw new Error(
+		`This ${statement.bank} statement does not agree with its own figures, so it has not been imported: ${failed
+			.map((check) => check.detail)
+			.join('; ')}.`
+	);
+}
+
+/**
+ * An adapter's claim on a file is a hypothesis, not a verdict.
+ *
+ * The signatures are substrings of ordinary text. `#Numer rachunku` is simply
+ * Polish for "account number", so the mBank adapter claimed every Polish-locale
+ * CSV in a 486-file corpus — 120 files — and then either died with "transaction
+ * header not found" or, worse, returned a statement with ZERO rows and a
+ * currency read off a metadata label. Nothing fell through to the generic
+ * reader, because the adapter had already returned.
+ *
+ * So: when an adapter claims a file and finds no movements in it, try reading
+ * it as an unknown layout before believing there were none. An empty month is
+ * legitimate and rare; a misroute is neither.
+ */
+async function adapterOrGeneric(
+	run: () => ParsedStatement | ParsedStatement[],
+	readAsUnknownLayout: () => Promise<{ statements: ParsedStatement[]; reason?: string }>
+): Promise<ParsedStatement[]> {
+	let statements: ParsedStatement[];
+	try {
+		const produced = run();
+		statements = Array.isArray(produced) ? produced : [produced];
+	} catch (error) {
+		// The adapter claimed the file and then could not read it — "transaction
+		// header not found" and its kind. That is the strongest possible evidence
+		// that the signature matched something it did not write, so it must not
+		// end the import.
+		const generic = await readAsUnknownLayout();
+		if (generic.statements.length > 0) return generic.statements;
+		throw error;
+	}
+
+	const rows = statements.reduce((total, statement) => total + statement.rows.length, 0);
+	if (rows > 0) return statements.map(assertAgreesWithItsOwnNumbers);
+
+	const generic = await readAsUnknownLayout();
+	if (generic.statements.length > 0) return generic.statements;
+
+	// Nothing read it. Keep the adapter's own account of itself, which knows
+	// whether the balances say movements were missed.
+	return statements.map(assertRowsExplainTheBalance);
+}
+
+/**
  * Sniff the bank and format from the file body and parse it. Throws a
  * user-facing Error when nothing matches.
  */
@@ -67,6 +139,15 @@ export interface ParseOptions {
 	 * background reader turns it on.
 	 */
 	ocr?: boolean;
+	/**
+	 * The destination account's currency.
+	 *
+	 * A statement is imported INTO an account the user created and whose
+	 * currency they stated, so that is the authority — never a symbol or a label
+	 * found in the document. Absent only for the first import of an account that
+	 * does not exist yet, which is exactly where a question belongs.
+	 */
+	currency?: string;
 }
 
 export async function detectAndParseAll(
@@ -125,19 +206,25 @@ async function parseByFormat(
 
 	if (format === 'camt053') {
 		// CAMT is UTF-8 by specification; the BOM is stripped by the reader.
-		return parseCamt053(new TextDecoder('utf-8', { fatal: false }).decode(buffer));
+		return parseCamt053(new TextDecoder('utf-8', { fatal: false }).decode(buffer)).map(
+			assertAgreesWithItsOwnNumbers
+		);
 	}
 
 	if (format === 'mt940') {
 		// MT940 is ASCII by specification; a bank that slips diacritics in still
 		// decodes here, since win1250 agrees with ASCII on every SWIFT character.
-		return parseMt940(iconv.decode(Buffer.from(buffer), 'win1250'));
+		return parseMt940(iconv.decode(Buffer.from(buffer), 'win1250')).map(
+			assertAgreesWithItsOwnNumbers
+		);
 	}
 
 	if (format === 'abo') {
 		// ABO is win1250 when it carries diacritics and ASCII otherwise; decoding
 		// as win1250 is safe for both, since ASCII is a subset.
-		return parseAbo(iconv.decode(Buffer.from(buffer), 'win1250'));
+		return parseAbo(iconv.decode(Buffer.from(buffer), 'win1250')).map(
+			assertAgreesWithItsOwnNumbers
+		);
 	}
 
 	if (format === 'pdf') {
@@ -160,8 +247,12 @@ async function parseByFormat(
 			.slice(0, 24)
 			.map((l) => l.cells.join(' '))
 			.join('\n');
-		if (/RZBCCZPP|Výpis z běžného účtu/.test(head)) return parseRbLines(lines);
-		if (/GIBACZPX|Výpis z účtu/.test(head)) return parseCsLines(lines);
+		const readPdfAsUnknownLayout = () =>
+			readGenerically(buffer, options.profiles, gridsFromPdfLines(lines), options.currency);
+		if (/RZBCCZPP|Výpis z běžného účtu/.test(head))
+			return adapterOrGeneric(() => parseRbLines(lines), readPdfAsUnknownLayout);
+		if (/GIBACZPX|Výpis z účtu/.test(head))
+			return adapterOrGeneric(() => parseCsLines(lines), readPdfAsUnknownLayout);
 
 		// Header unrecognised — a template may have moved. Fall back to the bank
 		// name anywhere in the file, but only when exactly one bank is named:
@@ -169,8 +260,10 @@ async function parseByFormat(
 		// error beats a silent zero-row parse under the wrong bank.
 		const namesRb = text.includes('Raiffeisenbank');
 		const namesCs = text.includes('Česká spořitelna');
-		if (namesRb && !namesCs) return parseRbLines(lines);
-		if (namesCs && !namesRb) return parseCsLines(lines);
+		if (namesRb && !namesCs)
+			return adapterOrGeneric(() => parseRbLines(lines), readPdfAsUnknownLayout);
+		if (namesCs && !namesRb)
+			return adapterOrGeneric(() => parseCsLines(lines), readPdfAsUnknownLayout);
 		// A portfolio statement is a legitimate document that simply is not a bank
 		// statement. Saying so beats "no transactions found", which is true and
 		// useless, and lets the caller offer to file it elsewhere.
@@ -179,7 +272,12 @@ async function parseByFormat(
 
 		// No bank matched. Recover a table from the page geometry and read it
 		// generically — behind the same proof gate as any other unknown layout.
-		const generic = await readGenerically(buffer, options.profiles, gridsFromPdfLines(lines));
+		const generic = await readGenerically(
+			buffer,
+			options.profiles,
+			gridsFromPdfLines(lines),
+			options.currency
+		);
 		if (generic.statements.length > 0) return generic.statements;
 
 		// The text layer could not be proven. Read the PAGE instead — an
@@ -191,7 +289,8 @@ async function parseByFormat(
 			const fromPixels = await readGenerically(
 				buffer,
 				options.profiles,
-				gridsFromPdfLines(scanned)
+				gridsFromPdfLines(scanned),
+				options.currency
 			);
 			if (fromPixels.statements.length > 0) return fromPixels.statements;
 			throw new Error(
@@ -205,7 +304,12 @@ async function parseByFormat(
 	if (format === 'xlsx') {
 		// A workbook is a table like any other: one grid per sheet, then the same
 		// regions, determinacy and proof as a CSV.
-		const fromSheets = await readGenerically(buffer, options.profiles, gridsFromWorkbook(buffer));
+		const fromSheets = await readGenerically(
+			buffer,
+			options.profiles,
+			gridsFromWorkbook(buffer),
+			options.currency
+		);
 		if (fromSheets.statements.length > 0) return fromSheets.statements;
 		throw new Error(
 			`${fromSheets.reason ?? 'No statement could be read from that workbook.'} If it is a broker report, investments read those separately.`
@@ -224,7 +328,12 @@ async function parseByFormat(
 			);
 		}
 		const scanned = await ocrImage(buffer, OCR_LANGUAGES);
-		const fromPixels = await readGenerically(buffer, options.profiles, gridsFromPdfLines(scanned));
+		const fromPixels = await readGenerically(
+			buffer,
+			options.profiles,
+			gridsFromPdfLines(scanned),
+			options.currency
+		);
 		if (fromPixels.statements.length > 0) return fromPixels.statements;
 		throw new Error(fromPixels.reason ?? 'No statement could be read from that photograph.');
 	}
@@ -232,13 +341,21 @@ async function parseByFormat(
 	const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
 	const head = utf8.slice(0, 2000);
 
-	if (head.includes('Výpis č.') && head.includes('z účtu')) return parseFio(utf8);
+	const readTextAsUnknownLayout = () =>
+		readGenerically(buffer, options.profiles, undefined, options.currency);
+
+	if (head.includes('Výpis č.') && head.includes('z účtu')) {
+		return adapterOrGeneric(() => parseFio(utf8), readTextAsUnknownLayout);
+	}
 	if (head.startsWith('Type,Product,Started Date') || head.includes('Type,Product,Started Date')) {
-		return parseRevolut(utf8);
+		return adapterOrGeneric(() => parseRevolut(utf8), readTextAsUnknownLayout);
 	}
 	// mBank ships windows-1250; its signature survives any decoding.
 	if (head.includes('mBank') || head.includes('#Numer rachunku')) {
-		return parseMbank(iconv.decode(Buffer.from(buffer), 'win1250'));
+		return adapterOrGeneric(
+			() => parseMbank(iconv.decode(Buffer.from(buffer), 'win1250')),
+			readTextAsUnknownLayout
+		);
 	}
 
 	// No bank matched. Read it generically — and file it ONLY if the statement
@@ -246,7 +363,7 @@ async function parseByFormat(
 	// human having checked each one against real exports; an unknown layout has
 	// no such warrant, so arithmetic is the only thing standing between a
 	// plausible misreading and the ledger.
-	const generic = await readGenerically(buffer, options.profiles);
+	const generic = await readGenerically(buffer, options.profiles, undefined, options.currency);
 	if (generic.statements.length > 0) return generic.statements;
 
 	throw new Error(
@@ -267,44 +384,102 @@ async function readGenerically(
 	buffer: Uint8Array,
 	loadProfiles?: () => Promise<ImportProfile[]>,
 	/** Grids recovered from somewhere other than the raw bytes, e.g. a PDF page. */
-	prebuilt?: Grid[]
+	prebuilt?: Grid[],
+	/** The destination account's currency, when the import names one. */
+	accountCurrency?: string
 ): Promise<{ statements: ParsedStatement[]; reason?: string }> {
-	// Every candidate reading is tried, and the one that PROVES itself wins.
-	//
-	// A PDF offers several readings — where the amounts sit, how lines group
-	// into movements — and picking the likeliest by shape alone chose wrongly on
-	// real statements. Reconciliation is the only judge that cannot be fooled by
-	// a plausible-looking layout, so it does the choosing here too, exactly as
-	// it does for date order and decimal mark.
 	const candidates = prebuilt ?? candidateGrids(buffer);
-	const readings: { statements: ParsedStatement[]; rank: number }[] = [];
+
+	// Evidence belongs to the reading it proves.
+	//
+	// Prebuilt grids are PARTS of one document — a PDF's pages — so a balance
+	// printed on page one is legitimately available to a table found on page
+	// three. Grids from `candidateGrids` are the opposite: they are ALTERNATIVE
+	// decodings of the same bytes, one encoding and delimiter per candidate, and
+	// at most one of them is the file. Sharing evidence between them lets one
+	// reading's balances judge another reading's rows, which manufactures a
+	// contradiction out of two perfectly consistent readings — and, worse, can
+	// mask a real defect by refusing a file for the wrong reason.
+	const sharedEvidence = prebuilt?.flatMap((grid) => detectRegions(grid));
+
+	const readings: { statements: ParsedStatement[]; amounts: string[]; proofClass: ProofClass }[] =
+		[];
 	let firstReason: string | undefined;
 
-	// Every region of every candidate reading, so a balance printed on page one
-	// is available to a table found on page three.
-	const allRegions = candidates.flatMap((grid) => detectRegions(grid));
-
 	for (const candidate of candidates) {
-		const attempt = await readOneGrid([candidate], loadProfiles, allRegions);
+		const attempt = await readOneGrid(
+			[candidate],
+			loadProfiles,
+			sharedEvidence ?? detectRegions(candidate),
+			accountCurrency
+		);
 		if (attempt.statements.length > 0) {
-			const rows = attempt.statements.reduce((n, s) => n + s.rows.length, 0);
-			readings.push({ statements: attempt.statements, rank: rows });
+			readings.push({
+				statements: attempt.statements,
+				// What the reading CLAIMS, reduced to the part that must not differ:
+				// the movements themselves. Text may differ between two decodings of
+				// the same bytes without either being wrong.
+				amounts: attempt.statements
+					.flatMap((statement) =>
+						statement.rows.map((row) => String(row.amountMinor - (row.feeMinor ?? 0n)))
+					)
+					.sort(),
+				proofClass: attempt.proofClass ?? 'P0'
+			});
 		} else if (!firstReason) firstReason = attempt.reason;
 	}
-	if (readings.length > 0) {
-		// Among readings that all prove themselves, the fullest is the right one:
-		// a partial assembly can close its own chain while missing movements.
-		readings.sort((a, b) => b.rank - a.rank);
-		return { statements: readings[0].statements };
+
+	if (readings.length === 0) return { statements: [], reason: firstReason };
+
+	// Proof first, then coverage — and disagreement is a question.
+	//
+	// This used to sort by row count alone and keep the fullest, which is a
+	// heuristic deciding what the arithmetic was supposed to decide. On a
+	// Raiffeisenbank statement one assembly yields 44 movements and another 43;
+	// the 43 reconcile against the printed closing balance and the 44 do not, so
+	// "most rows wins" prefers exactly the wrong one. Ranking by proof class
+	// first puts that right, because the 44-row reading never proves itself.
+	//
+	// Coverage still breaks ties, and it must.
+	//
+	// Genuine ambiguity is the remaining case: two readings that are EQUALLY
+	// COMPLETE, equally proven, and disagree about the movements. Then the file
+	// really can be read more than one way and the person who owns it should
+	// say which.
+	//
+	// Completeness is what separates that from a fragment. One real eight-page
+	// statement yields a 140-row assembly and, from a different column choice, a
+	// 5-row one; both close a running chain, because a chain over five rows is
+	// trivially easy to close. Five rows is not a rival account of an eight-page
+	// document, it is an incomplete one, and the fuller reading wins without a
+	// question.
+	const rank = (reading: (typeof readings)[number]) => PROOF_RANK[reading.proofClass];
+	readings.sort((a, b) => rank(b) - rank(a) || b.amounts.length - a.amounts.length);
+	const best = readings[0];
+	const fingerprint = (reading: (typeof readings)[number]) => reading.amounts.join(',');
+
+	const rival = readings.find(
+		(reading) =>
+			reading !== best &&
+			rank(reading) === rank(best) &&
+			reading.amounts.length === best.amounts.length &&
+			fingerprint(reading) !== fingerprint(best)
+	);
+	if (rival) {
+		return {
+			statements: [],
+			reason: `this file can be read two different ways, each with ${best.amounts.length} movements that agree with their own figures, so which of them it actually contains is undecided`
+		};
 	}
-	return { statements: [], reason: firstReason };
+	return { statements: best.statements };
 }
 
 async function readOneGrid(
 	grids: Grid[],
 	loadProfiles?: () => Promise<ImportProfile[]>,
-	evidenceRegions?: Region[]
-): Promise<{ statements: ParsedStatement[]; reason?: string }> {
+	evidenceRegions?: Region[],
+	accountCurrency?: string
+): Promise<{ statements: ParsedStatement[]; reason?: string; proofClass?: ProofClass }> {
 	const choice = chooseGrid(grids);
 	if (!choice) {
 		return { statements: [], reason: 'No table of dated movements could be found in that file.' };
@@ -314,6 +489,7 @@ async function readOneGrid(
 
 	const statements: ParsedStatement[] = [];
 	const reasons: string[] = [];
+	let weakest: ProofClass | undefined;
 
 	for (const region of choice.transactions) {
 		// A remembered layout answers the questions a person already answered.
@@ -335,7 +511,15 @@ async function readOneGrid(
 			);
 		}
 
-		const reading = readTabular(choice, region, { ...guided, evidenceRegions });
+		// The account outranks the document. A statement is always imported INTO
+		// an account whose currency the user stated when they created it; what the
+		// page appears to say is corroboration. Reading it off the page produced
+		// `#Numer rachunku` — a Polish column heading — as an ISO currency code.
+		const reading = readTabular(choice, region, {
+			...guided,
+			currency: accountCurrency ?? guided.currency,
+			evidenceRegions
+		});
 		if (!reading.statement) {
 			reasons.push(reading.questions.map((q) => q.reason).join('; '));
 			continue;
@@ -351,11 +535,16 @@ async function readOneGrid(
 		const decision = decideImport(proof, reading.questions.length, {
 			verifiedProfile: match.kind === 'match' && match.profile.verified
 		});
-		if (decision.autoImport) statements.push(reading.statement);
-		else reasons.push(`${decision.reason} (${proof.proofClass})`);
+		if (decision.autoImport) {
+			statements.push(reading.statement);
+			// The weakest link: a reading is only as good as its least-proven part.
+			if (!weakest || PROOF_RANK[proof.proofClass] < PROOF_RANK[weakest]) {
+				weakest = proof.proofClass;
+			}
+		} else reasons.push(`${decision.reason} (${proof.proofClass})`);
 	}
 
-	if (statements.length > 0) return { statements };
+	if (statements.length > 0) return { statements, proofClass: weakest };
 	return {
 		statements: [],
 		reason: reasons.length

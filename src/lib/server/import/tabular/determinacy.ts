@@ -19,14 +19,44 @@ export type DecimalMark = ',' | '.';
 /**
  * A numeric date. The year is OPTIONAL because US statements print entry
  * dates and daily balances as bare MM/DD, and a column of those still tells
- * us whether the order is day-first. Anchored at both ends so a plain
- * number like `1.234` cannot be mistaken for a date.
+ * us whether the order is day-first.
  */
 const NUMERIC_DATE =
 	/^\s*(\d{1,4})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\.?\s*(?:[T\s]+\d{1,2}:\d{2}(?::\d{2})?)?\s*$/;
 
-/** Is this cell a date at all? The one definition both modules share. */
-export const isDateLike = (value: string): boolean => NUMERIC_DATE.test(value);
+/**
+ * The shape is not enough — the COMPONENTS have to be a possible date.
+ *
+ * Anchoring the pattern was assumed to be sufficient, and it is not: on any
+ * dot-decimal statement `88.40`, `377.93` and `1234.56` all match it, so an
+ * entire money column reads as a column of dates and the amount column then
+ * cannot be found at all. The comment here used to claim `1.234` was the case
+ * this guarded against; that one is excluded by the two-digit group, and every
+ * ordinary two-decimal amount sailed through.
+ *
+ * A component above its range settles it. `12.05` stays a date because it
+ * genuinely is ambiguous — December 5th and twelve euros five look identical,
+ * and inventing a rule to separate them would be a guess.
+ */
+function matchNumericDate(value: string): RegExpExecArray | null {
+	const m = NUMERIC_DATE.exec(value);
+	if (!m) return null;
+	const first = Number(m[1]);
+	const second = Number(m[2]);
+
+	// Year-first: a four-digit lead, then month then day.
+	if (m[1].length === 4) return second >= 1 && second <= 12 ? m : null;
+
+	// Otherwise the pair is day/month in one order or the other. Zero is not a
+	// day or a month in either.
+	if (first < 1 || second < 1) return null;
+	const dayFirst = first <= 31 && second <= 12;
+	const monthFirst = first <= 12 && second <= 31;
+	return dayFirst || monthFirst ? m : null;
+}
+
+/** Is this cell a date at all? The one definition every module shares. */
+export const isDateLike = (value: string): boolean => matchNumericDate(value) !== null;
 
 /**
  * Day-first or month-first?
@@ -49,7 +79,7 @@ export function resolveDateOrder(
 	let isoLike = 0;
 
 	for (const value of values) {
-		const m = NUMERIC_DATE.exec(value);
+		const m = matchNumericDate(value);
 		if (!m) continue;
 		parsed++;
 		if (m[1].length === 4) {
@@ -121,7 +151,7 @@ export function applyDateOrder(
 	order: DateOrder,
 	fallbackYear?: number
 ): string | undefined {
-	const m = NUMERIC_DATE.exec(value);
+	const m = matchNumericDate(value);
 	if (!m) return undefined;
 	let year: string;
 	let month: string;

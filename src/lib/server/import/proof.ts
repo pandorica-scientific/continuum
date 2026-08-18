@@ -79,12 +79,24 @@ const money = (v: bigint, digits = 2): string => {
  */
 function testChain(statement: ParsedStatement): {
 	holds: boolean;
+	/** False when the chain cannot be tested at all, which is not a failure. */
+	testable: boolean;
 	model?: string;
 	covered: number;
 } {
 	const rows = statement.rows;
 	const covered = rows.filter((r) => r.balanceAfterMinor !== undefined).length;
-	if (covered < 2 || covered !== rows.length) return { holds: false, covered };
+	if (covered === 0) return { holds: false, testable: false, covered };
+	// A balance on some rows and not others is a real disagreement.
+	if (covered !== rows.length) return { holds: false, testable: true, covered };
+	// A chain needs somewhere to step FROM: a second balance, or a printed
+	// opening balance. One row with one balance and no opening figure is not a
+	// broken chain, it is no chain — and reporting it as "the running balance
+	// does not follow from the movements" says something false about a file
+	// that is perfectly consistent.
+	if (rows.length < 2 && statement.openingBalanceMinor === undefined) {
+		return { holds: false, testable: false, covered };
+	}
 
 	for (const [label, ordered] of [
 		['as listed', rows],
@@ -106,9 +118,9 @@ function testChain(statement: ParsedStatement): {
 			const first = ordered[0];
 			if (first.balanceAfterMinor! !== statement.openingBalanceMinor + net(first)) continue;
 		}
-		return { holds: true, model: label, covered };
+		return { holds: true, testable: true, model: label, covered };
 	}
-	return { holds: false, covered };
+	return { holds: false, testable: true, covered };
 }
 
 /**
@@ -190,11 +202,14 @@ export function proveStatement(statement: ParsedStatement, facts?: LexicalFacts)
 
 	const chain = testChain(statement);
 	checks.push(
-		chain.covered === 0
+		!chain.testable
 			? {
 					name: 'running balance',
 					status: 'unavailable',
-					detail: 'this statement prints no running balance'
+					detail:
+						chain.covered === 0
+							? 'this statement prints no running balance'
+							: 'one movement and one balance, with no opening figure to step from'
 				}
 			: chain.holds
 				? {
@@ -352,17 +367,28 @@ export function decideImport(
 	if (openQuestions > 0) {
 		return { autoImport: false, reason: 'something about the layout is still undecided' };
 	}
-	// A profile a person confirmed against a preview of their own rows IS the
-	// human check the weak classes would otherwise demand. The mapping is what
-	// can be wrong, and someone has already looked at it.
-	if (context.verifiedProfile) {
-		return { autoImport: true, reason: 'this layout was confirmed for this bank already' };
-	}
 	if (proof.proofClass === 'P4' || proof.proofClass === 'P3') {
 		return { autoImport: true, reason: 'every movement sits on a running balance that closes' };
 	}
+	// P0 is refused even for a layout someone confirmed.
+	//
+	// This branch used to sit ABOVE every proof check, which made a saved
+	// profile sufficient on its own: a statement with no opening balance, no
+	// closing balance, no totals and no running balance imported because a
+	// preset said the columns were right. That is the governing rule's exact
+	// counterexample — a preset was the reason the statement was accepted.
+	//
+	// Confirming a mapping says the columns mean what we think. It says nothing
+	// about whether the rows under them are all there, and P0 means nothing in
+	// the file can answer that question either.
 	if (proof.proofClass === 'P0') {
 		return { autoImport: false, reason: 'nothing in the statement could be checked' };
+	}
+	// For P1 and P2 the arithmetic is real but partial, and a person has already
+	// checked this mapping against a preview of their own rows. That is the
+	// human check those classes would otherwise demand.
+	if (context.verifiedProfile) {
+		return { autoImport: true, reason: 'this layout was confirmed for this bank already' };
 	}
 	return {
 		autoImport: true,

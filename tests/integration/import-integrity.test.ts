@@ -90,12 +90,21 @@ function fioStatement({
 	const [year, month, day] = bookedAt.split('-');
 	const czDay = `${day}.${month}.${year}`;
 	const [counterpartyNumber, counterpartyBank] = counterpartyAccount.split('/');
+	// The closing balance has to follow from the movement.
+	//
+	// This generator used to print 0,00 both sides while emitting a real
+	// transaction, which every route now rejects as a statement that disagrees
+	// with itself — correctly. These fixtures exist to exercise pairing and
+	// deduplication, so their arithmetic was never the point; it still has to be
+	// true, or the file could not exist.
+	const closing = Number(amount.replace(',', '.'));
+	const czClosing = closing.toFixed(2).replace('.', ',');
 	return new TextEncoder().encode(
 		[
 			`"Výpis č. 1/${year} z účtu ""${accountNumber}"""`,
 			`"Období: ${czDay} - ${czDay}"`,
 			`"Počáteční stav účtu k ${czDay}: 0,00 CZK"`,
-			`"Koncový stav účtu k ${czDay}: 0,00 CZK"`,
+			`"Koncový stav účtu k ${czDay}: ${czClosing} CZK"`,
 			'',
 			'"ID operace";"Datum";"Objem";"Měna";"Protiúčet";"Název protiúčtu";"Kód banky";"Název banky";"KS";"VS";"SS";"Poznámka";"Zpráva pro příjemce";"Typ"',
 			`"${bankRef}";"${czDay}";"${amount}";"CZK";"${counterpartyNumber}";"";"${counterpartyBank}";"";"";"";"";"";"";"Bezhotovostní platba"`
@@ -1047,9 +1056,18 @@ describe('import database integrity', () => {
 		`);
 		const { ingestFile } = await import('$lib/server/import/ingest');
 		const source = new TextDecoder().decode(await readFile(resolve('tests/fixtures/fio.csv')));
+		// Each statement has to add up on its own: the five movements come to
+		// 22 602.00, so a different closing balance means a different opening one.
+		// Moving only the closing figure leaves a file that contradicts itself,
+		// which every route now refuses — rightly, and this test is not about
+		// that.
 		const older = new TextEncoder().encode(
 			source
 				.replace('01.07.2026 - 31.07.2026', '01.06.2026 - 30.06.2026')
+				.replace(
+					'Počáteční stav účtu k 01.07.2026: 382,38 CZK',
+					'Počáteční stav účtu k 01.06.2026: -22502,00 CZK'
+				)
 				.replace(
 					'Koncový stav účtu k 31.07.2026: 22984,38 CZK',
 					'Koncový stav účtu k 30.06.2026: 100,00 CZK'
@@ -1058,6 +1076,10 @@ describe('import database integrity', () => {
 		const newer = new TextEncoder().encode(
 			source
 				.replace('01.07.2026 - 31.07.2026', '01.08.2026 - 31.08.2026')
+				.replace(
+					'Počáteční stav účtu k 01.07.2026: 382,38 CZK',
+					'Počáteční stav účtu k 01.08.2026: -21603,00 CZK'
+				)
 				.replace(
 					'Koncový stav účtu k 31.07.2026: 22984,38 CZK',
 					'Koncový stav účtu k 31.08.2026: 999,00 CZK'

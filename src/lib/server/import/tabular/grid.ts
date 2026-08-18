@@ -13,7 +13,7 @@
  */
 import iconv from 'iconv-lite';
 import * as XLSX from 'xlsx';
-import { splitCsvLine } from '../csv';
+import { csvLines, splitCsvLine } from '../csv';
 
 /** Encodings real exports from our sampled banks actually use. */
 const ENCODINGS = ['utf-8', 'win1250', 'win1252', 'iso-8859-2'] as const;
@@ -98,11 +98,23 @@ export function delimiterCandidates(lines: string[]): DelimiterCandidate[] {
 		.sort((a, b) => b.rows - a.rows || b.columns - a.columns);
 }
 
-/** Build a grid from already-decoded text under one delimiter. */
+/**
+ * Build a grid from already-decoded text under one delimiter.
+ *
+ * Records, not lines. A newline inside a quoted field belongs to the field —
+ * a wrapped payment note, a two-line merchant address — and splitting the text
+ * on every newline before parsing quotes cuts one movement into two rows that
+ * neither carry a date nor an amount between them. `csvLines` has always known
+ * this and the five adapters have always used it; the generic reader did not,
+ * so every statement with a wrapped description fragmented, recovered a
+ * fraction of its rows, and was refused for failing to reconcile. That is 60
+ * files in the synthetic corpus, and their transactions were never anywhere
+ * near the ledger.
+ */
 export function gridFromText(text: string, delimiter: string, encoding?: string): Grid {
-	const rows = text
-		.split(/\r?\n/)
-		.map((line) => splitCsvLine(line, delimiter).map((c) => cell(c.replace(/^"|"$/g, ''))));
+	const rows = csvLines(text).map((line) =>
+		splitCsvLine(line, delimiter).map((c) => cell(c.replace(/^"|"$/g, '')))
+	);
 	// Trailing blank lines are file punctuation, not rows.
 	while (rows.length > 0 && rows[rows.length - 1].every((c) => !c.text)) rows.pop();
 	return { source: 'delimited', encoding, delimiter, rows };
@@ -117,7 +129,7 @@ export function candidateGrids(buffer: Uint8Array): Grid[] {
 	const encodings = decodeCandidates(buffer).slice(0, 2);
 	const grids: Grid[] = [];
 	for (const candidate of encodings) {
-		const lines = candidate.text.split(/\r?\n/);
+		const lines = csvLines(candidate.text);
 		for (const delimiter of delimiterCandidates(lines).slice(0, 3)) {
 			grids.push(gridFromText(candidate.text, delimiter.delimiter, candidate.encoding));
 		}

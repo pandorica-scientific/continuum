@@ -28,6 +28,15 @@ interface Expectation {
 	note: string;
 	outcome: 'imports' | 'refuses';
 	bank?: string;
+	/**
+	 * The denomination, asserted for every importing file.
+	 *
+	 * This suite was green while a 140-row euro statement imported as Czech
+	 * koruna, because it checked how MANY rows arrived and never what they were
+	 * worth. A row count cannot see a wrong currency, and a wrong currency is a
+	 * wrong number in someone's ledger.
+	 */
+	currency?: string;
 	rows?: number;
 	proof?: ProofClass;
 	/** Opening + movements = closing must hold exactly. */
@@ -43,6 +52,7 @@ const CORPUS: Expectation[] = [
 		note: 'mBank PL — the only sample printing a per-direction row count, so the only P4 CSV',
 		outcome: 'imports',
 		bank: 'mbank',
+		currency: 'PLN',
 		rows: 5,
 		proof: 'P4',
 		reconciles: true
@@ -52,6 +62,7 @@ const CORPUS: Expectation[] = [
 		note: 'Česká spořitelna — 2-5 physical lines per movement, hence a hand-written parser',
 		outcome: 'imports',
 		bank: 'cs',
+		currency: 'CZK',
 		rows: 104,
 		proof: 'P2',
 		reconciles: true
@@ -61,6 +72,7 @@ const CORPUS: Expectation[] = [
 		note: 'Raiffeisenbank JANUARY template — unspaced dates; read zero rows before v0.3.8',
 		outcome: 'imports',
 		bank: 'rb',
+		currency: 'CZK',
 		rows: 43,
 		proof: 'P2',
 		reconciles: true
@@ -70,6 +82,7 @@ const CORPUS: Expectation[] = [
 		note: 'Raiffeisenbank MARCH template — the same bank, three months later, different layout',
 		outcome: 'imports',
 		bank: 'rb',
+		currency: 'CZK',
 		rows: 30,
 		proof: 'P2',
 		reconciles: true
@@ -79,6 +92,7 @@ const CORPUS: Expectation[] = [
 		note: 'Raiffeisenbank 2026 — the template the parser was originally written against',
 		outcome: 'imports',
 		bank: 'rb',
+		currency: 'CZK',
 		rows: 44,
 		proof: 'P2',
 		reconciles: true
@@ -88,6 +102,7 @@ const CORPUS: Expectation[] = [
 		note: 'Fio — a two-row month, the smallest statement in the corpus',
 		outcome: 'imports',
 		bank: 'fio',
+		currency: 'CZK',
 		rows: 2,
 		proof: 'P2',
 		reconciles: true
@@ -97,6 +112,7 @@ const CORPUS: Expectation[] = [
 		note: 'Fio — ungrouped integer amounts, which a grouped-only number pattern silently dropped',
 		outcome: 'imports',
 		bank: 'fio',
+		currency: 'CZK',
 		rows: 6,
 		proof: 'P2',
 		reconciles: true
@@ -106,6 +122,7 @@ const CORPUS: Expectation[] = [
 		note: 'Revolut — amount net of a separate fee, and no opening balance printed',
 		outcome: 'imports',
 		bank: 'revolut',
+		currency: 'CZK',
 		rows: 38,
 		proof: 'P3'
 	},
@@ -116,6 +133,7 @@ const CORPUS: Expectation[] = [
 		note: 'Paid out / Paid in columns: direction comes only from which column holds the value',
 		outcome: 'imports',
 		bank: 'tabular',
+		currency: 'GBP',
 		rows: 10,
 		proof: 'P4',
 		reconciles: true
@@ -125,6 +143,7 @@ const CORPUS: Expectation[] = [
 		note: 'Soll/Haben suffix: the amount is unsigned, so the sign is derived from the balance',
 		outcome: 'imports',
 		bank: 'tabular',
+		currency: 'EUR',
 		rows: 10,
 		proof: 'P4',
 		reconciles: true
@@ -135,6 +154,7 @@ const CORPUS: Expectation[] = [
 		note: 'CaixaBank — three months across EIGHT pages, joined into one table; a currency symbol travels with each amount',
 		outcome: 'imports',
 		bank: 'tabular',
+		currency: 'EUR',
 		rows: 140,
 		proof: 'P3'
 	},
@@ -225,7 +245,13 @@ describe.skipIf(!present)('the sample corpus, file by file', () => {
 			it('imports exactly what it should', async () => {
 				const [statement] = await read();
 				expect(statement.bank).toBe(expectation.bank);
+				expect(statement.currency).toBe(expectation.currency);
 				expect(statement.rows).toHaveLength(expectation.rows!);
+				// Every row carries the statement's own denomination. A row labelled
+				// with a foreign currency means the FX original leaked into the
+				// ledger field, which is a hundredfold error waiting on a
+				// zero-decimal currency.
+				for (const row of statement.rows) expect(row.currency).toBe(expectation.currency);
 
 				const proof = proveStatement(statement, { currency: statement.currency });
 				expect(proof.proofClass).toBe(expectation.proof);

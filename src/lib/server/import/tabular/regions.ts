@@ -175,6 +175,25 @@ export function transactionRows(region: Region): RawCell[][] {
 	});
 }
 
+/**
+ * Rows that look exactly like movements and were dropped anyway.
+ *
+ * The summary test is a word match, so a real transaction whose description
+ * happens to contain one of those words — a transfer labelled "total", a fee
+ * named for a balance — is deleted with everything else. Reproduced on a
+ * three-row statement: two rows stored, no questions asked, chain proof intact,
+ * auto-imported. The chain closes because the surviving rows still step
+ * correctly; nothing downstream can see the hole.
+ *
+ * A row carrying BOTH a booking date and an amount is movement-shaped, so
+ * dropping it is a judgement the reader must not make in silence.
+ */
+export function droppedMovements(region: Region): RawCell[][] {
+	const body =
+		region.headerIndex === undefined ? region.rows : region.rows.slice(region.headerIndex + 1);
+	return body.filter((row) => hasDate(row) && hasAmount(row) && looksLikeSummary(rowText(row)));
+}
+
 /** Rows a transaction region contained but did not file, for reporting. */
 export function excludedRows(region: Region): RawCell[][] {
 	const body =
