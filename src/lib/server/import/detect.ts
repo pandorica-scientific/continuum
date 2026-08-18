@@ -64,7 +64,10 @@ function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatemen
  * is not wrong, it is unprovable, and refusing it would reject formats that are
  * simply terse.
  */
-function assertAgreesWithItsOwnNumbers(statement: ParsedStatement): ParsedStatement {
+function assertAgreesWithItsOwnNumbers(
+	statement: ParsedStatement,
+	method = 'adapter'
+): ParsedStatement {
 	// A currency is three letters. Anything else is a reader defect that has
 	// escaped its own module — a label, a heading, a fragment of a metadata row
 	// — and it must never become the denomination of a stored transaction,
@@ -76,7 +79,17 @@ function assertAgreesWithItsOwnNumbers(statement: ParsedStatement): ParsedStatem
 	}
 	const proof = proveStatement(statement, { currency: statement.currency });
 	const failed = proof.checks.filter((check) => check.status === 'fail');
-	if (failed.length === 0) return statement;
+	if (failed.length === 0) {
+		return {
+			...statement,
+			provenance: {
+				method,
+				proofClass: proof.proofClass,
+				ledgerModel: proof.chainModel,
+				checks: proof.checks
+			}
+		};
+	}
 	throw new Error(
 		`This ${statement.bank} statement does not agree with its own figures, so it has not been imported: ${failed
 			.map((check) => check.detail)
@@ -117,7 +130,7 @@ async function adapterOrGeneric(
 	}
 
 	const rows = statements.reduce((total, statement) => total + statement.rows.length, 0);
-	if (rows > 0) return statements.map(assertAgreesWithItsOwnNumbers);
+	if (rows > 0) return statements.map((statement) => assertAgreesWithItsOwnNumbers(statement));
 
 	const generic = await readAsUnknownLayout();
 	if (generic.statements.length > 0) return generic.statements;
@@ -217,23 +230,23 @@ async function parseByFormat(
 	if (format === 'camt053') {
 		// CAMT is UTF-8 by specification; the BOM is stripped by the reader.
 		return parseCamt053(new TextDecoder('utf-8', { fatal: false }).decode(buffer)).map(
-			assertAgreesWithItsOwnNumbers
+			(statement) => assertAgreesWithItsOwnNumbers(statement, 'standard')
 		);
 	}
 
 	if (format === 'mt940') {
 		// MT940 is ASCII by specification; a bank that slips diacritics in still
 		// decodes here, since win1250 agrees with ASCII on every SWIFT character.
-		return parseMt940(iconv.decode(Buffer.from(buffer), 'win1250')).map(
-			assertAgreesWithItsOwnNumbers
+		return parseMt940(iconv.decode(Buffer.from(buffer), 'win1250')).map((statement) =>
+			assertAgreesWithItsOwnNumbers(statement, 'standard')
 		);
 	}
 
 	if (format === 'abo') {
 		// ABO is win1250 when it carries diacritics and ASCII otherwise; decoding
 		// as win1250 is safe for both, since ASCII is a subset.
-		return parseAbo(iconv.decode(Buffer.from(buffer), 'win1250')).map(
-			assertAgreesWithItsOwnNumbers
+		return parseAbo(iconv.decode(Buffer.from(buffer), 'win1250')).map((statement) =>
+			assertAgreesWithItsOwnNumbers(statement, 'standard')
 		);
 	}
 
@@ -564,7 +577,15 @@ async function readOneGrid(
 			verifiedProfile: match.kind === 'match' && match.profile.verified
 		});
 		if (decision.autoImport) {
-			statements.push(reading.statement);
+			statements.push({
+				...reading.statement,
+				provenance: {
+					method: choice.grid.origin ?? choice.grid.source,
+					proofClass: proof.proofClass,
+					ledgerModel: proof.chainModel,
+					checks: proof.checks
+				}
+			});
 			// The weakest link: a reading is only as good as its least-proven part.
 			if (!weakest || PROOF_RANK[proof.proofClass] < PROOF_RANK[weakest]) {
 				weakest = proof.proofClass;

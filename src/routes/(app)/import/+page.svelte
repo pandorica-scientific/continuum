@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -17,8 +18,20 @@
 	// again for the very choice that caused it. Keep it only while some file
 	// still needs an answer.
 	$effect(() => {
-		const results = form?.results;
-		if (results && !results.some((result) => result.needsAccount)) assignAccountId = '';
+		const results = data.queue.files.map((f) => f.result).filter((r) => r !== null);
+		if (results.length > 0 && !results.some((result) => result.needsAccount)) assignAccountId = '';
+	});
+
+	// Watch the queue while it has work in it.
+	//
+	// The upload returns as soon as the files are accepted, so the page has to
+	// find out for itself when each one has been read. Polling stops the moment
+	// the queue empties — an idle import page should be as quiet as any other.
+	const busy = $derived(data.queue.waiting + data.queue.running > 0);
+	$effect(() => {
+		if (!busy) return;
+		const timer = setInterval(() => void invalidateAll(), 1500);
+		return () => clearInterval(timer);
 	});
 
 	async function uploadFiles(files: FileList) {
@@ -64,14 +77,29 @@
 		</label>
 	{/if}
 
-	{#if form?.results}
+	{#if data.queue.files.length > 0}
 		<div class="card results">
-			{#each form.results as r (r.filename)}
+			{#if busy}
+				<p class="queue-depth">
+					Reading {data.queue.running} of {data.queue.files.length} — {data.queue.waiting} waiting.
+				</p>
+			{/if}
+			{#each data.queue.files as job (job.id)}
 				<div class="result-row">
-					<span class="r-name">{r.filename}</span>
+					<span class="r-name">{job.filename}</span>
 					<span class="r-meta mono">
-						{#if r.error}{r.error}{:else}{r.rowsAdded} added · {r.rowsDuplicate} known · {r.rowsPaired}
-							paired{/if}
+						{#if job.state === 'queued'}
+							waiting
+						{:else if job.state === 'running'}
+							reading…
+						{:else if job.error}
+							{job.error}
+						{:else if job.result?.error}
+							{job.result.error}
+						{:else if job.result}
+							{job.result.rowsAdded} added · {job.result.rowsDuplicate} known · {job.result
+								.rowsPaired} paired
+						{/if}
 					</span>
 				</div>
 			{/each}
@@ -186,6 +214,12 @@
 	.assign-note {
 		font-size: 11.5px;
 	}
+	.queue-depth {
+		margin: 0 0 0.5rem;
+		font-size: 0.85rem;
+		opacity: 0.75;
+	}
+
 	.results {
 		display: flex;
 		flex-direction: column;

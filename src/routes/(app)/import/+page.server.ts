@@ -3,7 +3,7 @@ import { desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, category, importFile, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
-import { ingestFile, type IngestResult } from '$lib/server/import/ingest';
+import { enqueue, queueStatus, runQueue } from '$lib/server/import/queue';
 import {
 	confirmTransferProposal,
 	rejectTransferProposal
@@ -25,49 +25,64 @@ export const load: PageServerLoad = async () => {
 		proposedPairs.flatMap((p) => [p.outTransactionId, p.inTransactionId])
 	);
 
-	const [files, readAgg, autoAgg, pairedAgg, reviewRows, categories, accounts] = await Promise.all([
-		db
-			.select({ count: sql<number>`count(*)::int` })
-			.from(importFile)
-			.where(gte(importFile.uploadedAt, new Date(monthStartIso))),
-		db.select({ count: sql<number>`count(*)::int` }).from(transaction),
-		db
-			.select({ count: sql<number>`count(*)::int` })
-			.from(transaction)
-			.where(sql`${transaction.reviewState} in ('auto','confirmed')`),
-		db
-			.select({ count: sql<number>`count(*)::int` })
-			.from(transaction)
-			.where(isNotNull(transaction.transferPairId)),
-		db
-			.select({
-				id: transaction.id,
-				bookedAt: transaction.bookedAt,
-				amount: transaction.amount,
-				currency: transaction.currency,
-				counterparty: transaction.counterparty,
-				description: transaction.description,
-				reviewReason: transaction.reviewReason,
-				suggestedCategoryId: transaction.suggestedCategoryId,
-				transferPairId: transaction.transferPairId,
-				accountName: account.name
-			})
-			.from(transaction)
-			.innerJoin(account, eq(transaction.accountId, account.id))
-			.where(eq(transaction.reviewState, 'needs_review'))
-			.orderBy(desc(transaction.bookedAt))
-			.limit(50),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
-		db
-			.select({ id: account.id, name: account.name, currency: account.currency })
-			.from(account)
-			.orderBy(account.createdAt, account.id)
-	]);
+	const [queue, files, readAgg, autoAgg, pairedAgg, reviewRows, categories, accounts] =
+		await Promise.all([
+			queueStatus(),
+			db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(importFile)
+				.where(gte(importFile.uploadedAt, new Date(monthStartIso))),
+			db.select({ count: sql<number>`count(*)::int` }).from(transaction),
+			db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(transaction)
+				.where(sql`${transaction.reviewState} in ('auto','confirmed')`),
+			db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(transaction)
+				.where(isNotNull(transaction.transferPairId)),
+			db
+				.select({
+					id: transaction.id,
+					bookedAt: transaction.bookedAt,
+					amount: transaction.amount,
+					currency: transaction.currency,
+					counterparty: transaction.counterparty,
+					description: transaction.description,
+					reviewReason: transaction.reviewReason,
+					suggestedCategoryId: transaction.suggestedCategoryId,
+					transferPairId: transaction.transferPairId,
+					accountName: account.name
+				})
+				.from(transaction)
+				.innerJoin(account, eq(transaction.accountId, account.id))
+				.where(eq(transaction.reviewState, 'needs_review'))
+				.orderBy(desc(transaction.bookedAt))
+				.limit(50),
+			db.select().from(category).orderBy(category.groupKey, category.sort),
+			db
+				.select({ id: account.id, name: account.name, currency: account.currency })
+				.from(account)
+				.orderBy(account.createdAt, account.id)
+		]);
 
 	const total = readAgg[0].count;
 	const auto = autoAgg[0].count;
 
 	return {
+		// What the queue is doing, so the page can show depth and per-file
+		// progress rather than a spinner that says nothing.
+		queue: {
+			waiting: queue.waiting,
+			running: queue.running,
+			files: queue.recent.map((job) => ({
+				id: job.id,
+				filename: job.filename,
+				state: job.state,
+				result: job.result,
+				error: job.error
+			}))
+		},
 		stats: {
 			filesThisMonth: files[0].count,
 			transactionsRead: total,
@@ -105,13 +120,23 @@ export const actions: Actions = {
 		if (files.length === 0) return fail(400, { message: 'Choose at least one statement file.' });
 		const accountId = String(form.get('accountId') ?? '').trim() || undefined;
 
-		const results: IngestResult[] = [];
+		// Accept the files and return. Reading them is background work: a
+		// multi-page PDF is recovered from glyph coordinates by two assemblers and
+		// every candidate reading is proved before one is chosen, and nobody
+		// should sit in front of a spinner while that happens six times over.
+		const queued: string[] = [];
 		for (const file of files) {
-			results.push(
-				await ingestFile(file.name, new Uint8Array(await file.arrayBuffer()), accountId)
-			);
+			queued.push(await enqueue(file.name, new Uint8Array(await file.arrayBuffer()), accountId));
 		}
-		return { results };
+
+		// Start the worker without waiting for it. It claims one job at a time and
+		// stops when the queue is empty, so a second upload arriving mid-run does
+		// not start a second reader — it finds nothing to claim and returns.
+		void runQueue().catch((error) => {
+			console.error('Statement queue stopped unexpectedly.', error);
+		});
+
+		return { queued };
 	},
 
 	categorize: async ({ request }) => {

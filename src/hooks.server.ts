@@ -6,6 +6,7 @@ import { authorizeApiRequest } from '$lib/server/api/respond';
 import { maybeRunScheduledBackup } from '$lib/server/backup';
 import { seedCategories } from '$lib/server/categorize';
 import { runMigrations } from '$lib/server/db/migrate';
+import { runQueue } from '$lib/server/import/queue';
 import { refreshRates } from '$lib/server/fx';
 import { isSetUp } from '$lib/server/settings';
 
@@ -36,6 +37,19 @@ async function boot(): Promise<void> {
 		await seedDemo();
 		console.log('Demo data seeded (DEMO=1).');
 	}
+
+	// Statements accepted but not yet read.
+	//
+	// The queue survives a restart because the work is in the database rather
+	// than in memory, but nothing would pick it up again on its own: a file
+	// uploaded a second before the process stopped would sit there indefinitely,
+	// having told its owner it was accepted. One sweep at boot, and a slow tick
+	// afterwards so a job whose worker died is retried without waiting for the
+	// next upload.
+	const readQueued = () =>
+		runQueue().catch((err) => console.warn('Statement queue failed:', err.message ?? err));
+	void readQueued();
+	setInterval(readQueued, 5 * 60 * 1000);
 
 	// Daily FX fixing; failures are logged, never fatal — a home server may be
 	// offline and the app keeps working with the last known rates.

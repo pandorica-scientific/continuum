@@ -640,5 +640,5 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 		}
 	}
 
-	return [{ source: 'delimited', rows }];
+	return [{ source: 'delimited', origin: 'pdf-rhythm', rows }];
 }

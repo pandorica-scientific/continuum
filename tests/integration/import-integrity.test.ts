@@ -46,6 +46,11 @@ async function withLegacyDatabase<T>(
 		for (const migration of migrationFiles().filter(before('0027_'))) {
 			await executeSqlFile(resolve('drizzle', migration), legacy.sql);
 		}
+		// The baseline is deliberately old — these suites break data the way the
+		// migrations under test found it — but every insert still goes through the
+		// CURRENT Drizzle schema, so any later migration that adds a column has to
+		// be applied on top or the insert names a column the database lacks.
+		await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'), legacy.sql);
 		return await run(legacy.sql, legacy.db);
 	} finally {
 		await legacy.drop();
@@ -123,9 +128,11 @@ beforeAll(async () => {
 	for (const name of migrationFiles().filter(before('0029_'))) {
 		await executeSqlFile(resolve('drizzle', name));
 	}
-	// The baseline stops before this one, but every insert here goes through the
-	// current Drizzle schema, which names every person column including this.
+	// The baseline stops before these, but every insert here goes through the
+	// current Drizzle schema, which names every column they add.
 	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
+	await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'));
+	await executeSqlFile(resolve('drizzle/0045_import_queue.sql'));
 }, 30_000);
 
 beforeEach(async () => {
@@ -1034,6 +1041,106 @@ describe('import database integrity', () => {
 		`;
 		expect(assignedAccounts).toHaveLength(1);
 	});
+
+	it('reads queued statements one at a time and records what happened', async () => {
+		const { enqueue, queueStatus, runQueue } = await import('$lib/server/import/queue');
+		await insertAccount('fio-queue', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+
+		const id = await enqueue('fio.csv', source, 'fio-queue', testDb);
+
+		// Accepting the file writes nothing to the ledger: the upload has returned
+		// and the reading has not started.
+		expect(await count('transaction')).toBe(0);
+		const waiting = await queueStatus(testDb);
+		expect(waiting.waiting).toBe(1);
+		expect(waiting.recent[0]).toMatchObject({ id, filename: 'fio.csv', state: 'queued' });
+
+		expect(await runQueue(testDb)).toBe(1);
+
+		const after = await queueStatus(testDb);
+		expect(after.waiting).toBe(0);
+		expect(after.recent[0].state).toBe('done');
+		expect(after.recent[0].result?.rowsAdded).toBe(5);
+		expect(await count('transaction')).toBe(5);
+
+		// The bytes are released once the job is finished; import_file keeps the
+		// original.
+		const [job] = await testDb.select().from(schema.importJob);
+		expect(job.payload).toBeNull();
+	}, 30_000);
+
+	it('offers a job again when the worker holding it died, and not before', async () => {
+		const { enqueue, runQueue, LEASE_MS } = await import('$lib/server/import/queue');
+		await insertAccount('fio-lease', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+		const id = await enqueue('fio.csv', source, 'fio-lease', testDb);
+
+		// A worker claimed this and then died: the row says running, and nothing
+		// is coming back for it.
+		await testDb
+			.update(schema.importJob)
+			.set({ state: 'running', claimedAt: new Date() })
+			.where(eq(schema.importJob.id, id));
+
+		// While the lease holds, the job is left alone — a slow read must never be
+		// taken away from the worker still doing it.
+		expect(await runQueue(testDb)).toBe(0);
+		expect(await count('transaction')).toBe(0);
+
+		// Once it has expired, the file is read rather than stranded.
+		await testDb
+			.update(schema.importJob)
+			.set({ claimedAt: new Date(Date.now() - LEASE_MS - 1000) })
+			.where(eq(schema.importJob.id, id));
+		expect(await runQueue(testDb)).toBe(1);
+		expect(await count('transaction')).toBe(5);
+	}, 30_000);
+
+	it('does not read the same file twice when two workers start at once', async () => {
+		const { enqueue, runQueue } = await import('$lib/server/import/queue');
+		await insertAccount('fio-race', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+		await enqueue('fio.csv', source, 'fio-race', testDb);
+
+		// A second upload arriving mid-run starts a second worker. It must find
+		// nothing to claim rather than racing the first.
+		const [first, second] = await Promise.all([runQueue(testDb), runQueue(testDb)]);
+		expect(first + second).toBe(1);
+		expect(await count('transaction')).toBe(5);
+		expect(await count('import_file')).toBe(1);
+	}, 30_000);
+
+	it('records how each statement was read and what proved it', async () => {
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		await insertAccount('fio-prov', 'CZK', ['1234567890/2010']);
+		const source = await readFile(resolve('tests/fixtures/fio.csv'));
+
+		const result = await ingestFile('fio.csv', new Uint8Array(source), 'fio-prov', testDb);
+		expect(result.error).toBeUndefined();
+
+		const [file] = await testDb.select().from(schema.importFile);
+		// The Fio adapter is a verified mapping, and it now meets the same
+		// arithmetic as everything else — this is the evidence it met.
+		expect(file.sourceMethod).toBe('adapter');
+		expect(file.proofClass).toBe('P2');
+		expect(file.currency).toBe('CZK');
+		expect(file.openingBalanceMinor).toBe(38_238n);
+		expect(file.closingBalanceMinor).toBe(2_298_438n);
+		expect(file.statedCreditTotalMinor).toBe(6_265_200n);
+		expect(file.statedDebitTotalMinor).toBe(4_005_000n);
+
+		// The individual checks, as an evidence panel would show them.
+		const checks = file.reconciliation ?? [];
+		expect(checks.map((check) => check.name)).toContain('opening and closing');
+		expect(checks.find((check) => check.name === 'stated totals')?.status).toBe('pass');
+
+		// And on every row, so a single transaction answers for its own origin.
+		const rows = await testDb.select().from(schema.transaction);
+		expect(rows).toHaveLength(5);
+		expect(new Set(rows.map((row) => row.sourceMethod))).toEqual(new Set(['adapter']));
+		expect(new Set(rows.map((row) => row.proofClass))).toEqual(new Set(['P2']));
+	}, 30_000);
 
 	it('refuses a chain whose first movement is missing, using the account as the anchor', async () => {
 		// Revolut prints no opening balance, so its chain proves everything except

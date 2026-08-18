@@ -237,6 +237,46 @@ export interface ProofCheckRecord {
 }
 
 /**
+ * A statement waiting to be read.
+ *
+ * Reading is not always fast. A 140-movement statement spread over eight pages
+ * is recovered from glyph coordinates by two assemblers, and every candidate
+ * reading is proved before one is chosen; a photograph would have to be
+ * rasterised and recognised first. None of that belongs on a request the person
+ * who uploaded the file is waiting behind.
+ *
+ * The bytes live here rather than on disk so a queued file is transactional
+ * with its job: a crash between writing the file and recording the job cannot
+ * leave one without the other, and nothing has to be swept up afterwards. They
+ * are cleared the moment the job finishes, so this table holds only work in
+ * flight.
+ *
+ * `claimedAt` is a LEASE, not a lock. The work in the middle is CPU-bound and
+ * can run for many seconds, and no database lock belongs open across that. The
+ * claim itself is atomic; the lease is what lets a crashed worker's job be
+ * picked up again rather than stranded.
+ */
+export const importJob = pgTable('import_job', {
+	id: text('id').primaryKey(),
+	filename: text('filename').notNull(),
+	/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
+	payload: text('payload'),
+	byteSize: integer('byte_size').notNull(),
+	/** The account the person chose at upload, when they chose one. */
+	appliesToAccountId: text('applies_to_account_id').references(() => account.id, {
+		onDelete: 'set null'
+	}),
+	/** queued -> running -> done | failed */
+	state: text('state').notNull().default('queued'),
+	claimedAt: timestamp('claimed_at', { withTimezone: true }),
+	finishedAt: timestamp('finished_at', { withTimezone: true }),
+	/** The IngestResult, so the page can show what happened without re-reading. */
+	result: jsonb('result'),
+	error: text('error'),
+	queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
  * A remembered statement layout.
  *
  * Matched by `signature` — a hash over the header LABELS, not their positions.

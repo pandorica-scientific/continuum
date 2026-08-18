@@ -329,7 +329,7 @@ export function gridsFromPdfLines(lines: PdfLine[]): Grid[] {
 			grids.push({
 				// Columns are carried alongside so consecutive pages of one statement
 				// can be recognised as the same table and joined.
-				grid: { source: 'delimited', rows },
+				grid: { source: 'delimited', origin: 'pdf-geometry', rows },
 				columns,
 				hypothesis
 			});

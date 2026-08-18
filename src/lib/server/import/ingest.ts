@@ -17,6 +17,7 @@ import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
 import { saveUpload } from '$lib/server/files';
 import { detectAndParseAll } from './detect';
+import { PROOF_RANK, type ProofClass } from './proof';
 import { loadProfiles } from './profiles';
 import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
 import {
@@ -449,7 +450,11 @@ async function ingestStatement(
 				bankRef: row.bankRef,
 				dedupFingerprint: currentFingerprint,
 				fingerprintVersion: FINGERPRINT_VERSION,
-				importFileId: fileId
+				importFileId: fileId,
+				// On the row itself, so it can answer for its own origin even after
+				// the file it came from is re-parsed or superseded.
+				sourceMethod: statement.provenance?.method,
+				proofClass: statement.provenance?.proofClass
 			})
 			.onConflictDoNothing({ target: [transaction.accountId, transaction.dedupFingerprint] })
 			.returning({ id: transaction.id });
@@ -693,13 +698,42 @@ export async function ingestFile(
 				tx,
 				pairingWindowAround(statements.flatMap((s) => s.rows.map((row) => row.bookedAt)))
 			);
+			// File-level evidence.
+			//
+			// A file usually holds one statement, and then this is simply that
+			// statement's reading. When it holds several — a CAMT export, a
+			// workbook — the figures belong to individual statements and recording
+			// any one of them at file level would assert something untrue, so only
+			// what is common to all of them is kept: how they were read, and the
+			// WEAKEST proof among them, because a file is only as well evidenced as
+			// its least evidenced part.
+			const only = statements.length === 1 ? statements[0] : undefined;
+			const weakest = statements.reduce<ParsedStatement | undefined>(
+				(worst, candidate) =>
+					!worst ||
+					PROOF_RANK[(candidate.provenance?.proofClass ?? 'P0') as ProofClass] <
+						PROOF_RANK[(worst.provenance?.proofClass ?? 'P0') as ProofClass]
+						? candidate
+						: worst,
+				undefined
+			);
 			await tx
 				.update(importFile)
 				.set({
 					accountId: firstAccountId,
 					rowsAdded: added,
 					rowsDuplicate: duplicate,
-					rowsPaired: paired
+					rowsPaired: paired,
+					sourceMethod: statements[0].provenance?.method,
+					proofClass: weakest?.provenance?.proofClass,
+					ledgerModel: only?.provenance?.ledgerModel,
+					currency: only?.currency,
+					openingBalanceMinor: only?.openingBalanceMinor,
+					closingBalanceMinor: only?.closingBalanceMinor,
+					statedCreditTotalMinor: only?.statedCreditTotalMinor,
+					statedDebitTotalMinor: only?.statedDebitTotalMinor,
+					statedRowCount: only?.statedRowCount,
+					reconciliation: only?.provenance?.checks ?? null
 				})
 				.where(eq(importFile.id, fileId));
 

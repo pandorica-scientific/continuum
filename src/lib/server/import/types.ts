@@ -11,6 +11,23 @@ export type BankId = string;
 /** The issuers and formats with a parser today. */
 export const KNOWN_BANK_IDS = ['fio', 'revolut', 'mbank', 'rb', 'cs', 'abo'] as const;
 
+/**
+ * How a statement was read, and what proved it.
+ *
+ * Kept because the proof engine used to decide whether to file a statement and
+ * then discard its reasoning, which left the ledger holding numbers with no
+ * account of where they came from. A row that later looks wrong could not be
+ * traced back to the reading that produced it.
+ */
+export interface StatementProvenance {
+	/** Which reader produced this: an adapter, a standard, or which assembler. */
+	method: string;
+	proofClass: string;
+	/** The ledger model the chain closed under, when one did. */
+	ledgerModel?: string;
+	checks: { name: string; status: 'pass' | 'fail' | 'unavailable'; detail: string }[];
+}
+
 export interface ParsedRow {
 	/** ISO date the bank booked the movement. */
 	bookedAt: string;
@@ -38,6 +55,8 @@ export interface ParsedRow {
 }
 
 export interface ParsedStatement {
+	/** How this reading was produced and what proved it. */
+	provenance?: StatementProvenance;
 	bank: BankId;
 	format: 'csv' | 'pdf' | 'abo' | 'mt940' | 'camt053' | 'ofx' | 'xlsx';
 	/** Account number as the statement prints it (no IBAN normalisation). */

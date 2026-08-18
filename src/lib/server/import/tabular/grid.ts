@@ -31,6 +31,12 @@ export interface RawCell {
 
 export interface Grid {
 	source: 'delimited' | 'xlsx';
+	/**
+	 * Which reader assembled this grid, carried through to the ledger so a row
+	 * can say how it was read. A PDF yields grids from two assemblers that work
+	 * in entirely different ways, and which one won is worth knowing.
+	 */
+	origin?: string;
 	/** Sheet name, for workbooks. */
 	sheet?: string;
 	encoding?: string;
@@ -118,7 +124,7 @@ export function gridFromText(text: string, delimiter: string, encoding?: string)
 	);
 	// Trailing blank lines are file punctuation, not rows.
 	while (rows.length > 0 && rows[rows.length - 1].every((c) => !c.text)) rows.pop();
-	return { source: 'delimited', encoding, delimiter, rows };
+	return { source: 'delimited', origin: 'delimited', encoding, delimiter, rows };
 }
 
 /**
@@ -202,7 +208,7 @@ export function gridsFromWorkbook(buffer: Uint8Array): Grid[] {
 				};
 			})
 		);
-		return { source: 'xlsx' as const, sheet, rows };
+		return { source: 'xlsx' as const, origin: 'workbook', sheet, rows };
 	});
 }
 
