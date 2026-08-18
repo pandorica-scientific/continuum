@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { ERROR_STATES, NOTES, huesFor, isGenericMessage, stateFor } from '$lib/errors/states';
-	import { MOTIFS } from '$lib/errors/motifs';
+	import { ARTWORK_SIZE, artworkFor } from '$lib/errors/artwork';
 
 	let {
 		status,
@@ -51,6 +51,11 @@
 	const EGG_KEY = 'continuum-error-eggs';
 	let open = $state(false);
 
+	const artwork = $derived(artworkFor(screen.code));
+	const label = $derived(
+		open ? `Hide ${screen.code} illustration` : `Reveal ${screen.code} illustration`
+	);
+
 	function toggleEgg() {
 		if (!open) {
 			try {
@@ -64,7 +69,16 @@
 		open = !open;
 	}
 
-	const motif = $derived(MOTIFS[screen.code] ?? []);
+	// The drawing is a few hundred kilobytes and is only referenced once it has
+	// been revealed, so a cold click would show an empty square while it loads.
+	// Fetching it when the pointer or focus arrives — not on mount — keeps the
+	// reveal instant without spending the download on everyone who never clicks.
+	let warmed = '';
+	function warm() {
+		if (warmed === artwork) return;
+		warmed = artwork;
+		new Image().src = artwork;
+	}
 </script>
 
 <div class="screen">
@@ -104,55 +118,98 @@
 				type="button"
 				class="mark"
 				onclick={toggleEgg}
-				title={open ? 'Back to the rings' : 'Something is in the rings'}
-				aria-label={open ? 'Back to the rings' : 'Something is in the rings'}
+				onpointerenter={warm}
+				onfocus={warm}
+				title={label}
+				aria-label={label}
+				aria-pressed={open}
 				style:color={hues.hue}
 			>
 				{#if open}
+					<!-- The drawing is white line art on transparency, used as a
+					     luminance mask over a solid fill, so the ink takes the hue of
+					     the state rather than staying white on a light background.
+					     The blurred copy underneath is the glow. -->
 					<svg
-						viewBox="0 0 340 340"
-						fill="none"
-						stroke="currentColor"
-						stroke-linecap="round"
-						stroke-linejoin="round"
+						data-error-artwork
+						class="art"
+						viewBox="0 0 {ARTWORK_SIZE} {ARTWORK_SIZE}"
 						aria-hidden="true"
 					>
-						{#each motif as m, i (i)}
-							<path
-								d={m.d}
-								stroke-width={m.w}
-								opacity={m.o}
-								stroke-dasharray={m.dash ?? 'none'}
-								transform="rotate({m.rot ?? 0} 170 170)"
-							/>
-						{/each}
+						<defs>
+							<filter id="error-art-glow" x="-18%" y="-18%" width="136%" height="136%">
+								<feGaussianBlur stdDeviation="12" />
+							</filter>
+							<mask id="error-art-mask" style="mask-type: luminance;">
+								<image
+									href={artwork}
+									x="0"
+									y="0"
+									width={ARTWORK_SIZE}
+									height={ARTWORK_SIZE}
+									preserveAspectRatio="xMidYMid meet"
+								/>
+							</mask>
+						</defs>
+						<rect
+							x="0"
+							y="0"
+							width={ARTWORK_SIZE}
+							height={ARTWORK_SIZE}
+							fill="currentColor"
+							opacity="0.34"
+							mask="url(#error-art-mask)"
+							filter="url(#error-art-glow)"
+						/>
+						<rect
+							x="0"
+							y="0"
+							width={ARTWORK_SIZE}
+							height={ARTWORK_SIZE}
+							fill="currentColor"
+							mask="url(#error-art-mask)"
+						/>
 					</svg>
 				{:else}
-					<svg
-						viewBox="0 0 340 340"
-						fill="none"
-						stroke="currentColor"
-						stroke-linecap="round"
-						aria-hidden="true"
-					>
-						<path d="M150 136 A34 34 0 0 1 150 204" stroke-width="7" opacity="0.95" />
-						<path d="M150 110 A60 60 0 0 1 150 230" stroke-width="6.4" opacity="0.68" />
-						<path d="M150 84 A86 86 0 0 1 150 256" stroke-width="5.8" opacity="0.47" />
-						<path d="M150 58 A112 112 0 0 1 150 282" stroke-width="5.2" opacity="0.32" />
-						<path d="M150 32 A138 138 0 0 1 150 308" stroke-width="4.6" opacity="0.2" />
-						<path d="M150 6 A164 164 0 0 1 150 334" stroke-width="4" opacity="0.11" />
-						<circle cx="150" cy="170" r="6" fill="currentColor" stroke="none" />
+					<svg data-error-logo class="logo" viewBox="0 0 56 56" aria-hidden="true">
+						<defs>
+							<filter id="error-logo-glow" x="-60%" y="-60%" width="220%" height="220%">
+								<feGaussianBlur stdDeviation="1.8" />
+							</filter>
+						</defs>
+						<g
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.2"
+							stroke-linecap="round"
+							opacity="0.34"
+							filter="url(#error-logo-glow)"
+						>
+							<path d="M18 18 A10 10 0 0 1 18 38" />
+							<path d="M18 10 A18 18 0 0 1 18 46" />
+							<path d="M18 3 A25 25 0 0 1 18 53" />
+							<circle cx="18" cy="28" r="2.8" fill="currentColor" stroke="none" />
+						</g>
+						<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+							<path d="M18 18 A10 10 0 0 1 18 38" />
+							<path d="M18 10 A18 18 0 0 1 18 46" />
+							<path d="M18 3 A25 25 0 0 1 18 53" />
+							<circle cx="18" cy="28" r="2.8" fill="currentColor" stroke="none" />
+						</g>
 					</svg>
-					<span class="mark-code">{screen.code}</span>
 				{/if}
 			</button>
 
-			{#if open && NOTES[screen.code]}
-				<p class="note" style:color={hues.hue}>
-					<span aria-hidden="true">&rsaquo;</span>
-					<span>{NOTES[screen.code]}</span>
-				</p>
-			{/if}
+			<!-- The line is held in a box of its own height whether or not it is
+			     showing, so revealing the drawing does not shove the page around. -->
+			<div class="note-slot">
+				{#if open && NOTES[screen.code]}
+					<p class="note" style:color={hues.hue}>
+						<span aria-hidden="true">&rsaquo;</span>
+						<span>{NOTES[screen.code]}</span>
+					</p>
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>
@@ -281,6 +338,8 @@
 	}
 
 	.mark-col {
+		width: min(420px, 46vh);
+		max-width: 100%;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -288,45 +347,66 @@
 		min-width: 0;
 	}
 
+	/* Both states fill the same square, so revealing the drawing is a redraw
+	   rather than a resize. The rings sit at 78% inside it because the drawings
+	   are full-bleed and the two would otherwise read as different sizes. */
 	.mark {
-		position: relative;
-		width: clamp(190px, 24vw, 310px);
-		/* The drawing is right-biased inside its square: the arcs open rightward
-		   from x=150 of a 340 box, so the left ~42% of the mark is empty. Closing
-		   the gap in the grid alone does nothing about that — it moves an empty
-		   column closer. This pulls the square itself left so the INK lands where
-		   the eye expects it, which is what "closer to the text" means. */
-		margin-inline-start: clamp(-104px, -7vw, -36px);
+		width: 100%;
 		aspect-ratio: 1 / 1;
 		display: grid;
 		place-items: center;
 		border: none;
 		background: none;
 		padding: 0;
+		margin: 0;
+		color: inherit;
 		cursor: pointer;
 	}
 
-	.mark svg {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
+	.mark:focus-visible {
+		border-radius: 18px;
+		outline: 2px solid currentColor;
+		outline-offset: 8px;
 	}
 
-	.mark-code {
-		position: relative;
-		font-family: var(--font-mono);
-		font-size: clamp(46px, 9vw, 74px);
-		font-weight: 600;
-		letter-spacing: -0.03em;
-		color: var(--fg1);
-		/* The rings pass behind the digits; the halo is what keeps them legible
-		   where a stroke crosses a numeral. */
-		text-shadow:
-			0 0 14px var(--bg),
-			0 0 14px var(--bg),
-			0 0 8px var(--bg),
-			0 0 4px var(--bg);
+	.logo {
+		width: 78%;
+		height: 78%;
+		display: block;
+		overflow: visible;
+	}
+
+	.art {
+		width: 100%;
+		height: 100%;
+		display: block;
+		overflow: visible;
+		transform-origin: 50% 50%;
+		animation: art-drift 9s ease-in-out infinite;
+	}
+
+	@keyframes art-drift {
+		0%,
+		100% {
+			transform: translateY(0) rotate(-0.25deg);
+		}
+		50% {
+			transform: translateY(-7px) rotate(0.25deg);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.art {
+			animation: none;
+		}
+	}
+
+	.note-slot {
+		width: 100%;
+		height: 3.2em;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
 	}
 
 	.note {
@@ -358,13 +438,8 @@
 
 		.mark-col {
 			order: -1;
-		}
-
-		.mark {
-			width: min(220px, 30vh);
-			/* Centred above the text here, so the crop-correction would only push
-			   it off-centre. */
-			margin-inline-start: 0;
+			width: min(260px, 34vh);
+			align-self: center;
 		}
 
 		h1 {
