@@ -6,9 +6,8 @@
   <p><strong>Your household's whole financial picture, on your own hardware.</strong></p>
 
   <p>
-    Import your bank statements and watch where the money actually goes. Accounts,
-    property, loans, investments, tax and documents in one place. No cloud account,
-    no subscription, no telemetry. Nothing calls home.
+    Drop in a statement from any bank and watch where the money actually goes.<br>
+    Self-hosted, private by construction, and nothing calls home.
   </p>
 
   <p>
@@ -40,36 +39,27 @@
 
 <br>
 
-Continuum gives a household one clear view of what it owns, owes, spends, and needs
-to remember. Import statements from the banks you already use, connect them to
-property, loans, investments, taxes, and documents, and see the answer to the
-question that matters: _what is our net worth right now, and is it moving in the
-right direction?_ Everything runs on hardware you control.
-
 ## Why Continuum
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>One household view</b><br>
-      <sub>Accounts, cash flow, property, loans, investments, tax, documents, and calendar live together, so the important relationships stay visible.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <b>Private by construction</b><br>
-      <sub>Self-hosted on your hardware. No cloud account, subscription, or telemetry. Your bank credentials and financial history stay on your machine.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <b>Safe to keep current</b><br>
-      <sub>Re-import overlapping statements without creating duplicates. Amounts use exact minor-unit arithmetic, and multi-currency totals use the rate from the day.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <b>Made for two people</b><br>
-      <sub>Each person gets their own sign-in, passkeys, dashboard arrangement, and tax statements, while the household shares the picture that matters.</sub>
-    </td>
-  </tr>
-</table>
+Household money ends up scattered across the bank's app, a spreadsheet and a folder
+of PDFs, and none of them can say what you are actually worth this morning. Continuum
+puts the mortgage, the flat it bought, the rent that flat earns and the salary
+covering the rest into one story.
+
+- **Statements from any bank.** Drop in whatever your bank hands you — CSV, an Excel
+  workbook, a PDF, even a photo of a printout. Nothing in the reader knows which bank
+  wrote it: the layout is worked out from the file and checked against the
+  statement's own balances. What it cannot prove, it refuses rather than guesses.
+- **One picture instead of eight tabs.** Accounts, cash flow, property, loans,
+  investments, tax, documents and calendar share a single ledger, so the
+  relationships between them stay visible.
+- **Nothing calls home.** Self-hosted on your own hardware. No cloud account, no
+  subscription, no telemetry, no trackers.
+- **Safe to keep current.** Re-import overlapping statements as often as you like;
+  duplicates are impossible. Amounts are exact minor-unit arithmetic, and
+  multi-currency totals use the rate from the day.
+- **Made for two people.** Separate sign-ins, passkeys, dashboards and tax
+  statements — one shared household picture.
 
 ---
 
@@ -203,32 +193,38 @@ right direction?_ Everything runs on hardware you control.
 
 ## What it does
 
-All five phases are functional: setup wizard and per-person sign-in; statement
-import from any bank — the layout is worked out from the file and checked against
-its own balances, with automatic categorisation and transfer pairing across
-your own accounts; a searchable transaction register where a receipt can be split
-between categories and anything can be tagged into projects with running totals; a
-rules engine whose rules earn (and lose) trust from whether their suggestions
-survive your corrections; the cash-flow Sankey; multi-currency accounts with daily
-CNB rates; property with tenancies, drawable floor plans and bills with attached
-documents; loans with fixation-period interest bookkeeping and what-if
-repayment/re-fix previews; investments fed by broker report uploads (XTB first,
-behind an adapter seam); retirement projection with a payslip-fed salary tracker;
-yearly tax statements per person and country, pre-filled from the payslips and
-charted over time; documents that always belong to something real — a person, a
-flat, an investment, the household — so columns follow renames and a typo cannot
-mint a phantom subject; a generated calendar with an ics feed; a read-only JSON API
-behind bearer tokens for dashboards and Home Assistant; Home Assistant itself
-behind a pluggable provider interface; and scheduled backups straight into a
-cloud-synced folder.
+- **Import** — statements from any bank, categorised automatically, with transfers
+  paired up across your own accounts and a rules engine whose rules earn or lose
+  trust depending on whether their suggestions survive your corrections.
+- **Register** — searchable and filterable; split a receipt between categories, tag
+  anything into a project and watch its running total.
+- **Cash flow** — the Sankey above, in the order money is actually committed, over
+  multi-currency accounts converted at daily CNB rates.
+- **Property** — tenancies, drawable floor plans, bills with their documents
+  attached, and optional smart-meter billing fed by Home Assistant.
+- **Loans** — fixation-period interest bookkeeping, plus what-if previews for an
+  extra repayment or the next re-fix.
+- **Investments and retirement** — a portfolio fed by broker report uploads (XTB
+  first, behind an adapter seam) and a projection driven by a payslip-fed salary
+  tracker.
+- **Tax** — yearly statements per person and per country, pre-filled from the
+  payslips and charted over time.
+- **Documents** — filed against something real: a person, a flat, a loan. Renames
+  follow, expiries surface, and a typo cannot mint a phantom subject.
+- **Calendar** — every date the ledger implies alongside your own events, as an ics
+  feed and two-way sync with Google and iCloud.
+- **API and backups** — read-only JSON under a bearer token for dashboards and Home
+  Assistant, and scheduled backups written straight into a cloud-synced folder.
+
+Setup is a wizard: people, base currency and which of the above you want are chosen
+there, not in configuration files.
 
 ### Statement import
 
-**Any bank.** There is no list of supported banks, because nothing in the reader
-knows which bank wrote a file. A statement is read by working out its structure
-from the file itself, and it is filed only if it then agrees with its own
-arithmetic — the printed opening and closing balances, the running balance, the
-stated totals, the movement count. Whatever the reader cannot prove, it refuses.
+There is no list of supported banks. A statement is read by working out its shape
+from the file itself, and it is filed only once it agrees with its own arithmetic —
+the printed opening and closing balances, the running balance, the stated totals,
+the movement count.
 
 | What you upload                   | How it is read                                |
 | --------------------------------- | --------------------------------------------- |
@@ -238,11 +234,9 @@ stated totals, the movement count. Whatever the reader cannot prove, it refuses.
 | CAMT.053, MT940, ABO/GPC, OFX/QFX | read directly — these declare their own shape |
 
 Measured on real statements from ten institutions across Poland, Czechia, Spain and
-the United States, on synthetic British, German and American layouts, and on a
-294-file corpus spanning 24 locales and 20 currencies: **every real statement is read
-without knowing which bank wrote it**, and 274 of the 294 are read exactly. The five
-banks that once had hand-written parsers still have them as a fast path, but nothing
-depends on them any more.
+the United States, and on a 294-file corpus spanning 24 locales and 20 currencies:
+**every real statement is read**, and 274 of the 294 are read exactly. Five banks
+still have hand-written parsers as a fast path, but nothing depends on them any more.
 
 **When it cannot work something out, it asks.** A layout nobody recognises opens a
 mapping wizard: you say which column is the date and which is the amount, it
