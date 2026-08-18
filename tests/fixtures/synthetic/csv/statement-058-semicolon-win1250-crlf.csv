@@ -1,0 +1,17 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;CAD
+#Numer rachunku;SYN-0058
+#Okres;2026-04-01;2026-04-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;86264.12
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-04-22;2026-04-21;"Bank service fee; Orbit Pharmacy";200.67;86464.79
+2026-04-24;;"Refund; Lantern Books
+synthetic continuation";-41.73;86423.06
+2026-04-01;;"Salary payment; Summit Cafeteria";-163.58;86259.48
+2026-04-03;2026-04-02;"Card purchase; Pinecrest Housing";226.61;86486.09
+2026-04-05;;"Account transfer; Copperline Services";-164.49;86321.60
+2026-04-07;;"Direct debit; Harbour Energy";-499.95;85821.65
+;;#Saldo koñcowe;85821.65;

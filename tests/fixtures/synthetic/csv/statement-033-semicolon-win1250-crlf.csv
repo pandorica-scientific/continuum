@@ -1,0 +1,16 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;USD
+#Numer rachunku;SYN-0033
+#Okres;2026-06-01;2026-06-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;28448.49
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-06-22;2026-06-21;"Card purchase; Pinecrest Housing";44.37;28492.86
+2026-06-24;;"Salary payment; Orbit Pharmacy
+synthetic continuation";-844.25;27648.61
+2026-06-01;;"Refund; Pinecrest Housing";-114.66;27533.95
+2026-06-03;2026-06-02;"Bank service fee; Copperline Services";-141.23;27392.72
+2026-06-05;;"Interest payment; Meadow Payroll";161.05;27553.77
+;;#Saldo koñcowe;27553.77;

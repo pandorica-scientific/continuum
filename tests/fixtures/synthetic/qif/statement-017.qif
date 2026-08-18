@@ -1,0 +1,26 @@
+!Type:Bank
+D2026-08-24
+T181.43
+PMeadow Payroll
+MDirect debit
+^
+D2026-08-01
+T-835.50
+POrbit Pharmacy
+MAccount transfer
+^
+D2026-08-03
+T-472.26
+PMeadow Payroll
+MInterest payment
+^
+D2026-08-05
+T-462.98
+PJuniper Transit
+MCash withdrawal
+^
+D2026-08-07
+T423.28
+PLantern Books
+MRefund
+^

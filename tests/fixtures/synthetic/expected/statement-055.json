@@ -1,0 +1,153 @@
+{
+  "id": "statement-055",
+  "archetype": "foreign-amount",
+  "locale": "nl-NL",
+  "currency": "EUR",
+  "accountId": "SYN-0055",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-01-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "ofx",
+    "ods"
+  ],
+  "openingBalanceMinor": "4902514",
+  "closingBalanceMinor": "4809743",
+  "statedCreditTotalMinor": "184864",
+  "statedDebitTotalMinor": "277635",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-01-13",
+      "valueDate": "2026-01-12",
+      "amountMinor": "87307",
+      "currency": "EUR",
+      "balanceAfterMinor": "4989821",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300005400",
+      "bankRef": "SIMREF055001",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-01-15",
+      "amountMinor": "-28625",
+      "currency": "EUR",
+      "balanceAfterMinor": "4961196",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005401",
+      "bankRef": "SIMREF055002",
+      "description": "Cash withdrawal",
+      "originalCurrency": "USD",
+      "originalAmountMinor": "85875"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-01-17",
+      "amountMinor": "3092",
+      "currency": "EUR",
+      "balanceAfterMinor": "4964288",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300005402",
+      "bankRef": "SIMREF055003",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-01-19",
+      "valueDate": "2026-01-18",
+      "amountMinor": "-58547",
+      "currency": "EUR",
+      "balanceAfterMinor": "4905741",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300005403",
+      "bankRef": "SIMREF055004",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-01-21",
+      "amountMinor": "-64759",
+      "currency": "EUR",
+      "balanceAfterMinor": "4840982",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300005404",
+      "bankRef": "SIMREF055005",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-01-23",
+      "amountMinor": "-12417",
+      "currency": "EUR",
+      "balanceAfterMinor": "4828565",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005405",
+      "bankRef": "SIMREF055006",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-01-25",
+      "valueDate": "2026-01-24",
+      "amountMinor": "46271",
+      "currency": "EUR",
+      "balanceAfterMinor": "4874836",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300005406",
+      "bankRef": "SIMREF055007",
+      "description": "Refund"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-01-02",
+      "amountMinor": "-16126",
+      "currency": "EUR",
+      "balanceAfterMinor": "4858710",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005407",
+      "bankRef": "SIMREF055008",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-01-04",
+      "amountMinor": "-10606",
+      "currency": "EUR",
+      "balanceAfterMinor": "4848104",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300005408",
+      "bankRef": "SIMREF055009",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-01-06",
+      "valueDate": "2026-01-05",
+      "amountMinor": "-86430",
+      "currency": "EUR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "4761549",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005409",
+      "bankRef": "SIMREF055010",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-01-08",
+      "amountMinor": "48194",
+      "currency": "EUR",
+      "balanceAfterMinor": "4809743",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300005410",
+      "bankRef": "SIMREF055011",
+      "description": "Account transfer"
+    }
+  ]
+}

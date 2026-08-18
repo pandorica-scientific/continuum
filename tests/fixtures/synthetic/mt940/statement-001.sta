@@ -1,0 +1,15 @@
+:20:STATEMENT001
+:25:SYN-0001
+:28C:00001/001
+:60F:C260101PLN28962,39
+:61:2601010101C812,62NTRFCashwithdraw//SIMREF001001
+:86:Cash withdrawal Vector Mobile
+:61:2601030103D404,25NTRFInterestpaym//SIMREF001002
+:86:Interest payment Northstar Market
+:61:2601050105D411,64NTRFAccounttrans//SIMREF001003
+:86:Account transfer Summit Cafeteria
+:61:2601070107D86,11NTRFDirectdebit//SIMREF001004
+:86:Direct debit Lantern Books
+:61:2601090109C89,80NTRFSalarypaymen//SIMREF001005
+:86:Salary payment Juniper Transit
+:62F:C260128PLN28962,81

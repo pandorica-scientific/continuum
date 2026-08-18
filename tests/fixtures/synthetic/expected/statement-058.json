@@ -1,0 +1,90 @@
+{
+  "id": "statement-058",
+  "archetype": "continued-pages",
+  "locale": "en-CA",
+  "currency": "CAD",
+  "accountId": "SYN-0058",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "camt053"
+  ],
+  "openingBalanceMinor": "8626412",
+  "closingBalanceMinor": "8582165",
+  "statedCreditTotalMinor": "42728",
+  "statedDebitTotalMinor": "86975",
+  "statedRowCount": 6,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-04-22",
+      "valueDate": "2026-04-21",
+      "amountMinor": "20067",
+      "currency": "CAD",
+      "balanceAfterMinor": "8646479",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005700",
+      "bankRef": "SIMREF058001",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-04-24",
+      "amountMinor": "-4173",
+      "currency": "CAD",
+      "balanceAfterMinor": "8642306",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300005701",
+      "bankRef": "SIMREF058002",
+      "description": "Refund"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-04-01",
+      "amountMinor": "-16358",
+      "currency": "CAD",
+      "balanceAfterMinor": "8625948",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300005702",
+      "bankRef": "SIMREF058003",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-04-03",
+      "valueDate": "2026-04-02",
+      "amountMinor": "22661",
+      "currency": "CAD",
+      "balanceAfterMinor": "8648609",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300005703",
+      "bankRef": "SIMREF058004",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-04-05",
+      "amountMinor": "-16449",
+      "currency": "CAD",
+      "balanceAfterMinor": "8632160",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300005704",
+      "bankRef": "SIMREF058005",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-04-07",
+      "amountMinor": "-49995",
+      "currency": "CAD",
+      "balanceAfterMinor": "8582165",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300005705",
+      "bankRef": "SIMREF058006",
+      "description": "Direct debit"
+    }
+  ]
+}

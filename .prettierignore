@@ -9,3 +9,8 @@ bank_data_examples_do_not_share/
 scratch-workspace/
 .remember/
 package-lock.json
+
+# Test data, not source. The synthetic corpus is generated and its ground truth
+# is compared byte-for-byte against what the reader produces; reformatting it
+# would be noise in every diff and a silent edit to the thing under test.
+tests/fixtures/synthetic/

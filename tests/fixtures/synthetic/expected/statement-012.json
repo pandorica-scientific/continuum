@@ -1,0 +1,113 @@
+{
+  "id": "statement-012",
+  "archetype": "furniture-pages",
+  "locale": "sv-SE",
+  "currency": "SEK",
+  "accountId": "SYN-0012",
+  "periodStart": "2026-03-01",
+  "periodEnd": "2026-03-28",
+  "targetDecision": "reject",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "1180985",
+  "closingBalanceMinor": "1098799",
+  "statedCreditTotalMinor": "146110",
+  "statedDebitTotalMinor": "228296",
+  "statedRowCount": 8,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-03-09",
+      "valueDate": "2026-03-08",
+      "amountMinor": "75783",
+      "currency": "SEK",
+      "balanceAfterMinor": "1256768",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001100",
+      "bankRef": "SIMREF012001",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-03-11",
+      "amountMinor": "38378",
+      "currency": "SEK",
+      "balanceAfterMinor": "1295146",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001101",
+      "bankRef": "SIMREF012002",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-03-13",
+      "amountMinor": "-18440",
+      "currency": "SEK",
+      "balanceAfterMinor": "1276706",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001102",
+      "bankRef": "SIMREF012003",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-03-15",
+      "valueDate": "2026-03-14",
+      "amountMinor": "-15934",
+      "currency": "SEK",
+      "balanceAfterMinor": "1260772",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300001103",
+      "bankRef": "SIMREF012004",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-03-17",
+      "amountMinor": "-56749",
+      "currency": "SEK",
+      "balanceAfterMinor": "1204023",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300001104",
+      "bankRef": "SIMREF012005",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-03-19",
+      "amountMinor": "31949",
+      "currency": "SEK",
+      "balanceAfterMinor": "1235972",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300001105",
+      "bankRef": "SIMREF012006",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-03-21",
+      "valueDate": "2026-03-20",
+      "amountMinor": "-81624",
+      "currency": "SEK",
+      "balanceAfterMinor": "1154348",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001106",
+      "bankRef": "SIMREF012007",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-03-23",
+      "amountMinor": "-55424",
+      "currency": "SEK",
+      "feeMinor": "125",
+      "balanceAfterMinor": "1098799",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001107",
+      "bankRef": "SIMREF012008",
+      "description": "Refund"
+    }
+  ]
+}

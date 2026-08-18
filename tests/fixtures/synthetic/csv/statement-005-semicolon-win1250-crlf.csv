@@ -1,0 +1,20 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;EUR
+#Numer rachunku;SYN-0005
+#Okres;2026-05-01;2026-05-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;10114,62
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-05-13;2026-05-12;"Salary payment; Copperline Services";162,96;10277,58
+2026-05-15;;"Card purchase; Northstar Market
+synthetic continuation";-158,44;10119,14
+2026-05-17;;"Bank service fee; Summit Cafeteria";-533,18;9585,96
+2026-05-19;2026-05-18;"Refund; Harbour Energy";-17,50;9568,46
+2026-05-21;;"Cash withdrawal; Summit Cafeteria";57,20;9625,66
+2026-05-23;;"Interest payment; Pinecrest Housing";-66,48;9559,18
+2026-05-25;2026-05-24;"Account transfer; Vector Mobile";-429,72;9129,46
+2026-05-02;;"Direct debit; Pinecrest Housing";-236,04;8893,42
+2026-05-04;;"Salary payment; Orbit Pharmacy";712,41;9605,83
+;;#Saldo koñcowe;9605,83;

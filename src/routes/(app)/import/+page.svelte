@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 
 	let { data, form } = $props();
@@ -16,9 +18,32 @@
 	// unrelated statement came back needsAccount with nothing imported, asking
 	// again for the very choice that caused it. Keep it only while some file
 	// still needs an answer.
+	//
+	// Scoped to the files THIS upload queued, which is what `form.queued` carries.
+	// Reading the whole queue instead brought the bug straight back: settled jobs
+	// linger for an hour, so one old `needsAccount` result kept the choice pinned
+	// to every batch dropped after it — the exact thing the paragraph above says
+	// was fixed.
 	$effect(() => {
-		const results = form?.results;
-		if (results && !results.some((result) => result.needsAccount)) assignAccountId = '';
+		const batch = new Set(form?.queued ?? []);
+		if (batch.size === 0) return;
+		const results = data.queue.files
+			.filter((f) => batch.has(f.id))
+			.map((f) => f.result)
+			.filter((r) => r !== null);
+		if (results.length > 0 && !results.some((result) => result.needsAccount)) assignAccountId = '';
+	});
+
+	// Watch the queue while it has work in it.
+	//
+	// The upload returns as soon as the files are accepted, so the page has to
+	// find out for itself when each one has been read. Polling stops the moment
+	// the queue empties — an idle import page should be as quiet as any other.
+	const busy = $derived(data.queue.waiting + data.queue.running > 0);
+	$effect(() => {
+		if (!busy) return;
+		const timer = setInterval(() => void invalidateAll(), 1500);
+		return () => clearInterval(timer);
 	});
 
 	async function uploadFiles(files: FileList) {
@@ -40,11 +65,11 @@
 
 <section class="section">
 	<UploadDropzone
-		accept=".csv,.pdf,.xml,.ofx,.abo"
+		accept=".csv,.tsv,.txt,.pdf,.xlsx,.xls,.xml,.camt,.gpc,.abo,.sta,.mt940,.ofx,.qfx,.png,.jpg,.jpeg,.tiff"
 		multiple={true}
 		idleText="Drop statements here, or click to browse"
 		busyText="Reading statements…"
-		description="CSV or PDF from any of the five banks, several files at once. The layout is detected, transfers between your own accounts are paired and dropped, and categories come from what you corrected last time."
+		description="A CSV, spreadsheet or PDF from any bank — the layout is worked out from the file and checked against the statement's own balances, so no per-bank setup is needed. CAMT.053, MT940, OFX/QFX and ABO/GPC exports are read directly. A photograph or scan is read from the page image, in the background. Several files at once. Transfers between your own accounts are paired and dropped, and categories come from what you corrected last time."
 		onfiles={uploadFiles}
 	/>
 
@@ -64,20 +89,198 @@
 		</label>
 	{/if}
 
-	{#if form?.results}
+	{#if data.queue.files.length > 0}
 		<div class="card results">
-			{#each form.results as r (r.filename)}
+			{#if busy}
+				<p class="queue-depth">
+					Reading {data.queue.running} of {data.queue.files.length} — {data.queue.waiting} waiting.
+				</p>
+			{/if}
+			{#each data.queue.files as job (job.id)}
 				<div class="result-row">
-					<span class="r-name">{r.filename}</span>
+					<span class="r-name">{job.filename}</span>
 					<span class="r-meta mono">
-						{#if r.error}{r.error}{:else}{r.rowsAdded} added · {r.rowsDuplicate} known · {r.rowsPaired}
-							paired{/if}
+						{#if job.state === 'queued'}
+							waiting
+						{:else if job.state === 'running'}
+							reading…
+						{:else if job.error}
+							{job.error}
+							<!-- The bytes are still here, so the layout can be mapped by hand
+							     rather than the file being uploaded again. -->
+							<form method="POST" action="?/previewLayout" use:enhance class="inline-form">
+								<input type="hidden" name="jobId" value={job.id} />
+								<button type="submit" class="btn">Map its columns</button>
+							</form>
+						{:else if job.result?.error}
+							{job.result.error}
+							<form method="POST" action="?/previewLayout" use:enhance class="inline-form">
+								<input type="hidden" name="jobId" value={job.id} />
+								<button type="submit" class="btn">Map its columns</button>
+							</form>
+						{:else if job.result}
+							{job.result.rowsAdded} added · {job.result.rowsDuplicate} known · {job.result
+								.rowsPaired} paired
+						{/if}
 					</span>
 				</div>
 			{/each}
 		</div>
 	{/if}
 </section>
+
+{#if form?.preview}
+	<section class="section">
+		<Eyebrow
+			emoji="🧩"
+			label="Map this layout"
+			caption="say what the columns are — the balances still decide whether it adds up"
+		/>
+		<!--
+			One question, asked of the person who has the statement in front of them:
+			what is each column? That is the one thing they know better than the file.
+
+			It is not permission to skip the proof. Whatever they confirm is read
+			back through the same arithmetic as any other statement, and a mapping
+			that produces movements contradicting the balances is refused exactly as
+			an inferred reading would be.
+		-->
+		<form method="POST" action="?/confirmMapping" use:enhance class="card wizard">
+			<input type="hidden" name="jobId" value={form.preview.jobId} />
+			<input type="hidden" name="source" value={form.preview.source} />
+			<input type="hidden" name="encoding" value={form.preview.encoding ?? ''} />
+			<input type="hidden" name="delimiter" value={form.preview.delimiter ?? ''} />
+
+			{#if form.preview.drift}
+				<!--
+					A layout we nearly know. Matching on labels rather than positions is
+					what turns "the bank added a column" from a silent shift of every
+					role into this: a named difference, with last time's answers already
+					filled in.
+				-->
+				<input type="hidden" name="supersedes" value={form.preview.drift.profileId} />
+				<p class="note">
+					This looks like <strong>{form.preview.drift.profileName}</strong>, changed since it was
+					last read{#if form.preview.drift.added.length}: {form.preview.drift.added.join(', ')}
+						{form.preview.drift.added.length === 1 ? 'is' : 'are'} new{/if}{#if form.preview.drift.removed.length}{form
+							.preview.drift.added.length
+							? ', and'
+							: ':'}
+						{form.preview.drift.removed.join(', ')}
+						{form.preview.drift.removed.length === 1 ? 'is' : 'are'} gone{/if}. The columns it
+					already knew are filled in.
+				</p>
+			{/if}
+
+			{#if form.preview.questions.length > 0}
+				<p class="note">
+					What stopped it: {form.preview.questions.join('; ')}
+				</p>
+			{/if}
+
+			<div class="w-columns">
+				{#each form.preview.headers as header, i (i)}
+					<label class="w-col">
+						<span class="w-head">{header || `Column ${i + 1}`}</span>
+						<input type="hidden" name="header" value={header} />
+						<select name="role">
+							<option value="">Not used</option>
+							{#each ROLE_CHOICES as choice (choice.value)}
+								<option value={choice.value} selected={form.preview.roles[i] === choice.value}>
+									{choice.label}
+								</option>
+							{/each}
+						</select>
+						<span class="w-sample mono">
+							{form.preview.sample
+								.map((row) => row[i] ?? '')
+								.filter(Boolean)
+								.slice(0, 3)
+								.join(' · ')}
+						</span>
+					</label>
+				{/each}
+			</div>
+
+			<div class="w-conventions">
+				<label class="field">
+					<span>Dates read as</span>
+					<select name="dateOrder">
+						{#each DATE_ORDER_CHOICES as choice (choice.value)}
+							<option value={choice.value} selected={form.preview.dateOrder === choice.value}>
+								{choice.label}
+							</option>
+						{/each}
+					</select>
+				</label>
+				<label class="field">
+					<span>Decimal mark</span>
+					<select name="decimalMark">
+						{#each DECIMAL_CHOICES as choice (choice.value)}
+							<option value={choice.value} selected={form.preview.decimalMark === choice.value}>
+								{choice.label}
+							</option>
+						{/each}
+					</select>
+				</label>
+				<label class="field">
+					<span>Name this layout</span>
+					<input
+						name="name"
+						placeholder="e.g. Bank Mandiri current account"
+						value={form.preview.drift?.profileName ?? ''}
+						required
+					/>
+				</label>
+			</div>
+
+			<button type="submit" class="btn primary">Read it this way</button>
+		</form>
+	</section>
+{/if}
+
+{#if data.imports.length > 0}
+	<section class="section">
+		<Eyebrow emoji="🧾" label="Recent imports" caption="what each statement was checked against" />
+		<!--
+			What each statement was checked against before its movements were filed.
+
+			The proof engine decided whether to accept these and then threw its
+			reasoning away, so a figure that later looked wrong could not be traced
+			to the reading that produced it. Showing the checks is what makes
+			"accepted" mean something a person can inspect rather than take on trust.
+		-->
+		<div class="card imports">
+			{#each data.imports as file (file.id)}
+				<details class="import-row">
+					<summary>
+						<span class="i-name">{file.filename}</span>
+						<span class="i-meta mono">
+							{file.rowsAdded} filed{#if file.readAs}&nbsp;· {file.readAs}{/if}
+						</span>
+					</summary>
+					<div class="i-body">
+						{#if file.proofLabel}
+							<p class="i-proof">{file.proofLabel}</p>
+						{/if}
+						{#if file.checks.length > 0}
+							<ul class="i-checks">
+								{#each file.checks as check (check.name)}
+									<li class:failed={check.status === 'fail'}>
+										<span class="c-name">{check.name}</span>
+										<span class="c-detail">{check.detail}</span>
+									</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="note">This statement printed no figures to check its movements against.</p>
+						{/if}
+					</div>
+				</details>
+			{/each}
+		</div>
+	</section>
+{/if}
 
 <section class="tiles">
 	<MetricTile label="Files this month" value={String(data.stats.filesThisMonth)} />
@@ -186,6 +389,93 @@
 	.assign-note {
 		font-size: 11.5px;
 	}
+	.wizard {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.w-columns {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	.w-col {
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.w-head {
+		font-weight: 600;
+		font-size: 0.9rem;
+		overflow-wrap: anywhere;
+	}
+
+	.w-sample {
+		font-size: 0.75rem;
+		opacity: 0.7;
+		overflow-wrap: anywhere;
+	}
+
+	.w-conventions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.inline-form {
+		display: inline;
+	}
+
+	.imports {
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.import-row summary {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		cursor: pointer;
+		padding: 0.35rem 0;
+	}
+
+	.i-meta {
+		opacity: 0.75;
+		font-size: 0.85rem;
+	}
+
+	.i-body {
+		padding: 0.25rem 0 0.75rem 1rem;
+	}
+
+	.i-proof {
+		margin: 0 0 0.4rem;
+		font-size: 0.9rem;
+	}
+
+	.i-checks {
+		margin: 0;
+		padding-left: 1rem;
+		display: grid;
+		gap: 0.2rem;
+		font-size: 0.85rem;
+	}
+
+	.i-checks .c-name {
+		opacity: 0.7;
+	}
+
+	.i-checks li.failed .c-detail {
+		color: var(--red);
+	}
+
+	.queue-depth {
+		margin: 0 0 0.5rem;
+		font-size: 0.85rem;
+		opacity: 0.75;
+	}
+
 	.results {
 		display: flex;
 		flex-direction: column;

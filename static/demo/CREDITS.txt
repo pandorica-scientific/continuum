@@ -1,0 +1,55 @@
+Demo interior photographs — provenance and licensing
+Collected 2026-08-18. All three images come from Pexels and are covered by the
+Pexels License (https://www.pexels.com/license/).
+
+-------------------------------------------------------------------------------
+1. flat-living.jpg
+   Subject:      Interior of modern apartment living room (sofa, TV, dining table)
+   Source page:  https://www.pexels.com/photo/interior-of-modern-apartment-living-room-6588599/
+   Photographer: Max Vakhtbovych (Pexels @artbovich)
+   Licence:      Pexels License ("Free to use", attribution not required)
+   Downloaded:   https://images.pexels.com/photos/6588599/pexels-photo-6588599.jpeg?auto=compress&cs=tinysrgb&w=1600
+   Dimensions:   1600 x 1067 px, JPEG
+
+2. flat-kitchen.jpg
+   Subject:      Modern white minimalistic kitchen with a balcony
+   Source page:  https://www.pexels.com/photo/modern-white-minimalistic-kitchen-with-a-balcony-19846379/
+   Photographer: Lisa Anna
+   Licence:      Pexels License ("Free to use", attribution not required)
+   Downloaded:   https://images.pexels.com/photos/19846379/pexels-photo-19846379.jpeg?auto=compress&cs=tinysrgb&w=1600
+   Dimensions:   1600 x 1067 px, JPEG
+
+3. flat-bedroom.jpg
+   Subject:      Scandinavian bedroom design, minimal concept
+   Source page:  https://www.pexels.com/photo/scandinavian-bedroom-design-minimal-concept-15131055/
+   Photographer: Ibrahim Dogan (page spelling: Ibrahim Dogan / İbrahim Doğan)
+   Licence:      Pexels License ("Free to use", attribution not required)
+   Downloaded:   https://images.pexels.com/photos/15131055/pexels-photo-15131055.jpeg?auto=compress&cs=tinysrgb&w=1600
+   Dimensions:   1600 x 1039 px, JPEG
+
+-------------------------------------------------------------------------------
+Pexels License terms, as stated on https://www.pexels.com/license/ (fetched
+2026-08-18):
+
+  Allowed:
+   - All photos and videos on Pexels are free to use.
+   - Attribution is not required. Giving credit to the photographer or Pexels
+     is not necessary but always appreciated.
+   - You can modify the photos and videos from Pexels. Be creative and edit
+     them as you like.
+   - Commercial and non-commercial use is permitted.
+
+  Not allowed:
+   - Don't sell unaltered copies of a photo or video, e.g. as a poster, print
+     or on a physical product.
+   - Don't imply endorsement of your product by people or brands in the imagery.
+   - Don't redistribute or sell the photos and videos on other stock photo or
+     wallpaper platforms.
+   - Don't use identifiable people in a bad light or in a way that is offensive.
+
+Note on the redistribution clause: the prohibition targets re-publishing the
+files as stock imagery (i.e. offering them as downloadable stock/wallpaper
+assets on a competing platform). Shipping them inside an application repository
+as demo/screenshot content is normal permitted use, not stock redistribution.
+None of the three photographs shows an identifiable person, a trademark, or a
+watermark.

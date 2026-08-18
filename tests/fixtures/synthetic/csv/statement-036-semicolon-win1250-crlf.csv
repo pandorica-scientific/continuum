@@ -1,0 +1,19 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;SEK
+#Numer rachunku;SYN-0036
+#Okres;2026-09-01;2026-09-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;66650.91
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-09-06;2026-09-05;"Bank service fee; Juniper Transit";741.67;67392.58
+2026-09-08;;"Refund; Harbour Energy
+synthetic continuation";397.10;67789.68
+2026-09-10;;"Salary payment; Summit Cafeteria";-563.50;67226.18
+2026-09-12;2026-09-11;"Card purchase; Harbour Energy";-798.77;66427.41
+2026-09-14;;"Account transfer; Orbit Pharmacy";-414.28;66013.13
+2026-09-16;;"Direct debit; Lantern Books";105.71;66118.84
+2026-09-18;2026-09-17;"Cash withdrawal; Summit Cafeteria";-333.52;65785.32
+2026-09-20;;"Interest payment; Meadow Payroll";-730.69;65054.63
+;;#Saldo koñcowe;65054.63;

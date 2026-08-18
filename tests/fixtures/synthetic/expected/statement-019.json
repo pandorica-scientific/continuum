@@ -1,0 +1,105 @@
+{
+  "id": "statement-019",
+  "archetype": "split-direction",
+  "locale": "en-IN",
+  "currency": "INR",
+  "accountId": "SYN-0019",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-01-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "ofx",
+    "ods"
+  ],
+  "openingBalanceMinor": "1560081",
+  "closingBalanceMinor": "1507809",
+  "statedCreditTotalMinor": "103119",
+  "statedDebitTotalMinor": "155391",
+  "statedRowCount": 7,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-01-05",
+      "valueDate": "2026-01-04",
+      "amountMinor": "68678",
+      "currency": "INR",
+      "balanceAfterMinor": "1628759",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300001800",
+      "bankRef": "SIMREF019001",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-01-07",
+      "amountMinor": "-52792",
+      "currency": "INR",
+      "balanceAfterMinor": "1575967",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300001801",
+      "bankRef": "SIMREF019002",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-01-09",
+      "amountMinor": "6180",
+      "currency": "INR",
+      "balanceAfterMinor": "1582147",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300001802",
+      "bankRef": "SIMREF019003",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-01-11",
+      "valueDate": "2026-01-10",
+      "amountMinor": "-37037",
+      "currency": "INR",
+      "balanceAfterMinor": "1545110",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001803",
+      "bankRef": "SIMREF019004",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-01-13",
+      "amountMinor": "-62249",
+      "currency": "INR",
+      "balanceAfterMinor": "1482861",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001804",
+      "bankRef": "SIMREF019005",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-01-15",
+      "amountMinor": "-3313",
+      "currency": "INR",
+      "balanceAfterMinor": "1479548",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300001805",
+      "bankRef": "SIMREF019006",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-01-17",
+      "valueDate": "2026-01-16",
+      "amountMinor": "28261",
+      "currency": "INR",
+      "balanceAfterMinor": "1507809",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001806",
+      "bankRef": "SIMREF019007",
+      "description": "Refund"
+    }
+  ]
+}

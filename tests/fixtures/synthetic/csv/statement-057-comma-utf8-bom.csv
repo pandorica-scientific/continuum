@@ -1,0 +1,13 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,USD
+#Numer rachunku,SYN-0057
+#Okres,2026-03-01,2026-03-28
+#Saldo początkowe,65098.78
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-03-19,2026-03-18,Refund; Harbour Energy,257.33,65356.11
+2026-03-21,,Bank service fee; Vector Mobile,-312.62,65043.49
+2026-03-23,,Card purchase; Northstar Market,-398.27,64645.22
+2026-03-25,2026-03-24,Salary payment; Copperline Services,-832.41,63812.81
+2026-03-02,,Direct debit; Pinecrest Housing,475.87,64288.68
+,,#Saldo końcowe,64288.68,

@@ -46,6 +46,11 @@ async function withLegacyDatabase<T>(
 		for (const migration of migrationFiles().filter(before('0027_'))) {
 			await executeSqlFile(resolve('drizzle', migration), legacy.sql);
 		}
+		// The baseline is deliberately old — these suites break data the way the
+		// migrations under test found it — but every insert still goes through the
+		// CURRENT Drizzle schema, so any later migration that adds a column has to
+		// be applied on top or the insert names a column the database lacks.
+		await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'), legacy.sql);
 		return await run(legacy.sql, legacy.db);
 	} finally {
 		await legacy.drop();
@@ -90,12 +95,21 @@ function fioStatement({
 	const [year, month, day] = bookedAt.split('-');
 	const czDay = `${day}.${month}.${year}`;
 	const [counterpartyNumber, counterpartyBank] = counterpartyAccount.split('/');
+	// The closing balance has to follow from the movement.
+	//
+	// This generator used to print 0,00 both sides while emitting a real
+	// transaction, which every route now rejects as a statement that disagrees
+	// with itself — correctly. These fixtures exist to exercise pairing and
+	// deduplication, so their arithmetic was never the point; it still has to be
+	// true, or the file could not exist.
+	const closing = Number(amount.replace(',', '.'));
+	const czClosing = closing.toFixed(2).replace('.', ',');
 	return new TextEncoder().encode(
 		[
 			`"Výpis č. 1/${year} z účtu ""${accountNumber}"""`,
 			`"Období: ${czDay} - ${czDay}"`,
 			`"Počáteční stav účtu k ${czDay}: 0,00 CZK"`,
-			`"Koncový stav účtu k ${czDay}: 0,00 CZK"`,
+			`"Koncový stav účtu k ${czDay}: ${czClosing} CZK"`,
 			'',
 			'"ID operace";"Datum";"Objem";"Měna";"Protiúčet";"Název protiúčtu";"Kód banky";"Název banky";"KS";"VS";"SS";"Poznámka";"Zpráva pro příjemce";"Typ"',
 			`"${bankRef}";"${czDay}";"${amount}";"CZK";"${counterpartyNumber}";"";"${counterpartyBank}";"";"";"";"";"";"";"Bezhotovostní platba"`
@@ -114,9 +128,12 @@ beforeAll(async () => {
 	for (const name of migrationFiles().filter(before('0029_'))) {
 		await executeSqlFile(resolve('drizzle', name));
 	}
-	// The baseline stops before this one, but every insert here goes through the
-	// current Drizzle schema, which names every person column including this.
+	// The baseline stops before these, but every insert here goes through the
+	// current Drizzle schema, which names every column they add.
 	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
+	await executeSqlFile(resolve('drizzle/0043_import_profiles.sql'));
+	await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'));
+	await executeSqlFile(resolve('drizzle/0045_import_queue.sql'));
 }, 30_000);
 
 beforeEach(async () => {
@@ -139,8 +156,9 @@ beforeEach(async () => {
 		drop trigger if exists task1_delay_transaction_tag on transaction_tag;
 		drop function if exists task1_delay_transaction_tag();
 		drop sequence if exists task1_tag_lock_arrivals;
-		truncate table transfer_pair, "transaction", import_file, account, person,
-			settings, rule, tag, currency_rate restart identity cascade;
+		truncate table transfer_pair, "transaction", import_file, import_job,
+			import_profile, account, person, settings, rule, tag, currency_rate
+			restart identity cascade;
 	`);
 });
 
@@ -907,6 +925,59 @@ describe('import database integrity', () => {
 		).toBe(true);
 	});
 
+	it('accepts the account a person chose for a statement no adapter recognised', async () => {
+		// The reader names the FORMAT it read a file as — `tabular`, `camt053` —
+		// whenever no adapter claimed it, and account resolution compared that
+		// against the chosen account's bank. So pointing at your own account and
+		// being told "the selected account belongs to cs, but this statement
+		// belongs to tabular" was the ordinary outcome for every bank without an
+		// adapter, which is most of them.
+		//
+		// The account is the authority on which bank it is. A format name is not
+		// evidence about an institution and may not overrule it.
+		await insertAccount('chosen-pln', 'PLN', [], 'cs');
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const buffer = new Uint8Array(
+			await readFile(resolve('tests/fixtures/synthetic/csv/statement-001-comma-utf8-bom.csv'))
+		);
+
+		const result = await ingestFile('generic.csv', buffer, 'chosen-pln', testDb);
+
+		expect(result.error).toBeUndefined();
+		expect(result.needsAccount).toBeUndefined();
+		expect(result.rowsAdded).toBeGreaterThan(0);
+		const rows = await testDb.select().from(schema.transaction);
+		expect(rows.every((row) => row.accountId === 'chosen-pln')).toBe(true);
+	});
+
+	it('asks rather than minting an account named after the format it was read as', async () => {
+		// Nothing here identifies an account: this file prints no number the reader
+		// recognises, and no adapter claimed it, so no issuer is known either.
+		//
+		// `bank: 'tabular'` used to be treated as the institution and carried
+		// straight into `account.bank` — which names the account, picks its emoji
+		// and is published through /api/v1 — so the ledger gained an account
+		// called, literally, `tabular PLN`. Worse, bank+currency then MATCHED, so
+		// the next unrelated bank read generically in the same currency landed in
+		// that same account.
+		//
+		// A format name is not evidence about an institution. With nothing to
+		// identify the account, the honest move is the question, because the
+		// answer becomes permanent metadata.
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const buffer = new Uint8Array(
+			await readFile(resolve('tests/fixtures/synthetic/csv/statement-001-comma-utf8-bom.csv'))
+		);
+
+		const result = await ingestFile('generic-auto.csv', buffer, undefined, testDb);
+
+		expect(result).toMatchObject({ needsAccount: true, rowsAdded: 0 });
+		expect(result.error).toMatch(/which bank issued it/i);
+		expect(await count('account')).toBe(0);
+		expect(await count('import_file')).toBe(0);
+		expect(await count('transaction')).toBe(0);
+	});
+
 	it('requires a choice when duplicate account records share the exact identity', async () => {
 		await insertAccount('duplicate-a', 'CZK', ['1234567890/2010']);
 		await insertAccount('duplicate-b', 'CZK', ['CZ6520100000001234567890']);
@@ -917,6 +988,55 @@ describe('import database integrity', () => {
 
 		expect(result).toMatchObject({ needsAccount: true, rowsAdded: 0 });
 		expect(result.error).toMatch(/several accounts/i);
+		expect(await count('import_file')).toBe(0);
+		expect(await count('transaction')).toBe(0);
+	});
+
+	it('imports every statement in a file that carries several accounts', async () => {
+		// A CAMT export with two accounts is one file and two statements. Each
+		// resolves on its own evidence, and both must land — this is the case the
+		// pipeline's array shape exists for.
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const camt = multiAccountCamt();
+		const result = await ingestFile('camt-two-accounts.xml', camt, undefined, testDb);
+
+		expect(result.error).toBeUndefined();
+		expect(result.statements).toHaveLength(2);
+		expect(result.rowsAdded).toBe(3);
+
+		const accounts = await testDb.select().from(schema.account);
+		expect(accounts).toHaveLength(2);
+		expect(accounts.map((a) => a.currency).sort()).toEqual(['CZK', 'EUR']);
+
+		// Every transaction belongs to the account of ITS OWN statement, never to
+		// whichever account happened to resolve first.
+		for (const outcome of result.statements ?? []) {
+			const rows = await testDb
+				.select()
+				.from(schema.transaction)
+				.where(eq(schema.transaction.accountId, outcome.accountId!));
+			expect(rows).toHaveLength(outcome.rowsAdded);
+			expect(rows.every((r) => r.currency === outcome.currency)).toBe(true);
+		}
+
+		// One file, one import_file row, holding the total across statements.
+		expect(await count('import_file')).toBe(1);
+		const [file] = await testDb.select().from(schema.importFile);
+		expect(file.rowsRead).toBe(3);
+	});
+
+	it('writes nothing at all when one statement in a multi-account file cannot be placed', async () => {
+		// Two accounts already share the EUR statement's identity, so that half is
+		// ambiguous. Importing the CZK half anyway would record the file's content
+		// hash and the corrected re-upload would be refused as a duplicate,
+		// stranding the EUR statement for good. All or nothing.
+		await insertAccount('camt-eur-a', 'EUR', ['CZ2010000000002500834780'], 'camt053');
+		await insertAccount('camt-eur-b', 'EUR', ['CZ2010000000002500834780'], 'camt053');
+		const { ingestFile } = await import('$lib/server/import/ingest');
+
+		const result = await ingestFile('camt-ambiguous.xml', multiAccountCamt(), undefined, testDb);
+
+		expect(result).toMatchObject({ needsAccount: true, rowsAdded: 0 });
 		expect(await count('import_file')).toBe(0);
 		expect(await count('transaction')).toBe(0);
 	});
@@ -977,6 +1097,367 @@ describe('import database integrity', () => {
 		expect(assignedAccounts).toHaveLength(1);
 	});
 
+	it('reads queued statements one at a time and records what happened', async () => {
+		const { enqueue, queueStatus, runQueue } = await import('$lib/server/import/queue');
+		await insertAccount('fio-queue', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+
+		const id = await enqueue('fio.csv', source, 'fio-queue', testDb);
+
+		// Accepting the file writes nothing to the ledger: the upload has returned
+		// and the reading has not started.
+		expect(await count('transaction')).toBe(0);
+		const waiting = await queueStatus(testDb);
+		expect(waiting.waiting).toBe(1);
+		expect(waiting.recent[0]).toMatchObject({ id, filename: 'fio.csv', state: 'queued' });
+
+		expect(await runQueue(testDb)).toBe(1);
+
+		const after = await queueStatus(testDb);
+		expect(after.waiting).toBe(0);
+		expect(after.recent[0].state).toBe('done');
+		expect(after.recent[0].result?.rowsAdded).toBe(5);
+		expect(await count('transaction')).toBe(5);
+
+		// The bytes are released once the job is finished; import_file keeps the
+		// original.
+		const [job] = await testDb.select().from(schema.importJob);
+		expect(job.payload).toBeNull();
+	}, 30_000);
+
+	it('offers a job again when the worker holding it died, and not before', async () => {
+		const { enqueue, runQueue, LEASE_MS } = await import('$lib/server/import/queue');
+		await insertAccount('fio-lease', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+		const id = await enqueue('fio.csv', source, 'fio-lease', testDb);
+
+		// A worker claimed this and then died: the row says running, and nothing
+		// is coming back for it.
+		await testDb
+			.update(schema.importJob)
+			.set({ state: 'running', claimedAt: new Date() })
+			.where(eq(schema.importJob.id, id));
+
+		// While the lease holds, the job is left alone — a slow read must never be
+		// taken away from the worker still doing it.
+		expect(await runQueue(testDb)).toBe(0);
+		expect(await count('transaction')).toBe(0);
+
+		// Once it has expired, the file is read rather than stranded.
+		await testDb
+			.update(schema.importJob)
+			.set({ claimedAt: new Date(Date.now() - LEASE_MS - 1000) })
+			.where(eq(schema.importJob.id, id));
+		expect(await runQueue(testDb)).toBe(1);
+		expect(await count('transaction')).toBe(5);
+	}, 30_000);
+
+	it('does not read the same file twice when two workers start at once', async () => {
+		const { enqueue, runQueue } = await import('$lib/server/import/queue');
+		await insertAccount('fio-race', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+		await enqueue('fio.csv', source, 'fio-race', testDb);
+
+		// A second upload arriving mid-run must not start a second reader. It joins
+		// the sweep already running, so both callers see the same one job drained —
+		// what matters is that the statement was read once, not what the two return
+		// values add up to. Counting the sum instead measured the old behaviour,
+		// where the second caller raced the first for the NEXT job and merely
+		// happened to find none because this fixture holds a single file.
+		const [first, second] = await Promise.all([runQueue(testDb), runQueue(testDb)]);
+		expect(first).toBe(1);
+		expect(second).toBe(first);
+		expect(await count('transaction')).toBe(5);
+		expect(await count('import_file')).toBe(1);
+	}, 30_000);
+
+	it('imports every account in a workbook rather than one of them', async () => {
+		// A workbook with a sheet per account is not several readings of one
+		// statement — it is several statements. Picking a winner there is not
+		// arbitration, it is losing an account: the file imported one of them,
+		// recorded its content hash, and the corrected re-upload was then refused
+		// as a duplicate.
+		const { detectAndParseAll } = await import('$lib/server/import/detect');
+		const bytes = new Uint8Array(
+			await readFile(resolve('tests/fixtures/synthetic/xlsx/multi-account-ambiguous-workbook.xlsx'))
+		);
+
+		const statements = await detectAndParseAll(bytes);
+		expect(statements).toHaveLength(2);
+		expect(statements.map((statement) => statement.currency).sort()).toEqual(['CZK', 'EUR']);
+		// The sheet that is not a statement is left out rather than guessed at.
+		expect(statements.every((statement) => statement.rows.length > 0)).toBe(true);
+	}, 30_000);
+
+	it('refuses a currency that is only shaped like one', async () => {
+		// Three capital letters is a shape, not a fact. `SYN-0001` is an account
+		// number, and its first three characters sit beside a digit exactly as a
+		// currency code would — so a workbook imported with a currency of "SYN",
+		// past a guard that checked the shape and nothing else.
+		const { isCurrencyCode } = await import('$lib/money');
+		expect(isCurrencyCode('SYN')).toBe(false);
+		expect(isCurrencyCode('PRA')).toBe(false);
+		expect(isCurrencyCode('CZK')).toBe(true);
+		expect(isCurrencyCode('KWD')).toBe(true);
+	}, 15_000);
+
+	it('lets a person map a layout the reader could not, and still checks the arithmetic', async () => {
+		// A statement in a layout nothing recognises: headers in a language the
+		// dictionary does not carry, so no column can be named by inference.
+		// Whole rupiah, because IDR has no subunit — a fact the reader takes from
+		// the account and applies to every figure it parses.
+		const csv = [
+			'Tanggal,Keterangan,Jumlah,Sisa',
+			'2026-03-14,Gaji bulanan,1500000,2500000',
+			'2026-03-15,Belanja harian,-320500,2179500',
+			'2026-03-16,Tagihan listrik,-179500,2000000'
+		].join('\n');
+		const bytes = new TextEncoder().encode(csv);
+
+		const { previewLayout } = await import('$lib/server/import/detect');
+		const { confirmMapping } = await import('$lib/server/import/wizard');
+		await insertAccount('bank-id', 'IDR', [], 'tabular');
+
+		// The reader refuses it — but it can still say what it saw, which is what
+		// makes a mapping possible at all.
+		const preview = await previewLayout(bytes, { currency: 'IDR' });
+		expect(preview).not.toBeNull();
+		expect(preview!.headers).toEqual(['Tanggal', 'Keterangan', 'Jumlah', 'Sisa']);
+		expect(preview!.sample).toHaveLength(3);
+
+		const result = await confirmMapping(
+			{
+				name: 'Bank Indonesia export',
+				source: preview!.source,
+				encoding: preview!.encoding,
+				delimiter: preview!.delimiter,
+				headers: preview!.headers,
+				roles: ['bookingDate', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'id.csv', bytes, accountId: 'bank-id' },
+			testDb
+		);
+
+		expect(result.error).toBeUndefined();
+		expect(result.rowsAdded).toBe(3);
+
+		// The mapping said what the columns ARE. Whether the movements add up was
+		// still decided by the balances.
+		const [file] = await testDb.select().from(schema.importFile);
+		expect(file.proofClass).toBe('P3');
+
+		// And it is remembered, so the next statement from this bank arrives
+		// already understood.
+		const [saved] = await testDb.select().from(schema.importProfile);
+		expect(saved.verified).toBe(true);
+		expect(saved.headers).toEqual(['Tanggal', 'Keterangan', 'Jumlah', 'Sisa']);
+	}, 30_000);
+
+	it('asks again, pre-filled, when a remembered layout gains a column', async () => {
+		// A bank adding a column is the commonest change there is, and the one a
+		// positional mapping gets silently wrong: every role shifts one to the
+		// right and the import still looks fine. Matching on labels turns it into
+		// a question.
+		const { previewLayout } = await import('$lib/server/import/detect');
+		const { confirmMapping } = await import('$lib/server/import/wizard');
+		const { loadProfiles } = await import('$lib/server/import/profiles');
+		await insertAccount('bank-drift', 'IDR', [], 'tabular');
+
+		const before = new TextEncoder().encode(
+			[
+				'Tanggal,Keterangan,Jumlah,Sisa',
+				'2026-03-14,Gaji bulanan,1500000,2500000',
+				'2026-03-15,Belanja harian,-320500,2179500',
+				'2026-03-16,Tagihan listrik,-179500,2000000'
+			].join('\n')
+		);
+		const first = await confirmMapping(
+			{
+				name: 'Mandiri current',
+				source: 'delimited',
+				delimiter: ',',
+				headers: ['Tanggal', 'Keterangan', 'Jumlah', 'Sisa'],
+				roles: ['bookingDate', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'before.csv', bytes: before, accountId: 'bank-drift' },
+			testDb
+		);
+		expect(first.rowsAdded).toBe(3);
+
+		// The same export, with a reference column inserted in the middle.
+		const after = new TextEncoder().encode(
+			[
+				'Tanggal,Referensi,Keterangan,Jumlah,Sisa',
+				'2026-04-14,REF-1,Gaji bulanan,1500000,2500000',
+				'2026-04-15,REF-2,Belanja harian,-320500,2179500',
+				'2026-04-16,REF-3,Tagihan listrik,-179500,2000000'
+			].join('\n')
+		);
+
+		const preview = await previewLayout(after, {
+			currency: 'IDR',
+			profiles: () => loadProfiles(testDb)
+		});
+		expect(preview!.drift?.profileName).toBe('Mandiri current');
+		expect(preview!.drift?.added).toEqual(['referensi']);
+
+		// The columns it already knew arrive answered; only the new one is blank,
+		// so confirming a changed export is a glance rather than the whole
+		// questionnaire again.
+		expect(preview!.roles).toEqual(['bookingDate', undefined, 'counterparty', 'amount', 'balance']);
+
+		// Confirming replaces the old layout rather than leaving two for one bank.
+		const second = await confirmMapping(
+			{
+				name: 'Mandiri current',
+				supersedes: preview!.drift!.profileId,
+				source: 'delimited',
+				delimiter: ',',
+				headers: preview!.headers,
+				roles: ['bookingDate', 'reference', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'after.csv', bytes: after, accountId: 'bank-drift' },
+			testDb
+		);
+		expect(second.error).toBeUndefined();
+		expect(second.rowsAdded).toBe(3);
+		expect(await count('import_profile')).toBe(1);
+	}, 30_000);
+
+	it('refuses a confirmed mapping whose rows contradict the balances', async () => {
+		// A mapping is not permission to skip the proof. Here the person names the
+		// columns correctly and the file itself is inconsistent — its running
+		// balance does not follow from its own movements — so it is refused
+		// exactly as an inferred reading would be.
+		const csv = [
+			'Tanggal,Keterangan,Jumlah,Sisa',
+			'2026-03-14,Gaji bulanan,1500000,2500000',
+			'2026-03-15,Belanja harian,-320500,9999999',
+			'2026-03-16,Tagihan listrik,-179500,1111111'
+		].join('\n');
+		const { confirmMapping } = await import('$lib/server/import/wizard');
+		await insertAccount('bank-id2', 'IDR', [], 'tabular');
+
+		const result = await confirmMapping(
+			{
+				name: 'Broken export',
+				source: 'delimited',
+				delimiter: ',',
+				headers: ['Tanggal', 'Keterangan', 'Jumlah', 'Sisa'],
+				roles: ['bookingDate', 'counterparty', 'amount', 'balance'],
+				dateOrder: 'year-first',
+				decimalMark: '.'
+			},
+			{ filename: 'broken.csv', bytes: new TextEncoder().encode(csv), accountId: 'bank-id2' },
+			testDb
+		);
+
+		expect(result.rowsAdded).toBe(0);
+		expect(result.error).toBeTruthy();
+	}, 30_000);
+
+	it('shows what a statement was checked against, in words', async () => {
+		// The proof engine used to decide whether to file a statement and then
+		// discard its reasoning, so "accepted" was something to take on trust.
+		// These are the fields the evidence panel reads.
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const { PROOF_LABELS, sourceLabel } = await import('$lib/transactions/provenance');
+		await insertAccount('fio-evidence', 'CZK', ['1234567890/2010']);
+		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
+
+		await ingestFile('fio.csv', source, 'fio-evidence', testDb);
+		const [file] = await testDb.select().from(schema.importFile);
+
+		expect(sourceLabel(file.sourceMethod)).toBe('bank format');
+		expect(PROOF_LABELS[file.proofClass!]).toMatch(/opening and closing balances agree/i);
+
+		// Only checks that said something are worth showing: "unavailable" means
+		// the statement never printed that figure, which is neither evidence nor
+		// a failure.
+		const said = (file.reconciliation ?? []).filter((check) => check.status !== 'unavailable');
+		expect(said.map((check) => check.name)).toEqual(['opening and closing', 'stated totals']);
+		expect(said.every((check) => check.status === 'pass')).toBe(true);
+	}, 30_000);
+
+	it('records how each statement was read and what proved it', async () => {
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		await insertAccount('fio-prov', 'CZK', ['1234567890/2010']);
+		const source = await readFile(resolve('tests/fixtures/fio.csv'));
+
+		const result = await ingestFile('fio.csv', new Uint8Array(source), 'fio-prov', testDb);
+		expect(result.error).toBeUndefined();
+
+		const [file] = await testDb.select().from(schema.importFile);
+		// The Fio adapter is a verified mapping, and it now meets the same
+		// arithmetic as everything else — this is the evidence it met.
+		expect(file.sourceMethod).toBe('adapter');
+		expect(file.proofClass).toBe('P2');
+		expect(file.currency).toBe('CZK');
+		expect(file.openingBalanceMinor).toBe(38_238n);
+		expect(file.closingBalanceMinor).toBe(2_298_438n);
+		expect(file.statedCreditTotalMinor).toBe(6_265_200n);
+		expect(file.statedDebitTotalMinor).toBe(4_005_000n);
+
+		// The individual checks, as an evidence panel would show them.
+		const checks = file.reconciliation ?? [];
+		expect(checks.map((check) => check.name)).toContain('opening and closing');
+		expect(checks.find((check) => check.name === 'stated totals')?.status).toBe('pass');
+
+		// And on every row, so a single transaction answers for its own origin.
+		const rows = await testDb.select().from(schema.transaction);
+		expect(rows).toHaveLength(5);
+		expect(new Set(rows.map((row) => row.sourceMethod))).toEqual(new Set(['adapter']));
+		expect(new Set(rows.map((row) => row.proofClass))).toEqual(new Set(['P2']));
+	}, 30_000);
+
+	it('refuses a chain whose first movement is missing, using the account as the anchor', async () => {
+		// Revolut prints no opening balance, so its chain proves everything except
+		// its own beginning: delete the FIRST movement and every remaining step
+		// still follows, and the printed closing balance still agrees because the
+		// sum and the start shift together. Only the account knows better.
+		const header =
+			'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance';
+		const rows = [
+			'Transfer,Current,2026-08-01 08:00:00,2026-08-01 08:00:00,Opening move,100.00,0.00,CZK,COMPLETED,1100.00',
+			'Transfer,Current,2026-08-02 08:00:00,2026-08-02 08:00:00,Second move,50.00,0.00,CZK,COMPLETED,1150.00',
+			'Transfer,Current,2026-08-03 08:00:00,2026-08-03 08:00:00,Third move,25.00,0.00,CZK,COMPLETED,1175.00'
+		];
+		const { ingestFile } = await import('$lib/server/import/ingest');
+
+		await insertAccount('rev-czk', 'CZK', [], 'revolut');
+		// The account was left at 1000.00 on the day before this statement starts,
+		// which is exactly the figure the complete chain begins from.
+		await testDb
+			.update(schema.account)
+			.set({ balanceMinor: 100_000n, balanceAsOf: '2026-07-31' })
+			.where(eq(schema.account.id, 'rev-czk'));
+
+		const whole = new TextEncoder().encode([header, ...rows].join('\n'));
+		const intact = await ingestFile('revolut-whole.csv', whole, 'rev-czk', testDb);
+		expect(intact.error).toBeUndefined();
+		expect(intact.rowsAdded).toBe(3);
+
+		// Now the same statement with its first movement removed. The chain still
+		// closes on the two that remain.
+		await testDb
+			.update(schema.account)
+			.set({ balanceMinor: 100_000n, balanceAsOf: '2026-07-31' })
+			.where(eq(schema.account.id, 'rev-czk'));
+		const truncated = new TextEncoder().encode([header, ...rows.slice(1)].join('\n'));
+		const missing = await ingestFile('revolut-short.csv', truncated, 'rev-czk', testDb);
+
+		expect(missing.error).toMatch(/missing from the beginning/i);
+		expect(missing.rowsAdded).toBe(0);
+		// Nothing recorded, so the corrected file is not later refused as a duplicate.
+		expect(await count('import_file')).toBe(1);
+	}, 30_000);
+
 	it('does not let a slower older statement overwrite a newer closing balance', async () => {
 		await insertAccount('fio-czk', 'CZK', ['1234567890/2010']);
 		await harness.sql.unsafe(`
@@ -998,9 +1479,18 @@ describe('import database integrity', () => {
 		`);
 		const { ingestFile } = await import('$lib/server/import/ingest');
 		const source = new TextDecoder().decode(await readFile(resolve('tests/fixtures/fio.csv')));
+		// Each statement has to add up on its own: the five movements come to
+		// 22 602.00, so a different closing balance means a different opening one.
+		// Moving only the closing figure leaves a file that contradicts itself,
+		// which every route now refuses — rightly, and this test is not about
+		// that.
 		const older = new TextEncoder().encode(
 			source
 				.replace('01.07.2026 - 31.07.2026', '01.06.2026 - 30.06.2026')
+				.replace(
+					'Počáteční stav účtu k 01.07.2026: 382,38 CZK',
+					'Počáteční stav účtu k 01.06.2026: -22502,00 CZK'
+				)
 				.replace(
 					'Koncový stav účtu k 31.07.2026: 22984,38 CZK',
 					'Koncový stav účtu k 30.06.2026: 100,00 CZK'
@@ -1009,6 +1499,10 @@ describe('import database integrity', () => {
 		const newer = new TextEncoder().encode(
 			source
 				.replace('01.07.2026 - 31.07.2026', '01.08.2026 - 31.08.2026')
+				.replace(
+					'Počáteční stav účtu k 01.07.2026: 382,38 CZK',
+					'Počáteční stav účtu k 01.08.2026: -21603,00 CZK'
+				)
 				.replace(
 					'Koncový stav účtu k 31.07.2026: 22984,38 CZK',
 					'Koncový stav účtu k 31.08.2026: 999,00 CZK'
@@ -1723,3 +2217,39 @@ describe('import database integrity', () => {
 		expect(pairingWindowAround([])).toBeNull();
 	});
 });
+
+/**
+ * A CAMT.053 file holding two statements for two different accounts — the
+ * shape a bank produces when you export "all accounts" at once.
+ */
+function multiAccountCamt(): Uint8Array {
+	const entry = (amount: string, ind: 'CRDT' | 'DBIT', date: string, ccy: string, ref: string) => `
+		<Ntry>
+			<Amt Ccy="${ccy}">${amount}</Amt>
+			<CdtDbtInd>${ind}</CdtDbtInd>
+			<BookgDt><Dt>${date}</Dt></BookgDt>
+			<ValDt><Dt>${date}</Dt></ValDt>
+			<AcctSvcrRef>${ref}</AcctSvcrRef>
+		</Ntry>`;
+	const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+	<BkToCstmrStmt>
+		<Stmt>
+			<Id>CZK-1</Id>
+			<Acct><Id><IBAN>CZ6955000000000093531803</IBAN></Id><Ccy>CZK</Ccy></Acct>
+			<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CZK">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-01</Dt></Dt></Bal>
+			<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CZK">1150.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-31</Dt></Dt></Bal>
+			${entry('50.00', 'DBIT', '2025-03-03', 'CZK', 'CZK-A')}
+			${entry('200.00', 'CRDT', '2025-03-04', 'CZK', 'CZK-B')}
+		</Stmt>
+		<Stmt>
+			<Id>EUR-1</Id>
+			<Acct><Id><IBAN>CZ2010000000002500834780</IBAN></Id><Ccy>EUR</Ccy></Acct>
+			<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">10.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-01</Dt></Dt></Bal>
+			<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">35.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2025-03-31</Dt></Dt></Bal>
+			${entry('25.00', 'CRDT', '2025-03-05', 'EUR', 'EUR-A')}
+		</Stmt>
+	</BkToCstmrStmt>
+</Document>`;
+	return new TextEncoder().encode(xml);
+}

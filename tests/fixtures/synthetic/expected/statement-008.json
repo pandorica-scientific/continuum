@@ -1,0 +1,159 @@
+{
+  "id": "statement-008",
+  "archetype": "reverse-chronological",
+  "locale": "en-GB",
+  "currency": "GBP",
+  "accountId": "SYN-0008",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-28",
+  "targetDecision": "review",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "8673406",
+  "closingBalanceMinor": "8438887",
+  "statedCreditTotalMinor": "168096",
+  "statedDebitTotalMinor": "402615",
+  "statedRowCount": 12,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-08-22",
+      "valueDate": "2026-08-21",
+      "amountMinor": "10957",
+      "currency": "GBP",
+      "balanceAfterMinor": "8684363",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300000700",
+      "bankRef": "SIMREF008001",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-08-24",
+      "amountMinor": "89994",
+      "currency": "GBP",
+      "balanceAfterMinor": "8774357",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300000701",
+      "bankRef": "SIMREF008002",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-08-01",
+      "amountMinor": "-38658",
+      "currency": "GBP",
+      "feeMinor": "125",
+      "balanceAfterMinor": "8735574",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300000702",
+      "bankRef": "SIMREF008003",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-08-03",
+      "valueDate": "2026-08-02",
+      "amountMinor": "-46835",
+      "currency": "GBP",
+      "balanceAfterMinor": "8688739",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300000703",
+      "bankRef": "SIMREF008004",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-08-05",
+      "amountMinor": "-43807",
+      "currency": "GBP",
+      "balanceAfterMinor": "8644932",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300000704",
+      "bankRef": "SIMREF008005",
+      "description": "Refund"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-08-07",
+      "amountMinor": "27278",
+      "currency": "GBP",
+      "balanceAfterMinor": "8672210",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300000705",
+      "bankRef": "SIMREF008006",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-08-09",
+      "valueDate": "2026-08-08",
+      "amountMinor": "-61870",
+      "currency": "GBP",
+      "balanceAfterMinor": "8610340",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300000706",
+      "bankRef": "SIMREF008007",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-08-11",
+      "amountMinor": "-79574",
+      "currency": "GBP",
+      "balanceAfterMinor": "8530766",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300000707",
+      "bankRef": "SIMREF008008",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-08-13",
+      "amountMinor": "-74812",
+      "currency": "GBP",
+      "balanceAfterMinor": "8455954",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300000708",
+      "bankRef": "SIMREF008009",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-08-15",
+      "valueDate": "2026-08-14",
+      "amountMinor": "39867",
+      "currency": "GBP",
+      "balanceAfterMinor": "8495821",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300000709",
+      "bankRef": "SIMREF008010",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-08-17",
+      "amountMinor": "-47107",
+      "currency": "GBP",
+      "balanceAfterMinor": "8448714",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300000710",
+      "bankRef": "SIMREF008011",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-12",
+      "bookedAt": "2026-08-19",
+      "amountMinor": "-9702",
+      "currency": "GBP",
+      "feeMinor": "125",
+      "balanceAfterMinor": "8438887",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300000711",
+      "bankRef": "SIMREF008012",
+      "description": "Interest payment"
+    }
+  ]
+}

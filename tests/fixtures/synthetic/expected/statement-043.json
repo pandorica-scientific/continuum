@@ -1,0 +1,105 @@
+{
+  "id": "statement-043",
+  "archetype": "concatenated-statements",
+  "locale": "en-IN",
+  "currency": "INR",
+  "accountId": "SYN-0043",
+  "periodStart": "2026-07-01",
+  "periodEnd": "2026-07-28",
+  "targetDecision": "review",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "ofx"
+  ],
+  "openingBalanceMinor": "857800",
+  "closingBalanceMinor": "689321",
+  "statedCreditTotalMinor": "71815",
+  "statedDebitTotalMinor": "240294",
+  "statedRowCount": 7,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-07-02",
+      "valueDate": "2026-07-01",
+      "amountMinor": "5089",
+      "currency": "INR",
+      "balanceAfterMinor": "862889",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004200",
+      "bankRef": "SIMREF043001",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-07-04",
+      "amountMinor": "-86671",
+      "currency": "INR",
+      "balanceAfterMinor": "776218",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004201",
+      "bankRef": "SIMREF043002",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-07-06",
+      "amountMinor": "59162",
+      "currency": "INR",
+      "balanceAfterMinor": "835380",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004202",
+      "bankRef": "SIMREF043003",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-07-08",
+      "valueDate": "2026-07-07",
+      "amountMinor": "-49547",
+      "currency": "INR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "785708",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004203",
+      "bankRef": "SIMREF043004",
+      "description": "Refund"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-07-10",
+      "amountMinor": "-88709",
+      "currency": "INR",
+      "balanceAfterMinor": "696999",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004204",
+      "bankRef": "SIMREF043005",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-07-12",
+      "amountMinor": "-15242",
+      "currency": "INR",
+      "balanceAfterMinor": "681757",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300004205",
+      "bankRef": "SIMREF043006",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-07-14",
+      "valueDate": "2026-07-13",
+      "amountMinor": "7564",
+      "currency": "INR",
+      "balanceAfterMinor": "689321",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300004206",
+      "bankRef": "SIMREF043007",
+      "description": "Account transfer"
+    }
+  ]
+}

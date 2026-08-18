@@ -1,0 +1,128 @@
+{
+  "id": "statement-021",
+  "archetype": "boxed-multiline",
+  "locale": "ar-AE",
+  "currency": "AED",
+  "accountId": "SYN-0021",
+  "periodStart": "2026-03-01",
+  "periodEnd": "2026-03-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940",
+    "abo",
+    "tsv"
+  ],
+  "openingBalanceMinor": "984504",
+  "closingBalanceMinor": "926268",
+  "statedCreditTotalMinor": "189658",
+  "statedDebitTotalMinor": "247894",
+  "statedRowCount": 9,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-03-11",
+      "valueDate": "2026-03-10",
+      "amountMinor": "31199",
+      "currency": "AED",
+      "balanceAfterMinor": "1015703",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002000",
+      "bankRef": "SIMREF021001",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-03-13",
+      "amountMinor": "-32002",
+      "currency": "AED",
+      "balanceAfterMinor": "983701",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002001",
+      "bankRef": "SIMREF021002",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-03-15",
+      "amountMinor": "-68451",
+      "currency": "AED",
+      "balanceAfterMinor": "915250",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002002",
+      "bankRef": "SIMREF021003",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-03-17",
+      "valueDate": "2026-03-16",
+      "amountMinor": "-3044",
+      "currency": "AED",
+      "balanceAfterMinor": "912206",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002003",
+      "bankRef": "SIMREF021004",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-03-19",
+      "amountMinor": "84737",
+      "currency": "AED",
+      "balanceAfterMinor": "996943",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002004",
+      "bankRef": "SIMREF021005",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-03-21",
+      "amountMinor": "-84285",
+      "currency": "AED",
+      "balanceAfterMinor": "912658",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300002005",
+      "bankRef": "SIMREF021006",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-03-23",
+      "valueDate": "2026-03-22",
+      "amountMinor": "-32758",
+      "currency": "AED",
+      "balanceAfterMinor": "879900",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002006",
+      "bankRef": "SIMREF021007",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-03-25",
+      "amountMinor": "-27229",
+      "currency": "AED",
+      "feeMinor": "125",
+      "balanceAfterMinor": "852546",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002007",
+      "bankRef": "SIMREF021008",
+      "description": "Refund"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-03-02",
+      "amountMinor": "73722",
+      "currency": "AED",
+      "balanceAfterMinor": "926268",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300002008",
+      "bankRef": "SIMREF021009",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

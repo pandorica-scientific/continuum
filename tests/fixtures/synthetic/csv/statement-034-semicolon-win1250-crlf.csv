@@ -1,0 +1,17 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;CAD
+#Numer rachunku;SYN-0034
+#Okres;2026-07-01;2026-07-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;63927.85
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-07-25;2026-07-24;"Salary payment; Orbit Pharmacy";251.89;64179.74
+2026-07-02;;"Card purchase; Harbour Energy
+synthetic continuation";-287.34;63892.40
+2026-07-04;;"Bank service fee; Summit Cafeteria";-144.62;63747.78
+2026-07-06;2026-07-05;"Refund; Northstar Market";579.44;64327.22
+2026-07-08;;"Cash withdrawal; Vector Mobile";-305.78;64021.44
+2026-07-10;;"Interest payment; Harbour Energy";-236.39;63785.05
+;;#Saldo koñcowe;63785.05;

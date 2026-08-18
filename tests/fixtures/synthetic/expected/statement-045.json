@@ -1,0 +1,126 @@
+{
+  "id": "statement-045",
+  "archetype": "metadata-csv",
+  "locale": "ar-AE",
+  "currency": "AED",
+  "accountId": "SYN-0045",
+  "periodStart": "2026-09-01",
+  "periodEnd": "2026-09-28",
+  "targetDecision": "reject",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940"
+  ],
+  "openingBalanceMinor": "6888164",
+  "closingBalanceMinor": "6845285",
+  "statedCreditTotalMinor": "149946",
+  "statedDebitTotalMinor": "192825",
+  "statedRowCount": 9,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-09-08",
+      "valueDate": "2026-09-07",
+      "amountMinor": "75711",
+      "currency": "AED",
+      "balanceAfterMinor": "6963875",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004400",
+      "bankRef": "SIMREF045001",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-09-10",
+      "amountMinor": "-49511",
+      "currency": "AED",
+      "feeMinor": "125",
+      "balanceAfterMinor": "6914239",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004401",
+      "bankRef": "SIMREF045002",
+      "description": "Refund"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-09-12",
+      "amountMinor": "-4797",
+      "currency": "AED",
+      "balanceAfterMinor": "6909442",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300004402",
+      "bankRef": "SIMREF045003",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-09-14",
+      "valueDate": "2026-09-13",
+      "amountMinor": "-26036",
+      "currency": "AED",
+      "balanceAfterMinor": "6883406",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300004403",
+      "bankRef": "SIMREF045004",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-09-16",
+      "amountMinor": "12527",
+      "currency": "AED",
+      "balanceAfterMinor": "6895933",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004404",
+      "bankRef": "SIMREF045005",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-09-18",
+      "amountMinor": "-10021",
+      "currency": "AED",
+      "balanceAfterMinor": "6885912",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300004405",
+      "bankRef": "SIMREF045006",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-09-20",
+      "valueDate": "2026-09-19",
+      "amountMinor": "-69870",
+      "currency": "AED",
+      "balanceAfterMinor": "6816042",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300004406",
+      "bankRef": "SIMREF045007",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-09-22",
+      "amountMinor": "-32465",
+      "currency": "AED",
+      "balanceAfterMinor": "6783577",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004407",
+      "bankRef": "SIMREF045008",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-09-24",
+      "amountMinor": "61708",
+      "currency": "AED",
+      "balanceAfterMinor": "6845285",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004408",
+      "bankRef": "SIMREF045009",
+      "description": "Bank service fee"
+    }
+  ]
+}

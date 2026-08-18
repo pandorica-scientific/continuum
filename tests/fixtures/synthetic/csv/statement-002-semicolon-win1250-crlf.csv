@@ -1,0 +1,17 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;CZK
+#Numer rachunku;SYN-0002
+#Okres;2026-02-01;2026-02-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;15804,40
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-02-04;2026-02-03;"Interest payment; Meadow Payroll";462,57;16266,97
+2026-02-06;;"Cash withdrawal; Summit Cafeteria
+synthetic continuation";-24,46;16242,51
+2026-02-08;;"Direct debit; Lantern Books";-780,42;15462,09
+2026-02-10;2026-02-09;"Account transfer; Juniper Transit";797,81;16259,90
+2026-02-12;;"Card purchase; Pinecrest Housing";-345,89;15914,01
+2026-02-14;;"Salary payment; Summit Cafeteria";-736,05;15177,96
+;;#Saldo koñcowe;15177,96;

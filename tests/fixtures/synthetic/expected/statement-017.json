@@ -1,0 +1,82 @@
+{
+  "id": "statement-017",
+  "archetype": "dense-ruled",
+  "locale": "es-MX",
+  "currency": "MXN",
+  "accountId": "SYN-0017",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940",
+    "qif"
+  ],
+  "openingBalanceMinor": "7603330",
+  "closingBalanceMinor": "7486727",
+  "statedCreditTotalMinor": "60471",
+  "statedDebitTotalMinor": "177074",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-08-24",
+      "valueDate": "2026-08-23",
+      "amountMinor": "18143",
+      "currency": "MXN",
+      "balanceAfterMinor": "7621473",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001600",
+      "bankRef": "SIMREF017001",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-08-01",
+      "amountMinor": "-83550",
+      "currency": "MXN",
+      "balanceAfterMinor": "7537923",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001601",
+      "bankRef": "SIMREF017002",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-08-03",
+      "amountMinor": "-47101",
+      "currency": "MXN",
+      "feeMinor": "125",
+      "balanceAfterMinor": "7490697",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001602",
+      "bankRef": "SIMREF017003",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-08-05",
+      "valueDate": "2026-08-04",
+      "amountMinor": "-46298",
+      "currency": "MXN",
+      "balanceAfterMinor": "7444399",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300001603",
+      "bankRef": "SIMREF017004",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-08-07",
+      "amountMinor": "42328",
+      "currency": "MXN",
+      "balanceAfterMinor": "7486727",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001604",
+      "bankRef": "SIMREF017005",
+      "description": "Refund"
+    }
+  ]
+}

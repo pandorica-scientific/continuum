@@ -54,3 +54,10 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# OCR language data — fetched at build time, never committed
+tessdata/
+# The directory rule above does not match a model downloaded to the repo
+# root, which is how four of them entered the history once.
+*.traineddata
+*.traineddata.gz

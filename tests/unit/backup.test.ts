@@ -7,6 +7,7 @@ import {
 	legacyDumps
 } from '$lib/server/backup/policy';
 import { orderTables } from '$lib/server/backup/dump';
+import { backupInProgress, runBackup } from '$lib/server/backup';
 
 describe('backup policy', () => {
 	const now = new Date('2026-08-13T12:00:00Z');
@@ -109,5 +110,27 @@ describe('backupDirProblem', () => {
 		// overlap with the served uploads folder would never be spotted.
 		expect(backupDirProblem(resolve('/app', 'data/backups'), UPLOADS)).toMatch(/uploads/i);
 		expect(backupDirProblem(resolve('/app', 'scratch/backups'), UPLOADS)).toBeNull();
+	});
+});
+
+describe('running a backup', () => {
+	it('joins the run already under way instead of starting a second', async () => {
+		// Two backups must never overlap. Both dump the whole database to the same
+		// temporary file and rename it into place, so a second run started while
+		// the first is mid-write races it for that name — and the loser leaves a
+		// truncated file as the only backup. This was reachable without anyone
+		// doing anything unusual: the hourly scheduler and someone pressing the
+		// button are independent of each other.
+		expect(backupInProgress()).toBe(false);
+
+		const first = runBackup();
+		expect(backupInProgress()).toBe(true);
+		const second = runBackup();
+		expect(second).toBe(first);
+
+		// Both fail here for want of a database, which is beside the point: what
+		// matters is that there was one run, and that the slot is given back.
+		await Promise.allSettled([first, second]);
+		expect(backupInProgress()).toBe(false);
 	});
 });

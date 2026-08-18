@@ -1,0 +1,17 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,EUR
+#Numer rachunku,SYN-0029
+#Okres,2026-02-01,2026-02-28
+#Saldo początkowe,12340,40
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-02-10,2026-02-09,Cash withdrawal; Orbit Pharmacy,293,70,12634,10
+2026-02-12,,Interest payment; Harbour Energy,-374,71,12259,39
+2026-02-14,,Account transfer; Copperline Services,-201,68,12057,71
+2026-02-16,2026-02-15,Direct debit; Meadow Payroll,-180,04,11877,67
+2026-02-18,,Salary payment; Summit Cafeteria,167,90,12045,57
+2026-02-20,,Card purchase; Northstar Market,-258,03,11787,54
+2026-02-22,2026-02-21,Bank service fee; Orbit Pharmacy,-354,89,11432,65
+2026-02-24,,Refund; Lantern Books,-328,32,11104,33
+2026-02-01,,Cash withdrawal; Juniper Transit,152,82,11257,15
+,,#Saldo końcowe,11257,15,

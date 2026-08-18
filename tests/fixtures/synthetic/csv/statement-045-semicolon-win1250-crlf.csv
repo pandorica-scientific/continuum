@@ -1,0 +1,20 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;AED
+#Numer rachunku;SYN-0045
+#Okres;2026-09-01;2026-09-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;68881.64
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-09-08;2026-09-07;"Bank service fee; Vector Mobile";757.11;69638.75
+2026-09-10;;"Refund; Harbour Energy
+synthetic continuation";-496.36;69142.39
+2026-09-12;;"Salary payment; Summit Cafeteria";-47.97;69094.42
+2026-09-14;2026-09-13;"Card purchase; Northstar Market";-260.36;68834.06
+2026-09-16;;"Account transfer; Vector Mobile";125.27;68959.33
+2026-09-18;;"Direct debit; Lantern Books";-100.21;68859.12
+2026-09-20;2026-09-19;"Cash withdrawal; Copperline Services";-698.70;68160.42
+2026-09-22;;"Interest payment; Harbour Energy";-324.65;67835.77
+2026-09-24;;"Bank service fee; Vector Mobile";617.08;68452.85
+;;#Saldo koñcowe;68452.85;

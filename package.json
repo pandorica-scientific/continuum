@@ -1,7 +1,7 @@
 {
 	"name": "continuum",
 	"private": true,
-	"version": "0.3.7",
+	"version": "0.3.8",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -18,7 +18,8 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"test:e2e": "playwright test",
-		"test:unit": "vitest run"
+		"test:unit": "vitest run",
+		"fetch:tessdata": "node scripts/fetch-tessdata.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -50,8 +51,10 @@
 		"@simplewebauthn/server": "^13.3.2",
 		"drizzle-orm": "^0.45.2",
 		"iconv-lite": "^0.7.3",
+		"mupdf": "^1.28.0",
 		"pdfjs-dist": "^6.2.108",
 		"postgres": "^3.4.9",
+		"tesseract.js": "^7.0.0",
 		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
 	}
 }

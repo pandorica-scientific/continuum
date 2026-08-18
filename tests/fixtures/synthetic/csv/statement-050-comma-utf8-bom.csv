@@ -1,0 +1,14 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,CZK
+#Numer rachunku,SYN-0050
+#Okres,2026-05-01,2026-05-28
+#Saldo początkowe,17437,31
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-05-23,2026-05-22,Direct debit; Meadow Payroll,651,78,18089,09
+2026-05-25,,Account transfer; Juniper Transit,-852,50,17236,59
+2026-05-02,,Interest payment; Harbour Energy,-799,69,16436,90
+2026-05-04,2026-05-03,Cash withdrawal; Juniper Transit,879,52,17316,42
+2026-05-06,,Refund; Meadow Payroll,-536,20,16780,22
+2026-05-08,,Bank service fee; Copperline Services,-645,72,16134,50
+,,#Saldo końcowe,16134,50,

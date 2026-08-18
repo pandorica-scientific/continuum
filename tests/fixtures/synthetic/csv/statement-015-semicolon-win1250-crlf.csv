@@ -1,0 +1,22 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;CHF
+#Numer rachunku;SYN-0015
+#Okres;2026-06-01;2026-06-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;64734,67
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-06-18;2026-06-17;"Card purchase; Pinecrest Housing";613,21;65347,88
+2026-06-20;;"Salary payment; Juniper Transit
+synthetic continuation";-687,40;64660,48
+2026-06-22;;"Refund; Harbour Energy";241,97;64902,45
+2026-06-24;2026-06-23;"Bank service fee; Juniper Transit";-767,74;64134,71
+2026-06-01;;"Interest payment; Meadow Payroll";-790,18;63344,53
+2026-06-03;;"Cash withdrawal; Orbit Pharmacy";-633,59;62710,94
+2026-06-05;2026-06-04;"Direct debit; Lantern Books";171,59;62882,53
+2026-06-07;;"Account transfer; Summit Cafeteria";-712,15;62170,38
+2026-06-09;;"Card purchase; Meadow Payroll";-42,17;62128,21
+2026-06-11;2026-06-10;"Salary payment; Vector Mobile";-219,21;61909,00
+2026-06-13;;"Bank service fee; Copperline Services";105,01;62014,01
+;;#Saldo koñcowe;62014,01;

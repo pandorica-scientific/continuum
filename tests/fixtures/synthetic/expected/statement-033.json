@@ -1,0 +1,81 @@
+{
+  "id": "statement-033",
+  "archetype": "dense-ruled",
+  "locale": "en-US",
+  "currency": "USD",
+  "accountId": "SYN-0033",
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940",
+    "qif"
+  ],
+  "openingBalanceMinor": "2844849",
+  "closingBalanceMinor": "2755377",
+  "statedCreditTotalMinor": "20542",
+  "statedDebitTotalMinor": "110014",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-06-22",
+      "valueDate": "2026-06-21",
+      "amountMinor": "4437",
+      "currency": "USD",
+      "balanceAfterMinor": "2849286",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300003200",
+      "bankRef": "SIMREF033001",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-06-24",
+      "amountMinor": "-84425",
+      "currency": "USD",
+      "balanceAfterMinor": "2764861",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300003201",
+      "bankRef": "SIMREF033002",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-06-01",
+      "amountMinor": "-11466",
+      "currency": "USD",
+      "balanceAfterMinor": "2753395",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300003202",
+      "bankRef": "SIMREF033003",
+      "description": "Refund"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-06-03",
+      "valueDate": "2026-06-02",
+      "amountMinor": "-14123",
+      "currency": "USD",
+      "balanceAfterMinor": "2739272",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300003203",
+      "bankRef": "SIMREF033004",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-06-05",
+      "amountMinor": "16105",
+      "currency": "USD",
+      "balanceAfterMinor": "2755377",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300003204",
+      "bankRef": "SIMREF033005",
+      "description": "Interest payment"
+    }
+  ]
+}

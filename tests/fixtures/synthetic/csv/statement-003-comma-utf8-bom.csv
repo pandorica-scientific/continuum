@@ -1,0 +1,15 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,EUR
+#Numer rachunku,SYN-0003
+#Okres,2026-03-01,2026-03-28
+#Saldo początkowe,45164,79
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-03-07,2026-03-06,Bank service fee; Summit Cafeteria,681,52,45846,31
+2026-03-09,,Refund; Lantern Books,-654,95,45191,36
+2026-03-11,,Salary payment; Juniper Transit,248,11,45439,47
+2026-03-13,2026-03-12,Card purchase; Meadow Payroll,-747,96,44691,51
+2026-03-15,,Account transfer; Vector Mobile,-739,49,43952,02
+2026-03-17,,Direct debit; Pinecrest Housing,-722,10,43229,92
+2026-03-19,2026-03-18,Cash withdrawal; Juniper Transit,856,15,44086,07
+,,#Saldo końcowe,44086,07,

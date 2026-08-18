@@ -1,0 +1,18 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;AUD
+#Numer rachunku;SYN-0035
+#Okres;2026-08-01;2026-08-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;63532.15
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-08-03;2026-08-02;"Refund; Harbour Energy";492.48;64024.63
+2026-08-05;;"Bank service fee; Juniper Transit
+synthetic continuation";-128.24;63896.39
+2026-08-07;;"Card purchase; Harbour Energy";863.72;64760.11
+2026-08-09;2026-08-08;"Salary payment; Juniper Transit";-47.90;64712.21
+2026-08-11;;"Direct debit; Northstar Market";-422.10;64290.11
+2026-08-13;;"Account transfer; Orbit Pharmacy";-72.65;64217.46
+2026-08-15;2026-08-14;"Interest payment; Lantern Books";149.43;64366.89
+;;#Saldo koñcowe;64366.89;

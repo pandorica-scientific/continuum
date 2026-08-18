@@ -1,0 +1,20 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,TRY
+#Numer rachunku,SYN-0024
+#Okres,2026-06-01,2026-06-28
+#Saldo początkowe,5328,36
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-06-20,2026-06-19,Refund; Harbour Energy,799,56,6127,92
+2026-06-22,,Bank service fee; Summit Cafeteria,425,23,6553,15
+2026-06-24,,Card purchase; Northstar Market,-50,49,6502,66
+2026-06-01,2026-06-01,Salary payment; Copperline Services,-55,01,6447,65
+2026-06-03,,Direct debit; Pinecrest Housing,-129,34,6318,31
+2026-06-05,,Account transfer; Vector Mobile,321,77,6640,08
+2026-06-07,2026-06-06,Interest payment; Pinecrest Housing,-417,67,6222,41
+2026-06-09,,Cash withdrawal; Summit Cafeteria,-409,64,5812,77
+2026-06-11,,Refund; Lantern Books,-438,06,5374,71
+2026-06-13,2026-06-12,Bank service fee; Vector Mobile,353,01,5727,72
+2026-06-15,,Salary payment; Juniper Transit,-389,92,5337,80
+2026-06-17,,Card purchase; Pinecrest Housing,-518,89,4818,91
+,,#Saldo końcowe,4818,91,

@@ -1,0 +1,150 @@
+{
+  "id": "statement-039",
+  "archetype": "foreign-amount",
+  "locale": "de-CH",
+  "currency": "CHF",
+  "accountId": "SYN-0039",
+  "periodStart": "2026-03-01",
+  "periodEnd": "2026-03-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx"
+  ],
+  "openingBalanceMinor": "4263234",
+  "closingBalanceMinor": "4154175",
+  "statedCreditTotalMinor": "180328",
+  "statedDebitTotalMinor": "289387",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-03-15",
+      "valueDate": "2026-03-14",
+      "amountMinor": "69236",
+      "currency": "CHF",
+      "balanceAfterMinor": "4332470",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300003800",
+      "bankRef": "SIMREF039001",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-03-17",
+      "amountMinor": "-12788",
+      "currency": "CHF",
+      "balanceAfterMinor": "4319682",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300003801",
+      "bankRef": "SIMREF039002",
+      "description": "Account transfer",
+      "originalCurrency": "USD",
+      "originalAmountMinor": "38364"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-03-19",
+      "amountMinor": "12049",
+      "currency": "CHF",
+      "balanceAfterMinor": "4331731",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300003802",
+      "bankRef": "SIMREF039003",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-03-21",
+      "valueDate": "2026-03-20",
+      "amountMinor": "-52886",
+      "currency": "CHF",
+      "balanceAfterMinor": "4278845",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300003803",
+      "bankRef": "SIMREF039004",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-03-23",
+      "amountMinor": "-74786",
+      "currency": "CHF",
+      "balanceAfterMinor": "4204059",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300003804",
+      "bankRef": "SIMREF039005",
+      "description": "Refund"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-03-25",
+      "amountMinor": "-29329",
+      "currency": "CHF",
+      "balanceAfterMinor": "4174730",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300003805",
+      "bankRef": "SIMREF039006",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-03-02",
+      "valueDate": "2026-03-01",
+      "amountMinor": "80856",
+      "currency": "CHF",
+      "balanceAfterMinor": "4255586",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300003806",
+      "bankRef": "SIMREF039007",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-03-04",
+      "amountMinor": "-69605",
+      "currency": "CHF",
+      "feeMinor": "125",
+      "balanceAfterMinor": "4185856",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300003807",
+      "bankRef": "SIMREF039008",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-03-06",
+      "amountMinor": "-23681",
+      "currency": "CHF",
+      "balanceAfterMinor": "4162175",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003808",
+      "bankRef": "SIMREF039009",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-03-08",
+      "valueDate": "2026-03-07",
+      "amountMinor": "-26187",
+      "currency": "CHF",
+      "balanceAfterMinor": "4135988",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300003809",
+      "bankRef": "SIMREF039010",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-03-10",
+      "amountMinor": "18187",
+      "currency": "CHF",
+      "balanceAfterMinor": "4154175",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300003810",
+      "bankRef": "SIMREF039011",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

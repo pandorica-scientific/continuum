@@ -1,0 +1,21 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;KWD
+#Numer rachunku;SYN-0022
+#Okres;2026-04-01;2026-04-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;7825.473
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-04-14;2026-04-13;"Interest payment; Pinecrest Housing";52.529;7878.002
+2026-04-16;;"Cash withdrawal; Orbit Pharmacy
+synthetic continuation";-82.848;7795.154
+2026-04-18;;"Direct debit; Meadow Payroll";-57.315;7737.839
+2026-04-20;2026-04-19;"Account transfer; Vector Mobile";23.769;7761.608
+2026-04-22;;"Card purchase; Harbour Energy";-29.981;7731.627
+2026-04-24;;"Salary payment; Orbit Pharmacy";-23.678;7707.949
+2026-04-01;2026-04-01;"Refund; Northstar Market";-11.618;7696.331
+2026-04-03;;"Bank service fee; Juniper Transit";27.387;7723.718
+2026-04-05;;"Interest payment; Meadow Payroll";-21.867;7701.851
+2026-04-07;2026-04-06;"Cash withdrawal; Juniper Transit";-51.652;7650.199
+;;#Saldo koñcowe;7650.199;

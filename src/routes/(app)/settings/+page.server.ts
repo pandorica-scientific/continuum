@@ -20,6 +20,7 @@ import {
 	detectDestinations,
 	getBackupConfig,
 	getLastBackupRun,
+	backupInProgress,
 	runBackup,
 	setBackupConfig,
 	type BackupCadence
@@ -220,6 +221,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		myPasskeys,
 		backup,
 		lastBackup,
+		backupRunning: backupInProgress(),
 		backupDestinations: isAdmin ? detectDestinations() : [],
 		status,
 		apiTokens: tokens.map((t) => ({
@@ -571,9 +573,25 @@ export const actions = administered({
 	},
 
 	runBackupNow: async () => {
-		const run = await runBackup();
-		if (!run.ok) return fail(500, { message: `Backup failed: ${run.note}` });
-		return { ok: true };
+		// Started, not awaited. A backup dumps the whole database and copies every
+		// uploaded file; awaiting it held the request — and therefore the
+		// interface — open for as long as that took, which on a household with
+		// years of statements is not a moment.
+		//
+		// The outcome is not lost by returning early: `runBackup` records it under
+		// `backupLastRun`, which this page already reads and shows.
+		if (backupInProgress()) return { ok: true, message: 'A backup is already running.' };
+		// Rejection handled, not merely ignored: `performBackup` records its own
+		// failures, but the config read and the final write sit outside that try,
+		// so a database that is briefly away rejects here — and an unhandled
+		// rejection takes the process down with it.
+		void runBackup().then(
+			(run) => {
+				if (!run.ok) console.warn('Backup failed:', run.note);
+			},
+			(error) => console.warn('Backup failed:', error)
+		);
+		return { ok: true, message: 'Backup started. It will appear here when it finishes.' };
 	},
 
 	changePassword: async ({ request, cookies, locals }) => {

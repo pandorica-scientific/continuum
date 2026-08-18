@@ -1,0 +1,23 @@
+:20:STATEMENT037
+:25:SYN-0037
+:28C:00001/001
+:60F:C260101NOK16576,20
+:61:2601090109C691,28NTRFInterestpaym//SIMREF037001
+:86:Interest payment Lantern Books
+:61:2601110111D754,50NTRFCashwithdraw//SIMREF037002
+:86:Cash withdrawal Orbit Pharmacy
+:61:2601130113D526,69NTRFDirectdebit//SIMREF037003
+:86:Direct debit Northstar Market
+:61:2601150115D374,87NTRFAccounttrans//SIMREF037004
+:86:Account transfer Juniper Transit
+:61:2601170117C759,36NTRFCardpurchase//SIMREF037005
+:86:Card purchase Harbour Energy
+:61:2601190119D94,47NTRFSalarypaymen//SIMREF037006
+:86:Salary payment Orbit Pharmacy
+:61:2601210121D818,08NTRFRefund//SIMREF037007
+:86:Refund Meadow Payroll
+:61:2601230123D272,64NTRFBankservicef//SIMREF037008
+:86:Bank service fee Copperline Services
+:61:2601250125C337,30NTRFInterestpaym//SIMREF037009
+:86:Interest payment Northstar Market
+:62F:C260128NOK15522,89

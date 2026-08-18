@@ -1,6 +1,150 @@
 # Changelog
 
-## 0.3.7 — unreleased
+## 0.3.8 — unreleased
+
+A reader that works out a statement's layout from the file itself, and files
+nothing it cannot check against the statement's own arithmetic.
+
+### Added
+
+- **Any bank's statement, without being told which bank.** Importing no longer
+  starts from a list of supported institutions. The reader sniffs the format,
+  then works out the encoding, the delimiter, the decimal mark, the date order
+  and what each column means from the file's own contents. Ten institutions
+  across four countries are read this way with no bank-specific code involved
+  in the reading at all.
+- **The formats banks export when they mean business.** CAMT.053, MT940,
+  ABO/GPC and OFX/QFX are read directly, because unlike a CSV they declare
+  their own shape. QIF is refused on purpose, and says why rather than implying
+  it is coming: a QIF records a date, an amount, a payee and a memo, and no
+  balance, total or count of any kind, so there is nothing in the file for the
+  arithmetic to check. It could only ever be taken on trust.
+- **Tables recovered from PDF pages.** Two assemblers read the same page in
+  different ways — one decides which lines begin a movement, the other ignores
+  lines entirely and finds the page's record beat. Neither wins everywhere: the
+  first reads a 140-row CaixaBank statement the second fragments, and the second
+  reads four banks the first cannot. So both readings are offered and the proof
+  engine picks, the same way it picks between candidate encodings.
+- **Photographs and scans of printouts**, read from the page image when the
+  text layer cannot be proven — never spliced with it, because a row assembled
+  from two readings exists in neither and would carry the confidence of a clean
+  one. The language data is fetched when the image is built, never while someone
+  is using the app: the promise is that it does not call home while it is
+  holding your bank statements.
+- **Every reading is proved before it is filed.** A statement is graded on what
+  its own figures can demonstrate — a running balance that carries every
+  movement, opening plus movements reaching the stated closing, stated totals
+  and a stated count that agree. What cannot be proven is not filed. A file that
+  prints none of those figures cannot be checked by anyone, so it is refused
+  rather than trusted, and so is a genuinely ambiguous one, like a date column
+  where more than one reading is valid.
+- **A wizard for a layout that cannot prove itself alone.** Rather than a dead
+  end, a refused file offers the table it worked out: name the date column and
+  the amount column once, and that mapping is saved and matched against the next
+  statement from the same bank, which then arrives already understood.
+- **Imports run in the background.** A large scan no longer holds the upload
+  open. The file is queued, the page reports where the job has got to, and a
+  reader interrupted by a restart is picked up again instead of being lost.
+- **Where each transaction came from is recorded on the transaction** — the
+  method that read it, the proof class it was filed under, and the checks that
+  were run — so "how do we know this figure is right" is answerable a year
+  later, per row, instead of being a matter of trust in a past import. The
+  register filters on it, including "read from the page image", which is the
+  one worth knowing about when a figure looks wrong.
+- **A 294-file corpus** spanning 24 locales and 20 currencies runs in CI, so a
+  parser change that quietly stops reading Hungarian, or starts reading a comma
+  as a thousands separator, fails a test rather than a household's import.
+
+### Changed
+
+- **The bank adapters are no longer load-bearing.** Fio, Revolut, mBank,
+  Raiffeisenbank and Česká spořitelna still have hand-written readers and they
+  are still tried first, but every one of their statements was verified to read
+  correctly with the adapter removed. They are a fast path now, not the reason
+  those banks work.
+- **Uploads are checked before they are parsed.** A small archive that expands
+  to gigabytes is a normal way to knock over a document reader, and three
+  variants of it are now stopped at the door, along with workbooks whose cell
+  count is a denial of service by itself.
+- **A statement that proves only its endpoints now asks once.** Where the
+  opening and closing balances agree but nothing else in the file corroborates
+  them, the reader no longer files unattended: two omitted movements that
+  happen to offset each other leave exactly that picture. Name the date and
+  amount columns once and every later statement from that bank arrives already
+  understood. Nothing changes for a statement that carries a running balance,
+  which is the ordinary case and files as before.
+- **A statement is now all-or-nothing.** A multi-page PDF is read as several
+  regions and a workbook as several sheets; if one of them read but could not
+  be checked, the parts that did read were filed and the file was reported as
+  imported. Since the file's fingerprint is recorded on success, the corrected
+  re-upload was then refused as a duplicate — stranding the rest for good. The
+  whole file is now refused with the reason, so re-uploading works.
+
+### Fixed
+
+- **The OFX endpoint check could not fail.** With no opening balance stated,
+  one was derived as the closing balance less every movement — which turns
+  "opening plus movements equals closing" into "closing equals closing", true
+  no matter what was read. An OFX export with a transaction missing passed it,
+  and every OFX file was filed on the strength of a check that had no way of
+  failing. Nothing is derived now: OFX prints no per-row balances either, so
+  with no stated opening figure there is genuinely nothing in the file to check
+  the movements against, and the record says so.
+- **A statement whose printed running balance did not follow from its
+  movements was still filed.** Two amounts transposed leave the total intact,
+  so the endpoints agreed while the chain plainly did not — and the failing
+  chain was not counted as evidence against the reading. It was filed carrying
+  a record that said, in words, that the check had failed.
+- **A date could be read as an amount.** A pattern used to tell dates from
+  figures kept its position between calls, so every second date-shaped value
+  slipped past it. `01.01.2025` became an opening balance of 1,012,025.00, fed
+  straight into the arithmetic that decides whether a statement agrees with
+  itself.
+- **A bank that writes credits as `+249,00` had every credit read as "not a
+  figure"**, which left the file with no usable amount column and refused it.
+  Amounts written with a typographic minus sign (`−`, not the hyphen) were
+  refused the same way, on statements that print them throughout.
+- **The archive safety check was skipped on the one path that needed it most.**
+  A file rejected as unsafe still offered its "map the columns" button, and that
+  button handed the same bytes to the parser with no check at all.
+- **A statement with dates in more than one column** could have the fullest one
+  passed over for whichever column was examined last, leaving movements without
+  a date and refusing a file that was entirely readable.
+- **Two imports could read the same file at once**, and a job that took longer
+  than its lease could be picked up and read a second time while the first was
+  still going — surfacing as a raw database error against a file that had in
+  fact imported cleanly.
+- **Polish summary lines were not recognised as summaries.** Folding accents
+  did not fold `ł`, so `Łącznie` never matched the word it was being compared
+  against, and a total line could be filed as though it were a transaction.
+- **The import screen re-read every queued file's contents from the database
+  every 1.5 seconds** while a queue was busy, to display seven small fields.
+- **A gap in a zero-decimal currency printed as though it had decimals**, so a
+  100,000 JPY discrepancy was reported as 1000.00.
+- **Choosing the right account for your own statement was refused.** Because
+  the reader labels a file by the format it read it as whenever no bank-specific
+  reader claimed it, picking your account produced "the selected account belongs
+  to cs, but this statement belongs to tabular" — for most banks, since most
+  have no bank-specific reader. The same confusion silently merged two unrelated
+  banks that happened to share a currency into one account, split one real
+  account in two when the same statement was read two different ways, importing
+  everything twice, and created accounts named after a file format. The account
+  you created is the authority on which bank it is; a file only overrules that
+  when it actually names its issuer.
+- **A statement printing an American date range imported four months out.** The
+  period a statement covers is read as evidence for how the dates in its rows
+  are written, and the period itself was read day-first regardless of where the
+  statement came from. `01/05/2026 – 02/06/2026` on a US export is 5 January to
+  6 February, was taken as 1 May to 2 June, and the reading was recorded as
+  determined — with a confident note explaining the reasoning. Both readings are
+  now tried; if the file does not settle which is meant, the period is treated
+  as saying nothing rather than as saying the wrong thing.
+- **A statement read from a photograph was recorded as though read from the
+  page's text**, so the register's "read from the page image" filter — the one
+  worth having, since scans are the least certain reading — never matched a
+  single row.
+
+## 0.3.7 — 2026-08-17
 
 A contacts module, and a calendar you can write in that stays in step with
 iCloud and Google.
@@ -36,7 +180,8 @@ iCloud and Google.
   in the log, so a report can be matched to the entry; the stack itself never
   reaches the browser, where it would name file paths and, in a query, real
   figures. Nothing else earns a reference: a mistyped address is not a fault.
-  There is something hidden in the rings.
+  There is something hidden in the rings — one drawing per status, tinted to
+  that status' own colour.
 - **Setup instructions live behind an ⓘ.** The three-line caption under a field
   is read once and then in the way forever. The reasoning — what an API token
   can reach, what a backup contains, what Google needs before it will authorise
@@ -200,7 +345,7 @@ Three things to know before updating an existing install.
   records the pass currently holding an account so two cannot run at once.
   Nothing is rewritten and no existing data is touched.
 
-## 0.3.6 — unreleased
+## 0.3.6 — 2026-08-16
 
 A colour pass over both themes, and a run of fixes found by using the thing.
 

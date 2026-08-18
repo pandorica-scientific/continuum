@@ -1,0 +1,21 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;EUR
+#Numer rachunku;SYN-0006
+#Okres;2026-06-01;2026-06-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;87553,80
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-06-16;2026-06-15;"Card purchase; Northstar Market";159,72;87713,52
+2026-06-18;;"Salary payment; Summit Cafeteria
+synthetic continuation";-561,72;87151,80
+2026-06-20;;"Refund; Lantern Books";-707,91;86443,89
+2026-06-22;2026-06-21;"Bank service fee; Summit Cafeteria";484,72;86928,61
+2026-06-24;;"Interest payment; Lantern Books";-645,91;86282,70
+2026-06-01;;"Cash withdrawal; Vector Mobile";-761,36;85521,34
+2026-06-03;2026-06-02;"Direct debit; Meadow Payroll";-184,92;85336,42
+2026-06-05;;"Account transfer; Copperline Services";54,04;85390,46
+2026-06-07;;"Card purchase; Pinecrest Housing";-289,90;85100,56
+2026-06-09;2026-06-08;"Salary payment; Copperline Services";-716,10;84384,46
+;;#Saldo koñcowe;84384,46;

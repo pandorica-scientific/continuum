@@ -1,0 +1,17 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,AED
+#Numer rachunku,SYN-0021
+#Okres,2026-03-01,2026-03-28
+#Saldo początkowe,9845.04
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-03-11,2026-03-10,Cash withdrawal; Copperline Services,311.99,10157.03
+2026-03-13,,Interest payment; Northstar Market,-320.02,9837.01
+2026-03-15,,Account transfer; Copperline Services,-684.51,9152.50
+2026-03-17,2026-03-16,Direct debit; Northstar Market,-30.44,9122.06
+2026-03-19,,Salary payment; Juniper Transit,847.37,9969.43
+2026-03-21,,Card purchase; Lantern Books,-842.85,9126.58
+2026-03-23,2026-03-22,Bank service fee; Copperline Services,-327.58,8799.00
+2026-03-25,,Refund; Pinecrest Housing,-273.54,8525.46
+2026-03-02,,Cash withdrawal; Orbit Pharmacy,737.22,9262.68
+,,#Saldo końcowe,9262.68,

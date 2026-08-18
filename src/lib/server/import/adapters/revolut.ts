@@ -56,6 +56,10 @@ export function parseRevolut(text: string): ParsedStatement {
 	const last = rows[rows.length - 1];
 	return {
 		bank: 'revolut',
+		// An adapter ran because the file identified this bank, so the issuer
+		// is evidence here rather than a guess. Readers that cannot tell leave
+		// it undefined; only this field may decide an account.
+		issuer: 'revolut',
 		format: 'csv',
 		currency: currency || 'CZK',
 		periodStart: rows[0]?.bookedAt,

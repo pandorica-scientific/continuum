@@ -206,7 +206,107 @@ export const importFile = pgTable('import_file', {
 	rowsAdded: integer('rows_added').notNull().default(0),
 	rowsDuplicate: integer('rows_duplicate').notNull().default(0),
 	rowsPaired: integer('rows_paired').notNull().default(0),
+	/**
+	 * How the statement was read, and what proved it.
+	 *
+	 * The proof engine decided whether to file this statement and then threw its
+	 * evidence away, so the ledger held numbers with no account of where they
+	 * came from. Keeping it means a row that turns out to be wrong can be traced
+	 * to the reading that produced it, and that "everything that came from OCR"
+	 * is a query rather than a guess.
+	 */
+	sourceMethod: text('source_method'),
+	proofClass: text('proof_class'),
+	ledgerModel: text('ledger_model'),
+	currency: text('currency'),
+	openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
+	closingBalanceMinor: bigint('closing_balance_minor', { mode: 'bigint' }),
+	statedCreditTotalMinor: bigint('stated_credit_total_minor', { mode: 'bigint' }),
+	statedDebitTotalMinor: bigint('stated_debit_total_minor', { mode: 'bigint' }),
+	statedRowCount: integer('stated_row_count'),
+	/** Each check as the evidence panel shows it: name, status, detail. */
+	reconciliation: jsonb('reconciliation').$type<ProofCheckRecord[] | null>(),
 	uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/** One line of a statement's evidence, as stored. */
+export interface ProofCheckRecord {
+	name: string;
+	status: 'pass' | 'fail' | 'unavailable';
+	detail: string;
+}
+
+/**
+ * A statement waiting to be read.
+ *
+ * Reading is not always fast. A 140-movement statement spread over eight pages
+ * is recovered from glyph coordinates by two assemblers, and every candidate
+ * reading is proved before one is chosen; a photograph would have to be
+ * rasterised and recognised first. None of that belongs on a request the person
+ * who uploaded the file is waiting behind.
+ *
+ * The bytes live here rather than on disk so a queued file is transactional
+ * with its job: a crash between writing the file and recording the job cannot
+ * leave one without the other, and nothing has to be swept up afterwards. They
+ * are cleared the moment the job finishes, so this table holds only work in
+ * flight.
+ *
+ * `claimedAt` is a LEASE, not a lock. The work in the middle is CPU-bound and
+ * can run for many seconds, and no database lock belongs open across that. The
+ * claim itself is atomic; the lease is what lets a crashed worker's job be
+ * picked up again rather than stranded.
+ */
+export const importJob = pgTable('import_job', {
+	id: text('id').primaryKey(),
+	filename: text('filename').notNull(),
+	/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
+	payload: text('payload'),
+	byteSize: integer('byte_size').notNull(),
+	/** The account the person chose at upload, when they chose one. */
+	appliesToAccountId: text('applies_to_account_id').references(() => account.id, {
+		onDelete: 'set null'
+	}),
+	/** queued -> running -> done | failed */
+	state: text('state').notNull().default('queued'),
+	claimedAt: timestamp('claimed_at', { withTimezone: true }),
+	finishedAt: timestamp('finished_at', { withTimezone: true }),
+	/** The IngestResult, so the page can show what happened without re-reading. */
+	result: jsonb('result'),
+	error: text('error'),
+	queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
+ * A remembered statement layout.
+ *
+ * Matched by `signature` — a hash over the header LABELS, not their positions.
+ * Position-based mapping breaks silently the moment a bank inserts a column;
+ * a label-based signature turns that same change into a mismatch we can ask
+ * the user about.
+ */
+export const importProfile = pgTable('import_profile', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	bank: text('bank'),
+	// 'delimited' | 'xlsx'
+	source: text('source').notNull(),
+	encoding: text('encoding'),
+	delimiter: text('delimiter'),
+	signature: text('signature').notNull(),
+	headers: jsonb('headers').$type<string[]>().notNull().default([]),
+	// { columns: [{header, role}], dateOrder, decimalMark, currency? } — typed
+	// at the import layer, which owns the shape
+	mapping: jsonb('mapping').notNull(),
+	// bumped when a drifted layout is re-confirmed; earlier files keep parsing
+	// under the version they were imported with
+	version: integer('version').notNull().default(1),
+	// a person confirmed this mapping against a preview of their own rows
+	verified: boolean('verified').notNull().default(false),
+	// 'builtin' | 'user' | 'imported'
+	origin: text('origin').notNull().default('user'),
+	filenamePattern: text('filename_pattern'),
+	lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 export const category = pgTable('category', {
@@ -263,6 +363,11 @@ export const transaction = pgTable(
 		reviewState: text('review_state').notNull().default('needs_review'),
 		reviewReason: text('review_reason'),
 		importFileId: text('import_file_id').references(() => importFile.id, { onDelete: 'set null' }),
+		// How this row was read and how strongly it was proven, carried on the row
+		// itself so it can answer for its own origin even after the file it came
+		// from has been re-parsed or superseded.
+		sourceMethod: text('source_method'),
+		proofClass: text('proof_class'),
 		transferPairId: text('transfer_pair_id')
 	},
 	(table) => [

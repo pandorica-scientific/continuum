@@ -1,0 +1,16 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,SEK
+#Numer rachunku,SYN-0060
+#Okres,2026-06-01,2026-06-28
+#Saldo początkowe,14210.28
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-06-03,2026-06-02,Salary payment; Summit Cafeteria,714.67,14924.95
+2026-06-05,,Card purchase; Pinecrest Housing,777.70,15702.65
+2026-06-07,,Bank service fee; Orbit Pharmacy,-751.76,14950.89
+2026-06-09,2026-06-08,Refund; Northstar Market,-592.82,14358.07
+2026-06-11,,Cash withdrawal; Orbit Pharmacy,-417.61,13940.46
+2026-06-13,,Interest payment; Northstar Market,113.17,14053.63
+2026-06-15,2026-06-14,Account transfer; Copperline Services,-715.58,13338.05
+2026-06-17,,Direct debit; Meadow Payroll,-161.03,13177.02
+,,#Saldo końcowe,13177.02,

@@ -20,19 +20,19 @@ approximation, never a future rate or a silent one-to-one conversion.
 
 ## Extension seams
 
-| Seam                   | Contract                                                                                                             | Implementations                                                                   | Add one by                                                                                                            |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Bank statement formats | `ParsedStatement` via `detectAndParse` (`src/lib/server/import/detect.ts`)                                           | Fio CSV, Revolut CSV, mBank CSV, RB PDF, ČS PDF                                   | new adapter in `import/adapters/` + a sniff rule in `detect.ts`                                                       |
-| Broker reports         | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                                             | XTB XLSX                                                                          | sibling parser + ingest wiring                                                                                        |
-| Smart-home platforms   | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory                     | Home Assistant (REST + WebSocket), Demo                                           | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically                 |
-| Briefing strip         | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing.ts`)                                               | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend    | append to `SOURCES`                                                                                                   |
-| Ledger calendar events | rule generators in `src/lib/server/calendar.ts`, individually switchable                                             | import reminder, loan payments, property dates, quarterly report, expiry          | new block in `generateEvents` + `CALENDAR_RULES` entry                                                                |
-| Categorisation rules   | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                | counterparty/description contains, counter-account, variable symbol, amount range | new variant in `Condition` + a branch in `conditionHolds()`                                                           |
-| Read-only API          | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                    | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`      | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls                         |
-| FX rates               | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                       | CNB                                                                               | replace `refreshRates`; the rate table and conversion API stay                                                        |
-| Modules / screens      | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes | 9 modules across 7 areas                                                          | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                              |
-| Overview panels        | registry in `src/lib/overview/panels.ts` (key, default and minimum size, required modules)                           | 13 panels                                                                         | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview.ts`            |
-| Calendar providers     | `CalendarProvider` (`src/lib/server/calendar/sync/provider.ts`): probe / listCalendars / pull / push                 | iCloud (CalDAV), Google Calendar                                                  | `registerCalendarProvider(id, label, factory, fields, hint, oauth)` — the Settings panel renders itself from `fields` |
+| Seam                   | Contract                                                                                                                                                  | Implementations                                                                                                                                                                                                 | Add one by                                                                                                                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bank statement formats | `ParsedStatement` via `detectAndParseAll` (`src/lib/server/import/detect.ts`), every reading gated by `proveStatement`/`decideImport` (`import/proof.ts`) | delimited text, XLSX, PDF (page geometry and page rhythm), page images via OCR; CAMT.053, MT940, ABO/GPC, OFX/QFX read directly; Fio, Revolut, mBank, RB and ČS have fast-path adapters that nothing depends on | a new **bank** needs no code — the generic reader works the layout out and the proof gate decides whether to trust it. A new **format** is a parser in `import/standards/` plus a rule in `import/format.ts` |
+| Broker reports         | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                                                                                  | XTB XLSX                                                                                                                                                                                                        | sibling parser + ingest wiring                                                                                                                                                                               |
+| Smart-home platforms   | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory                                                          | Home Assistant (REST + WebSocket), Demo                                                                                                                                                                         | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically                                                                                                        |
+| Briefing strip         | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing.ts`)                                                                                    | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend                                                                                                                                  | append to `SOURCES`                                                                                                                                                                                          |
+| Ledger calendar events | rule generators in `src/lib/server/calendar.ts`, individually switchable                                                                                  | import reminder, loan payments, property dates, quarterly report, expiry                                                                                                                                        | new block in `generateEvents` + `CALENDAR_RULES` entry                                                                                                                                                       |
+| Categorisation rules   | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                                                     | counterparty/description contains, counter-account, variable symbol, amount range                                                                                                                               | new variant in `Condition` + a branch in `conditionHolds()`                                                                                                                                                  |
+| Read-only API          | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                                                         | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`                                                                                                                                    | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls                                                                                                                |
+| FX rates               | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                                                            | CNB                                                                                                                                                                                                             | replace `refreshRates`; the rate table and conversion API stay                                                                                                                                               |
+| Modules / screens      | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes                                      | 9 modules across 7 areas                                                                                                                                                                                        | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                                                                                                                     |
+| Overview panels        | registry in `src/lib/overview/panels.ts` (key, default and minimum size, required modules)                                                                | 13 panels                                                                                                                                                                                                       | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview.ts`                                                                                                   |
+| Calendar providers     | `CalendarProvider` (`src/lib/server/calendar/sync/provider.ts`): probe / listCalendars / pull / push                                                      | iCloud (CalDAV), Google Calendar                                                                                                                                                                                | `registerCalendarProvider(id, label, factory, fields, hint, oauth)` — the Settings panel renders itself from `fields`                                                                                        |
 
 ## Correctness anchors
 
@@ -54,9 +54,47 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
 - **Loans**: interest is booked per fixation period; rate, payment, day-count
   convention and accrual style are per-loan data, verified to the haléř
   against real Česká spořitelna statements.
-- **Reconciliation**: parsers must reproduce each statement's own
-  opening + rows = closing; the acceptance suite enforces this against real
-  files when they are present locally (never in CI).
+- **Reconciliation is a gate, not a report**: a reading is graded on what the
+  statement's own figures can demonstrate — a running balance carrying every
+  movement, opening + rows = closing, stated credit/debit totals, a stated
+  movement count — and a reading that proves nothing is refused rather than
+  filed. Two properties do the work. Evidence that _contradicts_ the rows is
+  fatal whatever else passed, because a failing check is information, not a
+  missing one; and evidence must be independent of the rows to count, so a
+  figure derived from the movements can never be used to check those same
+  movements (that reduces the test to `closing === closing`, which is how OFX
+  once passed a check that could not fail). A confirmed column mapping says the
+  columns mean what we think and never waives the arithmetic: it lifts a
+  reading whose endpoints agree but which nothing corroborates, and it cannot
+  lift one nothing could check at all. The decision is taken per FILE — a
+  region or sheet that read and then failed refuses the whole file, because
+  filing the rest records the content hash and the corrected re-upload is then
+  refused as a duplicate. The acceptance suite enforces reconciliation against
+  real files when they are present locally (never in CI); a 294-file synthetic
+  corpus across 24 locales and 20 currencies runs in CI.
+- **Account identity is the account's, not the document's**: a statement is
+  imported into an account whose bank and currency the user stated, and that
+  metadata is authoritative. A reading is labelled with the format it was read
+  as whenever no adapter claimed it, so identity comes from the account number
+  and from the issuer only when the file actually named one. Deriving it from
+  the label refused correct account choices, merged unrelated banks sharing a
+  currency, and split one account in two — importing everything twice, since
+  dedup is scoped per account.
+- **Import provenance**: every transaction records the method that read it, the
+  proof class it was filed under and the checks that ran, so "how do we know
+  this figure is right" is a query against a row rather than trust in a past
+  import. A reading from pixels is recorded as such rather than as the
+  assembler that shaped it, because that is the fact worth selecting on.
+- **Import concurrency**: uploads are queued and read one at a time. A claim
+  takes an advisory lock, a sweep joins an in-flight one instead of starting a
+  second CPU-bound read, and a job orphaned by a restart is recovered. Reading
+  the same file twice is the failure this prevents: the content hash is
+  recorded on success, so a file wrongly recorded as imported cannot be
+  re-uploaded to correct it.
+- **Untrusted uploads**: an upload is checked for archive expansion and cell
+  count before any parser sees it, on every path that reaches a parser — the
+  column-mapping preview included, since it is reached precisely by the files
+  the first check rejected.
 - **Splits**: a transaction divided between categories keeps its lines summing
   exactly to the parent, same sign, at least two — enforced in one write path
   (`saveSplits`), which is one database transaction with the parent row locked
@@ -244,7 +282,9 @@ active. Everything downstream — the session cookie, `validateSession`,
   column on `person`, saved on discrete gestures and re-validated server-side
 - `src/lib/errors/` — what each error screen says, as data. `states.ts` maps a
   status to a screen and falls back by class, so a status nobody wrote a page
-  for still renders something a person can act on; `motifs.ts` is the line art.
+  for still renders something a person can act on; `artwork.ts` points each one
+  at its drawing in `static/error-pages/`, used as a luminance mask over the
+  state's own colour so one file serves both themes.
   One `+error.svelte` at the route root catches everything, including failures
   in a layout's own load, which cannot be rendered inside that layout.
   `handleError` in `hooks.server.ts` is the boundary between the two: the stack

@@ -1,0 +1,91 @@
+{
+  "id": "statement-010",
+  "archetype": "continued-pages",
+  "locale": "en-CA",
+  "currency": "CAD",
+  "accountId": "SYN-0010",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-01-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "camt053",
+    "ods"
+  ],
+  "openingBalanceMinor": "7457681",
+  "closingBalanceMinor": "7337293",
+  "statedCreditTotalMinor": "121024",
+  "statedDebitTotalMinor": "241412",
+  "statedRowCount": 6,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-01-03",
+      "valueDate": "2026-01-02",
+      "amountMinor": "85832",
+      "currency": "CAD",
+      "balanceAfterMinor": "7543513",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300000900",
+      "bankRef": "SIMREF010001",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-01-05",
+      "amountMinor": "-70298",
+      "currency": "CAD",
+      "balanceAfterMinor": "7473215",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300000901",
+      "bankRef": "SIMREF010002",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-01-07",
+      "amountMinor": "-70137",
+      "currency": "CAD",
+      "balanceAfterMinor": "7403078",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300000902",
+      "bankRef": "SIMREF010003",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-01-09",
+      "valueDate": "2026-01-08",
+      "amountMinor": "35192",
+      "currency": "CAD",
+      "balanceAfterMinor": "7438270",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300000903",
+      "bankRef": "SIMREF010004",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-01-11",
+      "amountMinor": "-68260",
+      "currency": "CAD",
+      "balanceAfterMinor": "7370010",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300000904",
+      "bankRef": "SIMREF010005",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-01-13",
+      "amountMinor": "-32717",
+      "currency": "CAD",
+      "balanceAfterMinor": "7337293",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300000905",
+      "bankRef": "SIMREF010006",
+      "description": "Salary payment"
+    }
+  ]
+}

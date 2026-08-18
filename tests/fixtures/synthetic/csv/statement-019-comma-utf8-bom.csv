@@ -1,0 +1,15 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,INR
+#Numer rachunku,SYN-0019
+#Okres,2026-01-01,2026-01-28
+#Saldo początkowe,15600.81
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-01-05,2026-01-04,Interest payment; Northstar Market,686.78,16287.59
+2026-01-07,,Cash withdrawal; Vector Mobile,-527.92,15759.67
+2026-01-09,,Direct debit; Pinecrest Housing,61.80,15821.47
+2026-01-11,2026-01-10,Account transfer; Orbit Pharmacy,-370.37,15451.10
+2026-01-13,,Card purchase; Meadow Payroll,-622.49,14828.61
+2026-01-15,,Salary payment; Copperline Services,-33.13,14795.48
+2026-01-17,2026-01-16,Refund; Lantern Books,282.61,15078.09
+,,#Saldo końcowe,15078.09,

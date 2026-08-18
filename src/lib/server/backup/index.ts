@@ -45,7 +45,42 @@ export async function getLastBackupRun(): Promise<BackupRun | null> {
 	return getSetting<BackupRun | null>('backupLastRun', null);
 }
 
-export async function runBackup(): Promise<BackupRun> {
+/**
+ * A backup that is already under way.
+ *
+ * Two of these must never overlap: both dump the whole database to the same
+ * temporary file and rename it into place, so a second run started while the
+ * first is mid-write races it for that name. That was reachable without anyone
+ * doing anything unusual — the hourly scheduler and a person pressing the
+ * button are independent — and the loser of the race would have left a
+ * truncated file as the only backup.
+ *
+ * In-process is the right scope: the scheduler and the form action are the only
+ * two callers and they share a process. A lease in the database would be
+ * heavier and would still not make concurrent dumps safe.
+ */
+let inFlight: Promise<BackupRun> | null = null;
+
+/** Is a backup running right now? */
+export function backupInProgress(): boolean {
+	return inFlight !== null;
+}
+
+/**
+ * Run a backup, or join the one already running.
+ *
+ * Callers that must not wait — a form action, for instance — should not await
+ * this: dumping a database and copying every uploaded file takes as long as it
+ * takes, and nobody should hold a browser open for it.
+ */
+export function runBackup(): Promise<BackupRun> {
+	inFlight ??= performBackup().finally(() => {
+		inFlight = null;
+	});
+	return inFlight;
+}
+
+async function performBackup(): Promise<BackupRun> {
 	const startedAt = new Date();
 	const config = await getBackupConfig();
 	let run: BackupRun;

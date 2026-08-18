@@ -1,0 +1,23 @@
+:20:STATEMENT045
+:25:SYN-0045
+:28C:00001/001
+:60F:C260901AED68881,64
+:61:2609080908C757,11NTRFBankservicef//SIMREF045001
+:86:Bank service fee Vector Mobile
+:61:2609100910D496,36NTRFRefund//SIMREF045002
+:86:Refund Harbour Energy
+:61:2609120912D47,97NTRFSalarypaymen//SIMREF045003
+:86:Salary payment Summit Cafeteria
+:61:2609140914D260,36NTRFCardpurchase//SIMREF045004
+:86:Card purchase Northstar Market
+:61:2609160916C125,27NTRFAccounttrans//SIMREF045005
+:86:Account transfer Vector Mobile
+:61:2609180918D100,21NTRFDirectdebit//SIMREF045006
+:86:Direct debit Lantern Books
+:61:2609200920D698,70NTRFCashwithdraw//SIMREF045007
+:86:Cash withdrawal Copperline Services
+:61:2609220922D324,65NTRFInterestpaym//SIMREF045008
+:86:Interest payment Harbour Energy
+:61:2609240924C617,08NTRFBankservicef//SIMREF045009
+:86:Bank service fee Vector Mobile
+:62F:C260928AED68452,85

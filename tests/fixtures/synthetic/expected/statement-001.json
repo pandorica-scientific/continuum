@@ -1,0 +1,86 @@
+{
+  "id": "statement-001",
+  "archetype": "dense-ruled",
+  "locale": "pl-PL",
+  "currency": "PLN",
+  "accountId": "SYN-0001",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-01-28",
+  "targetDecision": "unsupported",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "mt940",
+    "abo",
+    "ofx",
+    "qif",
+    "ods",
+    "tsv"
+  ],
+  "openingBalanceMinor": "2896239",
+  "closingBalanceMinor": "2896281",
+  "statedCreditTotalMinor": "90242",
+  "statedDebitTotalMinor": "90200",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-01-01",
+      "valueDate": "2026-01-01",
+      "amountMinor": "81262",
+      "currency": "PLN",
+      "balanceAfterMinor": "2977501",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300000000",
+      "bankRef": "SIMREF001001",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-01-03",
+      "amountMinor": "-40425",
+      "currency": "PLN",
+      "balanceAfterMinor": "2937076",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300000001",
+      "bankRef": "SIMREF001002",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-01-05",
+      "amountMinor": "-41164",
+      "currency": "PLN",
+      "balanceAfterMinor": "2895912",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300000002",
+      "bankRef": "SIMREF001003",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-01-07",
+      "valueDate": "2026-01-06",
+      "amountMinor": "-8611",
+      "currency": "PLN",
+      "balanceAfterMinor": "2887301",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300000003",
+      "bankRef": "SIMREF001004",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-01-09",
+      "amountMinor": "8980",
+      "currency": "PLN",
+      "balanceAfterMinor": "2896281",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300000004",
+      "bankRef": "SIMREF001005",
+      "description": "Salary payment"
+    }
+  ]
+}

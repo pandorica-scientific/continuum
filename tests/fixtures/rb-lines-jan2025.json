@@ -1,0 +1,127 @@
+[
+	{
+		"page": 1,
+		"y": 800,
+		"cells": ["Výpis z běžného účtu"]
+	},
+	{
+		"page": 1,
+		"y": 788,
+		"cells": ["poř. č. 1 za období 1.1.2025 - 31.1.2025"]
+	},
+	{
+		"page": 1,
+		"y": 776,
+		"cells": ["Banka inspirovaná klienty"]
+	},
+	{
+		"page": 1,
+		"y": 764,
+		"cells": ["Číslo účtu:", "98765432/5500 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 752,
+		"cells": ["Název účtu:", "Dr. Jana Nováková"]
+	},
+	{
+		"page": 1,
+		"y": 740,
+		"cells": ["IBAN:", "CZ69 5500 0000 0000 9876 5432"]
+	},
+	{
+		"page": 1,
+		"y": 728,
+		"cells": ["BIC:", "RZBCCZPP"]
+	},
+	{
+		"page": 1,
+		"y": 716,
+		"cells": ["Počáteční zůstatek:", "35 971.21"]
+	},
+	{
+		"page": 1,
+		"y": 704,
+		"cells": ["Příjmy celkem:", "15 000.00"]
+	},
+	{
+		"page": 1,
+		"y": 692,
+		"cells": ["Výdaje celkem:", "11 518.90"]
+	},
+	{
+		"page": 1,
+		"y": 680,
+		"cells": ["Konečný zůstatek:", "39 452.31"]
+	},
+	{
+		"page": 1,
+		"y": 668,
+		"cells": ["Poplatky celkem:", "0.00"]
+	},
+	{
+		"page": 1,
+		"y": 656,
+		"cells": ["Datum", "Kategorie transakce", "Typ transakce", "VS", "Poplatek", "Částka"]
+	},
+	{
+		"page": 1,
+		"y": 644,
+		"cells": ["3.1.2025", "Platba", "Jednorázová platba", "1032122213", "-6 103.00 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 632,
+		"cells": ["3.1.2025", "1011097041/5500", "VS:1032122213"]
+	},
+	{
+		"page": 1,
+		"y": 620,
+		"cells": ["7108202415", "Společenství vlastní"]
+	},
+	{
+		"page": 1,
+		"y": 608,
+		"cells": ["3.1.2025", "Platba", "Odchozí okamžitá úhrada", "212", "-5 134.00 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 596,
+		"cells": ["3.1.2025", "35-8059120257/0100", "VS:212"]
+	},
+	{
+		"page": 1,
+		"y": 584,
+		"cells": ["7108203617"]
+	},
+	{
+		"page": 1,
+		"y": 572,
+		"cells": ["4.1.2025", "Platba", "Příchozí okamžitá úhrada", "15 000.00 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 560,
+		"cells": ["4.1.2025", "2500834780/2010"]
+	},
+	{
+		"page": 1,
+		"y": 548,
+		"cells": ["7110240770", "Nováková, Jana"]
+	},
+	{
+		"page": 1,
+		"y": 536,
+		"cells": ["5.1.2025", "Platba kartou", "Platba kartou", "-281.90 CZK"]
+	},
+	{
+		"page": 1,
+		"y": 524,
+		"cells": ["3.1.2025", "KS:1178", "1178"]
+	},
+	{
+		"page": 1,
+		"y": 512,
+		"cells": ["7112671245", "DR. JANA NOVÁKOVÁ", "PK: 516872XXXXXX3251"]
+	}
+]

@@ -188,3 +188,73 @@ describe('Česká spořitelna PDF adapter', () => {
 		expect(new Set(prints).size).toBe(prints.length);
 	});
 });
+
+describe('Raiffeisenbank PDF adapter — January 2025 template', () => {
+	// RB shipped two incompatible layouts within three months. January writes
+	// dates unspaced ("3.1.2025") and heads the page "poř. č. 1 za období
+	// 1.1.2025 - 31.1.2025" with no colon; March onwards writes "1. 3. 2025" and
+	// "za období:". Requiring the March form read ZERO movements out of a real
+	// January statement — while still reporting success, because the balances
+	// parsed. The file imported empty, recorded its content hash, and the
+	// corrected re-import would then have been refused as a duplicate.
+	const lines = JSON.parse(readFileSync(fixture('rb-lines-jan2025.json'), 'utf-8')) as PdfLine[];
+	const statement = parseRbLines(lines);
+
+	it('reads every movement despite the unspaced dates', () => {
+		expect(statement.rows).toHaveLength(4);
+		expect(statement.rows[0].bookedAt).toBe('2025-01-03');
+		expect(statement.rows[0].amountMinor).toBe(-610300n);
+		expect(statement.rows[0].counterpartyAccount).toBe('1011097041/5500');
+		expect(statement.rows[0].bankRef).toBe('7108202415');
+	});
+
+	it('reads the period from a header with no colon', () => {
+		expect(statement.periodStart).toBe('2025-01-01');
+		expect(statement.periodEnd).toBe('2025-01-31');
+	});
+
+	it('reconciles: opening + sum of rows = closing', () => {
+		const sum = statement.rows.reduce((a, r) => a + r.amountMinor, 0n);
+		expect(statement.openingBalanceMinor).toBe(3597121n);
+		expect(statement.openingBalanceMinor! + sum).toBe(statement.closingBalanceMinor);
+	});
+
+	it('agrees with the totals the statement states for itself', () => {
+		const credits = statement.rows
+			.filter((r) => r.amountMinor > 0n)
+			.reduce((a, r) => a + r.amountMinor, 0n);
+		const debits = statement.rows
+			.filter((r) => r.amountMinor < 0n)
+			.reduce((a, r) => a - r.amountMinor, 0n);
+		expect(statement.statedCreditTotalMinor).toBe(1500000n);
+		expect(statement.statedDebitTotalMinor).toBe(1151890n);
+		expect(credits).toBe(statement.statedCreditTotalMinor);
+		expect(debits).toBe(statement.statedDebitTotalMinor);
+	});
+});
+
+describe('stated totals are captured wherever a bank prints them', () => {
+	// Two omitted movements that offset each other leave opening + sum = closing
+	// intact, but cannot also leave both stated totals intact. Every bank sampled
+	// prints these; none of them were read before v0.3.8.
+	it('Raiffeisenbank: Příjmy/Výdaje celkem', () => {
+		const s = parseRbLines(
+			JSON.parse(readFileSync(fixture('rb-lines.json'), 'utf-8')) as PdfLine[]
+		);
+		expect(s.statedCreditTotalMinor).toBe(5465000n);
+		expect(s.statedDebitTotalMinor).toBe(4238948n);
+	});
+
+	it('mBank: Uznania/Obciążenia, with a row count per direction', () => {
+		const s = parseMbank(iconv.decode(readFileSync(fixture('mbank.csv')), 'win1250'));
+		expect(s.statedCreditTotalMinor).toBeDefined();
+		expect(s.statedDebitTotalMinor).toBeDefined();
+		expect(s.statedRowCount).toBe(s.rows.length);
+	});
+
+	it('Fio: Suma příjmů/výdajů as positive magnitudes', () => {
+		const s = parseFio(readFileSync(fixture('fio.csv'), 'utf-8'));
+		expect(s.statedDebitTotalMinor).toBeDefined();
+		expect(s.statedDebitTotalMinor! >= 0n).toBe(true);
+	});
+});

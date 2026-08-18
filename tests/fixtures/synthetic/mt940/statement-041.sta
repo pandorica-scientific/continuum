@@ -1,0 +1,15 @@
+:20:STATEMENT041
+:25:SYN-0041
+:28C:00001/001
+:60F:C260501MXN14381,94
+:61:2605210521C497,65NTRFAccounttrans//SIMREF041001
+:86:Account transfer Vector Mobile
+:61:2605230523D681,86NTRFDirectdebit//SIMREF041002
+:86:Direct debit Harbour Energy
+:61:2605250525D610,95NTRFCashwithdraw//SIMREF041003
+:86:Cash withdrawal Juniper Transit
+:61:2605020502D409,19NTRFInterestpaym//SIMREF041004
+:86:Interest payment Pinecrest Housing
+:61:2605040504C685,61NTRFBankservicef//SIMREF041005
+:86:Bank service fee Vector Mobile
+:62F:C260528MXN13863,20

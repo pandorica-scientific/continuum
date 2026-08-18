@@ -1,0 +1,81 @@
+{
+  "id": "statement-057",
+  "archetype": "competing-tables",
+  "locale": "en-US",
+  "currency": "USD",
+  "accountId": "SYN-0057",
+  "periodStart": "2026-03-01",
+  "periodEnd": "2026-03-28",
+  "targetDecision": "review",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940",
+    "qif"
+  ],
+  "openingBalanceMinor": "6509878",
+  "closingBalanceMinor": "6428868",
+  "statedCreditTotalMinor": "73320",
+  "statedDebitTotalMinor": "154330",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-03-19",
+      "valueDate": "2026-03-18",
+      "amountMinor": "25733",
+      "currency": "USD",
+      "balanceAfterMinor": "6535611",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300005600",
+      "bankRef": "SIMREF057001",
+      "description": "Refund"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-03-21",
+      "amountMinor": "-31262",
+      "currency": "USD",
+      "balanceAfterMinor": "6504349",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300005601",
+      "bankRef": "SIMREF057002",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-03-23",
+      "amountMinor": "-39827",
+      "currency": "USD",
+      "balanceAfterMinor": "6464522",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300005602",
+      "bankRef": "SIMREF057003",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-03-25",
+      "valueDate": "2026-03-24",
+      "amountMinor": "-83241",
+      "currency": "USD",
+      "balanceAfterMinor": "6381281",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300005603",
+      "bankRef": "SIMREF057004",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-03-02",
+      "amountMinor": "47587",
+      "currency": "USD",
+      "balanceAfterMinor": "6428868",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300005604",
+      "bankRef": "SIMREF057005",
+      "description": "Direct debit"
+    }
+  ]
+}

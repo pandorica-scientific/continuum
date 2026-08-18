@@ -1,0 +1,102 @@
+{
+  "id": "statement-035",
+  "archetype": "split-direction",
+  "locale": "en-AU",
+  "currency": "AUD",
+  "accountId": "SYN-0035",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx"
+  ],
+  "openingBalanceMinor": "6353215",
+  "closingBalanceMinor": "6436689",
+  "statedCreditTotalMinor": "150563",
+  "statedDebitTotalMinor": "67089",
+  "statedRowCount": 7,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-08-03",
+      "valueDate": "2026-08-02",
+      "amountMinor": "49248",
+      "currency": "AUD",
+      "balanceAfterMinor": "6402463",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300003400",
+      "bankRef": "SIMREF035001",
+      "description": "Refund"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-08-05",
+      "amountMinor": "-12824",
+      "currency": "AUD",
+      "balanceAfterMinor": "6389639",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300003401",
+      "bankRef": "SIMREF035002",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-08-07",
+      "amountMinor": "86372",
+      "currency": "AUD",
+      "balanceAfterMinor": "6476011",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300003402",
+      "bankRef": "SIMREF035003",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-08-09",
+      "valueDate": "2026-08-08",
+      "amountMinor": "-4790",
+      "currency": "AUD",
+      "balanceAfterMinor": "6471221",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300003403",
+      "bankRef": "SIMREF035004",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-08-11",
+      "amountMinor": "-42210",
+      "currency": "AUD",
+      "balanceAfterMinor": "6429011",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300003404",
+      "bankRef": "SIMREF035005",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-08-13",
+      "amountMinor": "-7265",
+      "currency": "AUD",
+      "balanceAfterMinor": "6421746",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300003405",
+      "bankRef": "SIMREF035006",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-08-15",
+      "valueDate": "2026-08-14",
+      "amountMinor": "14943",
+      "currency": "AUD",
+      "balanceAfterMinor": "6436689",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003406",
+      "bankRef": "SIMREF035007",
+      "description": "Interest payment"
+    }
+  ]
+}

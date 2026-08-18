@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1117; --bg2: #11161f; --side: #0a0d13;
+    --card: rgba(255,255,255,0.03); --card2: rgba(255,255,255,0.06); --card3: rgba(255,255,255,0.09);
+    --bd: rgba(255,255,255,0.08); --bd2: rgba(255,255,255,0.18);
+    --fg1: #e6e9ef; --fg2: #c5ccd6; --fg3: #99a4b3; --fg-inverse: #0e1117;
+    --green: #2ecc71; --red: #ef6a5c; --yellow: #f1c40f; --blue: #5aaee4;
+    --purple: #bd85d3; --orange: #e67e22; --teal: #1abc9c; --indigo: #7b8ce8; --brand: #4a86c8;
+    --green-tint: rgba(46,204,113,0.18); --yellow-tint: rgba(241,196,15,0.18);
+    --red-tint: rgba(239,106,92,0.18); --blue-tint: rgba(90,174,228,0.18);
+    --teal-tint: rgba(26,188,156,0.18); --purple-tint: rgba(189,133,211,0.18);
+    --orange-tint: rgba(230,126,34,0.18); --indigo-tint: rgba(123,140,232,0.18);
+    --brand-tint: rgba(74,134,200,0.18); --grey-tint: rgba(138,150,166,0.16);
+    --green-wash: rgba(46,204,113,0.07); --yellow-wash: rgba(241,196,15,0.07);
+    --red-wash: rgba(239,106,92,0.07); --blue-wash: rgba(90,174,228,0.07);
+    --teal-wash: rgba(26,188,156,0.07); --orange-wash: rgba(230,126,34,0.07);
+    --brand-wash: rgba(74,134,200,0.07);
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'Source Code Pro', ui-monospace, monospace;
+  }
+  html[data-ledger-theme='light'] {
+    color-scheme: light;
+    --bg: #f3f0e9; --bg2: #eeeae1; --side: #efebe2;
+    --card: #ffffff; --card2: #f7f4ee; --card3: #ebe6dc;
+    --bd: rgba(60,52,40,0.1); --bd2: rgba(60,52,40,0.2);
+    --fg1: #1c1a16; --fg2: #494339; --fg3: #6b6559; --fg-inverse: #ffffff;
+    --green: #0e7a4a; --red: #bd2e21; --yellow: #8a5900; --blue: #186294;
+    --purple: #743990; --orange: #a2530f; --teal: #087059; --indigo: #454fb0; --brand: #1b4f8a;
+    --green-tint: rgba(34,163,102,0.13); --yellow-tint: rgba(232,169,4,0.16);
+    --red-tint: rgba(224,80,63,0.13); --blue-tint: rgba(63,143,206,0.13);
+    --teal-tint: rgba(20,161,132,0.13); --purple-tint: rgba(165,101,196,0.13);
+    --orange-tint: rgba(224,123,30,0.14); --indigo-tint: rgba(112,128,224,0.14);
+    --brand-tint: rgba(63,124,191,0.13); --grey-tint: rgba(120,130,145,0.13);
+    --green-wash: rgba(34,163,102,0.06); --yellow-wash: rgba(232,169,4,0.06);
+    --red-wash: rgba(224,80,63,0.05); --blue-wash: rgba(63,143,206,0.06);
+    --teal-wash: rgba(20,161,132,0.06); --orange-wash: rgba(224,123,30,0.06);
+    --brand-wash: rgba(63,124,191,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(var(--bg), var(--bg2)) fixed;
+    color: var(--fg1);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    scrollbar-gutter: stable;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { color: var(--fg1); text-decoration: underline; }
+  select, input[type='text'] {
+    border: 1px solid var(--bd2); background: var(--card); color: var(--fg1);
+    border-radius: 8px; padding: 7px 11px; font-family: inherit; font-size: 13px;
+  }
+</style>
+<script src="./image-slot.js"></script>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; flex-direction: column;">
+
+  <div style="position: sticky; top: 0; z-index: 20; background: var(--side); border-bottom: 1px solid var(--bd); padding: 13px 32px; display: flex; align-items: center; gap: 18px 24px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg viewBox="0 0 56 56" style="width: 20px; height: 20px; flex: 0 0 20px; display: block; color: var(--brand);" aria-hidden="true">
+        <g fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">
+          <path d="M18 18 A10 10 0 0 1 18 38"></path>
+          <path d="M18 10 A18 18 0 0 1 18 46" opacity="0.62"></path>
+          <path d="M18 3 A25 25 0 0 1 18 53" opacity="0.34"></path>
+        </g>
+        <circle cx="18" cy="28" r="3.6" fill="currentColor"></circle>
+      </svg>
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Continuum</span>
+      <span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--fg3); border: 1px solid var(--bd); border-radius: 20px; padding: 1px 8px;">v0.3.8 ingest</span>
+    </div>
+
+    <div style="display: flex; gap: 5px; flex-wrap: wrap; min-width: 0;">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="9">
+        <button onClick="{{ v.go }}" style="border: 0; background: {{ v.bg }}; color: {{ v.fg }}; font-weight: {{ v.fw }}; border-radius: 8px; padding: 6px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">{{ v.label }}</button>
+      </sc-for>
+    </div>
+
+    <div style="margin-left: auto; display: flex; gap: 4px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card);">
+      <sc-for list="{{ themes }}" as="t" hint-placeholder-count="2">
+        <button onClick="{{ t.go }}" style="border: 0; background: {{ t.bg }}; color: {{ t.fg }}; border-radius: 6px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;">{{ t.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <main style="padding: 26px 32px 60px; display: flex; flex-direction: column; gap: 26px; min-width: 0; flex: 1;">
+
+    <!-- ═══════════════ 1 · 2 · 11 — IMPORT SCREEN ═══════════════ -->
+    <sc-if value="{{ isImport }}" hint-placeholder-val="{{ true }}">
+      <header style="display: flex; flex-direction: column; gap: 4px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Import</h1>
+        <span style="font-size: 13.6px; color: var(--fg3);">Statements in, transactions filed. Only the ambiguous ones ask for you.</span>
+      </header>
+
+      <sc-if value="{{ showScanWarning }}" hint-placeholder-val="{{ true }}">
+        <div style="background: var(--yellow-wash); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 18px; display: flex; align-items: flex-start; gap: 16px 20px; flex-wrap: wrap;">
+          <div style="display: flex; flex-direction: column; gap: 5px; min-width: 260px; flex: 1;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="display: inline-block; border: 1px solid var(--yellow); background: var(--yellow-tint); color: var(--yellow); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">110 dpi</span>
+              <span style="font-size: 13.5px; font-weight: 500;">This scan is coarser than statements usually need.</span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--fg2); line-height: 1.55; max-width: 62ch;">Reading is reliable from about <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">300 dpi</span>. At this resolution <span style="font-family: var(--font-mono);">scan_2026_07.pdf</span> will probably need checking by hand — the rows will still be read, they just may not prove themselves.</span>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto;">
+            <button onClick="{{ dismissScan }}" style="border: 1px solid var(--brand); background: var(--brand); color: var(--fg-inverse); border-radius: 8px; padding: 7px 14px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="opacity: 0.9;">Read it anyway</button>
+            <button onClick="{{ dismissScan }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 14px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Use a better scan</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <section style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="border: 1.5px dashed var(--bd2); border-radius: 12px; padding: 30px 24px; background: var(--card); display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; cursor: pointer;" style-hover="background: var(--card2);">
+          <span style="font-size: 14.5px;">Drop statements here, or click to browse</span>
+          <span style="font-size: 12.5px; color: var(--fg3); max-width: 74ch; line-height: 1.55;">Several files at once, and one file may hold several accounts.</span>
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--fg3); margin-top: 3px;">.csv .pdf .xml .ofx .abo .xlsx .png .jpg</span>
+        </div>
+
+        <sc-if value="{{ queueOn }}" hint-placeholder-val="{{ true }}">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+            <div style="display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Reading <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">2</span> of <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">5</span></span>
+              <span style="display: inline-block; border: 1px solid var(--fg3); background: var(--grey-tint); color: var(--fg3); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">2 waiting</span>
+              <span style="display: inline-block; border: 1px solid var(--red); background: var(--red-tint); color: var(--red); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">1 failed</span>
+              <span style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+                <sc-if value="{{ queueTrimmed }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ restoreQueue }}" style="border: 1px solid var(--bd); background: transparent; color: var(--fg3); border-radius: 8px; padding: 3px 10px; font-family: inherit; font-size: 11.5px; cursor: pointer;" style-hover="border-color: var(--bd2); color: var(--fg2);">{{ queueTrimmedLabel }}</button>
+                </sc-if>
+                <span style="font-size: 12px; color: var(--fg3);">Nothing here blocks the page — leave and come back.</span>
+              </span>
+            </div>
+
+            <sc-for list="{{ queue }}" as="q" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto 22px; gap: 5px 14px; align-items: baseline;">
+                <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ q.name }}</span>
+                <span style="font-size: 12px; color: {{ q.stateColor }};">{{ q.state }}</span>
+                <button onClick="{{ q.drop }}" title="{{ q.dropTitle }}" style="border: 1px solid var(--bd); background: transparent; color: var(--fg3); border-radius: 6px; width: 22px; height: 22px; display: grid; place-items: center; cursor: pointer; padding: 0; font-family: inherit; font-size: 12px; line-height: 1; align-self: center;" style-hover="border-color: var(--red); color: var(--red);">✕</button>
+                <sc-if value="{{ q.failed }}" hint-placeholder-val="{{ false }}">
+                  <span style="grid-column: 1 / span 2; font-size: 11.5px; color: var(--fg3); line-height: 1.5;">{{ q.fix }}</span>
+                </sc-if>
+                <sc-if value="{{ q.running }}" hint-placeholder-val="{{ true }}">
+                  <div style="grid-column: 1 / span 2; height: 6px; border: 1px solid var(--bd); border-radius: 999px; overflow: hidden; background: transparent;">
+                    <div style="height: 100%; width: {{ q.pct }}; background: var(--brand); border-radius: 999px;"></div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">This batch</span>
+            <span style="font-size: 12px; color: var(--fg3);">one file can hold several statements — each proves itself separately</span>
+            <div style="margin-left: auto; display: flex; gap: 4px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card);">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="3">
+                <button onClick="{{ f.go }}" style="border: 0; background: {{ f.bg }}; color: {{ f.fg }}; border-radius: 6px; padding: 6px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;">{{ f.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--bd); padding-top: 13px;">
+              <sc-if value="{{ g.grouped }}" hint-placeholder-val="{{ true }}">
+                <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                  <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--fg2);">{{ g.file }}</span>
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ g.note }}</span>
+                </div>
+              </sc-if>
+
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 14px; align-items: center; padding: 7px 10px; border-radius: 8px; background: {{ r.wash }}; margin-left: {{ r.indent }};">
+                  <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                    <span style="font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.account }}</span>
+                    <span style="font-size: 11.5px; color: var(--fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.sub }}</span>
+                  </div>
+                  <span style="display: inline-block; border: 1px solid {{ r.hue }}; background: {{ r.tint }}; color: {{ r.hue }}; border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">{{ r.proof }}</span>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg3); white-space: nowrap;">{{ r.counts }}</span>
+                    <button onClick="{{ r.go }}" style="border: 1px solid {{ r.actionBd }}; background: var(--card); color: var(--fg1); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;" style-hover="background: var(--card2);">{{ r.action }}</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12px; color: var(--fg3);">Statements this month</span>
+          <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600;">11</span>
+          <span style="font-size: 11.5px; color: var(--fg3);">from 7 files</span>
+        </div>
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12px; color: var(--fg3);">Transactions read</span>
+          <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600;">418</span>
+        </div>
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12px; color: var(--fg3);">Proved by their own balances</span>
+          <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600; color: var(--green);">94%</span>
+          <span style="font-size: 11.5px; color: var(--fg3);">the rest agree on totals only</span>
+        </div>
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12px; color: var(--fg3);">Transfers paired</span>
+          <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600;">6</span>
+          <span style="font-size: 11.5px; color: var(--fg3);">excluded from income and spending</span>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Needs a decision</span>
+          <span style="font-size: 12px; color: var(--fg3);">3 rows the categoriser will not guess at</span>
+        </div>
+
+        <sc-for list="{{ review }}" as="r" hint-placeholder-count="3">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px;">
+            <div style="display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; align-items: baseline;">
+              <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg3);">{{ r.date }}</span>
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px; font-weight: 500;">{{ r.merchant }}</span>
+                <span style="font-size: 12px; color: var(--fg3);">{{ r.reason }}</span>
+              </div>
+              <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 14px; color: {{ r.color }};">{{ r.amount }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 11px;">
+              <sc-for list="{{ r.actions }}" as="a" hint-placeholder-count="2">
+                <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 6px 13px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card2);">{{ a.label }}</button>
+              </sc-for>
+              <button onClick="{{ goProvenance }}" style="margin-left: auto; border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12.5px; cursor: pointer; padding: 0;">Where did this come from?</button>
+            </div>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ 3 — SINGLE-QUESTION RESOLVER ═══════════════ -->
+    <sc-if value="{{ isResolver }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ goImport }}" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.55); display: grid; place-items: start center; padding: clamp(24px, 6vh, 72px) 20px; overflow-y: auto;">
+        <div onClick="{{ swallow }}" style="background: linear-gradient(var(--card), var(--card)), var(--bg); border: 1px solid var(--bd2); border-radius: 14px; padding: 18px 20px; width: min(860px, 100%); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 18px 48px rgba(0,0,0,0.4);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 15px; font-weight: 600;">One thing is unclear about this file</span>
+            <button onClick="{{ goImport }}" style="border: 0; background: transparent; color: var(--fg3); font-size: 14px; cursor: pointer; padding: 4px;" style-hover="color: var(--fg1);" aria-label="Close">✕</button>
+          </div>
+
+          <span style="font-size: 13.5px; color: var(--fg2); line-height: 1.6; max-width: 58ch;">Dates in <span style="font-family: var(--font-mono);">wyciag_07.csv</span> could be day-first or month-first, and nothing in the file settles it. Both readings are valid; only you know which bank wrote it.</span>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <sc-for list="{{ dateOptions }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.go }}" style="text-align: left; border: 1px solid {{ o.bd }}; background: {{ o.bg }}; border-radius: 10px; padding: 14px 16px; cursor: pointer; font-family: inherit; color: var(--fg1); display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 12px; align-items: start;" style-hover="border-color: var(--bd2);">
+                <span style="width: 15px; height: 15px; border-radius: 999px; border: 1px solid {{ o.dotBd }}; background: {{ o.dotBg }}; margin-top: 3px;"></span>
+                <span style="font-size: 13.5px; font-weight: 500;">{{ o.label }}</span>
+                <div style="grid-column: 2; display: flex; flex-direction: column; gap: 4px; margin-top: 3px;">
+                  <sc-for list="{{ o.rows }}" as="w" hint-placeholder-count="3">
+                    <div style="display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; font-size: 12.5px;">
+                      <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg3);">{{ w.raw }}</span>
+                      <span style="color: var(--fg2);">{{ w.reads }}</span>
+                      <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg3);">{{ w.amount }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="background: var(--green-wash); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12.5px; font-weight: 500; color: var(--fg1);">Everything else was verified against the statement's own balances.</span>
+            <span style="font-size: 12px; color: var(--fg2); line-height: 1.55;">Amounts, the running balance chain and both totals all close on <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">38</span> rows. The date order is the only thing the file does not settle by itself.</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 14px;">
+            <button onClick="{{ goImport }}" style="border: 1px solid var(--brand); background: var(--brand); color: var(--fg-inverse); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="opacity: 0.9;">{{ resolveLabel }}</button>
+            <button onClick="{{ goWizard }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Show full mapping</button>
+            <span style="margin-left: auto; font-size: 11.5px; color: var(--fg3);">answered once, remembered for this bank</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════════ 4 — FULL MAPPING WIZARD ═══════════════ -->
+    <sc-if value="{{ isWizard }}" hint-placeholder-val="{{ false }}">
+      <header style="display: flex; flex-direction: column; gap: 4px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Teach Continuum this file</h1>
+        <span style="font-size: 13.6px; color: var(--fg3);">No saved profile matches <span style="font-family: var(--font-mono);">wyciag_07.csv</span>. Map it once and every future export files itself.</span>
+      </header>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">What the file told us</span>
+          <span style="font-size: 12px; color: var(--fg3);">{{ detectedNote }}</span>
+          <span style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+            <sc-if value="{{ detectedTouched }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ resetDetected }}" style="border: 1px solid var(--bd); background: transparent; color: var(--fg3); border-radius: 8px; padding: 5px 11px; font-family: inherit; font-size: 12px; cursor: pointer;" style-hover="border-color: var(--bd2); color: var(--fg2);">Back to what the file said</button>
+            </sc-if>
+            <button onClick="{{ toggleAdjust }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card2);">{{ adjustLabel }}</button>
+          </span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 24px;">
+          <sc-for list="{{ detected }}" as="d" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+              <span style="font-size: 11.5px; color: var(--fg3);">{{ d.label }}</span>
+              <sc-if value="{{ adjusting }}" hint-placeholder-val="{{ false }}">
+                <select value="{{ d.raw }}" onChange="{{ d.set }}" style="border: 1px solid var(--bd2); background: var(--card2); color: var(--fg1); border-radius: 8px; padding: 6px 8px; font-family: var(--font-mono); font-size: 12.5px; cursor: pointer; width: 100%; box-sizing: border-box;">
+                  <sc-for list="{{ d.options }}" as="o" hint-placeholder-count="3">
+                    <option value="{{ o.value }}">{{ o.label }}</option>
+                  </sc-for>
+                </select>
+              </sc-if>
+              <sc-if value="{{ d.settled }}" hint-placeholder-val="{{ true }}">
+                <span style="font-family: var(--font-mono); font-size: 13.5px; color: {{ d.color }};">{{ d.value }}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">What each column is</span>
+          <span style="font-size: 12px; color: {{ columnsNoteColor }};">{{ columnsNote }}</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <div style="min-width: 620px; display: flex; flex-direction: column; gap: 9px;">
+            <div style="display: grid; grid-template-columns: 168px 1fr 1fr 190px; gap: 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); padding-bottom: 3px; border-bottom: 1px solid var(--bd);">
+              <span>Column in the file</span>
+              <span>First row</span>
+              <span>Second row</span>
+              <span>Is</span>
+            </div>
+            <sc-for list="{{ columns }}" as="c" hint-placeholder-count="6">
+              <div style="display: grid; grid-template-columns: 168px 1fr 1fr 190px; gap: 14px; align-items: center;">
+                <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.header }}</span>
+                <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.a }}</span>
+                <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.b }}</span>
+                <select value="{{ c.role }}" onChange="{{ c.set }}" style="width: 100%; cursor: pointer;">
+                  <option value="date">date</option>
+                  <option value="value-date">value date</option>
+                  <option value="amount">amount</option>
+                  <option value="debit">debit</option>
+                  <option value="credit">credit</option>
+                  <option value="balance">balance</option>
+                  <option value="counterparty">counterparty</option>
+                  <option value="account">account</option>
+                  <option value="reference">reference</option>
+                  <option value="description">description</option>
+                  <option value="ignore">ignore</option>
+                </select>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">How it will look in your ledger</span>
+          <span style="font-size: 12px; color: var(--fg3);">five real rows from this file</span>
+        </div>
+
+        <div style="border: 1px solid var(--bd); background: {{ checkWash }}; border-radius: 10px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 11px;">
+          <span style="font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: {{ checkColor }}; line-height: 1.4;">{{ checkMark }}</span>
+          <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13px; font-weight: 500;">{{ checkTitle }}</span>
+            <span style="font-size: 12px; color: var(--fg2); line-height: 1.55;">{{ checkDetail }}</span>
+          </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <div style="min-width: 580px; display: flex; flex-direction: column;">
+            <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr) 118px 130px; gap: 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); padding-bottom: 7px; border-bottom: 1px solid var(--bd);">
+              <span>Date</span><span>Description</span>
+              <span style="text-align: right;">Amount</span>
+              <span style="text-align: right;">Balance after</span>
+            </div>
+            <sc-for list="{{ preview }}" as="p" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr) 118px 130px; gap: 14px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--bd); font-size: 13px;">
+                <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--fg3);">{{ p.date }}</span>
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg2);">{{ p.desc }}</span>
+                <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: {{ p.color }};">{{ p.amount }}</span>
+                <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--fg3);">{{ p.balance }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; align-items: flex-end; gap: 14px 18px; flex-wrap: wrap;">
+        <label style="display: flex; flex-direction: column; gap: 6px; min-width: 240px; flex: 1;">
+          <span style="font-size: 11.5px; color: var(--fg3);">Remember this layout as</span>
+          <input type="text" value="{{ profileName }}" onChange="{{ setProfileName }}" style="width: 100%;" />
+        </label>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button onClick="{{ goImport }}" style="border: 1px solid var(--brand); background: var(--brand); color: var(--fg-inverse); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="opacity: 0.9;">Save and import</button>
+          <button onClick="{{ goImport }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Import once, do not save</button>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ 5 — FORMAT DRIFT ═══════════════ -->
+    <sc-if value="{{ isDrift }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ goImport }}" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.55); display: grid; place-items: start center; padding: clamp(24px, 6vh, 72px) 20px; overflow-y: auto;">
+        <div onClick="{{ swallow }}" style="background: linear-gradient(var(--card), var(--card)), var(--bg); border: 1px solid var(--bd2); border-radius: 14px; padding: 18px 20px; width: min(860px, 100%); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 18px 48px rgba(0,0,0,0.4);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 15px; font-weight: 600;">This export changed since last time</span>
+            <button onClick="{{ goImport }}" style="border: 0; background: transparent; color: var(--fg3); font-size: 14px; cursor: pointer; padding: 4px;" style-hover="color: var(--fg1);" aria-label="Close">✕</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="display: inline-block; border: 1px solid var(--blue); background: var(--blue-tint); color: var(--blue); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">2 new columns</span>
+            <span style="font-size: 12.5px; color: var(--fg3);">Česká spořitelna CSV · profile v2, in use since March</span>
+          </div>
+
+          <span style="font-size: 13.5px; color: var(--fg2); line-height: 1.6; max-width: 60ch;">Your previous mapping is filled in below. Check the two highlighted rows and we will remember the new layout as <span style="font-family: var(--font-mono);">v3</span>. Files you already imported keep parsing under <span style="font-family: var(--font-mono);">v2</span>, so nothing already in the ledger moves.</span>
+
+          <div style="overflow-x: auto;">
+            <div style="min-width: 600px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: grid; grid-template-columns: 214px 1fr 178px; gap: 13px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); padding: 0 12px 3px; border-bottom: 1px solid var(--bd);">
+                <span>Column</span><span>First row</span><span>Is</span>
+              </div>
+              <sc-for list="{{ driftColumns }}" as="c" hint-placeholder-count="8">
+                <div style="display: grid; grid-template-columns: 214px 1fr 178px; gap: 13px; align-items: center; padding: 7px 12px; border-radius: 8px; background: {{ c.wash }};">
+                  <span style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                    <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.header }}</span>
+                    <sc-if value="{{ c.isNew }}" hint-placeholder-val="{{ false }}">
+                      <span style="display: inline-block; border: 1px solid var(--yellow); background: var(--yellow-tint); color: var(--yellow); border-radius: 12px; padding: 1px 8px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;">new</span>
+                    </sc-if>
+                  </span>
+                  <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.sample }}</span>
+                  <select value="{{ c.role }}" onChange="{{ c.set }}" style="width: 100%; cursor: pointer;">
+                    <option value="date">date</option>
+                    <option value="value-date">value date</option>
+                    <option value="amount">amount</option>
+                    <option value="debit">debit</option>
+                    <option value="credit">credit</option>
+                    <option value="balance">balance</option>
+                    <option value="counterparty">counterparty</option>
+                    <option value="account">account</option>
+                    <option value="reference">reference</option>
+                    <option value="description">description</option>
+                    <option value="ignore">ignore</option>
+                  </select>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 14px;">
+            <button onClick="{{ goImport }}" style="border: 1px solid var(--brand); background: var(--brand); color: var(--fg-inverse); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="opacity: 0.9;">Remember this layout</button>
+            <button onClick="{{ goWizard }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Show full mapping</button>
+            <span style="margin-left: auto; font-size: 11.5px; color: var(--fg3);">banks change their exports — nothing is wrong on your side</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════════ 6 — ARBITRATION REVIEW ═══════════════ -->
+    <sc-if value="{{ isArbitration }}" hint-placeholder-val="{{ false }}">
+      <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Two reads disagree</h1>
+          <span style="font-size: 13.6px; color: var(--fg3);"><span style="font-family: var(--font-mono);">scan_2026_07.pdf</span> · page 2 · neither read closes its balance chain, so pick the one that matches the page.</span>
+        </div>
+        <span style="display: inline-block; border: 1px solid var(--yellow); background: var(--yellow-tint); color: var(--yellow); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">3 rows differ</span>
+      </header>
+
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 16px;">
+        <sc-for list="{{ reads }}" as="rd" hint-placeholder-count="2">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap;">
+              <span style="font-size: 13.5px; font-weight: 500;">{{ rd.title }}</span>
+              <span style="font-size: 11.5px; color: var(--fg3);">{{ rd.sub }}</span>
+              <span style="margin-left: auto; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--fg3);">{{ rd.rows }}</span>
+            </div>
+            <div style="display: flex; flex-direction: column;">
+              <sc-for list="{{ rd.lines }}" as="l" hint-placeholder-count="6">
+                <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr) 108px; gap: 12px; align-items: baseline; padding: 7px 8px; margin: 0 -8px; border-radius: 8px; background: {{ l.wash }}; font-size: 13px;">
+                  <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg3);">{{ l.date }}</span>
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: {{ l.textColor }};">{{ l.desc }}</span>
+                  <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: {{ l.amountColor }};">{{ l.amount }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; align-items: center; gap: 11px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 13px;">
+              <button onClick="{{ rd.go }}" style="border: 1px solid {{ rd.btnBd }}; background: {{ rd.btnBg }}; color: {{ rd.btnFg }}; border-radius: 8px; padding: 8px 15px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="opacity: 0.9;">{{ rd.btn }}</button>
+              <span style="font-size: 11.5px; color: var(--fg3); line-height: 1.5; min-width: 0;">{{ rd.note }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">The page itself</span>
+          <span style="font-size: 12px; color: var(--fg3);">cropped to the three disputed rows — you are arbitrating a document, so here is the document</span>
+        </div>
+        <div style="height: 260px; border-radius: 10px; overflow: hidden;">
+          <image-slot id="ingest-arb-page" radius="10" placeholder="Cropped scan of page 2, rows 14–16"></image-slot>
+        </div>
+        <span style="font-size: 12px; color: var(--fg2); line-height: 1.55; max-width: 76ch;">A row that exists in neither read is never spliced in. If both are wrong, the statement needs re-scanning — <button onClick="{{ goImport }}" style="border: 0; background: transparent; color: var(--blue); font-family: inherit; font-size: 12px; cursor: pointer; padding: 0;">start over with a better scan</button>.</span>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ 7 — STATEMENT EVIDENCE ═══════════════ -->
+    <sc-if value="{{ isEvidence }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ goImport }}" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.55); display: grid; place-items: start center; padding: clamp(24px, 6vh, 72px) 20px; overflow-y: auto;">
+        <div onClick="{{ swallow }}" style="background: linear-gradient(var(--card), var(--card)), var(--bg); border: 1px solid var(--bd2); border-radius: 14px; padding: 18px 20px; width: min(860px, 100%); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 18px 48px rgba(0,0,0,0.4);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 15px; font-weight: 600;">Fio CZK ·2010 — July 2026</span>
+            <button onClick="{{ goImport }}" style="border: 0; background: transparent; color: var(--fg3); font-size: 14px; cursor: pointer; padding: 4px;" style-hover="color: var(--fg1);" aria-label="Close">✕</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="display: inline-block; border: 1px solid var(--green); background: var(--green-tint); color: var(--green); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">balances check out</span>
+            <span style="font-size: 12.5px; color: var(--fg3);">the statement proves itself — nothing here needed a person</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <sc-for list="{{ checks }}" as="c" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--bd);">
+                <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: {{ c.color }};">{{ c.mark }}</span>
+                <span style="font-size: 13px; color: {{ c.textColor }}; line-height: 1.55;">{{ c.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <span style="font-size: 12px; color: var(--fg3); line-height: 1.55; max-width: 70ch;">A dash is not a failure. Most banks print only some of this checklist, and a statement that proves itself three ways out of four is filed without asking you anything.</span>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; border-top: 1px solid var(--bd); padding-top: 14px;">
+            <sc-for list="{{ evidenceFacts }}" as="f" hint-placeholder-count="4">
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 11.5px; color: var(--fg3);">{{ f.label }}</span>
+                <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--fg1); overflow: hidden; text-overflow: ellipsis;">{{ f.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 14px;">
+            <button onClick="{{ goImport }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 15px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Open its 41 transactions</button>
+            <button onClick="{{ goProfiles }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 15px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">The profile that read it</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════════ 8 — TRANSACTION PROVENANCE ═══════════════ -->
+    <sc-if value="{{ isProvenance }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ goImport }}" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.55); display: grid; place-items: start center; padding: clamp(24px, 6vh, 72px) 20px; overflow-y: auto;">
+        <div onClick="{{ swallow }}" style="background: linear-gradient(var(--card), var(--card)), var(--bg); border: 1px solid var(--bd2); border-radius: 14px; padding: 18px 20px; width: min(860px, 100%); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 18px 48px rgba(0,0,0,0.4);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 15px; font-weight: 600;">Kavárna Místo</span>
+            <button onClick="{{ goImport }}" style="border: 0; background: transparent; color: var(--fg3); font-size: 14px; cursor: pointer; padding: 4px;" style-hover="color: var(--fg1);" aria-label="Close">✕</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Amount</span>
+              <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600;">−164,00<span style="font-size: 12px; color: var(--fg3); margin-left: 5px;">Kč</span></span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Date</span>
+              <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px;">14 Jul 2026</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Account</span>
+              <span style="font-size: 13.5px;">Fio CZK ·2010</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 11.5px; color: var(--fg3);">Filed as</span>
+              <span style="font-size: 13.5px;">Eating out</span>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--bd); padding-top: 14px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;">
+              <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Where this came from</span>
+              <span style="display: inline-block; border: 1px solid var(--yellow); background: var(--yellow-tint); color: var(--yellow); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">read by OCR</span>
+              <span style="font-size: 12px; color: var(--fg3);">day to day the ledger hides all of this</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column;">
+              <sc-for list="{{ provenance }}" as="p" hint-placeholder-count="4">
+                <div style="display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 13px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--bd);">
+                  <span style="font-size: 11.5px; color: var(--fg3);">{{ p.label }}</span>
+                  <span style="font-family: var(--font-mono); font-size: 12.5px; color: {{ p.color }}; line-height: 1.5;">{{ p.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 14px;">
+            <button onClick="{{ goEvidence }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 15px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">The statement's evidence</button>
+            <button onClick="{{ goArbitration }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 15px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">See the page it was read from</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════════ 9 — PROFILE MANAGER ═══════════════ -->
+    <sc-if value="{{ isProfiles }}" hint-placeholder-val="{{ false }}">
+      <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Statement layouts</h1>
+          <span style="font-size: 13.6px; color: var(--fg3);">What Continuum has learned about your banks' exports. Settings · Import.</span>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 14px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Import a layout</button>
+          <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 7px 14px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Export all</button>
+        </div>
+      </header>
+
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Yours</span>
+          <span style="font-size: 12px; color: var(--fg3);">made by mapping a file once · export the JSON to share a layout with someone else</span>
+        </div>
+
+        <sc-for list="{{ myProfiles }}" as="p" hint-placeholder-count="3">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 14px 18px; flex-wrap: wrap;">
+            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 200px; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 9px; flex-wrap: wrap;">
+                <span style="font-size: 13.5px; font-weight: 500;">{{ p.name }}</span>
+                <sc-if value="{{ p.verified }}" hint-placeholder-val="{{ true }}">
+                  <span style="display: inline-block; border: 1px solid var(--green); background: var(--green-tint); color: var(--green); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">proves balances</span>
+                </sc-if>
+              </div>
+              <span style="font-size: 12px; color: var(--fg3);">{{ p.detail }}</span>
+            </div>
+            <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg3); white-space: nowrap;">{{ p.used }}</span>
+            <div style="display: flex; gap: 7px; flex-wrap: wrap;">
+              <button onClick="{{ goWizard }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card2);">Edit mapping</button>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card2);">Rename</button>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card2);">Export</button>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg3); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--red); color: var(--red);">Delete</button>
+            </div>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; gap: 10px 16px; flex-wrap: wrap;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Shipped with Continuum</span>
+          <span style="font-size: 12px; color: var(--fg3);">read-only — duplicate one to change it, and yours wins from then on</span>
+        </div>
+
+        <div style="background: var(--card2); border: 1px solid var(--bd); border-radius: 10px; padding: 4px 16px;">
+          <sc-for list="{{ builtIn }}" as="p" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 11px 0; border-top: 1px solid var(--bd);">
+              <span style="font-size: 13px; color: var(--fg2); min-width: 180px; flex: 1;">{{ p.name }}</span>
+              <span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--fg3);">{{ p.format }}</span>
+              <span style="display: inline-block; border: 1px solid var(--fg3); background: var(--grey-tint); color: var(--fg3); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">built in</span>
+              <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="background: var(--card2);">Duplicate</button>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+
+    <!-- ═══════════════ 10 — NOT A BANK STATEMENT ═══════════════ -->
+    <sc-if value="{{ isNotStatement }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ goImport }}" style="position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.55); display: grid; place-items: start center; padding: clamp(24px, 6vh, 72px) 20px; overflow-y: auto;">
+        <div onClick="{{ swallow }}" style="background: linear-gradient(var(--card), var(--card)), var(--bg); border: 1px solid var(--bd2); border-radius: 14px; padding: 18px 20px; width: min(860px, 100%); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 18px 48px rgba(0,0,0,0.4);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 15px; font-weight: 600;">This looks like a portfolio statement</span>
+            <button onClick="{{ goImport }}" style="border: 0; background: transparent; color: var(--fg3); font-size: 14px; cursor: pointer; padding: 4px;" style-hover="color: var(--fg1);" aria-label="Close">✕</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="display: inline-block; border: 1px solid var(--teal); background: var(--teal-tint); color: var(--teal); border-radius: 12px; padding: 2px 10px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.2; white-space: nowrap;">14 holdings</span>
+            <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--fg3);">xtb_statement_2026-07.pdf</span>
+          </div>
+
+          <span style="font-size: 13.5px; color: var(--fg2); line-height: 1.6; max-width: 60ch;">It lists what you hold, not money moving in and out, so there is nothing to file into the ledger. Valued <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">31 Jul 2026</span>, in <span style="font-family: var(--font-mono);">EUR</span> and <span style="font-family: var(--font-mono);">USD</span> — which is exactly what Investments wants.</span>
+
+          <div style="background: var(--teal-wash); border: 1px solid var(--bd); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 7px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">What it found</span>
+            <sc-for list="{{ holdings }}" as="hd" hint-placeholder-count="3">
+              <div style="display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; font-size: 12.5px;">
+                <span style="font-family: var(--font-mono); color: var(--fg1);">{{ hd.ticker }}</span>
+                <span style="color: var(--fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ hd.name }}</span>
+                <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg2);">{{ hd.value }}</span>
+              </div>
+            </sc-for>
+            <span style="font-size: 11.5px; color: var(--fg3);">and 11 more · already-known trades are dropped by trade id, so re-uploading the same report changes nothing</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 14px;">
+            <button onClick="{{ goImport }}" style="border: 1px solid var(--brand); background: var(--brand); color: var(--fg-inverse); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="opacity: 0.9;">Send to Investments</button>
+            <button onClick="{{ goImport }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: var(--card2);">Keep as a document</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 980}, &quot;theme&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;dark&quot;, &quot;light&quot;], &quot;default&quot;: &quot;dark&quot;, &quot;tsType&quot;: &quot;'dark' | 'light'&quot;, &quot;section&quot;: &quot;Presentation&quot;}, &quot;queue&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Import screen&quot;}, &quot;grouped&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Import screen&quot;}, &quot;scanWarning&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Import screen&quot;}}">
+class Component extends DCLogic {
+  state = {
+    view: 'import',
+    theme: 'dark',
+    scanWarning: true,
+    filter: 'all',
+    dateOrder: 'day',
+    roles: { 0: 'date', 1: 'description', 2: 'amount', 3: 'balance', 4: 'reference', 5: 'counterparty' },
+    driftRoles: { 0: 'date', 1: 'value-date', 2: 'description', 3: 'amount', 4: 'balance', 5: 'ignore', 6: 'ignore', 7: 'reference' },
+    profileName: 'mBank PL CSV',
+    chosenRead: null
+  };
+
+  // What the parser read, and what a person is allowed to overrule it with.
+  // `effect` is what that fact actually changes on a re-read — only `resplits`
+  // facts change which columns exist; the others change what is read inside them.
+  static get DETECTED() {
+    return [
+      { label: 'Separator', value: '; semicolon', effect: 'splits the columns differently',
+        columnEffect: 'may split the file into different columns',
+        options: ['; semicolon', ', comma', '\\t tab', '| pipe'] },
+      { label: 'Encoding', value: 'windows-1250', effect: 're-decodes the text', columnEffect: null,
+        options: ['windows-1250', 'utf-8', 'iso-8859-2', 'utf-16le'] },
+      { label: 'Header row', value: 'line 1', effect: 'changes which line is the header',
+        columnEffect: 'may name the columns differently and start the data on another line',
+        options: ['line 1', 'line 2', 'line 3', 'no header row'] },
+      { label: 'Numbers', value: '1 234,56 — comma decimal', effect: 're-reads every figure', columnEffect: null,
+        options: ['1 234,56 — comma decimal', '1.234,56 — point grouping', "1'234,56 — apostrophe grouping",
+          '1,234.56 — point decimal', '1234.56 — no grouping'] }
+    ];
+  }
+
+  static list(parts) {
+    if (parts.length < 2) return parts.join('');
+    return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+  }
+
+  // The facts a person has overruled, in the order they are shown, each with the
+  // consequence that is true of it.
+  changedFacts() {
+    const over = this.state.overrides || {};
+    return Component.DETECTED.filter(d => over[d.label]);
+  }
+
+  static get VIEWS() {
+    return [
+      ['import', 'Import'], ['resolver', 'One question'], ['wizard', 'Mapping'],
+      ['drift', 'Drift'], ['arbitration', 'Arbitration'], ['evidence', 'Evidence'],
+      ['provenance', 'Provenance'], ['profiles', 'Layouts'], ['notstatement', 'Not a statement']
+    ];
+  }
+
+  static get ROLES() {
+    return [
+      ['date', 'date'], ['value-date', 'value date'], ['amount', 'amount'],
+      ['debit', 'debit'], ['credit', 'credit'], ['balance', 'balance'],
+      ['counterparty', 'counterparty'], ['account', 'account'],
+      ['reference', 'reference'], ['description', 'description'], ['ignore', 'ignore']
+    ];
+  }
+
+  // Five real rows, so the preview is the user's own money rather than a schema.
+  static get RAW() {
+    return [
+      ['03.07.2026', 'Albert Praha 8', '-1 284,50', '381 097,88', '0', 'ALBERT CR'],
+      ['04.07.2026', 'Výplata — IOCB AV ČR', '62 000,00', '443 097,88', '2026071', 'IOCB AV CR'],
+      ['07.07.2026', 'Nájem Karlín', '-18 400,00', '424 697,88', '308', 'SVJ KARLIN'],
+      ['11.07.2026', 'ČEZ Prodej', '-3 180,00', '421 517,88', '7741', 'CEZ PRODEJ AS'],
+      ['14.07.2026', 'Kavárna Místo', '-164,00', '421 353,88', '0', 'MISTO SRO']
+    ];
+  }
+
+  componentDidMount() {
+    this.applyTheme(this.props.theme || 'dark');
+  }
+
+  applyTheme(t) {
+    try {
+      if (t === 'light') document.documentElement.setAttribute('data-ledger-theme', 'light');
+      else document.documentElement.removeAttribute('data-ledger-theme');
+    } catch (e) {}
+    if (t !== this.state.theme) this.setState({ theme: t });
+  }
+
+  go(view) { return () => this.setState({ view: view }); }
+
+  chip(active) {
+    return {
+      bg: active ? 'var(--card3)' : 'transparent',
+      fg: active ? 'var(--fg1)' : 'var(--fg3)',
+      fw: active ? '500' : '400'
+    };
+  }
+
+  // Which column carries which meaning right now — the wizard's whole state.
+  roleIndex(roles) {
+    const at = {};
+    Object.keys(roles).forEach(k => { at[roles[k]] = Number(k); });
+    return at;
+  }
+
+  renderVals() {
+    const s = this.state;
+    const raw = Component.RAW;
+    const at = this.roleIndex(s.roles);
+
+    const cell = (row, role) => (at[role] == null ? null : raw[row][at[role]]);
+    const signed = v => (v == null ? '—' : (v.indexOf('-') === 0 ? '−' + v.slice(1) : '+' + v));
+
+    const preview = raw.map((r, i) => {
+      const amt = cell(i, 'amount');
+      const neg = amt != null && amt.indexOf('-') === 0;
+      return {
+        date: cell(i, 'date') || '— unmapped —',
+        desc: cell(i, 'description') || cell(i, 'counterparty') || '— unmapped —',
+        amount: signed(amt),
+        balance: cell(i, 'balance') || '—',
+        color: amt == null ? 'var(--fg3)' : (neg ? 'var(--fg1)' : 'var(--green)')
+      };
+    });
+
+    // The balance chain is the proof. Not mappable and not proven are different
+    // states and must not both read as failure — a bank that prints no running
+    // balance is normal, a missing amount column is a mistake.
+    let checkMark = '✓', checkColor = 'var(--green)', checkWash = 'var(--green-wash)';
+    let checkTitle = 'The running balance closes on all five rows';
+    let checkDetail = 'Each amount moves the balance to exactly the next printed figure, so this mapping is proving itself against the file. It will be checked the same way across all 38 rows on import.';
+    if (at.amount == null) {
+      checkMark = '✕'; checkColor = 'var(--red)'; checkWash = 'var(--red-wash)';
+      checkTitle = 'No column is the amount';
+      checkDetail = 'Without an amount there is nothing to file. Pick the column whose figures move the balance, or map a debit and a credit column separately.';
+    } else if (at.date == null) {
+      checkMark = '✕'; checkColor = 'var(--red)'; checkWash = 'var(--red-wash)';
+      checkTitle = 'No column is the date';
+      checkDetail = 'Every transaction needs a date. The leftmost column here reads as one.';
+    } else if (at.balance == null) {
+      checkMark = '—'; checkColor = 'var(--fg3)'; checkWash = 'transparent';
+      checkTitle = 'No balance column, so the chain cannot be checked';
+      checkDetail = 'This is not a failure — plenty of exports omit the running balance. The rows will import, and the statement will be filed as agreeing on totals rather than proven row by row.';
+    }
+
+    // The preview below was produced by what the FILE said. Overrule a separator,
+    // an encoding or the header line and the file re-tokenises, so these rows and
+    // this proof no longer describe the settings on screen. Never leave green up.
+    const changed = this.changedFacts();
+    if (changed.length && checkColor === 'var(--green)') {
+      checkMark = '—'; checkColor = 'var(--yellow)'; checkWash = 'var(--yellow-wash)';
+      checkTitle = 'Not re-read yet — these rows still use what the file said';
+      // One change earns its consequence spelled out; several would turn the
+      // sentence into comma-soup, so they are named and the effect left general.
+      const what = changed.length === 1
+        ? changed[0].label.toLowerCase() + ', which ' + changed[0].effect
+        : Component.list(changed.map(d => d.label.toLowerCase()));
+      checkDetail = 'You changed ' + what + '. These rows were produced by the earlier settings, ' +
+        'so the proof below belongs to that reading, not this one. The balances are checked again ' +
+        'the moment you import, and that result is what gets filed.';
+    }
+
+    const dateRows = order => [
+      { raw: '03.07', reads: order === 'day' ? '3 July' : '7 March', amount: '−1 284,50' },
+      { raw: '11.07', reads: order === 'day' ? '11 July' : '7 November', amount: '−3 180,00' },
+      { raw: '04.07', reads: order === 'day' ? '4 July' : '7 April', amount: '+62 000,00' }
+    ];
+
+    const driftSpec = [
+      ['Datum zaúčtování', '03.07.2026', false],
+      ['Datum splatnosti', '03.07.2026', false],
+      ['Popis příkazce', 'Albert Praha 8', false],
+      ['Částka', '-1 284,50', false],
+      ['Zůstatek po transakci', '381 097,88', false],
+      ['Kód banky protistrany', '0800', true],
+      ['Typ transakce', 'karta', true],
+      ['Variabilní symbol', '0', false]
+    ];
+
+    return {
+      views: Component.VIEWS.map(v => Object.assign({ label: v[1], go: this.go(v[0]) }, this.chip(s.view === v[0]))),
+      themes: ['dark', 'light'].map(t => Object.assign({
+        label: t === 'dark' ? 'Dark' : 'Light', go: () => this.applyTheme(t)
+      }, this.chip(s.theme === t))),
+
+      isImport: ['import', 'resolver', 'drift', 'evidence', 'provenance', 'notstatement'].indexOf(s.view) >= 0,
+      isResolver: s.view === 'resolver',
+      swallow: e => e.stopPropagation(),
+      isWizard: s.view === 'wizard',
+      isDrift: s.view === 'drift',
+      isArbitration: s.view === 'arbitration',
+      isEvidence: s.view === 'evidence',
+      isProvenance: s.view === 'provenance',
+      isProfiles: s.view === 'profiles',
+      isNotStatement: s.view === 'notstatement',
+
+      goImport: this.go('import'),
+      goWizard: this.go('wizard'),
+      goEvidence: this.go('evidence'),
+      goProvenance: this.go('provenance'),
+      goProfiles: this.go('profiles'),
+      goArbitration: this.go('arbitration'),
+
+      showScanWarning: s.scanWarning && (this.props.scanWarning !== false),
+      dismissScan: () => this.setState({ scanWarning: false }),
+      queueOn: this.props.queue !== false,
+      restoreQueue: () => this.setState({ dropped: [] }),
+      queueTrimmed: (this.state.dropped || []).length > 0,
+      queueTrimmedLabel: (this.state.dropped || []).length === 1
+        ? '1 removed · undo'
+        : (this.state.dropped || []).length + ' removed · undo',
+
+      // A failed file keeps its place in the list rather than vanishing — the user
+      // wants to see what happened. It shows a reason and the way out, not a bar.
+      queue: [
+        { name: 'scan_2026_07.pdf', state: 'reading page 3 of 12', pct: '25%', stateColor: 'var(--fg2)', failed: false, fix: '' },
+        { name: 'ceska_sporitelna_07.pdf', state: 'reading page 1 of 4', pct: '9%', stateColor: 'var(--fg2)', failed: false, fix: '' },
+        { name: 'wyciag_07.csv', state: 'queued', pct: '0%', stateColor: 'var(--fg3)', failed: false, fix: '' },
+        { name: 'mBank_2026-07.xlsx', state: 'could not be read — the workbook is password protected', pct: '0%', stateColor: 'var(--red)', failed: true, fix: 'Save it without a password, or export CSV from mBank instead. Nothing was filed.' },
+        { name: 'xtb_statement_2026-07.pdf', state: 'queued', pct: '0%', stateColor: 'var(--fg3)', failed: false, fix: '' }
+      ].filter(q => (this.state.dropped || []).indexOf(q.name) < 0)
+        .map(q => Object.assign({
+          running: !q.failed,
+          // Cancel while it is being read, remove once it has stopped.
+          dropTitle: q.failed ? 'Remove from the queue' : (q.pct === '0%' ? 'Remove from the queue' : 'Cancel this read'),
+          drop: () => this.setState(st => ({ dropped: (st.dropped || []).concat([q.name]) }))
+        }, q)),
+
+
+      filters: [['all', 'All'], ['ocr', 'From OCR'], ['unverified', 'Unverified']].map(f =>
+        Object.assign({ label: f[1], go: () => this.setState({ filter: f[0] }) }, this.chip(s.filter === f[0]))),
+
+      // Keyed per statement, not per filename: one file can yield several, and
+      // filename as a key collides the moment it does.
+      groups: [
+        {
+          grouped: this.props.grouped !== false, file: 'fio_2026_07.csv', note: '2 statements in one export',
+          rows: [
+            { account: 'Fio CZK ·2010', sub: 'July 2026 · 41 rows · text layer',
+              proof: 'balances check out', hue: 'var(--green)', tint: 'var(--green-tint)',
+              wash: 'transparent', indent: this.props.grouped !== false ? '14px' : '0',
+              counts: '41 added · 3 known · 2 paired', action: 'Evidence',
+              actionBd: 'var(--bd2)', go: this.go('evidence') },
+            { account: 'Fio EUR ·2010', sub: 'July 2026 · 6 rows · no running balance printed',
+              proof: 'totals agree', hue: 'var(--yellow)', tint: 'var(--yellow-tint)',
+              wash: 'transparent', indent: this.props.grouped !== false ? '14px' : '0',
+              counts: '6 added · 0 known', action: 'Evidence',
+              actionBd: 'var(--bd2)', go: this.go('evidence') }
+          ]
+        },
+        {
+          grouped: false, file: '', note: '',
+          rows: [{
+            account: 'wyciag_07.csv', sub: 'mBank PL · no saved layout matches this export',
+            proof: "couldn't verify", hue: 'var(--red)', tint: 'var(--red-tint)',
+            wash: 'var(--red-wash)', indent: '0', counts: 'nothing filed yet',
+            action: 'Review', actionBd: 'var(--red)', go: this.go('resolver')
+          }]
+        },
+        {
+          grouped: false, file: '', note: '',
+          rows: [{
+            account: 'ceska_sporitelna_07.csv', sub: 'ČS CZK ·0244 · the bank changed its export',
+            proof: 'layout changed', hue: 'var(--blue)', tint: 'var(--blue-tint)',
+            wash: 'var(--blue-wash)', indent: '0', counts: 'held until you confirm',
+            action: 'Check mapping', actionBd: 'var(--bd2)', go: this.go('drift')
+          }]
+        },
+        {
+          grouped: false, file: '', note: '',
+          rows: [{
+            account: 'xtb_statement_2026-07.pdf', sub: 'holdings, not movements — belongs in Investments',
+            proof: 'not a statement', hue: 'var(--fg3)', tint: 'var(--grey-tint)',
+            wash: 'transparent', indent: '0', counts: '14 holdings read',
+            action: 'Where it belongs', actionBd: 'var(--bd2)', go: this.go('notstatement')
+          }]
+        },
+        {
+          grouped: false, file: '', note: '',
+          rows: [{
+            account: 'scan_2026_07.pdf', sub: 'ČS CZK ·0244 · the text layer and the OCR read disagree',
+            proof: '3 rows unproven', hue: 'var(--yellow)', tint: 'var(--yellow-tint)',
+            wash: 'var(--yellow-wash)', indent: '0', counts: '3 of 41 rows differ',
+            action: 'Arbitrate', actionBd: 'var(--yellow)', go: this.go('arbitration')
+          }]
+        }
+      ],
+
+      review: [
+        { date: '28 Jul', merchant: 'AWS EMEA', reason: 'first time from this merchant · Fio CZK ·2010',
+          amount: '−2 118,40', color: 'var(--fg1)',
+          actions: [{ label: 'Software' }, { label: 'Work expenses' }] },
+        { date: '26 Jul', merchant: 'Transfer to RB savings', reason: 'looks like your own transfer · unpaired leg',
+          amount: '−30 000,00', color: 'var(--fg1)',
+          actions: [{ label: '✓ Own transfer' }, { label: '✕ Not a transfer' }] },
+        { date: '14 Jul', merchant: 'Kavárna Místo', reason: 'read by OCR, low confidence on the merchant',
+          amount: '−164,00', color: 'var(--fg1)',
+          actions: [{ label: 'Eating out' }, { label: 'Groceries' }] }
+      ],
+
+      dateOptions: [
+        { label: 'Day first — 03.07 is 3 July', order: 'day' },
+        { label: 'Month first — 03.07 is 7 March', order: 'month' }
+      ].map(o => ({
+        label: o.label, rows: dateRows(o.order),
+        go: () => this.setState({ dateOrder: o.order }),
+        bd: s.dateOrder === o.order ? 'var(--brand)' : 'var(--bd)',
+        bg: s.dateOrder === o.order ? 'var(--brand-wash)' : 'var(--card)',
+        dotBd: s.dateOrder === o.order ? 'var(--brand)' : 'var(--bd2)',
+        dotBg: s.dateOrder === o.order ? 'var(--brand)' : 'transparent'
+      })),
+      resolveLabel: s.dateOrder === 'day' ? 'Import as day-first' : 'Import as month-first',
+
+      // Only a fact that re-splits the file can change which columns exist. An
+      // encoding or number-format change leaves these columns exactly as they are.
+      // Each fact states its own effect on the columns, or null when it has none.
+      // Both sentences are built around "your changes to …" so noun and verb
+      // agreement holds however many facts are involved.
+      columnsNote: (() => {
+        const changed = this.changedFacts();
+        if (!changed.length) return 'pre-filled from the header names and the arithmetic — change what is wrong';
+        const touching = changed.filter(d => d.columnEffect);
+        if (touching.length === 1) {
+          return 'these are the columns from the earlier reading — your change to ' +
+            touching[0].label.toLowerCase() + ' ' + touching[0].columnEffect;
+        }
+        if (touching.length) {
+          return 'these are the columns from the earlier reading — your changes to ' +
+            Component.list(touching.map(d => d.label.toLowerCase())) +
+            ' may give the file different columns entirely';
+        }
+        return 'the columns are unchanged — your changes to ' +
+          Component.list(changed.map(d => d.label.toLowerCase())) +
+          ' only affect what is read inside them';
+      })(),
+      columnsNoteColor: this.changedFacts().some(d => d.columnEffect) ? 'var(--yellow)' : 'var(--fg3)',
+
+      adjusting: !!s.adjusting,
+      adjustLabel: s.adjusting ? 'Done' : 'Adjust',
+      toggleAdjust: () => this.setState(st => ({ adjusting: !st.adjusting })),
+      resetDetected: () => this.setState({ overrides: {}, adjusting: false }),
+      detectedTouched: Object.keys(s.overrides || {}).length > 0,
+      detectedNote: Object.keys(s.overrides || {}).length > 0
+        ? 'read from the file — you have changed ' + Object.keys(s.overrides || {}).length + ' of these'
+        : 'read from the file, not guessed',
+
+      detected: Component.DETECTED.map(d => {
+        const over = (s.overrides || {})[d.label];
+        const raw = over || d.value;
+        return {
+          label: d.label,
+          raw: raw,
+          value: raw,
+          // A changed fact stops being something the file said, so it stops looking like one.
+          color: over ? 'var(--yellow)' : 'var(--fg1)',
+          settled: !s.adjusting,
+          options: d.options.map(o => ({ value: o, label: o })),
+          set: e => {
+            const v = e.target.value;
+            this.setState(st => {
+              const next = Object.assign({}, st.overrides);
+              if (v === d.value) { delete next[d.label]; } else { next[d.label] = v; }
+              return { overrides: next };
+            });
+          }
+        };
+      }),
+
+      columns: ['Datum', 'Popis transakce', 'Částka', 'Zůstatek', 'VS', 'Protistrana'].map((hdr, i) => ({
+        header: hdr, a: raw[0][i], b: raw[1][i], role: s.roles[i],
+        set: e => {
+          const v = e.target.value;
+          this.setState(st => ({ roles: Object.assign({}, st.roles, { [i]: v }) }));
+        }
+      })),
+
+      preview: preview,
+      checkMark: checkMark, checkColor: checkColor, checkWash: checkWash,
+      checkTitle: checkTitle, checkDetail: checkDetail,
+
+      profileName: s.profileName,
+      setProfileName: e => this.setState({ profileName: e.target.value }),
+
+      driftColumns: driftSpec.map((d, i) => ({
+        header: d[0], sample: d[1], isNew: d[2], role: s.driftRoles[i],
+        wash: d[2] ? 'var(--yellow-wash)' : 'transparent',
+        set: e => {
+          const v = e.target.value;
+          this.setState(st => ({ driftRoles: Object.assign({}, st.driftRoles, { [i]: v }) }));
+        }
+      })),
+
+      reads: [
+        {
+          key: 'text', title: 'The PDF text layer', sub: 'ČS PDF v1',
+          rows: '41 rows', btn: 'Use the text layer',
+          note: 'closes on 38 of 41 rows',
+          lines: [
+            { date: '11.07', desc: 'ČEZ Prodej', amount: '−3 180,00', wash: 'transparent', textColor: 'var(--fg2)', amountColor: 'var(--fg1)' },
+            { date: '12.07', desc: 'Rohlík.cz', amount: '−1 842,00', wash: 'transparent', textColor: 'var(--fg2)', amountColor: 'var(--fg1)' },
+            { date: '14.07', desc: 'Kavárna Místo', amount: '−164,00', wash: 'var(--yellow-wash)', textColor: 'var(--fg1)', amountColor: 'var(--fg1)' },
+            { date: '15.07', desc: 'Lékárna Dr. Max', amount: '−418,00', wash: 'var(--yellow-wash)', textColor: 'var(--fg1)', amountColor: 'var(--fg1)' },
+            { date: '18.07', desc: 'Splátka hypotéky', amount: '−24 850,00', wash: 'var(--yellow-wash)', textColor: 'var(--fg1)', amountColor: 'var(--fg1)' },
+            { date: '21.07', desc: 'Vodafone CZ', amount: '−749,00', wash: 'transparent', textColor: 'var(--fg2)', amountColor: 'var(--fg1)' }
+          ]
+        },
+        {
+          key: 'ocr', title: 'The OCR read', sub: 'tesseract · ces · 110 dpi',
+          rows: '40 rows', btn: 'Use the OCR read',
+          note: 'closes on 36 of 40 rows · one row missing entirely',
+          lines: [
+            { date: '11.07', desc: 'ČEZ Prodej', amount: '−3 180,00', wash: 'transparent', textColor: 'var(--fg2)', amountColor: 'var(--fg1)' },
+            { date: '12.07', desc: 'Rohlík.cz', amount: '−1 842,00', wash: 'transparent', textColor: 'var(--fg2)', amountColor: 'var(--fg1)' },
+            { date: '14.07', desc: 'Kavárna Misto', amount: '−1 640,00', wash: 'var(--yellow-wash)', textColor: 'var(--yellow)', amountColor: 'var(--yellow)' },
+            { date: '15.07', desc: 'Lékárna Dr. Max', amount: '−418,00', wash: 'var(--yellow-wash)', textColor: 'var(--fg1)', amountColor: 'var(--fg1)' },
+            { date: '—', desc: 'row not read', amount: '—', wash: 'var(--yellow-wash)', textColor: 'var(--yellow)', amountColor: 'var(--yellow)' },
+            { date: '21.07', desc: 'Vodafone CZ', amount: '−749,00', wash: 'transparent', textColor: 'var(--fg2)', amountColor: 'var(--fg1)' }
+          ]
+        }
+      ].map(r => ({
+        title: r.title, sub: r.sub, rows: r.rows, lines: r.lines, btn: r.btn, note: r.note,
+        go: () => this.setState({ chosenRead: r.key, view: 'import' }),
+        btnBd: r.key === 'text' ? 'var(--brand)' : 'var(--bd2)',
+        btnBg: r.key === 'text' ? 'var(--brand)' : 'var(--card)',
+        btnFg: r.key === 'text' ? 'var(--fg-inverse)' : 'var(--fg1)'
+      })),
+
+      checks: [
+        { mark: '✓', color: 'var(--green)', textColor: 'var(--fg2)',
+          text: 'The running balance chain closes on all 41 rows' },
+        { mark: '✓', color: 'var(--green)', textColor: 'var(--fg2)',
+          text: 'Opening 382,38 + credits 62 652,00 − debits 50 050,00 = closing 12 984,38' },
+        { mark: '✓', color: 'var(--green)', textColor: 'var(--fg2)',
+          text: 'Credit and debit totals match the ones the statement prints' },
+        { mark: '—', color: 'var(--fg3)', textColor: 'var(--fg3)',
+          text: 'Row count not printed by this bank' }
+      ],
+
+      evidenceFacts: [
+        { label: 'Read by', value: 'text layer' },
+        { label: 'Layout', value: 'Fio CSV v2' },
+        { label: 'Source file', value: 'fio_2026_07.csv' },
+        { label: 'Imported', value: '2026-08-02 09:12' }
+      ],
+
+      provenance: [
+        { label: 'Read by', value: 'OCR (tesseract, ces)', color: 'var(--yellow)' },
+        { label: 'Verified', value: 'balance chain ✓ 47/47 rows', color: 'var(--fg1)' },
+        { label: 'Source', value: 'scan_2026_07.pdf · page 2 · lines 14–16', color: 'var(--fg1)' },
+        { label: 'Layout', value: 'ČS PDF v1', color: 'var(--fg1)' }
+      ],
+
+      myProfiles: [
+        { name: 'Fio CSV v2', detail: 'Fio banka · CSV · 6 columns · balance chain provable',
+          used: 'used 2 Aug', verified: true },
+        { name: 'ČS PDF v1', detail: 'Česká spořitelna · PDF text layer · falls back to OCR',
+          used: 'used 2 Aug', verified: false },
+        { name: 'mBank XLSX v1', detail: 'mBank Polska · workbook · one sheet per account',
+          used: 'used 14 Jun', verified: true }
+      ],
+
+      builtIn: [
+        { name: 'Raiffeisenbank', format: 'CSV · XML' },
+        { name: 'Revolut', format: 'CSV' },
+        { name: 'Komerční banka', format: 'ABO · CSV' },
+        { name: 'ČSOB', format: 'CSV · OFX' },
+        { name: 'SEPA CAMT.053', format: 'XML' }
+      ],
+
+      holdings: [
+        { ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World', value: '€ 18 402,60' },
+        { ticker: 'CSPX.L', name: 'iShares Core S&P 500', value: '$ 9 118,00' },
+        { ticker: 'IWDA.L', name: 'iShares Core MSCI World', value: '€ 4 260,15' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

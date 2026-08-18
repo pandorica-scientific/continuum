@@ -1,0 +1,16 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,EUR
+#Numer rachunku,SYN-0004
+#Okres,2026-04-01,2026-04-28
+#Saldo początkowe,47801,76
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-04-10,2026-04-09,Refund; Northstar Market,137,91,47939,67
+2026-04-12,,Bank service fee; Orbit Pharmacy,143,73,48083,40
+2026-04-14,,Card purchase; Meadow Payroll,-659,00,47424,40
+2026-04-16,2026-04-15,Salary payment; Orbit Pharmacy,-546,49,46877,91
+2026-04-18,,Direct debit; Meadow Payroll,-82,41,46795,50
+2026-04-20,,Account transfer; Vector Mobile,868,33,47663,83
+2026-04-22,2026-04-21,Interest payment; Meadow Payroll,-862,19,46801,64
+2026-04-24,,Cash withdrawal; Juniper Transit,-379,30,46422,34
+,,#Saldo końcowe,46422,34,

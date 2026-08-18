@@ -1,0 +1,23 @@
+:20:STATEMENT013
+:25:SYN-0013
+:28C:00001/001
+:60F:C260401NOK82994,91
+:61:2604120412C875,08NTRFRefund//SIMREF013001
+:86:Refund Meadow Payroll
+:61:2604140414D676,69NTRFBankservicef//SIMREF013002
+:86:Bank service fee Summit Cafeteria
+:61:2604160416D179,94NTRFCardpurchase//SIMREF013003
+:86:Card purchase Pinecrest Housing
+:61:2604180418D427,94NTRFSalarypaymen//SIMREF013004
+:86:Salary payment Orbit Pharmacy
+:61:2604200420C19,79NTRFDirectdebit//SIMREF013005
+:86:Direct debit Northstar Market
+:61:2604220422D44,85NTRFAccounttrans//SIMREF013006
+:86:Account transfer Summit Cafeteria
+:61:2604240424D245,48NTRFInterestpaym//SIMREF013007
+:86:Interest payment Meadow Payroll
+:61:2604010401D188,66NTRFCashwithdraw//SIMREF013008
+:86:Cash withdrawal Copperline Services
+:61:2604030403C101,22NTRFRefund//SIMREF013009
+:86:Refund Lantern Books
+:62F:C260428NOK82227,44

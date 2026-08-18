@@ -15,13 +15,28 @@ export function parseMbank(text: string): ParsedStatement {
 	let accountNumber: string | undefined;
 	let openingBalanceMinor: bigint | undefined;
 	let closingBalanceMinor: bigint | undefined;
+	let statedCreditTotalMinor: bigint | undefined;
+	let statedDebitTotalMinor: bigint | undefined;
+	let creditCount: number | undefined;
+	let debitCount: number | undefined;
 	let periodStart: string | undefined;
 	let periodEnd: string | undefined;
 
 	let headerIndex = -1;
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
-		if (line.startsWith('#Waluta')) currency = lines[i + 1]?.split(';')[0]?.trim() || currency;
+		if (line.startsWith('#Waluta')) {
+			// mBank prints the label on one line and the value on the next, but a
+			// same-line `#Waluta;PLN` is just as common elsewhere. Either way the
+			// value has to LOOK like a currency: this used to take whatever came
+			// next verbatim, and a file whose next line was another label imported
+			// with a currency of "#Numer rachunku" — a column heading, filed as
+			// the denomination of someone's money.
+			const candidate = [lines[i + 1]?.split(';')[0], line.split(/[;,]/)[1]]
+				.map((value) => value?.trim().toUpperCase())
+				.find((value) => value && /^[A-Z]{3}$/.test(value));
+			if (candidate) currency = candidate;
+		}
 		if (line.startsWith('#Numer rachunku'))
 			accountNumber = lines[i + 1]?.split(';')[0]?.trim() || undefined;
 		if (line.startsWith('#Za okres:')) {
@@ -33,6 +48,19 @@ export function parseMbank(text: string): ParsedStatement {
 		}
 		const opening = line.match(/#Saldo początkowe;([-\d\s,.]+) ([A-Z]{3})/);
 		if (opening) openingBalanceMinor = parseAmountToMinor(opening[1], opening[2]);
+		// mBank is the only sampled bank printing a COUNT per direction as well as
+		// a value: "Uznania;2;310,00 PLN". The count is the strongest single check
+		// against a dropped row, and costs nothing to read.
+		const credits = line.match(/Uznania;(\d+);([-\d\s,.]+) ([A-Z]{3})/);
+		if (credits) {
+			statedCreditTotalMinor = parseAmountToMinor(credits[2], credits[3]);
+			creditCount = Number(credits[1]);
+		}
+		const debits = line.match(/Obciążenia;(\d+);([-\d\s,.]+) ([A-Z]{3})/);
+		if (debits) {
+			statedDebitTotalMinor = parseAmountToMinor(debits[2], debits[3]);
+			debitCount = Number(debits[1]);
+		}
 		const closing = line.match(/#Saldo końcowe;([-\d\s,.]+) ([A-Z]{3})/);
 		if (closing) closingBalanceMinor = parseAmountToMinor(closing[1], closing[2]);
 		if (line.startsWith('#Data księgowania')) headerIndex = i;
@@ -63,6 +91,10 @@ export function parseMbank(text: string): ParsedStatement {
 
 	return {
 		bank: 'mbank',
+		// An adapter ran because the file identified this bank, so the issuer
+		// is evidence here rather than a guess. Readers that cannot tell leave
+		// it undefined; only this field may decide an account.
+		issuer: 'mbank',
 		format: 'csv',
 		accountNumber,
 		currency,
@@ -70,6 +102,10 @@ export function parseMbank(text: string): ParsedStatement {
 		periodEnd,
 		openingBalanceMinor,
 		closingBalanceMinor,
+		statedCreditTotalMinor,
+		statedDebitTotalMinor,
+		statedRowCount:
+			creditCount !== undefined && debitCount !== undefined ? creditCount + debitCount : undefined,
 		rows
 	};
 }

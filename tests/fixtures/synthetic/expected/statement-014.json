@@ -1,0 +1,136 @@
+{
+  "id": "statement-014",
+  "archetype": "headerless-ledger",
+  "locale": "da-DK",
+  "currency": "DKK",
+  "accountId": "SYN-0014",
+  "periodStart": "2026-05-01",
+  "periodEnd": "2026-05-28",
+  "targetDecision": "incomplete",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "2383911",
+  "closingBalanceMinor": "2200638",
+  "statedCreditTotalMinor": "171031",
+  "statedDebitTotalMinor": "354304",
+  "statedRowCount": 10,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-05-15",
+      "valueDate": "2026-05-14",
+      "amountMinor": "25766",
+      "currency": "DKK",
+      "balanceAfterMinor": "2409677",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001300",
+      "bankRef": "SIMREF014001",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-05-17",
+      "amountMinor": "-63199",
+      "currency": "DKK",
+      "balanceAfterMinor": "2346478",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001301",
+      "bankRef": "SIMREF014002",
+      "description": "Refund"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-05-19",
+      "amountMinor": "-77745",
+      "currency": "DKK",
+      "balanceAfterMinor": "2268733",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001302",
+      "bankRef": "SIMREF014003",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-05-21",
+      "valueDate": "2026-05-20",
+      "amountMinor": "77293",
+      "currency": "DKK",
+      "balanceAfterMinor": "2346026",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300001303",
+      "bankRef": "SIMREF014004",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-05-23",
+      "amountMinor": "-15420",
+      "currency": "DKK",
+      "balanceAfterMinor": "2330606",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001304",
+      "bankRef": "SIMREF014005",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-05-25",
+      "amountMinor": "-85053",
+      "currency": "DKK",
+      "feeMinor": "125",
+      "balanceAfterMinor": "2245428",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001305",
+      "bankRef": "SIMREF014006",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-05-02",
+      "valueDate": "2026-05-01",
+      "amountMinor": "-67169",
+      "currency": "DKK",
+      "balanceAfterMinor": "2178259",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001306",
+      "bankRef": "SIMREF014007",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-05-04",
+      "amountMinor": "67972",
+      "currency": "DKK",
+      "balanceAfterMinor": "2246231",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001307",
+      "bankRef": "SIMREF014008",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-05-06",
+      "amountMinor": "-18544",
+      "currency": "DKK",
+      "balanceAfterMinor": "2227687",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001308",
+      "bankRef": "SIMREF014009",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-05-08",
+      "valueDate": "2026-05-07",
+      "amountMinor": "-27049",
+      "currency": "DKK",
+      "balanceAfterMinor": "2200638",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300001309",
+      "bankRef": "SIMREF014010",
+      "description": "Refund"
+    }
+  ]
+}

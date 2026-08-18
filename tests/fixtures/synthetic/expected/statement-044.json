@@ -1,0 +1,113 @@
+{
+  "id": "statement-044",
+  "archetype": "furniture-pages",
+  "locale": "en-SG",
+  "currency": "SGD",
+  "accountId": "SYN-0044",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "6953620",
+  "closingBalanceMinor": "6791692",
+  "statedCreditTotalMinor": "133435",
+  "statedDebitTotalMinor": "295363",
+  "statedRowCount": 8,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-08-05",
+      "valueDate": "2026-08-04",
+      "amountMinor": "88602",
+      "currency": "SGD",
+      "balanceAfterMinor": "7042222",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300004300",
+      "bankRef": "SIMREF044001",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-08-07",
+      "amountMinor": "17305",
+      "currency": "SGD",
+      "balanceAfterMinor": "7059527",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004301",
+      "bankRef": "SIMREF044002",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-08-09",
+      "amountMinor": "-70539",
+      "currency": "SGD",
+      "feeMinor": "125",
+      "balanceAfterMinor": "6988863",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300004302",
+      "bankRef": "SIMREF044003",
+      "description": "Refund"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-08-11",
+      "valueDate": "2026-08-10",
+      "amountMinor": "-7971",
+      "currency": "SGD",
+      "balanceAfterMinor": "6980892",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300004303",
+      "bankRef": "SIMREF044004",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-08-13",
+      "amountMinor": "-65390",
+      "currency": "SGD",
+      "balanceAfterMinor": "6915502",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300004304",
+      "bankRef": "SIMREF044005",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-08-15",
+      "amountMinor": "27528",
+      "currency": "SGD",
+      "balanceAfterMinor": "6943030",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300004305",
+      "bankRef": "SIMREF044006",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-08-17",
+      "valueDate": "2026-08-16",
+      "amountMinor": "-80651",
+      "currency": "SGD",
+      "balanceAfterMinor": "6862379",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300004306",
+      "bankRef": "SIMREF044007",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-08-19",
+      "amountMinor": "-70687",
+      "currency": "SGD",
+      "balanceAfterMinor": "6791692",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004307",
+      "bankRef": "SIMREF044008",
+      "description": "Account transfer"
+    }
+  ]
+}

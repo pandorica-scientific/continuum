@@ -1,0 +1,21 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;EUR
+#Numer rachunku;SYN-0030
+#Okres;2026-03-01;2026-03-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;33623,30
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-03-13;2026-03-12;"Interest payment; Northstar Market";425,18;34048,48
+2026-03-15;;"Cash withdrawal; Juniper Transit
+synthetic continuation";-494,57;33553,91
+2026-03-17;;"Direct debit; Lantern Books";-329,66;33224,25
+2026-03-19;2026-03-18;"Account transfer; Copperline Services";870,22;34094,47
+2026-03-21;;"Card purchase; Northstar Market";-46,51;34047,96
+2026-03-23;;"Salary payment; Copperline Services";-440,68;33607,28
+2026-03-25;2026-03-24;"Refund; Harbour Energy";-768,23;32839,05
+2026-03-02;;"Bank service fee; Juniper Transit";333,41;33172,46
+2026-03-04;;"Interest payment; Pinecrest Housing";-286,84;32885,62
+2026-03-06;2026-03-05;"Cash withdrawal; Orbit Pharmacy";-635,45;32250,17
+;;#Saldo koñcowe;32250,17;

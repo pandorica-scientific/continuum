@@ -24,8 +24,18 @@ describe('parseFilter', () => {
 			reviewState: null,
 			tagId: null,
 			includeTransfers: false,
+			sourceMethod: null,
 			page: 1
 		});
+	});
+
+	it('reads how a row was read, so a weaker reading can be looked at', () => {
+		// The ledger records per row whether it came from a bank adapter, a
+		// published format, page geometry, pixels, or a reading whose fields had
+		// to be rejoined. Those are not equally strong, and this is what lets
+		// someone ask to see one of them.
+		expect(parseFilter(params('source=pdf-rhythm'), 'CZK').sourceMethod).toBe('pdf-rhythm');
+		expect(parseFilter(params('source='), 'CZK').sourceMethod).toBeNull();
 	});
 
 	it('reads the tag filter', () => {

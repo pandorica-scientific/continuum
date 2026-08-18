@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&amp;family=Source+Code+Pro:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e1117; --bg2: #11161f; --side: #0a0d13;
+    --card: rgba(255,255,255,0.03); --card2: rgba(255,255,255,0.06); --card3: rgba(255,255,255,0.09);
+    --bd: rgba(255,255,255,0.08); --bd2: rgba(255,255,255,0.18);
+    --fg1: #e6e9ef; --fg2: #c5ccd6; --fg3: #99a4b3;
+    --green: #2ecc71; --red: #ef6a5c; --yellow: #f1c40f; --blue: #5aaee4;
+    --purple: #bd85d3; --orange: #e67e22; --teal: #1abc9c;
+    --indigo: #7b8ce8; --brand: #4a86c8;
+    --fg-inverse: #0e1117;
+    --green-tint: rgba(46,204,113,0.18); --yellow-tint: rgba(241,196,15,0.18);
+    --red-tint: rgba(239,106,92,0.18); --blue-tint: rgba(90,174,228,0.18);
+    --teal-tint: rgba(26,188,156,0.18); --purple-tint: rgba(189,133,211,0.18);
+    --grey-tint: rgba(138,150,166,0.16); --orange-tint: rgba(230,126,34,0.18);
+    --indigo-tint: rgba(123,140,232,0.18); --brand-tint: rgba(74,134,200,0.18);
+    --green-wash: rgba(46,204,113,0.07); --yellow-wash: rgba(241,196,15,0.07);
+    --red-wash: rgba(239,106,92,0.07); --blue-wash: rgba(90,174,228,0.07);
+    --teal-wash: rgba(26,188,156,0.07); --purple-wash: rgba(189,133,211,0.07);
+    --orange-wash: rgba(230,126,34,0.07); --indigo-wash: rgba(123,140,232,0.07);
+    --brand-wash: rgba(74,134,200,0.07); --grey-wash: rgba(138,150,166,0.06);
+  }
+  html[data-ledger-theme="light"] {
+    --bg: #f3f0e9; --bg2: #eeeae1; --side: #efebe2;
+    --card: #ffffff; --card2: #f7f4ee; --card3: #ebe6dc;
+    --bd: rgba(60,52,40,0.10); --bd2: rgba(60,52,40,0.20);
+    --fg1: #1c1a16; --fg2: #494339; --fg3: #6b6559;
+    --green: #0e7a4a; --red: #bd2e21; --yellow: #8a5900; --blue: #186294;
+    --purple: #743990; --orange: #a2530f; --teal: #087059;
+    --indigo: #454fb0; --brand: #1b4f8a;
+    --fg-inverse: #ffffff;
+    --green-tint: rgba(34,163,102,0.13); --yellow-tint: rgba(232,169,4,0.16);
+    --red-tint: rgba(224,80,63,0.13); --blue-tint: rgba(63,143,206,0.13);
+    --teal-tint: rgba(20,161,132,0.13); --purple-tint: rgba(165,101,196,0.13);
+    --grey-tint: rgba(120,130,145,0.13); --orange-tint: rgba(224,123,30,0.14);
+    --indigo-tint: rgba(112,128,224,0.14); --brand-tint: rgba(63,124,191,0.13);
+    --green-wash: rgba(34,163,102,0.05); --yellow-wash: rgba(232,169,4,0.06);
+    --red-wash: rgba(224,80,63,0.05); --blue-wash: rgba(63,143,206,0.05);
+    --teal-wash: rgba(20,161,132,0.05); --purple-wash: rgba(165,101,196,0.05);
+    --orange-wash: rgba(224,123,30,0.055); --indigo-wash: rgba(112,128,224,0.055);
+    --brand-wash: rgba(63,124,191,0.05); --grey-wash: rgba(120,130,145,0.05);
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background-attachment: fixed;
+    color: var(--fg1);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { color: var(--fg1); text-decoration: underline; }
+  button { font-family: inherit; }
+  .error-visual {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    display: grid;
+    margin: 0;
+    padding: 0;
+    place-items: center;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+  }
+  .error-visual:focus-visible {
+    border-radius: 18px;
+    outline: 2px solid currentColor;
+    outline-offset: 8px;
+  }
+  .error-art {
+    animation: error-art-drift 9s ease-in-out infinite;
+    transform-origin: 50% 50%;
+  }
+  @keyframes error-art-drift {
+    0%, 100% { transform: translateY(0) rotate(-0.25deg); }
+    50% { transform: translateY(-7px) rotate(0.25deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .error-art { animation: none; }
+  }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; flex-direction: column;">
+
+  <div style="border-bottom: 1px solid var(--bd); background: var(--side); padding: 12px clamp(16px, 3vw, 26px); display: flex; align-items: center; gap: 12px 18px; flex-wrap: wrap; position: sticky; top: 0; z-index: 20;">
+    <span style="display: flex; align-items: center; gap: 9px;">
+      <svg viewBox="0 0 56 56" style="width: 20px; height: 20px; display: block; color: var(--brand);" aria-hidden="true">
+        <g fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">
+          <path d="M18 18 A10 10 0 0 1 18 38"></path>
+          <path d="M18 10 A18 18 0 0 1 18 46" opacity="0.62"></path>
+          <path d="M18 3 A25 25 0 0 1 18 53" opacity="0.34"></path>
+        </g>
+        <circle cx="18" cy="28" r="3.6" fill="currentColor"></circle>
+      </svg>
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Error pages</span>
+    </span>
+
+    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="10">
+        <button onClick="{{ c.go }}" style="border: 1px solid {{ c.bd }}; background: {{ c.bg }}; color: {{ c.fg }}; border-radius: 8px; padding: 5px 11px; font-family: 'Source Code Pro', monospace; font-size: 12px; cursor: pointer;" style-hover="border-color: var(--bd2);">{{ c.code }}</button>
+      </sc-for>
+    </div>
+
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <sc-if value="{{ showCount }}" hint-placeholder-val="{{ false }}">
+        <span style="font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3);">{{ countLabel }}</span>
+      </sc-if>
+      <button onClick="{{ toggleSheet }}" style="border: 1px solid var(--bd); background: var(--card); color: var(--fg2); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--bd2);">{{ sheetLabel }}</button>
+      <sc-for list="{{ themeOptions }}" as="t" hint-placeholder-count="2">
+        <button onClick="{{ t.go }}" style="border: 1px solid {{ t.bd }}; background: {{ t.bg }}; color: {{ t.fg }}; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;">{{ t.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ isSingle }}" hint-placeholder-val="{{ true }}">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: clamp(28px, 6vh, 64px) clamp(20px, 5vw, 48px) clamp(36px, 7vh, 76px);">
+      <div style="width: 100%; max-width: 1080px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(28px, 5vw, 56px); align-items: center; justify-items: start;">
+
+        <div style="display: flex; flex-direction: column; gap: 20px; min-width: 0; width: 100%; align-self: center;">
+          <span style="display: inline-flex; align-self: flex-start; align-items: center; gap: 9px; border: 1px solid {{ e.hue }}; background: {{ e.tint }}; color: {{ e.hue }}; border-radius: 12px; padding: 4px 13px; font-family: 'Source Code Pro', monospace; font-size: 11.5px; font-weight: 600;">
+            <span>{{ e.code }}</span>
+            <span style="opacity: 0.7;">{{ e.name }}</span>
+          </span>
+
+          <h1 style="margin: 0; font-size: clamp(27px, 3.4vw, 40px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.14; text-wrap: pretty; max-width: 19ch; height: 3.42em; display: flex; align-items: flex-end;">{{ e.title }}</h1>
+
+          <p style="margin: 0; font-size: clamp(14.5px, 1.15vw, 16px); color: var(--fg2); line-height: 1.6; max-width: 46ch; text-wrap: pretty; height: 4.8em;">{{ e.body }}</p>
+
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto;">
+            <button style="border: 1px solid var(--brand); background: var(--brand); color: var(--fg-inverse); border-radius: 8px; padding: 10px 18px; font-size: 13.5px; font-weight: 500; cursor: pointer;" style-hover="opacity: 0.9;">{{ e.primary }}</button>
+            <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 10px 18px; font-size: 13.5px; cursor: pointer;" style-hover="background: var(--card2);">{{ e.secondary }}</button>
+          </div>
+
+          <sc-if value="{{ showTech }}" hint-placeholder-val="{{ true }}">
+            <div style="border-top: 1px solid var(--bd); padding-top: 15px; margin-top: 2px; min-height: 3.4em; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px 20px; font-family: 'Source Code Pro', monospace; font-size: 11.5px; color: var(--fg3);">
+              <sc-for list="{{ e.tech }}" as="t" hint-placeholder-count="3">
+                <span>{{ t }}</span>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="width: 100%; max-width: min(420px, 46vh); justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 0;">
+        <button type="button" class="error-visual" onClick="{{ revealEgg }}" aria-label="{{ eggLabel }}" title="{{ eggLabel }}" style="color: {{ e.hue }}; cursor: {{ eggCursor }};">
+          <sc-if value="{{ eggLogo }}" hint-placeholder-val="{{ true }}">
+            <svg data-error-logo viewBox="0 0 56 56" style="width: 78%; height: 78%; display: block; overflow: visible; color: inherit;" aria-hidden="true">
+              <defs>
+                <filter id="error-logo-glow" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="1.8"></feGaussianBlur>
+                </filter>
+              </defs>
+              <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.34" filter="url(#error-logo-glow)">
+                <path d="M18 18 A10 10 0 0 1 18 38"></path>
+                <path d="M18 10 A18 18 0 0 1 18 46"></path>
+                <path d="M18 3 A25 25 0 0 1 18 53"></path>
+                <circle cx="18" cy="28" r="2.8" fill="currentColor" stroke="none"></circle>
+              </g>
+              <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M18 18 A10 10 0 0 1 18 38"></path>
+                <path d="M18 10 A18 18 0 0 1 18 46"></path>
+                <path d="M18 3 A25 25 0 0 1 18 53"></path>
+                <circle cx="18" cy="28" r="2.8" fill="currentColor" stroke="none"></circle>
+              </g>
+            </svg>
+          </sc-if>
+          <sc-if value="{{ eggFound }}" hint-placeholder-val="{{ false }}">
+            <svg data-error-artwork class="error-art" viewBox="0 0 1024 1024" style="width: 100%; height: 100%; display: block; overflow: visible; color: inherit;" aria-hidden="true">
+              <defs>
+                <filter id="error-art-glow" x="-18%" y="-18%" width="136%" height="136%">
+                  <feGaussianBlur stdDeviation="12"></feGaussianBlur>
+                </filter>
+                <mask id="error-art-mask" style="mask-type: luminance;">
+                  <image data-error-image x="0" y="0" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"></image>
+                </mask>
+              </defs>
+              <rect x="0" y="0" width="1024" height="1024" fill="currentColor" opacity="0.34" mask="url(#error-art-mask)" filter="url(#error-art-glow)"></rect>
+              <rect x="0" y="0" width="1024" height="1024" fill="currentColor" mask="url(#error-art-mask)"></rect>
+            </svg>
+          </sc-if>
+        </button>
+          <div style="height: 3.2em; display: flex; align-items: flex-start; justify-content: center; width: 100%;">
+            <sc-if value="{{ eggFound }}" hint-placeholder-val="{{ false }}">
+              <span style="display: flex; align-items: flex-start; gap: 9px; max-width: 34ch; font-family: 'Source Code Pro', monospace; font-size: 12px; line-height: 1.55; color: {{ e.hue }}; text-align: left;">
+                <span style="flex: 0 0 auto; opacity: 0.7;">&#8250;</span>
+                <span>{{ eggNote }}</span>
+              </span>
+            </sc-if>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isSheet }}" hint-placeholder-val="{{ false }}">
+    <div style="padding: clamp(20px, 3vh, 26px) clamp(20px, 5vw, 32px) 60px; display: flex; flex-direction: column; gap: 16px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Every state</span>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+        <sc-for list="{{ sheet }}" as="s" hint-placeholder-count="10">
+          <button onClick="{{ s.go }}" style="text-align: left; border: 1px solid var(--bd); background: {{ s.wash }}; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; cursor: pointer; color: var(--fg1); min-height: 178px;" style-hover="border-color: {{ s.hue }};">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <svg viewBox="0 0 56 56" style="width: 26px; height: 26px; flex: 0 0 26px; display: block; color: {{ s.hue }};" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 18 A10 10 0 0 1 18 38"></path>
+                <path d="M18 10 A18 18 0 0 1 18 46" opacity="0.62"></path>
+                <path d="M18 3 A25 25 0 0 1 18 53" opacity="0.34"></path>
+              </svg>
+              <span style="font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">{{ s.code }}</span>
+              <span style="margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--fg3);">
+                <span>{{ s.name }}</span>
+                <span style="width: 7px; height: 7px; border-radius: 7px; background: {{ s.dot }};"></span>
+              </span>
+            </div>
+            <span style="font-size: 15px; font-weight: 500; line-height: 1.35; text-wrap: pretty;">{{ s.title }}</span>
+            <span style="font-size: 12.5px; color: var(--fg3); line-height: 1.5; text-wrap: pretty;">{{ s.short }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 900}, &quot;copy&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;themed&quot;, &quot;plain&quot;], &quot;default&quot;: &quot;themed&quot;, &quot;tsType&quot;: &quot;'themed' | 'plain'&quot;, &quot;section&quot;: &quot;Copy&quot;}, &quot;technical&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Copy&quot;}, &quot;easterEggs&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Copy&quot;}}">
+class Component extends DCLogic {
+  state = { code: '404', theme: 'dark', sheet: false };
+
+  componentDidMount() {
+    this.applyTheme(this.state.theme);
+    this.syncArtwork();
+  }
+
+  componentDidUpdate() { this.syncArtwork(); }
+
+  artworkPath() { return './assets/error-pages/' + this.state.code + '.webp'; }
+
+  syncArtwork() {
+    try {
+      const path = this.artworkPath();
+      document.querySelectorAll('svg[data-error-artwork] image[data-error-image]').forEach(image => {
+        image.setAttribute('href', path);
+      });
+    } catch (e) {}
+  }
+
+  applyTheme(t) {
+    try { document.documentElement.setAttribute('data-ledger-theme', t); } catch (e) {}
+  }
+
+  setTheme(t) {
+    this.applyTheme(t);
+    this.setState({ theme: t });
+  }
+
+  static get ERRORS() {
+    // Doctor Who in temperament only — time, timelines, things arriving out of order.
+    // No trademarked names, craft, creatures or catchphrases.
+    return [
+      { code: '400', name: 'Bad request', hue: 'grey',
+        title: 'That request did not make sense.',
+        plain: 'The request was malformed.',
+        short: 'Malformed input the server could not parse.',
+        body: 'Something in what the browser sent was malformed, so the server stopped rather than guess at what you meant. Reloading usually settles it.',
+        primary: 'Back to Overview', secondary: 'Reload',
+        tech: ['ref 4c11·9d02', 'POST /transactions/split', '2026-08-16 21:14'] },
+
+      { code: '401', name: 'Unauthorised', hue: 'blue',
+        title: 'Identify yourself.',
+        plain: 'Your session has ended.',
+        short: 'Signed out, or the session expired.',
+        body: 'Your session ended, either because you signed out or because it sat idle long enough to expire. Sign back in and you will land exactly where you were.',
+        primary: 'Sign in', secondary: 'Back to Overview',
+        tech: ['session expired 21:02', 'idle timeout 30 min'] },
+
+      { code: '403', name: 'Forbidden', hue: 'purple',
+        title: 'This is above your clearance.',
+        plain: 'You do not have access to this.',
+        short: 'The page exists; this account may not open it.',
+        body: 'The page is really there. Your account is not permitted to open it. Whoever set up this household can grant you access in Settings.',
+        primary: 'Back to Overview', secondary: 'Request access',
+        tech: ['ref 7a30·1e88', 'GET /property/brno/lease', 'role: viewer'] },
+
+      { code: '404', name: 'Not found', hue: 'indigo',
+        title: 'This page is not in this timeline.',
+        plain: 'This page does not exist.',
+        short: 'A valid address with nothing living at it.',
+        body: 'The address is valid; nothing lives at it. It may have moved somewhere else, or it may never have been written in the first place.',
+        primary: 'Back to Overview', secondary: 'Search',
+        tech: ['GET /property/karlin/floorplan', '2026-08-16 21:14'] },
+
+      { code: '408', name: 'Request timeout', hue: 'yellow',
+        title: 'Time ran out.',
+        plain: 'The request took too long.',
+        short: 'The server stopped waiting. Nothing was written.',
+        body: 'The server waited as long as it was willing to and then let go. Nothing was written, so nothing has been lost — try it again.',
+        primary: 'Try again', secondary: 'Back to Overview',
+        tech: ['waited 30 s', 'POST /import/parse', 'fio-2026-07.csv'] },
+
+      { code: '429', name: 'Too many requests', hue: 'orange',
+        title: 'You are moving faster than the server can follow.',
+        plain: 'Too many requests in a short window.',
+        short: 'Rate limited. It clears on its own.',
+        body: 'Too many requests arrived in too short a window, so the server is holding the rest back. It clears on its own in a moment — nothing is broken.',
+        primary: 'Back to Overview', secondary: 'Try again',
+        tech: ['retry after 24 s', '112 requests / 60 s', 'limit 100'] },
+
+      { code: '500', name: 'Server error', hue: 'red',
+        title: 'Something came loose in the engine room.',
+        plain: 'The server hit an unrecoverable error.',
+        short: 'An unhandled error, logged with a reference.',
+        body: 'The server hit an error it could not recover from. It has been written to the log with the reference below, which is worth quoting if you report it.',
+        primary: 'Back to Overview', secondary: 'Copy reference',
+        tech: ['ref 9f2c·40ab', '2026-08-16 21:14', 'logged to continuum.log'] },
+
+      { code: '502', name: 'Bad gateway', hue: 'teal',
+        title: 'Two halves of the system stopped talking.',
+        plain: 'The service behind the app did not answer.',
+        short: 'The app is up; something it depends on is not.',
+        body: 'The app is running, but the service behind it did not answer in time. This is usually brief and fixes itself without anyone doing anything.',
+        primary: 'Try again', secondary: 'Check status',
+        tech: ['upstream: postgres', 'ref 2b74·c519'] },
+
+      { code: '503', name: 'Unavailable', hue: 'green',
+        title: 'Out of service, briefly.',
+        plain: 'Continuum is updating itself.',
+        short: 'A planned update. Back on its own.',
+        body: 'Continuum is updating itself and will be back on its own. Nothing is being lost while it is away — imports and rules pick up exactly where they stopped.',
+        primary: 'Try again', secondary: 'Release notes',
+        tech: ['migrating 0041_add_tenancy', 'started 21:12', 'est. 2 min'] },
+
+      { code: '000', name: 'Offline', hue: 'grey',
+        title: 'You have drifted out of contact.',
+        plain: 'No connection to the server.',
+        short: 'The browser cannot reach the server at all.',
+        body: 'The browser cannot reach your Continuum server at all. It may be off, or you may be on a different network from the machine it runs on.',
+        primary: 'Try again', secondary: 'Connection help',
+        tech: ['host continuum.local:5173', 'last seen 21:09'] }
+    ];
+  }
+
+  // One line per state, revealed by clicking the rings. Written for this product —
+  // temporal in temperament, nothing quoted and nothing owned.
+  static get NOTES() {
+    return {
+      '400': 'The message arrived in the wrong order. Read it backwards and it still does not parse.',
+      '401': 'Names are the first thing you lose and the last thing you get back.',
+      '403': 'Locked from the other side. Someone thought that was the kinder way round.',
+      '404': 'Try the same address on a different Tuesday.',
+      '408': 'Nothing waits forever. Well. Almost nothing.',
+      '429': 'Slow down. You arrive at the same moment either way.',
+      '500': 'Held together with rather more sticky tape than anyone likes to admit.',
+      '502': 'One of them is shouting down a corridor that is not there any more.',
+      '503': 'Back in five minutes. It may be a different five minutes for you.',
+      '000': 'If you are reading this, you are further away than you think.'
+    };
+  }
+
+  // The visual easter egg: clicking the rings redraws them as a scene. Line art only,
+  // one colour, same 340 box — temporal in temperament, nothing owned by anyone.
+  static get MOTIFS() {
+    const ring = (r, o) => ({ d: 'M170,' + (170 - r) + ' A' + r + ',' + r + ' 0 0 1 170,' + (170 + r), w: 4, o: o });
+    const faint = [ring(126, 0.12), ring(154, 0.07)];
+    return {
+      // arcs shuffled out of sequence, and an arrow pointing back the way it came
+      '400': faint.concat([
+        { d: 'M170,110 A60,60 0 0 1 170,230', w: 6, o: 0.9, rot: 18 },
+        { d: 'M170,124 A46,46 0 0 1 170,216', w: 5.4, o: 0.55, rot: 168 },
+        { d: 'M170,138 A32,32 0 0 1 170,202', w: 5, o: 0.35, rot: 292 },
+        { d: 'M198,170 H146', w: 4.4, o: 0.9 },
+        { d: 'M158,160 L146,170 L158,180', w: 4.4, o: 0.9 }
+      ]),
+      // a watch on a chain, hands stopped
+      '401': faint.concat([
+        { d: 'M170,214 m-46,-44 a46,46 0 1,0 92,0 a46,46 0 1,0 -92,0', w: 5.6, o: 0.9 },
+        { d: 'M170,214 m-36,-44 a36,36 0 1,0 72,0 a36,36 0 1,0 -72,0', w: 3.2, o: 0.3 },
+        { d: 'M170,168 v-10', w: 5, o: 0.9 },
+        { d: 'M170,158 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0', w: 4.4, o: 0.9 },
+        { d: 'M164,150 C150,138 152,124 138,116 C126,109 122,98 124,88', w: 3.6, o: 0.5 },
+        { d: 'M170,170 v-26 M170,170 l22,12', w: 4.4, o: 0.9 }
+      ]),
+      // a keyhole, locked from the far side
+      '403': faint.concat([
+        { d: 'M170,170 m-72,0 a72,72 0 1,0 144,0 a72,72 0 1,0 -144,0', w: 4.4, o: 0.28 },
+        { d: 'M170,148 m-18,0 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0', w: 5.6, o: 0.9 },
+        { d: 'M158,162 L148,212 H192 L182,162', w: 5.6, o: 0.9 },
+        { d: 'M212,154 h22', w: 4, o: 0.4 },
+        { d: 'M212,186 h22', w: 4, o: 0.25 }
+      ]),
+      // a door standing on its own, ajar, with nothing behind it
+      '404': faint.concat([
+        { d: 'M126,96 h72 v148 h-72 z', w: 5.2, o: 0.85 },
+        { d: 'M198,110 l26,-12 v128 l-26,-12 z', w: 4.6, o: 0.9 },
+        { d: 'M190,172 h6', w: 5, o: 0.9 },
+        { d: 'M204,252 l34,26 M216,252 l40,18', w: 3.6, o: 0.3 },
+        { d: 'M104,244 h140', w: 3.6, o: 0.22 }
+      ]),
+      // an hourglass, run through
+      '408': faint.concat([
+        { d: 'M132,104 h76 M132,236 h76', w: 5.2, o: 0.9 },
+        { d: 'M140,104 L170,170 L140,236', w: 5.2, o: 0.9 },
+        { d: 'M200,104 L170,170 L200,236', w: 5.2, o: 0.9 },
+        { d: 'M146,236 C150,206 190,206 194,236', w: 4.4, o: 0.55 },
+        { d: 'M170,178 v18', w: 3.6, o: 0.3 }
+      ]),
+      // the same arc arriving three times, out of step
+      '429': [
+        { d: 'M118,110 A60,60 0 0 1 118,230', w: 5.6, o: 0.9 },
+        { d: 'M152,110 A60,60 0 0 1 152,230', w: 5.2, o: 0.45 },
+        { d: 'M186,110 A60,60 0 0 1 186,230', w: 4.8, o: 0.22 },
+        { d: 'M220,110 A60,60 0 0 1 220,230', w: 4.4, o: 0.1 },
+        { d: 'M244,152 h34 M244,170 h48 M244,188 h26', w: 4, o: 0.5 }
+      ],
+      // the inner ring split open, throwing sparks
+      '500': faint.concat([
+        { d: 'M170,104 A66,66 0 0 1 214,132', w: 5.6, o: 0.9 },
+        { d: 'M214,132 l-16,10 l20,10 l-18,12', w: 5, o: 0.9 },
+        { d: 'M212,192 A66,66 0 0 1 170,236', w: 5.6, o: 0.9 },
+        { d: 'M244,150 l20,-12 M250,176 l24,4 M238,124 l12,-20', w: 4, o: 0.55 },
+        { d: 'M170,170 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0', w: 4.4, o: 0.7 }
+      ]),
+      // two links that no longer meet
+      '502': faint.concat([
+        { d: 'M96,146 h44 a24,24 0 0 1 0,48 h-44 a24,24 0 0 1 0,-48 z', w: 5.4, o: 0.9 },
+        { d: 'M244,146 h-42 a24,24 0 0 0 0,48 h42 a24,24 0 0 0 0,-48 z', w: 5.4, o: 0.9 },
+        { d: 'M156,170 h8 M176,170 h8', w: 4.4, o: 0.35 },
+        { d: 'M170,124 v-14 M170,216 v14', w: 3.6, o: 0.25 }
+      ]),
+      // someone is under the floor with a spanner
+      '503': faint.concat([
+        { d: 'M126,224 L206,144', w: 6, o: 0.9 },
+        { d: 'M204,142 a26,26 0 1,0 22,22 l-18,-6 l-10,-10 z', w: 5.4, o: 0.9 },
+        { d: 'M118,232 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0', w: 4.6, o: 0.7 },
+        { d: 'M104,120 h58 M104,144 h34', w: 4, o: 0.3 }
+      ]),
+      // a signal thinning out into distance
+      '000': [
+        { d: 'M120,120 A72,72 0 0 1 120,220', w: 5.4, o: 0.55, dash: '2 12' },
+        { d: 'M150,134 A52,52 0 0 1 150,206', w: 5, o: 0.34, dash: '2 14' },
+        { d: 'M180,146 A34,34 0 0 1 180,194', w: 4.6, o: 0.2, dash: '2 16' },
+        { d: 'M214,170 h14 M244,170 h8 M266,170 h4', w: 4.2, o: 0.4 },
+        { d: 'M290,170 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0', w: 4, o: 0.9 }
+      ]
+    };
+  }
+
+  loadFound() {
+    try {
+      const raw = localStorage.getItem('continuum-error-eggs');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && typeof p === 'object') return p;
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  found() { return this.state.found || this.loadFound(); }
+
+  reveal(code) {
+    const next = Object.assign({}, this.found(), { [code]: true });
+    this.setState({ found: next });
+    try { localStorage.setItem('continuum-error-eggs', JSON.stringify(next)); } catch (e) {}
+  }
+
+  renderVals() {
+    const s = this.state;
+    const plain = this.props.copy === 'plain';
+    const errs = Component.ERRORS;
+    const cur = errs.filter(e => e.code === s.code)[0] || errs[3];
+    const hue = e => e.hue === 'grey' ? 'var(--fg3)' : 'var(--' + e.hue + ')';
+    const tint = e => e.hue === 'grey' ? 'var(--grey-tint)' : 'var(--' + e.hue + '-tint)';
+    const wash = e => e.hue === 'grey' ? 'var(--grey-wash)' : 'var(--' + e.hue + '-wash)';
+    const pick = c => () => this.setState({ code: c, sheet: false, open: false });
+    const eggsOn = this.props.easterEggs !== false;
+    const found = this.found();
+    const n = errs.filter(e => found[e.code]).length;
+
+    const eggFound = eggsOn && !!s.open;
+    const eggLabel = eggsOn
+      ? (s.open ? 'Hide ' + cur.code + ' illustration' : 'Reveal ' + cur.code + ' illustration')
+      : cur.code + ' error logo';
+
+    return {
+      eggsOn: eggsOn,
+      eggFound: eggFound,
+      eggLogo: !eggFound,
+      eggNote: Component.NOTES[cur.code] || '',
+      revealEgg: () => {
+        if (!eggsOn) return;
+        if (!s.open) this.reveal(cur.code);
+        this.setState({ open: !s.open });
+      },
+      eggCursor: eggsOn ? 'pointer' : 'default',
+      eggLabel: eggLabel,
+      showCount: eggsOn && n > 0,
+      countLabel: n + ' of ' + errs.length + ' found',
+
+      isSingle: !s.sheet,
+      isSheet: !!s.sheet,
+      sheetLabel: s.sheet ? 'Single page' : 'All states',
+      toggleSheet: () => this.setState({ sheet: !s.sheet }),
+      showTech: this.props.technical !== false,
+
+      e: {
+        code: cur.code, name: cur.name,
+        title: plain ? cur.plain : cur.title,
+        body: cur.body, primary: cur.primary, secondary: cur.secondary,
+        tech: cur.tech, hue: hue(cur), tint: tint(cur)
+      },
+
+      chips: errs.map(e => ({
+        code: e.code, go: pick(e.code),
+        bg: e.code === s.code ? tint(e) : 'var(--card)',
+        bd: e.code === s.code ? hue(e) : 'var(--bd)',
+        fg: e.code === s.code ? hue(e) : 'var(--fg3)'
+      })),
+
+      sheet: errs.map(e => ({
+        code: e.code, name: e.name, short: e.short,
+        title: plain ? e.plain : e.title,
+        hue: hue(e), wash: wash(e), go: pick(e.code),
+        dot: eggsOn && found[e.code] ? hue(e) : 'transparent'
+      })),
+
+      themeOptions: ['dark', 'light'].map(t => ({
+        label: t === 'dark' ? 'Dark' : 'Light',
+        go: () => this.setTheme(t),
+        bg: s.theme === t ? 'var(--card3)' : 'var(--card)',
+        bd: s.theme === t ? 'var(--bd2)' : 'var(--bd)',
+        fg: s.theme === t ? 'var(--fg1)' : 'var(--fg3)'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

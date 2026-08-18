@@ -1,0 +1,139 @@
+{
+  "id": "statement-046",
+  "archetype": "headerless-ledger",
+  "locale": "en-KW",
+  "currency": "KWD",
+  "accountId": "SYN-0046",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-01-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "camt053",
+    "abo",
+    "ods"
+  ],
+  "openingBalanceMinor": "6404459",
+  "closingBalanceMinor": "6059767",
+  "statedCreditTotalMinor": "137933",
+  "statedDebitTotalMinor": "482625",
+  "statedRowCount": 10,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-01-11",
+      "valueDate": "2026-01-10",
+      "amountMinor": "26588",
+      "currency": "KWD",
+      "balanceAfterMinor": "6431047",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004500",
+      "bankRef": "SIMREF046001",
+      "description": "Refund"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-01-13",
+      "amountMinor": "-88989",
+      "currency": "KWD",
+      "balanceAfterMinor": "6342058",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300004501",
+      "bankRef": "SIMREF046002",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-01-15",
+      "amountMinor": "-67551",
+      "currency": "KWD",
+      "balanceAfterMinor": "6274507",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004502",
+      "bankRef": "SIMREF046003",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-01-17",
+      "valueDate": "2026-01-16",
+      "amountMinor": "86479",
+      "currency": "KWD",
+      "balanceAfterMinor": "6360986",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300004503",
+      "bankRef": "SIMREF046004",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-01-19",
+      "amountMinor": "-8375",
+      "currency": "KWD",
+      "balanceAfterMinor": "6352611",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300004504",
+      "bankRef": "SIMREF046005",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-01-21",
+      "amountMinor": "-70193",
+      "currency": "KWD",
+      "balanceAfterMinor": "6282418",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300004505",
+      "bankRef": "SIMREF046006",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-01-23",
+      "valueDate": "2026-01-22",
+      "amountMinor": "-84082",
+      "currency": "KWD",
+      "balanceAfterMinor": "6198336",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004506",
+      "bankRef": "SIMREF046007",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-01-25",
+      "amountMinor": "24866",
+      "currency": "KWD",
+      "balanceAfterMinor": "6223202",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004507",
+      "bankRef": "SIMREF046008",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-01-02",
+      "amountMinor": "-73708",
+      "currency": "KWD",
+      "balanceAfterMinor": "6149494",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300004508",
+      "bankRef": "SIMREF046009",
+      "description": "Refund"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-01-04",
+      "valueDate": "2026-01-03",
+      "amountMinor": "-89602",
+      "currency": "KWD",
+      "feeMinor": "125",
+      "balanceAfterMinor": "6059767",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004509",
+      "bankRef": "SIMREF046010",
+      "description": "Bank service fee"
+    }
+  ]
+}

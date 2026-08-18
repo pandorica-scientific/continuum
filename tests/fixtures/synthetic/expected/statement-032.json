@@ -1,0 +1,15 @@
+{
+  "id": "statement-032",
+  "archetype": "non-statement",
+  "locale": "en-GB",
+  "currency": "GBP",
+  "accountId": "SYN-0032",
+  "periodStart": "2026-05-01",
+  "periodEnd": "2026-05-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "rows": []
+}

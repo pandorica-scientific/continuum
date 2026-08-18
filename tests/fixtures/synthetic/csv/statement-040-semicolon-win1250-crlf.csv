@@ -1,0 +1,23 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;BRL
+#Numer rachunku;SYN-0040
+#Okres;2026-04-01;2026-04-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;33585,66
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-04-18;2026-04-17;"Account transfer; Summit Cafeteria";475,68;34061,34
+2026-04-20;;"Direct debit; Northstar Market
+synthetic continuation";450,62;34511,96
+2026-04-22;;"Cash withdrawal; Copperline Services";-159,10;34352,86
+2026-04-24;2026-04-23;"Interest payment; Meadow Payroll";-675,06;33677,80
+2026-04-01;;"Bank service fee; Summit Cafeteria";-217,51;33460,29
+2026-04-03;;"Refund; Meadow Payroll";845,52;34305,81
+2026-04-05;2026-04-04;"Salary payment; Orbit Pharmacy";-399,63;33906,18
+2026-04-07;;"Card purchase; Pinecrest Housing";-610,77;33295,41
+2026-04-09;;"Account transfer; Copperline Services";-341,69;32953,72
+2026-04-11;2026-04-10;"Direct debit; Harbour Energy";16,16;32969,88
+2026-04-13;;"Refund; Northstar Market";-344,19;32625,69
+2026-04-15;;"Bank service fee; Juniper Transit";-606,19;32019,50
+;;#Saldo koñcowe;32019,50;

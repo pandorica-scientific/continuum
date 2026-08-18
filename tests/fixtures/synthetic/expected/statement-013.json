@@ -1,0 +1,128 @@
+{
+  "id": "statement-013",
+  "archetype": "metadata-csv",
+  "locale": "nb-NO",
+  "currency": "NOK",
+  "accountId": "SYN-0013",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "mt940",
+    "ofx"
+  ],
+  "openingBalanceMinor": "8299491",
+  "closingBalanceMinor": "8222744",
+  "statedCreditTotalMinor": "99609",
+  "statedDebitTotalMinor": "176356",
+  "statedRowCount": 9,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-04-12",
+      "valueDate": "2026-04-11",
+      "amountMinor": "87508",
+      "currency": "NOK",
+      "balanceAfterMinor": "8386999",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001200",
+      "bankRef": "SIMREF013001",
+      "description": "Refund"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-04-14",
+      "amountMinor": "-67669",
+      "currency": "NOK",
+      "balanceAfterMinor": "8319330",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001201",
+      "bankRef": "SIMREF013002",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-04-16",
+      "amountMinor": "-17994",
+      "currency": "NOK",
+      "balanceAfterMinor": "8301336",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300001202",
+      "bankRef": "SIMREF013003",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-04-18",
+      "valueDate": "2026-04-17",
+      "amountMinor": "-42794",
+      "currency": "NOK",
+      "balanceAfterMinor": "8258542",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001203",
+      "bankRef": "SIMREF013004",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-04-20",
+      "amountMinor": "1979",
+      "currency": "NOK",
+      "balanceAfterMinor": "8260521",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300001204",
+      "bankRef": "SIMREF013005",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-04-22",
+      "amountMinor": "-4485",
+      "currency": "NOK",
+      "balanceAfterMinor": "8256036",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001205",
+      "bankRef": "SIMREF013006",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-04-24",
+      "valueDate": "2026-04-23",
+      "amountMinor": "-24423",
+      "currency": "NOK",
+      "feeMinor": "125",
+      "balanceAfterMinor": "8231488",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001206",
+      "bankRef": "SIMREF013007",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-04-01",
+      "amountMinor": "-18866",
+      "currency": "NOK",
+      "balanceAfterMinor": "8212622",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300001207",
+      "bankRef": "SIMREF013008",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-04-03",
+      "amountMinor": "10122",
+      "currency": "NOK",
+      "balanceAfterMinor": "8222744",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001208",
+      "bankRef": "SIMREF013009",
+      "description": "Refund"
+    }
+  ]
+}

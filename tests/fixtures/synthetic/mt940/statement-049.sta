@@ -1,0 +1,15 @@
+:20:STATEMENT049
+:25:SYN-0049
+:28C:00001/001
+:60F:C260401PLN32993,85
+:61:2604200420C76,06NTRFAccounttrans//SIMREF049001
+:86:Account transfer Orbit Pharmacy
+:61:2604220422D206,94NTRFDirectdebit//SIMREF049002
+:86:Direct debit Pinecrest Housing
+:61:2604240424D783,38NTRFCashwithdraw//SIMREF049003
+:86:Cash withdrawal Juniper Transit
+:61:2604010401D666,68NTRFInterestpaym//SIMREF049004
+:86:Interest payment Harbour Energy
+:61:2604030403C506,74NTRFBankservicef//SIMREF049005
+:86:Bank service fee Vector Mobile
+:62F:C260428PLN31919,65

@@ -1,0 +1,114 @@
+{
+  "id": "statement-004",
+  "archetype": "suffix-direction",
+  "locale": "es-ES",
+  "currency": "EUR",
+  "accountId": "SYN-0004",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "camt053"
+  ],
+  "openingBalanceMinor": "4780176",
+  "closingBalanceMinor": "4642234",
+  "statedCreditTotalMinor": "114997",
+  "statedDebitTotalMinor": "252939",
+  "statedRowCount": 8,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-04-10",
+      "valueDate": "2026-04-09",
+      "amountMinor": "13791",
+      "currency": "EUR",
+      "balanceAfterMinor": "4793967",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300000300",
+      "bankRef": "SIMREF004001",
+      "description": "Refund"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-04-12",
+      "amountMinor": "14373",
+      "currency": "EUR",
+      "balanceAfterMinor": "4808340",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300000301",
+      "bankRef": "SIMREF004002",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-04-14",
+      "amountMinor": "-65900",
+      "currency": "EUR",
+      "balanceAfterMinor": "4742440",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300000302",
+      "bankRef": "SIMREF004003",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-04-16",
+      "valueDate": "2026-04-15",
+      "amountMinor": "-54649",
+      "currency": "EUR",
+      "balanceAfterMinor": "4687791",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300000303",
+      "bankRef": "SIMREF004004",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-04-18",
+      "amountMinor": "-8241",
+      "currency": "EUR",
+      "balanceAfterMinor": "4679550",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300000304",
+      "bankRef": "SIMREF004005",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-04-20",
+      "amountMinor": "86833",
+      "currency": "EUR",
+      "balanceAfterMinor": "4766383",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300000305",
+      "bankRef": "SIMREF004006",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-04-22",
+      "valueDate": "2026-04-21",
+      "amountMinor": "-86094",
+      "currency": "EUR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "4680164",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300000306",
+      "bankRef": "SIMREF004007",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-04-24",
+      "amountMinor": "-37930",
+      "currency": "EUR",
+      "balanceAfterMinor": "4642234",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300000307",
+      "bankRef": "SIMREF004008",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

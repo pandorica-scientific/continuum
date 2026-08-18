@@ -1,0 +1,150 @@
+{
+  "id": "statement-023",
+  "archetype": "foreign-amount",
+  "locale": "en-ZA",
+  "currency": "ZAR",
+  "accountId": "SYN-0023",
+  "periodStart": "2026-05-01",
+  "periodEnd": "2026-05-28",
+  "targetDecision": "reject",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx"
+  ],
+  "openingBalanceMinor": "2649370",
+  "closingBalanceMinor": "2553947",
+  "statedCreditTotalMinor": "316410",
+  "statedDebitTotalMinor": "411833",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-05-17",
+      "valueDate": "2026-05-16",
+      "amountMinor": "74290",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2723660",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300002200",
+      "bankRef": "SIMREF023001",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-05-19",
+      "amountMinor": "-58396",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2665264",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300002201",
+      "bankRef": "SIMREF023002",
+      "description": "Refund",
+      "originalCurrency": "USD",
+      "originalAmountMinor": "175188"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-05-21",
+      "amountMinor": "70581",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2735845",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002202",
+      "bankRef": "SIMREF023003",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-05-23",
+      "valueDate": "2026-05-22",
+      "amountMinor": "-76884",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2658961",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002203",
+      "bankRef": "SIMREF023004",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-05-25",
+      "amountMinor": "-27710",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2631251",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002204",
+      "bankRef": "SIMREF023005",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-05-02",
+      "amountMinor": "-61256",
+      "currency": "ZAR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "2569870",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300002205",
+      "bankRef": "SIMREF023006",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-05-04",
+      "valueDate": "2026-05-03",
+      "amountMinor": "86789",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2656659",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002206",
+      "bankRef": "SIMREF023007",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-05-06",
+      "amountMinor": "-56470",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2600189",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002207",
+      "bankRef": "SIMREF023008",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-05-08",
+      "amountMinor": "-73677",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2526512",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002208",
+      "bankRef": "SIMREF023009",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-05-10",
+      "valueDate": "2026-05-09",
+      "amountMinor": "-57315",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2469197",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002209",
+      "bankRef": "SIMREF023010",
+      "description": "Refund"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-05-12",
+      "amountMinor": "84750",
+      "currency": "ZAR",
+      "balanceAfterMinor": "2553947",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300002210",
+      "bankRef": "SIMREF023011",
+      "description": "Direct debit"
+    }
+  ]
+}

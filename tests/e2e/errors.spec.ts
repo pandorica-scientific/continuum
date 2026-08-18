@@ -43,18 +43,35 @@ test('the address that failed is shown, so it can be quoted', async ({ page }) =
 	await expect(page.getByText('/property/karlin/missing?ref=1')).toBeVisible();
 });
 
-test('the rings hide a line, and it stays found', async ({ page }) => {
+test('the rings hide a drawing and a line, and it stays found', async ({ page }) => {
 	await page.goto('/nothing-here-at-all');
 
-	const rings = page.getByRole('button', { name: 'Something is in the rings' });
+	const rings = page.getByRole('button', { name: 'Reveal 404 illustration' });
 	await expect(rings).toBeVisible();
+	await expect(rings.locator('[data-error-logo]')).toBeVisible();
 	await expect(page.getByText('Try the same address on a different Tuesday.')).toBeHidden();
 
 	await rings.click();
+
+	const revealed = page.getByRole('button', { name: 'Hide 404 illustration' });
+	await expect(revealed.locator('[data-error-artwork]')).toBeVisible();
 	await expect(page.getByText('Try the same address on a different Tuesday.')).toBeVisible();
 
+	// The drawing is a file rather than inline paths, so it has to actually be
+	// served — a mask over a 404 is an empty square, which still "renders".
+	const artwork = revealed.locator('[data-error-artwork] image');
+	await expect(artwork).toHaveAttribute('href', '/error-pages/404.webp');
+	expect(
+		await page.evaluate(async (url) => (await fetch(url)).status, '/error-pages/404.webp')
+	).toBe(200);
+
+	// The drawing takes the colour of the state rather than staying white.
+	const hue = await revealed.evaluate((node) => getComputedStyle(node).color);
+	expect(await artwork.evaluate((node) => getComputedStyle(node).color)).toBe(hue);
+
 	// Clicking again puts the rings back rather than leaving the drawing stuck.
-	await page.getByRole('button', { name: 'Back to the rings' }).click();
+	await revealed.click();
+	await expect(page.getByRole('button', { name: 'Reveal 404 illustration' })).toBeVisible();
 	await expect(page.getByText('Try the same address on a different Tuesday.')).toBeHidden();
 });
 
@@ -66,7 +83,7 @@ test.describe('on a phone', () => {
 	test('the mark sits above the text, not beside or below it', async ({ page }) => {
 		await page.goto('/nothing-here-at-all');
 
-		const mark = await page.getByRole('button', { name: /rings/ }).boundingBox();
+		const mark = await page.getByRole('button', { name: /illustration/ }).boundingBox();
 		const heading = await page.getByRole('heading', { level: 1 }).boundingBox();
 
 		expect(mark!.y + mark!.height).toBeLessThanOrEqual(heading!.y);

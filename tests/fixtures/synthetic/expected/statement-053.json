@@ -1,0 +1,126 @@
+{
+  "id": "statement-053",
+  "archetype": "boxed-multiline",
+  "locale": "fr-FR",
+  "currency": "EUR",
+  "accountId": "SYN-0053",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-28",
+  "targetDecision": "incomplete",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940"
+  ],
+  "openingBalanceMinor": "3095479",
+  "closingBalanceMinor": "2957726",
+  "statedCreditTotalMinor": "71791",
+  "statedDebitTotalMinor": "209544",
+  "statedRowCount": 9,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-08-07",
+      "valueDate": "2026-08-06",
+      "amountMinor": "25392",
+      "currency": "EUR",
+      "balanceAfterMinor": "3120871",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300005200",
+      "bankRef": "SIMREF053001",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-08-09",
+      "amountMinor": "-27556",
+      "currency": "EUR",
+      "balanceAfterMinor": "3093315",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005201",
+      "bankRef": "SIMREF053002",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-08-11",
+      "amountMinor": "-44859",
+      "currency": "EUR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "3048331",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300005202",
+      "bankRef": "SIMREF053003",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-08-13",
+      "valueDate": "2026-08-12",
+      "amountMinor": "-36758",
+      "currency": "EUR",
+      "balanceAfterMinor": "3011573",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300005203",
+      "bankRef": "SIMREF053004",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-08-15",
+      "amountMinor": "40220",
+      "currency": "EUR",
+      "balanceAfterMinor": "3051793",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300005204",
+      "bankRef": "SIMREF053005",
+      "description": "Refund"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-08-17",
+      "amountMinor": "-42877",
+      "currency": "EUR",
+      "balanceAfterMinor": "3008916",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300005205",
+      "bankRef": "SIMREF053006",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-08-19",
+      "valueDate": "2026-08-18",
+      "amountMinor": "-33191",
+      "currency": "EUR",
+      "balanceAfterMinor": "2975725",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300005206",
+      "bankRef": "SIMREF053007",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-08-21",
+      "amountMinor": "-24178",
+      "currency": "EUR",
+      "balanceAfterMinor": "2951547",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300005207",
+      "bankRef": "SIMREF053008",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-08-23",
+      "amountMinor": "6179",
+      "currency": "EUR",
+      "balanceAfterMinor": "2957726",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300005208",
+      "bankRef": "SIMREF053009",
+      "description": "Direct debit"
+    }
+  ]
+}
