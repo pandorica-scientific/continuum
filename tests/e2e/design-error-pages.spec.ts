@@ -12,9 +12,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test.beforeAll(async () => {
 	server = createServer(async (request, response) => {
 		try {
-			const pathname = decodeURIComponent(
-				new URL(request.url ?? '/', 'http://127.0.0.1').pathname
-			);
+			const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://127.0.0.1').pathname);
 			const relativePath =
 				pathname === '/' ? 'Continuum Error Pages.dc.html' : pathname.replace(/^\/+/, '');
 			const filePath = path.resolve(DESIGN_ROOT, relativePath);
@@ -57,7 +55,9 @@ test.afterAll(async () => {
 	});
 });
 
-test('every coloured Continuum logo reveals its matching coloured illustration', async ({ page }) => {
+test('every coloured Continuum logo reveals its matching coloured illustration', async ({
+	page
+}) => {
 	await page.goto(designUrl);
 	const errorCodes = ['400', '401', '403', '404', '408', '429', '500', '502', '503', '000'];
 
@@ -88,9 +88,7 @@ test('every coloured Continuum logo reveals its matching coloured illustration',
 		expect(await page.evaluate(async (url) => (await fetch(url)).status, assetPath)).toBe(200);
 
 		await open.click();
-		await expect(
-			page.getByRole('button', { name: `Reveal ${code} illustration` })
-		).toBeVisible();
+		await expect(page.getByRole('button', { name: `Reveal ${code} illustration` })).toBeVisible();
 	}
 
 	await page.getByRole('button', { name: '404', exact: true }).click();
@@ -110,6 +108,8 @@ test('every coloured Continuum logo reveals its matching coloured illustration',
 	await lightLogo.click();
 	const lightArtwork = page.getByRole('button', { name: 'Hide 404 illustration' });
 	expect(
-		await lightArtwork.locator('[data-error-artwork]').evaluate((node) => getComputedStyle(node).color)
+		await lightArtwork
+			.locator('[data-error-artwork]')
+			.evaluate((node) => getComputedStyle(node).color)
 	).toBe(lightHue);
 });
