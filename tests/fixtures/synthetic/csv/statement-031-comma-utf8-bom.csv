@@ -1,0 +1,19 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,EUR
+#Numer rachunku,SYN-0031
+#Okres,2026-04-01,2026-04-28
+#Saldo początkowe,29111,55
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-04-16,2026-04-15,Direct debit; Lantern Books,614,13,29725,68
+2026-04-18,,Account transfer; Vector Mobile,-53,63,29672,05
+2026-04-20,,Interest payment; Lantern Books,183,86,29855,91
+2026-04-22,2026-04-21,Cash withdrawal; Summit Cafeteria,-300,56,29555,35
+2026-04-24,,Refund; Northstar Market,-707,50,28847,85
+2026-04-01,,Bank service fee; Orbit Pharmacy,-23,92,28823,93
+2026-04-03,2026-04-02,Card purchase; Northstar Market,159,31,28983,24
+2026-04-05,,Salary payment; Summit Cafeteria,-100,92,28882,32
+2026-04-07,,Direct debit; Lantern Books,-484,12,28398,20
+2026-04-09,2026-04-08,Account transfer; Copperline Services,-684,84,27713,36
+2026-04-11,,Cash withdrawal; Vector Mobile,147,39,27860,75
+,,#Saldo końcowe,27860,75,

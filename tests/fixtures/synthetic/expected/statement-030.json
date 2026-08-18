@@ -1,0 +1,135 @@
+{
+  "id": "statement-030",
+  "archetype": "headerless-ledger",
+  "locale": "it-IT",
+  "currency": "EUR",
+  "accountId": "SYN-0030",
+  "periodStart": "2026-03-01",
+  "periodEnd": "2026-03-28",
+  "targetDecision": "unsupported",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "3362330",
+  "closingBalanceMinor": "3225017",
+  "statedCreditTotalMinor": "162881",
+  "statedDebitTotalMinor": "300194",
+  "statedRowCount": 10,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-03-13",
+      "valueDate": "2026-03-12",
+      "amountMinor": "42518",
+      "currency": "EUR",
+      "balanceAfterMinor": "3404848",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002900",
+      "bankRef": "SIMREF030001",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-03-15",
+      "amountMinor": "-49457",
+      "currency": "EUR",
+      "balanceAfterMinor": "3355391",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002901",
+      "bankRef": "SIMREF030002",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-03-17",
+      "amountMinor": "-32966",
+      "currency": "EUR",
+      "balanceAfterMinor": "3322425",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300002902",
+      "bankRef": "SIMREF030003",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-03-19",
+      "valueDate": "2026-03-18",
+      "amountMinor": "87022",
+      "currency": "EUR",
+      "balanceAfterMinor": "3409447",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002903",
+      "bankRef": "SIMREF030004",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-03-21",
+      "amountMinor": "-4651",
+      "currency": "EUR",
+      "balanceAfterMinor": "3404796",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002904",
+      "bankRef": "SIMREF030005",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-03-23",
+      "amountMinor": "-44068",
+      "currency": "EUR",
+      "balanceAfterMinor": "3360728",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002905",
+      "bankRef": "SIMREF030006",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-03-25",
+      "valueDate": "2026-03-24",
+      "amountMinor": "-76823",
+      "currency": "EUR",
+      "balanceAfterMinor": "3283905",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300002906",
+      "bankRef": "SIMREF030007",
+      "description": "Refund"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-03-02",
+      "amountMinor": "33341",
+      "currency": "EUR",
+      "balanceAfterMinor": "3317246",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002907",
+      "bankRef": "SIMREF030008",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-03-04",
+      "amountMinor": "-28684",
+      "currency": "EUR",
+      "balanceAfterMinor": "3288562",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002908",
+      "bankRef": "SIMREF030009",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-03-06",
+      "valueDate": "2026-03-05",
+      "amountMinor": "-63545",
+      "currency": "EUR",
+      "balanceAfterMinor": "3225017",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300002909",
+      "bankRef": "SIMREF030010",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

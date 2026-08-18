@@ -1,0 +1,21 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;DKK
+#Numer rachunku;SYN-0038
+#Okres;2026-02-01;2026-02-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;47888.12
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-02-12;2026-02-11;"Cash withdrawal; Summit Cafeteria";345.05;48233.17
+2026-02-14;;"Interest payment; Lantern Books
+synthetic continuation";-143.29;48089.88
+2026-02-16;;"Account transfer; Copperline Services";-231.75;47858.13
+2026-02-18;2026-02-17;"Direct debit; Pinecrest Housing";415.96;48274.09
+2026-02-20;;"Salary payment; Summit Cafeteria";-374.22;47899.87
+2026-02-22;;"Card purchase; Meadow Payroll";-258.31;47641.56
+2026-02-24;2026-02-23;"Bank service fee; Copperline Services";-419.71;47221.85
+2026-02-01;;"Refund; Northstar Market";518.21;47740.06
+2026-02-03;;"Cash withdrawal; Orbit Pharmacy";-293.38;47446.68
+2026-02-05;2026-02-04;"Interest payment; Lantern Books";-730.24;46716.44
+;;#Saldo koñcowe;46716.44;

@@ -1,0 +1,152 @@
+{
+  "id": "statement-007",
+  "archetype": "foreign-amount",
+  "locale": "nl-NL",
+  "currency": "EUR",
+  "accountId": "SYN-0007",
+  "periodStart": "2026-07-01",
+  "periodEnd": "2026-07-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "ofx"
+  ],
+  "openingBalanceMinor": "7681115",
+  "closingBalanceMinor": "7548933",
+  "statedCreditTotalMinor": "141443",
+  "statedDebitTotalMinor": "273625",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-07-19",
+      "valueDate": "2026-07-18",
+      "amountMinor": "50668",
+      "currency": "EUR",
+      "balanceAfterMinor": "7731783",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300000600",
+      "bankRef": "SIMREF007001",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-07-21",
+      "amountMinor": "-74262",
+      "currency": "EUR",
+      "balanceAfterMinor": "7657521",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300000601",
+      "bankRef": "SIMREF007002",
+      "description": "Direct debit",
+      "originalCurrency": "USD",
+      "originalAmountMinor": "222786"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-07-23",
+      "amountMinor": "13416",
+      "currency": "EUR",
+      "balanceAfterMinor": "7670937",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300000602",
+      "bankRef": "SIMREF007003",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-07-25",
+      "valueDate": "2026-07-24",
+      "amountMinor": "-14219",
+      "currency": "EUR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "7656593",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300000603",
+      "bankRef": "SIMREF007004",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-07-02",
+      "amountMinor": "-14975",
+      "currency": "EUR",
+      "balanceAfterMinor": "7641618",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300000604",
+      "bankRef": "SIMREF007005",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-07-04",
+      "amountMinor": "-52408",
+      "currency": "EUR",
+      "balanceAfterMinor": "7589210",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300000605",
+      "bankRef": "SIMREF007006",
+      "description": "Refund"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-07-06",
+      "valueDate": "2026-07-05",
+      "amountMinor": "66954",
+      "currency": "EUR",
+      "balanceAfterMinor": "7656164",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300000606",
+      "bankRef": "SIMREF007007",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-07-08",
+      "amountMinor": "-66502",
+      "currency": "EUR",
+      "balanceAfterMinor": "7589662",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300000607",
+      "bankRef": "SIMREF007008",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-07-10",
+      "amountMinor": "-17976",
+      "currency": "EUR",
+      "balanceAfterMinor": "7571686",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300000608",
+      "bankRef": "SIMREF007009",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-07-12",
+      "valueDate": "2026-07-11",
+      "amountMinor": "-33158",
+      "currency": "EUR",
+      "balanceAfterMinor": "7538528",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300000609",
+      "bankRef": "SIMREF007010",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-07-14",
+      "amountMinor": "10405",
+      "currency": "EUR",
+      "balanceAfterMinor": "7548933",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300000610",
+      "bankRef": "SIMREF007011",
+      "description": "Refund"
+    }
+  ]
+}

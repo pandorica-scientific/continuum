@@ -1,0 +1,14 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,JPY
+#Numer rachunku,SYN-0018
+#Okres,2026-09-01,2026-09-28
+#Saldo początkowe,5577139
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-09-02,2026-09-01,Account transfer; Copperline Services,7514,5584653
+2026-09-04,,Direct debit; Northstar Market,-65783,5518870
+2026-09-06,,Cash withdrawal; Juniper Transit,-88439,5430431
+2026-09-08,2026-09-07,Interest payment; Northstar Market,39155,5469586
+2026-09-10,,Bank service fee; Vector Mobile,-40253,5429333
+2026-09-12,,Refund; Lantern Books,-5796,5423537
+,,#Saldo końcowe,5423537,

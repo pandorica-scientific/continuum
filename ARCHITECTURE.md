@@ -244,7 +244,9 @@ active. Everything downstream — the session cookie, `validateSession`,
   column on `person`, saved on discrete gestures and re-validated server-side
 - `src/lib/errors/` — what each error screen says, as data. `states.ts` maps a
   status to a screen and falls back by class, so a status nobody wrote a page
-  for still renders something a person can act on; `motifs.ts` is the line art.
+  for still renders something a person can act on; `artwork.ts` points each one
+  at its drawing in `static/error-pages/`, used as a luminance mask over the
+  state's own colour so one file serves both themes.
   One `+error.svelte` at the route root catches everything, including failures
   in a layout's own load, which cannot be rendered inside that layout.
   `handleError` in `hooks.server.ts` is the boundary between the two: the stack

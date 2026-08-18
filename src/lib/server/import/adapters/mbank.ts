@@ -25,7 +25,18 @@ export function parseMbank(text: string): ParsedStatement {
 	let headerIndex = -1;
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
-		if (line.startsWith('#Waluta')) currency = lines[i + 1]?.split(';')[0]?.trim() || currency;
+		if (line.startsWith('#Waluta')) {
+			// mBank prints the label on one line and the value on the next, but a
+			// same-line `#Waluta;PLN` is just as common elsewhere. Either way the
+			// value has to LOOK like a currency: this used to take whatever came
+			// next verbatim, and a file whose next line was another label imported
+			// with a currency of "#Numer rachunku" — a column heading, filed as
+			// the denomination of someone's money.
+			const candidate = [lines[i + 1]?.split(';')[0], line.split(/[;,]/)[1]]
+				.map((value) => value?.trim().toUpperCase())
+				.find((value) => value && /^[A-Z]{3}$/.test(value));
+			if (candidate) currency = candidate;
+		}
 		if (line.startsWith('#Numer rachunku'))
 			accountNumber = lines[i + 1]?.split(';')[0]?.trim() || undefined;
 		if (line.startsWith('#Za okres:')) {

@@ -1,0 +1,148 @@
+{
+  "id": "statement-047",
+  "archetype": "multi-sheet-workbook",
+  "locale": "en-ZA",
+  "currency": "ZAR",
+  "accountId": "SYN-0047",
+  "periodStart": "2026-02-01",
+  "periodEnd": "2026-02-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx"
+  ],
+  "openingBalanceMinor": "6458810",
+  "closingBalanceMinor": "6306965",
+  "statedCreditTotalMinor": "144316",
+  "statedDebitTotalMinor": "296161",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-02-14",
+      "valueDate": "2026-02-13",
+      "amountMinor": "38019",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6496829",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004600",
+      "bankRef": "SIMREF047001",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-02-16",
+      "amountMinor": "-74042",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6422787",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300004601",
+      "bankRef": "SIMREF047002",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-02-18",
+      "amountMinor": "75584",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6498371",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004602",
+      "bankRef": "SIMREF047003",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-02-20",
+      "valueDate": "2026-02-19",
+      "amountMinor": "-21528",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6476843",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004603",
+      "bankRef": "SIMREF047004",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-02-22",
+      "amountMinor": "-32630",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6444213",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004604",
+      "bankRef": "SIMREF047005",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-02-24",
+      "amountMinor": "-36175",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6408038",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300004605",
+      "bankRef": "SIMREF047006",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-02-01",
+      "valueDate": "2026-02-01",
+      "amountMinor": "21903",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6429941",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300004606",
+      "bankRef": "SIMREF047007",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-02-03",
+      "amountMinor": "-19346",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6410595",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300004607",
+      "bankRef": "SIMREF047008",
+      "description": "Refund"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-02-05",
+      "amountMinor": "-52107",
+      "currency": "ZAR",
+      "feeMinor": "125",
+      "balanceAfterMinor": "6358363",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004608",
+      "bankRef": "SIMREF047009",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-02-07",
+      "valueDate": "2026-02-06",
+      "amountMinor": "-60208",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6298155",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300004609",
+      "bankRef": "SIMREF047010",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-02-09",
+      "amountMinor": "8810",
+      "currency": "ZAR",
+      "balanceAfterMinor": "6306965",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004610",
+      "bankRef": "SIMREF047011",
+      "description": "Interest payment"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;USD
+#Numer rachunku;SYN-0009
+#Okres;2026-09-01;2026-09-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;66285.22
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-09-25;2026-09-24;"Cash withdrawal; Summit Cafeteria";509.47;66794.69
+2026-09-02;;"Interest payment; Lantern Books
+synthetic continuation";-889.34;65905.35
+2026-09-04;;"Account transfer; Vector Mobile";-51.05;65854.30
+2026-09-06;2026-09-05;"Direct debit; Lantern Books";-150.69;65703.61
+2026-09-08;;"Salary payment; Orbit Pharmacy";407.24;66110.85
+;;#Saldo koñcowe;66110.85;

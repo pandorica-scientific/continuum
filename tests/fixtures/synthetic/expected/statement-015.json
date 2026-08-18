@@ -1,0 +1,148 @@
+{
+  "id": "statement-015",
+  "archetype": "multi-sheet-workbook",
+  "locale": "de-CH",
+  "currency": "CHF",
+  "accountId": "SYN-0015",
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-28",
+  "targetDecision": "review",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx"
+  ],
+  "openingBalanceMinor": "6473467",
+  "closingBalanceMinor": "6201401",
+  "statedCreditTotalMinor": "113178",
+  "statedDebitTotalMinor": "385244",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-06-18",
+      "valueDate": "2026-06-17",
+      "amountMinor": "61321",
+      "currency": "CHF",
+      "balanceAfterMinor": "6534788",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300001400",
+      "bankRef": "SIMREF015001",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-06-20",
+      "amountMinor": "-68740",
+      "currency": "CHF",
+      "balanceAfterMinor": "6466048",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300001401",
+      "bankRef": "SIMREF015002",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-06-22",
+      "amountMinor": "24197",
+      "currency": "CHF",
+      "balanceAfterMinor": "6490245",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300001402",
+      "bankRef": "SIMREF015003",
+      "description": "Refund"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-06-24",
+      "valueDate": "2026-06-23",
+      "amountMinor": "-76774",
+      "currency": "CHF",
+      "balanceAfterMinor": "6413471",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300001403",
+      "bankRef": "SIMREF015004",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-06-01",
+      "amountMinor": "-78893",
+      "currency": "CHF",
+      "feeMinor": "125",
+      "balanceAfterMinor": "6334453",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001404",
+      "bankRef": "SIMREF015005",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-06-03",
+      "amountMinor": "-63359",
+      "currency": "CHF",
+      "balanceAfterMinor": "6271094",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001405",
+      "bankRef": "SIMREF015006",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-06-05",
+      "valueDate": "2026-06-04",
+      "amountMinor": "17159",
+      "currency": "CHF",
+      "balanceAfterMinor": "6288253",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001406",
+      "bankRef": "SIMREF015007",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-06-07",
+      "amountMinor": "-71215",
+      "currency": "CHF",
+      "balanceAfterMinor": "6217038",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001407",
+      "bankRef": "SIMREF015008",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-06-09",
+      "amountMinor": "-4217",
+      "currency": "CHF",
+      "balanceAfterMinor": "6212821",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001408",
+      "bankRef": "SIMREF015009",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-06-11",
+      "valueDate": "2026-06-10",
+      "amountMinor": "-21921",
+      "currency": "CHF",
+      "balanceAfterMinor": "6190900",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300001409",
+      "bankRef": "SIMREF015010",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-06-13",
+      "amountMinor": "10501",
+      "currency": "CHF",
+      "balanceAfterMinor": "6201401",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300001410",
+      "bankRef": "SIMREF015011",
+      "description": "Bank service fee"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "id": "statement-049",
+  "archetype": "dense-ruled",
+  "locale": "pl-PL",
+  "currency": "PLN",
+  "accountId": "SYN-0049",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "mt940",
+    "ofx",
+    "qif"
+  ],
+  "openingBalanceMinor": "3299385",
+  "closingBalanceMinor": "3191965",
+  "statedCreditTotalMinor": "58280",
+  "statedDebitTotalMinor": "165700",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-04-20",
+      "valueDate": "2026-04-19",
+      "amountMinor": "7606",
+      "currency": "PLN",
+      "balanceAfterMinor": "3306991",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300004800",
+      "bankRef": "SIMREF049001",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-04-22",
+      "amountMinor": "-20694",
+      "currency": "PLN",
+      "balanceAfterMinor": "3286297",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004801",
+      "bankRef": "SIMREF049002",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-04-24",
+      "amountMinor": "-78338",
+      "currency": "PLN",
+      "balanceAfterMinor": "3207959",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300004802",
+      "bankRef": "SIMREF049003",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-04-01",
+      "valueDate": "2026-04-01",
+      "amountMinor": "-66668",
+      "currency": "PLN",
+      "balanceAfterMinor": "3141291",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004803",
+      "bankRef": "SIMREF049004",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-04-03",
+      "amountMinor": "50674",
+      "currency": "PLN",
+      "balanceAfterMinor": "3191965",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004804",
+      "bankRef": "SIMREF049005",
+      "description": "Bank service fee"
+    }
+  ]
+}

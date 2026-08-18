@@ -1,0 +1,113 @@
+{
+  "id": "statement-060",
+  "archetype": "furniture-pages",
+  "locale": "sv-SE",
+  "currency": "SEK",
+  "accountId": "SYN-0060",
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "1421028",
+  "closingBalanceMinor": "1317702",
+  "statedCreditTotalMinor": "160554",
+  "statedDebitTotalMinor": "263880",
+  "statedRowCount": 8,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-06-03",
+      "valueDate": "2026-06-02",
+      "amountMinor": "71467",
+      "currency": "SEK",
+      "balanceAfterMinor": "1492495",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300005900",
+      "bankRef": "SIMREF060001",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-06-05",
+      "amountMinor": "77770",
+      "currency": "SEK",
+      "balanceAfterMinor": "1570265",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300005901",
+      "bankRef": "SIMREF060002",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-06-07",
+      "amountMinor": "-75176",
+      "currency": "SEK",
+      "balanceAfterMinor": "1495089",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005902",
+      "bankRef": "SIMREF060003",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-06-09",
+      "valueDate": "2026-06-08",
+      "amountMinor": "-59282",
+      "currency": "SEK",
+      "balanceAfterMinor": "1435807",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300005903",
+      "bankRef": "SIMREF060004",
+      "description": "Refund"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-06-11",
+      "amountMinor": "-41636",
+      "currency": "SEK",
+      "feeMinor": "125",
+      "balanceAfterMinor": "1394046",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300005904",
+      "bankRef": "SIMREF060005",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-06-13",
+      "amountMinor": "11317",
+      "currency": "SEK",
+      "balanceAfterMinor": "1405363",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300005905",
+      "bankRef": "SIMREF060006",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-06-15",
+      "valueDate": "2026-06-14",
+      "amountMinor": "-71558",
+      "currency": "SEK",
+      "balanceAfterMinor": "1333805",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300005906",
+      "bankRef": "SIMREF060007",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-06-17",
+      "amountMinor": "-16103",
+      "currency": "SEK",
+      "balanceAfterMinor": "1317702",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300005907",
+      "bankRef": "SIMREF060008",
+      "description": "Direct debit"
+    }
+  ]
+}

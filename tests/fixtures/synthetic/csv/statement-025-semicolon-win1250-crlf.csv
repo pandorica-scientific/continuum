@@ -1,0 +1,16 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;PLN
+#Numer rachunku;SYN-0025
+#Okres;2026-07-01;2026-07-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;7026,53
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-07-23;2026-07-22;"Salary payment; Juniper Transit";463,84;7490,37
+2026-07-25;;"Card purchase; Lantern Books
+synthetic continuation";-825,72;6664,65
+2026-07-02;;"Bank service fee; Summit Cafeteria";-418,18;6246,47
+2026-07-04;2026-07-03;"Refund; Harbour Energy";-862,36;5384,11
+2026-07-06;;"Cash withdrawal; Copperline Services";164,28;5548,39
+;;#Saldo koñcowe;5548,39;

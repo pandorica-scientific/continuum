@@ -1,0 +1,84 @@
+{
+  "id": "statement-025",
+  "archetype": "competing-tables",
+  "locale": "pl-PL",
+  "currency": "PLN",
+  "accountId": "SYN-0025",
+  "periodStart": "2026-07-01",
+  "periodEnd": "2026-07-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "mt940",
+    "ofx",
+    "qif"
+  ],
+  "openingBalanceMinor": "702653",
+  "closingBalanceMinor": "554839",
+  "statedCreditTotalMinor": "62812",
+  "statedDebitTotalMinor": "210626",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-07-23",
+      "valueDate": "2026-07-22",
+      "amountMinor": "46384",
+      "currency": "PLN",
+      "balanceAfterMinor": "749037",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002400",
+      "bankRef": "SIMREF025001",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-07-25",
+      "amountMinor": "-82572",
+      "currency": "PLN",
+      "balanceAfterMinor": "666465",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300002401",
+      "bankRef": "SIMREF025002",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-07-02",
+      "amountMinor": "-41818",
+      "currency": "PLN",
+      "balanceAfterMinor": "624647",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002402",
+      "bankRef": "SIMREF025003",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-07-04",
+      "valueDate": "2026-07-03",
+      "amountMinor": "-86111",
+      "currency": "PLN",
+      "feeMinor": "125",
+      "balanceAfterMinor": "538411",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300002403",
+      "bankRef": "SIMREF025004",
+      "description": "Refund"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-07-06",
+      "amountMinor": "16428",
+      "currency": "PLN",
+      "balanceAfterMinor": "554839",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002404",
+      "bankRef": "SIMREF025005",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

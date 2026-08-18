@@ -1,0 +1,128 @@
+{
+  "id": "statement-037",
+  "archetype": "boxed-multiline",
+  "locale": "nb-NO",
+  "currency": "NOK",
+  "accountId": "SYN-0037",
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-01-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "mt940",
+    "ofx",
+    "ods"
+  ],
+  "openingBalanceMinor": "1657620",
+  "closingBalanceMinor": "1552289",
+  "statedCreditTotalMinor": "178794",
+  "statedDebitTotalMinor": "284125",
+  "statedRowCount": 9,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-01-09",
+      "valueDate": "2026-01-08",
+      "amountMinor": "69128",
+      "currency": "NOK",
+      "balanceAfterMinor": "1726748",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003600",
+      "bankRef": "SIMREF037001",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-01-11",
+      "amountMinor": "-75450",
+      "currency": "NOK",
+      "balanceAfterMinor": "1651298",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300003601",
+      "bankRef": "SIMREF037002",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-01-13",
+      "amountMinor": "-52669",
+      "currency": "NOK",
+      "balanceAfterMinor": "1598629",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300003602",
+      "bankRef": "SIMREF037003",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-01-15",
+      "valueDate": "2026-01-14",
+      "amountMinor": "-37487",
+      "currency": "NOK",
+      "balanceAfterMinor": "1561142",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300003603",
+      "bankRef": "SIMREF037004",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-01-17",
+      "amountMinor": "75936",
+      "currency": "NOK",
+      "balanceAfterMinor": "1637078",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300003604",
+      "bankRef": "SIMREF037005",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-01-19",
+      "amountMinor": "-9447",
+      "currency": "NOK",
+      "balanceAfterMinor": "1627631",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300003605",
+      "bankRef": "SIMREF037006",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-01-21",
+      "valueDate": "2026-01-20",
+      "amountMinor": "-81808",
+      "currency": "NOK",
+      "balanceAfterMinor": "1545823",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300003606",
+      "bankRef": "SIMREF037007",
+      "description": "Refund"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-01-23",
+      "amountMinor": "-27264",
+      "currency": "NOK",
+      "balanceAfterMinor": "1518559",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300003607",
+      "bankRef": "SIMREF037008",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-01-25",
+      "amountMinor": "33730",
+      "currency": "NOK",
+      "balanceAfterMinor": "1552289",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300003608",
+      "bankRef": "SIMREF037009",
+      "description": "Interest payment"
+    }
+  ]
+}

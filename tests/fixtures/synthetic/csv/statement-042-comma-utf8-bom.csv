@@ -1,0 +1,14 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,JPY
+#Numer rachunku,SYN-0042
+#Okres,2026-06-01,2026-06-28
+#Saldo początkowe,4388247
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-06-24,2026-06-23,Direct debit; Meadow Payroll,88339,4476586
+2026-06-01,,Account transfer; Vector Mobile,-30195,4446391
+2026-06-03,,Interest payment; Harbour Energy,-61836,4384555
+2026-06-05,2026-06-04,Cash withdrawal; Juniper Transit,45950,4430505
+2026-06-07,,Refund; Pinecrest Housing,-21544,4408961
+2026-06-09,,Bank service fee; Copperline Services,-46689,4362272
+,,#Saldo końcowe,4362272,

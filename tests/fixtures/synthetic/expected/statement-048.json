@@ -1,0 +1,15 @@
+{
+  "id": "statement-048",
+  "archetype": "non-statement",
+  "locale": "tr-TR",
+  "currency": "TRY",
+  "accountId": "SYN-0048",
+  "periodStart": "2026-03-01",
+  "periodEnd": "2026-03-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "rows": []
+}

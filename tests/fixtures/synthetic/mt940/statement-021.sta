@@ -1,0 +1,23 @@
+:20:STATEMENT021
+:25:SYN-0021
+:28C:00001/001
+:60F:C260301AED9845,04
+:61:2603110311C311,99NTRFCashwithdraw//SIMREF021001
+:86:Cash withdrawal Copperline Services
+:61:2603130313D320,02NTRFInterestpaym//SIMREF021002
+:86:Interest payment Northstar Market
+:61:2603150315D684,51NTRFAccounttrans//SIMREF021003
+:86:Account transfer Copperline Services
+:61:2603170317D30,44NTRFDirectdebit//SIMREF021004
+:86:Direct debit Northstar Market
+:61:2603190319C847,37NTRFSalarypaymen//SIMREF021005
+:86:Salary payment Juniper Transit
+:61:2603210321D842,85NTRFCardpurchase//SIMREF021006
+:86:Card purchase Lantern Books
+:61:2603230323D327,58NTRFBankservicef//SIMREF021007
+:86:Bank service fee Copperline Services
+:61:2603250325D273,54NTRFRefund//SIMREF021008
+:86:Refund Pinecrest Housing
+:61:2603020302C737,22NTRFCashwithdraw//SIMREF021009
+:86:Cash withdrawal Orbit Pharmacy
+:62F:C260328AED9262,68

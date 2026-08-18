@@ -1,0 +1,151 @@
+{
+  "id": "statement-031",
+  "archetype": "multi-sheet-workbook",
+  "locale": "nl-NL",
+  "currency": "EUR",
+  "accountId": "SYN-0031",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "camt053",
+    "abo",
+    "ofx",
+    "tsv"
+  ],
+  "openingBalanceMinor": "2911155",
+  "closingBalanceMinor": "2786075",
+  "statedCreditTotalMinor": "110469",
+  "statedDebitTotalMinor": "235549",
+  "statedRowCount": 11,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-04-16",
+      "valueDate": "2026-04-15",
+      "amountMinor": "61413",
+      "currency": "EUR",
+      "balanceAfterMinor": "2972568",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003000",
+      "bankRef": "SIMREF031001",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-04-18",
+      "amountMinor": "-5363",
+      "currency": "EUR",
+      "balanceAfterMinor": "2967205",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300003001",
+      "bankRef": "SIMREF031002",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-04-20",
+      "amountMinor": "18386",
+      "currency": "EUR",
+      "balanceAfterMinor": "2985591",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003002",
+      "bankRef": "SIMREF031003",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-04-22",
+      "valueDate": "2026-04-21",
+      "amountMinor": "-30056",
+      "currency": "EUR",
+      "balanceAfterMinor": "2955535",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300003003",
+      "bankRef": "SIMREF031004",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-04-24",
+      "amountMinor": "-70750",
+      "currency": "EUR",
+      "balanceAfterMinor": "2884785",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300003004",
+      "bankRef": "SIMREF031005",
+      "description": "Refund"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-04-01",
+      "amountMinor": "-2392",
+      "currency": "EUR",
+      "balanceAfterMinor": "2882393",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300003005",
+      "bankRef": "SIMREF031006",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-04-03",
+      "valueDate": "2026-04-02",
+      "amountMinor": "15931",
+      "currency": "EUR",
+      "balanceAfterMinor": "2898324",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300003006",
+      "bankRef": "SIMREF031007",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-04-05",
+      "amountMinor": "-10092",
+      "currency": "EUR",
+      "balanceAfterMinor": "2888232",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300003007",
+      "bankRef": "SIMREF031008",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-04-07",
+      "amountMinor": "-48412",
+      "currency": "EUR",
+      "balanceAfterMinor": "2839820",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003008",
+      "bankRef": "SIMREF031009",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-04-09",
+      "valueDate": "2026-04-08",
+      "amountMinor": "-68484",
+      "currency": "EUR",
+      "balanceAfterMinor": "2771336",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300003009",
+      "bankRef": "SIMREF031010",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-04-11",
+      "amountMinor": "14739",
+      "currency": "EUR",
+      "balanceAfterMinor": "2786075",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300003010",
+      "bankRef": "SIMREF031011",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

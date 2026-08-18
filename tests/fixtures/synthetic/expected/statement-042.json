@@ -1,0 +1,90 @@
+{
+  "id": "statement-042",
+  "archetype": "continued-pages",
+  "locale": "ja-JP",
+  "currency": "JPY",
+  "accountId": "SYN-0042",
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "4388247",
+  "closingBalanceMinor": "4362272",
+  "statedCreditTotalMinor": "134289",
+  "statedDebitTotalMinor": "160264",
+  "statedRowCount": 6,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-06-24",
+      "valueDate": "2026-06-23",
+      "amountMinor": "88339",
+      "currency": "JPY",
+      "balanceAfterMinor": "4476586",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300004100",
+      "bankRef": "SIMREF042001",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-06-01",
+      "amountMinor": "-30195",
+      "currency": "JPY",
+      "balanceAfterMinor": "4446391",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004101",
+      "bankRef": "SIMREF042002",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-06-03",
+      "amountMinor": "-61836",
+      "currency": "JPY",
+      "balanceAfterMinor": "4384555",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004102",
+      "bankRef": "SIMREF042003",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-06-05",
+      "valueDate": "2026-06-04",
+      "amountMinor": "45950",
+      "currency": "JPY",
+      "balanceAfterMinor": "4430505",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300004103",
+      "bankRef": "SIMREF042004",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-06-07",
+      "amountMinor": "-21419",
+      "currency": "JPY",
+      "feeMinor": "125",
+      "balanceAfterMinor": "4408961",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004104",
+      "bankRef": "SIMREF042005",
+      "description": "Refund"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-06-09",
+      "amountMinor": "-46689",
+      "currency": "JPY",
+      "balanceAfterMinor": "4362272",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300004105",
+      "bankRef": "SIMREF042006",
+      "description": "Bank service fee"
+    }
+  ]
+}

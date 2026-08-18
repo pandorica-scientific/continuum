@@ -1,0 +1,17 @@
+{
+  "id": "statement-016",
+  "archetype": "non-statement",
+  "locale": "pt-BR",
+  "currency": "BRL",
+  "accountId": "SYN-0016",
+  "periodStart": "2026-07-01",
+  "periodEnd": "2026-07-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "camt053",
+    "abo"
+  ],
+  "rows": []
+}

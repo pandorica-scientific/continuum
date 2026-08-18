@@ -1,0 +1,19 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;SGD
+#Numer rachunku;SYN-0020
+#Okres;2026-02-01;2026-02-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;63898.83
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-02-08;2026-02-07;"Cash withdrawal; Orbit Pharmacy";168.28;64067.11
+2026-02-10;;"Interest payment; Meadow Payroll
+synthetic continuation";760.44;64827.55
+2026-02-12;;"Account transfer; Copperline Services";-621.55;64206.00
+2026-02-14;2026-02-13;"Direct debit; Lantern Books";-893.38;63312.62
+2026-02-16;;"Salary payment; Copperline Services";-784.41;62528.21
+2026-02-18;;"Card purchase; Harbour Energy";595.13;63123.34
+2026-02-20;2026-02-19;"Bank service fee; Summit Cafeteria";-809.51;62313.83
+2026-02-22;;"Refund; Pinecrest Housing";-185.50;62128.33
+;;#Saldo koñcowe;62128.33;

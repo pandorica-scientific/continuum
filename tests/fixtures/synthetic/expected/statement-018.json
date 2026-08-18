@@ -1,0 +1,90 @@
+{
+  "id": "statement-018",
+  "archetype": "sparse-right-aligned",
+  "locale": "ja-JP",
+  "currency": "JPY",
+  "accountId": "SYN-0018",
+  "periodStart": "2026-09-01",
+  "periodEnd": "2026-09-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "5577139",
+  "closingBalanceMinor": "5423537",
+  "statedCreditTotalMinor": "46669",
+  "statedDebitTotalMinor": "200271",
+  "statedRowCount": 6,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-09-02",
+      "valueDate": "2026-09-01",
+      "amountMinor": "7514",
+      "currency": "JPY",
+      "balanceAfterMinor": "5584653",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300001700",
+      "bankRef": "SIMREF018001",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-09-04",
+      "amountMinor": "-65658",
+      "currency": "JPY",
+      "feeMinor": "125",
+      "balanceAfterMinor": "5518870",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300001701",
+      "bankRef": "SIMREF018002",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-09-06",
+      "amountMinor": "-88439",
+      "currency": "JPY",
+      "balanceAfterMinor": "5430431",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300001702",
+      "bankRef": "SIMREF018003",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-09-08",
+      "valueDate": "2026-09-07",
+      "amountMinor": "39155",
+      "currency": "JPY",
+      "balanceAfterMinor": "5469586",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300001703",
+      "bankRef": "SIMREF018004",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-09-10",
+      "amountMinor": "-40253",
+      "currency": "JPY",
+      "balanceAfterMinor": "5429333",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300001704",
+      "bankRef": "SIMREF018005",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-09-12",
+      "amountMinor": "-5796",
+      "currency": "JPY",
+      "balanceAfterMinor": "5423537",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001705",
+      "bankRef": "SIMREF018006",
+      "description": "Refund"
+    }
+  ]
+}

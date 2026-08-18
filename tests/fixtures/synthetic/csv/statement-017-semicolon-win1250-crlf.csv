@@ -1,0 +1,16 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;MXN
+#Numer rachunku;SYN-0017
+#Okres;2026-08-01;2026-08-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;76033,30
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-08-24;2026-08-23;"Direct debit; Meadow Payroll";181,43;76214,73
+2026-08-01;;"Account transfer; Orbit Pharmacy
+synthetic continuation";-835,50;75379,23
+2026-08-03;;"Interest payment; Meadow Payroll";-472,26;74906,97
+2026-08-05;2026-08-04;"Cash withdrawal; Juniper Transit";-462,98;74443,99
+2026-08-07;;"Refund; Lantern Books";423,28;74867,27
+;;#Saldo koñcowe;74867,27;

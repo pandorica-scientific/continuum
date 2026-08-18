@@ -1,0 +1,158 @@
+{
+  "id": "statement-024",
+  "archetype": "reverse-chronological",
+  "locale": "tr-TR",
+  "currency": "TRY",
+  "accountId": "SYN-0024",
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "532836",
+  "closingBalanceMinor": "481891",
+  "statedCreditTotalMinor": "189957",
+  "statedDebitTotalMinor": "240902",
+  "statedRowCount": 12,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-06-20",
+      "valueDate": "2026-06-19",
+      "amountMinor": "79956",
+      "currency": "TRY",
+      "balanceAfterMinor": "612792",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300002300",
+      "bankRef": "SIMREF024001",
+      "description": "Refund"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-06-22",
+      "amountMinor": "42523",
+      "currency": "TRY",
+      "balanceAfterMinor": "655315",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002301",
+      "bankRef": "SIMREF024002",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-06-24",
+      "amountMinor": "-5049",
+      "currency": "TRY",
+      "balanceAfterMinor": "650266",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002302",
+      "bankRef": "SIMREF024003",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-06-01",
+      "valueDate": "2026-06-01",
+      "amountMinor": "-5501",
+      "currency": "TRY",
+      "balanceAfterMinor": "644765",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002303",
+      "bankRef": "SIMREF024004",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-06-03",
+      "amountMinor": "-12809",
+      "currency": "TRY",
+      "feeMinor": "125",
+      "balanceAfterMinor": "631831",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002304",
+      "bankRef": "SIMREF024005",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-06-05",
+      "amountMinor": "32177",
+      "currency": "TRY",
+      "balanceAfterMinor": "664008",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300002305",
+      "bankRef": "SIMREF024006",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-06-07",
+      "valueDate": "2026-06-06",
+      "amountMinor": "-41767",
+      "currency": "TRY",
+      "balanceAfterMinor": "622241",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002306",
+      "bankRef": "SIMREF024007",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-06-09",
+      "amountMinor": "-40964",
+      "currency": "TRY",
+      "balanceAfterMinor": "581277",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002307",
+      "bankRef": "SIMREF024008",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-06-11",
+      "amountMinor": "-43806",
+      "currency": "TRY",
+      "balanceAfterMinor": "537471",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300002308",
+      "bankRef": "SIMREF024009",
+      "description": "Refund"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-06-13",
+      "valueDate": "2026-06-12",
+      "amountMinor": "35301",
+      "currency": "TRY",
+      "balanceAfterMinor": "572772",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300002309",
+      "bankRef": "SIMREF024010",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-11",
+      "bookedAt": "2026-06-15",
+      "amountMinor": "-38992",
+      "currency": "TRY",
+      "balanceAfterMinor": "533780",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002310",
+      "bankRef": "SIMREF024011",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-12",
+      "bookedAt": "2026-06-17",
+      "amountMinor": "-51889",
+      "currency": "TRY",
+      "balanceAfterMinor": "481891",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002311",
+      "bankRef": "SIMREF024012",
+      "description": "Card purchase"
+    }
+  ]
+}

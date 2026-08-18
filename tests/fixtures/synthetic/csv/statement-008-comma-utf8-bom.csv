@@ -1,0 +1,20 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,GBP
+#Numer rachunku,SYN-0008
+#Okres,2026-08-01,2026-08-28
+#Saldo początkowe,86734.06
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-08-22,2026-08-21,Direct debit; Meadow Payroll,109.57,86843.63
+2026-08-24,,Account transfer; Juniper Transit,899.94,87743.57
+2026-08-01,,Interest payment; Harbour Energy,-387.83,87355.74
+2026-08-03,2026-08-02,Cash withdrawal; Copperline Services,-468.35,86887.39
+2026-08-05,,Refund; Pinecrest Housing,-438.07,86449.32
+2026-08-07,,Bank service fee; Summit Cafeteria,272.78,86722.10
+2026-08-09,2026-08-08,Card purchase; Meadow Payroll,-618.70,86103.40
+2026-08-11,,Salary payment; Vector Mobile,-795.74,85307.66
+2026-08-13,,Direct debit; Northstar Market,-748.12,84559.54
+2026-08-15,2026-08-14,Account transfer; Orbit Pharmacy,398.67,84958.21
+2026-08-17,,Cash withdrawal; Orbit Pharmacy,-471.07,84487.14
+2026-08-19,,Interest payment; Pinecrest Housing,-98.27,84388.87
+,,#Saldo końcowe,84388.87,

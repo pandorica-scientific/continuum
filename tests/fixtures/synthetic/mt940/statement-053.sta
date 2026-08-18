@@ -1,0 +1,23 @@
+:20:STATEMENT053
+:25:SYN-0053
+:28C:00001/001
+:60F:C260801EUR30954,79
+:61:2608070807C253,92NTRFDirectdebit//SIMREF053001
+:86:Direct debit Pinecrest Housing
+:61:2608090809D275,56NTRFAccounttrans//SIMREF053002
+:86:Account transfer Orbit Pharmacy
+:61:2608110811D449,84NTRFInterestpaym//SIMREF053003
+:86:Interest payment Northstar Market
+:61:2608130813D367,58NTRFCashwithdraw//SIMREF053004
+:86:Cash withdrawal Summit Cafeteria
+:61:2608150815C402,20NTRFRefund//SIMREF053005
+:86:Refund Harbour Energy
+:61:2608170817D428,77NTRFBankservicef//SIMREF053006
+:86:Bank service fee Vector Mobile
+:61:2608190819D331,91NTRFCardpurchase//SIMREF053007
+:86:Card purchase Meadow Payroll
+:61:2608210821D241,78NTRFSalarypaymen//SIMREF053008
+:86:Salary payment Copperline Services
+:61:2608230823C61,79NTRFDirectdebit//SIMREF053009
+:86:Direct debit Meadow Payroll
+:62F:C260828EUR29577,26

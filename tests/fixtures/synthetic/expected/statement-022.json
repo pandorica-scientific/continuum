@@ -1,0 +1,137 @@
+{
+  "id": "statement-022",
+  "archetype": "rhythm-multiline",
+  "locale": "en-KW",
+  "currency": "KWD",
+  "accountId": "SYN-0022",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-28",
+  "targetDecision": "review",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "camt053"
+  ],
+  "openingBalanceMinor": "7825473",
+  "closingBalanceMinor": "7650199",
+  "statedCreditTotalMinor": "103685",
+  "statedDebitTotalMinor": "278959",
+  "statedRowCount": 10,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-04-14",
+      "valueDate": "2026-04-13",
+      "amountMinor": "52529",
+      "currency": "KWD",
+      "balanceAfterMinor": "7878002",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300002100",
+      "bankRef": "SIMREF022001",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-04-16",
+      "amountMinor": "-82848",
+      "currency": "KWD",
+      "balanceAfterMinor": "7795154",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300002101",
+      "bankRef": "SIMREF022002",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-04-18",
+      "amountMinor": "-57315",
+      "currency": "KWD",
+      "balanceAfterMinor": "7737839",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300002102",
+      "bankRef": "SIMREF022003",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-04-20",
+      "valueDate": "2026-04-19",
+      "amountMinor": "23769",
+      "currency": "KWD",
+      "balanceAfterMinor": "7761608",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300002103",
+      "bankRef": "SIMREF022004",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-04-22",
+      "amountMinor": "-29981",
+      "currency": "KWD",
+      "balanceAfterMinor": "7731627",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300002104",
+      "bankRef": "SIMREF022005",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-04-24",
+      "amountMinor": "-23678",
+      "currency": "KWD",
+      "balanceAfterMinor": "7707949",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300002105",
+      "bankRef": "SIMREF022006",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-04-01",
+      "valueDate": "2026-04-01",
+      "amountMinor": "-11493",
+      "currency": "KWD",
+      "feeMinor": "125",
+      "balanceAfterMinor": "7696331",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002106",
+      "bankRef": "SIMREF022007",
+      "description": "Refund"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-04-03",
+      "amountMinor": "27387",
+      "currency": "KWD",
+      "balanceAfterMinor": "7723718",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002107",
+      "bankRef": "SIMREF022008",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-04-05",
+      "amountMinor": "-21867",
+      "currency": "KWD",
+      "balanceAfterMinor": "7701851",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300002108",
+      "bankRef": "SIMREF022009",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-04-07",
+      "valueDate": "2026-04-06",
+      "amountMinor": "-51652",
+      "currency": "KWD",
+      "balanceAfterMinor": "7650199",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300002109",
+      "bankRef": "SIMREF022010",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

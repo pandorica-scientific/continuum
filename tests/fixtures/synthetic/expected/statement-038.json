@@ -1,0 +1,136 @@
+{
+  "id": "statement-038",
+  "archetype": "rhythm-multiline",
+  "locale": "da-DK",
+  "currency": "DKK",
+  "accountId": "SYN-0038",
+  "periodStart": "2026-02-01",
+  "periodEnd": "2026-02-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "4788812",
+  "closingBalanceMinor": "4671644",
+  "statedCreditTotalMinor": "127922",
+  "statedDebitTotalMinor": "245090",
+  "statedRowCount": 10,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-02-12",
+      "valueDate": "2026-02-11",
+      "amountMinor": "34505",
+      "currency": "DKK",
+      "balanceAfterMinor": "4823317",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300003700",
+      "bankRef": "SIMREF038001",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-02-14",
+      "amountMinor": "-14329",
+      "currency": "DKK",
+      "balanceAfterMinor": "4808988",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003701",
+      "bankRef": "SIMREF038002",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-02-16",
+      "amountMinor": "-23175",
+      "currency": "DKK",
+      "balanceAfterMinor": "4785813",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300003702",
+      "bankRef": "SIMREF038003",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-02-18",
+      "valueDate": "2026-02-17",
+      "amountMinor": "41596",
+      "currency": "DKK",
+      "balanceAfterMinor": "4827409",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300003703",
+      "bankRef": "SIMREF038004",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-02-20",
+      "amountMinor": "-37422",
+      "currency": "DKK",
+      "balanceAfterMinor": "4789987",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300003704",
+      "bankRef": "SIMREF038005",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-02-22",
+      "amountMinor": "-25831",
+      "currency": "DKK",
+      "balanceAfterMinor": "4764156",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300003705",
+      "bankRef": "SIMREF038006",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-02-24",
+      "valueDate": "2026-02-23",
+      "amountMinor": "-41971",
+      "currency": "DKK",
+      "balanceAfterMinor": "4722185",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300003706",
+      "bankRef": "SIMREF038007",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-02-01",
+      "amountMinor": "51821",
+      "currency": "DKK",
+      "balanceAfterMinor": "4774006",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300003707",
+      "bankRef": "SIMREF038008",
+      "description": "Refund"
+    },
+    {
+      "id": "row-09",
+      "bookedAt": "2026-02-03",
+      "amountMinor": "-29213",
+      "currency": "DKK",
+      "feeMinor": "125",
+      "balanceAfterMinor": "4744668",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300003708",
+      "bankRef": "SIMREF038009",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-10",
+      "bookedAt": "2026-02-05",
+      "valueDate": "2026-02-04",
+      "amountMinor": "-73024",
+      "currency": "DKK",
+      "balanceAfterMinor": "4671644",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300003709",
+      "bankRef": "SIMREF038010",
+      "description": "Interest payment"
+    }
+  ]
+}

@@ -64,6 +64,15 @@ function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatemen
  * simply terse.
  */
 function assertAgreesWithItsOwnNumbers(statement: ParsedStatement): ParsedStatement {
+	// A currency is three letters. Anything else is a reader defect that has
+	// escaped its own module — a label, a heading, a fragment of a metadata row
+	// — and it must never become the denomination of a stored transaction,
+	// because everything downstream treats it as fact.
+	if (!/^[A-Z]{3}$/.test(statement.currency)) {
+		throw new Error(
+			`This ${statement.bank} statement was read with "${statement.currency}" as its currency, which is not a currency code, so it has not been imported.`
+		);
+	}
 	const proof = proveStatement(statement, { currency: statement.currency });
 	const failed = proof.checks.filter((check) => check.status === 'fail');
 	if (failed.length === 0) return statement;

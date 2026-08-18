@@ -1,0 +1,19 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;EUR
+#Numer rachunku;SYN-0028
+#Okres;2026-01-01;2026-01-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;60184,38
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-01-07;2026-01-06;"Direct debit; Harbour Energy";796,15;60980,53
+2026-01-09;;"Account transfer; Juniper Transit
+synthetic continuation";817,79;61798,32
+2026-01-11;;"Interest payment; Northstar Market";-100,81;61697,51
+2026-01-13;2026-01-12;"Cash withdrawal; Summit Cafeteria";-19,80;61677,71
+2026-01-15;;"Refund; Harbour Energy";-54,42;61623,29
+2026-01-17;;"Bank service fee; Summit Cafeteria";80,99;61704,28
+2026-01-19;2026-01-18;"Card purchase; Meadow Payroll";-874,14;60830,14
+2026-01-21;;"Salary payment; Copperline Services";-784,01;60046,13
+;;#Saldo koñcowe;60046,13;

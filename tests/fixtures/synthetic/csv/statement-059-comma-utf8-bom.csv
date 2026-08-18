@@ -1,0 +1,15 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,AUD
+#Numer rachunku,SYN-0059
+#Okres,2026-05-01,2026-05-28
+#Saldo początkowe,70700.72
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-05-25,2026-05-24,Card purchase; Lantern Books,519.03,71219.75
+2026-05-02,,Salary payment; Juniper Transit,-157.15,71062.60
+2026-05-04,,Refund; Harbour Energy,554.42,71617.02
+2026-05-06,2026-05-05,Bank service fee; Summit Cafeteria,-111.49,71505.53
+2026-05-08,,Interest payment; Northstar Market,-254.07,71251.46
+2026-05-10,,Cash withdrawal; Copperline Services,-748.85,70502.61
+2026-05-12,2026-05-11,Direct debit; Pinecrest Housing,874.89,71377.50
+,,#Saldo końcowe,71377.50,

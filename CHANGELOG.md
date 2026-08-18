@@ -36,7 +36,8 @@ iCloud and Google.
   in the log, so a report can be matched to the entry; the stack itself never
   reaches the browser, where it would name file paths and, in a query, real
   figures. Nothing else earns a reference: a mistyped address is not a fault.
-  There is something hidden in the rings.
+  There is something hidden in the rings — one drawing per status, tinted to
+  that status' own colour.
 - **Setup instructions live behind an ⓘ.** The three-line caption under a field
   is read once and then in the way forever. The reasoning — what an API token
   can reach, what a backup contains, what Google needs before it will authorise

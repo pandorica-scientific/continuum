@@ -1,0 +1,15 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,EUR
+#Numer rachunku,SYN-0051
+#Okres,2026-06-01,2026-06-28
+#Saldo początkowe,74029,47
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-06-01,2026-06-01,Card purchase; Northstar Market,566,94,74596,41
+2026-06-03,,Salary payment; Summit Cafeteria,-354,55,74241,86
+2026-06-05,,Refund; Meadow Payroll,801,69,75043,55
+2026-06-07,2026-06-06,Bank service fee; Summit Cafeteria,-173,68,74869,87
+2026-06-09,,Interest payment; Harbour Energy,-632,48,74237,39
+2026-06-11,,Cash withdrawal; Copperline Services,-115,27,74122,12
+2026-06-13,2026-06-12,Direct debit; Northstar Market,406,79,74528,91
+,,#Saldo końcowe,74528,91,

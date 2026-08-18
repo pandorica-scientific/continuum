@@ -1,0 +1,91 @@
+{
+  "id": "statement-026",
+  "archetype": "continued-pages",
+  "locale": "cs-CZ",
+  "currency": "CZK",
+  "accountId": "SYN-0026",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "abo"
+  ],
+  "openingBalanceMinor": "1425905",
+  "closingBalanceMinor": "1290123",
+  "statedCreditTotalMinor": "93507",
+  "statedDebitTotalMinor": "229289",
+  "statedRowCount": 6,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-08-01",
+      "valueDate": "2026-08-01",
+      "amountMinor": "21916",
+      "currency": "CZK",
+      "balanceAfterMinor": "1447821",
+      "counterparty": "Northstar Market",
+      "counterpartyAccount": "SIM-300002500",
+      "bankRef": "SIMREF026001",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-08-03",
+      "amountMinor": "-89678",
+      "currency": "CZK",
+      "balanceAfterMinor": "1358143",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002501",
+      "bankRef": "SIMREF026002",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-08-05",
+      "amountMinor": "-45391",
+      "currency": "CZK",
+      "feeMinor": "125",
+      "balanceAfterMinor": "1312627",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300002502",
+      "bankRef": "SIMREF026003",
+      "description": "Refund"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-08-07",
+      "valueDate": "2026-08-06",
+      "amountMinor": "71591",
+      "currency": "CZK",
+      "balanceAfterMinor": "1384218",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300002503",
+      "bankRef": "SIMREF026004",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-08-09",
+      "amountMinor": "-28345",
+      "currency": "CZK",
+      "balanceAfterMinor": "1355873",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300002504",
+      "bankRef": "SIMREF026005",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-08-11",
+      "amountMinor": "-65750",
+      "currency": "CZK",
+      "balanceAfterMinor": "1290123",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300002505",
+      "bankRef": "SIMREF026006",
+      "description": "Cash withdrawal"
+    }
+  ]
+}

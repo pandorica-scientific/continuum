@@ -1,0 +1,19 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;SEK
+#Numer rachunku;SYN-0012
+#Okres;2026-03-01;2026-03-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;11809.85
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-03-09;2026-03-08;"Cash withdrawal; Summit Cafeteria";757.83;12567.68
+2026-03-11;;"Interest payment; Lantern Books
+synthetic continuation";383.78;12951.46
+2026-03-13;;"Account transfer; Orbit Pharmacy";-184.40;12767.06
+2026-03-15;2026-03-14;"Direct debit; Pinecrest Housing";-159.34;12607.72
+2026-03-17;;"Salary payment; Juniper Transit";-567.49;12040.23
+2026-03-19;;"Card purchase; Harbour Energy";319.49;12359.72
+2026-03-21;2026-03-20;"Bank service fee; Orbit Pharmacy";-816.24;11543.48
+2026-03-23;;"Refund; Lantern Books";-555.49;10987.99
+;;#Saldo koñcowe;10987.99;

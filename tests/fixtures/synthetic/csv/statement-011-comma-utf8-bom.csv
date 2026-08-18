@@ -1,0 +1,15 @@
+﻿#SYNTHETIC TEST DOCUMENT,NOT A REAL FINANCIAL RECORD
+#Waluta,AUD
+#Numer rachunku,SYN-0011
+#Okres,2026-02-01,2026-02-28
+#Saldo początkowe,42007.64
+
+#Data księgowania,#Data operacji,#Opis operacji,#Kwota,#Saldo po operacji
+2026-02-06,2026-02-05,Interest payment; Meadow Payroll,96.56,42104.20
+2026-02-08,,Cash withdrawal; Juniper Transit,-504.93,41599.27
+2026-02-10,,Direct debit; Harbour Energy,208.04,41807.31
+2026-02-12,2026-02-11,Account transfer; Copperline Services,-103.95,41703.36
+2026-02-14,,Card purchase; Harbour Energy,-784.63,40918.73
+2026-02-16,,Salary payment; Summit Cafeteria,-672.12,40246.61
+2026-02-18,2026-02-17,Refund; Lantern Books,723.93,40970.54
+,,#Saldo końcowe,40970.54,

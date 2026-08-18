@@ -1,0 +1,16 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;PLN
+#Numer rachunku;SYN-0001
+#Okres;2026-01-01;2026-01-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;28962,39
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-01-01;2026-01-01;"Cash withdrawal; Vector Mobile";812,62;29775,01
+2026-01-03;;"Interest payment; Northstar Market
+synthetic continuation";-404,25;29370,76
+2026-01-05;;"Account transfer; Summit Cafeteria";-411,64;28959,12
+2026-01-07;2026-01-06;"Direct debit; Lantern Books";-86,11;28873,01
+2026-01-09;;"Salary payment; Juniper Transit";89,80;28962,81
+;;#Saldo koñcowe;28962,81;

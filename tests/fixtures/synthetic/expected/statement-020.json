@@ -1,0 +1,112 @@
+{
+  "id": "statement-020",
+  "archetype": "suffix-direction",
+  "locale": "en-SG",
+  "currency": "SGD",
+  "accountId": "SYN-0020",
+  "periodStart": "2026-02-01",
+  "periodEnd": "2026-02-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text"
+  ],
+  "openingBalanceMinor": "6389883",
+  "closingBalanceMinor": "6212833",
+  "statedCreditTotalMinor": "152385",
+  "statedDebitTotalMinor": "329435",
+  "statedRowCount": 8,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-02-08",
+      "valueDate": "2026-02-07",
+      "amountMinor": "16828",
+      "currency": "SGD",
+      "balanceAfterMinor": "6406711",
+      "counterparty": "Orbit Pharmacy",
+      "counterpartyAccount": "SIM-300001900",
+      "bankRef": "SIMREF020001",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-02-10",
+      "amountMinor": "76044",
+      "currency": "SGD",
+      "balanceAfterMinor": "6482755",
+      "counterparty": "Meadow Payroll",
+      "counterpartyAccount": "SIM-300001901",
+      "bankRef": "SIMREF020002",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-02-12",
+      "amountMinor": "-62155",
+      "currency": "SGD",
+      "balanceAfterMinor": "6420600",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300001902",
+      "bankRef": "SIMREF020003",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-02-14",
+      "valueDate": "2026-02-13",
+      "amountMinor": "-89338",
+      "currency": "SGD",
+      "balanceAfterMinor": "6331262",
+      "counterparty": "Lantern Books",
+      "counterpartyAccount": "SIM-300001903",
+      "bankRef": "SIMREF020004",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-02-16",
+      "amountMinor": "-78441",
+      "currency": "SGD",
+      "balanceAfterMinor": "6252821",
+      "counterparty": "Copperline Services",
+      "counterpartyAccount": "SIM-300001904",
+      "bankRef": "SIMREF020005",
+      "description": "Salary payment"
+    },
+    {
+      "id": "row-06",
+      "bookedAt": "2026-02-18",
+      "amountMinor": "59513",
+      "currency": "SGD",
+      "balanceAfterMinor": "6312334",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300001905",
+      "bankRef": "SIMREF020006",
+      "description": "Card purchase"
+    },
+    {
+      "id": "row-07",
+      "bookedAt": "2026-02-20",
+      "valueDate": "2026-02-19",
+      "amountMinor": "-80951",
+      "currency": "SGD",
+      "balanceAfterMinor": "6231383",
+      "counterparty": "Summit Cafeteria",
+      "counterpartyAccount": "SIM-300001906",
+      "bankRef": "SIMREF020007",
+      "description": "Bank service fee"
+    },
+    {
+      "id": "row-08",
+      "bookedAt": "2026-02-22",
+      "amountMinor": "-18550",
+      "currency": "SGD",
+      "balanceAfterMinor": "6212833",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300001907",
+      "bankRef": "SIMREF020008",
+      "description": "Refund"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+#SYNTHETIC TEST DOCUMENT;NOT A REAL FINANCIAL RECORD
+#Waluta;ZAR
+#Numer rachunku;SYN-0047
+#Okres;2026-02-01;2026-02-28
+#Opis;"£ódŸ; synthetic multilingual note
+second synthetic line"
+#Saldo pocz¹tkowe;64588.10
+
+#Data ksiêgowania;#Data operacji;#Opis operacji;#Kwota;#Saldo po operacji
+2026-02-14;2026-02-13;"Cash withdrawal; Vector Mobile";380.19;64968.29
+2026-02-16;;"Interest payment; Meadow Payroll
+synthetic continuation";-740.42;64227.87
+2026-02-18;;"Account transfer; Orbit Pharmacy";755.84;64983.71
+2026-02-20;2026-02-19;"Direct debit; Harbour Energy";-215.28;64768.43
+2026-02-22;;"Salary payment; Orbit Pharmacy";-326.30;64442.13
+2026-02-24;;"Card purchase; Meadow Payroll";-361.75;64080.38
+2026-02-01;2026-02-01;"Bank service fee; Summit Cafeteria";219.03;64299.41
+2026-02-03;;"Refund; Northstar Market";-193.46;64105.95
+2026-02-05;;"Cash withdrawal; Vector Mobile";-522.32;63583.63
+2026-02-07;2026-02-06;"Interest payment; Lantern Books";-602.08;62981.55
+2026-02-09;;"Interest payment; Harbour Energy";88.10;63069.65
+;;#Saldo koñcowe;63069.65;

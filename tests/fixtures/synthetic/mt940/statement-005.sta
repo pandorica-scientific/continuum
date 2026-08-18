@@ -1,0 +1,23 @@
+:20:STATEMENT005
+:25:SYN-0005
+:28C:00001/001
+:60F:C260501EUR10114,62
+:61:2605130513C162,96NTRFSalarypaymen//SIMREF005001
+:86:Salary payment Copperline Services
+:61:2605150515D158,44NTRFCardpurchase//SIMREF005002
+:86:Card purchase Northstar Market
+:61:2605170517D533,18NTRFBankservicef//SIMREF005003
+:86:Bank service fee Summit Cafeteria
+:61:2605190519D17,50NTRFRefund//SIMREF005004
+:86:Refund Harbour Energy
+:61:2605210521C57,20NTRFCashwithdraw//SIMREF005005
+:86:Cash withdrawal Summit Cafeteria
+:61:2605230523D66,48NTRFInterestpaym//SIMREF005006
+:86:Interest payment Pinecrest Housing
+:61:2605250525D429,72NTRFAccounttrans//SIMREF005007
+:86:Account transfer Vector Mobile
+:61:2605020502D236,04NTRFDirectdebit//SIMREF005008
+:86:Direct debit Pinecrest Housing
+:61:2605040504C712,41NTRFSalarypaymen//SIMREF005009
+:86:Salary payment Orbit Pharmacy
+:62F:C260528EUR9605,83

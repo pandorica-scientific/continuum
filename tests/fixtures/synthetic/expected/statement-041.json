@@ -1,0 +1,83 @@
+{
+  "id": "statement-041",
+  "archetype": "competing-tables",
+  "locale": "es-MX",
+  "currency": "MXN",
+  "accountId": "SYN-0041",
+  "periodStart": "2026-05-01",
+  "periodEnd": "2026-05-28",
+  "targetDecision": "accept",
+  "representations": [
+    "csv",
+    "pdf-text",
+    "xlsx",
+    "mt940",
+    "abo",
+    "qif",
+    "tsv"
+  ],
+  "openingBalanceMinor": "1438194",
+  "closingBalanceMinor": "1386320",
+  "statedCreditTotalMinor": "118326",
+  "statedDebitTotalMinor": "170200",
+  "statedRowCount": 5,
+  "rows": [
+    {
+      "id": "row-01",
+      "bookedAt": "2026-05-21",
+      "valueDate": "2026-05-20",
+      "amountMinor": "49765",
+      "currency": "MXN",
+      "balanceAfterMinor": "1487959",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004000",
+      "bankRef": "SIMREF041001",
+      "description": "Account transfer"
+    },
+    {
+      "id": "row-02",
+      "bookedAt": "2026-05-23",
+      "amountMinor": "-68186",
+      "currency": "MXN",
+      "balanceAfterMinor": "1419773",
+      "counterparty": "Harbour Energy",
+      "counterpartyAccount": "SIM-300004001",
+      "bankRef": "SIMREF041002",
+      "description": "Direct debit"
+    },
+    {
+      "id": "row-03",
+      "bookedAt": "2026-05-25",
+      "amountMinor": "-61095",
+      "currency": "MXN",
+      "balanceAfterMinor": "1358678",
+      "counterparty": "Juniper Transit",
+      "counterpartyAccount": "SIM-300004002",
+      "bankRef": "SIMREF041003",
+      "description": "Cash withdrawal"
+    },
+    {
+      "id": "row-04",
+      "bookedAt": "2026-05-02",
+      "valueDate": "2026-05-01",
+      "amountMinor": "-40919",
+      "currency": "MXN",
+      "balanceAfterMinor": "1317759",
+      "counterparty": "Pinecrest Housing",
+      "counterpartyAccount": "SIM-300004003",
+      "bankRef": "SIMREF041004",
+      "description": "Interest payment"
+    },
+    {
+      "id": "row-05",
+      "bookedAt": "2026-05-04",
+      "amountMinor": "68561",
+      "currency": "MXN",
+      "balanceAfterMinor": "1386320",
+      "counterparty": "Vector Mobile",
+      "counterpartyAccount": "SIM-300004004",
+      "bankRef": "SIMREF041005",
+      "description": "Bank service fee"
+    }
+  ]
+}
