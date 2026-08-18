@@ -3,7 +3,8 @@ import {
 	applyDateOrder,
 	parseAmount,
 	resolveDateOrder,
-	resolveDecimalMark
+	resolveDecimalMark,
+	resolvePeriod
 } from '$lib/server/import/tabular/determinacy';
 
 describe('date order', () => {
@@ -143,5 +144,66 @@ describe('parsing an amount under a resolved convention', () => {
 		expect(parseAmount('Biedronka', ',')).toBeNull();
 		expect(parseAmount('', ',')).toBeNull();
 		expect(parseAmount('--', ',')).toBeNull();
+	});
+});
+
+describe('signs a statement actually prints', () => {
+	it('reads a U+2212 MINUS SIGN as a minus', () => {
+		// `formatMinor` emits one and Raiffeisenbank's PDFs print it literally, so
+		// `adapters/rb.ts` folds it by hand. The generic reader is the fallback for
+		// every bank without an adapter and read those cells as "not a number",
+		// dropping every signed amount on the page.
+		expect(parseAmount('\u22121 000,00', ',', 2)).toBe(-100_000n);
+		expect(parseAmount('\u2212249.00', '.', 2)).toBe(-24_900n);
+	});
+
+	it('reads an explicit plus as a credit', () => {
+		// NUMBER_SHAPE accepts a leading `+`, so a bank writing `+249,00` passed the
+		// shape test and then failed the digits-only test one line below — null for
+		// every credit it has, which drops the amount column under its coverage
+		// threshold and refuses the statement.
+		expect(parseAmount('+249.00', '.', 2)).toBe(24_900n);
+		expect(parseAmount('+1 234,56', ',', 2)).toBe(123_456n);
+	});
+});
+
+describe('the period a statement prints', () => {
+	it('is read when only one order can be meant', () => {
+		// 31 cannot be a month, so the period can only run 31 Jan to 28 Feb.
+		expect(resolvePeriod('31.01.2026', '28.02.2026')).toEqual({
+			start: '2026-01-31',
+			end: '2026-02-28'
+		});
+	});
+
+	it('settles nothing when both readings are possible', () => {
+		// `01/05/2026` to `02/06/2026` is 5 Jan to 6 Feb in a US export and 1 May
+		// to 2 June in a European one. Both are real periods that run forwards, so
+		// the file does not say which of them it means.
+		//
+		// This used to be parsed as day-first outright, and the result was then
+		// handed to `resolveDateOrder` as the evidence that SETTLED the rows'
+		// order — reporting `kind: 'determined'` with a confident evidence string
+		// while every movement imported four months out.
+		expect(resolvePeriod('01/05/2026', '02/06/2026')).toBeUndefined();
+	});
+
+	it('does not let an ambiguous period determine the rows', () => {
+		const dates = ['01/05/2026', '02/05/2026', '02/06/2026'];
+		expect(resolveDateOrder(dates, resolvePeriod('01/05/2026', '02/06/2026'))).toMatchObject({
+			kind: 'ambiguous'
+		});
+	});
+
+	it('is not ambiguous when both readings agree', () => {
+		// An ISO period carries its own year first, so the order cannot change it.
+		expect(resolvePeriod('2026-05-01', '2026-06-02')).toEqual({
+			start: '2026-05-01',
+			end: '2026-06-02'
+		});
+	});
+
+	it('rejects a period that runs backwards under both readings', () => {
+		expect(resolvePeriod('28.02.2026', '31.01.2026')).toBeUndefined();
 	});
 });

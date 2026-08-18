@@ -27,12 +27,27 @@ const ENTITIES: Record<string, string> = {
 	apos: "'"
 };
 
+/**
+ * A numeric reference that names a real character, or nothing.
+ *
+ * `parseInt` returns any magnitude it is given but `String.fromCodePoint`
+ * accepts only 0..0x10FFFF, so `&#x110000;` in an uploaded statement threw a
+ * RangeError out of the parser and surfaced as the raw internal message
+ * "Invalid code point 1114112". An unrepresentable reference is malformed
+ * input, not a crash: leave it as it was written.
+ */
+const codePoint = (digits: string, radix: number, whole: string): string => {
+	const value = parseInt(digits, radix);
+	if (!Number.isFinite(value) || value < 0 || value > 0x10ffff) return whole;
+	return String.fromCodePoint(value);
+};
+
 export function decodeEntities(raw: string): string {
 	return raw.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (whole, body: string) => {
 		if (body.startsWith('#x') || body.startsWith('#X')) {
-			return String.fromCodePoint(parseInt(body.slice(2), 16));
+			return codePoint(body.slice(2), 16, whole);
 		}
-		if (body.startsWith('#')) return String.fromCodePoint(parseInt(body.slice(1), 10));
+		if (body.startsWith('#')) return codePoint(body.slice(1), 10, whole);
 		return ENTITIES[body] ?? whole;
 	});
 }

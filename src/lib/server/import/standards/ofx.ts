@@ -188,19 +188,20 @@ export function parseOfx(raw: string): ParsedStatement[] {
 			statement.periodStart ??= statement.rows[0].bookedAt;
 			statement.periodEnd ??= statement.rows[statement.rows.length - 1].bookedAt;
 		}
-		// The file states a closing balance and no opening one, so the opening is
-		// derived rather than invented: it is the closing balance less everything
-		// that happened. That keeps the endpoint check meaningful instead of
-		// unavailable — and it cannot manufacture agreement, because both sides
-		// come from the same movements.
-		if (
-			statement.closingBalanceMinor !== undefined &&
-			statement.openingBalanceMinor === undefined &&
-			statement.rows.length > 0
-		) {
-			const moved = statement.rows.reduce((total, entry) => total + entry.amountMinor, 0n);
-			statement.openingBalanceMinor = statement.closingBalanceMinor - moved;
-		}
+		// The opening balance is NOT derived from the closing one.
+		//
+		// `closing - sum(movements)` was computed here so the endpoint check would
+		// have something to test, on the reasoning that it could not manufacture
+		// agreement because both sides come from the same movements. That is
+		// exactly backwards: because both sides come from the same movements,
+		// `opening + sum === closing` reduces to `closing === closing` and is true
+		// whatever was read. An OFX export missing a transaction passed it, and
+		// every OFX file was rated P1 on a check that could not fail.
+		//
+		// OFX prints no per-row balances, so with no stated opening figure there is
+		// genuinely nothing in the file to check the movements against. Leaving the
+		// endpoint evidence unavailable says so; the reading is then held rather
+		// than filed, which is the honest answer for it.
 	}
 
 	return statements.filter((statement) => statement.rows.length > 0);

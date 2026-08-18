@@ -103,7 +103,28 @@ async function claimNext(handle: Handle = db): Promise<typeof importJob.$inferSe
  * finds nothing to claim and returns, so a burst of uploads does not start a
  * burst of workers.
  */
-export async function runQueue(handle: Handle = db): Promise<number> {
+let sweep: Promise<number> | null = null;
+
+export function runQueue(handle: Handle = db): Promise<number> {
+	// Join the sweep already running rather than starting a second one.
+	//
+	// The advisory lock makes one CLAIM atomic; it does nothing about two
+	// callers, because the second finds the NEXT job still queued and reads it
+	// in parallel — which is precisely the burst of CPU-bound readers this
+	// module exists to prevent, and there are two independent callers: every
+	// upload, and a tick every five minutes. Worse, since the lease is never
+	// renewed, a read running longer than LEASE_MS was re-offered to that tick
+	// and ingested a second time while the first was still inside it.
+	//
+	// In-process is the right scope, as it is for backups: one sweep works
+	// through the queue serially, so nothing it is holding can be re-claimed.
+	sweep ??= drainQueue(handle).finally(() => {
+		sweep = null;
+	});
+	return sweep;
+}
+
+async function drainQueue(handle: Handle = db): Promise<number> {
 	// Settled work from earlier sweeps, cleared before this one starts.
 	await clearFinished(KEEP_FINISHED_MS, handle);
 	let done = 0;
@@ -160,7 +181,24 @@ export async function queueStatus(
 		handle.select({ n: count() }).from(importJob).where(eq(importJob.state, 'running')),
 		// Newest first, so a fresh upload is never pushed off the end by settled
 		// work not yet swept up; reversed below into the order the files arrived.
-		handle.select().from(importJob).orderBy(desc(importJob.queuedAt)).limit(20)
+		//
+		// Named columns, deliberately. `payload` is the whole uploaded file in
+		// base64 and is retained for an hour on any job that could not be read;
+		// selecting it here pulled up to twenty files out of the database and threw
+		// them away on every poll of a page that polls every 1.5 seconds.
+		handle
+			.select({
+				id: importJob.id,
+				filename: importJob.filename,
+				state: importJob.state,
+				byteSize: importJob.byteSize,
+				queuedAt: importJob.queuedAt,
+				result: importJob.result,
+				error: importJob.error
+			})
+			.from(importJob)
+			.orderBy(desc(importJob.queuedAt))
+			.limit(20)
 	]);
 	return {
 		waiting: waiting?.n ?? 0,

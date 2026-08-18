@@ -925,6 +925,59 @@ describe('import database integrity', () => {
 		).toBe(true);
 	});
 
+	it('accepts the account a person chose for a statement no adapter recognised', async () => {
+		// The reader names the FORMAT it read a file as — `tabular`, `camt053` —
+		// whenever no adapter claimed it, and account resolution compared that
+		// against the chosen account's bank. So pointing at your own account and
+		// being told "the selected account belongs to cs, but this statement
+		// belongs to tabular" was the ordinary outcome for every bank without an
+		// adapter, which is most of them.
+		//
+		// The account is the authority on which bank it is. A format name is not
+		// evidence about an institution and may not overrule it.
+		await insertAccount('chosen-pln', 'PLN', [], 'cs');
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const buffer = new Uint8Array(
+			await readFile(resolve('tests/fixtures/synthetic/csv/statement-001-comma-utf8-bom.csv'))
+		);
+
+		const result = await ingestFile('generic.csv', buffer, 'chosen-pln', testDb);
+
+		expect(result.error).toBeUndefined();
+		expect(result.needsAccount).toBeUndefined();
+		expect(result.rowsAdded).toBeGreaterThan(0);
+		const rows = await testDb.select().from(schema.transaction);
+		expect(rows.every((row) => row.accountId === 'chosen-pln')).toBe(true);
+	});
+
+	it('asks rather than minting an account named after the format it was read as', async () => {
+		// Nothing here identifies an account: this file prints no number the reader
+		// recognises, and no adapter claimed it, so no issuer is known either.
+		//
+		// `bank: 'tabular'` used to be treated as the institution and carried
+		// straight into `account.bank` — which names the account, picks its emoji
+		// and is published through /api/v1 — so the ledger gained an account
+		// called, literally, `tabular PLN`. Worse, bank+currency then MATCHED, so
+		// the next unrelated bank read generically in the same currency landed in
+		// that same account.
+		//
+		// A format name is not evidence about an institution. With nothing to
+		// identify the account, the honest move is the question, because the
+		// answer becomes permanent metadata.
+		const { ingestFile } = await import('$lib/server/import/ingest');
+		const buffer = new Uint8Array(
+			await readFile(resolve('tests/fixtures/synthetic/csv/statement-001-comma-utf8-bom.csv'))
+		);
+
+		const result = await ingestFile('generic-auto.csv', buffer, undefined, testDb);
+
+		expect(result).toMatchObject({ needsAccount: true, rowsAdded: 0 });
+		expect(result.error).toMatch(/which bank issued it/i);
+		expect(await count('account')).toBe(0);
+		expect(await count('import_file')).toBe(0);
+		expect(await count('transaction')).toBe(0);
+	});
+
 	it('requires a choice when duplicate account records share the exact identity', async () => {
 		await insertAccount('duplicate-a', 'CZK', ['1234567890/2010']);
 		await insertAccount('duplicate-b', 'CZK', ['CZ6520100000001234567890']);
@@ -1105,10 +1158,15 @@ describe('import database integrity', () => {
 		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
 		await enqueue('fio.csv', source, 'fio-race', testDb);
 
-		// A second upload arriving mid-run starts a second worker. It must find
-		// nothing to claim rather than racing the first.
+		// A second upload arriving mid-run must not start a second reader. It joins
+		// the sweep already running, so both callers see the same one job drained —
+		// what matters is that the statement was read once, not what the two return
+		// values add up to. Counting the sum instead measured the old behaviour,
+		// where the second caller raced the first for the NEXT job and merely
+		// happened to find none because this fixture holds a single file.
 		const [first, second] = await Promise.all([runQueue(testDb), runQueue(testDb)]);
-		expect(first + second).toBe(1);
+		expect(first).toBe(1);
+		expect(second).toBe(first);
 		expect(await count('transaction')).toBe(5);
 		expect(await count('import_file')).toBe(1);
 	}, 30_000);

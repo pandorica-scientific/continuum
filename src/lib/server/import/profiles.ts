@@ -8,22 +8,22 @@
  *
  * ---
  *
- * STATUS: only `loadProfiles` is called from anywhere. `saveProfile`,
- * `saveDriftedProfile`, `recordProfileUse`, `deleteProfile`,
- * `importProfileDocument` and `profileFromReading` have no callers, because the
- * mapping wizard that would call them does not exist. `import_profile` is
- * therefore always empty in production and every lookup here returns nothing.
+ * STATUS: live. `loadProfiles` is read on every import, and `saveProfile`,
+ * `deleteProfile` and `profileFromReading` are called by the mapping wizard
+ * (`wizard.ts`) behind the `confirmMapping` action, so `import_profile` holds
+ * real rows in production and a saved layout really does decide how the next
+ * file from that bank is read.
  *
- * That is not harmless bookkeeping: until the proof gate was made universal, a
- * verified profile short-circuited every arithmetic check, and the only reason
- * that hole was never exploitable is that no profile could be created to
- * exploit it. The gate is fixed now (`decideImport` refuses P0 whatever the
- * profile says), but the lesson stands — this module is a loaded feature with
- * no trigger, and it is marked so it cannot be read as a delivered one.
+ * That matters, because a profile used to short-circuit every arithmetic
+ * check and the only thing that made the hole unreachable was that no profile
+ * could be created. `decideImport` now refuses P0 whatever the profile says,
+ * and it is the reason this module is safe to have a trigger at all — anything
+ * added here has to keep it that way.
  *
- * Kept rather than deleted because the schema, the migration and the matching
- * logic are coherent and the wizard is real planned work. If that work is
- * dropped, this should go with it rather than linger.
+ * `saveDriftedProfile` and `recordProfileUse` are still uncalled. Note that
+ * because nothing records a use, `lastUsedAt` is null on every row, and the
+ * ordering `loadProfiles` relies on to make a household's own layout win is
+ * not yet doing anything.
  */
 import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';

@@ -54,7 +54,31 @@ export interface ParsedRow {
 export interface ParsedStatement {
 	/** How this reading was produced and what proved it. */
 	provenance?: StatementProvenance;
+	/**
+	 * A LABEL for the reading, not an identity.
+	 *
+	 * Since routing became format-first this field holds a real issuer only when
+	 * an adapter read the file. Every other reader writes the format's own name
+	 * — `tabular`, `camt053`, `ofx` — because an ABO export names no issuer at
+	 * all and the format is then the honest thing to say. Good as a label, and
+	 * the reason `issuer` exists: this must never decide which account a
+	 * statement belongs to.
+	 */
 	bank: BankId;
+	/**
+	 * The institution, when the FILE actually named one.
+	 *
+	 * Undefined is the common case and means "this file does not say", which is
+	 * different from "no bank" — it is the difference between evidence and a
+	 * guess. Account identity may consult this; it may never consult `bank`,
+	 * which for most readings is a format name. Treating the two as the same
+	 * thing refused correct account choices ("the selected account belongs to
+	 * cs, but this statement belongs to tabular"), collapsed unrelated banks
+	 * sharing a currency into one account, and split one real account in two —
+	 * importing everything twice — when the same account was read once by an
+	 * adapter and once from a CAMT export.
+	 */
+	issuer?: BankId;
 	format: 'csv' | 'pdf' | 'abo' | 'mt940' | 'camt053' | 'ofx' | 'xlsx';
 	/** Account number as the statement prints it (no IBAN normalisation). */
 	accountNumber?: string;

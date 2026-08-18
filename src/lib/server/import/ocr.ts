@@ -247,9 +247,12 @@ export async function ocrPdf(
 					}
 				}
 			}
-			// A line's height at 300 dpi is ~40px; half of that separates rows
-			// without splitting a row whose glyphs sit at slightly different tops.
-			lines.push(...wordsToLines(words, index + 1, 20, dpi / 72));
+			// A line's height is ~40px at 300 dpi; half of that separates rows without
+			// splitting a row whose glyphs sit at slightly different tops. Derived
+			// from the dpi actually rendered at rather than fixed at the value 300
+			// gives, because the caller chooses the dpi — and at 150 a fixed 20px is
+			// a whole line, which merges every pair of movements into one.
+			lines.push(...wordsToLines(words, index + 1, Math.max(6, dpi / 15), dpi / 72));
 		}
 		return lines;
 	} finally {

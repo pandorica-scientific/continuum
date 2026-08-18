@@ -201,13 +201,33 @@ describe('the import policy', () => {
 		expect(decideImport(proveStatement(chained()), 0).autoImport).toBe(true);
 	});
 
-	it('files weaker arithmetic when the layout left nothing open', () => {
+	it('holds weaker arithmetic until someone has confirmed the layout', () => {
+		// P1 is the endpoints agreeing and nothing corroborating them, which two
+		// omitted movements that offset each other leave intact. A confirmed
+		// mapping is the human check that lifts it, and it was the documented
+		// rule all along — but both branches returned `autoImport: true`, so the
+		// parameter decided nothing and every P1 filed unattended.
 		const aggregate = proveStatement({
 			...chained(),
 			rows: chained().rows.map((r) => ({ ...r, balanceAfterMinor: undefined }))
 		});
 		expect(aggregate.proofClass).toBe('P1');
-		expect(decideImport(aggregate, 0).autoImport).toBe(true);
+		expect(decideImport(aggregate, 0).autoImport).toBe(false);
+		expect(decideImport(aggregate, 0, { verifiedProfile: true }).autoImport).toBe(true);
+	});
+
+	it('still refuses a layout nothing could check, however confidently it was mapped', () => {
+		// The confirmed mapping says what the columns MEAN. It says nothing about
+		// whether the rows under them are all there, and P0 means the file cannot
+		// answer that either.
+		const bare = proveStatement({
+			...chained(),
+			openingBalanceMinor: undefined,
+			closingBalanceMinor: undefined,
+			rows: chained().rows.map((r) => ({ ...r, balanceAfterMinor: undefined }))
+		});
+		expect(bare.proofClass).toBe('P0');
+		expect(decideImport(bare, 0, { verifiedProfile: true }).autoImport).toBe(false);
 	});
 
 	it('asks when a single dimension is still open, however strong the arithmetic', () => {
@@ -224,5 +244,41 @@ describe('the import policy', () => {
 			rows: [row('2025-03-01', -5000n)]
 		});
 		expect(decideImport(nothing, 0).autoImport).toBe(false);
+	});
+});
+
+describe('a running balance that does not follow', () => {
+	it('refuses the statement even when the endpoints happen to agree', () => {
+		// Two amounts transposed leave the sum unchanged, so opening + movements
+		// still meets the closing balance while the printed chain visibly does not.
+		// That failure was recorded in the evidence and then not consulted by the
+		// test for contradicting evidence, so the reading reached P1 and filed
+		// itself carrying a check that said in words that it had failed.
+		const broken: ParsedStatement = {
+			bank: 'tabular',
+			format: 'csv',
+			currency: 'CZK',
+			openingBalanceMinor: 0n,
+			closingBalanceMinor: 0n,
+			rows: [
+				{
+					bookedAt: '2026-01-01',
+					amountMinor: 10_000n,
+					currency: 'CZK',
+					balanceAfterMinor: 99_999n
+				},
+				{
+					bookedAt: '2026-01-02',
+					amountMinor: -10_000n,
+					currency: 'CZK',
+					balanceAfterMinor: 12_345n
+				}
+			]
+		};
+
+		const proof = proveStatement(broken, { currency: 'CZK' });
+		expect(proof.checks.find((check) => check.name === 'running balance')?.status).toBe('fail');
+		expect(proof.proofClass).toBe('P0');
+		expect(decideImport(proof, 0).autoImport).toBe(false);
 	});
 });

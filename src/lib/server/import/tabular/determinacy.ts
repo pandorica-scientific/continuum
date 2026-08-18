@@ -145,6 +145,46 @@ export function resolveDateOrder(
 }
 
 /**
+ * The ISO period a statement prints, when that period can only be read one way.
+ *
+ * The printed period is used as the evidence that SETTLES an otherwise
+ * ambiguous date order in the rows, which makes how the period itself is read
+ * load-bearing. It used to be parsed with a hardcoded `'day-first'`, so a guess
+ * about locale was laundered into a `kind: 'determined'` verdict one layer up:
+ * a US export printing `01/05/2026 – 02/06/2026` (5 Jan – 6 Feb) was read as
+ * 1 May – 2 June, every movement imported four months out, and the reading
+ * carried the confident evidence string "only this reading places every date
+ * inside 2026-05-01 to 2026-06-02". Nothing raised a question. The constant was
+ * invisible because the synthetic corpus is Polish throughout, while en-US,
+ * en-CA, en-AU and en-ZA are all in its locale list.
+ *
+ * So the period is held to the same standard as everything else here: try both
+ * readings, and speak only if one survives. A reading survives when both
+ * endpoints are dates and the period does not run backwards. If both survive
+ * and disagree, the period is genuinely ambiguous and contributes NOTHING — the
+ * rows must then settle their own order, and if they cannot, that is a question
+ * for the person holding the statement rather than a coin toss. If both survive
+ * and agree — an ISO period, where the order cannot matter — it is not
+ * ambiguous at all and is used.
+ */
+export function resolvePeriod(
+	start: string,
+	end: string
+): { start: string; end: string } | undefined {
+	const readings: { start: string; end: string }[] = [];
+	for (const order of ['day-first', 'month-first'] as const) {
+		const from = applyDateOrder(start, order);
+		const to = applyDateOrder(end, order);
+		// A period that runs backwards is not a reading of anything.
+		if (from && to && from <= to) readings.push({ start: from, end: to });
+	}
+	if (readings.length === 0) return undefined;
+	const [first] = readings;
+	const agree = readings.every((r) => r.start === first.start && r.end === first.end);
+	return agree ? first : undefined;
+}
+
+/**
  * Apply a resolved order to one value, yielding an ISO date.
  *
  * `fallbackYear` supplies the year for the bare MM/DD dates US statements
@@ -196,7 +236,7 @@ export function applyDateOrder(
  * removed those rows from the table and cost one real statement 100 498.00
  * across four movements.
  */
-const NUMBER_SHAPE = /^[-+]?\(?\s*[\d.,\s'\u00A0\u202F]+\s*\)?[-+]?$/;
+const NUMBER_SHAPE = /^[-+\u2212]?\(?\s*[\d.,\s'\u00A0\u202F]+\s*\)?[-+\u2212]?$/;
 
 /**
  * Comma or dot for the decimal?
@@ -320,7 +360,13 @@ export function resolveDecimalMark(
  */
 export function parseAmount(raw: string, decimal: DecimalMark, minorDigits = 2): bigint | null {
 	if (!raw) return null;
-	const trimmed = raw.trim();
+	// U+2212 MINUS SIGN is folded to a hyphen before anything else. `formatMinor`
+	// emits one, and Raiffeisenbank's PDFs print it literally — which is why
+	// `adapters/rb.ts` already folds it by hand. Without it here the GENERIC
+	// reader, the fallback for every bank with no adapter of its own, read every
+	// signed amount on such a page as "not a figure" and refused the statement
+	// for want of an amount column.
+	const trimmed = raw.trim().replace(/\u2212/g, '-');
 	if (!NUMBER_SHAPE.test(trimmed)) return null;
 
 	const negative =
@@ -328,10 +374,13 @@ export function parseAmount(raw: string, decimal: DecimalMark, minorDigits = 2):
 		trimmed.endsWith('-') ||
 		(trimmed.startsWith('(') && trimmed.endsWith(')'));
 
-	// Strip everything that is not a digit or the decimal mark.
+	// Strip everything that is not a digit or the decimal mark. `+` belongs in
+	// this class as much as `-` does: NUMBER_SHAPE accepts an explicit plus, so a
+	// bank writing its credits `+249,00` passed the shape test and then failed
+	// the digits-only test below, returning null for every credit it has.
 	const group = decimal === ',' ? '.' : ',';
 	const cleaned = trimmed
-		.replace(/[()\s'\u00A0\u202F-]/g, '')
+		.replace(/[()\s'\u00A0\u202F+-]/g, '')
 		.split(group)
 		.join('')
 		.replace(decimal, '.');

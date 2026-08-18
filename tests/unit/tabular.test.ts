@@ -6,6 +6,7 @@ import {
 	gridFromText
 } from '$lib/server/import/tabular/grid';
 import { chooseGrid, detectRegions, transactionRows } from '$lib/server/import/tabular/regions';
+import { normalise } from '$lib/server/import/tabular/vocabulary';
 import { looksLikeSummary, roleOfHeader } from '$lib/server/import/tabular/vocabulary';
 
 /**
@@ -271,5 +272,15 @@ describe('the vocabulary itself', () => {
 			}
 		}
 		expect(clashes).toEqual([]);
+	});
+});
+
+describe('vocabulary folding', () => {
+	it('folds Polish stroked letters, which NFD cannot decompose', () => {
+		// Every Polish term in the dictionary is written plainly, so a `ł` that
+		// survives normalisation means the entry can never match: `Łącznie` never
+		// marked a summary line, and `Opłata` never named a fee column.
+		expect(normalise('Łącznie')).toBe('lacznie');
+		expect(normalise('Opłata')).toBe('oplata');
 	});
 });

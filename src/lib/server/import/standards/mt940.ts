@@ -37,7 +37,12 @@ function swiftDate(raw: string): string | undefined {
 	const yy = Number(raw.slice(0, 2));
 	const month = raw.slice(2, 4);
 	const day = raw.slice(4, 6);
+	// The DAY is checked as well as the month, as `aboDate` already does. `250230`
+	// otherwise yielded "2025-02-30", which every Date constructor downstream
+	// silently rolls forward to 2 March — a movement filed on a day the statement
+	// never printed, past the anchor guard that would have queried it.
 	if (Number(month) < 1 || Number(month) > 12) return undefined;
+	if (Number(day) < 1 || Number(day) > 31) return undefined;
 	return `${yy >= 70 ? 1900 + yy : 2000 + yy}-${month}-${day}`;
 }
 
@@ -54,8 +59,18 @@ function entryDate(mmdd: string, valueIso: string): string | undefined {
 	if (month < 1 || month > 12) return undefined;
 	const valueYear = Number(valueIso.slice(0, 4));
 	const valueMonth = Number(valueIso.slice(5, 7));
-	// December entry against a January value date means the year before.
-	const year = valueMonth === 1 && month === 12 ? valueYear - 1 : valueYear;
+	// An entry date carries no year, so it takes the value date's — except
+	// across a year boundary, which runs BOTH ways: a December entry against a
+	// January value date belongs to the year before, and a January entry against
+	// a December value date (a payment valued on the 31st, booked after the New
+	// Year holiday) belongs to the year after. Only the first was handled, so
+	// the second filed the movement a full year in the past.
+	const year =
+		valueMonth === 1 && month === 12
+			? valueYear - 1
+			: valueMonth === 12 && month === 1
+				? valueYear + 1
+				: valueYear;
 	return `${year}-${mmdd.slice(0, 2)}-${day}`;
 }
 

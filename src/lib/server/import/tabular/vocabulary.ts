@@ -12,8 +12,27 @@
  */
 
 /** Lowercase and strip diacritics so "Částka" and "castka" are one key. */
+/**
+ * Letters NFD cannot take apart.
+ *
+ * A stroke is part of the glyph rather than a combining mark, so `ł` survives
+ * decomposition untouched. Every Polish term in this file is written plainly —
+ * `lacznie`, `oplata` — so without this substitution none of them could ever
+ * match the `Łącznie` total line or the `Opłata` fee column they were written
+ * for, and a Polish summary line could be filed as a movement.
+ *
+ * Lowercase first, so the map only needs its lowercase keys.
+ */
+const STROKED: Record<string, string> = { ł: 'l', đ: 'd', ø: 'o', ħ: 'h', ŧ: 't' };
+
 export const normalise = (raw: string): string =>
-	raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+	raw
+		.toLowerCase()
+		.replace(/[łđøħŧ]/g, (character) => STROKED[character])
+		.normalize('NFD')
+		.replace(/[̀-ͯ]/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
 
 export type ColumnRole =
 	| 'bookingDate'

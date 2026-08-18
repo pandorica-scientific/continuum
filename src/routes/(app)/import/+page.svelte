@@ -18,8 +18,19 @@
 	// unrelated statement came back needsAccount with nothing imported, asking
 	// again for the very choice that caused it. Keep it only while some file
 	// still needs an answer.
+	//
+	// Scoped to the files THIS upload queued, which is what `form.queued` carries.
+	// Reading the whole queue instead brought the bug straight back: settled jobs
+	// linger for an hour, so one old `needsAccount` result kept the choice pinned
+	// to every batch dropped after it — the exact thing the paragraph above says
+	// was fixed.
 	$effect(() => {
-		const results = data.queue.files.map((f) => f.result).filter((r) => r !== null);
+		const batch = new Set(form?.queued ?? []);
+		if (batch.size === 0) return;
+		const results = data.queue.files
+			.filter((f) => batch.has(f.id))
+			.map((f) => f.result)
+			.filter((r) => r !== null);
 		if (results.length > 0 && !results.some((result) => result.needsAccount)) assignAccountId = '';
 	});
 

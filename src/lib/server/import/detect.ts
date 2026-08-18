@@ -27,9 +27,9 @@ import { gridsFromRhythm } from './tabular/rhythm';
 import { looksLikeHoldings } from './holdings';
 import { OCR_LANGUAGES, languagesFor, ocrAvailable, ocrImage, ocrPdf } from './ocr';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
-import { isCurrencyCode } from '$lib/money';
+import { formatMinor, isCurrencyCode } from '$lib/money';
 import { assertSafeToParse } from './safety';
-import type { ParsedStatement } from './types';
+import type { ParsedStatement, PdfLine } from './types';
 
 /**
  * A statement that prints a change in its own balance but yields no movements
@@ -52,9 +52,29 @@ function assertRowsExplainTheBalance(statement: ParsedStatement): ParsedStatemen
 	if (opening === closing) return statement;
 	const moved = closing - opening;
 	throw new Error(
-		`This ${statement.bank} statement reports a balance change of ${moved < 0n ? '-' : ''}${(moved < 0n ? -moved : moved).toString().replace(/(\d{2})$/, '.$1')} ${statement.currency} but no transactions could be read from it. The layout has probably changed. The file has not been imported.`
+		`This ${statement.bank} statement reports a balance change of ${formatMinor(moved, statement.currency)} but no transactions could be read from it. The layout has probably changed. The file has not been imported.`
 	);
 }
+
+/**
+ * Grids assembled from a reading of the PAGE, tagged as such.
+ *
+ * The two assemblers stamp their own origin — `pdf-geometry`, `pdf-rhythm` —
+ * and an OCR reading goes through exactly those two, so a row recovered from
+ * pixels reached the ledger labelled as though its table had come from the
+ * text layer. `transaction.sourceMethod` exists so that "everything that came
+ * from OCR" is a query rather than a guess, and the register offers precisely
+ * that filter; it matched nothing, because nothing ever wrote the value.
+ *
+ * The origin is REPLACED rather than extended. Which assembler ran is implied
+ * by the reading and is not what the column is for; that the figures came from
+ * pixels is the reliability-relevant fact worth selecting on. A compound
+ * `ocr-pdf-rhythm` would break the same equality filter a second time.
+ */
+const gridsFromPixels = (scanned: PdfLine[]): Grid[][] =>
+	[gridsFromPdfLines(scanned), gridsFromRhythm(scanned)].map((group) =>
+		group.map((grid) => ({ ...grid, origin: 'ocr' }))
+	);
 
 /**
  * Every route into the ledger meets the same arithmetic.
@@ -335,7 +355,7 @@ async function parseByFormat(
 			const fromPixels = await readGenerically(
 				buffer,
 				options.profiles,
-				[gridsFromPdfLines(scanned), gridsFromRhythm(scanned)],
+				gridsFromPixels(scanned),
 				options.currency
 			);
 			if (fromPixels.statements.length > 0) return fromPixels.statements;
@@ -381,7 +401,7 @@ async function parseByFormat(
 		const fromPixels = await readGenerically(
 			buffer,
 			options.profiles,
-			[gridsFromPdfLines(scanned), gridsFromRhythm(scanned)],
+			gridsFromPixels(scanned),
 			options.currency
 		);
 		if (fromPixels.statements.length > 0) return fromPixels.statements;
@@ -475,11 +495,23 @@ async function readGenerically(
 	const readings: { statements: ParsedStatement[]; amounts: string[]; proofClass: ProofClass }[] =
 		[];
 	let firstReason: string | undefined;
+	/**
+	 * Set when some part of the document read into a statement and then failed
+	 * the proof gate, as opposed to simply not being found.
+	 */
+	let refusedReason: string | undefined;
+
+	// Asked once per FILE, not once per candidate grid. The thunk exists so a
+	// file that never needs a profile never pays for the lookup; awaiting it
+	// inside the per-grid loop turned that one saved query into a dozen
+	// identical ones.
+	let remembered: Promise<ImportProfile[]> | undefined;
+	const profilesOnce = loadProfiles ? () => (remembered ??= loadProfiles()) : undefined;
 
 	for (const group of groups) {
 		const evidence = group.flatMap((grid) => detectRegions(grid));
 		for (const candidate of group) {
-			const attempt = await readOneGrid([candidate], loadProfiles, evidence, accountCurrency);
+			const attempt = await readOneGrid([candidate], profilesOnce, evidence, accountCurrency);
 			if (attempt.statements.length > 0) {
 				readings.push({
 					statements: attempt.statements,
@@ -493,7 +525,10 @@ async function readGenerically(
 						.sort(),
 					proofClass: attempt.proofClass ?? 'P0'
 				});
-			} else if (!firstReason) firstReason = attempt.reason;
+			} else {
+				if (attempt.refused && !refusedReason) refusedReason = attempt.reason;
+				if (!firstReason) firstReason = attempt.reason;
+			}
 		}
 	}
 
@@ -501,6 +536,18 @@ async function readGenerically(
 
 	// Separate parts: every one of them belongs in the ledger.
 	if (combine === 'collect') {
+		// Which is exactly why one of them failing cannot be shrugged off. These
+		// groups are not rival accounts of one document — a workbook holds a sheet
+		// per account — so filing the sheets that proved and dropping the one that
+		// did not imports part of a file and records its content hash, and the
+		// corrected re-upload is then refused as a duplicate. That precise failure
+		// is already recorded a few lines up for a two-account workbook.
+		//
+		// A sheet that yielded NO statement is a different thing: workbooks carry
+		// summary and notes sheets that were never movements, and refusing a file
+		// over one of those would refuse most real workbooks. Only a sheet that was
+		// read and then failed the gate counts.
+		if (refusedReason) return { statements: [], reason: refusedReason };
 		return { statements: readings.flatMap((reading) => reading.statements) };
 	}
 
@@ -552,7 +599,18 @@ async function readOneGrid(
 	loadProfiles?: () => Promise<ImportProfile[]>,
 	evidenceRegions?: Region[],
 	accountCurrency?: string
-): Promise<{ statements: ParsedStatement[]; reason?: string; proofClass?: ProofClass }> {
+): Promise<{
+	statements: ParsedStatement[];
+	reason?: string;
+	proofClass?: ProofClass;
+	/**
+	 * A statement WAS read here and then failed the proof gate — as distinct
+	 * from "nothing that looked like a statement was found", which is an
+	 * ordinary miss. Only the first is evidence that filing what did read would
+	 * file part of a document.
+	 */
+	refused?: boolean;
+}> {
 	const choice = chooseGrid(grids);
 	if (!choice) {
 		return { statements: [], reason: 'No table of dated movements could be found in that file.' };
@@ -622,7 +680,34 @@ async function readOneGrid(
 			if (!weakest || PROOF_RANK[proof.proofClass] < PROOF_RANK[weakest]) {
 				weakest = proof.proofClass;
 			}
-		} else reasons.push(`${decision.reason} (${proof.proofClass})`);
+		} else {
+			// Proof is taken per region; the decision to file used to be taken per
+			// FILE, and the two disagreed. `regions.ts` splits wherever the column
+			// shape changes and a multi-page statement prints furniture between its
+			// pages, so several transaction regions is the ordinary case, not an
+			// exotic one. Three regions proving and a fourth failing therefore
+			// filed three quarters of a statement and reported success — and the
+			// file's content hash is recorded on success, so the corrected
+			// re-upload is refused as a duplicate. `frompdf.ts` calls that the
+			// worst outcome this system can produce.
+			//
+			// `ingest.ts` already settles the same argument for a statement that
+			// cannot be assigned to an account: "Importing what resolved and asking
+			// about the rest sounds friendlier, but it records the file's content
+			// hash". Same argument, same answer — the inconsistency was the bug.
+			//
+			// This refuses the READING, not the file. Where the caller holds
+			// alternative readings of one document — the two PDF assemblers, two
+			// candidate encodings — the other one is still free to read the whole
+			// thing cleanly and win, which is the arbitration this reader is built
+			// on. What can no longer happen is a partial reading being filed as
+			// though it were whole.
+			return {
+				statements: [],
+				refused: true,
+				reason: `That layout was read, but not confidently enough to file: ${decision.reason} (${proof.proofClass}).`
+			};
+		}
 	}
 
 	if (statements.length > 0) return { statements, proofClass: weakest };
@@ -684,6 +769,15 @@ export async function previewLayout(
 	options: ParseOptions = {}
 ): Promise<LayoutPreview | null> {
 	const format = sniffFormat(buffer).format;
+	// The same boundary the reading path crosses, for the same bytes.
+	//
+	// This is the ONE route the interface offers for a file that was refused,
+	// and a workbook refused for expanding to 900 MB is exactly such a file: the
+	// queue keeps its payload so it can be mapped by hand, and "Map its columns"
+	// handed those bytes straight to SheetJS with no size, entry-count, ratio,
+	// nesting or real-inflation check. The guard has to sit on every door into
+	// the parsers, not on the first one.
+	assertSafeToParse(buffer, format);
 	const grids =
 		format === 'xlsx'
 			? gridsFromWorkbook(buffer)

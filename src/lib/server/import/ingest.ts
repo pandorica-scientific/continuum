@@ -16,6 +16,7 @@ import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
 import { saveUpload } from '$lib/server/files';
+import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';
 import { loadProfiles } from './profiles';
@@ -110,6 +111,23 @@ export async function inTransaction<T>(
  * number (Revolut) and more than one candidate exists, refuse and ask —
  * silently creating a fresh account would fragment the ledger and defeat
  * dedup, since the unique index is scoped per account.
+ *
+ * Identity comes from the account NUMBER, and from the issuer only when the
+ * file actually named one. It never comes from `statement.bank`, which since
+ * format-first routing holds a format name for every reading an adapter did
+ * not produce. Consulting it there caused all four of:
+ *
+ *   - a correct account choice refused, because `cs` is not `tabular`;
+ *   - two unrelated banks read generically in one currency collapsing into a
+ *     single account;
+ *   - one real account read by an adapter and from a CAMT export becoming two
+ *     accounts, importing every movement twice, because dedup is scoped per
+ *     account;
+ *   - an account minted and named, literally, `tabular EUR`.
+ *
+ * The governing rule is recorded elsewhere and is the same one: a statement is
+ * imported INTO an account whose bank and currency the user stated, and that
+ * metadata is authoritative. What the document appears to say is corroboration.
  */
 async function resolveAccount(
 	statement: ParsedStatement,
@@ -123,7 +141,7 @@ async function resolveAccount(
 		if (statement.accountNumber) {
 			const statementIdentity = canonicalAccountIdentity(statement.accountNumber);
 			await handle.execute(
-				sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:statement-account:${statement.bank}:${statement.currency}:${statementIdentity}`}, 0))`
+				sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:statement-account:${statement.currency}:${statementIdentity}`}, 0))`
 			);
 		}
 		// Explicit imports can carry aliases that produce different statement
@@ -140,10 +158,14 @@ async function resolveAccount(
 				reason: `The selected account uses ${chosen.currency}, but this statement uses ${statement.currency}. Choose an account with the statement currency.`
 			};
 		}
-		if (chosen.bank !== statement.bank) {
+		// Only when the FILE named its issuer. A generic reading reports the
+		// format it was read as, and comparing that against the account told the
+		// user their own account was wrong — for a file they had just pointed at
+		// it deliberately.
+		if (statement.issuer && chosen.bank !== statement.issuer) {
 			return {
 				kind: 'ambiguous',
-				reason: `The selected account belongs to ${chosen.bank}, but this statement belongs to ${statement.bank}.`
+				reason: `The selected account belongs to ${chosen.bank}, but this statement was read as a ${statement.issuer} statement.`
 			};
 		}
 		if (
@@ -167,16 +189,20 @@ async function resolveAccount(
 		? canonicalAccountIdentity(statement.accountNumber)
 		: '(number-not-printed)';
 	await handle.execute(
-		sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:statement-account:${statement.bank}:${statement.currency}:${statementIdentity}`}, 0))`
+		sql`select pg_advisory_xact_lock(hashtextextended(${`continuum:statement-account:${statement.currency}:${statementIdentity}`}, 0))`
 	);
 	const accounts = await handle.select().from(account);
 	let resolved: typeof account.$inferSelect | undefined;
 
 	if (statement.accountNumber) {
 		const key = normaliseAccountKey(statement.accountNumber);
+		// The account number IS the identity. Requiring the bank to match as well
+		// split one real account in two as soon as the same statement was read by
+		// two different readers, and dedup is scoped per account, so every
+		// movement then imported a second time.
 		const byNumber = accounts.filter(
 			(a) =>
-				a.bank === statement.bank &&
+				(!statement.issuer || a.bank === statement.issuer) &&
 				a.currency === statement.currency &&
 				a.numbers.some((number) => accountKeysMatch(normaliseAccountKey(number), key))
 		);
@@ -189,14 +215,25 @@ async function resolveAccount(
 			};
 		}
 	} else {
+		// Nothing identifies this statement but its bank and currency, so the
+		// issuer has to be evidence rather than the name of a file format. Two
+		// unrelated banks whose statements were both read generically in EUR are
+		// not the same account, and matching on `tabular` + EUR said they were.
+		if (!statement.issuer) {
+			return {
+				kind: 'ambiguous',
+				reason:
+					'This statement prints no account number, and the file does not say which bank issued it — pick the account it belongs to.'
+			};
+		}
 		const byBank = accounts.filter(
-			(a) => a.bank === statement.bank && a.currency === statement.currency
+			(a) => a.bank === statement.issuer && a.currency === statement.currency
 		);
 		if (byBank.length === 1) resolved = byBank[0];
 		if (byBank.length > 1) {
 			return {
 				kind: 'ambiguous',
-				reason: `Several ${BANK_LABEL[statement.bank] ?? statement.bank} ${statement.currency} accounts exist and this statement does not say which it belongs to — pick the account and upload again.`
+				reason: `Several ${BANK_LABEL[statement.issuer] ?? statement.issuer} ${statement.currency} accounts exist and this statement does not say which it belongs to — pick the account and upload again.`
 			};
 		}
 	}
@@ -211,8 +248,15 @@ async function resolveAccount(
 	}
 
 	// First statement from this account: create it.
+	//
+	// Reaching here without an issuer means the statement printed an account
+	// number — the branch above refuses to guess when it printed neither — so
+	// the row has a real identity even though the institution is unknown.
+	// `other` is what the column's own comment reserves for that, and it is the
+	// honest value: a format name is not a bank, and storing one produced an
+	// account called `tabular EUR` and published it through /api/v1.
 	const id = randomUUID();
-	const label = BANK_LABEL[statement.bank] ?? statement.bank;
+	const label = statement.issuer ? (BANK_LABEL[statement.issuer] ?? statement.issuer) : 'Bank';
 	// Suffix from the account number itself, not the bank code after the slash.
 	const numberPart = statement.accountNumber?.split('/')[0].replace(/\D/g, '') ?? '';
 	const suffix = numberPart ? ` ·${numberPart.slice(-4)}` : '';
@@ -221,7 +265,7 @@ async function resolveAccount(
 		.values({
 			id,
 			name: `${label} ${statement.currency}${suffix}`,
-			bank: statement.bank,
+			bank: statement.issuer ?? 'other',
 			currency: statement.currency,
 			numbers: statement.accountNumber ? [statement.accountNumber] : []
 		})
@@ -536,7 +580,7 @@ function assertChainStartsWhereTheAccountLeftOff(
 	if (openings.some((opening) => opening === acct.balanceMinor)) return;
 
 	const gap = openings[0] - acct.balanceMinor;
-	const size = (gap < 0n ? -gap : gap).toString().replace(/(\d{2})$/, '.$1');
+	const size = formatMinor(gap < 0n ? -gap : gap, statement.currency);
 	throw new StatementRejected(
 		`This statement prints no opening balance, and its first movement starts ${size} ${statement.currency} away from where this account stood on ${acct.balanceAsOf}. Either a movement is missing from the beginning of the file, or an earlier statement has not been imported yet. Nothing has been imported.`
 	);

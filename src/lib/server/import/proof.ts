@@ -317,7 +317,16 @@ export function proveStatement(statement: ParsedStatement, facts?: LexicalFacts)
 	// closing balance, and was rated P3: strong enough to file, with a
 	// transaction missing. Unavailable evidence is fine; contradicted evidence
 	// is not.
+	//
+	// The running balance belongs in this test as much as the endpoints do. It
+	// was the one failing check that did not appear here, so a statement whose
+	// own printed chain demonstrably did not follow from its movements — two
+	// amounts transposed, or a balance on some rows and not others — still
+	// reached P1 on endpoints that happened to survive, and auto-imported
+	// carrying a provenance record that said in words that the chain failed.
+	const chainContradicts = chain.testable && !chain.holds;
 	const contradicted =
+		chainContradicts ||
 		(hasEndpoints && !endpointsHold) ||
 		(totalsStated && !(creditsHold && debitsHold)) ||
 		(countStated && !countHolds);
@@ -384,14 +393,29 @@ export function decideImport(
 	if (proof.proofClass === 'P0') {
 		return { autoImport: false, reason: 'nothing in the statement could be checked' };
 	}
-	// For P1 and P2 the arithmetic is real but partial, and a person has already
-	// checked this mapping against a preview of their own rows. That is the
-	// human check those classes would otherwise demand.
+	// P1 and P2 only: everything else has returned by now.
+	//
+	// The arithmetic here is real but partial, and a person who has checked this
+	// mapping against a preview of their own rows supplies what it is missing.
+	// That is the human check these classes demand, and it is the only thing
+	// that lifts them.
 	if (context.verifiedProfile) {
 		return { autoImport: true, reason: 'this layout was confirmed for this bank already' };
 	}
+	// This branch used to return `autoImport: true` as well, differing only in
+	// its reason string — so the parameter above decided nothing and P1 and P2
+	// filed unattended, while this file's own docblock explained why they should
+	// not and `wizard.ts` said "decideImport enforces this". It did not.
+	//
+	// A refusal here is not a dead end: the reader hands back the table it
+	// worked out, the person names the date and amount columns once, and the
+	// saved profile means every later statement from that bank arrives already
+	// understood. One question, once per bank.
 	return {
-		autoImport: true,
-		reason: 'the balances agree and the layout left nothing ambiguous'
+		autoImport: false,
+		reason:
+			proof.proofClass === 'P2'
+				? 'the balances and the stated totals agree, but no running balance carries the movements — confirm the columns once and this layout files unattended after that'
+				: 'the opening and closing balances agree and nothing else corroborates them — two omitted movements that offset each other would leave exactly this, so confirm the columns once and this layout files unattended after that'
 	};
 }

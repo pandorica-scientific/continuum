@@ -17,6 +17,7 @@ import {
 	isDateLike,
 	parseAmount,
 	resolveDateOrder,
+	resolvePeriod,
 	resolveDecimalMark,
 	type DateOrder,
 	type DecimalMark
@@ -70,6 +71,16 @@ const SYMBOL_CURRENCY: Record<string, string> = {
 const CURRENCY_NEAR_AMOUNT =
 	/(?:^|[\s(])([A-Z]{3})\s*-?\(?\d|\d[\d\s.,'\u00A0]*\s*([A-Z]{3})(?=$|[\s).,])/;
 const DATE_TOKEN = /\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d{4}-\d{2}-\d{2}/g;
+/**
+ * The same pattern without `g`, for asking a single token.
+ *
+ * `RegExp.prototype.test` on a global regex resumes from `lastIndex` and only
+ * resets it on a miss, so testing a run of date strings with DATE_TOKEN itself
+ * answered true, false, true, false. Every second date therefore survived the
+ * "this is a date, not an amount" filter, and a date read as a figure is not a
+ * small error: `31.01.2025` parses to 1 012 025.00.
+ */
+const ONE_DATE_TOKEN = new RegExp(DATE_TOKEN.source);
 
 const rowText = (row: RawCell[]) =>
 	row
@@ -102,7 +113,7 @@ function labelledValue(row: RawCell[]): string | undefined {
 function trailingAmount(text: string): string | undefined {
 	const matches = [...text.matchAll(AMOUNT_TOKEN)]
 		.map((m) => m[0].trim())
-		.filter((t) => /\d/.test(t) && !DATE_TOKEN.test(t));
+		.filter((t) => /\d/.test(t) && !ONE_DATE_TOKEN.test(t));
 	return matches.at(-1);
 }
 
@@ -248,7 +259,7 @@ const columnValues = (rows: RawCell[][], index: number) => rows.map((r) => r[ind
 function amountFromCell(text: string, decimal: DecimalMark, digits: number): bigint | null {
 	const whole = parseAmount(text, decimal, digits);
 	if (whole !== null) return whole;
-	const tokens = text.match(/-?\(?\d[\d\s.,'\u00A0]*\)?-?/g) ?? [];
+	const tokens = text.match(AMOUNT_TOKEN) ?? [];
 	const money = tokens.map((t) => t.trim()).filter((t) => /\d/.test(t));
 	if (money.length !== 1) return null;
 	return parseAmount(money[0], decimal, digits);
@@ -571,12 +582,12 @@ export function readTabular(
 
 	// The period the statement claims, used to settle an otherwise ambiguous
 	// date order.
+	// Read the period the same way the rows are read: both orders tried, and it
+	// speaks only if one survives. Parsing it as day-first turned a locale guess
+	// into determined evidence about the rows — see `resolvePeriod`.
 	const period =
 		evidence.periodStart && evidence.periodEnd
-			? {
-					start: applyDateOrder(evidence.periodStart, 'day-first'),
-					end: applyDateOrder(evidence.periodEnd, 'day-first')
-				}
+			? resolvePeriod(evidence.periodStart, evidence.periodEnd)
 			: undefined;
 
 	const dateValues = columnValues(body, dateColumn).filter(Boolean);
@@ -879,10 +890,19 @@ function preferCompleteDateColumn(roles: (ColumnRole | undefined)[], body: RawCe
 	const current = dated(booking);
 	if (current === body.length) return;
 
+	// The FULLEST column, not merely the last one that beat the incumbent: the
+	// running best has to move with the winner, or a 28-date column loses to a
+	// 26-date column that happens to sit further right, and the two movements
+	// the sparser column cannot date still refuse the statement.
 	let better: number | undefined;
+	let bestDated = current;
 	for (let column = 0; column < roles.length; column++) {
 		if (column === booking || (roles[column] && roles[column] !== 'valueDate')) continue;
-		if (dated(column) > current) better = column;
+		const count = dated(column);
+		if (count > bestDated) {
+			bestDated = count;
+			better = column;
+		}
 	}
 	if (better === undefined) return;
 

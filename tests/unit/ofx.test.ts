@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseOfx } from '$lib/server/import/standards/ofx';
+import { proveStatement } from '$lib/server/import/proof';
 
 /**
  * OFX arrives in two dialects under one extension, and the older one is not
@@ -45,13 +46,20 @@ describe('parseOfx', () => {
 		expect(statement.closingBalanceMinor).toBe(105_950n);
 	});
 
-	it('derives the opening balance so the endpoints can be checked', () => {
-		// The file states a closing balance and no opening one. Deriving the
-		// opening from it cannot manufacture agreement — both sides come from the
-		// same movements — but it does turn an unavailable check into a real one.
+	it('does not invent an opening balance the file never stated', () => {
+		// `closing - sum(movements)` was computed here so the endpoint check would
+		// have something to test. It cannot: `opening + sum === closing` then
+		// reduces to `closing === closing` and holds whatever was read, so an OFX
+		// export missing a transaction passed it and every OFX file was rated P1
+		// on a check that could not fail. OFX prints no per-row balances either,
+		// so with no stated opening figure there is genuinely nothing in the file
+		// to check the movements against, and saying so is the honest answer.
 		const [statement] = parseOfx(SGML);
-		const moved = statement.rows.reduce((total, row) => total + row.amountMinor, 0n);
-		expect(statement.openingBalanceMinor! + moved).toBe(statement.closingBalanceMinor);
+		expect(statement.openingBalanceMinor).toBeUndefined();
+
+		const proof = proveStatement(statement, { currency: statement.currency });
+		const endpoints = proof.checks.find((check) => check.name === 'opening and closing');
+		expect(endpoints?.status).toBe('unavailable');
 	});
 
 	it('reads the XML dialect the same way', () => {

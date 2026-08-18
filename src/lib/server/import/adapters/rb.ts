@@ -178,6 +178,10 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 
 	return {
 		bank: 'rb',
+		// An adapter ran because the file identified this bank, so the issuer
+		// is evidence here rather than a guess. Readers that cannot tell leave
+		// it undefined; only this field may decide an account.
+		issuer: 'rb',
 		format: 'pdf',
 		accountNumber,
 		currency,
