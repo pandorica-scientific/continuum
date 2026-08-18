@@ -32,8 +32,23 @@
  *     29,775.01 -> 239,775.01    -86.11    -> -66.11
  *
  * Those are substitutions, not formatting, so no amount of post-processing
- * recovers them. Whatever is wrong is upstream of the text — rendering,
- * contrast, or the recogniser's configuration — and it has not been found yet.
+ * recovers them. Confidence is 63 on a page a person reads without effort.
+ *
+ * Four explanations were tested and none of them is it. Recorded so the next
+ * attempt starts further along:
+ *
+ *   - NOT the language count. `eng` alone, `eng+pol` and all five score the
+ *     same (0-1 of 10 figures exact).
+ *   - NOT the `_fast` models. The full 10 MB `eng` traineddata scores the same,
+ *     at the same confidence.
+ *   - NOT the image. 2480x3509 at 300 dpi, 8-bit RGB, visibly crisp — the
+ *     figures are legible even downscaled to a third.
+ *   - NOT the missing DPI metadata. These PNGs carry no `pHYs` chunk, so
+ *     Tesseract assumes 70 dpi; setting `user_defined_dpi` to 300 changes the
+ *     output not at all.
+ *
+ * What remains untested is the WASM build against a native Tesseract on the
+ * same page. If those differ, the answer is upstream of this file entirely.
  *
  * The half that matters holds: all 64 were REFUSED, none imported wrongly. The
  * proof gate does not care where a reading came from.

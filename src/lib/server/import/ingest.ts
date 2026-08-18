@@ -26,7 +26,7 @@ import {
 	proposePairs,
 	type PairableTx
 } from './pairing';
-import type { ParsedStatement } from './types';
+import type { ParsedRow, ParsedStatement } from './types';
 
 interface LegacyRevolutIdentity {
 	bookedAt: string;
@@ -237,6 +237,13 @@ async function resolveAccount(
  * as a duplicate, stranding the unresolved statements permanently. Until a
  * statement can be re-imported on its own, a file is all or nothing.
  */
+/**
+ * The file is wrong, not merely unassignable. Nothing is written — content hash
+ * included — so the corrected file can be uploaded again without looking like a
+ * duplicate.
+ */
+class StatementRejected extends Error {}
+
 class NeedsAccount extends Error {
 	constructor(readonly result: IngestResult) {
 		super(result.error ?? 'An account is needed.');
@@ -292,6 +299,7 @@ async function ingestStatement(
 	}
 
 	let acct = resolution.account;
+	assertChainStartsWhereTheAccountLeftOff(statement, acct);
 	if (
 		explicitAccountId &&
 		statement.accountNumber &&
@@ -464,6 +472,69 @@ async function ingestStatement(
 	}
 
 	return { ...base, accountId: acct.id, rowsAdded: added, rowsDuplicate: duplicate };
+}
+
+/**
+ * A running balance chain proves everything except its own beginning.
+ *
+ * Every step follows from the one above it, so removing a movement from the
+ * HEAD of a statement leaves a chain that still closes perfectly — and still
+ * agrees with a printed closing balance, because the sum and the starting point
+ * shift by the same amount. A printed OPENING balance catches it. Two of the
+ * sampled banks print none: a Revolut export of 38 movements and a CaixaBank
+ * statement of 140, which between them are most of the rows this product files
+ * on chain proof alone.
+ *
+ * Nothing inside such a file can settle it. What can is the account: the balance
+ * we last recorded is where the next statement must begin.
+ *
+ * The period cannot be used to establish adjacency, because a statement that
+ * prints no opening balance usually prints no period either — both are then
+ * derived from the rows, so deleting the first row moves the period start along
+ * with it and the two always agree. The gap in TIME is what remains, and it is
+ * measured from the last balance we hold to the first movement in the file.
+ *
+ * Beyond a month that gap is assumed to be a missing statement rather than a
+ * missing row, and nothing is said. That is the honest limit of what an account
+ * balance can prove: a hole in someone's statement history looks exactly like a
+ * hole in one statement, and refusing the import would punish the wrong one.
+ */
+const ANCHOR_WINDOW_DAYS = 31;
+
+function assertChainStartsWhereTheAccountLeftOff(
+	statement: ParsedStatement,
+	acct: typeof account.$inferSelect
+): void {
+	// A printed opening balance is its own anchor; the proof engine used it.
+	if (statement.openingBalanceMinor !== undefined) return;
+	if (acct.balanceMinor === null || acct.balanceAsOf === null) return;
+	if (statement.rows.length === 0) return;
+
+	const dates = statement.rows.map((row) => row.bookedAt).sort();
+	const firstMovement = dates[0];
+	// A statement that starts on or before the balance we hold is history being
+	// filled in behind us, not the next instalment.
+	if (firstMovement <= acct.balanceAsOf) return;
+	const days =
+		(Date.parse(`${firstMovement}T00:00:00Z`) - Date.parse(`${acct.balanceAsOf}T00:00:00Z`)) /
+		86_400_000;
+	if (days > ANCHOR_WINDOW_DAYS) return;
+
+	// The chain may be listed either way round, so both ends are candidates for
+	// its beginning; the proof engine has already established that one of them is.
+	const net = (row: ParsedRow) => row.amountMinor - (row.feeMinor ?? 0n);
+	const openings: bigint[] = [];
+	for (const row of [statement.rows[0], statement.rows[statement.rows.length - 1]]) {
+		if (row?.balanceAfterMinor !== undefined) openings.push(row.balanceAfterMinor - net(row));
+	}
+	if (openings.length === 0) return;
+	if (openings.some((opening) => opening === acct.balanceMinor)) return;
+
+	const gap = openings[0] - acct.balanceMinor;
+	const size = (gap < 0n ? -gap : gap).toString().replace(/(\d{2})$/, '.$1');
+	throw new StatementRejected(
+		`This statement prints no opening balance, and its first movement starts ${size} ${statement.currency} away from where this account stood on ${acct.balanceAsOf}. Either a movement is missing from the beginning of the file, or an earlier statement has not been imported yet. Nothing has been imported.`
+	);
 }
 
 /** Ingest one uploaded statement file end to end. */
@@ -661,6 +732,17 @@ export async function ingestFile(
 		// The transaction has rolled back, so nothing — importFile included — was
 		// written; the user can choose an account and upload the same file again.
 		if (error instanceof NeedsAccount) return error.result;
+		if (error instanceof StatementRejected) {
+			return {
+				filename,
+				bank: statements[0]?.bank,
+				rowsRead: totalRows,
+				rowsAdded: 0,
+				rowsDuplicate: 0,
+				rowsPaired: 0,
+				error: error.message
+			};
+		}
 		// Filesystem writes cannot join the database transaction. Retain the
 		// UUID-named original as an explicitly logged orphan so a transient
 		// database failure never destroys the user's only copy of a statement.

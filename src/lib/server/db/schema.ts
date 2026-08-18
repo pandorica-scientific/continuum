@@ -206,8 +206,35 @@ export const importFile = pgTable('import_file', {
 	rowsAdded: integer('rows_added').notNull().default(0),
 	rowsDuplicate: integer('rows_duplicate').notNull().default(0),
 	rowsPaired: integer('rows_paired').notNull().default(0),
+	/**
+	 * How the statement was read, and what proved it.
+	 *
+	 * The proof engine decided whether to file this statement and then threw its
+	 * evidence away, so the ledger held numbers with no account of where they
+	 * came from. Keeping it means a row that turns out to be wrong can be traced
+	 * to the reading that produced it, and that "everything that came from OCR"
+	 * is a query rather than a guess.
+	 */
+	sourceMethod: text('source_method'),
+	proofClass: text('proof_class'),
+	ledgerModel: text('ledger_model'),
+	currency: text('currency'),
+	openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
+	closingBalanceMinor: bigint('closing_balance_minor', { mode: 'bigint' }),
+	statedCreditTotalMinor: bigint('stated_credit_total_minor', { mode: 'bigint' }),
+	statedDebitTotalMinor: bigint('stated_debit_total_minor', { mode: 'bigint' }),
+	statedRowCount: integer('stated_row_count'),
+	/** Each check as the evidence panel shows it: name, status, detail. */
+	reconciliation: jsonb('reconciliation').$type<ProofCheckRecord[] | null>(),
 	uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+/** One line of a statement's evidence, as stored. */
+export interface ProofCheckRecord {
+	name: string;
+	status: 'pass' | 'fail' | 'unavailable';
+	detail: string;
+}
 
 /**
  * A remembered statement layout.
@@ -296,6 +323,11 @@ export const transaction = pgTable(
 		reviewState: text('review_state').notNull().default('needs_review'),
 		reviewReason: text('review_reason'),
 		importFileId: text('import_file_id').references(() => importFile.id, { onDelete: 'set null' }),
+		// How this row was read and how strongly it was proven, carried on the row
+		// itself so it can answer for its own origin even after the file it came
+		// from has been re-parsed or superseded.
+		sourceMethod: text('source_method'),
+		proofClass: text('proof_class'),
 		transferPairId: text('transfer_pair_id')
 	},
 	(table) => [

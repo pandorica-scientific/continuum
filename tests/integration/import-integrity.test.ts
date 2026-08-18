@@ -1035,6 +1035,48 @@ describe('import database integrity', () => {
 		expect(assignedAccounts).toHaveLength(1);
 	});
 
+	it('refuses a chain whose first movement is missing, using the account as the anchor', async () => {
+		// Revolut prints no opening balance, so its chain proves everything except
+		// its own beginning: delete the FIRST movement and every remaining step
+		// still follows, and the printed closing balance still agrees because the
+		// sum and the start shift together. Only the account knows better.
+		const header =
+			'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance';
+		const rows = [
+			'Transfer,Current,2026-08-01 08:00:00,2026-08-01 08:00:00,Opening move,100.00,0.00,CZK,COMPLETED,1100.00',
+			'Transfer,Current,2026-08-02 08:00:00,2026-08-02 08:00:00,Second move,50.00,0.00,CZK,COMPLETED,1150.00',
+			'Transfer,Current,2026-08-03 08:00:00,2026-08-03 08:00:00,Third move,25.00,0.00,CZK,COMPLETED,1175.00'
+		];
+		const { ingestFile } = await import('$lib/server/import/ingest');
+
+		await insertAccount('rev-czk', 'CZK', [], 'revolut');
+		// The account was left at 1000.00 on the day before this statement starts,
+		// which is exactly the figure the complete chain begins from.
+		await testDb
+			.update(schema.account)
+			.set({ balanceMinor: 100_000n, balanceAsOf: '2026-07-31' })
+			.where(eq(schema.account.id, 'rev-czk'));
+
+		const whole = new TextEncoder().encode([header, ...rows].join('\n'));
+		const intact = await ingestFile('revolut-whole.csv', whole, 'rev-czk', testDb);
+		expect(intact.error).toBeUndefined();
+		expect(intact.rowsAdded).toBe(3);
+
+		// Now the same statement with its first movement removed. The chain still
+		// closes on the two that remain.
+		await testDb
+			.update(schema.account)
+			.set({ balanceMinor: 100_000n, balanceAsOf: '2026-07-31' })
+			.where(eq(schema.account.id, 'rev-czk'));
+		const truncated = new TextEncoder().encode([header, ...rows.slice(1)].join('\n'));
+		const missing = await ingestFile('revolut-short.csv', truncated, 'rev-czk', testDb);
+
+		expect(missing.error).toMatch(/missing from the beginning/i);
+		expect(missing.rowsAdded).toBe(0);
+		// Nothing recorded, so the corrected file is not later refused as a duplicate.
+		expect(await count('import_file')).toBe(1);
+	}, 30_000);
+
 	it('does not let a slower older statement overwrite a newer closing balance', async () => {
 		await insertAccount('fio-czk', 'CZK', ['1234567890/2010']);
 		await harness.sql.unsafe(`
