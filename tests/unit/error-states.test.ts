@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { ERROR_STATES, NOTES, huesFor, isGenericMessage, stateFor } from '$lib/errors/states';
-import { MOTIFS } from '$lib/errors/motifs';
+import { ARTWORK_DIR, artworkFor } from '$lib/errors/artwork';
 
 describe('choosing a screen for a status', () => {
 	it('uses the state written for that status', () => {
@@ -64,20 +66,17 @@ describe('the catalogue', () => {
 	it('gives every state a note and a drawing', () => {
 		for (const state of ERROR_STATES) {
 			expect(NOTES[state.code]).toBeTruthy();
-			expect(MOTIFS[state.code]?.length ?? 0).toBeGreaterThan(0);
+			expect(artworkFor(state.code)).toBe(`${ARTWORK_DIR}/${state.code}.webp`);
 		}
 	});
 
-	// The drawings were transcribed by script from the design. A mistyped arc
-	// command still renders — just wrong — so the shape is checked here.
-	it('has well-formed path data throughout', () => {
-		for (const [code, paths] of Object.entries(MOTIFS)) {
-			for (const path of paths) {
-				expect(path.d, code).toMatch(/^[Mm]/);
-				expect(path.w, code).toBeGreaterThan(0);
-				expect(path.o, code).toBeGreaterThan(0);
-				expect(path.o, code).toBeLessThanOrEqual(1);
-			}
+	// The drawings are files rather than transcribed path data now, so a missing
+	// export is a blank square on a screen nobody visits on purpose. Checking the
+	// file is on disk is the only thing that catches that before someone hits it.
+	it('ships the drawing every state points at', () => {
+		for (const state of ERROR_STATES) {
+			const file = path.resolve('static', artworkFor(state.code).replace(/^\//, ''));
+			expect(existsSync(file), state.code).toBe(true);
 		}
 	});
 
