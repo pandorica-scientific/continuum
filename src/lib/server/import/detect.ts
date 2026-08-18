@@ -14,6 +14,7 @@ import { readTabular } from './tabular/statement';
 import { PROOF_RANK, decideImport, proveStatement, type ProofClass } from './proof';
 import { headersOf, matchProfile, rolesFromProfile, type ImportProfile } from './tabular/profile';
 import { gridsFromPdfLines } from './tabular/frompdf';
+import { gridsFromRhythm } from './tabular/rhythm';
 import { looksLikeHoldings } from './holdings';
 import { OCR_LANGUAGES, languagesFor, ocrAvailable, ocrImage, ocrPdf } from './ocr';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
@@ -256,8 +257,22 @@ async function parseByFormat(
 			.slice(0, 24)
 			.map((l) => l.cells.join(' '))
 			.join('\n');
+		// Two assemblers, one arbiter.
+		//
+		// `gridsFromPdfLines` reads a table by deciding which lines start a
+		// movement; `gridsFromRhythm` never classifies a line and instead finds
+		// the page's record beat. Neither dominates — the first reads a 140-row
+		// CaixaBank statement the second fragments, and the second reads four
+		// banks the first cannot — so both are offered as candidate readings and
+		// the proof engine chooses, exactly as it chooses between encodings and
+		// delimiters.
 		const readPdfAsUnknownLayout = () =>
-			readGenerically(buffer, options.profiles, gridsFromPdfLines(lines), options.currency);
+			readGenerically(
+				buffer,
+				options.profiles,
+				[gridsFromPdfLines(lines), gridsFromRhythm(lines)],
+				options.currency
+			);
 		if (/RZBCCZPP|Výpis z běžného účtu/.test(head))
 			return adapterOrGeneric(() => parseRbLines(lines), readPdfAsUnknownLayout);
 		if (/GIBACZPX|Výpis z účtu/.test(head))
@@ -284,7 +299,7 @@ async function parseByFormat(
 		const generic = await readGenerically(
 			buffer,
 			options.profiles,
-			gridsFromPdfLines(lines),
+			[gridsFromPdfLines(lines), gridsFromRhythm(lines)],
 			options.currency
 		);
 		if (generic.statements.length > 0) return generic.statements;
@@ -298,7 +313,7 @@ async function parseByFormat(
 			const fromPixels = await readGenerically(
 				buffer,
 				options.profiles,
-				gridsFromPdfLines(scanned),
+				[gridsFromPdfLines(scanned), gridsFromRhythm(scanned)],
 				options.currency
 			);
 			if (fromPixels.statements.length > 0) return fromPixels.statements;
@@ -316,7 +331,7 @@ async function parseByFormat(
 		const fromSheets = await readGenerically(
 			buffer,
 			options.profiles,
-			gridsFromWorkbook(buffer),
+			[gridsFromWorkbook(buffer)],
 			options.currency
 		);
 		if (fromSheets.statements.length > 0) return fromSheets.statements;
@@ -340,7 +355,7 @@ async function parseByFormat(
 		const fromPixels = await readGenerically(
 			buffer,
 			options.profiles,
-			gridsFromPdfLines(scanned),
+			[gridsFromPdfLines(scanned), gridsFromRhythm(scanned)],
 			options.currency
 		);
 		if (fromPixels.statements.length > 0) return fromPixels.statements;
@@ -392,50 +407,54 @@ async function parseByFormat(
 async function readGenerically(
 	buffer: Uint8Array,
 	loadProfiles?: () => Promise<ImportProfile[]>,
-	/** Grids recovered from somewhere other than the raw bytes, e.g. a PDF page. */
-	prebuilt?: Grid[],
+	/**
+	 * Grids recovered from somewhere other than the raw bytes, grouped by the
+	 * assembler that produced them. Evidence is shared inside a group and never
+	 * across one.
+	 */
+	prebuilt?: Grid[][],
 	/** The destination account's currency, when the import names one. */
 	accountCurrency?: string
 ): Promise<{ statements: ParsedStatement[]; reason?: string }> {
-	const candidates = prebuilt ?? candidateGrids(buffer);
-
-	// Evidence belongs to the reading it proves.
+	// One group per assembly of the document.
 	//
-	// Prebuilt grids are PARTS of one document — a PDF's pages — so a balance
-	// printed on page one is legitimately available to a table found on page
-	// three. Grids from `candidateGrids` are the opposite: they are ALTERNATIVE
-	// decodings of the same bytes, one encoding and delimiter per candidate, and
-	// at most one of them is the file. Sharing evidence between them lets one
-	// reading's balances judge another reading's rows, which manufactures a
-	// contradiction out of two perfectly consistent readings — and, worse, can
-	// mask a real defect by refusing a file for the wrong reason.
-	const sharedEvidence = prebuilt?.flatMap((grid) => detectRegions(grid));
+	// Delimited candidates are ALTERNATIVE decodings of the same bytes, so each
+	// stands alone: at most one of them is the file, and letting one reading's
+	// balances judge another's rows manufactures a contradiction out of two
+	// perfectly consistent readings.
+	//
+	// A PDF is read by two assemblers that both see the whole document, and
+	// within one assembly a balance printed on page one is legitimately
+	// available to a table found on page three. Across assemblies it is not —
+	// they extract the SAME furniture differently, and one of them can be wrong.
+	// Sharing across them cost a five-movement statement its proof: read with its
+	// own evidence it is P4 with every check passing, and read with the other
+	// assembler's stated totals it is P0.
+	const groups: Grid[][] = prebuilt ?? candidateGrids(buffer).map((grid) => [grid]);
 
 	const readings: { statements: ParsedStatement[]; amounts: string[]; proofClass: ProofClass }[] =
 		[];
 	let firstReason: string | undefined;
 
-	for (const candidate of candidates) {
-		const attempt = await readOneGrid(
-			[candidate],
-			loadProfiles,
-			sharedEvidence ?? detectRegions(candidate),
-			accountCurrency
-		);
-		if (attempt.statements.length > 0) {
-			readings.push({
-				statements: attempt.statements,
-				// What the reading CLAIMS, reduced to the part that must not differ:
-				// the movements themselves. Text may differ between two decodings of
-				// the same bytes without either being wrong.
-				amounts: attempt.statements
-					.flatMap((statement) =>
-						statement.rows.map((row) => String(row.amountMinor - (row.feeMinor ?? 0n)))
-					)
-					.sort(),
-				proofClass: attempt.proofClass ?? 'P0'
-			});
-		} else if (!firstReason) firstReason = attempt.reason;
+	for (const group of groups) {
+		const evidence = group.flatMap((grid) => detectRegions(grid));
+		for (const candidate of group) {
+			const attempt = await readOneGrid([candidate], loadProfiles, evidence, accountCurrency);
+			if (attempt.statements.length > 0) {
+				readings.push({
+					statements: attempt.statements,
+					// What the reading CLAIMS, reduced to the part that must not
+					// differ: the movements themselves. Text may differ between two
+					// decodings of the same bytes without either being wrong.
+					amounts: attempt.statements
+						.flatMap((statement) =>
+							statement.rows.map((row) => String(row.amountMinor - (row.feeMinor ?? 0n)))
+						)
+						.sort(),
+					proofClass: attempt.proofClass ?? 'P0'
+				});
+			} else if (!firstReason) firstReason = attempt.reason;
+		}
 	}
 
 	if (readings.length === 0) return { statements: [], reason: firstReason };

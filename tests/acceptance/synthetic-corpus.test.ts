@@ -42,14 +42,7 @@ interface Gap {
 
 const KNOWN_GAPS: Gap[] = [
 	{
-		/**
-		 * Comma as both delimiter and decimal mark, unquoted: `799,56` is
-		 * indistinguishable from two fields `799` and `56`, so the field boundaries
-		 * are genuinely ambiguous. Real exports using comma decimals ship semicolons
-		 * for exactly this reason. Recoverable only by trying merges against the
-		 * balance chain, which is candidate generation we have not built.
-		 */
-		why: 'Comma as both delimiter and decimal mark, unquoted: `799,56` is indistinguishable from two fields `799` and `56`, so the field boundaries are genuinely ambiguous. Real exports using comma decimals ship semicolons for exactly this reason. Recoverable only by trying merges against the balance chain, which is candidate generation we have not built.',
+		why: 'Comma as both delimiter and decimal mark, unquoted: `799,56` is indistinguishable from two fields `799` and `56`, so the field boundaries are genuinely ambiguous. Real exports using comma decimals ship semicolons for exactly this reason.',
 		files: [
 			'csv/statement-001-comma-utf8-bom.csv',
 			'csv/statement-002-comma-utf8-bom.csv',
@@ -61,7 +54,6 @@ const KNOWN_GAPS: Gap[] = [
 			'csv/statement-015-comma-utf8-bom.csv',
 			'csv/statement-016-comma-utf8-bom.csv',
 			'csv/statement-017-comma-utf8-bom.csv',
-			'csv/statement-022-comma-utf8-bom.csv',
 			'csv/statement-024-comma-utf8-bom.csv',
 			'csv/statement-025-comma-utf8-bom.csv',
 			'csv/statement-026-comma-utf8-bom.csv',
@@ -74,7 +66,6 @@ const KNOWN_GAPS: Gap[] = [
 			'csv/statement-039-comma-utf8-bom.csv',
 			'csv/statement-040-comma-utf8-bom.csv',
 			'csv/statement-041-comma-utf8-bom.csv',
-			'csv/statement-046-comma-utf8-bom.csv',
 			'csv/statement-048-comma-utf8-bom.csv',
 			'csv/statement-049-comma-utf8-bom.csv',
 			'csv/statement-050-comma-utf8-bom.csv',
@@ -86,92 +77,14 @@ const KNOWN_GAPS: Gap[] = [
 		]
 	},
 	{
-		/**
-		 * Three-decimal currencies. KWD has 1000 fils to the dinar and the reader
-		 * assumes two places, so no amount parses.
-		 */
-		why: 'Three-decimal currencies. KWD has 1000 fils to the dinar and the reader assumes two places, so no amount parses.',
-		files: [
-			'csv/statement-022-comma-utf8-bom.csv',
-			'csv/statement-022-semicolon-win1250-crlf.csv',
-			'csv/statement-046-comma-utf8-bom.csv',
-			'csv/statement-046-semicolon-win1250-crlf.csv',
-			'tsv/statement-022-tab-headerless.tsv',
-			'tsv/statement-046-tab-headerless.tsv'
-		]
+		why: 'A dot-decimal PDF whose every figure has three digits after the separator, in a two-decimal currency: the separator could be a decimal point or a thousands group, and nothing in the file settles it.',
+		files: ['pdf-text/statement-018.pdf', 'pdf-text/statement-042.pdf']
 	},
 	{
-		/**
-		 * Multi-line PDF records. The geometric reader recovers two or three rows
-		 * of each table and refuses the rest, which is the gap the rhythm assembler
-		 * in `scratch-workspace/probe/rhythm.ts` was measured against.
-		 */
-		why: 'Multi-line PDF records. The geometric reader recovers two or three rows of each table and refuses the rest, which is the gap the rhythm assembler in `scratch-workspace/probe/rhythm.ts` was measured against.',
-		files: [
-			'pdf-text/statement-001.pdf',
-			'pdf-text/statement-002.pdf',
-			'pdf-text/statement-003.pdf',
-			'pdf-text/statement-004.pdf',
-			'pdf-text/statement-005.pdf',
-			'pdf-text/statement-006.pdf',
-			'pdf-text/statement-007.pdf',
-			'pdf-text/statement-008.pdf',
-			'pdf-text/statement-009.pdf',
-			'pdf-text/statement-010.pdf',
-			'pdf-text/statement-011.pdf',
-			'pdf-text/statement-012.pdf',
-			'pdf-text/statement-013.pdf',
-			'pdf-text/statement-014.pdf',
-			'pdf-text/statement-015.pdf',
-			'pdf-text/statement-017.pdf',
-			'pdf-text/statement-018.pdf',
-			'pdf-text/statement-019.pdf',
-			'pdf-text/statement-020.pdf',
-			'pdf-text/statement-021.pdf',
-			'pdf-text/statement-022.pdf',
-			'pdf-text/statement-023.pdf',
-			'pdf-text/statement-024.pdf',
-			'pdf-text/statement-025.pdf',
-			'pdf-text/statement-026.pdf',
-			'pdf-text/statement-027.pdf',
-			'pdf-text/statement-028.pdf',
-			'pdf-text/statement-029.pdf',
-			'pdf-text/statement-030.pdf',
-			'pdf-text/statement-031.pdf',
-			'pdf-text/statement-033.pdf',
-			'pdf-text/statement-034.pdf',
-			'pdf-text/statement-035.pdf',
-			'pdf-text/statement-036.pdf',
-			'pdf-text/statement-037.pdf',
-			'pdf-text/statement-038.pdf',
-			'pdf-text/statement-039.pdf',
-			'pdf-text/statement-040.pdf',
-			'pdf-text/statement-041.pdf',
-			'pdf-text/statement-042.pdf',
-			'pdf-text/statement-043.pdf',
-			'pdf-text/statement-044.pdf',
-			'pdf-text/statement-045.pdf',
-			'pdf-text/statement-046.pdf',
-			'pdf-text/statement-047.pdf',
-			'pdf-text/statement-049.pdf',
-			'pdf-text/statement-050.pdf',
-			'pdf-text/statement-051.pdf',
-			'pdf-text/statement-052.pdf',
-			'pdf-text/statement-053.pdf',
-			'pdf-text/statement-054.pdf',
-			'pdf-text/statement-055.pdf',
-			'pdf-text/statement-056.pdf',
-			'pdf-text/statement-057.pdf',
-			'pdf-text/statement-058.pdf',
-			'pdf-text/statement-059.pdf',
-			'pdf-text/statement-060.pdf'
-		]
+		why: "Three-decimal currency in a PDF: the amounts parse, but three of eight rows carry a figure the reader cannot resolve to KWD's 1000 fils.",
+		files: ['pdf-text/statement-022.pdf', 'pdf-text/statement-046.pdf']
 	},
 	{
-		/**
-		 * A statement with no movements at all, in a format with no header and no
-		 * metadata. There is nothing in the file to read, and refusing is right.
-		 */
 		why: 'A statement with no movements at all, in a format with no header and no metadata. There is nothing in the file to read, and refusing is right.',
 		files: [
 			'tsv/statement-016-tab-headerless.tsv',
@@ -180,9 +93,6 @@ const KNOWN_GAPS: Gap[] = [
 		]
 	},
 	{
-		/**
-		 * OFX/QFX is not implemented.
-		 */
 		why: 'OFX/QFX is not implemented.',
 		files: [
 			'ofx/statement-001.ofx',
@@ -198,9 +108,6 @@ const KNOWN_GAPS: Gap[] = [
 		]
 	},
 	{
-		/**
-		 * QIF is not implemented.
-		 */
 		why: 'QIF is not implemented.',
 		files: [
 			'qif/statement-001.qif',
@@ -214,17 +121,10 @@ const KNOWN_GAPS: Gap[] = [
 		]
 	},
 	{
-		/**
-		 * OpenDocument spreadsheets are not read yet.
-		 */
 		why: 'OpenDocument spreadsheets are not read yet.',
 		files: ['ods/multi-account-ambiguous-workbook.ods']
 	},
 	{
-		/**
-		 * A workbook holding two accounts, with no ground truth of its own: it
-		 * exists to show that one sheet is silently dropped (Phase C item 8).
-		 */
 		why: 'A workbook holding two accounts, with no ground truth of its own: it exists to show that one sheet is silently dropped (Phase C item 8).',
 		files: ['xlsx/multi-account-ambiguous-workbook.xlsx']
 	}

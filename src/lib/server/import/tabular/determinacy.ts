@@ -20,9 +20,14 @@ export type DecimalMark = ',' | '.';
  * A numeric date. The year is OPTIONAL because US statements print entry
  * dates and daily balances as bare MM/DD, and a column of those still tells
  * us whether the order is day-first.
+ *
+ * Spaces are allowed around the separators: Raiffeisenbank prints `1. 3. 2025`,
+ * and a PDF's text layer can put a space anywhere its glyph spacing suggests
+ * one. This is the ONE definition every module shares — two of them drifted
+ * apart once already, and the modules disagreed about which cells were dates.
  */
 const NUMERIC_DATE =
-	/^\s*(\d{1,4})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\.?\s*(?:[T\s]+\d{1,2}:\d{2}(?::\d{2})?)?\s*$/;
+	/^\s*(\d{1,4})\s*[.\-/]\s*(\d{1,2})(?:\s*[.\-/]\s*(\d{2,4}))?\.?\s*(?:[T\s]+\d{1,2}:\d{2}(?::\d{2})?)?\s*$/;
 
 /**
  * The shape is not enough — the COMPONENTS have to be a possible date.
@@ -190,7 +195,19 @@ const NUMBER_SHAPE = /^-?\(?\s*[\d.,\s'\u00A0\u202F]+\s*\)?-?$/;
  * ambiguous — a thousand and change, or one point two three four — and a
  * parser that picks per value will read a column two different ways.
  */
-export function resolveDecimalMark(values: string[]): Determinacy<DecimalMark> {
+export function resolveDecimalMark(
+	values: string[],
+	/**
+	 * How many decimal places the currency actually has.
+	 *
+	 * "Exactly three trailing digits reads equally as a thousands group" is true
+	 * of a two-decimal currency and false of a three-decimal one: a Kuwaiti dinar
+	 * has 1000 fils, so `1.234` IS the fraction, and treating it as a group left
+	 * every KWD statement with an undecidable separator and no readable amount.
+	 * The account states its currency, so this is known rather than guessed.
+	 */
+	fractionDigits = 2
+): Determinacy<DecimalMark> {
 	let both = 0;
 	let commaDecimal = 0;
 	let dotDecimal = 0;
@@ -213,14 +230,16 @@ export function resolveDecimalMark(values: string[]): Determinacy<DecimalMark> {
 			lastBoth = comma > dot ? ',' : '.';
 			continue;
 		}
-		// Exactly three trailing digits reads equally as a thousands group; one or
-		// two can only be a fraction.
+		// Three trailing digits reads equally as a thousands group — unless the
+		// currency has three decimal places, in which case it is the fraction.
+		// One or two trailing digits can only ever be a fraction.
+		const groupLike = (after: number) => after === 3 && fractionDigits !== 3;
 		if (comma !== -1) {
-			if (value.length - comma - 1 === 3) commaGroup++;
+			if (groupLike(value.length - comma - 1)) commaGroup++;
 			else commaDecimal++;
 		}
 		if (dot !== -1) {
-			if (value.length - dot - 1 === 3) dotGroup++;
+			if (groupLike(value.length - dot - 1)) dotGroup++;
 			else dotDecimal++;
 		}
 	}

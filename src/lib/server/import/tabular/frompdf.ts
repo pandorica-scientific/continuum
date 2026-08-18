@@ -14,10 +14,18 @@
  *     Joining is required — and is itself ambiguous, because "digits, gap,
  *     three digits" also describes two adjacent columns (`300,00 377,93`).
  *     The distinguishing fact is whether the left part already has a decimal.
- *  2. **Multi-line records defeat this.** Raiffeisenbank prints three physical
- *     lines per movement and Česká spořitelna two to five. Those banks keep
- *     their hand-written parsers; this reader is for the one-line-per-movement
- *     layouts, which is most of them.
+ *  2. **Multi-line records defeat THIS reader — but not the problem.** This one
+ *     works by deciding which lines start a movement, and Raiffeisenbank's three
+ *     physical lines per movement, or Česká spořitelna's two to five, give that
+ *     question no usable answer: their continuation lines carry dates and
+ *     figures too.
+ *
+ *     That was once recorded here as a structural boundary. It is not one.
+ *     `rhythm.ts` assembles those layouts correctly by asking what the page's
+ *     record BEAT is and never classifying a line at all, and both readers are
+ *     now offered as candidates for the proof engine to choose between. Neither
+ *     dominates: this one reads a 140-row statement the other fragments, and the
+ *     other reads four banks this one cannot.
  */
 import { isDateLike } from './determinacy';
 import { looksLikeSummary } from './vocabulary';

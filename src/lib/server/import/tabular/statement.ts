@@ -481,26 +481,6 @@ export function readTabular(
 		...(creditColumn >= 0 ? columnValues(body, creditColumn) : []),
 		...(balanceColumn >= 0 ? columnValues(body, balanceColumn) : [])
 	].filter(Boolean);
-	// Resolve the convention over EVERY number the statement shows, movements and
-	// balances alike. Fio's amounts are ungrouped integers that settle nothing,
-	// while its balance line reads `382,38` — consulting only the columns picked
-	// "." and turned that balance into 38 238,00.
-	const mark = options.decimalMark
-		? ({ kind: 'determined', value: options.decimalMark, evidence: 'a confirmed layout' } as const)
-		: resolveDecimalMark([
-				...amountValues,
-				evidence.openingBalance ?? '',
-				evidence.closingBalance ?? '',
-				evidence.creditTotal ?? '',
-				evidence.debitTotal ?? ''
-			]);
-	// "Unavailable" means every reading agrees — integers with no separator —
-	// which is settled, not open.
-	const decimalMark: DecimalMark = mark.kind === 'determined' ? mark.value : '.';
-	if (mark.kind === 'ambiguous') {
-		questions.push({ dimension: 'decimalMark', reason: mark.reason, candidates: mark.candidates });
-	}
-
 	// The account first, the document second, a guess never.
 	//
 	// `?? 'CZK'` used to close this expression, and it was a fabricated fact
@@ -522,6 +502,30 @@ export function readTabular(
 			dimension: 'currency',
 			reason: 'nothing in this file names the currency, and no account was given to take it from'
 		});
+	}
+
+	// Resolve the convention over EVERY number the statement shows, movements and
+	// balances alike. Fio's amounts are ungrouped integers that settle nothing,
+	// while its balance line reads `382,38` — consulting only the columns picked
+	// "." and turned that balance into 38 238,00.
+	const mark = options.decimalMark
+		? ({ kind: 'determined', value: options.decimalMark, evidence: 'a confirmed layout' } as const)
+		: resolveDecimalMark(
+				[
+					...amountValues,
+					evidence.openingBalance ?? '',
+					evidence.closingBalance ?? '',
+					evidence.creditTotal ?? '',
+					evidence.debitTotal ?? ''
+				],
+				// The currency decides what three trailing digits mean.
+				detectedCurrency ? minorDigits(detectedCurrency) : 2
+			);
+	// "Unavailable" means every reading agrees — integers with no separator —
+	// which is settled, not open.
+	const decimalMark: DecimalMark = mark.kind === 'determined' ? mark.value : '.';
+	if (mark.kind === 'ambiguous') {
+		questions.push({ dimension: 'decimalMark', reason: mark.reason, candidates: mark.candidates });
 	}
 
 	if (questions.length > 0) {

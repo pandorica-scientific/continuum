@@ -150,6 +150,17 @@ const CORPUS: Expectation[] = [
 	},
 
 	{
+		file: '72970193_260701_260731.pdf',
+		note: 'mBank PL as a PDF — read by rhythm assembly, and it must agree with the CSV the adapter reads: same five amounts, same balances, same proof class, no bank-specific code',
+		outcome: 'imports',
+		bank: 'tabular',
+		currency: 'PLN',
+		rows: 5,
+		proof: 'P4',
+		reconciles: true
+	},
+
+	{
 		file: 'KU_3_month_bank_statment.pdf',
 		note: 'CaixaBank — three months across EIGHT pages, joined into one table; a currency symbol travels with each amount',
 		outcome: 'imports',
@@ -179,28 +190,23 @@ const CORPUS: Expectation[] = [
 		because: /confidently|broker/i
 	},
 
-	// ---- known gap: ONE limitation, four files ----
+	// ---- known gap: multi-line records, three files ----
 	//
-	// Each of these prints a movement across several physical lines, so the
-	// table fragments into three- and four-row pieces no region can hold
-	// together. It is not four bugs: Raiffeisenbank and Česká spořitelna have
-	// the same shape, which is exactly why they kept hand-written parsers.
+	// Each prints a movement across several physical lines. `frompdf.ts` reads a
+	// table by deciding which line starts a movement, and these give no usable
+	// answer: their continuation lines carry dates and figures too.
 	//
-	// The geometric reader handles one-line-per-movement layouts — UK, German
-	// and CaixaBank all read that way with no bank-specific code. Assembling
-	// multi-line records is a different problem, and the honest answer for now
-	// is a per-bank parser or a CSV/CAMT export.
+	// This was recorded as ONE limitation over FOUR files, and as a structural
+	// boundary rather than a defect. That was wrong. `rhythm.ts` assembles all
+	// four correctly — mBank PL now imports above, matching its own CSV exactly —
+	// and the three below assemble correctly as well. They stop later, at the
+	// proof gate, each for its own reason:
 	//
-	// Two attempts at a general fix are recorded in frompdf.ts, both reverted:
-	// defining a continuation by "carries no amount" (helped none of these and
-	// split CaixaBank into seven statements), and gap-based column clustering.
-	{
-		file: '72970193_260701_260731.pdf',
-		note: 'GAP: mBank PL PDF — dense layout, columns not recovered',
-		outcome: 'refuses',
-		because: /No table|confidently/i
-	},
-
+	//   Komerční banka   the decimal convention cannot be settled from the table
+	//   mBank CZ         two columns both read as amounts, mixing conventions
+	//   Nickel ES        assembles 11 movements with no arithmetic to check them
+	//
+	// So this is no longer one gap but three, and none of them is the assembler.
 	{
 		file: 'RK_3_month_bank_statment.pdf',
 		note: 'GAP: Nickel ES',
