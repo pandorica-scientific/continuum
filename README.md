@@ -40,66 +40,33 @@
 
 <br>
 
-<div align="center">
-  <table>
-    <tr>
-      <td align="center"><b>5</b><br><sub>bank formats</sub></td>
-      <td align="center"><sub>·</sub></td>
-      <td align="center"><b>3</b><br><sub>base currencies</sub></td>
-      <td align="center"><sub>·</sub></td>
-      <td align="center"><b>13</b><br><sub>dashboard panels</sub></td>
-      <td align="center"><sub>·</sub></td>
-      <td align="center"><b>0</b><br><sub>trackers</sub></td>
-      <td align="center"><sub>·</sub></td>
-      <td align="center"><b>1054</b><br><sub>tests</sub></td>
-    </tr>
-  </table>
-</div>
+Continuum gives a household one clear view of what it owns, owes, spends, and needs
+to remember. Import statements from the banks you already use, connect them to
+property, loans, investments, taxes, and documents, and see the answer to the
+question that matters: _what is our net worth right now, and is it moving in the
+right direction?_ Everything runs on hardware you control.
 
-<br>
-
-Continuum is built for households, not companies: two people, a few banks in a few
-currencies, a flat or two, and the question that actually matters — _what is our net
-worth right now, and is it going up?_ It runs as two containers on any machine you
-own, and the only copy of your financial history is the one on your disk.
-
----
-
-## Why
-
-Household money ends up scattered across a banking app per bank, a spreadsheet
-that goes stale, and a budgeting service that wants your bank credentials and a
-monthly fee. Continuum puts it in one place that belongs to you.
-
-| Instead of…                                  | Continuum gives you                                                                 |
-| -------------------------------------------- | ----------------------------------------------------------------------------------- |
-| a budgeting service holding your bank logins | **Import** — you export the statement, it never touches your bank                   |
-| a spreadsheet that goes stale                | **Cash flow** — a Sankey of where the money actually went, redrawn on every import  |
-| guessing what a flat is worth                | **Property** — tenancies, floor plans, bills with documents attached                |
-| a mortgage calculator in a browser tab       | **Loans** — fixation periods, real interest bookkeeping, what-if repayment previews |
-| a broker's own dashboard                     | **Investments** — fed by broker report uploads, behind an adapter seam              |
-| a folder of PDFs called `scans`              | **Documents** — filed against a person, a flat, a loan; renames follow              |
-| a reminder you set once and lost             | **Calendar** — ledger dates plus your own, synced to Google and iCloud              |
+## Why Continuum
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Private by construction</b><br>
-      <sub>Self-hosted on your hardware, with no telemetry and no accounts beyond your own household. Credentials live in their own table so a config export cannot leak them by omission. Real bank statements never leave the machine — the committed test fixtures are synthetic.</sub>
+      <b>One household view</b><br>
+      <sub>Accounts, cash flow, property, loans, investments, tax, documents, and calendar live together, so the important relationships stay visible.</sub>
     </td>
     <td width="50%" valign="top">
-      <b>Correct about money</b><br>
-      <sub>Every amount is an integer in minor units with a currency code, never a float. Multi-currency accounts convert at the rate that applied on the day, from daily Czech National Bank fixings, and a missing rate says so rather than quietly counting at face value.</sub>
+      <b>Private by construction</b><br>
+      <sub>Self-hosted on your hardware. No cloud account, subscription, or telemetry. Your bank credentials and financial history stay on your machine.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>Safe to re-import</b><br>
-      <sub>Statements are deduplicated by content and by transaction, so overlapping exports are always safe — including concurrent uploads. Re-uploading is the intended way to backfill years of history.</sub>
+      <b>Safe to keep current</b><br>
+      <sub>Re-import overlapping statements without creating duplicates. Amounts use exact minor-unit arithmetic, and multi-currency totals use the rate from the day.</sub>
     </td>
     <td width="50%" valign="top">
-      <b>Two people, not one admin</b><br>
-      <sub>Everyone signs in as themselves, with their own dashboard arrangement, their own passkeys and their own tax statements. Administrators manage the household; members see their own settings and nothing more.</sub>
+      <b>Made for two people</b><br>
+      <sub>Each person gets their own sign-in, passkeys, dashboard arrangement, and tax statements, while the household shares the picture that matters.</sub>
     </td>
   </tr>
 </table>
