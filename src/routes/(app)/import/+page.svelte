@@ -40,11 +40,11 @@
 
 <section class="section">
 	<UploadDropzone
-		accept=".csv,.pdf,.xlsx,.xls,.xml,.camt,.gpc,.abo,.sta,.mt940,.txt,.png,.jpg,.jpeg,.heic"
+		accept=".csv,.tsv,.txt,.pdf,.xlsx,.xls,.xml,.camt,.gpc,.abo,.sta,.mt940"
 		multiple={true}
 		idleText="Drop statements here, or click to browse"
 		busyText="Reading statements…"
-		description="CSV or PDF from any of the five banks, a spreadsheet, or a CAMT.053, MT940 or ABO/GPC export from any bank that offers one — those need no per-bank setup. Photographs of paper statements are read too. Several files at once. The layout is detected, transfers between your own accounts are paired and dropped, and categories come from what you corrected last time."
+		description="A CSV, spreadsheet or PDF from any bank — the layout is worked out from the file and checked against the statement's own balances, so no per-bank setup is needed. CAMT.053, MT940 and ABO/GPC exports are read directly. Several files at once. Transfers between your own accounts are paired and dropped, and categories come from what you corrected last time."
 		onfiles={uploadFiles}
 	/>
 

@@ -14,6 +14,7 @@
 import iconv from 'iconv-lite';
 import * as XLSX from 'xlsx';
 import { csvLines, splitCsvLine } from '../csv';
+import { MAX_CELLS_PER_SHEET, MAX_SHEETS } from '../safety';
 
 /** Encodings real exports from our sampled banks actually use. */
 const ENCODINGS = ['utf-8', 'win1250', 'win1252', 'iso-8859-2'] as const;
@@ -156,8 +157,26 @@ export function gridsFromWorkbook(buffer: Uint8Array): Grid[] {
 		bookVBA: false
 	});
 
+	if (workbook.SheetNames.length > MAX_SHEETS) {
+		throw new Error(
+			`That workbook has ${workbook.SheetNames.length} sheets; the limit is ${MAX_SHEETS}. It has not been read.`
+		);
+	}
+
 	return workbook.SheetNames.map((sheet) => {
 		const worksheet = workbook.Sheets[sheet];
+		// The declared extent, before any of it is turned into values. A sheet
+		// whose range says a million rows costs a million rows of memory the
+		// moment it is enumerated, however few of them hold anything.
+		if (worksheet['!ref']) {
+			const range = XLSX.utils.decode_range(worksheet['!ref']);
+			const cells = (range.e.r - range.s.r + 1) * (range.e.c - range.s.c + 1);
+			if (cells > MAX_CELLS_PER_SHEET) {
+				throw new Error(
+					`Sheet "${sheet}" declares ${cells.toLocaleString('en')} cells; the limit is ${MAX_CELLS_PER_SHEET.toLocaleString('en')}. It has not been read.`
+				);
+			}
+		}
 		const displayed = XLSX.utils.sheet_to_json<string[]>(worksheet, {
 			header: 1,
 			raw: false,

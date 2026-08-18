@@ -16,6 +16,32 @@
  * The output is deliberately `PdfLine[]` — the same shape the text layer
  * produces — so a scanned page and a digital one travel the identical road
  * afterwards: geometry, regions, determinacy, proof.
+ *
+ * ---
+ *
+ * STATUS: this has never read a statement. Measured twice, most recently across
+ * 64 raster derivatives of the synthetic corpus — PNG at 300 dpi, JPEG at 150,
+ * TIFF at 400 and scanned PDF at 200 — with every fix from the tabular and
+ * rhythm work in place: **0 read, 64 refused.**
+ *
+ * The pipeline is not the problem. The table is found and most rows assemble;
+ * the digits are wrong. On a clean 300 dpi render of a synthetic statement:
+ *
+ *     812.62    -> 612.62        -411.64   -> -41164   (the decimal is lost)
+ *     89.80     -> 1350          28,873.01 -> 28,073.01
+ *     29,775.01 -> 239,775.01    -86.11    -> -66.11
+ *
+ * Those are substitutions, not formatting, so no amount of post-processing
+ * recovers them. Whatever is wrong is upstream of the text — rendering,
+ * contrast, or the recogniser's configuration — and it has not been found yet.
+ *
+ * The half that matters holds: all 64 were REFUSED, none imported wrongly. The
+ * proof gate does not care where a reading came from.
+ *
+ * Nothing in production sets `options.ocr`, and the upload dialog no longer
+ * offers image formats, because a promise that always fails is worse than an
+ * absent one. This is kept rather than deleted because it is structurally
+ * sound and isolated; it is marked here so it cannot be mistaken for finished.
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
