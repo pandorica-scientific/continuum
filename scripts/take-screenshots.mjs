@@ -71,7 +71,10 @@ const SCREENS = [
 	{ name: 'loans', path: '/loans', settle: 600 },
 	{ name: 'investments', path: '/investments', settle: 900 },
 	{ name: 'retirement', path: '/retirement', settle: 900 },
-	{ name: 'tax', path: '/tax', settle: 600 },
+	// Nine statements push the history charts past a 1150px viewport, and the
+	// charts are the point of the screen — scroll to them rather than trimming
+	// the demo data to fit the frame.
+	{ name: 'tax', path: '/tax', settle: 600, scrollTo: 'text=one line per person and country' },
 	{ name: 'calendar', path: '/calendar', phone: true },
 	{ name: 'contacts', path: '/contacts' },
 	{ name: 'documents', path: '/documents' }
@@ -137,6 +140,16 @@ async function capture(browser, device, theme) {
 		// on an idle signal the app does not emit, but it is honest about what
 		// it is waiting for.
 		if (screen.settle) await page.waitForTimeout(screen.settle);
+		// Some screens carry a list above the thing worth photographing.
+		// scrollIntoViewIfNeeded() is not enough: it treats an element peeking
+		// over the bottom edge as already visible and does nothing.
+		if (screen.scrollTo) {
+			const target = page.locator(screen.scrollTo).first();
+			if (await target.count()) {
+				await target.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+				await page.waitForTimeout(400);
+			}
+		}
 		const file = `${OUT}/${screen.name}-${theme}-${device.name}.png`;
 		await page.screenshot({ path: file });
 		process.stdout.write(`  ${screen.name}-${theme}-${device.name}\n`);
