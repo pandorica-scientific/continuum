@@ -7,8 +7,8 @@
 
 services:
   app:
-    # Docker Hub is the primary registry (private for now — `docker login`
-    # before pulling); ghcr.io/pandorica-scientific/continuum mirrors it.
+    # Docker Hub is the primary registry; ghcr.io/pandorica-scientific/continuum
+    # mirrors it. Built for linux/amd64 and linux/arm64.
     image: kerth92/continuum:latest
     build:
       context: .

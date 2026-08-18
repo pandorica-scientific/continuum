@@ -1,230 +1,130 @@
 <div align="center">
-  <img src="docs/logo.svg" alt="Continuum" width="72" />
 
-  <h1>Continuum</h1>
+<img src="docs/logo.svg" alt="" width="88">
 
-  <p><strong>Your household's whole financial picture, on your own hardware.</strong></p>
+<h1>Continuum</h1>
 
-  <p>
-    Drop in a statement from any bank and watch where the money actually goes.<br>
-    Self-hosted, private by construction, and nothing calls home.
-  </p>
+<h3>Your household's whole financial picture, on hardware you own.</h3>
 
-  <p>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue?style=flat-square" alt="PolyForm Noncommercial"></a>
-    <img src="https://img.shields.io/badge/self--hosted-Docker%20%C2%B7%20Postgres-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker and Postgres">
-    <img src="https://img.shields.io/badge/passkeys-supported-5A0FC8?style=flat-square" alt="Passkeys supported">
-    <img src="https://img.shields.io/badge/trackers-0-green?style=flat-square" alt="Zero trackers">
-  </p>
+<p>
+  <a href="#screens"><b>Screens</b></a> &nbsp;·&nbsp;
+  <a href="#it-reads-any-banks-statement"><b>How import works</b></a> &nbsp;·&nbsp;
+  <a href="#try-it-in-one-command"><b>Quickstart</b></a> &nbsp;·&nbsp;
+  <a href="docs/"><b>Docs</b></a> &nbsp;·&nbsp;
+  <a href="CHANGELOG.md"><b>Changelog</b></a>
+</p>
 
-  <p>
-    <a href="#install-docker"><strong>→ Install in minutes</strong></a> &nbsp;·&nbsp;
-    <a href="#screens"><strong>Screens</strong></a> &nbsp;·&nbsp;
-    <a href="#what-it-does"><strong>What it does</strong></a> &nbsp;·&nbsp;
-    <a href="CHANGELOG.md"><strong>Changelog</strong></a>
-  </p>
+<p>
+  <a href="https://hub.docker.com/r/kerth92/continuum"><img src="https://img.shields.io/badge/docker-kerth92%2Fcontinuum-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker image"></a>
+  <img src="https://img.shields.io/badge/arch-amd64%20%C2%B7%20arm64-555?style=flat-square" alt="amd64 and arm64">
+  <img src="https://img.shields.io/badge/passkeys-supported-5A0FC8?style=flat-square" alt="Passkeys supported">
+  <img src="https://img.shields.io/badge/trackers-0-2ea44f?style=flat-square" alt="Zero trackers">
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue?style=flat-square" alt="PolyForm Noncommercial"></a>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/cashflow-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/cashflow-light-web.png">
+  <img src="docs/screenshots/cashflow-dark-web.png" alt="Cash flow shown as a Sankey diagram, tracing salary and rent through housing, food, transport and bills to what is left" width="880">
+</picture>
+
+<sub>Where the money went, in the order it was committed.</sub>
+
 </div>
 
 <br>
 
-<div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/cashflow-dark-web.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/cashflow-light-web.png">
-    <img src="docs/screenshots/cashflow-dark-web.png" alt="Cash flow — a Sankey diagram tracing salary and rent through housing, food, transport and bills to what is left" width="860">
-  </picture>
-  <br>
-  <sub>Cash flow, in the order money is committed. GitHub serves the theme you are reading in.</sub>
-</div>
+Most personal-finance apps start by asking which bank you use. Continuum never
+asks. It reads the file your bank gave you — whatever bank that is — by working
+out the layout from the file itself, then checking what it read against the
+statement's own balances. Whatever it cannot prove, it refuses.
 
-<br>
+Then it ties that money to everything attached to it: the flat, the mortgage on
+it, the tenants, the portfolio, the payslips, and the tax that falls out of all
+of it.
 
-## Why Continuum
+## Is this for you?
 
-Household money ends up scattered across the bank's app, a spreadsheet and a folder
-of PDFs, and none of them can say what you are actually worth this morning. Continuum
-puts the mortgage, the flat it bought, the rent that flat earns and the salary
-covering the rest into one story.
+Continuum is for you if you…
 
-- **Statements from any bank.** Drop in whatever your bank hands you — CSV, an Excel
-  workbook, a PDF, even a photo of a printout. Nothing in the reader knows which bank
-  wrote it: the layout is worked out from the file and checked against the
-  statement's own balances. What it cannot prove, it refuses rather than guesses.
-- **One picture instead of eight tabs.** Accounts, cash flow, property, loans,
-  investments, tax, documents and calendar share a single ledger, so the
-  relationships between them stay visible.
-- **Nothing calls home.** Self-hosted on your own hardware. No cloud account, no
-  subscription, no telemetry, no trackers.
-- **Safe to keep current.** Re-import overlapping statements as often as you like;
-  duplicates are impossible. Amounts are exact minor-unit arithmetic, and
-  multi-currency totals use the rate from the day.
-- **Made for two people.** Separate sign-ins, passkeys, dashboards and tax
-  statements — one shared household picture.
+- 🏠 **run a household with someone else** — shared property and one shared picture, but separate salaries, sign-ins and tax
+- 🌍 **hold money in more than one currency**, or file tax in more than one country
+- 🏦 **bank somewhere no budgeting app has ever heard of**
+- 🔌 **would rather run a container** than hand a third party your bank login
+- 🙅 **have outgrown the spreadsheet** but not the wish to own what is in it
 
----
+It is not for you if you want an account to sign up for and a monthly bill. There
+is no hosted version, no cloud, and nothing that phones home.
 
 ## Screens
 
 <div align="center">
-  <table>
-    <tr>
-      <td align="center" width="50%">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/overview-light-web.png">
-          <img src="docs/screenshots/overview-dark-web.png" alt="Overview — a briefing panel over the cash-flow chart">
-        </picture>
-        <br><sub><b>Overview</b> — a board each person arranges for themselves, from thirteen panels</sub>
-      </td>
-      <td align="center" width="50%">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/transactions-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/transactions-light-web.png">
-          <img src="docs/screenshots/transactions-dark-web.png" alt="Transactions — the searchable register">
-        </picture>
-        <br><sub><b>Transactions</b> — search, split a receipt across categories, tag into projects</sub>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/property-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/property-light-web.png">
-          <img src="docs/screenshots/property-dark-web.png" alt="Property — flats, tenancies and bills">
-        </picture>
-        <br><sub><b>Property</b> — tenancies, drawable floor plans, bills with documents attached</sub>
-      </td>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/loans-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/loans-light-web.png">
-          <img src="docs/screenshots/loans-dark-web.png" alt="Loans — fixation periods and repayment previews">
-        </picture>
-        <br><sub><b>Loans</b> — fixation-period interest, what-if repayment and re-fix previews</sub>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/investments-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/investments-light-web.png">
-          <img src="docs/screenshots/investments-dark-web.png" alt="Investments — portfolio from broker reports">
-        </picture>
-        <br><sub><b>Investments</b> — portfolio fed by broker report uploads</sub>
-      </td>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/retirement-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/retirement-light-web.png">
-          <img src="docs/screenshots/retirement-dark-web.png" alt="Retirement — projection from a payslip-fed salary tracker">
-        </picture>
-        <br><sub><b>Retirement</b> — projection driven by a payslip-fed salary tracker</sub>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tax-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/tax-light-web.png">
-          <img src="docs/screenshots/tax-dark-web.png" alt="Tax — yearly statements per person and country">
-        </picture>
-        <br><sub><b>Tax</b> — yearly statements per person and country, pre-filled from payslips</sub>
-      </td>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/calendar-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/calendar-light-web.png">
-          <img src="docs/screenshots/calendar-dark-web.png" alt="Calendar — generated dates with an ics feed">
-        </picture>
-        <br><sub><b>Calendar</b> — ledger dates and your own events, two-way sync with Google and iCloud</sub>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/contacts-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/contacts-light-web.png">
-          <img src="docs/screenshots/contacts-dark-web.png" alt="Contacts — the household address book, linked to tenancies and properties">
-        </picture>
-        <br><sub><b>Contacts</b> — tenants, tradespeople and bank contacts, linked to what they relate to</sub>
-      </td>
-      <td align="center">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/documents-dark-web.png">
-          <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/documents-light-web.png">
-          <img src="docs/screenshots/documents-dark-web.png" alt="Documents — filed against a person, a flat or a loan">
-        </picture>
-        <br><sub><b>Documents</b> — filed against something real, so renames follow and expiries surface</sub>
-      </td>
-    </tr>
-  </table>
+<table>
+<tr>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark-web.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/overview-light-web.png">
+    <img src="docs/screenshots/overview-dark-web.png" alt="Overview — a briefing board over the cash-flow chart">
+  </picture>
+  <br><b>Overview</b><br><sub>A board each person arranges for themselves</sub>
+</td>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/transactions-dark-web.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/transactions-light-web.png">
+    <img src="docs/screenshots/transactions-dark-web.png" alt="Transactions — the searchable register">
+  </picture>
+  <br><b>Transactions</b><br><sub>Search, split a receipt, tag into projects</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/property-dark-web.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/property-light-web.png">
+    <img src="docs/screenshots/property-dark-web.png" alt="Property — flats, tenancies and bills">
+  </picture>
+  <br><b>Property</b><br><sub>Tenancies, drawable floor plans, bills</sub>
+</td>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/loans-dark-web.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/loans-light-web.png">
+    <img src="docs/screenshots/loans-dark-web.png" alt="Loans — fixation periods and repayment previews">
+  </picture>
+  <br><b>Loans</b><br><sub>Fixation periods, what-if repayment previews</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/investments-dark-web.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/investments-light-web.png">
+    <img src="docs/screenshots/investments-dark-web.png" alt="Investments — portfolio built from broker reports">
+  </picture>
+  <br><b>Investments</b><br><sub>Portfolio fed by broker report uploads</sub>
+</td>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tax-dark-web.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/tax-light-web.png">
+    <img src="docs/screenshots/tax-dark-web.png" alt="Tax — yearly statements per person and country">
+  </picture>
+  <br><b>Tax</b><br><sub>Yearly, per person and country, from payslips</sub>
+</td>
+</tr>
+</table>
 
-<sub>On a phone, too — every screen reflows to one column:</sub>
-<br>
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark-mobile.png">
-<source media="(prefers-color-scheme: light)" srcset="docs/screenshots/overview-light-mobile.png">
-<img src="docs/screenshots/overview-dark-mobile.png" alt="Overview on a phone" height="420">
-</picture>
-&nbsp;
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/transactions-dark-mobile.png">
-<source media="(prefers-color-scheme: light)" srcset="docs/screenshots/transactions-light-mobile.png">
-<img src="docs/screenshots/transactions-dark-mobile.png" alt="Transactions on a phone" height="420">
-</picture>
-&nbsp;
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/calendar-dark-mobile.png">
-<source media="(prefers-color-scheme: light)" srcset="docs/screenshots/calendar-light-mobile.png">
-<img src="docs/screenshots/calendar-dark-mobile.png" alt="Calendar on a phone" height="420">
-</picture>
-&nbsp;
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/property-dark-mobile.png">
-<source media="(prefers-color-scheme: light)" srcset="docs/screenshots/property-light-mobile.png">
-<img src="docs/screenshots/property-dark-mobile.png" alt="Property on a phone" height="420">
-</picture>
+<sub>Retirement, calendar, contacts, documents and the phone layouts are in the
+<a href="docs/screenshots.md">full gallery</a>. Every shot is generated from the
+demo household, so none of them can drift from the app.</sub>
 
-<br><br>
-<sub>Every screenshot is generated from the demo household by <code>scripts/take-screenshots.mjs</code>, so they cannot drift from the app.</sub>
 </div>
 
----
+## It reads any bank's statement
 
-## What it does
-
-- **Import** — statements from any bank, categorised automatically, with transfers
-  paired up across your own accounts and a rules engine whose rules earn or lose
-  trust depending on whether their suggestions survive your corrections.
-- **Register** — searchable and filterable; split a receipt between categories, tag
-  anything into a project and watch its running total.
-- **Cash flow** — the Sankey above, in the order money is actually committed, over
-  multi-currency accounts converted at daily CNB rates.
-- **Property** — tenancies, drawable floor plans, bills with their documents
-  attached, and optional smart-meter billing fed by Home Assistant.
-- **Loans** — fixation-period interest bookkeeping, plus what-if previews for an
-  extra repayment or the next re-fix.
-- **Investments and retirement** — a portfolio fed by broker report uploads (XTB
-  first, behind an adapter seam) and a projection driven by a payslip-fed salary
-  tracker.
-- **Tax** — yearly statements per person and per country, pre-filled from the
-  payslips and charted over time.
-- **Documents** — filed against something real: a person, a flat, a loan. Renames
-  follow, expiries surface, and a typo cannot mint a phantom subject.
-- **Calendar** — every date the ledger implies alongside your own events, as an ics
-  feed and two-way sync with Google and iCloud.
-- **API and backups** — read-only JSON under a bearer token for dashboards and Home
-  Assistant, and scheduled backups written straight into a cloud-synced folder.
-
-Setup is a wizard: people, base currency and which of the above you want are chosen
-there, not in configuration files.
-
-### Statement import
-
-There is no list of supported banks. A statement is read by working out its shape
-from the file itself, and it is filed only once it agrees with its own arithmetic —
-the printed opening and closing balances, the running balance, the stated totals,
-the movement count.
+Upload what your bank actually gives you:
 
 | What you upload                   | How it is read                                |
 | --------------------------------- | --------------------------------------------- |
@@ -232,329 +132,116 @@ the movement count.
 | Excel workbook (`.xlsx`)          | a statement per sheet                         |
 | PDF                               | the table recovered from the page geometry    |
 | CAMT.053, MT940, ABO/GPC, OFX/QFX | read directly — these declare their own shape |
+| A photo or scan of a printout     | read from the page image, in the background   |
 
-Measured on real statements from ten institutions across Poland, Czechia, Spain and
-the United States, and on a 294-file corpus spanning 24 locales and 20 currencies:
-**every real statement is read**, and 274 of the 294 are read exactly. Five banks
-still have hand-written parsers as a fast path, but nothing depends on them any more.
+**Measured, not asserted.** Across a 294-file corpus spanning 24 locales and 20
+currencies, plus real statements from ten institutions in four countries: every
+real statement is read without knowing which bank wrote it, and 274 of the 294
+are read exactly.
 
-**When it cannot work something out, it asks.** A layout nobody recognises opens a
-mapping wizard: you say which column is the date and which is the amount, it
-remembers the answer, and the next statement from that bank arrives already
-understood. If the bank later adds a column, you are asked again with your previous
-answers filled in — never silently misread, which is what mapping by column
-_position_ would do.
+It earns that by refusing. A statement is filed only once it agrees with its own
+arithmetic — the printed opening and closing balances, the running balance, the
+stated totals, the movement count. A file that prints none of those cannot be
+checked by anyone, so it is refused rather than trusted; so is a genuinely
+ambiguous one, like a date column where every reading is valid. Scanned pages are
+the newest path and the least reliable, and are held to the same proof.
 
-#### What it will not do
+When a layout is new, it asks instead of guessing: you name the date column and
+the amount column once, and the next statement from that bank arrives already
+understood.
 
-- **It refuses what it cannot check.** A statement that prints no balances, no
-  totals and no count cannot be verified by anyone, so it is refused rather than
-  taken on trust. QIF is the common case: it records a date, an amount and a payee,
-  and nothing that could confirm them.
-- **It refuses when a file is genuinely ambiguous.** A date column where every day
-  and month is twelve or lower, with no period printed, has no correct reading; so
-  does a CSV whose delimiter is also its decimal mark and whose figures happen to
-  survive both readings.
-- **Not yet read:** OpenDocument spreadsheets (`.ods`), and legacy `.xls`
-  workbooks — re-save either as `.xlsx`.
-- **Scanned statements and photographs** are read from the page image, in the
-  background, and held to the same arithmetic as everything else. This is the newest
-  part and the least reliable: on a rendered-page corpus it reads about two in five
-  exactly and refuses the rest. Nothing it cannot prove is filed, so a poor scan
-  costs you a refusal rather than a wrong number.
+→ [How the reader works, and every file it still cannot read with the reason for
+each](docs/statement-import.md)
 
-How the reader works, and the twenty files it still cannot read with the reason for
-each, are documented in [`docs/statement-import.md`](docs/statement-import.md).
+## And everything attached to it
 
-Statements are deduplicated by content and by transaction, so re-uploading
-overlapping exports is always safe — including concurrent uploads and exports that
-overlap an older fingerprint format. Account identity includes bank, currency and
-the exact normalised account number; an ambiguous match is held for a person
-instead of creating or choosing an account by guess. Re-uploading is the intended
-way to backfill years of history.
+- **Keeps one picture** — accounts, property, loans, investments, tax, documents and calendar share a single ledger, so the relationships between them stay visible.
+- **Never calls home** — no cloud account, no subscription, no telemetry, no trackers. Your statements never leave the machine.
+- **Is safe to re-run** — re-import overlapping exports as often as you like; duplicates are impossible. Backfilling years of history is the intended use.
+- **Is exact about money** — integer minor units end to end, never floats, and multi-currency totals use the rate from the day.
+- **Fits two people** — separate sign-ins, passkeys, dashboards and tax statements over one shared household.
 
----
-
-## Install (Docker)
+## Try it in one command
 
 ```sh
 curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
-docker login   # the kerth92/continuum image is private for now
-POSTGRES_PASSWORD=change-me docker compose up -d
-```
-
-Open `http://your-server` (port 80 by default; set `CONTINUUM_PORT` in `.env` if
-something else already owns it) and follow the setup wizard. Everything — people,
-base currency (CZK, EUR or PLN), modules — is configured there, not in files.
-
-That brings up a **Tailscale sidecar** alongside the app, because HTTPS is what
-makes passkeys possible and a home server has no other easy route to a trusted
-certificate. It is tailnet-only — see [Passkeys and
-Tailscale](#passkeys-and-tailscale) for the one-time authentication step and the
-`ORIGIN` it needs. Until you complete it the sidecar simply idles, and the app is
-reachable on the port above exactly as before. To leave Tailscale out altogether,
-start the two services you need:
-
-```sh
-docker compose up -d app db
-```
-
-Three optional knobs live in `.env`. `CONTINUUM_MAX_UPLOAD` sets the largest
-accepted upload (`32M` by default — a phone photo does not fit in the server's own
-512 KB default). `ADDRESS_HEADER=x-forwarded-for` makes the app read the real
-client address from a forwarded header, which authentication rate limits need
-behind a reverse proxy. `XFF_DEPTH=1` chooses the trusted hop counted from the
-right of `X-Forwarded-For`; increase it only for a known proxy chain. Set either
-only where that chain is the only way in and always overwrites the header, or a
-caller can forge its address.
-
-### Try it first
-
-```sh
 DEMO=1 docker compose up -d
 ```
 
-On a pristine instance this seeds a fictional household — six months of
-categorised cash flow, two flats on one shared mortgage, payslips, a portfolio —
-so you can look around before importing anything real. Sign in as Jana Nováková
-with `demo-demo-demo`. An instance that already has people is never touched, and
-every screenshot above comes from exactly this data.
+Open `http://localhost` and sign in as **Jana Nováková** / `demo-demo-demo`. That
+seeds a fictional household — six months of categorised cash flow, two flats on
+one mortgage, payslips, a portfolio — so you can look around before importing
+anything real. An instance that already has people in it is never touched.
 
-### Backups
-
-Settings → Backups writes one restorable database dump
-(`continuum-backup.sql`, overwritten on every run) plus a copy of every uploaded
-file to a folder of your choosing, weekly or monthly. By default that is the
-`continuum-backups` volume; point `CONTINUUM_BACKUPS` (in `.env`) at a
-cloud-synced folder on the host — a Google Drive or Dropbox directory — and the
-sync client carries the backup off-machine and keeps the dump's version history on
-its side:
+For a real instance, drop `DEMO=1`, set a database password, and follow the setup
+wizard:
 
 ```sh
-# .env
-CONTINUUM_BACKUPS=/Users/you/Library/CloudStorage/GoogleDrive-you@gmail.com/My Drive
+POSTGRES_PASSWORD=change-me docker compose up -d
 ```
 
-Restoring is booting a fresh instance (its migrations recreate the schema) and
-feeding it the dump:
+**What it needs.** About 300 MB of memory at rest — measured at 191 MB for the
+app and 69 MB for Postgres — from a 393 MB image built for both `amd64` and
+`arm64`. A Raspberry Pi 4 or 5 with 2 GB on a 64-bit OS runs it comfortably.
+There is no 32-bit build, so a Pi 3 or older will not.
 
-```sh
-docker compose exec -T db psql -U continuum -d continuum -v ON_ERROR_STOP=1 \
-  < "Continuum backups/continuum-backup.sql"
-```
+Docker and Docker Compose are the supported route today. Podman, Proxmox,
+TrueNAS, Umbrel and Unraid packaging are planned.
 
-then copying the `files/` folder back into the `continuum-data` volume.
+> [!IMPORTANT]
+> This holds your household's complete financial history in plain text in a
+> database. Run it on a machine you trust, on your own network — never on a
+> public-facing host — and keep backups. Settings → Backups writes a restorable
+> dump plus every uploaded file to a folder you choose, including a cloud-synced
+> one.
 
-### Upgrading
+→ [Install, configuration and upgrading](docs/install.md) · [Backups and
+restore](docs/backups.md)
 
-Take a backup, then pull and restart the containers:
+## Why this exists
 
-```sh
-docker compose pull
-docker compose up -d
-```
+Household finance software assumes one country, one currency, one bank and one
+person. Real households are messier than that: property held jointly while income
+is earned separately, salaries and tax in different places, and banks whose
+exports no tool recognises. The tools that promise to tidy it up mostly want a
+live connection to your bank, a subscription, or both.
 
-Database migrations run before the app accepts requests. Release-specific data
-repairs and any manual considerations are listed at the top of
-[CHANGELOG.md](CHANGELOG.md).
+Continuum takes the other trade. It never connects to your bank — it reads the
+files your bank already gives you, on a machine you own — and it applies one rule
+throughout: if a number cannot be proven from the file it came from, it does not
+get filed.
 
----
+## Documentation
 
-## Reaching it by name
-
-Typing `ip:port` stops working the moment the router hands the server a new
-address. Two steps fix it for every device on the network, no cloud involved:
-
-1. **Pin the address.** In the router's DHCP settings, give the server a
-   reservation (a fixed lease for its MAC address). This is the actual cure for
-   the rotating IP — do it even if you skip step 2.
-2. **Name it.** Either set the server machine's hostname to `continuum`, and mDNS
-   makes it reachable as **`http://continuum.local`** from macOS, iOS, Windows and
-   recent Android with zero configuration — or, if your router offers local DNS
-   names, give the reservation a name there (`continuum.lan` on most). A Pi-hole
-   or AdGuard Home works too, with a custom DNS record.
-
-The app sits on plain port 80 by default, so the name alone is the whole address —
-just tell it what that address is:
-
-```sh
-# .env
-ORIGIN=http://continuum.local
-```
-
-`ORIGIN` must match whatever address you actually browse to — form submissions are
-origin-checked and will be refused otherwise. A bare `continuum` without a suffix
-is not reliable in browsers (it reads as a search), so `.local` or your router's
-suffix is the practical spelling.
-
-## Accounts
-
-The setup wizard makes its first person an **administrator**; everyone added later
-is a **member**. Only administrators can add or deactivate people, change roles,
-manage API tokens, switch modules on and off, set the base currency, or configure
-and run backups. A member's Settings page holds their own password and their own
-passkeys and nothing else — the administrative sections are not merely hidden from
-them, they are never sent.
-
-Adding someone in Settings → Household produces a **one-time enrollment link**,
-valid for seven days, which you pass to them however you like. They open it and
-choose their own password — you never see it. Until they do, they show as "not
-enrolled yet" and cannot sign in.
-
-Two knobs, both optional, in `.env`: `PASSWORD_MIN_LENGTH` (default 8) and
-`ENROLLMENT_LINK_DAYS` (default 7). The password hints in the interface are fed by
-the same value the server enforces, so they cannot disagree.
-
-Deactivating a person blocks sign-in and cuts their live sessions, and voids any
-enrollment link they never opened — but it keeps their password, passkeys and all
-their history, so reactivating is a clean undo. People are never deleted:
-accounts, properties, loans, documents and tax statements reference them.
-
-Two guards mean an instance can never be left without an administrator: you cannot
-deactivate yourself, and the last administrator can be neither deactivated nor
-demoted. If you somehow lock yourself out, promote someone directly in the
-database:
-
-```sh
-docker compose exec db psql -U continuum -d continuum \
-  -c "UPDATE person SET role = 'admin', deactivated_at = NULL WHERE name = 'Your Name';"
-```
-
-## Passkeys and Tailscale
-
-Continuum supports **passkeys** — Face ID, Touch ID, Windows Hello — alongside
-passwords. Passwords never go away, so a device without a passkey still works.
-
-Browsers refuse the passkey API outside a secure context, so the passkey controls
-appear only when `ORIGIN` is `https://` (or `localhost` during development). On a
-plain-HTTP LAN address they are simply absent rather than broken.
-
-A passkey here always requires **user verification** — the face, the fingerprint,
-or the device PIN. That is what keeps it a second factor rather than a bearer
-token, and it means a roaming security key with no PIN configured cannot be
-registered. Platform authenticators (Face ID, Touch ID, Windows Hello) verify by
-nature and need nothing extra.
-
-The simplest way to get HTTPS on a home server is
-[Tailscale](https://tailscale.com), a WireGuard mesh that is **private by
-default**: only devices you have added to your tailnet can reach the machine. That
-is why the sidecar ships **on by default** — passkeys are the point, and they need
-a secure origin. `tailscale serve` publishes to the tailnet; the command that
-would expose the app to the public internet is `tailscale funnel`, which nothing
-here runs. The one thing that does become public is the hostname — Tailscale's
-certificate comes from Let's Encrypt, and every Let's Encrypt certificate is
-listed in public Certificate Transparency logs. Nothing is reachable at that name;
-only the name is visible.
-
-The sidecar needs authenticating once. Either read the login URL out of its logs:
-
-```sh
-docker compose logs tailscale     # visit the https://login.tailscale.com/… URL
-```
-
-or generate an auth key in the Tailscale admin console and let it authenticate
-unattended:
-
-```sh
-# .env
-TS_AUTHKEY=tskey-auth-…
-```
-
-Either way, finish by telling the app the name Tailscale issued — passkeys are
-verified against it exactly:
-
-```sh
-# .env
-ORIGIN=https://continuum.<your-tailnet>.ts.net
-
-docker compose up -d
-```
-
-Until that is done the sidecar sits unauthenticated and nothing else changes: the
-app answers on its LAN address, and the passkey controls stay absent because the
-origin is still plain HTTP.
-
-**Do not remove the LAN port mapping yet.** Sign in over the tailnet address,
-register a passkey in Settings → Household, and confirm it signs you in. Only then
-delete the `ports:` block from the `app` service in `compose.yaml`, which makes
-Tailscale the only way in. Note that this also puts the `/ics` calendar feed and
-the `/api` tokens behind the tailnet, so a phone subscribed to the calendar needs
-Tailscale connected for it to refresh.
-
-**Already running Tailscale on the host?** Skip the sidecar. Set `ORIGIN` to your
-existing `.ts.net` name and run, on the host:
-
-```sh
-# 80 is the host port compose publishes by default; use your CONTINUUM_PORT if
-# you overrode it. 3000 is the port *inside* the container and is not published.
-tailscale serve --bg 80
-```
-
-Any other route to a trusted certificate works equally well — a reverse proxy with
-Let's Encrypt, or your own internal certificate authority via `mkcert` if you would
-rather nothing appear in a public log. Continuum only cares that `ORIGIN` is
-`https://` and matches the address you browse to.
-
-## Smart-meter billing
-
-When connecting Home Assistant, choose the lived-in property whose bill the meter
-should feed and enter the energy price with its currency. On that property, mark
-exactly one bill with the meter control. The hourly sync updates only that row and
-converts the price into the property's currency; it never creates a guessed
-"energy" bill. If the provider or target changes while a slow snapshot is in
-flight, that stale reading is discarded.
-
-## API
-
-Settings → API tokens creates a bearer token (shown once) that grants read-only
-access to the whole ledger under `/api/v1` — accounts, transactions (accepting the
-register's filter params), categories, tags, net worth and cash-flow totals. Every
-amount crosses the wire as integer minor units plus a currency code, never a
-float:
-
-```sh
-curl -H "Authorization: Bearer <token>" http://your-server/api/v1/networth
-# { "total": { "amountMinor": 646055100, "currency": "CZK" }, … }
-```
-
-There are no write endpoints and no webhooks — a household produces a handful of
-events a week, so a dashboard polls.
-
----
-
-## Development
-
-```sh
-docker compose up -d db        # Postgres
-cp .env.example .env
-npm install
-npm run dev
-```
-
-- `npm test` — unit tests plus isolated embedded-PostgreSQL integration tests for
-  imports, authentication, transactions/tags, loans, rollback/concurrency and
-  revisioned autosave
-- `npm run test:e2e` — Playwright journey (needs the db and `npm run build` first)
-- `npm run check` / `npm run lint` — types and style
-- `node scripts/take-screenshots.mjs` — regenerate `docs/screenshots/` from a
-  running `DEMO=1` instance, both themes, desktop and phone
-
-Real bank statements for parser development belong in
-`bank_data_examples_do_not_share/` (gitignored). The committed test fixtures in
-`tests/fixtures/` are synthetic and anonymised — keep it that way.
+|                                               |                                                  |
+| --------------------------------------------- | ------------------------------------------------ |
+| [Statement import](docs/statement-import.md)  | how the reader works, and what it refuses        |
+| [Install and configuration](docs/install.md)  | `.env` reference, ports, upgrading               |
+| [Networking and passkeys](docs/networking.md) | reaching it by name, HTTPS via Tailscale         |
+| [Accounts and roles](docs/accounts.md)        | enrollment links, administrators, recovery       |
+| [Backups and restore](docs/backups.md)        | scheduled dumps, restoring into a fresh instance |
+| [API and Home Assistant](docs/api.md)         | read-only tokens, smart-meter billing            |
+| [Screenshot gallery](docs/screenshots.md)     | every screen, both themes, desktop and phone     |
+| [Architecture](ARCHITECTURE.md)               | how the codebase is laid out                     |
 
 ## Contributing
 
-Bug reports, new bank formats and patches are welcome — start with
-[CONTRIBUTING.md](CONTRIBUTING.md), which covers the setup above plus the two
-rules the codebase follows and the one rule with no exceptions: no real financial
-data ever leaves your machine. Participation is under the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+Bug reports, new bank formats and patches are welcome. Local setup is three
+commands:
 
-Found a security problem? Do not open an issue — [SECURITY.md](SECURITY.md)
-explains how to report it privately, and what the deployment assumes.
+```sh
+docker compose up -d db && npm install && npm run dev
+```
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the rest, including the one rule with
+no exceptions: no real financial data ever leaves your machine — committed
+fixtures are synthetic and anonymised, and stay that way. Participation is under
+the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Found a security problem? Do not open an issue —
+[SECURITY.md](SECURITY.md) explains how to report it privately.
 
 ## License
 
-PolyForm Noncommercial — free to self-host and modify for personal, noncommercial
-use.
+[PolyForm Noncommercial](LICENSE.md) — free to self-host and modify for personal,
+noncommercial use.
