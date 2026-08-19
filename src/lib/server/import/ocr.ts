@@ -64,11 +64,11 @@ const TESSDATA = resolve('tessdata');
  * Language per statement language. English is always included: card schemes,
  * merchant names and SWIFT text are English inside every statement we have.
  */
-export type OcrLanguage = 'eng' | 'ces' | 'pol' | 'deu' | 'spa';
+type OcrLanguage = 'eng' | 'ces' | 'pol' | 'deu' | 'spa';
 export const OCR_LANGUAGES: OcrLanguage[] = ['eng', 'ces', 'pol', 'deu', 'spa'];
 
 /** 300 dpi: measured as the point where a rendered page reconciles reliably. */
-export const RENDER_DPI = 300;
+const RENDER_DPI = 300;
 
 export const ocrAvailable = (): boolean => existsSync(TESSDATA);
 

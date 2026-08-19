@@ -24,7 +24,7 @@ export const EXPORTABLE_KEYS = [
 	'payslipLabels'
 ] as const;
 
-export interface ConfigFile {
+interface ConfigFile {
 	continuum: 1;
 	exportedAt: string;
 	settings: Record<string, unknown>;

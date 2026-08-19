@@ -10,7 +10,7 @@ import { getSetting, setSetting } from '$lib/server/settings';
 import { detectPeriod, extractCandidates, pickAmount, type AmountCandidate } from '$lib/salary';
 import { getBaseCurrency } from '$lib/server/settings';
 
-export interface PayslipReading {
+interface PayslipReading {
 	amountMinor: bigint | null;
 	periodMonth: string | null;
 	candidates: AmountCandidate[];

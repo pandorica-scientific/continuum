@@ -22,7 +22,7 @@ interface StoreChallengeOptions {
 	handle?: Db;
 }
 
-export interface StoredChallenge {
+interface StoredChallenge {
 	challenge: string;
 	personId: string | null;
 	authGeneration: number | null;

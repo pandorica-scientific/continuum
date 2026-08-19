@@ -9,7 +9,7 @@ import { expand, formatRrule, parseRrule, toBasicUtc } from '$lib/calendar/rrule
 
 export type EditScope = 'this' | 'following' | 'all';
 
-export type ScopePlan =
+type ScopePlan =
 	/** Override or cancel one occurrence; the series is untouched. */
 	| { kind: 'exception'; recurrenceId: string }
 	/** Truncate the original series and begin a second one at the split. */

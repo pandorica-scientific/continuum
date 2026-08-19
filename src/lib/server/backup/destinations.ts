@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import { labelForDestination } from './policy';
 
-export interface BackupDestination {
+interface BackupDestination {
 	path: string;
 	label: string;
 }

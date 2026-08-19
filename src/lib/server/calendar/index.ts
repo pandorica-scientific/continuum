@@ -32,7 +32,7 @@ export const CALENDAR_RULES = [
 ] as const;
 
 export type CalendarRuleKey = (typeof CALENDAR_RULES)[number]['key'];
-export type CalendarRuleToggles = Record<CalendarRuleKey, boolean>;
+type CalendarRuleToggles = Record<CalendarRuleKey, boolean>;
 
 const DEFAULT_RULES: CalendarRuleToggles = {
 	importReminder: true,
@@ -57,7 +57,7 @@ export async function getCalendarMarkers(handle: Db = db): Promise<boolean> {
 	return getSetting<boolean>('calendarMarkers', true, handle);
 }
 
-export interface LedgerEvent {
+interface LedgerEvent {
 	date: string; // ISO
 	label: string;
 	ruleKey: CalendarRuleKey;

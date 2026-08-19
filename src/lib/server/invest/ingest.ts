@@ -11,7 +11,7 @@ import {
 import { brokerAdapters, detectBroker, type BrokerReport } from './adapter';
 import './xtb'; // adapters register themselves on import
 
-export interface BrokerIngestResult {
+interface BrokerIngestResult {
 	broker: string;
 	operationsAdded: number;
 	operationsKnown: number;

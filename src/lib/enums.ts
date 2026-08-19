@@ -115,7 +115,7 @@ export const ENUMS = {
 	'entity.kind': ENTITY_KINDS
 } as const satisfies Record<string, readonly string[]>;
 
-export type EnumKey = keyof typeof ENUMS;
+type EnumKey = keyof typeof ENUMS;
 export type EnumValue<K extends EnumKey> = (typeof ENUMS)[K][number];
 
 /**
@@ -154,10 +154,6 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 
 /** `<table>_<column>_check` — the locked constraint name. */
 export const checkName = (table: string, column: string): string => `${table}_${column}_check`;
-
-/** The CHECK body for one column, e.g. `role in ('admin', 'member')`. */
-export const checkBody = (column: string, values: readonly string[]): string =>
-	`${column} in (${values.map((value) => `'${value}'`).join(', ')})`;
 
 /** Is this one of the values the column accepts? */
 export function isEnumValue<K extends EnumKey>(key: K, value: unknown): value is EnumValue<K> {

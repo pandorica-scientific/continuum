@@ -15,14 +15,14 @@ export interface PairableTx {
 	counterpartyAccount?: string | null;
 }
 
-export interface OwnAccount {
+interface OwnAccount {
 	id: string;
 	currency: string;
 	/** normalised account-number forms, retaining Czech prefix/bank separators */
 	numberKeys: string[];
 }
 
-export interface PairProposal {
+interface PairProposal {
 	outId: string;
 	inId: string;
 	/** auto pairs are excluded from figures immediately; review pairs ask */

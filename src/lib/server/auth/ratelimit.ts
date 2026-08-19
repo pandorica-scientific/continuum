@@ -14,13 +14,13 @@ const MAX_CHALLENGE_ISSUES = 60;
 const DEFAULT_MAX_ENTRIES = 4096;
 const DEFAULT_PRUNE_BATCH_SIZE = 64;
 
-export const UNKNOWN_LOGIN_SUBJECT = 'unknown-account';
+const UNKNOWN_LOGIN_SUBJECT = 'unknown-account';
 
 export function loginLimitSubject(personId: string, known: boolean): string {
 	return known ? personId : UNKNOWN_LOGIN_SUBJECT;
 }
 
-export type LimitScope = 'login' | 'api' | 'enroll' | 'passkey-challenge';
+type LimitScope = 'login' | 'api' | 'enroll' | 'passkey-challenge';
 
 interface Entry {
 	count: number;

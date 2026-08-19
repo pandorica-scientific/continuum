@@ -22,7 +22,7 @@ export async function setSetting(key: string, value: unknown, tx: Db | Tx = db):
 		.onConflictDoUpdate({ target: settings.key, set: { value } });
 }
 
-export interface RevisionedSetting<T> {
+interface RevisionedSetting<T> {
 	value: T;
 	/** Global optimistic-concurrency version shared by every browser tab. */
 	version: number;

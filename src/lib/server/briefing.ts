@@ -21,7 +21,7 @@ import {
 	transaction
 } from '$lib/server/db/schema';
 
-export interface BriefingItem {
+interface BriefingItem {
 	emoji: string;
 	kind: string;
 	pill: string;

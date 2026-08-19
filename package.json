@@ -19,7 +19,8 @@
 		"db:studio": "drizzle-kit studio",
 		"test:e2e": "playwright test",
 		"test:unit": "vitest run",
-		"fetch:tessdata": "node scripts/fetch-tessdata.mjs"
+		"fetch:tessdata": "node scripts/fetch-tessdata.mjs",
+		"scan:unused": "node scripts/unused-exports.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

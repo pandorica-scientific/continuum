@@ -83,7 +83,7 @@ export function fromMajor(major: number, currency: string): bigint {
 	return BigInt(Math.round(major * 10 ** minorDigits(currency)));
 }
 
-export interface FormatOptions {
+interface FormatOptions {
 	/** Always print the fraction digits, even when zero. */
 	exact?: boolean;
 	/** Prefix positive amounts with +. */

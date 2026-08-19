@@ -8,7 +8,7 @@
  * forced it, or by an honest admission that nothing did.
  */
 
-export type Determinacy<T> =
+type Determinacy<T> =
 	| { kind: 'determined'; value: T; evidence: string }
 	| { kind: 'ambiguous'; candidates: T[]; reason: string }
 	| { kind: 'unavailable'; reason: string };

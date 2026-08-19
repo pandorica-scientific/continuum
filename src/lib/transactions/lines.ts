@@ -15,7 +15,7 @@ export interface SplitSource {
 	sort: number;
 }
 
-export interface EffectiveLine {
+interface EffectiveLine {
 	categoryId: string | null;
 	amountMinor: bigint;
 	/** null when the line is the transaction itself rather than a split row. */

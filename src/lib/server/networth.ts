@@ -10,7 +10,7 @@ import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
 import { deltaSinceMonthStart } from '$lib/networth/history';
 
-export interface NetWorthGroup {
+interface NetWorthGroup {
 	key: string;
 	label: string;
 	/** gross asset value in base minor units (0 for pure debt) */

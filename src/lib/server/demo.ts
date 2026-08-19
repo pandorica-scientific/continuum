@@ -39,7 +39,7 @@ import { setTransactionTags } from '$lib/server/tags';
 import { hashPassword } from '$lib/server/auth';
 import { setSetting } from '$lib/server/settings';
 
-export const DEMO_PASSWORD = 'demo-demo-demo';
+const DEMO_PASSWORD = 'demo-demo-demo';
 
 function monthShift(base: string, offset: number): string {
 	const [y, m] = base.split('-').map(Number);

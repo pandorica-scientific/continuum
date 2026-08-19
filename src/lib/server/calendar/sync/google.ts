@@ -45,7 +45,7 @@ function resetWindowStart(): string {
 	return new Date(Date.now() - RESET_WINDOW_DAYS * 86_400_000).toISOString();
 }
 
-export interface GoogleTime {
+interface GoogleTime {
 	date?: string;
 	dateTime?: string;
 	timeZone?: string;

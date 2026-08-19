@@ -80,7 +80,7 @@ export const RETIRE_DEFAULTS: RetireConfig = {
 	ageTwo: 68
 };
 
-export interface RetireRow {
+interface RetireRow {
 	t: number;
 	year: number;
 	a1: number;
@@ -93,7 +93,7 @@ export interface RetireRow {
 	gap: number;
 }
 
-export interface RetireModel {
+interface RetireModel {
 	rows: RetireRow[];
 	fire: RetireRow | null;
 	chart: { t: number; pot: number; required: number }[];

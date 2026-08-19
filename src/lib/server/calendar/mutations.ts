@@ -4,10 +4,10 @@ import { db, type Db } from '$lib/server/db';
 import { calendarEvent, calendarEventException } from '$lib/server/db/schema';
 import { planScopeChange, type EditScope } from '$lib/calendar/scope';
 
-export type EventMutationResult =
+type EventMutationResult =
 	{ ok: true; id: string } | { ok: false; status: 400 | 404; message: string };
 
-export interface EventInput {
+interface EventInput {
 	title: string;
 	notes: string | null;
 	category: string | null;

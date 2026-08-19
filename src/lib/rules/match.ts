@@ -50,7 +50,7 @@ export interface RowLike {
 	currency?: string;
 }
 
-export interface RuleDecision {
+interface RuleDecision {
 	kind: 'auto' | 'review';
 	/** The winner, or the suggestion when kind is review. */
 	categoryId: string | null;

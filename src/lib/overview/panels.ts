@@ -9,7 +9,7 @@
 import type { ModuleKey, ModuleToggles } from '$lib/modules/registry';
 import type { OverviewPlacement, PanelBounds } from './layout';
 
-export interface PanelDefinition {
+interface PanelDefinition {
 	key: string;
 	title: string;
 	emoji: string;
@@ -185,7 +185,7 @@ export const PANELS: PanelDefinition[] = [
 	}
 ];
 
-export const PANEL_BY_KEY: Record<string, PanelDefinition> = Object.fromEntries(
+const PANEL_BY_KEY: Record<string, PanelDefinition> = Object.fromEntries(
 	PANELS.map((panel) => [panel.key, panel])
 );
 

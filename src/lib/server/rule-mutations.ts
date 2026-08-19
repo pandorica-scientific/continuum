@@ -5,7 +5,7 @@ import { lockTransferPairing } from '$lib/server/import/ingest';
 import { upsertTag } from '$lib/server/tags';
 import type { Condition } from '$lib/rules/match';
 
-export interface RuleDefinitionInput {
+interface RuleDefinitionInput {
 	id: string;
 	name: string;
 	conditions: Condition[];

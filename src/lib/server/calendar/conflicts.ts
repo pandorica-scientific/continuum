@@ -1,5 +1,5 @@
 import { uuidv7 } from 'uuidv7';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { calendarConflict } from '$lib/server/db/schema';
 
@@ -27,7 +27,7 @@ function jsonbSide(value: unknown) {
 	return sql`${JSON.stringify(value ?? null)}::jsonb`;
 }
 
-export interface ConflictRecord {
+interface ConflictRecord {
 	localKey: string;
 	accountId: string;
 	ours: unknown;
@@ -65,13 +65,4 @@ export async function acknowledgeConflicts(handle: Queryable = db): Promise<numb
 		.where(isNull(calendarConflict.acknowledgedAt))
 		.returning({ id: calendarConflict.id });
 	return cleared.length;
-}
-
-/** Outstanding conflicts for one account, newest last. */
-export async function listOpenConflicts(accountId: string, handle: Queryable = db) {
-	return handle
-		.select()
-		.from(calendarConflict)
-		.where(and(eq(calendarConflict.accountId, accountId), isNull(calendarConflict.acknowledgedAt)))
-		.orderBy(calendarConflict.detectedAt);
 }

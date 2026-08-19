@@ -20,7 +20,7 @@ import { convertMinorSync, faceValueMinor, loadRateTable, missingRateCodes } fro
 const CNB_DAILY_URL =
 	'https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/daily.txt';
 
-export interface CnbRate {
+interface CnbRate {
 	code: string;
 	/** CZK per one unit of `code`. */
 	rate: number;
@@ -95,7 +95,7 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
  * Convert an amount in minor units between currencies at the day's rate.
  * Returns null when no rate is known yet (e.g. before the first fetch).
  */
-export async function convertMinor(
+async function convertMinor(
 	amountMinor: bigint,
 	from: string,
 	to: string,

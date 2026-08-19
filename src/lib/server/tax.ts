@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { person, taxStatement, taxStatementLine } from '$lib/server/db/schema';
 
-export interface StatementInput {
+interface StatementInput {
 	personId: string;
 	year: number;
 	country: string;
@@ -18,7 +18,7 @@ export interface StatementInput {
 	lines: { label: string; amountMinor: bigint }[];
 }
 
-export type TaxResult = { ok: true } | { ok: false; status: number; message: string };
+type TaxResult = { ok: true } | { ok: false; status: number; message: string };
 
 export async function loadStatements() {
 	const [rows, lines, people] = await Promise.all([

@@ -1,9 +1,9 @@
-export interface TenancyDateRange {
+interface TenancyDateRange {
 	startsOn: string | null;
 	endsOn: string | null;
 }
 
-export interface PropertyTenancyRange extends TenancyDateRange {
+interface PropertyTenancyRange extends TenancyDateRange {
 	id: string;
 	propertyId: string;
 }

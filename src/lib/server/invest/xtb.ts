@@ -18,10 +18,10 @@ import {
 
 // The normalised shapes live in ./adapter; these aliases keep the XTB parser
 // and its tests reading naturally.
-export type XtbHolding = BrokerHolding;
-export type XtbOperation = BrokerCashOperation;
-export type XtbPosition = BrokerPositionSpan;
-export type XtbReport = BrokerReport;
+type XtbHolding = BrokerHolding;
+type XtbOperation = BrokerCashOperation;
+type XtbPosition = BrokerPositionSpan;
+type XtbReport = BrokerReport;
 
 function toMinor(raw: string, currency: string): bigint {
 	return parseAmountToMinor(raw.replace(/\s/g, ''), currency);

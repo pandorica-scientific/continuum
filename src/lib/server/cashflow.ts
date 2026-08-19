@@ -171,7 +171,7 @@ export async function flowData(period: Period): Promise<FlowData> {
 	};
 }
 
-export interface MonthBar {
+interface MonthBar {
 	month: string; // YYYY-MM
 	earned: number;
 	spent: number;

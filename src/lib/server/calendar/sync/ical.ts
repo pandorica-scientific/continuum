@@ -55,7 +55,7 @@ function unfold(text: string): string {
 }
 
 /** Escape the four characters that would otherwise end a property early. */
-export function escapeText(value: string): string {
+function escapeText(value: string): string {
 	return value
 		.replace(/\\/g, '\\\\')
 		.replace(/;/g, '\\;')

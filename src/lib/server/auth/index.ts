@@ -77,7 +77,7 @@ export async function pruneExpiredSessions(handle: Queryable = db, limit = 64): 
 	return removed.length;
 }
 
-export interface SessionGrant {
+interface SessionGrant {
 	token: string;
 	expiresAt: Date;
 }

@@ -11,7 +11,7 @@ import {
 } from './amortise';
 
 // Far enough that any real loan reaches payoff or its last known rate first.
-export const FAR_MONTH = '2126-01';
+const FAR_MONTH = '2126-01';
 
 export interface YearAgg {
 	year: string;
@@ -100,7 +100,7 @@ export function applyFixation(
 	];
 }
 
-export interface ScheduleSummary {
+interface ScheduleSummary {
 	/** month the balance reaches zero, or null if rates run out first */
 	debtFreeMonth: string | null;
 	totalInterestMinor: bigint;

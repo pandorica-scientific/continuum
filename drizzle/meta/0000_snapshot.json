@@ -1,5 +1,5 @@
 {
-  "id": "51b6918b-4b99-4528-bbc3-ead33c94bcb8",
+  "id": "6f991187-5d19-454f-bc92-a78193762f5f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1722,12 +1722,6 @@
         "filename_pattern": {
           "name": "filename_pattern",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_used_at": {
-          "name": "last_used_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

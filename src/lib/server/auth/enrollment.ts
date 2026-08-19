@@ -17,9 +17,9 @@ import {
 } from '$lib/server/auth';
 import type { Cookies } from '@sveltejs/kit';
 
-export type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
+type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
 
-export interface EnrollmentRow {
+interface EnrollmentRow {
 	expiresAt: Date;
 	usedAt: Date | null;
 }
@@ -86,7 +86,7 @@ export async function lookupEnrollmentToken(
  * its status from `expired` to `used`, the one distinction enrollmentStatus
  * draws, on a route any unauthenticated visitor can reach.
  */
-export async function consumeEnrollmentToken(
+async function consumeEnrollmentToken(
 	raw: string,
 	on: Queryable = db
 ): Promise<{ personId: string } | null> {

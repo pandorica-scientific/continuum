@@ -11,7 +11,7 @@ export interface LinkedDoc {
 	subjects: string[];
 }
 
-export interface DocColumn {
+interface DocColumn {
 	label: string;
 	docIds: string[];
 }

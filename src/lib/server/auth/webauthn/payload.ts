@@ -4,7 +4,7 @@
 // surfacing as a 500 — and, on the sign-in path, a 500 that fires before the
 // rate limiter has counted anything.
 
-export interface WebAuthnBody<T> {
+interface WebAuthnBody<T> {
 	response: T;
 	label: unknown;
 }

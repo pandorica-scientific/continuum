@@ -5,7 +5,7 @@ import { tenancyRangesOverlap } from '$lib/property/tenancy';
 import { validateDrawing } from '$lib/plan';
 import { and, eq } from 'drizzle-orm';
 
-export type PropertyMutationResult =
+type PropertyMutationResult =
 	{ ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
 
 const missingProperty = (): PropertyMutationResult => ({
@@ -14,7 +14,7 @@ const missingProperty = (): PropertyMutationResult => ({
 	message: 'Property not found.'
 });
 
-export interface AttachedBillDocumentInput {
+interface AttachedBillDocumentInput {
 	id: string;
 	name: string;
 	storedName: string;
@@ -22,7 +22,7 @@ export interface AttachedBillDocumentInput {
 	addedOn: string;
 }
 
-export interface CreatePropertyBillInput {
+interface CreatePropertyBillInput {
 	id: string;
 	propertyId: string;
 	label: string;
@@ -68,7 +68,7 @@ export async function createPropertyBill(
 	});
 }
 
-export interface CreateTenancyInput {
+interface CreateTenancyInput {
 	id: string;
 	propertyId: string;
 	tenantName: string;
@@ -124,7 +124,7 @@ export async function createTenancy(
 	});
 }
 
-export interface SetPropertyImageInput {
+interface SetPropertyImageInput {
 	propertyId: string;
 	slot: string;
 	storedName: string;
@@ -175,12 +175,12 @@ export async function setPropertyImage(
 	});
 }
 
-export interface SetPropertyDrawingInput {
+interface SetPropertyDrawingInput {
 	propertyId: string;
 	drawing: unknown;
 }
 
-export type RemovePropertyImageResult =
+type RemovePropertyImageResult =
 	{ ok: true; removed: string } | { ok: false; status: 400 | 404 | 409; message: string };
 
 /**

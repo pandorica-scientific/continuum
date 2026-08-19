@@ -46,7 +46,7 @@ export interface Grid {
 
 const cell = (text: string): RawCell => ({ text: text.trim() });
 
-export interface DecodeCandidate {
+interface DecodeCandidate {
 	encoding: string;
 	text: string;
 	replacements: number;
@@ -74,7 +74,7 @@ export function decodeCandidates(buffer: Uint8Array): DecodeCandidate[] {
 	}).sort((a, b) => a.replacements - b.replacements || b.diacritics - a.diacritics);
 }
 
-export interface DelimiterCandidate {
+interface DelimiterCandidate {
 	delimiter: string;
 	/** The most common column count among rows that actually split. */
 	columns: number;

@@ -19,8 +19,8 @@ export interface FlowGraphInput extends FlowFigures {
 }
 
 /** Below this the leaf column is dropped; below the second, groups only. */
-export const LEAF_WIDTH = 560;
-export const GROUP_WIDTH = 380;
+const LEAF_WIDTH = 560;
+const GROUP_WIDTH = 380;
 
 /** How many columns the box has room for. */
 export function depthFor(width: number): 2 | 3 | 4 {

@@ -8,7 +8,7 @@ export interface Contribution {
 	amountMinor: bigint;
 }
 
-export interface SnapshotPoint {
+interface SnapshotPoint {
 	day: string;
 	valueMinor: bigint;
 }
@@ -25,14 +25,14 @@ export interface SeriesPoint {
 	isSnapshot: boolean;
 }
 
-export interface CashOp {
+interface CashOp {
 	at: string; // ISO datetime
 	amountMinor: bigint;
 	type?: string;
 	positionId?: string | null;
 }
 
-export interface PositionSpan {
+interface PositionSpan {
 	openedAt: string; // ISO datetime
 	closedAt: string | null;
 	purchaseValueMinor: bigint | null;

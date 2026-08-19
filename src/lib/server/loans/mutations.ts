@@ -7,9 +7,9 @@ import { addRatios, tryRatioFromPercent, type Ratio } from '$lib/property/financ
 import { db, type Db } from '$lib/server/db';
 import { loan, loanEvent, loanFixationPeriod, loanProperty, property } from '$lib/server/db/schema';
 
-export type LoanMutationResult = { ok: true } | { ok: false; status: number; message: string };
+type LoanMutationResult = { ok: true } | { ok: false; status: number; message: string };
 
-export interface RepaymentInput {
+interface RepaymentInput {
 	loanId: string;
 	date: string;
 	amount: string;
@@ -17,7 +17,7 @@ export interface RepaymentInput {
 	note: string;
 }
 
-export interface FixationInput {
+interface FixationInput {
 	loanId: string;
 	startsOn: string;
 	endsOn: string | null;

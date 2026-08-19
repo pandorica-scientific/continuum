@@ -202,7 +202,7 @@ const columnOf = (x: number, columns: number[]): number => {
  * is page furniture, not a continuation, which is what stopped a multi-page
  * statement absorbing each page's header into the movement above it.
  */
-export function assembleRecords(
+function assembleRecords(
 	lines: { cells: string[]; xs: number[]; xEnds: number[]; y: number }[],
 	/**
 	 * Which right-edge cluster holds the amounts. Undefined means "assume every

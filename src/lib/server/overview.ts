@@ -46,7 +46,7 @@ const today = () => new Date().toISOString().slice(0, 10);
  * sidebar card, so the loader hands that promise straight in rather than
  * running the whole calculation a second time.
  */
-export interface PanelContext {
+interface PanelContext {
 	baseCurrency: string;
 	period: Period;
 	netWorth: () => Promise<NetWorth>;

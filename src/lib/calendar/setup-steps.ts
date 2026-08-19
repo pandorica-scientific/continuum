@@ -5,7 +5,7 @@
 // its own instructions, and kept as data rather than markup so it can be shown
 // in a bubble, a page, or the docs without being rewritten.
 
-export interface SetupGuide {
+interface SetupGuide {
 	steps: string[];
 	/** The one thing that goes wrong most often, said plainly. */
 	warning?: string;

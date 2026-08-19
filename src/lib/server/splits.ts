@@ -3,11 +3,11 @@
 // pure so it is testable without a database.
 
 import { uuidv7 } from 'uuidv7';
-import { asc, eq, inArray, type SQL } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import { transaction, transactionSplit } from '$lib/server/db/schema';
 
-export interface SplitInput {
+interface SplitInput {
 	/**
 	 * The stored row this line edits, when it edits one. Line identity, not
 	 * list position: split-level tags hang off the row id, so reusing rows by
@@ -21,7 +21,7 @@ export interface SplitInput {
 	note?: string | null;
 }
 
-export type SplitResult = { ok: true } | { ok: false; status: number; message: string };
+type SplitResult = { ok: true } | { ok: false; status: number; message: string };
 
 const bad = (message: string): SplitResult => ({ ok: false, status: 400, message });
 
@@ -70,7 +70,7 @@ async function clearSplits(tx: Tx, transactionId: string): Promise<SplitResult> 
  * the stored lines summed to twice the transaction amount while
  * `validateSplits` had checked only what was in memory.
  */
-export interface SavedSplitLine {
+interface SavedSplitLine {
 	id: string;
 	sort: number;
 }
@@ -174,7 +174,7 @@ export async function deleteSplits(transactionId: string, handle: Db = db): Prom
 	});
 }
 
-export type SplitRow = typeof transactionSplit.$inferSelect;
+type SplitRow = typeof transactionSplit.$inferSelect;
 
 function groupByTransaction(rows: SplitRow[]): Map<string, SplitRow[]> {
 	const out = new Map<string, SplitRow[]>();
@@ -193,29 +193,5 @@ export async function loadSplits(transactionIds: string[]): Promise<Map<string, 
 		.select()
 		.from(transactionSplit)
 		.where(inArray(transactionSplit.transactionId, transactionIds));
-	return groupByTransaction(rows);
-}
-
-/**
- * Splits for every transaction matching a predicate, without ever naming their
- * ids.
- *
- * The register's totals need the splits of the whole filtered set, not just the
- * visible page. Passing those ids to `loadSplits` put one bind parameter per
- * matching transaction on the wire, and Postgres caps a statement at 65 535 of
- * them — so a broad filter over a long history failed outright rather than
- * paginating. The predicate goes to the database as a subquery instead, which
- * has no such ceiling and never leaves the server.
- */
-export async function loadSplitsMatching(where: SQL | undefined): Promise<Map<string, SplitRow[]>> {
-	const rows = await db
-		.select()
-		.from(transactionSplit)
-		.where(
-			inArray(
-				transactionSplit.transactionId,
-				db.select({ id: transaction.id }).from(transaction).where(where)
-			)
-		);
 	return groupByTransaction(rows);
 }

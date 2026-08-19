@@ -41,7 +41,7 @@ export function writeBackValue(
 	return newDate;
 }
 
-export interface WriteBackResult {
+interface WriteBackResult {
 	ok: boolean;
 	/** Human-readable, and shown in the briefing. */
 	message: string;

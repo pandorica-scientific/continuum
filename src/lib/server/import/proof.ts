@@ -34,16 +34,16 @@ import type { ParsedRow, ParsedStatement } from './types';
 // and transaction.proof_class cannot drift from this union.
 export type ProofClass = EnumValue<'proof_class'>;
 
-export type CheckStatus = 'pass' | 'fail' | 'unavailable';
+type CheckStatus = 'pass' | 'fail' | 'unavailable';
 
-export interface ProofCheck {
+interface ProofCheck {
 	name: string;
 	status: CheckStatus;
 	/** Phrased for a person reading the statement's evidence panel. */
 	detail: string;
 }
 
-export interface LexicalFacts {
+interface LexicalFacts {
 	currency: string;
 	/** The amounts as the file displayed them, before any parsing. */
 	amountTexts?: string[];
@@ -397,7 +397,7 @@ export function accountsForWholeFile(statements: ParsedStatement[]): boolean {
 	});
 }
 
-export interface ImportDecision {
+interface ImportDecision {
 	/** May this statement be filed without asking? */
 	autoImport: boolean;
 	reason: string;

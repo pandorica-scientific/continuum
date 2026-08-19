@@ -8,7 +8,7 @@ import {
 	type DatabaseHandle
 } from './ingest';
 
-export type TransferDecisionResult = { ok: true } | { ok: false; status: 404; message: string };
+type TransferDecisionResult = { ok: true } | { ok: false; status: 404; message: string };
 
 async function transitionProposal(
 	id: string,

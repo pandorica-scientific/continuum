@@ -5,7 +5,7 @@ import { db, type Db, type Queryable } from '$lib/server/db';
 import { document, documentLink, tagLink, subject } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
 
-export interface CreateDocumentInput {
+interface CreateDocumentInput {
 	id: string;
 	name: string;
 	shelf: EnumValue<'document.shelf'>;

@@ -1,4 +1,4 @@
-export interface EffectiveSpendingLine {
+interface EffectiveSpendingLine {
 	day: string;
 	currency: string;
 	amountMinor: bigint;

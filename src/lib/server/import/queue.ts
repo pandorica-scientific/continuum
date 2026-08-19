@@ -35,7 +35,7 @@ type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
  */
 export const LEASE_MS = 10 * 60 * 1000;
 
-export interface QueuedJob {
+interface QueuedJob {
 	id: string;
 	filename: string;
 	state: string;
@@ -260,12 +260,9 @@ export async function jobBytes(
  * upload forever, and the page's list of recent files would fill with months of
  * settled work.
  */
-export const KEEP_FINISHED_MS = 60 * 60 * 1000;
+const KEEP_FINISHED_MS = 60 * 60 * 1000;
 
-export async function clearFinished(
-	olderThanMs = KEEP_FINISHED_MS,
-	handle: Handle = db
-): Promise<number> {
+async function clearFinished(olderThanMs = KEEP_FINISHED_MS, handle: Handle = db): Promise<number> {
 	const removed = await handle
 		.delete(job)
 		.where(

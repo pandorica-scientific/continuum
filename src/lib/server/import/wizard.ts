@@ -29,7 +29,7 @@ import type { DateOrder, DecimalMark } from './tabular/determinacy';
 import { deleteProfile, saveProfile } from './profiles';
 import { ingestFile, type IngestResult } from './ingest';
 
-export interface ConfirmedMapping {
+interface ConfirmedMapping {
 	/** What to call this layout when it is recognised again. */
 	name: string;
 	bank?: string;

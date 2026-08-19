@@ -23,12 +23,12 @@ import { FORMAT_LABEL, type StatementFormat } from './format';
 /** Matches BODY_SIZE_LIMIT in docker/Dockerfile; a statement is 1–300 KB. */
 export const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
 /** A workbook of statements; far beyond any real bank export. */
-export const MAX_ZIP_ENTRIES = 512;
-export const MAX_TOTAL_UNCOMPRESSED = 256 * 1024 * 1024;
+const MAX_ZIP_ENTRIES = 512;
+const MAX_TOTAL_UNCOMPRESSED = 256 * 1024 * 1024;
 /** Ordinary spreadsheet XML compresses ~20:1; 200:1 is not a spreadsheet. */
-export const MAX_COMPRESSION_RATIO = 200;
+const MAX_COMPRESSION_RATIO = 200;
 /** A ceiling on the checking itself, so a pathological archive cannot stall. */
-export const MAX_INSPECTION_MS = 5000;
+const MAX_INSPECTION_MS = 5000;
 /**
  * Shape limits for a workbook, applied after it opens.
  *

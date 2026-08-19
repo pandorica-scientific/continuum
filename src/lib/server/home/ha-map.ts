@@ -44,7 +44,7 @@ const DOMAIN_EMOJI: Record<string, string> = {
 	humidifier: '💧'
 };
 
-export const CONTROLLABLE_DOMAINS = new Set([
+const CONTROLLABLE_DOMAINS = new Set([
 	'light',
 	'switch',
 	'cover',

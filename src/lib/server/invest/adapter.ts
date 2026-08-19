@@ -43,7 +43,7 @@ export interface BrokerReport {
 	positions: BrokerPositionSpan[];
 }
 
-export interface BrokerAdapter {
+interface BrokerAdapter {
 	id: string;
 	label: string;
 	/** cheap check whether this file looks like this broker's report */

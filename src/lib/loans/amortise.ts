@@ -25,7 +25,7 @@ export interface FixationPeriod {
 	paymentMinor: bigint;
 }
 
-export type AccrualStyle = 'payment' | 'calendar';
+type AccrualStyle = 'payment' | 'calendar';
 
 export interface LoanTerms {
 	owedMinor: bigint;

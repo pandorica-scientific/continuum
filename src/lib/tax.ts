@@ -4,7 +4,7 @@
 
 import { toMajor } from '$lib/money';
 
-export interface StatementLike {
+interface StatementLike {
 	personId: string;
 	personName: string;
 	year: number;

@@ -76,7 +76,7 @@ export interface ProviderField {
  * Provider registry. A new platform registers a factory here; everything else
  * — settings UI, the Home screen, the bills wiring — picks it up by key.
  */
-export type ProviderFactory = (config: Record<string, string>) => HomeProvider;
+type ProviderFactory = (config: Record<string, string>) => HomeProvider;
 
 interface RegistryEntry {
 	label: string;

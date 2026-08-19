@@ -11,7 +11,7 @@ import { problemMessage } from '$lib/http';
 
 const CANCELLED = ['NotAllowedError', 'AbortError'];
 
-export interface CeremonyResult {
+interface CeremonyResult {
 	ok: boolean;
 	/** Empty when the person simply cancelled — nothing to report in that case. */
 	error: string;

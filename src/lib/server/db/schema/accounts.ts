@@ -143,7 +143,6 @@ export const importProfile = pgTable('import_profile', {
 	// 'builtin' | 'user' | 'imported'
 	origin: text('origin').$type<EnumValue<'import_profile.origin'>>().notNull().default('user'),
 	filenamePattern: text('filename_pattern'),
-	lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

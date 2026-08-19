@@ -60,7 +60,7 @@ export async function applyScores(
 	}
 }
 
-export interface PreviewResult {
+interface PreviewResult {
 	count: number;
 	rows: { id: string; date: string; merchant: string; amountMinor: bigint; currency: string }[];
 }

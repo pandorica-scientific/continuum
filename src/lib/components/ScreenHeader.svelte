@@ -31,8 +31,6 @@
 	// An area holding one screen renders no row at all — a single pill would be
 	// a label pretending to be a choice.
 	const tabs = $derived(screens.length > 1 ? screens : []);
-	// Only where importing belongs — see the registry's offersImport.
-
 	const current = $derived(
 		area?.screens.find(
 			(screen) =>

@@ -18,7 +18,7 @@ export type BankId = string;
  * account of where they came from. A row that later looks wrong could not be
  * traced back to the reading that produced it.
  */
-export interface StatementProvenance {
+interface StatementProvenance {
 	/** Which reader produced this: an adapter, a standard, or which assembler. */
 	method: string;
 	proofClass: EnumValue<'proof_class'>;

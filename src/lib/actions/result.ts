@@ -5,7 +5,7 @@ import type { ActionResult } from '@sveltejs/kit';
 export type ActionOutcome =
 	{ type: 'success'; message: null } | { type: 'failure' | 'error' | 'redirect'; message: string };
 
-export const GENERIC_ACTION_ERROR = 'The request could not be completed. Please try again.';
+const GENERIC_ACTION_ERROR = 'The request could not be completed. Please try again.';
 
 type ActionDependencies = {
 	deserialize: (body: string) => ActionResult<Record<string, unknown>, Record<string, unknown>>;

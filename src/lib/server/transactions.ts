@@ -188,14 +188,14 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 }
 
 /** The complete row predicate, including at least one selected effective line. */
-export function registerWhere(filter: RegisterFilter, rowFactor?: SQL): SQL {
+function registerWhere(filter: RegisterFilter, rowFactor?: SQL): SQL {
 	return and(
 		registerTransactionWhere(filter, rowFactor),
 		sql`exists (${selectedEffectiveLines(filter)})`
 	) as SQL;
 }
 
-export interface RegisterRow {
+interface RegisterRow {
 	id: string;
 	bookedAt: string;
 	amount: bigint;
@@ -213,7 +213,7 @@ export interface RegisterRow {
 	proofClass: string | null;
 }
 
-export interface RegisterPage {
+interface RegisterPage {
 	rows: RegisterRow[];
 	total: number;
 	/** Signed sums over the whole filtered set, never re-denominated. */
@@ -309,7 +309,7 @@ export async function registerPage(
 	};
 }
 
-export type FileResult = { ok: true } | { ok: false; status: number; message: string };
+type FileResult = { ok: true } | { ok: false; status: number; message: string };
 
 /**
  * File a transaction under a category and teach the categoriser from it, so a

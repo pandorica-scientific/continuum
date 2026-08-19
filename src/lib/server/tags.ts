@@ -13,12 +13,12 @@ export function normaliseTagName(raw: string): string {
 	return raw.trim().toLowerCase().replace(/\s+/gu, ' ');
 }
 
-export interface TagRefs {
+interface TagRefs {
 	transactionTags: { transactionId: string; tagId: string }[];
 	splitTags: { splitId: string; tagId: string }[];
 }
 
-export interface TaggedAmount {
+interface TaggedAmount {
 	amountMinor: bigint;
 	currency: string;
 	/** The transaction's value date when present, otherwise its booking date. */
@@ -142,7 +142,7 @@ function wantedNames(names: string[]): string[] {
 	return [...unique.values()];
 }
 
-export interface TagDelta {
+interface TagDelta {
 	add?: string;
 	remove?: string;
 }
@@ -272,26 +272,6 @@ export async function addTagsToTransaction(
 		.onConflictDoNothing();
 }
 
-/** Same wholesale-replace contract as transactions, for loans. */
-export async function setLoanTags(
-	loanId: string,
-	names: string[],
-	handle: Queryable = db
-): Promise<void> {
-	await withinTransaction(handle, (tx) =>
-		replaceTagSet(
-			names,
-			tx,
-			() => tx.delete(tagLink).where(eq(tagLink.targetId, loanId)),
-			(tagIds) =>
-				tx
-					.insert(tagLink)
-					.values(tagIds.map((tagId) => ({ tagId, targetId: loanId })))
-					.onConflictDoNothing()
-		)
-	);
-}
-
 export async function updateLoanTags(
 	loanId: string,
 	delta: TagDelta,
@@ -313,26 +293,6 @@ export async function updateLoanTags(
 				.values(tagIds.map((tagId) => ({ tagId, targetId: loanId })))
 				.onConflictDoNothing()
 	});
-}
-
-/** Same wholesale-replace contract as transactions, for properties. */
-export async function setPropertyTags(
-	propertyId: string,
-	names: string[],
-	handle: Queryable = db
-): Promise<void> {
-	await withinTransaction(handle, (tx) =>
-		replaceTagSet(
-			names,
-			tx,
-			() => tx.delete(tagLink).where(eq(tagLink.targetId, propertyId)),
-			(tagIds) =>
-				tx
-					.insert(tagLink)
-					.values(tagIds.map((tagId) => ({ tagId, targetId: propertyId })))
-					.onConflictDoNothing()
-		)
-	);
 }
 
 export async function updatePropertyTags(
@@ -379,14 +339,6 @@ async function replaceSplitTags(
 	);
 }
 
-export async function setSplitTags(
-	splitId: string,
-	names: string[],
-	handle: Queryable = db
-): Promise<void> {
-	await withinTransaction(handle, (tx) => replaceSplitTags(splitId, names, tx));
-}
-
 /** Replace several split lines' tag sets in one commit. */
 export async function setSplitTagSets(
 	sets: { splitId: string; names: string[] }[],
@@ -398,7 +350,7 @@ export async function setSplitTagSets(
 }
 
 /** Tag names attached to each of the given transactions, directly or via a split. */
-export interface LoadedTag {
+interface LoadedTag {
 	id: string;
 	name: string;
 	direct: boolean;

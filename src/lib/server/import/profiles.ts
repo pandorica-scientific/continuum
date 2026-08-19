@@ -20,12 +20,17 @@
  * and it is the reason this module is safe to have a trigger at all — anything
  * added here has to keep it that way.
  *
- * `saveDriftedProfile` and `recordProfileUse` are still uncalled. Note that
- * because nothing records a use, `lastUsedAt` is null on every row, and the
- * ordering `loadProfiles` relies on to make a household's own layout win is
- * not yet doing anything.
+ * WHEN A REMEMBERED LAYOUT CHANGES, the wizard supersedes it: `confirmMapping`
+ * saves the new profile and deletes the old one. The alternative — keeping both
+ * and bumping `version` — was tried and rejected, because two profiles sharing
+ * one signature make `matchProfile`'s "first exact hit" depend on the order the
+ * database happened to return them.
+ *
+ * That is also why nothing tracks how recently a profile was used. Ranking
+ * same-signature profiles is a problem the supersede rule removes rather than
+ * solves, and a household's own layout already outranks a shipped one by
+ * construction: `loadProfiles` returns its rows ahead of `BUILTIN_PROFILES`.
  */
-import { uuidv7 } from 'uuidv7';
 import { desc, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { importProfile } from '$lib/server/db/schema';
@@ -42,7 +47,7 @@ type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
  * the arithmetic would object. Contributed profiles land here once someone has
  * confirmed one against a real file.
  */
-export const BUILTIN_PROFILES: ImportProfile[] = [];
+const BUILTIN_PROFILES: ImportProfile[] = [];
 
 const rowToProfile = (row: typeof importProfile.$inferSelect): ImportProfile => ({
 	id: row.id,
@@ -64,10 +69,12 @@ const rowToProfile = (row: typeof importProfile.$inferSelect): ImportProfile => 
  *
  * Order matters: `matchProfile` takes the first exact signature hit, so a
  * household's own confirmed layout wins over a shipped one describing the same
- * headers.
+ * headers. That is what the concatenation below guarantees — not the ordering,
+ * which only decides between two local profiles and is newest-first so that it
+ * decides the same way twice.
  */
 export async function loadProfiles(handle: Handle = db): Promise<ImportProfile[]> {
-	const rows = await handle.select().from(importProfile).orderBy(desc(importProfile.lastUsedAt));
+	const rows = await handle.select().from(importProfile).orderBy(desc(importProfile.createdAt));
 	return [...rows.map(rowToProfile), ...BUILTIN_PROFILES];
 }
 
@@ -99,35 +106,6 @@ export async function saveProfile(profile: ImportProfile, handle: Handle = db): 
 				verified: profile.verified
 			}
 		});
-}
-
-/**
- * Store a re-confirmed layout as a NEW version rather than editing the old one.
- *
- * Files already imported were read under the previous mapping, and rewriting
- * it in place would make their stored provenance describe a mapping that never
- * touched them.
- */
-export async function saveDriftedProfile(
-	previous: ImportProfile,
-	updated: Omit<ImportProfile, 'id' | 'version' | 'origin'>,
-	handle: Handle = db
-): Promise<ImportProfile> {
-	const next: ImportProfile = {
-		...updated,
-		id: uuidv7(),
-		version: previous.version + 1,
-		origin: previous.origin === 'builtin' ? 'user' : previous.origin
-	};
-	await saveProfile(next, handle);
-	return next;
-}
-
-export async function recordProfileUse(id: string, handle: Handle = db): Promise<void> {
-	await handle
-		.update(importProfile)
-		.set({ lastUsedAt: new Date() })
-		.where(eq(importProfile.id, id));
 }
 
 export async function deleteProfile(id: string, handle: Handle = db): Promise<void> {

@@ -83,7 +83,7 @@ const BARE_MONEY =
  * not known yet — that is settled later, from the column as a whole.
  */
 
-export const kindOf = (text: string): Kind => {
+const kindOf = (text: string): Kind => {
 	const t = text.trim();
 	if (isDateLike(t)) return 'date';
 	if (BARE_MONEY.test(t) && MONEY.test(t) && (DECIMAL_TAIL.test(t) || GROUPED.test(t)))
@@ -129,7 +129,7 @@ const nearest = (v: number, centres: number[]): number => {
 
 const COLUMN_TOLERANCE = 6;
 
-export function cellsOf(
+function cellsOf(
 	lines: { page: number; y: number; cells: string[]; xs?: number[]; xEnds?: number[] }[]
 ): Cell[] {
 	const raw = lines.flatMap((line) =>
@@ -201,7 +201,7 @@ const labelOf = (cell: Cell): string =>
 		? `R${cell.right.toFixed(0)}:money`
 		: `L${cell.left.toFixed(0)}:${cell.kind}`;
 
-export function hypotheses(cells: Cell[]): Run[] {
+function hypotheses(cells: Cell[]): Run[] {
 	const byColumn = new Map<string, number[]>();
 	for (const c of cells) {
 		const key = labelOf(c);
@@ -217,7 +217,7 @@ const anchorsFor = (label: string, cells: Cell[]): number[] =>
 		(a, b) => b - a
 	);
 
-export type Band = { top: number; bottom: number; cells: Cell[] };
+type Band = { top: number; bottom: number; cells: Cell[] };
 
 /**
  * Bands from anchors: content hangs BELOW the line that opens it.
@@ -234,7 +234,7 @@ export type Band = { top: number; bottom: number; cells: Cell[] };
  * hypothesis whose anchors sit at the top of the row is the one that survives
  * validation, so no per-layout switch is needed.
  */
-export function bandsOf(anchors: number[], cells: Cell[]): Band[] {
+function bandsOf(anchors: number[], cells: Cell[]): Band[] {
 	const bands: Band[] = [];
 	for (let i = 0; i < anchors.length; i++) {
 		const top = anchors[i];
@@ -324,7 +324,7 @@ export function evaluate(run: Run, cells: Cell[]): Reading {
  * table that passes validation by a hair. It explains less of the page than the
  * date column does, and coverage is what separates them.
  */
-export function readPage(cells: Cell[]): Reading | undefined {
+function readPage(cells: Cell[]): Reading | undefined {
 	const readings = hypotheses(cells)
 		.map((run) => evaluate(run, cells))
 		.filter((r) => r.valid);
@@ -332,7 +332,7 @@ export function readPage(cells: Cell[]): Reading | undefined {
 	return readings[0];
 }
 
-export type AssembledRecord = {
+type AssembledRecord = {
 	page: number;
 	y: number;
 	cells: Cell[];

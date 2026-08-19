@@ -10,14 +10,14 @@ import { sql } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 
-export interface StorageFact {
+interface StorageFact {
 	label: string;
 	path: string;
 	writable: boolean;
 	size: string | null;
 }
 
-export interface ServerStatus {
+interface ServerStatus {
 	version: string;
 	migrations: number;
 	databaseSize: string;

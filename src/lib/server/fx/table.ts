@@ -5,7 +5,7 @@ import { minorDigits } from '$lib/money';
 /** All known rates, newest first per code: code → [{day, czkPerUnit}]. */
 export type RateTable = Map<string, { day: string; rate: number }[]>;
 
-export interface CurrencyUse {
+interface CurrencyUse {
 	currency: string;
 	day: string;
 }
@@ -27,7 +27,7 @@ export async function loadRateTable(handle: Queryable = db): Promise<RateTable> 
  * How well a rate is known for one day: an actual fixing at or before it, the
  * oldest fixing on record carried backwards, or nothing at all.
  */
-export type RateBasis = 'exact' | 'carried' | 'none';
+type RateBasis = 'exact' | 'carried' | 'none';
 
 function rateAt(table: RateTable, code: string, day: string): { rate: number; basis: RateBasis } {
 	if (code === 'CZK') return { rate: 1, basis: 'exact' };

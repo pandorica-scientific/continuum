@@ -21,7 +21,7 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
 	{ key: 'savings', label: 'Saved & invested', colorVar: '--teal', order: 6 }
 ];
 
-export interface CategoryDef {
+interface CategoryDef {
 	id: string;
 	groupKey: string;
 	name: string;

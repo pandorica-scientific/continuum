@@ -22,9 +22,9 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
  * own. For a household ledger that is the arrangement you would want anyway:
  * one calendar you can switch off in your phone in a single tap.
  */
-export const SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
+const SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
 
-export interface PendingAuth {
+interface PendingAuth {
 	clientId: string;
 	clientSecret: string;
 	/** Hash of the state nonce, not the nonce — see startAuth. */
@@ -32,7 +32,7 @@ export interface PendingAuth {
 	redirectUri: string;
 }
 
-export interface AuthStart {
+interface AuthStart {
 	url: string;
 	/** Goes in the caller's session or a short-lived cookie. */
 	state: string;

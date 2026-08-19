@@ -5,9 +5,9 @@ import { contact, contactLink, entity } from '$lib/server/db/schema';
 import { removeUpload } from '$lib/server/files';
 import { normaliseSearch } from '$lib/contacts/search';
 
-export type ContactRow = typeof contact.$inferSelect;
+type ContactRow = typeof contact.$inferSelect;
 
-export type ContactMutationResult =
+type ContactMutationResult =
 	{ ok: true; id: string } | { ok: false; status: 400 | 404; message: string };
 
 // files.ts allows .svg, correctly — a document can be an SVG. An avatar cannot.

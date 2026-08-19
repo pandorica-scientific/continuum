@@ -19,7 +19,7 @@ import {
 export * from './provider';
 export { haMeterCandidates } from './homeassistant';
 
-export interface HomeConfig {
+interface HomeConfig {
 	kind: string;
 	[key: string]: string;
 }

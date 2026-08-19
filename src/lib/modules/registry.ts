@@ -41,7 +41,7 @@ export const EVENT_CATEGORIES = {
 	social: { label: 'Social', emoji: '🎉' }
 } as const;
 
-export type EventCategoryKey = keyof typeof EVENT_CATEGORIES;
+type EventCategoryKey = keyof typeof EVENT_CATEGORIES;
 export const EVENT_CATEGORY_KEYS = Object.keys(EVENT_CATEGORIES) as EventCategoryKey[];
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
@@ -50,7 +50,7 @@ export type ModuleKey = keyof typeof MODULES;
 
 export type ModuleToggles = Record<ModuleKey, boolean>;
 
-export interface Screen {
+interface Screen {
 	path: string;
 	label: string;
 	/** Shown at 26px in the screen title; ScreenHeader reads it from here so no
@@ -63,9 +63,9 @@ export interface Screen {
 
 /** The hues an area may take. Every one is a token in app.css, so a name that
  *  does not exist fails the build rather than rendering an invisible colour. */
-export type AreaHue = 'brand' | 'teal' | 'purple' | 'blue' | 'orange' | 'indigo' | 'fg3';
+type AreaHue = 'brand' | 'teal' | 'purple' | 'blue' | 'orange' | 'indigo' | 'fg3';
 
-export interface Area {
+interface Area {
 	key: string;
 	label: string;
 	icon: IconName;
@@ -180,11 +180,6 @@ export function visibleAreas(modules: ModuleToggles): Area[] {
 		...area,
 		screens: area.screens.filter((screen) => !screen.module || modules[screen.module])
 	})).filter((area) => area.screens.length > 0);
-}
-
-/** Whether a statement import may be started from this path. */
-export function importOfferedAt(pathname: string, modules: ModuleToggles): boolean {
-	return modules.import && (areaForPath(pathname)?.offersImport ?? false);
 }
 
 /** The area a path belongs to, or undefined for a route outside the navigation. */

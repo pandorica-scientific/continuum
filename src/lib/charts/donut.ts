@@ -1,4 +1,4 @@
-export interface DonutSlice<T> {
+interface DonutSlice<T> {
 	item: T;
 	pct: number;
 	from: number;

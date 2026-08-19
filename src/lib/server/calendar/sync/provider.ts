@@ -114,7 +114,7 @@ export interface ProviderField {
 	kind?: 'text' | 'url' | 'password';
 }
 
-export type CalendarProviderFactory = (config: Record<string, string>) => CalendarProvider;
+type CalendarProviderFactory = (config: Record<string, string>) => CalendarProvider;
 
 interface RegistryEntry {
 	label: string;
@@ -144,7 +144,7 @@ export function registerCalendarProvider(
 	registry.set(id, { label, make, fields, hint, oauth });
 }
 
-export interface CalendarProviderKind {
+interface CalendarProviderKind {
 	id: string;
 	label: string;
 	fields: ProviderField[];
@@ -174,9 +174,4 @@ export function makeCalendarProvider(
 ): CalendarProvider | null {
 	const entry = registry.get(kind);
 	return entry ? entry.make(config) : null;
-}
-
-/** Test seam: forget every registered provider. */
-export function clearCalendarProviders(): void {
-	registry.clear();
 }

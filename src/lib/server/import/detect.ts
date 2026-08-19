@@ -184,7 +184,7 @@ async function adapterOrGeneric(
  * Sniff the bank and format from the file body and parse it. Throws a
  * user-facing Error when nothing matches.
  */
-export interface ParseOptions {
+interface ParseOptions {
 	/**
 	 * Layouts this household has confirmed, fetched lazily.
 	 *
@@ -756,7 +756,7 @@ async function readOneGrid(
  * everything it returns is a proposal for a person to correct, and whatever
  * they confirm still has to pass the same arithmetic as any other reading.
  */
-export interface LayoutPreview {
+interface LayoutPreview {
 	/** The header labels, which are what a profile is keyed on. */
 	headers: string[];
 	/** Roles the reader inferred, in header order, for the person to correct. */

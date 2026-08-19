@@ -297,7 +297,7 @@ class NeedsAccount extends Error {
 }
 
 /** What one statement inside an uploaded file did. */
-export interface StatementOutcome {
+interface StatementOutcome {
 	accountId: string | null;
 	bank: string;
 	currency: string;
@@ -876,7 +876,7 @@ export async function ingestFile(
  * review proposals stay in income/spending until the user confirms them.
  */
 /** Inclusive ISO-day bounds a pairing pass may consider. */
-export interface PairingWindow {
+interface PairingWindow {
 	from: string;
 	to: string;
 }

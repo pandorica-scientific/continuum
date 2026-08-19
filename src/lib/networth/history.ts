@@ -1,4 +1,4 @@
-export interface NetWorthHistoryPoint {
+interface NetWorthHistoryPoint {
 	day: string;
 	valueMinor: bigint;
 	currency: string;

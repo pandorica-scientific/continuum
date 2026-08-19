@@ -209,7 +209,6 @@ CREATE TABLE "import_profile" (
 	"verified" boolean DEFAULT false NOT NULL,
 	"origin" text DEFAULT 'user' NOT NULL,
 	"filename_pattern" text,
-	"last_used_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
