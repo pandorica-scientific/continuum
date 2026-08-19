@@ -93,8 +93,11 @@ jobs:
       # surfaces as a browser that will not launch rather than as a version
       # complaint. Checked here so the failure names the real problem.
       - name: playwright image matches the installed version
+        # POSIX sh, not bash: a container job runs `sh -e {0}`, where `set -o
+        # pipefail` is not a builtin and the step dies before it checks anything.
+        # There are no pipes here, so `set -eu` is the whole of what was wanted.
         run: |
-          set -euo pipefail
+          set -eu
           installed="$(node -p "require('@playwright/test/package.json').version")"
           if ! grep -q "mcr.microsoft.com/playwright:v${installed}-noble" .github/workflows/ci.yml; then
             echo "::error::@playwright/test is $installed — update the e2e job's container image to v${installed}-noble"
