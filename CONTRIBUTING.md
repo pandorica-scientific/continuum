@@ -64,12 +64,18 @@ even when the tests pass.
 
 ### Database changes
 
-Schema lives in `src/lib/server/db/schema.ts`. After editing it:
+Schema lives in `src/lib/server/db/schema/`, split by domain with `index.ts` as
+the only import site. After editing it:
 
 ```sh
 npm run db:generate    # writes a new migration into drizzle/
 npm run db:migrate     # applies it locally
 ```
+
+**The schema is additive-only.** `drizzle/0000_baseline.sql` is the whole schema
+as of 0.3.9; everything after it adds. Dropping or renaming a column means
+writing the migration that carries the data across, because households are
+running the previous release.
 
 Commit the generated SQL and the snapshot together with the schema change.
 Migrations are forward-only and run automatically on container start, so a
@@ -80,11 +86,35 @@ migration-metadata regression also verifies that the current snapshot matches
 the TypeScript schema so the next generated migration cannot recreate objects
 that already exist.
 
+`db:generate` writes tables, columns, indexes and foreign keys and nothing else.
+Triggers, generated columns, CHECK constraints, expression indexes, views and
+seed rows have to be written by hand — the appendix at the foot of the baseline
+is the worked example, and `tests/integration/baseline-migration.test.ts` is what
+notices when one goes missing.
+
+### Conventions the tests enforce
+
+Three rules are checked rather than remembered, so breaking one fails CI rather
+than review:
+
+- **Naming.** Money is `*_minor` and always `bigint`; a date is `*_on`; an
+  instant is `*_at`. Every foreign key has a covering index, and every enum
+  column has a CHECK matching its list in `src/lib/enums.ts`. See
+  `tests/integration/schema-invariants.test.ts`.
+- **Module boundaries.** Nothing loose in `src/lib/server` — a domain is a
+  directory with an `index.ts`, and cross-cutting plumbing lives in `system/`.
+  See `tests/unit/module-boundaries.test.ts`.
+- **Licence headers.** Every file under `src/` starts with
+  `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0`. An ESLint rule adds
+  it with `--fix` and fails without it.
+
 ### Cutting a release
 
-Pushing to `main` keeps `latest` current on ghcr.io and Docker Hub. A version is
+Nothing is published from `main`. A version — and `latest` with it — is
 published only by a tag, so releasing stays a deliberate act rather than
-something a merge does by accident:
+something a merge does by accident. `latest` names the newest RELEASE, because
+that is the tag `compose.yaml` pulls and people run at home; moving it on every
+merge meant a `docker compose pull` picked up whatever landed an hour ago:
 
 ```sh
 # 1. bump the version and write the changelog section, then commit
