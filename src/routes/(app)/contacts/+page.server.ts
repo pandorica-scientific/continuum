@@ -3,7 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { account, loan, property, tenancy } from '$lib/server/db/schema';
-import { removeUpload, saveUpload } from '$lib/server/files';
+import { removeUpload, saveUpload } from '$lib/server/system/files';
 import {
 	createContact,
 	deleteContact,

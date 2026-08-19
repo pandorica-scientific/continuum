@@ -15,7 +15,7 @@ import {
 	subject,
 	tag
 } from '$lib/server/db/schema';
-import { saveUpload } from '$lib/server/files';
+import { saveUpload } from '$lib/server/system/files';
 import { createDocument } from '$lib/server/documents/mutations';
 import { deriveColumns, isUnlinked, type LinkedDoc } from '$lib/documents-links';
 import { SHELVES, type ShelfKey } from '$lib/documents';

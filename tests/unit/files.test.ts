@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { openUpload, removeUpload, saveUpload } from '$lib/server/files';
+import { openUpload, removeUpload, saveUpload } from '$lib/server/system/files';
 
 const DIRECTORY = resolve('scratch-workspace/files-test');
 let previousDirectory: string | undefined;

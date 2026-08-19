@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatUptime } from '$lib/server/status';
+import { formatBytes, formatUptime } from '$lib/server/system/status';
 
 describe('status formatting', () => {
 	it('formats byte sizes with sensible units', () => {

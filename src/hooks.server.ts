@@ -39,7 +39,7 @@ async function boot(): Promise<void> {
 	// screenshots and first impressions need no real data. Never touches an
 	// instance that has people.
 	if (env.DEMO && !(await isSetUp())) {
-		const { seedDemo } = await import('$lib/server/demo');
+		const { seedDemo } = await import('$lib/server/system/demo');
 		await seedDemo();
 		console.log('Demo data seeded (DEMO=1).');
 	}

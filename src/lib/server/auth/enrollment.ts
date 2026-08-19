@@ -8,7 +8,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { enrollmentToken, person } from '$lib/server/db/schema';
 import { hashToken } from '$lib/server/auth/token-hash';
-import { enrollmentLinkDays } from '$lib/server/policy';
+import { enrollmentLinkDays } from '$lib/server/system/policy';
 import {
 	applySessionCookie,
 	createSessionGrant,

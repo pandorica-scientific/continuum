@@ -24,7 +24,7 @@ import { initialsFor } from '$lib/people';
 import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { removeUpload, saveUpload } from '$lib/server/files';
+import { removeUpload, saveUpload } from '$lib/server/system/files';
 import {
 	createPropertyBill,
 	createTenancy,

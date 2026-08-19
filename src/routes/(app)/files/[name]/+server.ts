@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { openUpload } from '$lib/server/files';
+import { openUpload } from '$lib/server/system/files';
 import type { RequestHandler } from './$types';
 
 // Uploaded images/documents, auth-guarded by the (app) layout via hooks.

@@ -13,7 +13,7 @@ import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/serv
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
 import { currentOrigin, passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
-import { enrollmentLinkDays, passwordMinLength } from '$lib/server/policy';
+import { enrollmentLinkDays, passwordMinLength } from '$lib/server/system/policy';
 import { env } from '$env/dynamic/private';
 import {
 	BACKUP_CADENCES,
@@ -26,7 +26,7 @@ import {
 	setBackupConfig,
 	type BackupCadence
 } from '$lib/server/backup';
-import { importConfig as importConfigFile } from '$lib/server/config-file';
+import { importConfig as importConfigFile } from '$lib/server/system/config-file';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { getCalendarMarkers } from '$lib/server/calendar';
@@ -42,7 +42,7 @@ import {
 } from '$lib/server/calendar/sync';
 import { startAuth } from '$lib/server/calendar/sync/google-oauth';
 import { calendarAccount } from '$lib/server/db/schema';
-import { serverStatus } from '$lib/server/status';
+import { serverStatus } from '$lib/server/system/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
 import type { Action } from '@sveltejs/kit';

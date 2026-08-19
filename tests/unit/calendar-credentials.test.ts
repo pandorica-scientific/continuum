@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
-import { EXPORTABLE_KEYS } from '$lib/server/config-file';
+import { EXPORTABLE_KEYS } from '$lib/server/system/config-file';
 import { calendarAccount } from '$lib/server/db/schema';
 
 /**
@@ -30,13 +30,13 @@ describe('calendar credentials cannot be exported', () => {
 	// The whole guarantee rests on the exporter reading one table. If it ever
 	// learns to read another, the whitelist stops being the boundary.
 	it('reads only the settings table', () => {
-		const source = readFileSync('src/lib/server/config-file.ts', 'utf8');
+		const source = readFileSync('src/lib/server/system/config-file.ts', 'utf8');
 		const tablesRead = [...source.matchAll(/\.from\((\w+)\)/g)].map((m) => m[1]);
 		expect([...new Set(tablesRead)]).toEqual(['settings']);
 	});
 
 	it('never imports a calendar table', () => {
-		const source = readFileSync('src/lib/server/config-file.ts', 'utf8');
+		const source = readFileSync('src/lib/server/system/config-file.ts', 'utf8');
 		expect(source).not.toMatch(/calendarAccount|calendarSyncLink|calendarConflict/);
 	});
 });

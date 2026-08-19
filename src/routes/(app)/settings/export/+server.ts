@@ -1,4 +1,4 @@
-import { exportConfig } from '$lib/server/config-file';
+import { exportConfig } from '$lib/server/system/config-file';
 import { requireAdmin } from '$lib/server/auth/policy';
 import type { RequestHandler } from './$types';
 

@@ -2,7 +2,7 @@ import { extname } from 'node:path';
 import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contact, contactLink, entity } from '$lib/server/db/schema';
-import { removeUpload } from '$lib/server/files';
+import { removeUpload } from '$lib/server/system/files';
 import { normaliseSearch } from '$lib/contacts/search';
 
 type ContactRow = typeof contact.$inferSelect;

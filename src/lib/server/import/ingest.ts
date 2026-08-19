@@ -16,7 +16,7 @@ import { convertMinorSync, type RateTable } from '$lib/server/fx/table';
 import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
-import { saveUpload } from '$lib/server/files';
+import { saveUpload } from '$lib/server/system/files';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';

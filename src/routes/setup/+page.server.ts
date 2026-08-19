@@ -6,7 +6,7 @@ import { createSession, hashPassword } from '$lib/server/auth';
 import { initialSetupPeopleLimitError, runInitialSetup } from '$lib/server/auth/generation';
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
-import { passwordMinLength } from '$lib/server/policy';
+import { passwordMinLength } from '$lib/server/system/policy';
 import { passwordLengthError } from '$lib/password-policy';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';

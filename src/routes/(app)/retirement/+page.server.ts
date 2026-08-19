@@ -6,7 +6,7 @@ import { db } from '$lib/server/db';
 import { document, documentLink, person } from '$lib/server/db/schema';
 import { formatMinor, parseAmountToMinor, toMajor } from '$lib/money';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { saveUpload } from '$lib/server/files';
+import { saveUpload } from '$lib/server/system/files';
 import { learnAmountLabel, readPayslip, readStoredPayslip } from '$lib/server/salary';
 import { retirementInputs } from '$lib/server/retirement';
 import {

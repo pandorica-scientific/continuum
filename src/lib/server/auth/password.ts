@@ -5,7 +5,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
-import { passwordMinLength } from '$lib/server/policy';
+import { passwordMinLength } from '$lib/server/system/policy';
 import { passwordLengthError } from '$lib/password-policy';
 import { hashPassword, verifyPassword } from './index';
 import { revokeAuthenticationGeneration } from './generation';
