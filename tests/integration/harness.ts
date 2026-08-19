@@ -19,6 +19,7 @@ import { resolve } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { refreshCurrencies } from '$lib/server/db/currency-refresh';
 import * as schema from '$lib/server/db/schema';
 import { removeStalePostgresDirectory } from './embedded-postgres';
 
@@ -192,6 +193,19 @@ export async function startPostgres(
 			for (const file of migrationFiles().filter(keep)) {
 				await apply(readFileSync(resolve('drizzle', file), 'utf8'));
 			}
+			// What `boot()` does immediately after `runMigrations()`, for the same
+			// reason: fourteen columns carry a foreign key into `currency`, and
+			// migration 0048 seeds only the two codes it needed to attach them. A
+			// suite that writes a USD rate would otherwise fail on an empty table
+			// rather than on anything it was testing.
+			//
+			// Conditional, because a suite may deliberately stop short of 0048 to
+			// exercise the schema as it was before that migration.
+			const [{ exists }] = await sql<{ exists: boolean }[]>`
+				select exists (
+					select 1 from pg_tables where schemaname = 'public' and tablename = 'currency'
+				) as exists`;
+			if (exists) await refreshCurrencies(db);
 		},
 		async stop() {
 			await sql?.end();

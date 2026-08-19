@@ -1,3 +1,4 @@
+import { isCurrencyCode } from '$lib/money';
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import {
@@ -73,13 +74,24 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
 	const res = await fetchFn(CNB_DAILY_URL);
 	if (!res.ok) throw new Error(`CNB fixing fetch failed: ${res.status}`);
 	const rates = parseCnbDaily(await res.text());
-	for (const r of rates) {
+	// `currency_rate.code` carries a foreign key into `currency`, so a code the
+	// runtime does not recognise would abort the whole refresh rather than cost
+	// one rate. Skipped here instead, which is also the older bug's fix: an
+	// unchecked code from the feed became selectable through
+	// `availableCurrencies`, which is how a column heading once offered itself
+	// as a currency.
+	const known = rates.filter((r) => isCurrencyCode(r.code));
+	for (const r of known) {
 		await db
 			.insert(currencyRate)
 			.values({ code: r.code, day: r.day, rate: String(r.rate) })
 			.onConflictDoNothing();
 	}
-	return rates.length;
+	if (known.length !== rates.length) {
+		const dropped = rates.filter((r) => !isCurrencyCode(r.code)).map((r) => r.code);
+		console.warn(`FX: ignored ${dropped.length} unrecognised code(s): ${dropped.join(', ')}`);
+	}
+	return known.length;
 }
 
 /**

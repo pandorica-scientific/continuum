@@ -5,6 +5,8 @@ import { validateSession } from '$lib/server/auth';
 import { authorizeApiRequest } from '$lib/server/api/respond';
 import { maybeRunScheduledBackup } from '$lib/server/backup';
 import { seedCategories } from '$lib/server/categorize';
+import { db } from '$lib/server/db';
+import { refreshCurrencies } from '$lib/server/db/currency-refresh';
 import { runMigrations } from '$lib/server/db/migrate';
 import { runQueue } from '$lib/server/import/queue';
 import { refreshRates } from '$lib/server/fx';
@@ -27,6 +29,10 @@ function ensureReady(): Promise<void> {
 
 async function boot(): Promise<void> {
 	await runMigrations();
+	// Before anything writes a currency. Fourteen columns now carry a foreign key
+	// into this table, so an empty one refuses every insert — and the migration
+	// seeds only the two codes it needed to attach those keys.
+	await refreshCurrencies(db);
 	await seedCategories();
 
 	// DEMO=1 fills a pristine instance with the fictional Novák household so

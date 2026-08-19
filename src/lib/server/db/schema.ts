@@ -158,12 +158,31 @@ export const settings = pgTable('settings', {
 
 // ---- Currencies ----
 
+/**
+ * Every currency a code may name, materialised from CLDR at boot by
+ * `refreshCurrencies` — never seeded by hand.
+ *
+ * Present so the fourteen currency columns can carry a real foreign key.
+ * `$lib/money` remains the source of truth about currencies; a hand-written ISO
+ * 4217 list here would be a second answer free to drift from it, and the two
+ * disagree about real currencies (ISO gives HUF two decimal places, CLDR gives
+ * zero, and CLDR is how it is written).
+ */
+export const currency = pgTable('currency', {
+	code: text('code').primaryKey(),
+	/** Decimal places, from `minorDigits`: 0 for JPY, 2 for EUR, 3 for KWD. */
+	exponent: integer('exponent').notNull(),
+	name: text('name').notNull()
+});
+
 // One row per currency and day: how many base-currency minor units one unit of
 // `code` was worth. Only screen-level totals ever use this.
 export const currencyRate = pgTable(
 	'currency_rate',
 	{
-		code: text('code').notNull(),
+		code: text('code')
+			.notNull()
+			.references(() => currency.code),
 		day: date('day').notNull(),
 		// rate as a decimal string, e.g. 24.905 CZK per 1 EUR
 		rate: numeric('rate', { precision: 14, scale: 6 }).notNull()
@@ -181,7 +200,9 @@ export const account = pgTable(
 		emoji: text('emoji').notNull().default('🏦'),
 		bank: text('bank').notNull(), // fio | revolut | mbank | rb | cs | other
 		kind: text('kind').$type<EnumValue<'account.kind'>>().notNull().default('current'),
-		currency: text('currency').notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
 		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 		// bank account number / IBAN in the form statements print it; used to
 		// recognise transfers between the household's own accounts
@@ -194,7 +215,10 @@ export const account = pgTable(
 		balanceAsOf: date('balance_as_of'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('account_owner_person_idx').on(table.ownerPersonId)]
+	(table) => [
+		index('account_currency_idx').on(table.currency),
+		index('account_owner_person_idx').on(table.ownerPersonId)
+	]
 );
 
 export const importFile = pgTable(
@@ -226,7 +250,7 @@ export const importFile = pgTable(
 		sourceMethod: text('source_method'),
 		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>(),
 		ledgerModel: text('ledger_model'),
-		currency: text('currency'),
+		currency: text('currency').references(() => currency.code),
 		openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
 		closingBalanceMinor: bigint('closing_balance_minor', { mode: 'bigint' }),
 		statedCreditTotalMinor: bigint('stated_credit_total_minor', { mode: 'bigint' }),
@@ -236,7 +260,10 @@ export const importFile = pgTable(
 		reconciliation: jsonb('reconciliation').$type<ProofCheckRecord[] | null>(),
 		uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('import_file_account_idx').on(table.accountId)]
+	(table) => [
+		index('import_file_currency_idx').on(table.currency),
+		index('import_file_account_idx').on(table.accountId)
+	]
 );
 
 /** One line of a statement's evidence, as stored. */
@@ -348,14 +375,16 @@ export const transaction = pgTable(
 		amount: bigint('amount', { mode: 'bigint' }).notNull(),
 		// separate bank fee on this movement (positive minor units)
 		feeMinor: bigint('fee_minor', { mode: 'bigint' }),
-		currency: text('currency').notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
 		// account balance after this movement, when the statement prints it —
 		// the column that lets the ledger reconcile against the bank
 		balanceAfterMinor: bigint('balance_after_minor', { mode: 'bigint' }),
 		// original amount for foreign-currency card payments billed in the
 		// account currency
 		originalAmountMinor: bigint('original_amount_minor', { mode: 'bigint' }),
-		originalCurrency: text('original_currency'),
+		originalCurrency: text('original_currency').references(() => currency.code),
 		counterparty: text('counterparty'),
 		counterpartyAccount: text('counterparty_account'),
 		variableSymbol: text('variable_symbol'),
@@ -388,6 +417,8 @@ export const transaction = pgTable(
 		transferPairId: text('transfer_pair_id')
 	},
 	(table) => [
+		index('transaction_currency_idx').on(table.currency),
+		index('transaction_original_currency_idx').on(table.originalCurrency),
 		uniqueIndex('transaction_dedup_idx').on(table.accountId, table.dedupFingerprint),
 		index('transaction_booked_idx').on(table.bookedAt),
 		index('transaction_review_idx').on(table.reviewState),
@@ -480,7 +511,10 @@ export const property = pgTable(
 		// e.g. "3+kk · 78 m² · bought 2019"
 		sizeLabel: text('size_label').notNull().default(''),
 		kind: text('kind').$type<EnumValue<'property.kind'>>().notNull(),
-		currency: text('currency').notNull().default('CZK'),
+		currency: text('currency')
+			.notNull()
+			.default('CZK')
+			.references(() => currency.code),
 		valueMinor: bigint('value_minor', { mode: 'bigint' })
 			.notNull()
 			.default(sql`0`),
@@ -503,7 +537,10 @@ export const property = pgTable(
 			.default({ photos: [] }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('property_owner_person_idx').on(table.ownerPersonId)]
+	(table) => [
+		index('property_currency_idx').on(table.currency),
+		index('property_owner_person_idx').on(table.ownerPersonId)
+	]
 );
 
 export const tenancy = pgTable(
@@ -570,7 +607,10 @@ export const loan = pgTable(
 		name: text('name').notNull(),
 		lender: text('lender').notNull().default(''),
 		kind: text('kind').$type<EnumValue<'loan.kind'>>().notNull().default('mortgage'),
-		currency: text('currency').notNull().default('CZK'),
+		currency: text('currency')
+			.notNull()
+			.default('CZK')
+			.references(() => currency.code),
 		principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
 		owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
 		owedAsOf: date('owed_as_of'),
@@ -598,7 +638,10 @@ export const loan = pgTable(
 		interestDeductible: integer('interest_deductible').notNull().default(0),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('loan_owner_person_idx').on(table.ownerPersonId)]
+	(table) => [
+		index('loan_currency_idx').on(table.currency),
+		index('loan_owner_person_idx').on(table.ownerPersonId)
+	]
 );
 
 // One mortgage agreement can secure several properties (the flats entered at
@@ -694,79 +737,118 @@ export const document = pgTable(
 		// money documents (payslips, bills) can carry the amount they are about
 		// and the month they cover — the salary tracker derives from these
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
-		amountCurrency: text('amount_currency'),
+		amountCurrency: text('amount_currency').references(() => currency.code),
 		periodMonth: text('period_month')
 	},
-	(table) => [index('document_shelf_idx').on(table.shelf)]
+	(table) => [
+		index('document_amount_currency_idx').on(table.amountCurrency),
+		index('document_shelf_idx').on(table.shelf)
+	]
 );
 
 // ---- Investments (XTB report snapshots) ----
 
 // A cash operation from the broker report; XTB assigns each a unique id, so
 // re-uploading the same (or an overlapping) report is idempotent.
-export const brokerOperation = pgTable('broker_operation', {
-	id: text('id').primaryKey(), // XTB operation ID
-	type: text('type').notNull(), // Deposit | Withdrawal | Dividend | …
-	ticker: text('ticker'),
-	happenedAt: timestamp('happened_at', { withTimezone: true }).notNull(),
-	amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
-	currency: text('currency').notNull(),
-	comment: text('comment'),
-	// the broker position this cash movement belongs to — links purchases and
-	// sells to holding periods for the reconstructed value curve
-	positionId: text('position_id')
-});
+export const brokerOperation = pgTable(
+	'broker_operation',
+	{
+		id: text('id').primaryKey(), // XTB operation ID
+		type: text('type').notNull(), // Deposit | Withdrawal | Dividend | …
+		ticker: text('ticker'),
+		happenedAt: timestamp('happened_at', { withTimezone: true }).notNull(),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
+		comment: text('comment'),
+		// the broker position this cash movement belongs to — links purchases and
+		// sells to holding periods for the reconstructed value curve
+		positionId: text('position_id')
+	},
+	(table) => [index('broker_operation_currency_idx').on(table.currency)]
+);
 
 // A broker position's holding interval, from the report's Closed Positions
 // sheet (authoritative purchase/sale values and times) and the open lots.
 // This is what turns a single report into a value history.
-export const brokerPosition = pgTable('broker_position', {
-	id: text('id').primaryKey(), // XTB position ID
-	ticker: text('ticker').notNull(),
-	purchaseValueMinor: bigint('purchase_value_minor', { mode: 'bigint' }),
-	saleValueMinor: bigint('sale_value_minor', { mode: 'bigint' }),
-	currency: text('currency').notNull(),
-	openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
-	closedAt: timestamp('closed_at', { withTimezone: true })
-});
+export const brokerPosition = pgTable(
+	'broker_position',
+	{
+		id: text('id').primaryKey(), // XTB position ID
+		ticker: text('ticker').notNull(),
+		purchaseValueMinor: bigint('purchase_value_minor', { mode: 'bigint' }),
+		saleValueMinor: bigint('sale_value_minor', { mode: 'bigint' }),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
+		openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
+		closedAt: timestamp('closed_at', { withTimezone: true })
+	},
+	(table) => [index('broker_position_currency_idx').on(table.currency)]
+);
 
 // Current holdings — a snapshot replaced wholesale by each newer report.
-export const holding = pgTable('holding', {
-	id: text('id').primaryKey(),
-	ticker: text('ticker').notNull(),
-	name: text('name').notNull(),
-	category: text('category').notNull().default('STOCK'),
-	units: numeric('units', { precision: 18, scale: 6 }).notNull(),
-	valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
-	currency: text('currency').notNull(),
-	netProfitPct: numeric('net_profit_pct', { precision: 9, scale: 2 }),
-	asOf: timestamp('as_of', { withTimezone: true }).notNull()
-});
+export const holding = pgTable(
+	'holding',
+	{
+		id: text('id').primaryKey(),
+		ticker: text('ticker').notNull(),
+		name: text('name').notNull(),
+		category: text('category').notNull().default('STOCK'),
+		units: numeric('units', { precision: 18, scale: 6 }).notNull(),
+		valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
+		netProfitPct: numeric('net_profit_pct', { precision: 9, scale: 2 }),
+		asOf: timestamp('as_of', { withTimezone: true }).notNull()
+	},
+	(table) => [index('holding_currency_idx').on(table.currency)]
+);
 
 // Portfolio value over time: one row per report upload day, appended forever —
 // this series is the "actual" line on the value chart.
-export const portfolioSnapshot = pgTable('portfolio_snapshot', {
-	day: date('day').primaryKey(),
-	valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
-	currency: text('currency').notNull()
-});
+export const portfolioSnapshot = pgTable(
+	'portfolio_snapshot',
+	{
+		day: date('day').primaryKey(),
+		valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code)
+	},
+	(table) => [index('portfolio_snapshot_currency_idx').on(table.currency)]
+);
 
 // A holdings report can legitimately contain zero rows, so freshness cannot
 // be inferred from the current holding table. This singleton remembers the
 // exact report timestamp and account currency independently of its contents.
-export const brokerImportState = pgTable('broker_import_state', {
-	id: text('id').primaryKey(),
-	latestGeneratedAt: timestamp('latest_generated_at', { withTimezone: true }).notNull(),
-	currency: text('currency').notNull()
-});
+export const brokerImportState = pgTable(
+	'broker_import_state',
+	{
+		id: text('id').primaryKey(),
+		latestGeneratedAt: timestamp('latest_generated_at', { withTimezone: true }).notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code)
+	},
+	(table) => [index('broker_import_state_currency_idx').on(table.currency)]
+);
 
 // Net-worth history: upserted daily so the sidebar delta and (later) trend
 // charts have real data.
-export const netWorthSnapshot = pgTable('networth_snapshot', {
-	day: date('day').primaryKey(),
-	valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
-	currency: text('currency').notNull()
-});
+export const netWorthSnapshot = pgTable(
+	'networth_snapshot',
+	{
+		day: date('day').primaryKey(),
+		valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code)
+	},
+	(table) => [index('networth_snapshot_currency_idx').on(table.currency)]
+);
 
 // ---- Splits and tags ----
 
@@ -1022,7 +1104,9 @@ export const taxStatement = pgTable(
 		// free text on purpose — a validated country list would need maintaining
 		country: text('country').notNull(),
 		// the statement's own currency, so a series never mixes currencies
-		currency: text('currency').notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
 		grossIncomeMinor: bigint('gross_income_minor', { mode: 'bigint' }).notNull(),
 		taxPaidMinor: bigint('tax_paid_minor', { mode: 'bigint' }).notNull(),
 		documentId: text('document_id').references(() => document.id, { onDelete: 'set null' }),
@@ -1030,6 +1114,7 @@ export const taxStatement = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
+		index('tax_statement_currency_idx').on(table.currency),
 		uniqueIndex('tax_statement_unique_idx').on(table.personId, table.year, table.country),
 		index('tax_statement_document_idx').on(table.documentId)
 	]
