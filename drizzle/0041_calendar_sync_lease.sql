@@ -1,1 +1,0 @@
-ALTER TABLE "calendar_account" ADD COLUMN "syncing_since" timestamp with time zone;

@@ -8,7 +8,7 @@ import { syncAccount } from '$lib/server/calendar/sync/engine';
 import type { EventSeries } from '$lib/server/calendar/series';
 import { toRemoteId } from '$lib/calendar/keys';
 import { calendarConflicts, calendarSyncFailures } from '$lib/server/briefing';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { FakeCalendarProvider } from './fake-calendar-provider';
 
 const ACCOUNT = rowId('acct-1');
@@ -49,7 +49,7 @@ const sync = () => syncAccount(ACCOUNT, fake, testDb);
 beforeAll(async () => {
 	harness = await startPostgres('calendar-sync');
 	testDb = harness.db;
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 60_000);
 
 afterAll(async () => {

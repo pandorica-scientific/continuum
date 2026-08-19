@@ -1,37 +1,13 @@
 import { rowId } from '../row-id';
-import { readFileSync } from 'node:fs';
-import type postgres from 'postgres';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
-import {
-	before,
-	migrationFiles,
-	startPostgres,
-	statements,
-	type Harness,
-	type TestDb
-} from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
 let testDb: TestDb;
-
-/**
- * One migration file, all of it in ONE transaction.
- *
- * The harness applies statements one at a time, as the migrator does. This suite
- * needs the whole file to commit or roll back together, because it runs the
- * fingerprint repair against deliberately broken data and asserts that a repair
- * which fails partway leaves nothing behind.
- */
-async function executeSqlFile(path: string, client: postgres.Sql = harness.sql): Promise<void> {
-	const parts = statements(readFileSync(path, 'utf8'));
-	await client.begin(async (tx) => {
-		for (const statement of parts) await tx.unsafe(statement);
-	});
-}
 
 async function count(table: string): Promise<number> {
 	const rows = await harness.sql.unsafe<{ count: number }[]>(
@@ -100,38 +76,7 @@ beforeAll(async () => {
 	process.env.DATABASE_URL = harness.url;
 	process.env.UPLOAD_DIR = resolve('scratch-workspace/task1-import-uploads');
 
-	// The world as it was before the migrations under test, which this suite
-	// applies itself against data it has deliberately broken.
-	for (const name of migrationFiles().filter(before('0029_'))) {
-		await executeSqlFile(resolve('drizzle', name));
-	}
-	// The baseline stops before these, but every insert here goes through the
-	// current Drizzle schema, which names every column they add.
-	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
-	await executeSqlFile(resolve('drizzle/0043_import_profiles.sql'));
-	await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'));
-	// The supertype and the collapsed link tables, in order, because the current
-	// schema writes `tag_link`. 0049 backfills from `contact`, so 0035 comes
-	// first; 0050 copies from `contact_tenancy`, so 0037 does too.
-	await executeSqlFile(resolve('drizzle/0035_contacts.sql'));
-	await executeSqlFile(resolve('drizzle/0037_tenant_contacts.sql'));
-	await executeSqlFile(resolve('drizzle/0049_entity.sql'));
-	await executeSqlFile(resolve('drizzle/0050_link_tables.sql'));
-	// The queue moved into `job` in 0051; this suite drives it directly. 0051
-	// migrates rows out of `import_job` (0045) and takes the lease off
-	// `calendar_account` (0038 then 0039), so all three come first.
-	await executeSqlFile(resolve('drizzle/0038_calendar_events.sql'));
-	await executeSqlFile(resolve('drizzle/0039_calendar_sync.sql'));
-	await executeSqlFile(resolve('drizzle/0040_calendar_name.sql'));
-	// 0041 is the one that adds `syncing_since`, which 0051 drops.
-	await executeSqlFile(resolve('drizzle/0041_calendar_sync_lease.sql'));
-	await executeSqlFile(resolve('drizzle/0045_import_queue.sql'));
-	await executeSqlFile(resolve('drizzle/0051_job.sql'));
-	// 0052 and 0053 are constraint and type work the current schema depends on;
-	// 0054 renames the columns it names.
-	await executeSqlFile(resolve('drizzle/0052_integrity_gaps.sql'));
-	await executeSqlFile(resolve('drizzle/0053_uuid_keys.sql'));
-	await executeSqlFile(resolve('drizzle/0054_naming.sql'));
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
 beforeEach(async () => {

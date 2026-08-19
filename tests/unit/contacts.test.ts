@@ -46,11 +46,11 @@ describe('contact search normalisation', () => {
 // matching and reports NO RESULTS — never an error — so nothing surfaces until
 // someone notices a contact they know exists cannot be found.
 describe('the SQL fold matches the TypeScript fold', () => {
-	const migration = readFileSync('drizzle/0036_contact_search.sql', 'utf8');
+	const migration = readFileSync('drizzle/0000_baseline.sql', 'utf8');
 
 	it('translates the same stroked letters the TypeScript map does', () => {
 		const call = migration.match(/translate\(value,\s*'([^']*)',\s*'([^']*)'\)/);
-		expect(call, 'translate(...) not found in the migration').toBeTruthy();
+		expect(call, 'translate(...) not found in the baseline').toBeTruthy();
 		expect(call![1]).toBe(SQL_FOLD_FROM);
 		expect(call![2]).toBe(SQL_FOLD_TO);
 	});
@@ -67,13 +67,26 @@ describe('the SQL fold matches the TypeScript fold', () => {
 		expect(migration).toContain("public.unaccent('public.unaccent'::regdictionary");
 	});
 
+	// The extension, the function and the index have to arrive as three separate
+	// statements, in that order. Sent as one batch, CREATE FUNCTION is parsed
+	// before CREATE EXTENSION has taken effect and the whole thing fails with
+	// "text search dictionary unaccent does not exist" — on a fresh database
+	// only, which is the one place nobody tests before shipping.
 	it('separates its statements so a fresh database can apply it', () => {
 		const statements = migration
 			.split('--> statement-breakpoint')
 			.filter((part) =>
 				part.split('\n').some((line) => line.trim() && !line.trim().startsWith('--'))
 			);
-		expect(statements).toHaveLength(3);
+		const at = (pattern: RegExp) => statements.findIndex((part) => pattern.test(part));
+
+		const extension = at(/CREATE EXTENSION IF NOT EXISTS unaccent/i);
+		const fold = at(/FUNCTION contact_fold/i);
+		const index = at(/INDEX contact_search_idx/i);
+
+		expect(extension).toBeGreaterThanOrEqual(0);
+		expect(fold).toBeGreaterThan(extension);
+		expect(index).toBeGreaterThan(fold);
 	});
 });
 

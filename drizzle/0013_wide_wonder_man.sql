@@ -1,1 +1,0 @@
-DROP TABLE "category_rule" CASCADE;

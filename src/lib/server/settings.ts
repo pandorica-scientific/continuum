@@ -162,8 +162,8 @@ export async function getModules(): Promise<ModuleToggles> {
 	return { ...DEFAULT_MODULES, ...stored };
 }
 
-export async function getBaseCurrency(): Promise<string> {
-	return getSetting<string>('baseCurrency', 'CZK');
+export async function getBaseCurrency(handle: Queryable = db): Promise<string> {
+	return getSetting<string>('baseCurrency', 'CZK', handle);
 }
 
 export async function getHouseholdName(): Promise<string> {

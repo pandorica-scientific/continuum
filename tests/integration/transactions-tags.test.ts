@@ -1,6 +1,6 @@
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { loadTagsFor, setTransactionTags, tagTotals } from '$lib/server/tags';
 import { PAGE_SIZE, registerPage } from '$lib/server/transactions';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
@@ -32,7 +32,7 @@ beforeAll(async () => {
 	// The real schema, not a hand-written subset of it. The subset that used to
 	// live here had to be kept in step with schema.ts by hand, and a test passing
 	// against a stale copy of a table says nothing about the real one.
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 
 	// A fault injector, not schema: it makes one specific tag name fail on
 	// insert, so the rollback test below has something real to roll back from.

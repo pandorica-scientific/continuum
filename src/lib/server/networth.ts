@@ -1,12 +1,10 @@
 import { asc, desc, lt } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, type Queryable } from '$lib/server/db';
 import {
-	account,
-	loan,
 	loanProperty,
+	netWorthComponent,
 	netWorthSnapshot,
-	portfolioSnapshot,
-	property
+	portfolioSnapshot
 } from '$lib/server/db/schema';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -43,16 +41,16 @@ export interface NetWorth {
  * again on /overview, and from `GET /api/v1/networth` — so an upsert inside it
  * meant the documented read-only API wrote on every poll.
  */
-export async function computeNetWorth(): Promise<NetWorth> {
-	const baseCurrency = await getBaseCurrency();
-	const [rates, accounts, properties, loans, links, snapshots] = await Promise.all([
+export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth> {
+	const baseCurrency = await getBaseCurrency(handle);
+	const [rates, components, links, snapshots] = await Promise.all([
 		// One table load, not a query per holding: this ran on every page view.
-		loadRateTable(),
-		db.select().from(account),
-		db.select().from(property),
-		db.select().from(loan),
-		db.select({ loanId: loanProperty.loanId }).from(loanProperty),
-		db.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
+		loadRateTable(handle),
+		// One read of the view, not a query per asset table. A new asset type is a
+		// UNION branch in the migration; nothing here has to be told about it.
+		handle.select().from(netWorthComponent),
+		handle.select({ loanId: loanProperty.loanId }).from(loanProperty),
+		handle.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
 	]);
 	const securedLoanIds = new Set(links.map((l) => l.loanId));
 
@@ -61,21 +59,52 @@ export async function computeNetWorth(): Promise<NetWorth> {
 		convertOrFace(rates, amount, currency, baseCurrency, today);
 
 	let cash = 0n;
-	for (const a of accounts) {
-		if (a.kind === 'brokerage') continue;
-		cash += toBase(a.balanceMinor, a.currency);
-	}
-
+	let cashAccounts = 0;
 	let flatsGross = 0n;
-	for (const p of properties) {
-		flatsGross += toBase(p.valueMinor, p.currency);
-	}
+	let properties = 0;
 	let mortgagesOwed = 0n;
 	let otherLoans = 0n;
-	for (const l of loans) {
-		const owedBase = toBase(l.owedMinor, l.currency);
-		if (securedLoanIds.has(l.id)) mortgagesOwed += owedBase;
-		else otherLoans += owedBase;
+	let unnamedAssets = 0n;
+	let unnamedLiabilities = 0n;
+	const unnamedKinds = new Set<string>();
+
+	for (const c of components) {
+		// The view's columns are nullable because a view carries no constraints;
+		// every row that reaches here has both, and a row that somehow does not is
+		// worth nothing rather than worth guessing at.
+		const value = toBase(c.valueMinor ?? 0n, c.currency ?? baseCurrency);
+		switch (c.kind) {
+			case 'property':
+				flatsGross += value;
+				properties += 1;
+				break;
+			case 'account':
+				// A brokerage balance is cash sitting at the broker, and the broker
+				// already reports it inside the portfolio value below. Counting it here
+				// too is the same money twice.
+				if (c.subkind === 'brokerage') break;
+				cash += value;
+				cashAccounts += 1;
+				break;
+			case 'loan':
+				// Already negative in the view; the groups carry what is owed as a
+				// positive liability beside the asset it is secured on.
+				if (c.id !== null && securedLoanIds.has(c.id)) mortgagesOwed -= value;
+				else otherLoans -= value;
+				break;
+			case 'holding':
+				// The portfolio snapshot is the investments figure: it is the broker's
+				// own total for the day, including cash and fees the holdings do not
+				// show. Summing positions as well would count the portfolio twice.
+				break;
+			default:
+				// An asset type added to the view but not yet named here. It counts —
+				// which is the point of the view — and says so, rather than being
+				// silently dropped into a total nobody can reconcile.
+				if (value < 0n) unnamedLiabilities -= value;
+				else unnamedAssets += value;
+				if (c.kind) unnamedKinds.add(c.kind);
+		}
 	}
 
 	let portfolio = 0n;
@@ -84,14 +113,14 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	}
 
 	const groups: NetWorthGroup[] = [];
-	if (properties.length > 0) {
+	if (properties > 0) {
 		groups.push({
 			key: 'flats',
 			label: 'Flats',
 			assetMinor: flatsGross,
 			liabilityMinor: mortgagesOwed,
 			colorVar: '--blue',
-			detail: `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} at latest valuation${mortgagesOwed > 0n ? ', net of the mortgage owed' : ''}`
+			detail: `${properties} propert${properties === 1 ? 'y' : 'ies'} at latest valuation${mortgagesOwed > 0n ? ', net of the mortgage owed' : ''}`
 		});
 	}
 	if (snapshots[0]) {
@@ -110,7 +139,7 @@ export async function computeNetWorth(): Promise<NetWorth> {
 		assetMinor: cash,
 		liabilityMinor: 0n,
 		colorVar: '--green',
-		detail: `${accounts.filter((a) => a.kind !== 'brokerage').length} accounts, statement balances`
+		detail: `${cashAccounts} accounts, statement balances`
 	});
 	if (otherLoans > 0n) {
 		groups.push({
@@ -120,6 +149,16 @@ export async function computeNetWorth(): Promise<NetWorth> {
 			liabilityMinor: otherLoans,
 			colorVar: '--orange',
 			detail: 'car and consumer debt'
+		});
+	}
+	if (unnamedAssets > 0n || unnamedLiabilities > 0n) {
+		groups.push({
+			key: 'other',
+			label: 'Other',
+			assetMinor: unnamedAssets,
+			liabilityMinor: unnamedLiabilities,
+			colorVar: '--purple',
+			detail: [...unnamedKinds].sort().join(', ')
 		});
 	}
 
@@ -134,13 +173,13 @@ export async function computeNetWorth(): Promise<NetWorth> {
 	// rather than loading the month.
 	const monthStart = today.slice(0, 8) + '01';
 	const [priorMonth, oldest] = await Promise.all([
-		db
+		handle
 			.select()
 			.from(netWorthSnapshot)
 			.where(lt(netWorthSnapshot.day, monthStart))
 			.orderBy(desc(netWorthSnapshot.day))
 			.limit(1),
-		db
+		handle
 			.select()
 			.from(netWorthSnapshot)
 			.where(lt(netWorthSnapshot.day, today))
@@ -163,9 +202,9 @@ export async function computeNetWorth(): Promise<NetWorth> {
  * One row per day, upserted — called from the scheduler, never from a page load
  * or from the read-only API.
  */
-export async function recordNetWorthSnapshot(): Promise<void> {
-	const { totalMinor, baseCurrency } = await computeNetWorth();
-	await db
+export async function recordNetWorthSnapshot(handle: Queryable = db): Promise<void> {
+	const { totalMinor, baseCurrency } = await computeNetWorth(handle);
+	await handle
 		.insert(netWorthSnapshot)
 		.values({
 			day: new Date().toISOString().slice(0, 10),

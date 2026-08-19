@@ -19,12 +19,12 @@ interface DrizzleSnapshot {
 // drift" — the wrong diagnosis, which sends the next person looking in the wrong
 // place.
 //
-// Read from the snapshot FILES, not from the journal. Hand-written migrations
-// (0033_drop_seeded_rules, 0034_person_overview_layout) carry a journal entry
-// but generate no snapshot, because they change data or nothing drizzle models.
-// Taking the newest journal entry would therefore name a file that does not
-// exist, and this suite would die on ENOENT the first time someone writes SQL by
-// hand — which is exactly when it is most needed.
+// Read from the snapshot FILES, not from the journal. A hand-written migration
+// carries a journal entry but generates no snapshot, because it changes data or
+// something drizzle does not model. Taking the newest journal entry would
+// therefore name a file that does not exist, and this suite would die on ENOENT
+// the first time someone writes SQL by hand — which is exactly when it is most
+// needed.
 function currentSnapshotName(): string {
 	const snapshots = readdirSync('drizzle/meta')
 		.filter((name) => /^\d{4}_snapshot\.json$/.test(name))
@@ -125,23 +125,17 @@ describe('Drizzle migration metadata', () => {
 		expect(snapshot.tables).toHaveProperty('public.calendar_conflict');
 	});
 
-	it('lets the fingerprint repair stop at its first matching occurrence', () => {
-		const migration = readFileSync('drizzle/0027_repair_transaction_fingerprints.sql', 'utf8');
-		const candidateLookup = migration.match(
-			/LEFT JOIN LATERAL \([\s\S]*?FROM generate_series\([\s\S]*?LIMIT 1[\s\S]*?\) matched ON true/
-		)?.[0];
-
-		expect(candidateLookup).toBeDefined();
-		expect(candidateLookup).not.toMatch(/ORDER BY candidate/i);
-	});
+	// RETIRED with the migration chain: a case pinning the fingerprint repair in
+	// 0027 to a LATERAL that stops at its first match rather than ordering the
+	// whole series. The repair ran once, on data that no longer exists.
 
 	// transfer_pair_leg enforces the cross-column claim rule through a trigger.
 	// Drizzle models tables, not triggers, so `db:generate` cannot notice the
-	// trigger disappearing; only this migration keeps the constraint alive.
-	it('keeps the transfer-pair leg trigger in the migration that owns it', () => {
-		const migration = readFileSync('drizzle/0027_repair_transaction_fingerprints.sql', 'utf8');
+	// trigger disappearing; only the baseline keeps the constraint alive.
+	it('keeps the transfer-pair leg trigger in the baseline that owns it', () => {
+		const baseline = readFileSync('drizzle/0000_baseline.sql', 'utf8');
 
-		expect(migration).toMatch(/CREATE FUNCTION maintain_transfer_pair_legs\(\)/);
-		expect(migration).toMatch(/CREATE TRIGGER transfer_pair_leg_claims/);
+		expect(baseline).toMatch(/CREATE FUNCTION maintain_transfer_pair_legs\(\)/);
+		expect(baseline).toMatch(/CREATE TRIGGER transfer_pair_leg_claims/);
 	});
 });

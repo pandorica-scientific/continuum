@@ -2,15 +2,12 @@ import { isCurrencyCode } from '$lib/money';
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import {
-	account,
 	brokerOperation,
 	brokerPosition,
 	currencyRate,
 	document as storedDocument,
-	holding,
-	loan,
+	netWorthComponent,
 	portfolioSnapshot,
-	property,
 	settings,
 	taxStatement,
 	transaction
@@ -131,22 +128,22 @@ export async function missingRateCurrencies(
 	baseCurrency: string,
 	handle: Queryable = db
 ): Promise<import('./table').ApproximateRates> {
-	// Every table computeNetWorth converts from. Property and the portfolio
-	// snapshot were missing, which are the two largest figures on the net-worth
-	// screen — so a flat valued in EUR with no EUR rate was counted at face
-	// value, roughly 25x understated, while the banner raised to say exactly
+	// Everything that carries an amount in a currency of its own. Property and the
+	// portfolio snapshot were missing, which are the two largest figures on the
+	// net-worth screen — so a flat valued in EUR with no EUR rate was counted at
+	// face value, roughly 25x understated, while the banner raised to say exactly
 	// that stayed silent.
+	// The valued things come from `net_worth_component` rather than being listed
+	// one table at a time, so an asset type added to that view is covered here
+	// without a second edit — which is the only way the banner stays honest.
 	// Rates carry forward after their first fixing, so the earliest use of each
 	// currency is sufficient to prove whether any historical fallback occurred.
 	// Keep that aggregation in Postgres instead of returning the whole ledger on
 	// every app-layout load.
 	const rows = (await handle.execute(sql`
 		select currency, min(day)::text as day from (
-			select currency, coalesce(balance_on, current_date) as day from ${account}
+			select currency, coalesce(valued_on, current_date) as day from ${netWorthComponent}
 			union all select currency, coalesce(value_on, booked_on) as day from ${transaction}
-			union all select currency, coalesce(owed_on, current_date) as day from ${loan}
-			union all select currency, valued_at::date as day from ${holding}
-			union all select currency, coalesce(valued_on, current_date) as day from ${property}
 			union all select currency, day from ${portfolioSnapshot}
 			union all select ${storedDocument.currency},
 				-- The month the document covers when it names one, else the day it was

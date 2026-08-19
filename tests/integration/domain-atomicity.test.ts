@@ -25,7 +25,7 @@ import { deleteSplits, saveSplits } from '$lib/server/splits';
 import { setSetting } from '$lib/server/settings';
 import { updateLoanTags, updatePropertyTags, updateTransactionTags } from '$lib/server/tags';
 import { saveStatement } from '$lib/server/tax';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -110,7 +110,7 @@ function delayedHomeProvider(): HomeProvider {
 beforeAll(async () => {
 	harness = await startPostgres(rowId('domain-atomicity'));
 	testDb = harness.db;
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 
 	registerBrokerAdapter({
 		id: rowId('domain-atomicity'),
@@ -674,68 +674,17 @@ describe('domain replacement writes', () => {
 		]);
 	});
 
-	it('migration 0030 deterministically keeps the first sorted meter bill', async () => {
-		await harness.sql.unsafe('drop index property_bill_meter_property_idx');
-		await testDb.insert(schema.property).values({
-			id: rowId('property-meter-migration'),
-			name: 'Meter flat',
-			kind: 'lived',
-			currency: 'CZK'
-		});
-		await testDb.insert(schema.propertyBill).values([
-			{
-				id: rowId('bill-later'),
-				propertyId: rowId('property-meter-migration'),
-				label: 'Later',
-				sort: 2,
-				source: 'meter'
-			},
-			{
-				id: rowId('bill-first'),
-				propertyId: rowId('property-meter-migration'),
-				label: 'First',
-				sort: 1,
-				source: 'meter'
-			}
-		]);
-
-		await harness.applyMigrationFile('0030_property_meter_bill_unique.sql');
-
-		expect(
-			await testDb
-				.select({ id: schema.propertyBill.id, source: schema.propertyBill.source })
-				.from(schema.propertyBill)
-				.orderBy(schema.propertyBill.sort)
-		).toEqual([
-			{ id: rowId('bill-first'), source: 'meter' },
-			{ id: rowId('bill-later'), source: 'manual' }
-		]);
-	});
-
-	it('migration 0032 deterministically binds an existing home config to one lived property', async () => {
-		await testDb.insert(schema.property).values([
-			{
-				id: rowId('newer-home'),
-				name: 'Newer home',
-				kind: 'lived',
-				createdAt: new Date('2026-01-02T00:00:00.000Z')
-			},
-			{
-				id: rowId('older-home'),
-				name: 'Older home',
-				kind: 'lived',
-				createdAt: new Date('2026-01-01T00:00:00.000Z')
-			}
-		]);
-		await testDb.insert(schema.settings).values({ key: 'home', value: { kind: 'demo' } });
-
-		await harness.applyMigrationFile('0032_bind_home_meter_property.sql');
-
-		expect((await testDb.select().from(schema.settings))[0].value).toEqual({
-			kind: 'demo',
-			meterPropertyId: rowId('older-home')
-		});
-	});
+	/*
+	 * RETIRED: two cases that replayed migrations 0030 and 0032 against data
+	 * arranged to be ambiguous, proving each picked deterministically rather than
+	 * by whatever order the planner returned.
+	 *
+	 * They went with the migrations themselves in the squash to a single
+	 * baseline. The invariants they were protecting survive as schema: the
+	 * partial unique index on property_bill(property_id) where source = 'meter'
+	 * is asserted by tests/integration/baseline-migration.test.ts, and the
+	 * settings key it bound is written only through setHome() now.
+	 */
 
 	it('reports every historically unconvertible document and broker currency', async () => {
 		await testDb.insert(schema.currencyRate).values([

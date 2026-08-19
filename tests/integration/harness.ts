@@ -9,9 +9,10 @@
 // therefore exercised by whichever suites happened to be in the first group,
 // which is not a decision anyone made.
 //
-// So the lifecycle lives here once, and the one thing that legitimately differs
-// between suites — WHICH migrations to apply — is named rather than retyped, so
-// a suite that deliberately stops short says so out loud.
+// So the lifecycle lives here once. There used to be a second thing suites
+// differed on — WHICH migrations to apply — and named filters for it; since the
+// squash to a single baseline there is only one migration, and nothing to
+// select among.
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -30,28 +31,6 @@ export type MigrationFilter = (name: string) => boolean;
 
 /** Today's schema. What a suite testing BEHAVIOUR should use. */
 export const ALL_MIGRATIONS: MigrationFilter = () => true;
-
-/**
- * Everything except the fingerprint repair.
- *
- * 0027 rewrites existing transaction rows through a lateral generate_series. On
- * an empty database it has nothing to repair and costs seconds, so suites that
- * only need the schema skip it. Suites that test the repair itself apply it
- * explicitly, which is why this is a named exclusion and not a silent one.
- */
-export const EXCEPT_FINGERPRINT_REPAIR: MigrationFilter = (name) =>
-	name !== '0027_repair_transaction_fingerprints.sql';
-
-/**
- * Only the migrations that existed before `tag`.
- *
- * For a suite testing a MIGRATION rather than the schema: it builds the world as
- * it was, then applies the file under test itself and checks what happened.
- */
-export const before =
-	(tag: string): MigrationFilter =>
-	(name) =>
-		name < tag;
 
 /** Every migration file, in the order the migrator would apply them. */
 export function migrationFiles(): string[] {
@@ -194,18 +173,11 @@ export async function startPostgres(
 				await apply(readFileSync(resolve('drizzle', file), 'utf8'));
 			}
 			// What `boot()` does immediately after `runMigrations()`, for the same
-			// reason: fourteen columns carry a foreign key into `currency`, and
-			// migration 0048 seeds only the two codes it needed to attach them. A
-			// suite that writes a USD rate would otherwise fail on an empty table
-			// rather than on anything it was testing.
-			//
-			// Conditional, because a suite may deliberately stop short of 0048 to
-			// exercise the schema as it was before that migration.
-			const [{ exists }] = await sql<{ exists: boolean }[]>`
-				select exists (
-					select 1 from pg_tables where schemaname = 'public' and tablename = 'currency'
-				) as exists`;
-			if (exists) await refreshCurrencies(db);
+			// reason: fourteen columns carry a foreign key into `currency`, and the
+			// baseline seeds only the two codes it needed to attach them. A suite
+			// that writes a USD rate would otherwise fail on an empty table rather
+			// than on anything it was testing.
+			await refreshCurrencies(db);
 		},
 		async stop() {
 			await sql?.end();

@@ -1,21 +1,12 @@
 import { rowId } from '../row-id';
-import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
-import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { exportConfig, importConfig } from '$lib/server/config-file';
 import { lockTransferPairing } from '$lib/server/import/ingest';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rule-mutations';
-import { loadRules } from '$lib/server/rules';
 import { getRevisionedSetting, setRevisionedSetting } from '$lib/server/settings';
-
-const migrationJournal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as {
-	entries: Array<{ idx: number; tag: string }>;
-};
-const moneyCurrencyTag = migrationJournal.entries.find((entry) => entry.idx === 31)?.tag;
-if (!moneyCurrencyTag) throw new Error('Migration journal is missing index 31');
 
 let harness: Harness;
 let testDb: TestDb;
@@ -26,7 +17,7 @@ beforeAll(async () => {
 	// The real schema, not a hand-written subset of it. The subset that used
 	// to live here had to be kept in step with schema.ts by hand, and a test
 	// passing against a stale copy of a table says nothing about the real one.
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
 beforeEach(async () => {
@@ -311,44 +302,12 @@ describe('rule definition mutation', () => {
 	});
 });
 
-describe('legacy monetary currency migration', () => {
-	it('is present in the Drizzle journal and split into executable statements', () => {
-		const parsed = readMigrationFiles({ migrationsFolder: 'drizzle' });
-		const migration = parsed[migrationJournal.entries.findIndex((entry) => entry.idx === 31)];
-
-		expect(moneyCurrencyTag).toBe('0031_bind_legacy_money_currencies');
-		expect(migration.sql).toHaveLength(2);
-	});
-
-	it('keeps rule bounds and the meter price in their upgrade-time base currency', async () => {
-		await testDb.insert(schema.settings).values([
-			{ key: 'baseCurrency', value: 'CZK' },
-			{ key: 'home', value: { kind: 'homeassistant', pricePerKwh: '650' } }
-		]);
-		await testDb.insert(schema.rule).values({
-			id: rowId('legacy-amount'),
-			name: 'Legacy amount',
-			conditions: [{ field: 'amount', op: 'between', min: '10000', max: null }]
-		});
-
-		for (const statement of readMigrationFiles({ migrationsFolder: 'drizzle' })[
-			migrationJournal.entries.findIndex((entry) => entry.idx === 31)
-		].sql) {
-			await harness.sql.unsafe(statement);
-		}
-		await testDb
-			.update(schema.settings)
-			.set({ value: 'EUR' })
-			.where(eq(schema.settings.key, 'baseCurrency'));
-
-		expect((await loadRules(testDb))[0].conditions).toEqual([
-			{ field: 'amount', op: 'between', min: '10000', max: null, currency: 'CZK' }
-		]);
-		const home = (await testDb.select().from(schema.settings)).find((row) => row.key === 'home');
-		expect(home?.value).toEqual({
-			kind: 'homeassistant',
-			pricePerKwh: '650',
-			pricePerKwhCurrency: 'CZK'
-		});
-	});
-});
+/*
+ * RETIRED with the migration chain: two cases covering 0031, which stamped the
+ * base currency of the day onto rule bounds and the meter price so a later
+ * change of base currency could not silently reinterpret them.
+ *
+ * The migration ran once, against data written before those fields carried a
+ * currency. Both fields are written with an explicit currency now, and the
+ * squash to a single baseline leaves nothing to replay.
+ */
