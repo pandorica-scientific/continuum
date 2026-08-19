@@ -43,9 +43,56 @@ To check what is actually running:
 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' kerth92/continuum:latest
 ```
 
-The image needs a PostgreSQL 17 database, `/data` for uploaded files and
-`/backups` for backups. `compose.yaml` wires all three, which is why it is the
-supported way in rather than a bare `docker run`.
+The image needs three things: a PostgreSQL 17 database, `/data` for uploaded
+files and `/backups` for backups. `compose.yaml` wires all three, which is why
+it is the shortest way in — but nothing stops you wiring them yourself.
+
+## Without Compose
+
+Two containers on a shared network, no files to download:
+
+```sh
+docker pull kerth92/continuum:latest
+
+docker network create continuum
+
+docker run -d --name continuum-db --network continuum --restart unless-stopped \
+  -e POSTGRES_USER=continuum \
+  -e POSTGRES_PASSWORD=change-me \
+  -e POSTGRES_DB=continuum \
+  -v continuum-db:/var/lib/postgresql/data \
+  postgres:17-alpine
+
+docker run -d --name continuum --network continuum --restart unless-stopped \
+  -p 80:3000 \
+  -e DATABASE_URL='postgres://continuum:change-me@continuum-db:5432/continuum' \
+  -e ORIGIN='http://localhost' \
+  -v continuum-data:/data \
+  -v continuum-backups:/backups \
+  kerth92/continuum:latest
+```
+
+The named volumes are created on first use. The app runs its own migrations at
+boot, so there is no separate database step — open `http://localhost` and the
+setup wizard is there.
+
+`ORIGIN` must be the address you actually type, port included: map `-p
+8080:3000` and it is `http://localhost:8080`, browse to a LAN name and it is
+`http://continuum.local`. Add `-e DEMO=1` to the app container to seed the demo
+household described below, and point the `/backups` mount at a host folder to
+have backups land somewhere cloud-synced.
+
+There is no Tailscale in this path, so the origin is plain HTTP and the passkey
+controls stay absent — `tailscale serve --bg 80` on the host adds HTTPS later
+without touching either container. See [Networking and passkeys](networking.md).
+
+Upgrading is a pull and a re-create; the volumes carry the data:
+
+```sh
+docker pull kerth92/continuum:latest
+docker rm -f continuum
+# then re-run the app container above
+```
 
 ## What it needs
 
