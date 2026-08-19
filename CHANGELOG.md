@@ -1,339 +1,108 @@
-# Changelog
+# 📓 Changelog
+
+✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
 ## 0.3.8 — unreleased
 
-A reader that works out a statement's layout from the file itself, and files
-nothing it cannot check against the statement's own arithmetic.
+> A reader that works out a statement's layout from the file itself, and files nothing it cannot check against the statement's own arithmetic.
 
-### Added
+### ✨ Added
 
-- **Any bank's statement, without being told which bank.** Importing no longer
-  starts from a list of supported institutions. The reader sniffs the format,
-  then works out the encoding, the delimiter, the decimal mark, the date order
-  and what each column means from the file's own contents. Ten institutions
-  across four countries are read this way with no bank-specific code involved
-  in the reading at all.
-- **The formats banks export when they mean business.** CAMT.053, MT940,
-  ABO/GPC and OFX/QFX are read directly, because unlike a CSV they declare
-  their own shape. QIF is refused on purpose, and says why rather than implying
-  it is coming: a QIF records a date, an amount, a payee and a memo, and no
-  balance, total or count of any kind, so there is nothing in the file for the
-  arithmetic to check. It could only ever be taken on trust.
-- **Tables recovered from PDF pages.** Two assemblers read the same page in
-  different ways — one decides which lines begin a movement, the other ignores
-  lines entirely and finds the page's record beat. Neither wins everywhere: the
-  first reads a 140-row CaixaBank statement the second fragments, and the second
-  reads four banks the first cannot. So both readings are offered and the proof
-  engine picks, the same way it picks between candidate encodings.
-- **Photographs and scans of printouts**, read from the page image when the
-  text layer cannot be proven — never spliced with it, because a row assembled
-  from two readings exists in neither and would carry the confidence of a clean
-  one. The language data is fetched when the image is built, never while someone
-  is using the app: the promise is that it does not call home while it is
-  holding your bank statements.
-- **Every reading is proved before it is filed.** A statement is graded on what
-  its own figures can demonstrate — a running balance that carries every
-  movement, opening plus movements reaching the stated closing, stated totals
-  and a stated count that agree. What cannot be proven is not filed. A file that
-  prints none of those figures cannot be checked by anyone, so it is refused
-  rather than trusted, and so is a genuinely ambiguous one, like a date column
-  where more than one reading is valid.
-- **A wizard for a layout that cannot prove itself alone.** Rather than a dead
-  end, a refused file offers the table it worked out: name the date column and
-  the amount column once, and that mapping is saved and matched against the next
-  statement from the same bank, which then arrives already understood.
-- **Imports run in the background.** A large scan no longer holds the upload
-  open. The file is queued, the page reports where the job has got to, and a
-  reader interrupted by a restart is picked up again instead of being lost.
-- **Where each transaction came from is recorded on the transaction** — the
-  method that read it, the proof class it was filed under, and the checks that
-  were run — so "how do we know this figure is right" is answerable a year
-  later, per row, instead of being a matter of trust in a past import. The
-  register filters on it, including "read from the page image", which is the
-  one worth knowing about when a figure looks wrong.
-- **A 294-file corpus** spanning 24 locales and 20 currencies runs in CI, so a
-  parser change that quietly stops reading Hungarian, or starts reading a comma
-  as a thousands separator, fails a test rather than a household's import.
+- 🏦 Any bank's statement, without being told which bank — ten institutions across four countries, no bank-specific code
+- 📑 CAMT.053, MT940, ABO/GPC and OFX/QFX read directly; QIF refused on purpose, because it carries nothing to check
+- 📄 PDF tables recovered by two competing assemblers, with the proof engine picking the winner
+- 📷 Photographs and scans read from the page image when the text layer cannot be proven — never spliced with it
+- 🧮 Every reading proved against the statement's own figures before filing; what cannot be proven is refused
+- 🧭 A wizard for a layout that cannot prove itself: name two columns once, and that bank arrives understood after
+- ⏳ Imports run in the background, and a reader interrupted by a restart is picked up rather than lost
+- 🔎 Provenance on every transaction — method, proof class, checks run — filterable in the register
+- 🧪 A 294-file corpus across 24 locales and 20 currencies runs in CI
 
-### Changed
+### 🔧 Changed
 
-- **The bank adapters are no longer load-bearing.** Fio, Revolut, mBank,
-  Raiffeisenbank and Česká spořitelna still have hand-written readers and they
-  are still tried first, but every one of their statements was verified to read
-  correctly with the adapter removed. They are a fast path now, not the reason
-  those banks work.
-- **Uploads are checked before they are parsed.** A small archive that expands
-  to gigabytes is a normal way to knock over a document reader, and three
-  variants of it are now stopped at the door, along with workbooks whose cell
-  count is a denial of service by itself.
-- **A statement that proves only its endpoints now asks once.** Where the
-  opening and closing balances agree but nothing else in the file corroborates
-  them, the reader no longer files unattended: two omitted movements that
-  happen to offset each other leave exactly that picture. Name the date and
-  amount columns once and every later statement from that bank arrives already
-  understood. Nothing changes for a statement that carries a running balance,
-  which is the ordinary case and files as before.
-- **A statement is now all-or-nothing.** A multi-page PDF is read as several
-  regions and a workbook as several sheets; if one of them read but could not
-  be checked, the parts that did read were filed and the file was reported as
-  imported. Since the file's fingerprint is recorded on success, the corrected
-  re-upload was then refused as a duplicate — stranding the rest for good. The
-  whole file is now refused with the reason, so re-uploading works.
+- 🔌 The bank adapters are a fast path now, not load-bearing — every one of their statements verified without them
+- 🛡️ Uploads are checked before they are parsed: zip bombs and denial-of-service workbooks stopped at the door
+- ⚖️ A statement that proves only its endpoints asks once — two offsetting omissions leave exactly that picture
+- 📦 A statement is all-or-nothing; a partial import used to strand the rest as a duplicate forever
 
-### Fixed
+### 🐛 Fixed
 
-- **The OFX endpoint check could not fail.** With no opening balance stated,
-  one was derived as the closing balance less every movement — which turns
-  "opening plus movements equals closing" into "closing equals closing", true
-  no matter what was read. An OFX export with a transaction missing passed it,
-  and every OFX file was filed on the strength of a check that had no way of
-  failing. Nothing is derived now: OFX prints no per-row balances either, so
-  with no stated opening figure there is genuinely nothing in the file to check
-  the movements against, and the record says so.
-- **A statement whose printed running balance did not follow from its
-  movements was still filed.** Two amounts transposed leave the total intact,
-  so the endpoints agreed while the chain plainly did not — and the failing
-  chain was not counted as evidence against the reading. It was filed carrying
-  a record that said, in words, that the check had failed.
-- **A date could be read as an amount.** A pattern used to tell dates from
-  figures kept its position between calls, so every second date-shaped value
-  slipped past it. `01.01.2025` became an opening balance of 1,012,025.00, fed
-  straight into the arithmetic that decides whether a statement agrees with
-  itself.
-- **A bank that writes credits as `+249,00` had every credit read as "not a
-  figure"**, which left the file with no usable amount column and refused it.
-  Amounts written with a typographic minus sign (`−`, not the hyphen) were
-  refused the same way, on statements that print them throughout.
-- **The archive safety check was skipped on the one path that needed it most.**
-  A file rejected as unsafe still offered its "map the columns" button, and that
-  button handed the same bytes to the parser with no check at all.
-- **A statement with dates in more than one column** could have the fullest one
-  passed over for whichever column was examined last, leaving movements without
-  a date and refusing a file that was entirely readable.
-- **Two imports could read the same file at once**, and a job that took longer
-  than its lease could be picked up and read a second time while the first was
-  still going — surfacing as a raw database error against a file that had in
-  fact imported cleanly.
-- **Polish summary lines were not recognised as summaries.** Folding accents
-  did not fold `ł`, so `Łącznie` never matched the word it was being compared
-  against, and a total line could be filed as though it were a transaction.
-- **The import screen re-read every queued file's contents from the database
-  every 1.5 seconds** while a queue was busy, to display seven small fields.
-- **A gap in a zero-decimal currency printed as though it had decimals**, so a
-  100,000 JPY discrepancy was reported as 1000.00.
-- **Choosing the right account for your own statement was refused.** Because
-  the reader labels a file by the format it read it as whenever no bank-specific
-  reader claimed it, picking your account produced "the selected account belongs
-  to cs, but this statement belongs to tabular" — for most banks, since most
-  have no bank-specific reader. The same confusion silently merged two unrelated
-  banks that happened to share a currency into one account, split one real
-  account in two when the same statement was read two different ways, importing
-  everything twice, and created accounts named after a file format. The account
-  you created is the authority on which bank it is; a file only overrules that
-  when it actually names its issuer.
-- **A statement printing an American date range imported four months out.** The
-  period a statement covers is read as evidence for how the dates in its rows
-  are written, and the period itself was read day-first regardless of where the
-  statement came from. `01/05/2026 – 02/06/2026` on a US export is 5 January to
-  6 February, was taken as 1 May to 2 June, and the reading was recorded as
-  determined — with a confident note explaining the reasoning. Both readings are
-  now tried; if the file does not settle which is meant, the period is treated
-  as saying nothing rather than as saying the wrong thing.
-- **A statement read from a photograph was recorded as though read from the
-  page's text**, so the register's "read from the page image" filter — the one
-  worth having, since scans are the least certain reading — never matched a
-  single row.
+- 🧮 The OFX endpoint check could not fail — it derived the opening balance, turning the test into "closing equals closing"
+- ⛓️ A printed running balance that did not follow from the movements was still filed, carrying a record saying so
+- 📅 A date could be read as an amount: `01.01.2025` became an opening balance of 1,012,025.00
+- ➕ Credits written `+249,00`, and amounts using a typographic minus, were read as "not a figure"
+- 🛡️ The archive safety check was skipped on the one path that needed it most — the "map the columns" button
+- 📅 A statement with dates in several columns could have the fullest one passed over
+- 🔁 Two imports could read the same file at once, surfacing as a raw database error on a clean import
+- 🇵🇱 Accent folding did not fold `ł`, so a Polish summary line could be filed as a transaction
+- ⚡ The import screen re-read every queued file's contents every 1.5 seconds to show seven small fields
+- 💴 A gap in a zero-decimal currency printed as though it had decimals — 100,000 JPY reported as 1000.00
+- 🏦 Choosing the right account for your own statement was refused, merging unrelated banks and splitting real accounts
+- 🗓️ A statement printing an American date range imported four months out; an ambiguous period now says nothing
+- 📷 A statement read from a photograph was recorded as read from text, so the register's filter never matched
 
 ## 0.3.7 — 2026-08-17
 
-A contacts module, and a calendar you can write in that stays in step with
-iCloud and Google.
+> A contacts module, and a calendar you can write in that stays in step with iCloud and Google.
 
-### Added
+### ✨ Added
 
-- **Contacts.** The people and companies a household deals with — name, photo,
-  work place, job title, phone, email, address, notes — each linkable to the
-  tenancies, properties, loans and accounts they touch. Search folds diacritics,
-  so `rehor` finds Řehoř and `lukasz` finds Łukasz; an address book that only
-  answers to input with the háček already typed is no use to this household.
-- **A writable shared calendar.** Anyone in the household can add events, with
-  recurrence — daily, weekly on chosen days, monthly by date or by weekday
-  position, yearly — and edit or cancel a single occurrence, this and all later
-  ones, or the whole series. The ledger's own generated events keep appearing
-  alongside them.
-- **Two-way calendar sync** with iCloud (and any CalDAV server — Fastmail,
-  Nextcloud, Radicale) and with Google Calendar. Events written here appear
-  there and the other way round. Setup for iCloud is one app-specific password;
-  Google needs a Cloud project of your own, and `docs/google-calendar-setup.md`
-  walks through it.
-- **Continuum's own events are marked** with the module emoji and `· Continuum`,
-  so a mortgage payment is tellable from "dentist, 3pm" in a shared calendar.
-  Switchable off in Settings.
-- **Moving a date in a connected calendar can change the ledger.** Dragging a
-  loan payment, a lease end, a renewal notice or a document expiry writes that
-  date back. Nothing else does — a retitled payment is reverted, because the
-  ledger owns what its own events say.
-- **Error screens.** A wrong address, an expired session, a server that fell
-  over — each now gets a page that says what happened, what to do about it, and
-  the address and time to quote if it needs reporting, instead of the framework's
-  bare status line. A 500 also carries a short reference printed beside the stack
-  in the log, so a report can be matched to the entry; the stack itself never
-  reaches the browser, where it would name file paths and, in a query, real
-  figures. Nothing else earns a reference: a mistyped address is not a fault.
-  There is something hidden in the rings — one drawing per status, tinted to
-  that status' own colour.
-- **Setup instructions live behind an ⓘ.** The three-line caption under a field
-  is read once and then in the way forever. The reasoning — what an API token
-  can reach, what a backup contains, what Google needs before it will authorise
-  anything — is now one hover away from a heading that stays short.
+- 👥 Contacts — people and companies, linked to the tenancies, properties, loans and accounts they touch
+- 🔤 Contact search folds diacritics, so `rehor` finds Řehoř and `lukasz` finds Łukasz
+- 📅 A writable shared calendar with full recurrence, and edits to one occurrence, this-and-later, or the series
+- 🔄 Two-way sync with iCloud, any CalDAV server, and Google Calendar
+- 🏷️ Continuum's own events are marked, so a mortgage payment is tellable from "dentist, 3pm"
+- ✍️ Moving a loan payment, lease end, renewal notice or document expiry in a connected calendar writes the date back
+- 🚨 Error screens that say what happened and what to do, with a reference on a 500 and no stack in the browser
+- ⓘ Setup instructions moved behind an info icon, so headings stay short
 
-### Changed
+### 🔧 Changed
 
-- **One quick-add button, on every screen.** The header's Import statement
-  button is gone; the floating plus opens a menu of what can be added from here
-  — bank statement, XTB statement, calendar event, contact, document — filtered
-  to the modules that are switched on. Importing is no longer confined to
-  Overview and Money, which it was only because a bare unlabelled plus on the
-  Property screen said nothing; a named list says what it does.
-- **Google's setup instructions were rewritten from a connection that worked**,
-  in the order it worked in. Each line corresponds to something that went wrong
-  first: the narrow `calendar.app.created` scope rather than full calendar
-  access, publishing the consent screen so authorisation does not expire every
-  seven days, and creating the calendar rather than picking from a list the
-  scope will not let anyone read.
+- ➕ One quick-add button on every screen, replacing the header's Import statement button
+- 📗 Google's setup instructions rewritten from a connection that worked, in the order it worked in
 
-### Fixed
+### 🐛 Fixed
 
-- **The published `.ics` feed gave events unstable identities.** UIDs were
-  numbered by position in the generated list, so adding a loan renumbered every
-  later event on the same day and subscribers saw them deleted and recreated.
-  Cosmetic in a read-only feed; it would have been duplication and lost edits
-  once sync existed.
-- **Two events from one tenancy shared a UID.** A lease end and its renewal
-  notice come from the same rule and the same row, and the feed published both
-  under one identity — so a subscriber saw only one of them.
+- 🆔 The published `.ics` feed numbered UIDs by position, so adding a loan renumbered every later event that day
+- 🆔 A lease end and its renewal notice shared one UID, so a subscriber saw only one of them
 
-The rest of this list came out of connecting real iCloud and Google accounts.
-Every one of them was silent: the tests, the type checker and a code review all
-passed over them.
+_The rest came out of connecting real iCloud and Google accounts. Every one was silent: tests, type checker and a code review all passed over them._
 
-- **Google refused every event.** All-day events were written ending on the day
-  they end. RFC 5545 makes `DTEND` exclusive for a date, so a one-day event ends
-  the following day; iCloud tolerated the difference, Google answered 400 and
-  the first sync of a real calendar wrote nothing at all.
-- **Sync rewrote every event, every pass, forever.** Events were pushed with the
-  module emoji and `· Continuum` on the title but hashed without them, so the
-  copy that came back never matched what was sent and the whole calendar looked
-  changed on each pass — dozens of writes a minute against an idle calendar.
-- **Events created in iCloud or Google never arrived.** Reconciliation walked
-  the local events and the known links, so anything that existed only at the far
-  end was never in the set being compared.
-- **A single rejected write wedged that event for good.** After a 412 the stored
-  ETag stayed stale, so every later attempt was refused for the same reason.
-- **A failed push reported success.** Refusals that were not conflicts were
-  counted and discarded, so a sync that wrote nothing said it had finished.
-- **No iCloud calendar could be chosen.** Discovery took the first `href` out of
-  each response rather than the one inside the property it asked for, which is
-  the principal's own address — so the list of calendars came back empty.
-- **"Choose a calendar" did nothing on Google.** It listed the account's
-  calendars first, which the narrow scope forbids; the 403 left the button dead
-  with nothing said. It creates the calendar instead, which is exactly what that
-  scope is for.
-- **Approximate exchange rates blamed the internet.** A figure older than the
-  first rate this instance ever stored and a currency with no rate at all were
-  reported as one thing, under one instruction to check the connection. They are
-  now told apart: one is worth checking, the other cannot be fixed by anyone,
-  because the Czech National Bank publishes forward and a past day cannot gain a
-  rate of its own. The warning can also be dismissed, and stays dismissed —
-  including across a reload, where it used to flash up before vanishing.
-- **A white bar down the right of every scrolling page**, and a floating button
-  that jumped as pages gained or lost a scrollbar. The document never declared
-  its colour scheme, so the browser drew a light scrollbar over a dark app; the
-  gutter is now always reserved, so nothing shifts when it appears.
-- **The ⓘ bubble was unreadable and opened off the edge of the screen.** It used
-  a translucent token meant to tint a page background, so the page showed through
-  the text, and it always opened the same way regardless of the room available.
+- 🚫 Google refused every event — RFC 5545 makes an all-day `DTEND` exclusive, and iCloud had tolerated the difference
+- 🔁 Sync rewrote every event, every pass, forever: titles were pushed with a marker but hashed without it
+- 📥 Events created in iCloud or Google never arrived, because reconciliation only walked local events
+- 🔒 A single rejected write wedged that event for good on a stale ETag
+- 🤫 A failed push reported success — refusals that were not conflicts were counted and discarded
+- 🍎 No iCloud calendar could be chosen: discovery took the first `href` rather than the principal's own
+- 🚫 "Choose a calendar" did nothing on Google; the narrow scope forbids listing, so it creates one instead
+- 💱 Approximate exchange rates blamed the internet; a missing past rate and an unknown currency are now told apart
+- 📜 A white bar down every scrolling page, and a floating button that jumped as the scrollbar came and went
+- ⓘ The info bubble was unreadable and opened off the edge of the screen
 
-The rest came out of a review of the sync engine before it met a real account
-for long. None of them had a test; several would have destroyed data quietly.
+_And these came out of a review of the sync engine. None had a test; several would have destroyed data quietly._
 
-- **One conflict wedged an account for good.** An event edited here and deleted
-  on the phone is an ordinary outcome, and it is recorded as a conflict — where
-  one side is genuinely nothing. That was written as SQL NULL into a NOT NULL
-  column, inside the pass's single commit transaction, so the whole pass rolled
-  back: the cursor never advanced, nothing was applied, and every event was sent
-  again on the next pass, which failed in exactly the same place, every minute,
-  forever.
-- **An expired Google sync token deleted a year of events.** When Google retires
-  a sync token — routine, and documented — the recovery is to list everything
-  again. That listing reaches back ninety days, and anything it did not mention
-  was taken to have been deleted. Events older than the window are now left
-  alone: silence is not deletion. A failed reconcile no longer reports an empty
-  calendar either, which had the same effect on both providers at once.
-- **Past mortgage payments were deleted out of the household's own calendar.**
-  Generated events are published over a rolling window, and one ageing off the
-  back of it looked exactly like an event deleted here — so a deletion was sent
-  for it. One per loan per month, indefinitely, silently.
-- **A payment day was rewritten on every pass.** A CalDAV all-day event came back
-  a day shorter than it was sent, which read as somebody having moved it, which
-  wrote a new payment day into the loan. A loan paid on the 31st was moved to the
-  28th by February and stayed there.
-- **Deleting an event on a phone did nothing.** CalDAV reports a deletion as a
-  path and nothing else, and that path was never matched back to the event, so
-  the deletion was dropped while the cursor moved past it. The event stayed here
-  for good, and a Continuum event someone had deliberately deleted came back.
-- **No recurring event with an exception ever reached Google.** Its override ids
-  used a character Google refuses, so every one was rejected. They are also keyed
-  on the occurrence now, not on its position in a list, so removing one override
-  no longer renames the others.
-- **A remote change to a recurring event destroyed its exceptions.** An
-  incremental page carries only what changed, and it was read as the whole
-  series, so a retitled series lost every cancelled and moved occurrence — and a
-  changed occurrence with an unchanged series was dropped entirely.
-- **Weekly events from other calendars lost three of every four occurrences.** A
-  weekly rule that names no weekday is valid, and is what Apple Calendar sends;
-  it was expanded roughly monthly instead. Events in the first hours of a month
-  could also go missing from both that month and the one before.
-- **New events were saved at the wrong time.** An event's instant was built in
-  the server's timezone rather than the household's, so a 09:00 event showed as
-  11:00 — and 13:00 after the next edit, walking forward each time.
-- **"This and following" lost overrides and miscounted.** Splitting a series
-  deleted every exception including the ones before the split, and gave the
-  second half the original occurrence count rather than what was left of it, so
-  ten occurrences ran for twelve. Editing the recurrence during such an edit was
-  discarded outright.
-- **Two sync passes could run at once.** The lock meant to prevent it was taken
-  outside any transaction and released immediately, so it excluded nothing.
-- **A failed delete was recorded as a success**, orphaning the event on the
-  server, clearing the error and making sure nothing tried again.
-- **A rejected contact form pre-filled the next contact opened** with the details
-  from the one that failed — and saving wrote them onto that person's row.
-- **Dismissing the harmless exchange-rate warning silenced the serious one** for
-  the same currency, for a year, so holdings could be counted at face value with
-  nothing on screen to say so.
-- **Nothing could clear a sync conflict.** The briefing raised them and sent
-  people to the calendar, which had no way to mark them seen, so the first one
-  stayed up permanently.
-- **Sync events were written with a timezone declaration RFC 5545 forbids**, and
-  a strict client may refuse the whole event over it. A time sent by another
-  client with a named zone was also read as though it were UTC.
-- **How often calendars are polled could be read but never set.** It is a field
-  in Settings now.
+- 💥 One conflict wedged an account for good — a NULL into a NOT NULL column rolled back every pass, every minute
+- 🗑️ An expired Google sync token deleted a year of events; silence is no longer taken as deletion
+- 🗑️ Past mortgage payments were deleted from the household's own calendar, one per loan per month
+- 📆 A payment day was rewritten on every pass — a loan paid on the 31st was moved to the 28th by February
+- 🗑️ Deleting an event on a phone did nothing, and a Continuum event deliberately deleted came back
+- 🚫 No recurring event with an exception ever reached Google — its override ids used a character Google refuses
+- 💥 A remote change to a recurring event destroyed its exceptions
+- 📆 Weekly events from other calendars lost three of every four occurrences
+- 🕐 New events were saved in the server's timezone, walking forward with each edit
+- ✂️ "This and following" lost overrides and gave the second half the original occurrence count
+- 🔁 Two sync passes could run at once — the lock was taken outside any transaction and excluded nothing
+- 🤫 A failed delete was recorded as a success, orphaning the event and making sure nothing tried again
+- 📝 A rejected contact form pre-filled the next contact opened, and saving wrote it onto that person's row
+- 🔕 Dismissing the harmless exchange-rate warning silenced the serious one for the same currency, for a year
+- 🚩 Nothing could clear a sync conflict, so the first one stayed up permanently
+- 📜 Sync events carried a timezone declaration RFC 5545 forbids, which a strict client may refuse
+- ⚙️ How often calendars are polled could be read but never set — it is a field in Settings now
 
-### Upgrading
+### ⬆️ Upgrading
 
-Three things to know before updating an existing install.
-
-- **`tenancy.tenantContact` is gone.** The migration creates a real contact from
-  each non-empty value first — named after the tenant, with the original text
-  preserved verbatim in the contact's notes — and links it to the tenancy.
-  Nothing is parsed or guessed at, so nothing is lost; but the column itself is
-  dropped, and how to reach a tenant now lives in Contacts.
-- **PostgreSQL needs the `unaccent` extension.** Migration `0036` runs
-  `create extension if not exists unaccent`, which requires rights the
-  application user may not have on a locked-down server. If the migration stops
-  there, have someone with the rights run this once against the database and
-  then update again:
+- 🗃️ **`tenancy.tenantContact` is gone.** The migration first creates a real contact from each non-empty value — named after the tenant, original text preserved verbatim in the notes — and links it to the tenancy. Nothing is parsed or guessed at, but how to reach a tenant now lives in Contacts.
+- 🗃️ **PostgreSQL needs the `unaccent` extension.** Migration `0036` runs it, which requires rights the application user may not have. If the migration stops there, have someone with the rights run this once, then update again:
 
   ```sql
   create extension if not exists unaccent;
@@ -341,880 +110,295 @@ Three things to know before updating an existing install.
 
   The stock `postgres:17-alpine` image in `compose.yaml` needs nothing extra.
 
-- **Migration `0041` adds one nullable column** to `calendar_account`, which
-  records the pass currently holding an account so two cannot run at once.
-  Nothing is rewritten and no existing data is touched.
+- 🗃️ **Migration `0041`** adds one nullable column to `calendar_account`. Nothing is rewritten and no existing data is touched.
 
 ## 0.3.6 — 2026-08-16
 
-A colour pass over both themes, and a run of fixes found by using the thing.
+> A colour pass over both themes, and a run of fixes found by using the thing.
 
-### Fixed
+### 🐛 Fixed
 
-- **Saving anything about a property silently switched you to a different
-  flat.** Save a floor plan and it looked as though the plan had been lost: the
-  page had quietly moved to the other property, which had none. Opening the
-  editor then edited _that_ flat, so it came up empty, and saving again flipped
-  the selection back — which is why the plan appeared to return. Properties
-  created together share a creation timestamp to the microsecond, and ordering
-  by that column alone is not a total order: PostgreSQL may return tied rows in
-  any order, and an update moves a row. Every list that picks by position now
-  has a tiebreak. Uploading a photo had the same cause.
-- **"Person one" and "person two" could swap between loads**, which quietly
-  changed whose birth year fed the retirement projection. Same cause as above.
-- **A panel whose module was switched off could leave a band of empty space** at
-  the top of the Overview instead of closing it.
-- **The move-up and move-down buttons on a narrow Overview did nothing.** They
-  wrote new positions and re-rendered the same order, because exchanging two
-  panels' cells leaves a short one overlapping a tall one and the board pushed
-  it straight back. Reordering now lays the column out in the order asked for.
-- **Adding a panel dropped you out of Customise mode** and threw away the
-  "not saved" notice along with the panel it referred to.
-- **The cash-flow waterfall stopped at 880 pixels wide** and left the rest of a
-  wider card empty.
+- 🏠 Saving anything about a property silently switched you to a different flat — tied timestamps with no tiebreak
+- 👥 "Person one" and "person two" could swap between loads, changing whose birth year fed the retirement projection
+- 🧩 A panel whose module was switched off could leave a band of empty space at the top of the Overview
+- ↕️ The move-up and move-down buttons on a narrow Overview did nothing
+- 🧩 Adding a panel dropped you out of Customise mode, and threw away the "not saved" notice with it
+- 📊 The cash-flow waterfall stopped at 880 pixels and left the rest of a wider card empty
 
-### Added
+### ✨ Added
 
-- **A photo can be removed, not only replaced.** Two taps — the button arms
-  itself and says so — since it deletes the file.
-- **The retirement chart has years along the bottom**, and marks the year the
-  pot clears the target. Reading when that happens no longer means counting
-  gridlines.
-- **A new fixation fills in the half you did not type.** Give the annual rate
-  and the monthly payment that holds the loan's current term is worked out for
-  you, or the other way round; the field says it was derived, and correcting it
-  never moves the one you typed. Both directions are solved against the same
-  amortisation the app books interest with, so the figure matches the schedule
-  rather than approximating it.
+- 🗑️ A photo can be removed, not only replaced — two taps, since it deletes the file
+- 📈 The retirement chart has years along the bottom, and marks the year the pot clears the target
+- 🧮 A new fixation fills in the half you did not type, solved against the same amortisation the app books interest with
 
-### Changed
+### 🔧 Changed
 
-- **The cash-flow chart is a Sankey, and it fits the space it is given.** It
-  used to be one fixed drawing scaled to fit, so on a narrow panel the labels
-  shrank with it and the type became unreadable; it also left a large empty
-  corner, because the biggest outflow peeled off last and swung the diagram to
-  one side. It now lays out in the pixels it actually has — labels stay the size
-  they were designed at whatever the width — and reads as four columns: where
-  money came from, what came in, where it went, and what each of those was
-  spent on. Below about 560 pixels it drops the last column, and below 380 it
-  shows sources and groups only, rather than drawing something too small to
-  read. The full breakdown is still listed beneath the chart either way.
-- **Both palettes rebuilt, and both now meet WCAG AA.** They did not: ten
-  checks failed, including dark purple at 3.16:1 and light amber at 2.87:1
-  against a 4.5:1 bar. Light mode is now warm paper with crisp white cards, and
-  its tints are mixed from bright hues rather than from the dark ink they sit
-  under — which is what made amber read olive, and what left every attempt to
-  fix a failing pill chasing its own tail. A test measures every tint over its
-  card over the canvas and holds the line.
-- **Each area has its own colour**, on its sidebar icon and the mark beside the
-  screen title: Money teal, Assets purple, Retirement blue, Home orange,
-  Calendar indigo, Overview the brand blue. Admin stays muted — it is chrome,
-  not a subject.
-- **Import statement appears only on Overview and Money.** It was on every
-  screen, including ones where importing a bank statement means nothing.
-- **Fields in the loan dialogs line up** when a label wraps to two lines.
+- 📊 The cash-flow chart is a Sankey that lays out in the pixels it has, dropping columns rather than shrinking type
+- 🎨 Both palettes rebuilt and both now meet WCAG AA — ten checks had been failing, one as low as 2.87:1
+- 🌈 Each area has its own colour, on its sidebar icon and beside the screen title
+- 📥 Import statement appears only on Overview and Money, not on screens where it means nothing
+- 📐 Fields in the loan dialogs line up when a label wraps to two lines
 
 ## 0.3.5 — 2026-08-16
 
-The Overview stops being a screen somebody else designed and becomes a board
-you build. Drag the panels where you want them, resize them, add the ones you
-care about and remove the ones you don't — and because the arrangement belongs
-to your profile rather than the browser, two people sharing an install no
-longer share a dashboard.
+> The Overview stops being a screen somebody else designed and becomes a board you build — and because the arrangement belongs to your profile, two people sharing an install no longer share a dashboard.
 
-**Upgrading:** migration `0034` runs automatically and adds one nullable column
-to `person`. Nothing is rewritten and no existing data is touched. As with
-every database release, take a backup before replacing the image.
+**⬆️ Upgrading:** migration `0034` adds one nullable column to `person`; nothing is rewritten. Nobody's screen changes on upgrade — the default arrangement is the previous Overview exactly, and the board arrives when you press **Customise**. Take a backup before replacing the image.
 
-**Nobody's screen changes on upgrade.** The default arrangement is the previous
-Overview exactly — the attention strip full width, the waterfall beneath it,
-then net-worth composition and the next thirty days side by side. The board
-arrives when you press **Customise**, not when you upgrade.
+### ✨ Added
 
-### Added
+- 🧩 The Overview is a twelve-column board — drag to move, drag the corner to resize, ✕ to remove, a tray to add
+- ⬆️ The board has gravity: move a panel away and everything below rises, so no empty band is left in the middle
+- 🧩 Thirteen panels, up from the fixed screen's four; panels of a switched-off module are not offered
+- 👤 The board follows you, not your browser — stored against your profile, not in Settings or the config export
+- 📱 A narrow screen stacks the board into one column and swaps resizing for move up and move down
+- 🧭 The sidebar lists seven areas instead of twelve screens, with each area's screens as tabs under the title
+- ➕ A quick-add button on every screen
+- 🎨 Drawn SVG icons in place of emoji in the navigation — in the bundle, not a font and not a CDN fetch
 
-- **The Overview is a twelve-column board you arrange yourself.** Drag a panel
-  by its body to move it, drag the corner to resize it in columns and rows, ✕
-  to remove it, and an **Add a panel** tray for everything not currently
-  placed. **Reset to default** puts it back. The board has gravity: move a
-  panel away and everything below rises to close the space, so the arrangement
-  never keeps an empty band in the middle of it.
-- **Thirteen panels.** The four from the old screen — Needs you, Where the
-  money goes, What it is made of, Next 30 days — plus Net worth over time,
-  Where the cash sits, Flats against mortgages, Energy this month, Portfolio,
-  Retirement outlook, Tax position, Recent activity, and Saved each month.
-  Panels belonging to a switched-off module are not offered.
-- **The board follows you, not your browser.** Each person's arrangement is
-  stored against their own profile. It is not a setting, does not appear in
-  Settings, and is not part of the configuration export.
-- **A narrow screen stacks the board into one column** and swaps resizing for
-  move-up and move-down. There is only one arrangement, so reordering on a
-  phone does change how the board looks on a wider screen — the screen says so
-  while you are editing rather than letting you discover it later.
+### 🔧 Changed
 
-- **The sidebar lists seven areas instead of twelve screens.** Overview, Money,
-  Assets, Retirement, Home, Calendar and Admin; the screens inside an area
-  appear as a row of tabs under the page title. Twelve items in one column had
-  stopped being legible, and the app now has eighteen screens rather than
-  twelve. Money holds Cash flow, Accounts, Transactions, Tax, Import, Rules and
-  Tags; Assets holds Property, Investments and Loans. Home and Calendar are
-  their own rows rather than one Household area, so the calendar stays one
-  click away.
-- **A quick-add button on every screen** — bottom right, straight to statement
-  import.
-- **Drawn icons in place of emoji** in the sidebar, the screen titles and the
-  header buttons. They are inline SVG in the bundle, not a font and not a
-  fetch, because this is a package people self-host and it should not depend on
-  a CDN to render its own navigation. Emoji stay where they read as content
-  rather than furniture: the attention cards, account rows and the Settings
-  module list.
+- 📊 The cash-flow waterfall scales to fit instead of scrolling sideways below 880 pixels
+- ⚡ A panel's data is computed only when that panel is on your board
+- ♻️ The retirement projection's inputs moved into one shared module, rather than two copies drifting apart
 
-### Changed
+### 🔒 Security
 
-- **The cash-flow waterfall scales to fit instead of scrolling.** It was a
-  fixed 592-pixel box that scrolled sideways below 880 pixels, which cannot
-  work when the panel holding it can be resized to a quarter of the board. It
-  now lays out once and scales into whatever room it is given, labels and all.
-  Below about half width the leaf labels do get genuinely small; that is a
-  known limit rather than a defect.
-- **A panel's data is only computed when the panel is on your board.** Loading
-  thirteen panels' worth of queries on every visit would have been a real
-  regression from the four the fixed screen ran, so the loader builds exactly
-  what is being shown.
-- **The retirement projection's inputs moved into
-  `src/lib/server/retirement.ts`**, shared by the Retirement screen and the new
-  panel. Two copies of a forty-year amortisation drifting apart was not a risk
-  worth taking for one small panel.
+- 📗 `xlsx` moved to 0.20.3 from SheetJS's own distribution — 0.18.5 carried prototype pollution and a ReDoS
+- 📦 npm removed from the shipped image, taking three high-severity advisories and 18MB with it
 
-### Security
+### 🐛 Fixed
 
-- **The spreadsheet parser behind broker imports is patched.** `xlsx` 0.18.5
-  carried a prototype-pollution flaw and a regular-expression denial of service,
-  both reachable by reading a crafted report. SheetJS stopped publishing to npm
-  after that version, so the fixed 0.20.3 is installed from their own
-  distribution — pinned by content hash in the lockfile like any other
-  dependency. Note that image scanners flag the npm `xlsx` package at every
-  version, since the abandoned package is itself the advisory; the two
-  underlying issues are fixed.
-- **npm is no longer in the shipped image.** Nothing ran it — the server starts
-  with `node build` and migrations run in-process — but it came with the base
-  image and its own bundled dependencies, which carried three high-severity
-  advisories of their own. Removing it takes those with it, and 18MB besides.
-
-### Fixed
-
-- **The Overview offered a link to a switched-off Calendar.** The "Next 30
-  days" card rendered regardless of the module, and its "Open calendar" link
-  led to a 404 whenever Calendar was off. The panel is now gated on the module
-  like every other module-owned panel, and disappears with it.
-- **Every screen offered an "Import statement" button with the Import module
-  switched off**, which led to the same kind of 404. Both that button and the
-  new quick-add button now go with their module.
-- **A panel that could not load took the whole Overview down with it.** The
-  energy panel reaches Home Assistant over the network, so an unreachable box
-  turned the entire screen into an error — and because a panel's placement is
-  saved, it stayed that way. A panel that fails now says so in its own box and
-  the rest of the board carries on.
-- **Switching two panel-owning modules off left a band of empty space** at the
-  top of the board instead of closing it.
-- **The cash-flow waterfall stopped at 880 pixels** and left the rest of a wider
-  card empty. It fills the space again above that width and scales down below
-  it.
+- 🔗 The Overview offered a link to a switched-off Calendar, which led to a 404
+- 🔗 Every screen offered Import statement with the Import module switched off
+- 💥 A panel that could not load took the whole Overview down with it — and stayed that way, since placement is saved
+- 🧩 Switching two panel-owning modules off left a band of empty space at the top of the board
+- 📊 The cash-flow waterfall stopped at 880 pixels and left the rest of a wider card empty
 
 ## 0.3.4 — 2026-08-15
 
-A pass over the first-run experience: the setup wizard, what a fresh install
-starts with, and the controls that had kept their browser defaults.
+> A pass over the first-run experience: the setup wizard, what a fresh install starts with, and the controls that had kept their browser defaults.
 
-**Upgrading:** migration `0033` runs automatically and retires the shipped
-starter rules — the ones nobody ever accepted or corrected are removed, and any
-that did earn a record are kept and relabelled as learned. As with every
-database release, take a backup before replacing the image.
+**⬆️ Upgrading:** migration `0033` retires the shipped starter rules — those nobody ever accepted or corrected are removed, and any that earned a record are kept and relabelled as learned. Take a backup before replacing the image.
 
-### Fixed
+### 🐛 Fixed
 
-- **The setup wizard showed one module with no name, and threw away everything
-  typed when it refused a submission.** The wizard kept its own list of module
-  labels beside the registry, so Tax — added to the registry later — rendered as
-  a bare checkbox; labels now come from the registry itself and cannot drift
-  again. A rejected submission re-renders with the household name, currency,
-  people, birth years and module choices intact. Passwords are deliberately not
-  restored: echoing one would write it into the response HTML.
-- **A file field's "Choose File" button ignored the theme.** The browser draws
-  that button itself, so it kept its platform default — a light grey chip inside
-  a dark card on the payslip, document, bill and restore forms. It now takes the
-  same look as every other control, from one rule in the shared stylesheet.
-- **Nothing explained why passkeys were missing on a plain-HTTP deployment.**
-  The whole section was hidden without a word, which reads as a build that has
-  no passkeys at all. Settings now says that browsers refuse WebAuthn outside a
-  secure context, names the `ORIGIN` actually in force, and — for an
-  administrator, who is the only person who can act on it — gives the three
-  steps that turn passkeys on: authenticate the Tailscale sidecar, put the name
-  it issues in `.env`, restart. A member is told an administrator can do it
-  rather than being handed shell commands.
+- 🧙 The setup wizard showed one module with no name, and threw away everything typed when it refused a submission
+- 🎨 A file field's "Choose File" button ignored the theme, since the browser draws it itself
+- 🔑 Nothing explained why passkeys were missing on a plain-HTTP deployment — the section was hidden without a word
 
-### Changed
+### 🔧 Changed
 
-- **The Tailscale sidecar now runs by default.** It was behind a compose
-  profile, so the out-of-the-box install was plain HTTP and therefore had no
-  passkeys — the feature was present but unreachable unless you already knew to
-  ask for it. `docker compose up -d` now brings it up alongside the app. It
-  stays tailnet-only; `tailscale funnel`, the command that would publish to the
-  open internet, is still run nowhere. Without `TS_AUTHKEY` the sidecar idles
-  and prints a login URL to its logs rather than failing, so an install that
-  never authenticates it behaves exactly as it did before. Naming the two
-  services (`app db`) on the `up` command leaves it out entirely.
-- **An install no longer ships 42 starter rules.** A fresh household begins with
-  the category taxonomy and no rules at all; every rule is earned from a
-  correction someone actually made, which is what the confidence score claims to
-  measure. The curated Czech/Polish merchant patterns were wrong in both
-  directions — dead weight for a household that shops elsewhere, and, because
-  seeding ran on every boot, a starter rule you deleted came back at the next
-  restart. The first import of a new install now sends more rows to the review
-  queue, and filing them is what teaches the rules.
+- 🔐 The Tailscale sidecar runs by default, so a stock install has HTTPS and therefore passkeys; still tailnet-only
+- 📋 An install no longer ships 42 starter rules — every rule is earned from a correction someone actually made
 
 ## 0.3.3 — 2026-08-15
 
-A full correctness and simplification pass over the paths that move money or
-credentials. This release closes races that only appeared when two requests
-arrived together, makes multi-row changes commit as one unit, and replaces
-repeated route code with shared domain mutations and interaction helpers.
+> A correctness and simplification pass over the paths that move money or credentials: races that only appeared when two requests arrived together, and multi-row changes that now commit as one unit.
 
-**Upgrading:** migrations `0027`–`0032` run automatically. They repair legacy
-transaction fingerprints and transfer claims, add authentication-concurrency
-guards and broker-report freshness state, enforce one smart-meter bill per
-property, and bind legacy monetary settings and the meter to explicit
-currencies/properties. The fingerprint repair deliberately reconciles old
-duplicates while preserving their categories, splits, tags and linked events.
-If the household has more than one lived-in property, migration `0032` binds an
-existing home integration to the oldest one; open Home settings once and
-confirm that target. As with every database release, take a backup
-before replacing the image.
+**⬆️ Upgrading:** migrations `0027`–`0032` run automatically — repairing legacy fingerprints and transfer claims, adding authentication-concurrency guards, enforcing one smart-meter bill per property, and binding legacy settings to explicit currencies. With more than one lived-in property, `0032` binds the home integration to the oldest; open Home settings once and confirm it. Take a backup before replacing the image.
 
-### Fixed
+### 🐛 Fixed
 
-- **Overlapping or simultaneous statement imports could create duplicate
-  accounts and transactions.** Account identity is now exact, bank-aware and
-  serialised; an explicit account choice learns a compatible statement number,
-  closing balances move forward in time only, and the import record, rows,
-  counters and post-processing commit together or not at all.
-- **Old fingerprints could disagree with the current parser.** The forward
-  repair handles the version-1 Revolut fee representation, version-2 minor-unit
-  rescaling and collisions with already-current rows one occurrence at a time.
-  It also repairs existing transfer claims without deleting a genuine repeated
-  movement.
-- **Transfer pairing still had timing holes.** Pairing now takes one global
-  transaction lock before row locks, waits for ordinary edits, sees the other
-  side of concurrent imports, works for historical statements, and never
-  overwrites a transaction a person has already filed or split. Confirm and
-  reject update the pair and both legs atomically.
-- **The transaction register and its totals could disagree.** One database-side
-  effective-line relation now owns category, uncategorised, direct-tag,
-  split-tag and fee semantics. Counts and per-currency totals remain correct
-  beyond one page, and amount bounds are converted to the household currency at
-  the transaction date.
-- **Split and tag edits could leave partial or contradictory state.** Duplicate
-  split identifiers are rejected, save/delete operations lock the parent, line
-  tags save in the same transaction, and concurrent tag additions are resolved
-  under an owner lock instead of silently dropping one another.
-- **Several cross-currency figures mixed raw minor units.** Property equity and
-  rent, loan allocation, account charts, retirement income, tax series,
-  investment history, tag totals and net-worth deltas now convert each operand
-  at its effective date. A day before the first stored fixing converts at the
-  oldest rate on record — the CNB publishes forward and only today's fixing is
-  ever fetched, so those days can never gain one of their own — and a currency
-  with no fixing at all still falls back to major-unit face value. Both are
-  labelled by a banner covering every converted source and target currency.
-- **Broker reports could replay stale holdings or closed positions.** Import
-  freshness is stored independently of the current holdings, so a newer empty
-  report stays authoritative and an older same-day or partial report cannot
-  resurrect or regress positions.
-- **Loan actions accepted impossible chronology and inconsistent balances.** A
-  repayment cannot increase or overpay debt, occur before the agreement/current
-  balance or in the future. Creation and re-fixation validate dates, rates,
-  payments, agreement bounds and secured-property shares before one atomic
-  write replaces the affected schedule.
-- **Property figures and edits could lose data.** Every active linked loan is
-  included, only the deterministic tenancy active today contributes rent,
-  overlapping tenancies are serialised, and concurrent image/floor-plan updates
-  merge under a property lock. Invalid or ambiguous secured shares are refused
-  instead of duplicating debt between properties.
-- **A shared mortgage could report one minor unit more debt than it carries.**
-  Each property's share used to be rounded on its own, so a 50/50 split of an
-  odd balance rounded up on both sides. Shares are now allocated as the gap
-  between cumulative boundaries over a loan's whole secured set, in a fixed
-  order, so the parts always sum to the loan itself. A secured share is also
-  validated with the one grammar the property page reads back, rejecting
-  precision the `numeric(6,3)` column would silently round away.
-- **A tag on a transfer leg totalled zero.** Tag totals excluded any
-  transaction pairing had marked a transfer, so a tag put on the outgoing leg of
-  a move — money set aside — reported nothing while the register still showed the
-  chip on that row. A tag is a filing decision and now counts wherever it is put.
-- **The month-on-month net-worth delta could vanish or measure the wrong
-  period.** The baseline is the last snapshot before the month began, falling
-  back to the oldest on record, rather than the first snapshot inside the month:
-  the figure no longer disappears on the 1st, nor silently measures only the days
-  since the container last ran.
-- **Backfilling an older broker report recorded no value point.** The report's
-  own day is written whatever its age — `portfolio_snapshot` is keyed by day, so
-  an archived report cannot collide with the current one — while holdings and
-  freshness still follow the newest report only.
-- **Saving a re-fixation destroyed later agreed periods.** A follow-on fixation
-  the bank had already committed to is preserved; a blank end date runs until
-  that period begins instead of silently becoming the loan's maturity date, and
-  an explicit end that would span a committed period is refused rather than
-  deleting it. The dialog preview shows the same schedule the save writes.
-- **Non-Czech accounts never matched their own IBAN.** Account comparison fell
-  back to a Czech-only reading, so a Polish or Revolut account written one way in
-  a statement and another in the ledger looked like two accounts: own transfers
-  stopped pairing and an import could mint a duplicate account. Czech references
-  keep their structural rule; elsewhere the national number and the IBAN body are
-  compared directly.
-- **Filing one transaction scanned the whole ledger.** A pairing pass is bounded
-  to the days around whatever changed, rather than row-locking and comparing every
-  unpaired transaction on every filing, import, rule edit and transfer decision.
-  Unlike the horizon this replaces, the bound follows the rows, so historical
-  statements still pair.
-- **One out-of-range retirement assumption stopped the page saving anything.**
-  Refusals now name the assumption at fault, and the form carries the same bounds
-  the save enforces, so an age left below the minimum no longer refused every
-  later edit to spending or growth behind one generic line.
-- **Importing a configuration file could be undone by an open tab.** An imported
-  retirement payload takes a version above whatever is stored, so a tab loaded
-  before the import gets a visible conflict rather than silently replacing the
-  file — or being refused forever.
-- **An account chosen for one upload was applied to the next.** The import
-  screen's account choice is cleared once no file is still waiting on an answer,
-  so a later unrelated statement is detected normally instead of being refused
-  against the previous batch's account.
-- **Smart-meter sync could target the wrong flat, wrong bill or stale
-  configuration.** The selected property and meter bill are explicit and
-  database-enforced. A delayed provider response is discarded if the
-  configuration changed while it was in flight, and switching the meter source
-  cannot race an hourly update.
-- **Documents, property bills, tax statements and rule edits used several
-  commits for one action.** Their database rows, links and tags now use shared
-  transactional mutations with rollback coverage. Rule replacement, tags and
-  replay also follow the same lock order as transaction filing.
-- **Retirement autosave could persist an older request last or silently ignore
-  another tab.** Each page writer now carries an ordered revision plus a shared
-  optimistic version; stale writes return a visible conflict, while unload
-  retries of the same snapshot remain idempotent.
-- **Form and upload failures were hidden behind dialogs or discarded local
-  state.** Shared action-result and upload helpers now keep drafts open, show
-  errors inside the active dialog and refresh page data only after success.
-  Property, import, investment, home-device, split, tax, rule and loan flows all
-  use the same behavior.
-- **Keyboard and assistive-technology users could still reach hidden UI.**
-  Modals, the lightbox and the mobile drawer now move and contain focus, restore
-  it on close, announce their state and errors, and support Escape. Calendar and
-  property-local drafts reset when their route identity changes.
-- **Editing an older payslip could silently change its currency.** Corrections
-  retain the document's stored currency, while legacy rule thresholds and home
-  energy prices are permanently bound to the currency in force when they were
-  authored rather than being reinterpreted after a base-currency change.
+- 🏦 Overlapping or simultaneous imports could create duplicate accounts and transactions
+- 🔑 Old fingerprints could disagree with the current parser; the repair preserves categories, splits and tags
+- 🔁 Transfer pairing had timing holes, and could overwrite a transaction a person had already filed or split
+- 🧾 The transaction register and its totals could disagree beyond one page
+- ✂️ Split and tag edits could leave partial or contradictory state
+- 💱 Several cross-currency figures mixed raw minor units; each operand now converts at its effective date
+- 📈 Broker reports could replay stale holdings or resurrect closed positions
+- 💰 Loan actions accepted impossible chronology and inconsistent balances
+- 🏠 Property figures and edits could lose data, or duplicate debt between properties
+- 🧮 A shared mortgage could report one minor unit more debt than it carries — both halves of a 50/50 split rounded up
+- 🏷️ A tag on a transfer leg totalled zero, while the register still showed the chip on that row
+- 📉 The month-on-month net-worth delta could vanish on the 1st, or measure only the days since the last restart
+- 📈 Backfilling an older broker report recorded no value point
+- 💰 Saving a re-fixation destroyed later agreed periods the bank had already committed to
+- 🌍 Non-Czech accounts never matched their own IBAN, so own transfers stopped pairing and imports minted duplicates
+- ⚡ Filing one transaction scanned the whole ledger; the pass is now bounded to the days around what changed
+- 🏖️ One out-of-range retirement assumption stopped the page saving anything, behind one generic line
+- ⚙️ Importing a configuration file could be silently undone by an open tab
+- 📥 An account chosen for one upload was applied to the next
+- 🔌 Smart-meter sync could target the wrong flat, the wrong bill, or a configuration that changed mid-flight
+- 🗃️ Documents, bills, tax statements and rule edits used several commits for one action
+- 🏖️ Retirement autosave could persist an older request last, or silently ignore another tab
+- 🚨 Form and upload failures were hidden behind dialogs or discarded local state
+- ♿ Keyboard and assistive-technology users could still reach hidden UI
+- 💱 Editing an older payslip could silently change its currency
 
-### Security
+### 🔒 Security
 
-- Initial setup is a single database claim: concurrent requests cannot create
-  two first administrators, and the public pre-claim work is capped at twenty
-  people so losing requests cannot schedule unbounded Argon2 work.
-- Password changes and deactivation advance an authentication generation.
-  Sessions, credentials and positive passkey counters are written only if that
-  generation is still current and the person is still active, closing the
-  in-flight registration and sign-in races.
-- Enrollment token consumption, the active-person/password check, password
-  creation and session issuance are now one atomic transition. A concurrent
-  deactivation or second enrollment request cannot leave a usable partial
-  account.
-- Public passkey challenge issuance has its own rate budget, sized for a
-  household rather than for guessed credentials, and bounded, expiry-indexed
-  storage. Login limiting is keyed per account, with unknown accounts collapsed
-  onto one budget: behind Tailscale or a reverse proxy the whole household is a
-  single address, so there is deliberately no budget above that key.
-- Bearer authentication is enforced once at the whole `/api` route boundary —
-  the same tree the sign-in redirect exempts — and therefore fails closed for
-  future endpoints. Scheme parsing is
-  case-insensitive, token failures are throttled, invalid cookies are cleared,
-  and expired sessions have a cleanup path.
+- 🥇 Initial setup is a single database claim, so concurrent requests cannot create two first administrators
+- 🔄 Password changes and deactivation advance an authentication generation, closing in-flight sign-in races
+- 🎟️ Enrollment consumption, the active-person check, password creation and session issuance are one transition
+- 🚦 Passkey challenges have their own rate budget; login limiting is keyed per account, not per address
+- 🚪 Bearer authentication is enforced once at the whole `/api` boundary, so it fails closed for future endpoints
 
-### Changed
+### 🔧 Changed
 
-- Coherent writes now live in reusable server-domain modules for loans,
-  documents, property, rules, tags, splits and imports; page actions translate
-  form data and results instead of repeating transaction orchestration.
-- Repeated client behavior is shared through upload, action-error, autosave,
-  overlay and loan-scenario primitives. Repayment and re-fix dialogs retain
-  their distinct fields while sharing payload decoding and comparison UI.
-- Retirement assumptions now expose contribution-growth and property-growth
-  controls, saved through the same conflict-safe autosave as the other inputs.
-- The migration journal now has a consolidated current schema snapshot and a
-  regression holding it to the declared schema table by table and column by
-  column, so drift cannot surface later as a surprise migration. Embedded
-  PostgreSQL integration coverage now exercises imports, authentication,
-  transactions/tags, loans, domain rollback/concurrency and autosave ordering.
+- ♻️ Coherent writes live in reusable server-domain modules; page actions translate form data instead of orchestrating
+- ♻️ Repeated client behaviour shared through upload, action-error, autosave, overlay and loan-scenario primitives
+- 🏖️ Retirement assumptions gain contribution-growth and property-growth controls
+- 🗃️ A consolidated schema snapshot, plus a regression holding migrations to it column by column
 
 ## 0.3.2 — 2026-08-15
 
-Two rounds of whole-codebase review, and the repairs the second round found in
-the first. The theme is figures that were wrong without saying so: a hang that
-took the server down, amounts scaled by the wrong power of ten, statement rows
-dropped in silence, and a passkey challenge that was never really checked.
+> Two rounds of whole-codebase review, and the repairs the second found in the first. The theme is figures that were wrong without saying so.
 
-**Upgrading**: migration `0023` rescales stored amounts for currencies that do
-not have two minor units, and `FINGERPRINT_VERSION` moves to 3 for the same
-reason. Both are no-ops for CZK, EUR, USD, PLN and every other two-decimal
-currency — which is every currency this app could previously hold correctly. If
-you have pointed the smart meter at a bill, see "the meter no longer invents a
-bill line" below: you will need to say which line it feeds.
+**⬆️ Upgrading:** migration `0023` rescales stored amounts for currencies without two minor units, and `FINGERPRINT_VERSION` moves to 3 for the same reason — both no-ops for CZK, EUR, USD, PLN and every other two-decimal currency. If you have pointed the smart meter at a bill, you will need to say which line it feeds.
 
-### Fixed
+### 🐛 Fixed
 
-- **The cash-flow waterfall could hang the whole server.** The label-relaxation
-  loop took each block's position from the labels' original positions while
-  recomputing which labels formed a block from their moved ones. The two
-  disagreed, so for some arrangements it alternated between two layouts and
-  never settled. It is computed inside a `$derived`, so this ran during the
-  server-side render of `/cashflow` and `/overview` — a synchronous infinite
-  loop on the one Node thread, which stops every request for every user until
-  the container is restarted. It is now a pool-adjacent-violators merge, which
-  terminates in at most one merge per label.
-- **A sixty-byte floor plan could exhaust the heap.** The legacy-rectangle path
-  in `validateDrawing` checked only that x, y, w and h were integers before
-  allocating `w × h` cells. Its sibling branch had always clamped to the grid;
-  now both do.
-- **A failed boot was cached forever.** `ready ??= boot()` only reassigns when
-  the left side is nullish, and a rejected promise is not — so one unreachable
-  database during migration made every later request await the same rejection,
-  long after the database came back.
-- **Confirming a transfer could resurrect a rejected one and erase a category.**
-  A raw SQL fragment holding a top-level `or` was passed to Drizzle's `and()`,
-  which parenthesises the list but never its operands: the predicate rendered as
-  `(state = 'proposed' AND out = id) OR (in = id)`, so posting any in-leg
-  matched its pair whatever its state, and confirming then nulled both legs'
-  category. `rejectTransfer` had no state filter at all.
-- **Transfers proposed during an import vanished and stayed double-counted.**
-  The guard keeping a proposed leg out of categorisation read a snapshot taken
-  before the same pass inserted its own proposals, so a leg proposed in that
-  pass could be filed by a rule, drop out of the review queue, and leave both
-  sides counting as real income and real spending with no way to confirm them.
-- **Amounts were scaled by a hardcoded hundred in half the app.** `minorDigits`
-  now reads the runtime's own CLDR data, and every crossing between minor units
-  and a plain number goes through `toMajor`/`fromMajor`. Scattering `/ 100` and
-  `* 100` worked only while every currency had two minor units — the moment one
-  half of a round trip became currency-aware and the other did not, the figure
-  came out a hundred times wrong. Migration `0023` rescales what was already
-  stored.
-- **One stray quote mark swallowed the rest of a CSV.** A quote now opens a
-  field only at the field's start, as in RFC 4180. Treating one anywhere as an
-  opener meant an inch mark in a card description — `NAKUP 27" MONITOR` — ate
-  the delimiter after it and merged the amount into the description; the row
-  then failed its adapter's column guard and disappeared, while the import still
-  counted as a success and recorded a content hash that made the corrected
-  re-upload look like a duplicate.
-- **A wrapped payment note dropped its transaction.** The field splitter
-  understood quoted newlines and the record splitter feeding it did not, so a
-  note wrapping onto a second line was cut in half and both halves discarded.
-- **Uploaded PDFs opened as a blank tab.** The upload response carried a bare
-  `sandbox` in its content-security policy, which is exactly what the browsers'
-  own PDF viewers are — scripted documents — and blocked the download fallback
-  too. The rest of the policy already blocks every script, which was the whole
-  of the threat that token was added for.
-- **An unknown exchange rate was treated as one-to-one.** Every converted total
-  fell back to face value with nothing to say so; a 10 000 EUR movement counted
-  as 100 CZK on an instance whose rate table had not been filled yet. Face value
-  is still the arithmetic, but the app now names every currency being shown that
-  way, on every screen. The check reads property and portfolio values too — the
-  two largest figures on the net-worth screen, and the two it used to miss.
-- **A repayment's saved projection disagreed with its preview.** The payment-day
-  adjustment was applied when previewing a what-if and not when reading the
-  stored balance back, so the chart drawn after saving booked an instalment the
-  bank had already collected. Both now derive the anchor month from one rule.
-- **Rules containing an accent or punctuation could never match.** The editor
-  stored what was typed with only `.toLowerCase()`, while the matcher compares
-  against text that has been diacritic-stripped and punctuation-collapsed. In a
-  Czech household that is most of the rules a person writes — "Rohlík" never
-  matched ROHLIK.CZ, "T-Mobile" never matched T-MOBILE. Both sides are folded
-  now, which repairs rules already saved.
-- **An English payslip was read a thousand times too small.** The amount pattern
-  had no comma-grouped alternative, so `45,231.00` fell through to a tail that
-  matched its first four characters and filed the slip as 45.23.
-- **Five months a year vanished from the salary history.** Month names were
-  matched with `\b`, which JavaScript defines over ASCII only — so nine of the
-  twenty-three names in the table, every one beginning or ending with a
-  diacritic, could never match. February, June, July, September and October
-  payslips stored no period and dropped out of both the salary chart and the tax
-  prefill.
-- **The Raiffeisenbank parser lost a quarter of its references.** It read the
-  transaction code and merchant line at fixed offsets, which a card payment with
-  its own marker line pushes past. It now scans each movement's own span,
-  stopping at the page header so a footer's date or a statement number cannot be
-  taken for a movement's own.
-- **The Česká spořitelna parser invented payment symbols.** On a card row the
-  cell where a transfer prints its variable symbol holds the compressed
-  transaction date, and rules match on that field — so a rule keyed to a real
-  symbol could file unrelated card payments. Fifty of sixty symbols on a real
-  statement were dates; all ten genuine ones survive.
-- **A statement mentioning another bank was parsed as that bank's.** The sniff
-  was a substring over the whole document, and both banks print their name deep
-  in the body. It now reads the statement's own header, and a parse that finds
-  no rows records nothing at all — previously it minted an account for a bank
-  the household did not have and stored a content hash that refused the
-  corrected re-import forever.
-- **The smart meter reading could be a thousand times out.** The energy provider
-  assumed kWh and never read the sensor's unit, and Shelly, Tasmota and ESPHome
-  commonly report Wh. That figure is multiplied by the price per kWh and written
-  onto a bill as money. The unit is now read and converted, an unrecognised one
-  yields no reading rather than a guess, and the entity picker shows each
-  sensor's unit.
-- **Hovering the sidebar wrote to the database.** The home page's `load` updated
-  and inserted bill rows, and the app asks SvelteKit to preload on hover. The
-  write now runs on the hourly tick and when a platform is connected.
-- **The month-to-date reading could span two months.** Its window was built by
-  setting the UTC date on a local clock, so just after midnight on the 1st in a
-  UTC-positive zone it opened a month early — and that figure is persisted as
-  money hourly.
-- **A meter reset read as a month of nobody being home.** The month tile and the
-  daily bars are two views of one series and disagreed about what a counter
-  reset means: one clamped the month to zero, the other dropped the day from the
-  chart entirely. Both now sum the rises and treat a reset as a restart.
-- **The split write path was three separate commits.** A failure between them
-  left a transaction with no lines and its old category still set — the exact
-  state the design exists to prevent — and two tabs saving at once could persist
-  both sets. It is now one transaction with the parent row locked, and lines are
-  matched to the rows they came from by id, so a split-level tag stays with its
-  line instead of following the slot.
-- **The register's totals hit a hard ceiling.** Splits for the whole filtered
-  set were loaded by naming every matching id, against a Postgres limit of
-  65 535 bind parameters. The predicate now goes to the database as a subquery.
-- **A large page number returned a 500.** `Number.isInteger(1e21)` is true, so
-  `?page=1e21` reached SQL as `OFFSET 5e+22`.
-- **The read-only API wrote on every poll.** `computeNetWorth` upserted a
-  snapshot as part of computing the figure, and it runs from the app layout on
-  every page as well as from `GET /api/v1/networth`. The snapshot is now written
-  on the scheduler, and the per-holding rate lookups collapsed into one.
-- **Uploads over 512 KB failed with a bare 413.** `adapter-node` rejects larger
-  bodies before any of the app's code runs, so a phone photo never reached the
-  upload form's own error. `BODY_SIZE_LIMIT` is now set, and configurable as
-  `CONTINUUM_MAX_UPLOAD`.
-- **The backup destination was stored with no validation.** The dump is
-  plaintext SQL holding every password hash and access token. A system directory
-  or the served uploads folder is now refused, and an unwritable path is caught
-  where the person who typed it can still see the message.
+- 💥 The cash-flow waterfall could hang the whole server — a synchronous infinite loop on the one Node thread
+- 💥 A sixty-byte floor plan could exhaust the heap
+- 💥 A failed boot was cached forever, so one unreachable database outlived its own outage
+- 🔁 Confirming a transfer could resurrect a rejected one and erase a category — an unparenthesised `or` in raw SQL
+- 🔁 Transfers proposed during an import vanished and stayed double-counted
+- 💯 Amounts were scaled by a hardcoded hundred in half the app, which only worked while every currency had two decimals
+- 📄 One stray quote mark swallowed the rest of a CSV — `NAKUP 27" MONITOR` ate the delimiter after it
+- 📄 A wrapped payment note dropped its transaction, split in half between two splitters that disagreed
+- 📄 Uploaded PDFs opened as a blank tab, blocked by a `sandbox` token in their own policy
+- 💱 An unknown exchange rate was treated as one-to-one — 10,000 EUR counted as 100 CZK, with nothing said
+- 💰 A repayment's saved projection disagreed with its preview by one instalment
+- 🔤 Rules containing an accent or punctuation could never match — "Rohlík" never matched ROHLIK.CZ
+- 💷 An English payslip was read a thousand times too small: `45,231.00` filed as 45.23
+- 📅 Five months a year vanished from the salary history, because `\b` is ASCII-only in JavaScript
+- 🏦 The Raiffeisenbank parser lost a quarter of its references to fixed offsets
+- 🏦 The Česká spořitelna parser invented payment symbols — fifty of sixty on a real statement were dates
+- 🏦 A statement merely mentioning another bank was parsed as that bank's, minting an account and blocking re-import
+- 🔌 The smart meter reading could be a thousand times out, assuming kWh where Shelly and Tasmota report Wh
+- 💾 Hovering the sidebar wrote to the database, via preload on the home page's loader
+- 🕐 The month-to-date reading could span two months, and that figure is persisted as money hourly
+- 🔌 A meter reset read as a month of nobody being home
+- ✂️ The split write path was three separate commits, so a failure left a transaction with no lines
+- 🧾 The register's totals hit Postgres's 65,535 bind-parameter ceiling
+- 💥 A large page number returned a 500 — `?page=1e21` reached SQL as `OFFSET 5e+22`
+- 💾 The read-only API wrote a snapshot on every poll
+- 📤 Uploads over 512 KB failed with a bare 413, before any of the app's code ran
+- 💾 The backup destination was stored with no validation, though the dump holds every password hash
 
-### Security
+### 🔒 Security
 
-- **A passkey assertion could be replayed indefinitely.** The WebAuthn challenge
-  lived only in a cookie the caller hands back, and SvelteKit does not sign
-  cookies — so `expectedChallenge` was whatever the request said it was, and
-  there was no record anywhere of what the server had actually issued. Anyone
-  holding one captured assertion could turn it into a fresh thirty-day session,
-  over and over. Challenges are now recorded when issued and spent when used: a
-  verification that spends nothing is refused.
-- **Changing a password did not remove passkeys.** Registering one needs only a
-  live session, so somebody with a stolen cookie could enrol their own
-  authenticator and keep it long after the password changed — a credential is
-  not tied to the password, and passkey sign-in went on minting sessions.
-  Changing a password now revokes every other session _and_ every registered
-  passkey, and the confirmation says so.
-- **Eight bad attempts could lock out the whole household.** The rate limiter
-  was keyed on client address alone, and the Tailscale sidecar this release
-  supports puts every member behind one address. Sign-in attempts are now
-  budgeted per account, enrollment links have their own budget instead of
-  spending the sign-in one, and spending a valid link no longer clears the
-  failure counter. `ADDRESS_HEADER` and `XFF_DEPTH` are documented for
-  deployments behind a trusted proxy.
-- Uploaded files are served with a content-security policy and `nosniff`, so an
-  SVG carrying a script is inert when opened directly; data formats are handed
-  over as downloads.
+- 🔑 A passkey assertion could be replayed indefinitely — challenges are now recorded when issued and spent when used
+- 🔑 Changing a password did not remove passkeys, so a stolen cookie could outlive the change
+- 🚦 Eight bad attempts could lock out the whole household, since Tailscale puts everyone behind one address
+- 📎 Uploaded files are served with a content-security policy and `nosniff`, so a scripted SVG is inert
 
-### Changed
+### 🔧 Changed
 
-- **The meter no longer invents a bill line.** It used to look for a bill whose
-  label contained "energy", which missed the app's own seeded "Electricity
-  advance" — so it added a second line beside it and the flat's total counted
-  electricity twice. Which line the meter feeds is now the household's choice,
-  made with the 📟 control on the property card, and the reading is converted
-  from the currency the price was typed in to the property's own.
-- Continuous integration runs the end-to-end suite. It existed and nothing ran
-  it, so the authentication, import, splits and API-token paths were covered
-  only by a journey no build executed.
-- `person.role` is constrained in the database to the two values the code
-  recognises, and `session.person_id` and `credential.person_id` are indexed
-  like every comparable foreign key in the schema.
-- The setup wizard writes its people and settings as one transaction. The first
-  person is what closes the wizard, so a failure part-way through used to strand
-  the instance with no way back to that screen.
+- 🔌 The meter no longer invents a bill line — which line it feeds is the household's choice, made on the property card
+- 🧪 CI runs the end-to-end suite; it existed and nothing executed it
+- 🗃️ `person.role` is constrained in the database, and session and credential foreign keys are indexed
+- 🧙 The setup wizard writes its people and settings as one transaction
 
 ## 0.3.1 — 2026-08-14
 
-Hardening the accounts work in 0.3.0. Three rounds of review over that release
-found gaps between what the code did and what the README promised; this closes
-them.
+> Hardening the accounts work in 0.3.0 — three rounds of review closing the gaps between what the code did and what the README promised.
 
-### Fixed
+### 🐛 Fixed
 
-- **Settings export needed no administrator.** `?/importConfig` was restricted
-  when roles landed but its read counterpart, `GET /settings/export`, was not —
-  so any signed-in member could download `ledger.config.json`, which names the
-  host filesystem path backups are written to. It now requires an administrator,
-  and an end-to-end test signs in as a member and checks for the 403.
-- **The household roster told members too much.** Administrative sections were
-  withheld from members, but the list of people still carried everyone's role,
-  birth year, deactivation state, and which accounts had no password set yet —
-  that last one naming exactly the people with a live enrollment link. Members
-  now see names and nothing else.
-- **Deactivation left enrollment links live.** Deactivating someone cut their
-  sessions but not the one-time link they had never opened, so whoever held that
-  URL could still set a password on a closed account. Deactivation now voids the
-  link, and enrollment independently refuses a deactivated person — previously
-  they would have been handed a session and bounced straight back out at the
-  next request with nothing explaining why.
-- **An expired enrollment link could be marked used.** Submitting the form on an
-  eight-day-old link stamped `used_at` on the way to rejecting it, flipping its
-  status from expired to used. Every condition now lives in the update's own
-  predicate, so an expired link is refused without being written to.
-- **A trailing slash in `ORIGIN` broke every passkey.** `ORIGIN` was passed to
-  WebAuthn verbatim while everything else parsed it, so a value written as
-  `https://Continuum.example.ts.net/` reported itself secure, drew both passkey
-  buttons, and then failed every registration and sign-in with an error that
-  named nothing. It is now normalised the way a browser reports an origin.
-- **Cloned-authenticator detection never ran.** The library's own counter rule
-  fired first, which made the check unreachable — and that rule would have
-  locked out a synced passkey that once reported a real counter and later
-  reported zero, which is exactly the case the check exists to permit.
-- **A refused role change or deactivation committed its transaction.** `fail()`
-  returns rather than throws, so Drizzle saw a normal completion. Nothing was
-  written either way, but the locks were held to COMMIT and the pattern would
-  have silently persisted partial work the day a write moved above a guard.
-- The end-to-end suite builds inside its web-server command, whose timeout
-  defaults to sixty seconds — enough for a cold build to abort the whole run
-  before a single test started. It now gets five minutes.
-- The README's Tailscale instructions proxied port 3000, which is the port
-  inside the container. Compose publishes 80.
-- **An administrator who had never enrolled counted as one.** The last-
-  administrator guard measured "admins who are not deactivated", which includes
-  an account created moments ago that has no password, holds nothing but a
-  one-time link, and cannot reach a single administrative control. Adding one
-  made the count read two, and the only person who could actually sign in and
-  administer the household was then free to demote themselves — the exact
-  outcome the guard exists to prevent, recoverable only through the database
-  one-liner in the README. The count is now the same condition sign-in uses.
-- **A crafted credential id was an uncounted 500.** The sign-in endpoint checked
-  only that the id was a non-empty string, but a credential id is base64url and
-  goes straight into a Postgres text lookup: a NUL byte in it threw 22021 from
-  outside every catch in the handler. Anyone could reach that unauthenticated,
-  and it happened without passing any branch that records a failed attempt, so
-  it was never rate limited. The id is now checked against its actual shape, and
-  a passkey's label is stripped of control characters for the same reason.
-- **Two enrollment links could be live for one person.** "One link per person"
-  was a delete followed by an insert with nothing in the table to enforce it, so
-  a double-clicked _New link_ left both spendable and the older URL — possibly
-  the one sent to the wrong address — kept working. It is now a single upsert
-  against a unique constraint, and the upgrade removes any duplicates already
-  stored.
-- **An enrollment link was honoured against an account that already had a
-  password.** Spending one overwrites the password and signs its visitor in, so
-  reissuing refuses anyone already enrolled — but it read and then wrote in two
-  separate round trips, and somebody who enrolled inside that window was left
-  with a live link pointing at their own account. Enrollment now checks the same
-  condition at the point of use, so a link that should never have been minted is
-  refused rather than honoured.
-- **A new link could be minted for a closed account.** Deactivation revokes the
-  outstanding link, but _New link_ still appeared for a deactivated person who
-  had never enrolled and still produced a valid-looking URL, which enrollment
-  then refused with the wording a broken link gets — leaving both sides blaming
-  the URL rather than the account.
-- **The sign-in picker listed people who could not sign in.** Someone added but
-  not yet enrolled appeared in the list, and every attempt they made failed
-  against the shared per-address limit that gates everyone's sign-in — behind a
-  reverse proxy or Tailscale, eight guesses from one new person locked out the
-  household.
-- **A refusal could name the wrong person as the last administrator.** Demoting
-  or deactivating an administrator who was already deactivated cannot reduce the
-  number of people who can administer anything, but the guard tested the role
-  alone and refused, citing a person the request never touched.
-- **How long a sign-in failed said what kind of account it was.** A wrong
-  password costs a full argon2 verify; a deactivated or never-enrolled account
-  short-circuited before it and answered in about a millisecond, so timing drew
-  the distinction the identical wording exists to hide.
-- The add-person form kept four columns on a phone. Its single-column rule was
-  left behind in the settings page when the household list moved into its own
-  component, where it was quietly reused by the password form.
+- 🔓 Settings export needed no administrator, so any member could download the file naming the backup path
+- 👥 The household roster told members everyone's role, birth year and which accounts had a live enrollment link
+- 🎟️ Deactivation left enrollment links live, so whoever held the URL could still set a password
+- 🎟️ An expired enrollment link was stamped used on its way to being rejected
+- 🔑 A trailing slash in `ORIGIN` broke every passkey, with an error that named nothing
+- 🔑 Cloned-authenticator detection never ran, and the rule that pre-empted it would have locked out synced passkeys
+- 🗃️ A refused role change or deactivation still committed its transaction
+- 🧪 The end-to-end suite's cold build could exceed the web server's sixty-second default and abort the run
+- 📖 The README's Tailscale instructions proxied the in-container port rather than the published one
+- 👑 An administrator who had never enrolled counted as one, letting the only real one demote themselves
+- 💥 A crafted credential id was an uncounted, unrate-limited 500, reachable unauthenticated
+- 🎟️ Two enrollment links could be live for one person, so a URL sent to the wrong address kept working
+- 🎟️ A link was honoured against an account that had already been enrolled
+- 🎟️ A new link could be minted for a closed account, then refused with wording that blamed the URL
+- 👥 The sign-in picker listed people who could not sign in, spending the household's shared attempt budget
+- 👑 A refusal could name the wrong person as the last administrator
+- ⏱️ How long a sign-in failed revealed what kind of account it was, defeating the identical wording
+- 📱 The add-person form kept four columns on a phone
 
-### Changed
+### 🔧 Changed
 
-- **`PASSWORD_MIN_LENGTH` and `ENROLLMENT_LINK_DAYS` are configurable**, with
-  the previous values as defaults. Both are household policy rather than facts,
-  and the interface hints are fed by the same numbers the server enforces so the
-  two cannot disagree. The WebAuthn challenge lifetime stays fixed on purpose:
-  it bounds one ceremony, and a knob there would only widen a replay window.
-- **Changing your password says so.** It was the one action on the page with a
-  real security consequence and no feedback at all — the form now clears and
-  confirms that other devices were signed out. It also has its own layout
-  instead of borrowing the add-person grid, whose second column is sized for a
-  birth year and left the new-password field a third the width of its
-  neighbours.
-- The two passkey buttons share one ceremony helper. The fragile part is the
-  list of exception names that mean "the person cancelled", and it was written
-  out twice.
-- **Administrator enforcement on the settings page is applied once**, to every
-  action except the two a member comes there for, instead of being repeated at
-  the top of each. The guard was correct twelve times over and the shape was
-  still wrong: forgetting the thirteenth left an action anyone signed in could
-  call, with nothing failing to say so.
-- A member's settings page no longer fetches the module map, the base currency
-  or the currency list — all three render only for administrators — and the
-  passkey query is skipped entirely on deployments where passkeys are not
-  possible.
-- Sessions, API tokens and enrollment links share one token-hashing function.
-  Each had its own private copy whose comment claimed to match the others, so
-  hardening one would have quietly left the other two behind.
+- ⚙️ `PASSWORD_MIN_LENGTH` and `ENROLLMENT_LINK_DAYS` are configurable, with the previous values as defaults
+- 🔑 Changing your password now says so, and confirms that other devices were signed out
+- ♻️ The two passkey buttons share one ceremony helper, rather than two copies of the same exception list
+- 👑 Administrator enforcement on the settings page is applied once, not repeated at the top of each action
+- ⚡ A member's settings page no longer fetches the three things only administrators see
+- ♻️ Sessions, API tokens and enrollment links share one token-hashing function
 
 ## 0.3.0 — 2026-08-14
 
-Accounts you can actually manage, and a way in that is not a password.
+> Accounts you can actually manage, and a way in that is not a password.
 
-### Added
+### ✨ Added
 
-- **Passkeys**: sign in with Face ID, Touch ID or Windows Hello alongside the
-  existing passwords, which are staying — a device without a passkey still
-  works, and there is no lockout risk. Credentials are discoverable, so the
-  sign-in screen needs no person picker: one tap and you are in. Manage them in
-  Settings → Household, where each device is listed with its last-used date and
-  can be removed on its own.
-- **Enrollment links**: adding a person produces a one-time link, valid seven
-  days, that lets them choose their own password. The administrator who created
-  the account never knows it. Until they enrol they show as "not enrolled yet"
-  and cannot sign in.
-- **Change your own password**, from Settings. Every other session for that
-  person is revoked on success, so changing it after a scare actually ejects
-  the other device.
-- **Deactivate and reactivate a person.** Deactivation blocks sign-in and cuts
-  live sessions but keeps their password, passkeys and history, so reactivating
-  is a clean undo. People are never deleted — six tables reference them.
-- **Administrator role.** `person.role` finally means something: exactly
-  `admin` or `member`. Administrators alone can add or deactivate people, change
-  roles, manage API tokens, switch modules, set the base currency, and configure
-  or run backups. A member's Settings page holds their own password and their
-  own passkeys and nothing else — the rest is never sent to them. You cannot
-  deactivate yourself, and the last administrator can be neither deactivated nor
-  demoted, so an instance can never be left with nobody in charge. Those two
-  guards now hold under concurrent edits: the check and the write share one
-  transaction with the administrator rows locked.
-- **A sign-out control** in the sidebar. `/logout` had existed since the first
-  release with nothing linking to it.
-- **Optional Tailscale sidecar** (`docker compose --profile tailscale up -d`)
-  that terminates HTTPS for the app, which is what makes passkeys possible.
-  Private by default: it publishes to your tailnet, never the public internet.
+- 🔑 Passkeys — Face ID, Touch ID or Windows Hello alongside passwords, which are staying; no lockout risk
+- 🎟️ Enrollment links: adding a person produces a one-time link, valid seven days, so they choose their own password
+- 🔑 Change your own password from Settings, revoking every other session for that person
+- 🚫 Deactivate and reactivate a person — sign-in blocked, history kept, so reactivating is a clean undo
+- 👑 An administrator role that means something; the last administrator can be neither deactivated nor demoted
+- 🚪 A sign-out control in the sidebar — `/logout` had existed since the first release with nothing linking to it
+- 🔐 Optional Tailscale sidecar terminating HTTPS, which is what makes passkeys possible; tailnet-only
 
-### Changed
+### 🔧 Changed
 
-- `person.role` was previously incoherent — the schema defaulted to `adult`,
-  the demo seeder wrote `admin`/`member`, the setup wizard never set it, and
-  nothing read it. It is now the permission field, with exactly two values.
-- `person.password_hash` is now nullable, so a person can exist between being
-  created and choosing a password.
-- The end-to-end suite now builds the app before running. It previously served
-  whatever was last compiled, so it could pass against code no longer in the
-  repository.
-- Passkeys now require user verification — the biometric or PIN — rather than
-  merely preferring it. The server already enforced it, so asking for less than
-  that meant an authenticator which skipped the prompt was rejected afterwards
-  with an error nobody could act on. A security key with no PIN configured will
-  no longer register; Face ID, Touch ID and Windows Hello are unaffected.
-- Signing in now ends whatever session the browser arrived with, instead of
-  leaving the previous person's session row alive for its full thirty days.
+- 🗃️ `person.role` is now the permission field with exactly two values, having been incoherent across four places
+- 🗃️ `person.password_hash` is nullable, so a person can exist between being created and choosing a password
+- 🧪 The end-to-end suite builds the app before running, instead of serving whatever was last compiled
+- 🔑 Passkeys require user verification rather than merely preferring it, since the server already enforced it
+- 🚪 Signing in ends whatever session the browser arrived with
 
-### Upgrading from 0.2.x
+### ⬆️ Upgrading from 0.2.x
 
-Your existing people carry `role = 'adult'`, the old column default, which is
-neither `admin` nor `member`. Migration `0020` runs on first boot and turns
-every such row into an administrator — before 0.3.0 anyone who could sign in
-could do anything, so this takes no capability away from anyone. Demote whoever
-should be a member in Settings → Household afterwards. Nothing else is needed:
-`docker compose pull && docker compose up -d` is the whole upgrade.
+Existing people carry `role = 'adult'`, which is neither `admin` nor `member`. Migration `0020` turns every such row into an administrator — before 0.3.0 anyone who could sign in could do anything, so this takes no capability away. Demote whoever should be a member afterwards. `docker compose pull && docker compose up -d` is the whole upgrade.
 
 ## 0.2.1 — 2026-08-14
 
-Reachable by name.
+> Reachable by name.
 
-### Changed
+### 🔧 Changed
 
-- The server sits on plain port 80 by default (`CONTINUUM_PORT` in `.env`
-  overrides it), so with a DHCP reservation and a LAN hostname the whole
-  address is `http://continuum.local` — no port to remember. Compose fails
-  loudly if 80 is already taken, never silently.
-- README documents the local-name setup end to end: the DHCP reservation, the
-  mDNS / router-DNS name, and the `ORIGIN` value that must match the address
-  you browse to.
+- 🌐 The server sits on plain port 80 by default, so the whole address is `http://continuum.local`
+- 📖 The README documents the local-name setup end to end: DHCP reservation, mDNS name, and the matching `ORIGIN`
 
 ## 0.2.0 — 2026-08-14
 
-The ledger grew from watching money to working with it.
+> The ledger grew from watching money to working with it.
 
-### Added
+### ✨ Added
 
-- **Transaction register** (`/transactions`): every row the ledger holds,
-  searchable by text, date, account, category, direction, amount and tag, with
-  per-currency totals over the filtered set. Filing a correction here teaches
-  the categoriser exactly as the review queue does.
-- **Splits**: one payment divided between categories, with a dialog that
-  balances live and refuses to save otherwise. Lines always sum to the parent;
-  every consumer resolves through one seam, so cash flow and filters count the
-  matching share of a split receipt, not the whole of it.
-- **Tags** (`/tags`): cross-cutting projects — a renovation, a holiday — over
-  transactions, split lines, documents, properties and loans, each with a
-  running per-currency total.
-- **Rules engine** (`/rules`): rules with several ANDed conditions
-  (counterparty, note, counter-account, variable symbol, amount range) that
-  set a category and add tags. Each rule's confidence is earned: the Wilson
-  lower bound on how often its suggestions survived your corrections. Contested
-  or unproven rows go to review with the best guess pre-filled; nothing is ever
-  guessed silently, and a match preview shows what a rule would touch before it
-  is saved.
-- **Read-only JSON API** (`/api/v1`): accounts, transactions (with the
-  register's filter params), categories, tags, net worth and cash-flow totals,
-  behind bearer tokens created in Settings and stored only as hashes. Every
-  amount is integer minor units plus a currency code — never a float. No write
-  endpoints, no webhooks.
-- **Tax statements** (`/tax`, toggleable module): what each person's yearly
-  statement said, per country, with free labelled lines instead of a
-  hard-coded jurisdiction. Gross pre-fills from the payslip history and stays
-  whatever you corrected it to; charts show gross, tax paid and effective rate
-  per person and country, money panels split per currency.
-- **Entity links**: a document always belongs to something real — people,
-  flats, brokerage accounts, or subject records like the household or the car
-  — through typed join tables, several at once. Columns on the Documents
-  screen follow renames; a typo can no longer mint a phantom subject. The
-  migration carries every existing free-text subject across and reports what
-  it did in the boot log.
+- 🧾 Transaction register — every row, searchable by text, date, account, category, amount and tag
+- ✂️ Splits — one payment divided between categories, balanced live and refusing to save otherwise
+- 🏷️ Tags across transactions, split lines, documents, properties and loans, each with a running total
+- ⚙️ Rules engine with ANDed conditions, each rule's confidence earned from how its suggestions survived correction
+- 🔌 Read-only JSON API behind bearer tokens — integer minor units plus a currency code, never a float
+- 📊 Tax statements per person and country, with free labelled lines instead of a hard-coded jurisdiction
+- 🔗 Entity links — a document always belongs to something real, through typed join tables
 
-### Changed
+### 🔧 Changed
 
-- Import review pre-selects the engine's suggested category instead of
-  arriving empty.
-- The old single-matcher categoriser and the free-text document subject are
-  gone; both migrations are automatic and lossless.
-- Base control styling now lives once in `app.css` instead of being restated
-  per screen.
+- 📥 Import review pre-selects the engine's suggested category instead of arriving empty
+- 🗃️ The old single-matcher categoriser and the free-text document subject are gone; both migrations are lossless
+- 🎨 Base control styling lives once in `app.css` instead of being restated per screen
 
-### Fixed
+### 🐛 Fixed
 
-- Amount filters compare exactly across currencies with different minor-unit
-  scales (integer cross-multiplication, no floats).
-- Subjects are case-insensitively unique; existing case-duplicates are merged
-  by migration.
-- The rules screen no longer presents a rule's starter prior as history — it
-  shows only what a human actually kept or overrode.
+- 💱 Amount filters compare exactly across currencies with different minor-unit scales, without floats
+- 🔤 Subjects are case-insensitively unique; existing case-duplicates are merged by migration
+- ⚙️ The rules screen no longer presents a rule's starter prior as history
 
 ## 0.1.0 — 2026-08-13
 
-First published version: setup wizard and per-person sign-in; statement import
-for five banks (Fio, Revolut, mBank, Raiffeisenbank, Česká spořitelna) with
-dedup, transfer pairing and correction-learning categorisation; cash-flow
-waterfall; multi-currency accounts with daily CNB rates; property with
-tenancies, floor plans and bills; loans with fixation-period interest verified
-to the haléř; XTB investment imports; retirement projection with a payslip-fed
-salary tracker; documents with shelves and expiry; generated calendar with an
-ics feed; Home Assistant provider seam; scheduled backups; demo mode.
+> First published version.
+
+- 🧙 Setup wizard and per-person sign-in
+- 🏦 Statement import for five banks, with dedup, transfer pairing and correction-learning categorisation
+- 📊 Cash-flow waterfall
+- 💱 Multi-currency accounts with daily CNB rates
+- 🏠 Property with tenancies, floor plans and bills
+- 💰 Loans with fixation-period interest verified to the haléř
+- 📈 XTB investment imports
+- 🏖️ Retirement projection with a payslip-fed salary tracker
+- 📄 Documents with shelves and expiry
+- 📅 Generated calendar with an ics feed
+- 🏡 Home Assistant provider seam
+- 💾 Scheduled backups and demo mode

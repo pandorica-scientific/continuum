@@ -18,6 +18,30 @@ test.use({ storageState: AUTH_STATE });
 const panel = (page: import('@playwright/test').Page, title: string) =>
 	page.locator('section.panel').filter({ hasText: title });
 
+/**
+ * Wait for an arrangement to have been STORED, not merely drawn.
+ *
+ * The board saves optimistically — `Board.svelte` puts the new arrangement on
+ * screen before the PUT that stores it has been answered, which is what makes
+ * dragging feel immediate. So "the panel is visible" says nothing about
+ * whether it has reached the database yet, and a reload that overtakes the
+ * request reads the board from before the change. The assertion after the
+ * reload then judges the wrong board and reports "customising does not stick",
+ * which is exactly the failure these tests exist to catch — indistinguishable
+ * from the real thing, and it only shows up on a machine slow enough to lose
+ * the race, which is to say CI rather than a laptop.
+ *
+ * The endpoint awaits its write before answering, so its response is the
+ * signal. Create the waiter BEFORE the gesture that triggers the save.
+ */
+const layoutStored = (page: import('@playwright/test').Page) =>
+	page.waitForResponse(
+		(response) =>
+			new URL(response.url()).pathname === '/overview/layout' &&
+			response.request().method() === 'PUT' &&
+			response.ok()
+	);
+
 test('the default board is the four panels of the old fixed screen', async ({ page }) => {
 	await page.goto('/overview');
 
@@ -34,8 +58,10 @@ test('adding a panel from the tray survives a reload', async ({ page }) => {
 	await page.getByRole('button', { name: 'Customise' }).click();
 
 	await expect(page.getByText('Add a panel')).toBeVisible();
+	const stored = layoutStored(page);
 	await page.getByRole('button', { name: 'Where the cash sits' }).click();
 	await expect(panel(page, 'Where the cash sits')).toBeVisible();
+	await stored;
 
 	await page.reload();
 	await expect(panel(page, 'Where the cash sits')).toBeVisible();
@@ -56,6 +82,7 @@ test('resizing a panel survives a reload', async ({ page }) => {
 	await handle.scrollIntoViewIfNeeded();
 	const box = await handle.boundingBox();
 	if (!box) throw new Error('the resize handle has no box');
+	const stored = layoutStored(page);
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 	await page.mouse.down();
 	// Two columns wider, well past the five-pixel drag threshold.
@@ -66,6 +93,7 @@ test('resizing a panel survives a reload', async ({ page }) => {
 		.poll(() => slot.evaluate((el) => getComputedStyle(el).gridColumnEnd))
 		.not.toBe(before);
 	const after = await slot.evaluate((el) => getComputedStyle(el).gridColumnEnd);
+	await stored;
 
 	await page.reload();
 	await expect(slot).toHaveCount(1);
@@ -76,8 +104,10 @@ test('removing a panel survives a reload', async ({ page }) => {
 	await page.goto('/overview');
 	await page.getByRole('button', { name: 'Customise' }).click();
 
+	const stored = layoutStored(page);
 	await page.getByRole('button', { name: 'Remove Where the cash sits' }).click();
 	await expect(panel(page, 'Where the cash sits')).toHaveCount(0);
+	await stored;
 
 	await page.reload();
 	await expect(panel(page, 'Where the cash sits')).toHaveCount(0);
@@ -113,6 +143,7 @@ test('reordering on a narrow viewport moves the panel and sticks', async ({ page
 	const before = await titles();
 	expect(before.length).toBeGreaterThan(1);
 
+	const stored = layoutStored(page);
 	await page
 		.getByRole('button', { name: `Move ${before[0].trim().split(/\s+/).slice(1).join(' ')} down` })
 		.click();
@@ -121,6 +152,7 @@ test('reordering on a narrow viewport moves the panel and sticks', async ({ page
 	const after = await titles();
 	expect(after[0]).toBe(before[1]);
 	expect(after[1]).toBe(before[0]);
+	await stored;
 
 	await page.reload();
 	expect(await titles()).toEqual(after);
