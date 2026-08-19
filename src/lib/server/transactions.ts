@@ -45,7 +45,7 @@ function effectiveLineRelation(): SQL {
 	const fee = sql`coalesce(${transaction.feeMinor}, 0::bigint)`;
 	return sql`
 		select
-			(${transaction.amount} - ${fee})::bigint as amount_minor,
+			(${transaction.amountMinor} - ${fee})::bigint as amount_minor,
 			${transaction.categoryId}::text as category_id,
 			-- uuid, not text: the two union branches have to agree, and tag_link
 			-- .target_id is a uuid since 0053 so the comparison must be legal.
@@ -134,18 +134,18 @@ function convertedMagnitude(filter: RegisterFilter, rowFactor?: SQL): SQL {
 	const baseCurrency = filter.baseCurrency.toUpperCase();
 	const baseFactor = (10 ** minorDigits(baseCurrency)).toString();
 	const sourceFactor = rowFactor ?? sql`${baseFactor}::numeric`;
-	const day = sql`coalesce(${transaction.valueDate}, ${transaction.bookedAt})`;
+	const day = sql`coalesce(${transaction.valueOn}, ${transaction.bookedOn})`;
 	const sourceRate = datedCzkRate(sql`${transaction.currency}`, day);
 	const baseRate = datedCzkRate(sql`${baseCurrency}`, day);
 	const faceValue = sql`round(
-		abs(${transaction.amount})::numeric * ${baseFactor}::numeric / (${sourceFactor})::numeric
+		abs(${transaction.amountMinor})::numeric * ${baseFactor}::numeric / (${sourceFactor})::numeric
 	)`;
 
 	return sql`case
-		when ${transaction.currency} = ${baseCurrency} then abs(${transaction.amount})::numeric
+		when ${transaction.currency} = ${baseCurrency} then abs(${transaction.amountMinor})::numeric
 		else coalesce(
 			round(
-				abs(${transaction.amount})::numeric
+				abs(${transaction.amountMinor})::numeric
 				* (${sourceRate})
 				* ${baseFactor}::numeric
 				/ nullif((${baseRate}) * (${sourceFactor})::numeric, 0::numeric)
@@ -160,12 +160,12 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 	const clauses: SQL[] = [];
 
 	if (filter.search) clauses.push(searchable(filter.search));
-	if (filter.from) clauses.push(gte(transaction.bookedAt, filter.from));
-	if (filter.to) clauses.push(lte(transaction.bookedAt, filter.to));
+	if (filter.from) clauses.push(gte(transaction.bookedOn, filter.from));
+	if (filter.to) clauses.push(lte(transaction.bookedOn, filter.to));
 	if (filter.accountId) clauses.push(eq(transaction.accountId, filter.accountId));
 
-	if (filter.direction === 'in') clauses.push(sql`${transaction.amount} > 0`);
-	else if (filter.direction === 'out') clauses.push(sql`${transaction.amount} < 0`);
+	if (filter.direction === 'in') clauses.push(sql`${transaction.amountMinor} > 0`);
+	else if (filter.direction === 'out') clauses.push(sql`${transaction.amountMinor} < 0`);
 
 	// Bounds are magnitudes entered in the household base currency. Conversion
 	// uses value date (falling back to booking date), like every other dated
@@ -245,8 +245,8 @@ export async function registerPage(
 		handle
 			.select({
 				id: transaction.id,
-				bookedAt: transaction.bookedAt,
-				amount: transaction.amount,
+				bookedOn: transaction.bookedOn,
+				amountMinor: transaction.amountMinor,
 				currency: transaction.currency,
 				counterparty: transaction.counterparty,
 				description: transaction.description,
@@ -263,7 +263,7 @@ export async function registerPage(
 			.innerJoin(account, eq(transaction.accountId, account.id))
 			.leftJoin(category, eq(transaction.categoryId, category.id))
 			.where(where)
-			.orderBy(desc(transaction.bookedAt), asc(transaction.id))
+			.orderBy(desc(transaction.bookedOn), asc(transaction.id))
 			.limit(PAGE_SIZE)
 			.offset((filter.page - 1) * PAGE_SIZE),
 		// Only one aggregate row per currency crosses the wire, regardless of
@@ -273,7 +273,7 @@ export async function registerPage(
 			.select({
 				currency: transaction.currency,
 				count: sql<number>`count(distinct ${transaction.id})::integer`.mapWith(Number),
-				sumMinor: sql<bigint>`sum(selected_line.amount_minor)`.mapWith(transaction.amount)
+				sumMinor: sql<bigint>`sum(selected_line.amount_minor)`.mapWith(transaction.amountMinor)
 			})
 			.from(transaction)
 			.innerJoin(sql`lateral (${selectedLines}) selected_line`, sql`true`)
@@ -289,8 +289,8 @@ export async function registerPage(
 	return {
 		rows: rows.map((r) => ({
 			id: r.id,
-			bookedAt: r.bookedAt,
-			amount: r.amount,
+			bookedAt: r.bookedOn,
+			amount: r.amountMinor,
 			currency: r.currency,
 			counterparty: r.counterparty,
 			description: r.description,
@@ -342,7 +342,7 @@ export async function fileTransaction(
 				counterpartyAccount: row.counterpartyAccount,
 				variableSymbol: row.variableSymbol,
 				description: row.description,
-				amountMinor: row.amount,
+				amountMinor: row.amountMinor,
 				currency: row.currency
 			},
 			rules,
@@ -365,7 +365,7 @@ export async function fileTransaction(
 				counterparty: row.counterparty,
 				counterpartyAccount: row.counterpartyAccount,
 				variableSymbol: row.variableSymbol,
-				amountMinor: row.amount,
+				amountMinor: row.amountMinor,
 				currency: row.currency
 			},
 			categoryId,
@@ -374,7 +374,7 @@ export async function fileTransaction(
 		// Only the filed row changed, so the pass has nothing to learn outside its
 		// own neighbourhood — and reading the whole unpaired ledger under row
 		// locks made one click of "File" wait on it.
-		await pairAndCategorise(tx, pairingWindowAround([row.bookedAt]));
+		await pairAndCategorise(tx, pairingWindowAround([row.bookedOn]));
 		return { ok: true };
 	});
 }

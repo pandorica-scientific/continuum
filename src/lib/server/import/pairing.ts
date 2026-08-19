@@ -8,7 +8,7 @@
 export interface PairableTx {
 	id: string;
 	accountId: string;
-	bookedAt: string; // ISO
+	bookedOn: string; // ISO
 	amountMinor: bigint;
 	currency: string;
 	counterparty?: string | null;
@@ -184,7 +184,7 @@ export function proposePairs(txs: PairableTx[], ctx: PairingContext): PairPropos
 	const tokens = nameTokens(ctx.personNames);
 
 	const byDateThenId = (a: PairableTx, b: PairableTx) =>
-		a.bookedAt < b.bookedAt ? -1 : a.bookedAt > b.bookedAt ? 1 : a.id < b.id ? -1 : 1;
+		a.bookedOn < b.bookedOn ? -1 : a.bookedOn > b.bookedOn ? 1 : a.id < b.id ? -1 : 1;
 	const outs = txs.filter((t) => t.amountMinor < 0n).sort(byDateThenId);
 	const ins = txs.filter((t) => t.amountMinor > 0n).sort(byDateThenId);
 
@@ -209,7 +209,7 @@ export function proposePairs(txs: PairableTx[], ctx: PairingContext): PairPropos
 			if (used.has(inn.id) || inn.accountId === out.accountId) continue;
 			const inAccount = accountById.get(inn.accountId);
 			if (!inAccount) continue;
-			const gap = daysBetween(out.bookedAt, inn.bookedAt);
+			const gap = daysBetween(out.bookedOn, inn.bookedOn);
 
 			if (
 				out.currency === inn.currency &&
@@ -226,7 +226,7 @@ export function proposePairs(txs: PairableTx[], ctx: PairingContext): PairPropos
 			) {
 				candidates.push({ inn, tier: 2, gap });
 			} else if (out.currency !== inn.currency && gap <= 3) {
-				const converted = ctx.convert(-out.amountMinor, out.currency, inn.currency, out.bookedAt);
+				const converted = ctx.convert(-out.amountMinor, out.currency, inn.currency, out.bookedOn);
 				if (converted !== null && converted > 0n && inn.amountMinor > 0n) {
 					const diff = Number(converted - inn.amountMinor) / Number(inn.amountMinor);
 					if (Math.abs(diff) <= 0.025) candidates.push({ inn, tier: 3, gap });

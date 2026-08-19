@@ -128,7 +128,7 @@ export async function seedDemo(): Promise<void> {
 			currency: 'CZK',
 			ownerPersonId: jana,
 			balanceMinor: 24350000n,
-			balanceAsOf: new Date().toISOString().slice(0, 10)
+			balanceOn: new Date().toISOString().slice(0, 10)
 		},
 		{
 			id: revolut,
@@ -139,7 +139,7 @@ export async function seedDemo(): Promise<void> {
 			currency: 'EUR',
 			ownerPersonId: petr,
 			balanceMinor: 310000n,
-			balanceAsOf: new Date().toISOString().slice(0, 10)
+			balanceOn: new Date().toISOString().slice(0, 10)
 		}
 	]);
 
@@ -156,8 +156,8 @@ export async function seedDemo(): Promise<void> {
 		rows.push({
 			id: uuidv7(),
 			accountId: fio,
-			bookedAt: `${month}-${day}`,
-			amount,
+			bookedOn: `${month}-${day}`,
+			amountMinor: amount,
 			currency: 'CZK',
 			counterparty,
 			dedupFingerprint: `demo-${rows.length}`,
@@ -245,7 +245,7 @@ export async function seedDemo(): Promise<void> {
 			kind: 'lived',
 			currency: 'CZK',
 			valueMinor: 890000000n,
-			valuedAt: new Date().toISOString().slice(0, 10),
+			valuedOn: new Date().toISOString().slice(0, 10),
 			moneyInMinor: 310000000n,
 			boughtYear: 2019,
 			images: {
@@ -275,7 +275,7 @@ export async function seedDemo(): Promise<void> {
 			kind: 'rented',
 			currency: 'CZK',
 			valueMinor: 610000000n,
-			valuedAt: new Date().toISOString().slice(0, 10),
+			valuedOn: new Date().toISOString().slice(0, 10),
 			moneyInMinor: 180000000n,
 			boughtYear: 2022,
 			images: {
@@ -304,8 +304,8 @@ export async function seedDemo(): Promise<void> {
 		currency: 'CZK',
 		principalMinor: 990000000n,
 		owedMinor: 927000000n,
-		owedAsOf: new Date().toISOString().slice(0, 10),
-		startDate: '2026-02-11',
+		owedOn: new Date().toISOString().slice(0, 10),
+		startsOn: '2026-02-11',
 		regime: 'fixed_period',
 		dayCount: 'act/360',
 		accrualStyle: 'calendar',
@@ -319,13 +319,13 @@ export async function seedDemo(): Promise<void> {
 	await db.insert(loanFixationPeriod).values({
 		id: uuidv7(),
 		loanId: mortgage,
-		startDate: '2026-02-11',
+		startsOn: '2026-02-11',
 		// Relative, and inside the horizon the briefing watches (30 months), so a
 		// demo household has the one thing every mortgage-holder actually has to
 		// think about ahead of time. A fixation running to a fixed 2031 was five
 		// years out from every angle: nothing to decide, nothing to show, and the
 		// first panel on the Overview read "nothing needs a decision right now".
-		endDate: monthShift(thisMonth, 24) + '-11',
+		endsOn: monthShift(thisMonth, 24) + '-11',
 		annualRatePct: '4.44',
 		paymentMinor: 5445600n
 	});
@@ -337,13 +337,13 @@ export async function seedDemo(): Promise<void> {
 		tenantName: 'Martin Dvořák',
 		rentMinor: 1650000n,
 		depositMinor: 3300000n,
-		startDate: '2025-06-01',
+		startsOn: '2025-06-01',
 		// Close enough that the lease and its renewal notice are live decisions.
 		// At ten months out both sat outside every window the briefing watches,
 		// so the demo's tenancy was invisible on the screen that exists to
 		// surface exactly this.
-		endDate: monthShift(thisMonth, 3) + '-01',
-		renewalNoticeDate: monthShift(thisMonth, 1) + '-01'
+		endsOn: monthShift(thisMonth, 3) + '-01',
+		renewalNoticeOn: monthShift(thisMonth, 1) + '-01'
 	});
 
 	// The tenant, and one company the household deals with. Both carry diacritics
@@ -486,7 +486,7 @@ export async function seedDemo(): Promise<void> {
 			valueMinor: v.valueMinor,
 			currency: 'CZK',
 			netProfitPct: v.netProfitPct,
-			asOf: demoPortfolioAsOf
+			valuedAt: demoPortfolioAsOf
 		}))
 	);
 
@@ -503,7 +503,7 @@ export async function seedDemo(): Promise<void> {
 			shelf: 'payslips',
 			addedOn: today,
 			amountMinor: base,
-			amountCurrency: 'CZK',
+			currency: 'CZK',
 			// The month the payslip covers, pinned to its first day.
 			periodOn: `${m}-01`
 		});

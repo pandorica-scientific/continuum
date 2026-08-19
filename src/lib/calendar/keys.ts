@@ -81,7 +81,7 @@ export function isGeneratedKey(key: string): boolean {
  */
 export const WRITABLE_BINDINGS: Record<string, ReadonlySet<string>> = {
 	loan: new Set(['paymentDay']),
-	tenancy: new Set(['endDate', 'renewalNoticeDate']),
+	tenancy: new Set(['endsOn', 'renewalNoticeOn']),
 	document: new Set(['expiresOn'])
 };
 

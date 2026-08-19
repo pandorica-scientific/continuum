@@ -22,10 +22,10 @@
 	// The parent keys this draft by loan. This is intentionally the boundary of
 	// the period in force today, never a maximum historical end date.
 	// svelte-ignore state_referenced_locally
-	let startDate = $state(defaultFixationStart(sim.periods, new Date().toISOString().slice(0, 10)));
+	let startsOn = $state(defaultFixationStart(sim.periods, new Date().toISOString().slice(0, 10)));
 	let rate = $state('');
 	let payment = $state('');
-	let endDate = $state('');
+	let endsOn = $state('');
 	let actionError = $state<string | null>(null);
 
 	const scenario = $derived(decodeScenarioPayload(sim));
@@ -43,13 +43,7 @@
 		if (derivedField === 'rate') return;
 		const annualRatePct = Number(rate.replace(',', '.'));
 		if (!rate.trim() || !Number.isFinite(annualRatePct) || annualRatePct < 0) return;
-		const derived = paymentForRate(
-			scenario.terms,
-			scenario.periods,
-			startDate,
-			annualRatePct,
-			term
-		);
+		const derived = paymentForRate(scenario.terms, scenario.periods, startsOn, annualRatePct, term);
 		if (derived === null) return;
 		payment = formatMinor(derived, currency);
 		derivedField = 'payment';
@@ -64,7 +58,7 @@
 		} catch {
 			return;
 		}
-		const derived = rateForPayment(scenario.terms, scenario.periods, startDate, paymentMinor, term);
+		const derived = rateForPayment(scenario.terms, scenario.periods, startsOn, paymentMinor, term);
 		if (derived === null) return;
 		rate = String(derived);
 		derivedField = 'rate';
@@ -72,14 +66,14 @@
 
 	const whatIf = $derived.by(() => {
 		try {
-			if (!startDate || !rate.trim() || !payment.trim()) return null;
+			if (!startsOn || !rate.trim() || !payment.trim()) return null;
 			const annualRatePct = Number(rate.replace(',', '.'));
 			if (!Number.isFinite(annualRatePct) || annualRatePct < 0 || annualRatePct > 100) return null;
 			const paymentMinor = parseAmountToMinor(payment, currency);
 			if (paymentMinor <= 0n) return null;
 			const next = applyFixation(scenario.periods, {
-				startDate,
-				endDate: endDate || null,
+				startsOn,
+				endsOn: endsOn || null,
 				annualRatePct,
 				paymentMinor
 			});
@@ -105,7 +99,7 @@
 		<input type="hidden" name="loanId" value={loanId} />
 		<ActionError message={actionError} />
 		<div class="fields">
-			<label><span>From</span><input name="startDate" type="date" bind:value={startDate} /></label>
+			<label><span>From</span><input name="startsOn" type="date" bind:value={startsOn} /></label>
 			<label
 				><span>Annual rate %{derivedField === 'rate' ? ' · derived' : ''}</span><input
 					name="rate"
@@ -134,9 +128,9 @@
 			>
 			<label
 				><span>Fixed until (blank = open-ended)</span><input
-					name="endDate"
+					name="endsOn"
 					type="date"
-					bind:value={endDate}
+					bind:value={endsOn}
 				/></label
 			>
 		</div>

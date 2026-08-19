@@ -120,3 +120,50 @@ describe('enum columns', () => {
 		).rejects.toThrow(/person_role_check/);
 	});
 });
+
+/**
+ * `day` on the snapshot and rate tables is a time DIMENSION KEY — what the row
+ * is about — rather than an attribute of it, so it keeps its bare name. Listed
+ * here rather than tolerated silently.
+ */
+const DATE_NAME_EXCEPTIONS = new Set(['day']);
+
+describe('naming conventions', () => {
+	it('every money column is bigint and ends _minor', async () => {
+		const rows = await harness.sql<
+			{ table_name: string; column_name: string; data_type: string }[]
+		>`
+			select table_name, column_name, data_type from information_schema.columns
+			where table_schema = 'public' and column_name like '%\\_minor'`;
+		expect(rows.filter((r) => r.data_type !== 'bigint')).toEqual([]);
+		expect(rows.length).toBeGreaterThan(20);
+	});
+
+	it('no money column hides under another name', async () => {
+		// A bigint that is not a count and not a minor-unit amount is a money column
+		// that got away — `transaction.amount` was exactly that for a long time.
+		const rows = await harness.sql<{ detail: string }[]>`
+			select format('%s.%s', table_name, column_name) as detail
+			from information_schema.columns
+			where table_schema = 'public' and data_type = 'bigint'
+			  and column_name not like '%\\_minor'
+			  and column_name not in ('counter')`;
+		expect(rows.map((r) => r.detail)).toEqual([]);
+	});
+
+	it('a date ends _on and an instant ends _at', async () => {
+		const rows = await harness.sql<
+			{ table_name: string; column_name: string; data_type: string }[]
+		>`
+			select table_name, column_name, data_type from information_schema.columns
+			where table_schema = 'public'
+			  and data_type in ('date', 'timestamp with time zone')`;
+		const wrong = rows
+			.filter((r) => !DATE_NAME_EXCEPTIONS.has(r.column_name))
+			.filter((r) =>
+				r.data_type === 'date' ? !r.column_name.endsWith('_on') : !r.column_name.endsWith('_at')
+			)
+			.map((r) => `${r.table_name}.${r.column_name} (${r.data_type})`);
+		expect(wrong.sort()).toEqual([]);
+	});
+});

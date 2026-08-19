@@ -13,8 +13,8 @@ describe('decodeScenarioPayload', () => {
 			},
 			periods: [
 				{
-					startDate: '2026-01-01',
-					endDate: null,
+					startsOn: '2026-01-01',
+					endsOn: null,
 					annualRatePct: 4.2,
 					paymentMinor: '22000'
 				}
@@ -27,7 +27,7 @@ describe('decodeScenarioPayload', () => {
 			paymentDay: 15
 		});
 		expect(decoded.periods).toEqual([
-			{ startDate: '2026-01-01', endDate: null, annualRatePct: 4.2, paymentMinor: 22000n }
+			{ startsOn: '2026-01-01', endsOn: null, annualRatePct: 4.2, paymentMinor: 22000n }
 		]);
 	});
 });
@@ -54,14 +54,14 @@ describe('defaultFixationStart', () => {
 			defaultFixationStart(
 				[
 					{
-						startDate: '2020-01-01',
-						endDate: '2025-01-01',
+						startsOn: '2020-01-01',
+						endsOn: '2025-01-01',
 						annualRatePct: 2,
 						paymentMinor: '1000'
 					},
 					{
-						startDate: '2025-01-01',
-						endDate: null,
+						startsOn: '2025-01-01',
+						endsOn: null,
 						annualRatePct: 4,
 						paymentMinor: '1200'
 					}
@@ -76,8 +76,8 @@ describe('defaultFixationStart', () => {
 			defaultFixationStart(
 				[
 					{
-						startDate: '2025-01-01',
-						endDate: '2027-01-01',
+						startsOn: '2025-01-01',
+						endsOn: '2027-01-01',
 						annualRatePct: 4,
 						paymentMinor: '1200'
 					}

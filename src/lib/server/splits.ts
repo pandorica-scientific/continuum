@@ -100,10 +100,10 @@ export async function saveSplits(
 
 		const signed = lines.map((line) => {
 			const magnitude = line.amountMinor < 0n ? -line.amountMinor : line.amountMinor;
-			return { ...line, amountMinor: txn.amount < 0n ? -magnitude : magnitude };
+			return { ...line, amountMinor: txn.amountMinor < 0n ? -magnitude : magnitude };
 		});
 
-		const valid = validateSplits(txn.amount, signed);
+		const valid = validateSplits(txn.amountMinor, signed);
 		if (!valid.ok) return valid;
 
 		if (signed.length === 0) return clearSplits(tx, transactionId);

@@ -74,9 +74,9 @@ export interface CreateTenancyInput {
 	tenantName: string;
 	rentMinor: bigint;
 	depositMinor: bigint;
-	startDate: string | null;
-	endDate: string | null;
-	renewalNoticeDate: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
+	renewalNoticeOn: string | null;
 }
 
 function isIsoDay(day: string | null): boolean {
@@ -91,10 +91,10 @@ export async function createTenancy(
 	handle: Db = db
 ): Promise<PropertyMutationResult> {
 	if (
-		!isIsoDay(input.startDate) ||
-		!isIsoDay(input.endDate) ||
-		!isIsoDay(input.renewalNoticeDate) ||
-		(input.startDate !== null && input.endDate !== null && input.startDate > input.endDate)
+		!isIsoDay(input.startsOn) ||
+		!isIsoDay(input.endsOn) ||
+		!isIsoDay(input.renewalNoticeOn) ||
+		(input.startsOn !== null && input.endsOn !== null && input.startsOn > input.endsOn)
 	) {
 		return { ok: false, status: 400, message: 'The tenancy dates are not valid.' };
 	}

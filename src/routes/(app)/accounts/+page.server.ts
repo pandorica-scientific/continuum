@@ -33,7 +33,7 @@ export const load: PageServerLoad = async () => {
 				kind: account.kind,
 				currency: account.currency,
 				balanceMinor: account.balanceMinor,
-				balanceAsOf: account.balanceAsOf,
+				balanceAsOf: account.balanceOn,
 				ownerName: person.name
 			})
 			.from(account)
@@ -115,9 +115,9 @@ export const load: PageServerLoad = async () => {
 		if (!out || !into) return [];
 		return [
 			{
-				date: out.bookedAt,
+				date: out.bookedOn,
 				route: `${accountName(out.accountId)} → ${accountName(into.accountId)}`,
-				amount: `${formatMinor(-out.amount, out.currency)} ${displayCurrency(out.currency)}`
+				amount: `${formatMinor(-out.amountMinor, out.currency)} ${displayCurrency(out.currency)}`
 			}
 		];
 	});

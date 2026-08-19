@@ -484,9 +484,9 @@ export async function tagTotals(handle: Queryable = db): Promise<
 		handle
 			.select({
 				id: transaction.id,
-				bookedAt: transaction.bookedAt,
-				valueDate: transaction.valueDate,
-				amount: transaction.amount,
+				bookedOn: transaction.bookedOn,
+				valueDate: transaction.valueOn,
+				amountMinor: transaction.amountMinor,
 				feeMinor: transaction.feeMinor,
 				categoryId: transaction.categoryId,
 				currency: transaction.currency

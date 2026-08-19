@@ -83,6 +83,13 @@ BEGIN
 	-- ordinality so a COMPOSITE key contributes only its id half: the entity
 	-- foreign keys are (id, entity_kind) -> (id, kind), and `entity_kind` is a
 	-- generated text column that stays text.
+	-- Only tables that actually exist: a suite may build a partial world from a
+	-- subset of the migrations, and a target that is not there yet is not an error.
+	SELECT array_agg(t) INTO targets FROM unnest(targets) AS t
+	WHERE EXISTS (
+		SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t
+	);
+
 	SELECT array_agg(DISTINCT x) INTO cols FROM (
 		SELECT format('%s.id', t) AS x FROM unnest(targets) AS t
 		UNION
@@ -105,7 +112,15 @@ BEGIN
 	-- transfer_pair_id is deliberately not a key, to avoid a cycle with
 	-- transfer_pair's own two references back to transaction. job.subject_id names
 	-- an account or a calendar account, both of which are converting.
-	cols := cols || ARRAY['transaction.transfer_pair_id', 'job.subject_id'];
+	FOR s IN SELECT unnest(ARRAY['transaction.transfer_pair_id', 'job.subject_id']) LOOP
+		IF EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = split_part(s, '.', 1)
+			  AND column_name = split_part(s, '.', 2)
+		) THEN
+			cols := cols || s;
+		END IF;
+	END LOOP;
 
 	FOREACH s IN ARRAY trg_drop LOOP EXECUTE s; END LOOP;
 	FOREACH s IN ARRAY fk_drop LOOP EXECUTE s; END LOOP;

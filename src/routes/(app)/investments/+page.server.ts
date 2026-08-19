@@ -105,7 +105,7 @@ export const load: PageServerLoad = async () => {
 			holding.valueMinor,
 			holding.currency,
 			accountCurrency,
-			holding.asOf.toISOString().slice(0, 10)
+			holding.valuedAt.toISOString().slice(0, 10)
 		)
 	).map(({ item: h, pct, from, to }, i) => {
 		return {
@@ -125,7 +125,7 @@ export const load: PageServerLoad = async () => {
 			h.valueMinor,
 			h.currency,
 			baseCurrency,
-			h.asOf.toISOString().slice(0, 10)
+			h.valuedAt.toISOString().slice(0, 10)
 		);
 		rows.push({
 			id: h.id,

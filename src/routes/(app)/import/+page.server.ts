@@ -79,8 +79,8 @@ export const load: PageServerLoad = async () => {
 		db
 			.select({
 				id: transaction.id,
-				bookedAt: transaction.bookedAt,
-				amount: transaction.amount,
+				bookedOn: transaction.bookedOn,
+				amountMinor: transaction.amountMinor,
 				currency: transaction.currency,
 				counterparty: transaction.counterparty,
 				description: transaction.description,
@@ -92,7 +92,7 @@ export const load: PageServerLoad = async () => {
 			.from(transaction)
 			.innerJoin(account, eq(transaction.accountId, account.id))
 			.where(eq(transaction.reviewState, 'needs_review'))
-			.orderBy(desc(transaction.bookedAt))
+			.orderBy(desc(transaction.bookedOn))
 			.limit(50),
 		db.select().from(category).orderBy(category.groupKey, category.sort),
 		db
@@ -139,11 +139,11 @@ export const load: PageServerLoad = async () => {
 		},
 		review: reviewRows.map((r) => ({
 			id: r.id,
-			date: r.bookedAt,
+			date: r.bookedOn,
 			merchant: r.counterparty ?? r.description ?? '—',
 			reason: r.reviewReason ?? 'needs a look',
-			amount: `${formatMinor(r.amount, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
-			negative: r.amount < 0n,
+			amount: `${formatMinor(r.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
+			negative: r.amountMinor < 0n,
 			isTransfer: proposedLegIds.has(r.id),
 			account: r.accountName,
 			// The engine's best guess, pre-selected below so a contested or

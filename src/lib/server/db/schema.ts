@@ -248,7 +248,7 @@ export const account = pgTable(
 		balanceMinor: bigint('balance_minor', { mode: 'bigint' })
 			.notNull()
 			.default(sql`0`),
-		balanceAsOf: date('balance_as_of'),
+		balanceOn: date('balance_on'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
@@ -417,13 +417,13 @@ export const transaction = pgTable(
 		accountId: uuid('account_id')
 			.notNull()
 			.references(() => account.id, { onDelete: 'cascade' }),
-		bookedAt: date('booked_at').notNull(),
+		bookedOn: date('booked_on').notNull(),
 		// the value date (valuta / data operacji / started date) when the bank
 		// prints one — cashflow prefers it so month-boundary spending lands in
 		// the month the money actually moved
-		valueDate: date('value_date'),
+		valueOn: date('value_on'),
 		// minor units of `currency`; negative = money out. Gross of any fee.
-		amount: bigint('amount', { mode: 'bigint' }).notNull(),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 		// separate bank fee on this movement (positive minor units)
 		feeMinor: bigint('fee_minor', { mode: 'bigint' }),
 		currency: text('currency')
@@ -471,7 +471,7 @@ export const transaction = pgTable(
 		index('transaction_currency_idx').on(table.currency),
 		index('transaction_original_currency_idx').on(table.originalCurrency),
 		uniqueIndex('transaction_dedup_idx').on(table.accountId, table.dedupFingerprint),
-		index('transaction_booked_idx').on(table.bookedAt),
+		index('transaction_booked_on_idx').on(table.bookedOn),
 		index('transaction_review_idx').on(table.reviewState),
 		index('transaction_category_idx').on(table.categoryId),
 		index('transaction_suggested_category_idx').on(table.suggestedCategoryId),
@@ -569,7 +569,7 @@ export const property = pgTable(
 		valueMinor: bigint('value_minor', { mode: 'bigint' })
 			.notNull()
 			.default(sql`0`),
-		valuedAt: date('valued_at'),
+		valuedOn: date('valued_on'),
 		// what went in: deposit, fees, principal repaid — for the appreciation tile
 		moneyInMinor: bigint('money_in_minor', { mode: 'bigint' })
 			.notNull()
@@ -608,10 +608,10 @@ export const tenancy = pgTable(
 		depositMinor: bigint('deposit_minor', { mode: 'bigint' })
 			.notNull()
 			.default(sql`0`),
-		startDate: date('start_date'),
-		endDate: date('end_date'),
+		startsOn: date('starts_on'),
+		endsOn: date('ends_on'),
 		// the date by which a renewal notice must be given
-		renewalNoticeDate: date('renewal_notice_date')
+		renewalNoticeOn: date('renewal_notice_on')
 	},
 	(table) => [index('tenancy_property_idx').on(table.propertyId)]
 );
@@ -664,10 +664,10 @@ export const loan = pgTable(
 			.references(() => currency.code),
 		principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
 		owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
-		owedAsOf: date('owed_as_of'),
+		owedOn: date('owed_on'),
 		ownerPersonId: uuid('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
-		startDate: date('start_date'),
-		endDate: date('end_date'),
+		startsOn: date('starts_on'),
+		endsOn: date('ends_on'),
 		// fixed_period: rate fixed until a date, then re-fixed (mortgages)
 		// fixed_term:   rate fixed for the whole life of the loan
 		// floating:     rate tracks a reference
@@ -717,7 +717,7 @@ export const loanProperty = pgTable(
 );
 
 // Interest is booked per fixation period so a later re-fix never rewrites
-// history. endDate null = open-ended (fixed_term / floating current period).
+// history. ends_on null = open-ended (fixed_term / floating current period).
 // The monthly payment lives here too: when a fixation ends the bank re-quotes
 // the payment together with the rate.
 export const loanFixationPeriod = pgTable(
@@ -727,14 +727,14 @@ export const loanFixationPeriod = pgTable(
 		loanId: uuid('loan_id')
 			.notNull()
 			.references(() => loan.id, { onDelete: 'cascade' }),
-		startDate: date('start_date').notNull(),
-		endDate: date('end_date'),
+		startsOn: date('starts_on').notNull(),
+		endsOn: date('ends_on'),
 		annualRatePct: numeric('annual_rate_pct', { precision: 6, scale: 3 }).notNull(),
 		paymentMinor: bigint('payment_minor', { mode: 'bigint' }).notNull()
 	},
 	(table) => [
 		index('loan_fixation_loan_idx').on(table.loanId),
-		uniqueIndex('loan_fixation_start_idx').on(table.loanId, table.startDate)
+		uniqueIndex('loan_fixation_start_idx').on(table.loanId, table.startsOn)
 	]
 );
 
@@ -788,11 +788,11 @@ export const document = pgTable(
 		// money documents (payslips, bills) can carry the amount they are about
 		// and the month they cover — the salary tracker derives from these
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
-		amountCurrency: text('amount_currency').references(() => currency.code),
+		currency: text('currency').references(() => currency.code),
 		periodOn: date('period_on')
 	},
 	(table) => [
-		index('document_amount_currency_idx').on(table.amountCurrency),
+		index('document_currency_idx').on(table.currency),
 		index('document_shelf_idx').on(table.shelf)
 	]
 );
@@ -858,7 +858,7 @@ export const holding = pgTable(
 			.notNull()
 			.references(() => currency.code),
 		netProfitPct: numeric('net_profit_pct', { precision: 9, scale: 2 }),
-		asOf: timestamp('as_of', { withTimezone: true }).notNull()
+		valuedAt: timestamp('valued_at', { withTimezone: true }).notNull()
 	},
 	(table) => [index('holding_currency_idx').on(table.currency)]
 );
@@ -895,7 +895,7 @@ export const brokerImportState = pgTable(
 // Net-worth history: upserted daily so the sidebar delta and (later) trend
 // charts have real data.
 export const netWorthSnapshot = pgTable(
-	'networth_snapshot',
+	'net_worth_snapshot',
 	{
 		day: date('day').primaryKey(),
 		valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
@@ -903,7 +903,7 @@ export const netWorthSnapshot = pgTable(
 			.notNull()
 			.references(() => currency.code)
 	},
-	(table) => [index('networth_snapshot_currency_idx').on(table.currency)]
+	(table) => [index('net_worth_snapshot_currency_idx').on(table.currency)]
 );
 
 // ---- Splits and tags ----

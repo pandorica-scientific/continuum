@@ -87,27 +87,31 @@ export async function previewMatches(conditions: Condition[], limit = 5): Promis
 	const rows = await db
 		.select({
 			id: transaction.id,
-			bookedAt: transaction.bookedAt,
+			bookedOn: transaction.bookedOn,
 			counterparty: transaction.counterparty,
 			counterpartyAccount: transaction.counterpartyAccount,
 			variableSymbol: transaction.variableSymbol,
 			description: transaction.description,
-			amount: transaction.amount,
+			amountMinor: transaction.amountMinor,
 			currency: transaction.currency
 		})
 		.from(transaction);
 
 	const matching = rows.filter((row: (typeof rows)[number]) =>
-		ruleMatches(candidate, { ...row, amountMinor: row.amount, currency: row.currency } as RowLike)
+		ruleMatches(candidate, {
+			...row,
+			amountMinor: row.amountMinor,
+			currency: row.currency
+		} as RowLike)
 	);
 
 	return {
 		count: matching.length,
 		rows: matching.slice(0, limit).map((row) => ({
 			id: row.id,
-			date: row.bookedAt,
+			date: row.bookedOn,
 			merchant: row.counterparty ?? row.description ?? '—',
-			amountMinor: row.amount,
+			amountMinor: row.amountMinor,
 			currency: row.currency
 		}))
 	};

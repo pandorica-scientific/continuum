@@ -73,7 +73,7 @@ describe('which marker a generated event gets', () => {
 		expect(marker({ table: 'loan', rowId: 'l', field: 'paymentDay' }, 'loanPayments')).toBe(
 			MODULES.loans.emoji
 		);
-		expect(marker({ table: 'tenancy', rowId: 't', field: 'endDate' }, 'propertyDates')).toBe(
+		expect(marker({ table: 'tenancy', rowId: 't', field: 'endsOn' }, 'propertyDates')).toBe(
 			MODULES.property.emoji
 		);
 		expect(marker({ table: 'document', rowId: 'd', field: 'expiresOn' }, 'expiry')).toBe(
@@ -86,10 +86,7 @@ describe('which marker a generated event gets', () => {
 	// rule every one of them would carry the same blurred marker.
 	it('gives two events of the same rule different markers', () => {
 		const passport = marker({ table: 'document', rowId: 'd', field: 'expiresOn' }, 'expiry');
-		const fixation = marker(
-			{ table: 'loanFixationPeriod', rowId: 'p', field: 'endDate' },
-			'expiry'
-		);
+		const fixation = marker({ table: 'loanFixationPeriod', rowId: 'p', field: 'endsOn' }, 'expiry');
 		expect(passport).toBe(MODULES.documents.emoji);
 		expect(fixation).toBe(MODULES.loans.emoji);
 		expect(passport).not.toBe(fixation);

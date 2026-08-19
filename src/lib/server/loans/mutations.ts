@@ -19,8 +19,8 @@ export interface RepaymentInput {
 
 export interface FixationInput {
 	loanId: string;
-	startDate: string;
-	endDate: string | null;
+	startsOn: string;
+	endsOn: string | null;
 	rate: string;
 	payment: string;
 }
@@ -44,8 +44,8 @@ export interface CreateLoanInput {
 	accrualStyle: string;
 	paymentDay: number | null;
 	fixedUntil: string | null;
-	startDate: string | null;
-	endDate: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
 	interestDeductible: boolean;
 	secured: SecuredPropertyInput[];
 	today?: string;
@@ -82,14 +82,14 @@ export async function recordRepayment(
 		const rows = await tx.select().from(loan).where(eq(loan.id, input.loanId)).for('update');
 		const current = rows[0];
 		if (!current) return { ok: false, status: 404, message: 'Loan not found.' };
-		if (current.startDate && happenedOn < current.startDate) {
+		if (current.startsOn && happenedOn < current.startsOn) {
 			return {
 				ok: false,
 				status: 400,
 				message: 'The repayment cannot predate the loan agreement.'
 			};
 		}
-		if (current.owedAsOf && happenedOn < current.owedAsOf) {
+		if (current.owedOn && happenedOn < current.owedOn) {
 			return {
 				ok: false,
 				status: 400,
@@ -138,7 +138,7 @@ export async function recordRepayment(
 		});
 		await tx
 			.update(loan)
-			.set({ owedMinor: newOwed, owedAsOf: happenedOn })
+			.set({ owedMinor: newOwed, owedOn: happenedOn })
 			.where(eq(loan.id, input.loanId));
 		return { ok: true };
 	});
@@ -153,12 +153,12 @@ export async function replaceFixation(
 	input: FixationInput,
 	handle: Db = db
 ): Promise<LoanMutationResult> {
-	const startDate = input.startDate.trim();
-	if (!isIsoDay(startDate)) {
+	const startsOn = input.startsOn.trim();
+	if (!isIsoDay(startsOn)) {
 		return { ok: false, status: 400, message: 'The new fixation needs a valid start date.' };
 	}
-	const endDate = input.endDate?.trim() || null;
-	if (endDate && (!isIsoDay(endDate) || endDate <= startDate)) {
+	const endsOn = input.endsOn?.trim() || null;
+	if (endsOn && (!isIsoDay(endsOn) || endsOn <= startsOn)) {
 		return { ok: false, status: 400, message: 'The fixation end must be after its start.' };
 	}
 
@@ -166,7 +166,7 @@ export async function replaceFixation(
 		const rows = await tx.select().from(loan).where(eq(loan.id, input.loanId)).for('update');
 		const current = rows[0];
 		if (!current) return { ok: false, status: 404, message: 'Loan not found.' };
-		if (current.startDate && startDate < current.startDate) {
+		if (current.startsOn && startsOn < current.startsOn) {
 			return {
 				ok: false,
 				status: 400,
@@ -174,8 +174,8 @@ export async function replaceFixation(
 			};
 		}
 		if (
-			current.endDate &&
-			(startDate >= current.endDate || (endDate !== null && endDate > current.endDate))
+			current.endsOn &&
+			(startsOn >= current.endsOn || (endsOn !== null && endsOn > current.endsOn))
 		) {
 			return { ok: false, status: 400, message: 'The fixation cannot outlast the loan.' };
 		}
@@ -195,22 +195,19 @@ export async function replaceFixation(
 		}
 
 		// A later period is schedule the bank has already agreed, not something a
-		// re-fix may silently destroy. Deleting everything from startDate onward
+		// re-fix may silently destroy. Deleting everything from startsOn onward
 		// threw away a committed follow-on with no warning and no recovery, so
 		// only the period starting on exactly this boundary is replaced.
 		const following = await tx
-			.select({ startDate: loanFixationPeriod.startDate })
+			.select({ startsOn: loanFixationPeriod.startsOn })
 			.from(loanFixationPeriod)
 			.where(
-				and(
-					eq(loanFixationPeriod.loanId, input.loanId),
-					gt(loanFixationPeriod.startDate, startDate)
-				)
+				and(eq(loanFixationPeriod.loanId, input.loanId), gt(loanFixationPeriod.startsOn, startsOn))
 			)
-			.orderBy(asc(loanFixationPeriod.startDate))
+			.orderBy(asc(loanFixationPeriod.startsOn))
 			.limit(1);
-		const nextStart = following[0]?.startDate ?? null;
-		if (endDate && nextStart && endDate > nextStart) {
+		const nextStart = following[0]?.startsOn ?? null;
+		if (endsOn && nextStart && endsOn > nextStart) {
 			return {
 				ok: false,
 				status: 400,
@@ -220,38 +217,35 @@ export async function replaceFixation(
 		// A blank end means "not fixed to a date", so it runs until the next
 		// agreed period or stays open. Defaulting to the loan's maturity wrote a
 		// decades-long fixation nobody entered and the dialog never previewed.
-		const persistedEndDate = endDate ?? nextStart;
+		const persistedEndDate = endsOn ?? nextStart;
 
 		await tx
 			.delete(loanFixationPeriod)
 			.where(
-				and(
-					eq(loanFixationPeriod.loanId, input.loanId),
-					eq(loanFixationPeriod.startDate, startDate)
-				)
+				and(eq(loanFixationPeriod.loanId, input.loanId), eq(loanFixationPeriod.startsOn, startsOn))
 			);
 		await tx
 			.update(loanFixationPeriod)
-			.set({ endDate: startDate })
+			.set({ endsOn: startsOn })
 			.where(
 				and(
 					eq(loanFixationPeriod.loanId, input.loanId),
-					lt(loanFixationPeriod.startDate, startDate),
-					or(isNull(loanFixationPeriod.endDate), gt(loanFixationPeriod.endDate, startDate))
+					lt(loanFixationPeriod.startsOn, startsOn),
+					or(isNull(loanFixationPeriod.endsOn), gt(loanFixationPeriod.endsOn, startsOn))
 				)
 			);
 		await tx.insert(loanFixationPeriod).values({
 			id: uuidv7(),
 			loanId: input.loanId,
-			startDate,
-			endDate: persistedEndDate,
+			startsOn,
+			endsOn: persistedEndDate,
 			annualRatePct: String(rate),
 			paymentMinor: payment
 		});
 		await tx.insert(loanEvent).values({
 			id: uuidv7(),
 			loanId: input.loanId,
-			happenedOn: startDate,
+			happenedOn: startsOn,
 			kind: 'refix',
 			amountMinor: payment,
 			note: `${rate.toFixed(2)}%${persistedEndDate ? ` to ${persistedEndDate}` : ''}`
@@ -306,25 +300,25 @@ export async function createLoan(
 		return { ok: false, status: 400, message: 'Choose a valid rate regime.' };
 	}
 	const observedOn = (input.today ?? today()).trim();
-	const startDate = input.startDate?.trim() || null;
-	const endDate = input.endDate?.trim() || null;
+	const startsOn = input.startsOn?.trim() || null;
+	const endsOn = input.endsOn?.trim() || null;
 	const fixedUntil = input.fixedUntil?.trim() || null;
 	if (
 		!isIsoDay(observedOn) ||
-		(startDate !== null && !isIsoDay(startDate)) ||
-		(endDate !== null && !isIsoDay(endDate)) ||
+		(startsOn !== null && !isIsoDay(startsOn)) ||
+		(endsOn !== null && !isIsoDay(endsOn)) ||
 		(fixedUntil !== null && !isIsoDay(fixedUntil))
 	) {
 		return { ok: false, status: 400, message: 'Loan dates must be valid calendar dates.' };
 	}
-	const scheduleStart = startDate ?? observedOn;
-	if (owed > 0n && startDate && startDate > observedOn) {
+	const scheduleStart = startsOn ?? observedOn;
+	if (owed > 0n && startsOn && startsOn > observedOn) {
 		return { ok: false, status: 400, message: 'A loan with a balance cannot start in the future.' };
 	}
-	if (owed > 0n && endDate && endDate < observedOn) {
+	if (owed > 0n && endsOn && endsOn < observedOn) {
 		return { ok: false, status: 400, message: 'An ended loan cannot keep a current balance.' };
 	}
-	if (endDate && endDate <= scheduleStart) {
+	if (endsOn && endsOn <= scheduleStart) {
 		return { ok: false, status: 400, message: 'The loan end must be after its start.' };
 	}
 	if (regime === 'fixed_period' && !fixedUntil) {
@@ -337,7 +331,7 @@ export async function createLoan(
 	if (fixedUntil && fixedUntil <= scheduleStart) {
 		return { ok: false, status: 400, message: 'The fixation end must be after its start.' };
 	}
-	if (fixedUntil && endDate && fixedUntil > endDate) {
+	if (fixedUntil && endsOn && fixedUntil > endsOn) {
 		return { ok: false, status: 400, message: 'The fixation cannot outlast the loan.' };
 	}
 	const propertyIds = input.secured.map((link) => link.propertyId);
@@ -404,9 +398,9 @@ export async function createLoan(
 			currency,
 			principalMinor: principal,
 			owedMinor: owed,
-			owedAsOf: observedOn,
-			startDate,
-			endDate,
+			owedOn: observedOn,
+			startsOn,
+			endsOn,
 			regime,
 			dayCount,
 			accrualStyle,
@@ -426,8 +420,8 @@ export async function createLoan(
 		await tx.insert(loanFixationPeriod).values({
 			id: uuidv7(),
 			loanId,
-			startDate: startDate ?? observedOn,
-			endDate: regime === 'fixed_period' ? fixedUntil : null,
+			startsOn: startsOn ?? observedOn,
+			endsOn: regime === 'fixed_period' ? fixedUntil : null,
 			annualRatePct: String(rate),
 			paymentMinor: payment
 		});

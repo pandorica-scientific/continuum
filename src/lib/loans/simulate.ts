@@ -71,7 +71,7 @@ export function applyRepayment(
 	};
 }
 
-/** Periods after a re-fix from `startDate`: anything reaching past that date
+/** Periods after a re-fix from `startsOn`: anything reaching past that date
  *  is closed there, the new period takes over. History never rewrites, and
  *  neither does already-agreed future schedule — a period starting later
  *  survives, and a blank end runs until it begins. This mirrors what
@@ -79,20 +79,20 @@ export function applyRepayment(
  *  will not produce. */
 export function applyFixation(
 	periods: FixationPeriod[],
-	input: { startDate: string; endDate: string | null; annualRatePct: number; paymentMinor: bigint }
+	input: { startsOn: string; endsOn: string | null; annualRatePct: number; paymentMinor: bigint }
 ): FixationPeriod[] {
 	const later = periods
-		.filter((p) => p.startDate > input.startDate)
-		.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0));
+		.filter((p) => p.startsOn > input.startsOn)
+		.sort((a, b) => (a.startsOn < b.startsOn ? -1 : a.startsOn > b.startsOn ? 1 : 0));
 	return [
 		...periods
-			.filter((p) => p.startDate < input.startDate)
+			.filter((p) => p.startsOn < input.startsOn)
 			.map((p) =>
-				p.endDate === null || p.endDate > input.startDate ? { ...p, endDate: input.startDate } : p
+				p.endsOn === null || p.endsOn > input.startsOn ? { ...p, endsOn: input.startsOn } : p
 			),
 		{
-			startDate: input.startDate,
-			endDate: input.endDate ?? later[0]?.startDate ?? null,
+			startsOn: input.startsOn,
+			endsOn: input.endsOn ?? later[0]?.startsOn ?? null,
 			annualRatePct: input.annualRatePct,
 			paymentMinor: input.paymentMinor
 		},

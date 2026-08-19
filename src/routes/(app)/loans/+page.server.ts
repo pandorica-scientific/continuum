@@ -39,8 +39,8 @@ function fixationPill(regime: string, periods: FixationPeriod[], paidOff: boolea
 	const current = periodForMonth(periods, monthNow());
 	if (regime === 'floating') return { label: 'floating rate', hue: 'yellow' as const };
 	if (regime === 'fixed_term') return { label: 'fixed for the whole term', hue: 'teal' as const };
-	if (current?.endDate) {
-		const end = new Date(current.endDate);
+	if (current?.endsOn) {
+		const end = new Date(current.endsOn);
 		const label = `fixed to ${end.toLocaleString('en', { month: 'short' })} ${end.getFullYear()}`;
 		const monthsLeft =
 			(end.getFullYear() - new Date().getFullYear()) * 12 + end.getMonth() - new Date().getMonth();
@@ -89,8 +89,8 @@ export const load: PageServerLoad = async () => {
 		const periods: FixationPeriod[] = allPeriods
 			.filter((p) => p.loanId === l.id)
 			.map((p) => ({
-				startDate: p.startDate,
-				endDate: p.endDate,
+				startsOn: p.startsOn,
+				endsOn: p.endsOn,
 				annualRatePct: Number(p.annualRatePct),
 				paymentMinor: p.paymentMinor
 			}));
@@ -100,7 +100,7 @@ export const load: PageServerLoad = async () => {
 			// preview it was decided from cannot disagree: a balance observed
 			// after the payment day already reflects this month's instalment.
 			owedAsOfMonth: anchorMonthFor(
-				l.owedAsOf ?? new Date().toISOString().slice(0, 10),
+				l.owedOn ?? new Date().toISOString().slice(0, 10),
 				l.paymentDay
 			),
 			dayCount: (DAY_COUNTS as readonly string[]).includes(l.dayCount)
@@ -157,7 +157,7 @@ export const load: PageServerLoad = async () => {
 		// Beyond the last fixation the engine carries the last known terms
 		// forward (documented re-fix-gap behaviour) — say so on the chart.
 		const lastKnown = periods.reduce<string | null>(
-			(max, p) => (p.endDate && (!max || p.endDate > max) ? p.endDate : max),
+			(max, p) => (p.endsOn && (!max || p.endsOn > max) ? p.endsOn : max),
 			null
 		);
 		const lastMonth = fullSchedule.at(-1)?.month ?? null;
@@ -196,7 +196,7 @@ export const load: PageServerLoad = async () => {
 				{ label: 'Rate', value: rate !== null ? `${rate.toFixed(2)}%` : '—', color: 'var(--fg2)' },
 				{
 					label: 'Ends',
-					value: freeYear !== null ? String(freeYear) : (l.endDate?.slice(0, 4) ?? '—'),
+					value: freeYear !== null ? String(freeYear) : (l.endsOn?.slice(0, 4) ?? '—'),
 					color: 'var(--fg2)'
 				}
 			],
@@ -222,8 +222,8 @@ export const load: PageServerLoad = async () => {
 					paymentDay: terms.paymentDay
 				},
 				periods: periods.map((p) => ({
-					startDate: p.startDate,
-					endDate: p.endDate,
+					startsOn: p.startsOn,
+					endsOn: p.endsOn,
 					annualRatePct: p.annualRatePct,
 					paymentMinor: String(p.paymentMinor)
 				}))
@@ -283,8 +283,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const result = await replaceFixation({
 			loanId: asRowId(form.get('loanId')),
-			startDate: String(form.get('startDate') ?? ''),
-			endDate: String(form.get('endDate') ?? '') || null,
+			startsOn: String(form.get('startsOn') ?? ''),
+			endsOn: String(form.get('endsOn') ?? '') || null,
 			rate: String(form.get('rate') ?? ''),
 			payment: String(form.get('payment') ?? '')
 		});
@@ -320,8 +320,8 @@ export const actions: Actions = {
 			accrualStyle: String(form.get('accrualStyle') ?? 'payment'),
 			paymentDay,
 			fixedUntil: String(form.get('fixedUntil') ?? '') || null,
-			startDate: String(form.get('startDate') ?? '') || null,
-			endDate: String(form.get('endDate') ?? '') || null,
+			startsOn: String(form.get('startsOn') ?? '') || null,
+			endsOn: String(form.get('endsOn') ?? '') || null,
 			interestDeductible: form.get('deductible') === 'on',
 			secured
 		});

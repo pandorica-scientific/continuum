@@ -49,7 +49,7 @@ export async function retirementInputs(baseCurrency: string): Promise<RetireInpu
 	let liquid = 0;
 	for (const a of accounts) {
 		if (a.kind === 'brokerage') continue;
-		liquid += toBase(a.balanceMinor, a.currency, a.balanceAsOf ?? today);
+		liquid += toBase(a.balanceMinor, a.currency, a.balanceOn ?? today);
 	}
 	if (snapshots[0])
 		liquid += toBase(snapshots[0].valueMinor, snapshots[0].currency, snapshots[0].day);
@@ -62,7 +62,7 @@ export async function retirementInputs(baseCurrency: string): Promise<RetireInpu
 
 	let propertyValue = 0;
 	for (const p of properties)
-		propertyValue += toBase(p.valueMinor, p.currency, p.valuedAt ?? today);
+		propertyValue += toBase(p.valueMinor, p.currency, p.valuedOn ?? today);
 
 	const year = new Date().getFullYear();
 	const month = today.slice(0, 7);
@@ -72,15 +72,15 @@ export async function retirementInputs(baseCurrency: string): Promise<RetireInpu
 		const loanPeriods = periods
 			.filter((period) => period.loanId === l.id)
 			.map((period) => ({
-				startDate: period.startDate,
-				endDate: period.endDate,
+				startsOn: period.startsOn,
+				endsOn: period.endsOn,
 				annualRatePct: Number(period.annualRatePct),
 				paymentMinor: period.paymentMinor
 			}));
 		const schedule = amortise(
 			{
 				owedMinor: l.owedMinor,
-				owedAsOfMonth: anchorMonthFor(l.owedAsOf ?? today, l.paymentDay),
+				owedAsOfMonth: anchorMonthFor(l.owedOn ?? today, l.paymentDay),
 				dayCount: (DAY_COUNTS as readonly string[]).includes(l.dayCount)
 					? (l.dayCount as DayCount)
 					: '30/360',
@@ -91,7 +91,7 @@ export async function retirementInputs(baseCurrency: string): Promise<RetireInpu
 			`${year + HORIZON}-${month.slice(5)}`
 		);
 
-		mortgageOwedByYear[0] += toBase(l.owedMinor, l.currency, l.owedAsOf ?? today);
+		mortgageOwedByYear[0] += toBase(l.owedMinor, l.currency, l.owedOn ?? today);
 		let rowIndex = -1;
 		for (let offset = 1; offset <= HORIZON; offset++) {
 			const targetMonth = `${year + offset}-${month.slice(5)}`;

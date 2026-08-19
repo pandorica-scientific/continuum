@@ -280,8 +280,8 @@ describe('write-back into the ledger', () => {
 			currency: 'CZK',
 			principalMinor: 990000000n,
 			owedMinor: 927000000n,
-			owedAsOf: today,
-			startDate: '2020-01-01',
+			owedOn: today,
+			startsOn: '2020-01-01',
 			regime: 'fixed_period',
 			dayCount: 'act/360',
 			accrualStyle: 'calendar',
@@ -291,8 +291,8 @@ describe('write-back into the ledger', () => {
 		await testDb.insert(schema.loanFixationPeriod).values({
 			id: randomUUID(),
 			loanId: id,
-			startDate: '2020-01-01',
-			endDate: '2035-01-01',
+			startsOn: '2020-01-01',
+			endsOn: '2035-01-01',
 			annualRatePct: '4.44',
 			paymentMinor: 5445600n
 		});

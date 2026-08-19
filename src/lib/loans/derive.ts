@@ -20,13 +20,13 @@ const STEPS = 40;
 function payoffMonth(
 	terms: LoanTerms,
 	periods: FixationPeriod[],
-	startDate: string,
+	startsOn: string,
 	annualRatePct: number,
 	paymentMinor: bigint
 ): string | null {
 	const next = applyFixation(periods, {
-		startDate,
-		endDate: null,
+		startsOn,
+		endsOn: null,
 		annualRatePct,
 		paymentMinor
 	});
@@ -43,7 +43,7 @@ function payoffMonth(
 export function paymentForRate(
 	terms: LoanTerms,
 	periods: FixationPeriod[],
-	startDate: string,
+	startsOn: string,
 	annualRatePct: number,
 	targetMonth: string | null
 ): bigint | null {
@@ -55,14 +55,14 @@ export function paymentForRate(
 	// A schedule that never clears is *later* than any target. Coalescing null to
 	// an empty string sorted it before every date instead, so an impossible
 	// request looked satisfiable and the search returned a bound rather than null.
-	const fastest = payoffMonth(terms, periods, startDate, annualRatePct, high0);
+	const fastest = payoffMonth(terms, periods, startsOn, annualRatePct, high0);
 	if (fastest === null || fastest > targetMonth) return null;
 	let high = high0;
 
 	for (let step = 0; step < STEPS && low < high; step++) {
 		const mid = (low + high) / 2n;
 		if (mid <= low) break;
-		const reached = payoffMonth(terms, periods, startDate, annualRatePct, mid);
+		const reached = payoffMonth(terms, periods, startsOn, annualRatePct, mid);
 		// Too small a payment never clears at all, which reads as "later".
 		if (reached === null || reached > targetMonth) low = mid;
 		else high = mid;
@@ -82,7 +82,7 @@ export function paymentForRate(
 export function rateForPayment(
 	terms: LoanTerms,
 	periods: FixationPeriod[],
-	startDate: string,
+	startsOn: string,
 	paymentMinor: bigint,
 	targetMonth: string | null
 ): number | null {
@@ -91,14 +91,14 @@ export function rateForPayment(
 	// A zero rate is the fastest any payment can clear; if that is still too
 	// slow — or never clears at all — the payment is too small and no rate will
 	// rescue it.
-	const fastest = payoffMonth(terms, periods, startDate, 0, paymentMinor);
+	const fastest = payoffMonth(terms, periods, startsOn, 0, paymentMinor);
 	if (fastest === null || fastest > targetMonth) return null;
 
 	let low = 0;
 	let high = 100;
 	for (let step = 0; step < STEPS; step++) {
 		const mid = (low + high) / 2;
-		const reached = payoffMonth(terms, periods, startDate, mid, paymentMinor);
+		const reached = payoffMonth(terms, periods, startsOn, mid, paymentMinor);
 		if (reached === null || reached > targetMonth) high = mid;
 		else low = mid;
 	}

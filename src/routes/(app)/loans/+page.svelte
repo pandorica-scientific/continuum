@@ -237,8 +237,8 @@
 						placeholder="15"
 					/></label
 				>
-				<label><span>Started</span><input name="startDate" type="date" /></label>
-				<label><span>Ends (contract)</span><input name="endDate" type="date" /></label>
+				<label><span>Started</span><input name="startsOn" type="date" /></label>
+				<label><span>Ends (contract)</span><input name="endsOn" type="date" /></label>
 			</div>
 			{#if data.properties.length}
 				<fieldset class="secured">

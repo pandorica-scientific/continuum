@@ -241,8 +241,8 @@
 									placeholder="33 000"
 								/></label
 							>
-							<label><span>Since</span><input name="startDate" type="date" /></label>
-							<label><span>Lease ends</span><input name="endDate" type="date" /></label>
+							<label><span>Since</span><input name="startsOn" type="date" /></label>
+							<label><span>Lease ends</span><input name="endsOn" type="date" /></label>
 							<label
 								><span>Renewal notice by</span><input name="renewalNoticeDate" type="date" /></label
 							>

@@ -3,10 +3,10 @@ import { bindingIsWritable, writeBackValue } from '$lib/server/calendar/bindings
 import type { OriginBinding } from '$lib/calendar/keys';
 
 const loan: OriginBinding = { table: 'loan', rowId: 'l1', field: 'paymentDay' };
-const leaseEnd: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'endDate' };
-const notice: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'renewalNoticeDate' };
+const leaseEnd: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'endsOn' };
+const notice: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'renewalNoticeOn' };
 const docExpiry: OriginBinding = { table: 'document', rowId: 'd1', field: 'expiresOn' };
-const fixation: OriginBinding = { table: 'loanFixationPeriod', rowId: 'p1', field: 'endDate' };
+const fixation: OriginBinding = { table: 'loanFixationPeriod', rowId: 'p1', field: 'endsOn' };
 
 describe('which bindings accept a write-back', () => {
 	it('accepts the three date fields that are genuinely a scheduling fact', () => {

@@ -142,20 +142,20 @@ export async function missingRateCurrencies(
 	// every app-layout load.
 	const rows = (await handle.execute(sql`
 		select currency, min(day)::text as day from (
-			select currency, coalesce(balance_as_of, current_date) as day from ${account}
-			union all select currency, coalesce(value_date, booked_at) as day from ${transaction}
-			union all select currency, coalesce(owed_as_of, current_date) as day from ${loan}
-			union all select currency, as_of::date as day from ${holding}
-			union all select currency, coalesce(valued_at, current_date) as day from ${property}
+			select currency, coalesce(balance_on, current_date) as day from ${account}
+			union all select currency, coalesce(value_on, booked_on) as day from ${transaction}
+			union all select currency, coalesce(owed_on, current_date) as day from ${loan}
+			union all select currency, valued_at::date as day from ${holding}
+			union all select currency, coalesce(valued_on, current_date) as day from ${property}
 			union all select currency, day from ${portfolioSnapshot}
-			union all select ${storedDocument.amountCurrency},
+			union all select ${storedDocument.currency},
 				-- The month the document covers when it names one, else the day it was
 				-- filed. This used to test a 'YYYY-MM' string against a regex and cast
 				-- it, which silently skipped any value written another way; period_on
 				-- is a real date since 0052 and needs neither.
 				coalesce(${storedDocument.periodOn}, ${storedDocument.addedOn})
 			from ${storedDocument}
-			where ${storedDocument.amountCurrency} is not null
+			where ${storedDocument.currency} is not null
 				and ${storedDocument.amountMinor} is not null
 			union all select currency, happened_at::date from ${brokerOperation}
 			union all select currency, opened_at::date from ${brokerPosition}

@@ -54,7 +54,7 @@ export async function flowData(period: Period): Promise<FlowData> {
 	// The value date decides which month a movement belongs to when the bank
 	// provides one — card payments started in June and booked in July count in
 	// June, where the money actually moved.
-	const effectiveDate = sql`coalesce(${transaction.valueDate}, ${transaction.bookedAt})`;
+	const effectiveDate = sql`coalesce(${transaction.valueOn}, ${transaction.bookedOn})`;
 	const [rows, categories] = await Promise.all([
 		db
 			.select()
@@ -84,7 +84,7 @@ export async function flowData(period: Period): Promise<FlowData> {
 				line.amountMinor,
 				t.currency,
 				base,
-				t.valueDate ?? t.bookedAt
+				t.valueOn ?? t.bookedOn
 			);
 			const major = toMajor(converted, base);
 			if (line.categoryId) {
@@ -185,9 +185,9 @@ export async function monthlyHistory(): Promise<MonthBar[]> {
 
 	const byMonth = new Map<string, { earned: number; spent: number }>();
 	for (const t of rows) {
-		const effective = t.valueDate ?? t.bookedAt;
+		const effective = t.valueOn ?? t.bookedOn;
 		const month = effective.slice(0, 7);
-		const net = t.amount - (t.feeMinor ?? 0n);
+		const net = t.amountMinor - (t.feeMinor ?? 0n);
 		const converted = convertOrFace(rates, net, t.currency, base, effective);
 		const major = toMajor(converted, base);
 		if (!byMonth.has(month)) byMonth.set(month, { earned: 0, spent: 0 });

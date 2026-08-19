@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { effectiveLines, matchingLineTotal } from '$lib/transactions/lines';
 
-const txn = (amount: bigint, categoryId: string | null = null, feeMinor: bigint | null = null) => ({
-	amount,
+const txn = (
+	amountMinor: bigint,
+	categoryId: string | null = null,
+	feeMinor: bigint | null = null
+) => ({
+	amountMinor,
 	feeMinor,
 	categoryId
 });

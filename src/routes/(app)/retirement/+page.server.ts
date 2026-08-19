@@ -136,7 +136,7 @@ export const load: PageServerLoad = async () => {
 				// months, which is what an <input type="month"> gives and takes.
 				periodMonth: d.periodOn!.slice(0, 7),
 				amountMinor: d.amountMinor!,
-				currency: d.amountCurrency ?? baseCurrency,
+				currency: d.currency ?? baseCurrency,
 				file: d.storedName
 			}))
 			.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1));
@@ -243,7 +243,7 @@ export const actions: Actions = {
 				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
 				addedOn: new Date().toISOString().slice(0, 10),
 				amountMinor,
-				amountCurrency: baseCurrency,
+				currency: baseCurrency,
 				periodOn: `${periodMonth}-01`
 			});
 			await tx
@@ -260,7 +260,7 @@ export const actions: Actions = {
 		const rows = await db.select().from(document).where(eq(document.id, id));
 		const doc = rows[0];
 		if (!doc) return fail(404, { message: 'Payslip not found.' });
-		const currency = payslipEditCurrency(doc.amountCurrency, await getBaseCurrency());
+		const currency = payslipEditCurrency(doc.currency, await getBaseCurrency());
 		let amountMinor: bigint;
 		try {
 			amountMinor = parseAmountToMinor(String(form.get('amount') ?? ''), currency);
@@ -287,10 +287,7 @@ export const actions: Actions = {
 				await learnAmountLabel(owner.name, amountMinor, reading.candidates);
 			}
 		}
-		await db
-			.update(document)
-			.set({ amountMinor, amountCurrency: currency })
-			.where(eq(document.id, id));
+		await db.update(document).set({ amountMinor, currency: currency }).where(eq(document.id, id));
 		return { ok: true };
 	},
 

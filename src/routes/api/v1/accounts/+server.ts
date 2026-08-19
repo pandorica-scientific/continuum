@@ -13,7 +13,7 @@ export const GET: RequestHandler = async () => {
 			bank: a.bank,
 			kind: a.kind,
 			balance: money(a.balanceMinor, a.currency),
-			balanceAsOf: a.balanceAsOf
+			balanceAsOf: a.balanceOn
 		}))
 	});
 };

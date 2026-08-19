@@ -71,18 +71,17 @@ const leaseExpiry: Source = async () => {
 	]);
 	const items: BriefingItem[] = [];
 	for (const t of tenancies) {
-		if (!t.endDate || t.endDate < today) continue;
-		const days = Math.ceil((new Date(t.endDate).getTime() - Date.now()) / 86400000);
+		if (!t.endsOn || t.endsOn < today) continue;
+		const days = Math.ceil((new Date(t.endsOn).getTime() - Date.now()) / 86400000);
 		if (days > 120) continue;
 		const propertyName = properties.find((p) => p.id === t.propertyId)?.name ?? 'the flat';
-		const noticeDue =
-			t.renewalNoticeDate && t.renewalNoticeDate >= today ? t.renewalNoticeDate : null;
+		const noticeDue = t.renewalNoticeOn && t.renewalNoticeOn >= today ? t.renewalNoticeOn : null;
 		items.push({
 			emoji: '🔑',
 			kind: 'Tenancy',
 			pill: `${days} days`,
 			hue: days <= 60 ? 'yellow' : 'grey',
-			title: `${propertyName} lease ends ${t.endDate}`,
+			title: `${propertyName} lease ends ${t.endsOn}`,
 			detail: noticeDue
 				? `${t.tenantName} is the tenant. Renewal notice is due by ${noticeDue}.`
 				: `${t.tenantName} is the tenant.`,
@@ -103,14 +102,14 @@ const fixationHorizon: Source = async () => {
 	for (const l of loans) {
 		if (l.owedMinor <= 0n || l.regime !== 'fixed_period') continue;
 		const current = periods.find(
-			(p) => p.loanId === l.id && p.startDate <= today && (p.endDate === null || p.endDate > today)
+			(p) => p.loanId === l.id && p.startsOn <= today && (p.endsOn === null || p.endsOn > today)
 		);
-		if (!current?.endDate) continue;
+		if (!current?.endsOn) continue;
 		const months = Math.round(
-			(new Date(current.endDate).getTime() - Date.now()) / (30.44 * 86400000)
+			(new Date(current.endsOn).getTime() - Date.now()) / (30.44 * 86400000)
 		);
 		if (months > 30) continue;
-		const end = new Date(current.endDate);
+		const end = new Date(current.endsOn);
 		const pill = `${end.toLocaleString('en', { month: 'short' })} ${end.getFullYear()}`;
 		items.push({
 			emoji: '🏦',
@@ -198,7 +197,7 @@ const overspend: Source = async () => {
 
 	const rows = groupMonthlySpending(
 		txns.flatMap((t) => {
-			const day = t.valueDate ?? t.bookedAt;
+			const day = t.valueOn ?? t.bookedOn;
 			return effectiveLines(t, splitsByTxn.get(t.id) ?? []).map((line) => ({
 				day,
 				currency: t.currency,

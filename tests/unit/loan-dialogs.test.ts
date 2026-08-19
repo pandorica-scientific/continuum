@@ -13,8 +13,8 @@ const sim = {
 	},
 	periods: [
 		{
-			startDate: '2025-01-01',
-			endDate: null,
+			startsOn: '2025-01-01',
+			endsOn: null,
 			annualRatePct: 4.2,
 			paymentMinor: '45000'
 		}

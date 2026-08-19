@@ -31,7 +31,7 @@ describe('normaliseTagName', () => {
 describe('rollUpTagTotals', () => {
 	const txn = {
 		id: 't1',
-		amount: -4550n,
+		amountMinor: -4550n,
 		feeMinor: null,
 		categoryId: null,
 		currency: 'CZK'
@@ -85,7 +85,7 @@ describe('rollUpTagTotals', () => {
 	it('keeps each effective amount at its own value date for later FX conversion', () => {
 		const datedTxn = {
 			...txn,
-			bookedAt: '2026-04-02',
+			bookedOn: '2026-04-02',
 			valueDate: '2026-04-01'
 		};
 		const amounts = rollUpTaggedAmounts([datedTxn], splits, {

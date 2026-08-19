@@ -153,7 +153,7 @@ const builders: Record<string, Builder> = {
 					emoji: account.emoji,
 					currency: account.currency,
 					balanceMinor: account.balanceMinor,
-					balanceAsOf: account.balanceAsOf
+					balanceAsOf: account.balanceOn
 				})
 				.from(account)
 				.orderBy(account.createdAt, account.id),
@@ -202,7 +202,7 @@ const builders: Record<string, Builder> = {
 			convertOrFace(rates, minor, currency, ctx.baseCurrency, on);
 
 		const rows = properties.map((p) => {
-			const value = toBase(p.valueMinor, p.currency, p.valuedAt ?? day);
+			const value = toBase(p.valueMinor, p.currency, p.valuedOn ?? day);
 			// A mortgage can cover more than one flat, so only its share counts here.
 			const owed = links
 				.filter((link) => link.propertyId === p.id)
@@ -210,7 +210,7 @@ const builders: Record<string, Builder> = {
 					const l = loans.find((candidate) => candidate.id === link.loanId);
 					if (!l) return sum;
 					const shareOfLoan = Number(link.sharePct ?? 100) / 100;
-					const owedBase = toBase(l.owedMinor, l.currency, l.owedAsOf ?? day);
+					const owedBase = toBase(l.owedMinor, l.currency, l.owedOn ?? day);
 					return sum + BigInt(Math.round(Number(owedBase) * shareOfLoan));
 				}, 0n);
 			const equity = value - owed;
@@ -360,10 +360,10 @@ const builders: Record<string, Builder> = {
 	activity: async (ctx) => {
 		const rows = await db
 			.select({
-				bookedAt: transaction.bookedAt,
+				bookedOn: transaction.bookedOn,
 				counterparty: transaction.counterparty,
 				description: transaction.description,
-				amount: transaction.amount,
+				amountMinor: transaction.amountMinor,
 				currency: transaction.currency,
 				categoryLabel: category.name
 			})
@@ -371,18 +371,18 @@ const builders: Record<string, Builder> = {
 			.leftJoin(category, eq(transaction.categoryId, category.id))
 			// Transfers move money between the household's own accounts; showing
 			// them here would read as spending that never happened.
-			.where(and(isNull(transaction.transferPairId), sql`${transaction.amount} <> 0`))
-			.orderBy(desc(transaction.bookedAt), desc(transaction.id))
+			.where(and(isNull(transaction.transferPairId), sql`${transaction.amountMinor} <> 0`))
+			.orderBy(desc(transaction.bookedOn), desc(transaction.id))
 			.limit(8);
 
 		return {
 			baseCurrency: displayCurrency(ctx.baseCurrency),
 			rows: rows.map((r) => ({
-				date: r.bookedAt.slice(5),
+				date: r.bookedOn.slice(5),
 				merchant: r.counterparty ?? r.description ?? '—',
 				category: r.categoryLabel,
-				amount: `${formatMinor(r.amount, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
-				negative: r.amount < 0n
+				amount: `${formatMinor(r.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
+				negative: r.amountMinor < 0n
 			}))
 		};
 	},

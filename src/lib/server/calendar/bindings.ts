@@ -86,14 +86,14 @@ export async function applyWriteBack(
 			const [row] = await tx.select().from(tenancy).where(eq(tenancy.id, binding.rowId)).limit(1);
 			if (!row) return { ok: false, message: 'The tenancy behind that event is gone.' };
 
-			const field = binding.field === 'endDate' ? 'endDate' : 'renewalNoticeDate';
+			const field = binding.field === 'endsOn' ? 'endsOn' : 'renewalNoticeOn';
 			await tx
 				.update(tenancy)
 				.set({ [field]: value as string })
 				.where(eq(tenancy.id, binding.rowId));
 
 			message =
-				field === 'endDate'
+				field === 'endsOn'
 					? `${row.tenantName}: the lease end moved to ${value}, from a calendar edit.`
 					: `${row.tenantName}: the renewal notice date moved to ${value}, from a calendar edit.`;
 		} else {

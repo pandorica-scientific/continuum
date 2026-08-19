@@ -171,8 +171,8 @@ export async function generateEvents(
 					periods
 						.filter((p) => p.loanId === l.id)
 						.map((p) => ({
-							startDate: p.startDate,
-							endDate: p.endDate,
+							startsOn: p.startsOn,
+							endsOn: p.endsOn,
 							annualRatePct: Number(p.annualRatePct),
 							paymentMinor: p.paymentMinor
 						})),
@@ -202,22 +202,22 @@ export async function generateEvents(
 	if (rules.propertyDates) {
 		for (const t of tenancies) {
 			const propertyName = properties.find((p) => p.id === t.propertyId)?.name ?? 'the flat';
-			if (t.endDate && inRange(t.endDate)) {
+			if (t.endsOn && inRange(t.endsOn)) {
 				// No amountMinor: a lease ending is a date, not a movement of
 				// money, and the renderer prints amountMinor as a signed figure.
-				const binding = { table: 'tenancy', rowId: t.id, field: 'endDate' } as const;
+				const binding = { table: 'tenancy', rowId: t.id, field: 'endsOn' } as const;
 				events.push({
-					date: t.endDate,
+					date: t.endsOn,
 					label: `Lease ends · ${propertyName}`,
 					ruleKey: 'propertyDates',
 					key: generatedKey('propertyDates', binding),
 					binding
 				});
 			}
-			if (t.renewalNoticeDate && inRange(t.renewalNoticeDate)) {
-				const binding = { table: 'tenancy', rowId: t.id, field: 'renewalNoticeDate' } as const;
+			if (t.renewalNoticeOn && inRange(t.renewalNoticeOn)) {
+				const binding = { table: 'tenancy', rowId: t.id, field: 'renewalNoticeOn' } as const;
 				events.push({
-					date: t.renewalNoticeDate,
+					date: t.renewalNoticeOn,
 					label: `Renewal notice due · ${propertyName}`,
 					ruleKey: 'propertyDates',
 					key: generatedKey('propertyDates', binding),
@@ -241,7 +241,7 @@ export async function generateEvents(
 			}
 		}
 		for (const p of periods) {
-			if (p.endDate && inRange(p.endDate)) {
+			if (p.endsOn && inRange(p.endsOn)) {
 				const l = loans.find((x) => x.id === p.loanId);
 				if (l && l.owedMinor > 0n) {
 					// The fixation PERIOD row, not the loan: p.id is a
@@ -250,10 +250,10 @@ export async function generateEvents(
 					const binding = {
 						table: 'loanFixationPeriod',
 						rowId: p.id,
-						field: 'endDate'
+						field: 'endsOn'
 					} as const;
 					events.push({
-						date: p.endDate,
+						date: p.endsOn,
 						label: `${l.name} fixation ends`,
 						ruleKey: 'expiry',
 						key: generatedKey('expiry', binding),

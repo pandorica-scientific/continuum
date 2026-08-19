@@ -246,8 +246,8 @@ describe('domain replacement writes', () => {
 		await testDb.insert(schema.transaction).values({
 			id: rowId('transaction-split'),
 			accountId: rowId('account-split'),
-			bookedAt: '2026-08-15',
-			amount: -100n,
+			bookedOn: '2026-08-15',
+			amountMinor: -100n,
 			currency: 'CZK',
 			dedupFingerprint: 'split-fixture',
 			reviewState: 'confirmed'
@@ -460,9 +460,9 @@ describe('domain replacement writes', () => {
 			propertyId: rowId('property-tenancy'),
 			rentMinor: 20_000n,
 			depositMinor: 40_000n,
-			startDate: '2026-01-01',
-			endDate: '2026-12-31',
-			renewalNoticeDate: null
+			startsOn: '2026-01-01',
+			endsOn: '2026-12-31',
+			renewalNoticeOn: null
 		};
 
 		const outcomes = await Promise.all([
@@ -491,9 +491,9 @@ describe('domain replacement writes', () => {
 					tenantName: 'Tenant',
 					rentMinor: 20_000n,
 					depositMinor: 0n,
-					startDate: '2026-12-31',
-					endDate: '2026-01-01',
-					renewalNoticeDate: null
+					startsOn: '2026-12-31',
+					endsOn: '2026-01-01',
+					renewalNoticeOn: null
 				},
 				testDb
 			)
@@ -664,13 +664,13 @@ describe('domain replacement writes', () => {
 
 		expect(
 			await testDb
-				.select({ id: schema.propertyBill.id, amount: schema.propertyBill.amountMinor })
+				.select({ id: schema.propertyBill.id, amountMinor: schema.propertyBill.amountMinor })
 				.from(schema.propertyBill)
 				// Ordered by amount, not by id: ids are uuids since 0053.
 				.orderBy(schema.propertyBill.amountMinor)
 		).toEqual([
-			{ id: rowId('bill-old-meter'), amount: 100n },
-			{ id: rowId('bill-new-meter'), amount: 999n }
+			{ id: rowId('bill-old-meter'), amountMinor: 100n },
+			{ id: rowId('bill-new-meter'), amountMinor: 999n }
 		]);
 	});
 
@@ -750,7 +750,7 @@ describe('domain replacement writes', () => {
 			ext: 'PDF',
 			addedOn: '2026-08-15',
 			amountMinor: 100n,
-			amountCurrency: 'EUR',
+			currency: 'EUR',
 			periodOn: '2020-01-01'
 		});
 		await testDb.insert(schema.brokerOperation).values({
@@ -807,8 +807,8 @@ describe('domain replacement writes', () => {
 		await testDb.insert(schema.transaction).values({
 			id: rowId('transaction-tags'),
 			accountId: rowId('account-tags'),
-			bookedAt: '2026-08-15',
-			amount: -100n,
+			bookedOn: '2026-08-15',
+			amountMinor: -100n,
 			currency: 'CZK',
 			dedupFingerprint: 'tag-fixture'
 		});
@@ -935,7 +935,7 @@ describe('domain replacement writes', () => {
 			valueMinor: 7000n,
 			currency: 'EUR',
 			netProfitPct: null,
-			asOf: new Date('2026-08-01T00:00:00.000Z')
+			valuedAt: new Date('2026-08-01T00:00:00.000Z')
 		});
 		await testDb.insert(schema.portfolioSnapshot).values({
 			day: '2026-08-01',
@@ -1175,33 +1175,9 @@ describe('domain replacement writes', () => {
 		]);
 	});
 
-	it('backfills broker freshness from a newer empty snapshot instead of stale holdings', async () => {
-		await harness.sql.unsafe('drop table broker_import_state');
-		await testDb.insert(schema.holding).values({
-			id: rowId('stale-holding'),
-			ticker: 'OLD',
-			name: 'Stale resurrection',
-			category: 'STOCK',
-			units: '1',
-			valueMinor: 1_000n,
-			currency: 'EUR',
-			netProfitPct: null,
-			asOf: new Date('2026-08-10T12:00:00.000Z')
-		});
-		await testDb.insert(schema.portfolioSnapshot).values({
-			day: '2026-08-20',
-			valueMinor: 0n,
-			currency: 'EUR'
-		});
-
-		await harness.applyMigrationFile('0029_broker_import_state.sql');
-
-		expect(await testDb.select().from(schema.brokerImportState)).toMatchObject([
-			{
-				id: 'global',
-				latestGeneratedAt: new Date('2026-08-20T23:59:59.999Z'),
-				currency: 'EUR'
-			}
-		]);
-	});
+	// RETIRED: this replayed migration 0029 against a CURRENT schema to check
+	// its one-time backfill. v0.3.9 collapses every migration into one baseline,
+	// so 0029 will not exist to replay — and since the rename it names a column
+	// (holding.as_of) that no longer exists. The freshness rule it covered is
+	// exercised live by the broker ingest tests.
 });

@@ -41,7 +41,7 @@ export const load: PageServerLoad = async () => {
 			personId: ownerOf.get(d.id) ?? '',
 			periodMonth: d.periodOn!.slice(0, 7),
 			amountMinor: d.amountMinor,
-			currency: d.amountCurrency ?? base
+			currency: d.currency ?? base
 		}));
 
 	// Prefill totals for every person × payslip-year, as editable major-unit

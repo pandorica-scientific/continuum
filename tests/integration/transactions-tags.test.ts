@@ -71,7 +71,7 @@ describe('register database aggregates', () => {
 	it('counts rows and sums effective lines without materialising the whole ledger', async () => {
 		await harness.sql.unsafe(`
 			insert into "transaction"
-				(id, dedup_fingerprint, account_id, booked_at, amount, fee_minor, currency, category_id, review_state)
+				(id, dedup_fingerprint, account_id, booked_on, amount_minor, fee_minor, currency, category_id, review_state)
 			values
 				('${rowId('split')}', '${rowId('split')}', '${rowId('a1')}', '2026-04-02', -4550, 50, 'CZK', null, 'confirmed'),
 				('${rowId('salary-txn')}', '${rowId('salary-txn')}', '${rowId('a1')}', '2026-04-03', 10000, 100, 'CZK', 'salary', 'confirmed');
@@ -97,7 +97,7 @@ describe('register database aggregates', () => {
 	it('intersects category and tag filters on effective lines without double counting', async () => {
 		await harness.sql.unsafe(`
 			insert into "transaction"
-				(id, dedup_fingerprint, account_id, booked_at, amount, fee_minor, currency, category_id, review_state)
+				(id, dedup_fingerprint, account_id, booked_on, amount_minor, fee_minor, currency, category_id, review_state)
 			values
 				('${rowId('direct')}', '${rowId('direct')}', '${rowId('a1')}', '2026-04-04', -6000, 100, 'CZK', null, 'confirmed'),
 				('${rowId('split-only')}', '${rowId('split-only')}', '${rowId('a1')}', '2026-04-03', -5000, 50, 'CZK', null, 'confirmed'),
@@ -145,7 +145,7 @@ describe('register database aggregates', () => {
 	it('keeps aggregate counts and totals correct beyond one page', async () => {
 		await harness.sql.unsafe(`
 			insert into "transaction"
-				(id, dedup_fingerprint, account_id, booked_at, amount, currency, category_id, review_state)
+				(id, dedup_fingerprint, account_id, booked_on, amount_minor, currency, category_id, review_state)
 			select
 				-- A deterministic uuid per row: the id column is uuid now, so a
 				-- 'bulk-07' string will not do.
@@ -180,7 +180,7 @@ describe('register database aggregates', () => {
 				('USD', '2026-01-01', 20),
 				('USD', '2026-02-01', 21);
 			insert into "transaction"
-				(id, dedup_fingerprint, account_id, booked_at, value_date, amount, currency, category_id, review_state)
+				(id, dedup_fingerprint, account_id, booked_on, value_on, amount_minor, currency, category_id, review_state)
 			values
 				('${rowId('old-rate')}', '${rowId('old-rate')}', '${rowId('a1')}', '2026-02-10', '2026-01-10', 10000, 'USD', 'salary', 'confirmed'),
 				('${rowId('new-rate')}', '${rowId('new-rate')}', '${rowId('a1')}', '2026-02-10', null, 10000, 'USD', 'salary', 'confirmed');
@@ -206,7 +206,7 @@ describe('tag persistence', () => {
 	it('keeps a tagged leg in project totals after it becomes a transfer', async () => {
 		await harness.sql.unsafe(`
 			insert into "transaction"
-				(id, dedup_fingerprint, account_id, booked_at, amount, currency, transfer_pair_id)
+				(id, dedup_fingerprint, account_id, booked_on, amount_minor, currency, transfer_pair_id)
 			values ('${rowId('paired-leg')}', '${rowId('paired-leg')}', '${rowId('a1')}', '2026-04-02', -100, 'CZK', '${rowId('pair-a')}');
 			insert into tag (id, name, normalised_name) values ('${rowId('trip')}', 'Trip', '${rowId('trip')}');
 			insert into tag_link (tag_id, target_id) values ('${rowId('trip')}', '${rowId('paired-leg')}');
@@ -219,7 +219,7 @@ describe('tag persistence', () => {
 
 	it('loads direct and split tags once and records both scopes', async () => {
 		await harness.sql.unsafe(`
-			insert into "transaction" (id, dedup_fingerprint, account_id, booked_at, amount, currency)
+			insert into "transaction" (id, dedup_fingerprint, account_id, booked_on, amount_minor, currency)
 			values ('${rowId('t1')}', '${rowId('t1')}', '${rowId('a1')}', '2026-04-02', -100, 'CZK');
 			insert into transaction_split (id, transaction_id, amount_minor, sort)
 			values ('${rowId('s1')}', '${rowId('t1')}', -100, 0);
@@ -235,7 +235,7 @@ describe('tag persistence', () => {
 
 	it('rolls the delete and newly-created tags back when replacement fails', async () => {
 		await harness.sql.unsafe(`
-			insert into "transaction" (id, dedup_fingerprint, account_id, booked_at, amount, currency)
+			insert into "transaction" (id, dedup_fingerprint, account_id, booked_on, amount_minor, currency)
 			values ('${rowId('t1')}', '${rowId('t1')}', '${rowId('a1')}', '2026-04-02', -100, 'CZK');
 			insert into tag (id, name, normalised_name) values ('${rowId('old')}', 'Old', '${rowId('old')}');
 			insert into tag_link (tag_id, target_id) values ('${rowId('old')}', '${rowId('t1')}');

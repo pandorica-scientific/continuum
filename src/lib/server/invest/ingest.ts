@@ -83,7 +83,7 @@ async function ingestReport(
 
 		const existingHolding = state
 			? null
-			: ((await tx.select().from(holding).orderBy(desc(holding.asOf)).limit(1))[0] ?? null);
+			: ((await tx.select().from(holding).orderBy(desc(holding.valuedAt)).limit(1))[0] ?? null);
 		const existingSnapshot =
 			state || existingHolding
 				? null
@@ -91,7 +91,7 @@ async function ingestReport(
 						await tx.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
 					)[0] ?? null);
 		const inferredGeneratedAt = existingHolding
-			? existingHolding.asOf
+			? existingHolding.valuedAt
 			: existingSnapshot
 				? new Date(`${existingSnapshot.day}T23:59:59.999Z`)
 				: null;
@@ -176,7 +176,7 @@ async function ingestReport(
 						valueMinor: item.valueMinor,
 						currency: accountCurrency,
 						netProfitPct: item.netProfitPct !== null ? String(item.netProfitPct) : null,
-						asOf: reportTime
+						valuedAt: reportTime
 					}))
 				);
 			}

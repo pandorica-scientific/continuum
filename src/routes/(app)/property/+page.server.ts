@@ -113,8 +113,8 @@ export const load: PageServerLoad = async ({ url }) => {
 				const loanPeriods = periods
 					.filter((period) => period.loanId === linkedLoan.id)
 					.map((period) => ({
-						startDate: period.startDate,
-						endDate: period.endDate,
+						startsOn: period.startsOn,
+						endsOn: period.endsOn,
 						annualRatePct: Number(period.annualRatePct),
 						paymentMinor: period.paymentMinor
 					}));
@@ -159,7 +159,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				label: 'Est. value',
 				value: formatMinor(current.valueMinor, current.currency),
 				color: 'var(--fg1)',
-				note: current.valuedAt ? `valued ${current.valuedAt.slice(0, 7)}` : 'set a value'
+				note: current.valuedOn ? `valued ${current.valuedOn.slice(0, 7)}` : 'set a value'
 			},
 			{
 				label: 'Mortgage owed',
@@ -238,7 +238,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 		let lease = null;
 		if (currentTenancy) {
-			const days = currentTenancy.endDate ? daysUntil(currentTenancy.endDate) : null;
+			const days = currentTenancy.endsOn ? daysUntil(currentTenancy.endsOn) : null;
 			// How to reach the tenant now lives in the contacts module rather than in
 			// one free-text column, so a tenancy can carry a mobile, a landline and
 			// an agent without them being crammed into a single string.
@@ -271,10 +271,10 @@ export const load: PageServerLoad = async ({ url }) => {
 						label: 'Deposit held',
 						value: `${formatMinor(currentTenancy.depositMinor, current.currency)} ${displayCurrency(current.currency)}`
 					},
-					{ label: 'Lease ends', value: currentTenancy.endDate ?? 'open-ended' },
-					{ label: 'Since', value: currentTenancy.startDate ?? '—' }
+					{ label: 'Lease ends', value: currentTenancy.endsOn ?? 'open-ended' },
+					{ label: 'Since', value: currentTenancy.startsOn ?? '—' }
 				],
-				renewalNotice: currentTenancy.renewalNoticeDate
+				renewalNotice: currentTenancy.renewalNoticeOn
 			};
 		}
 
@@ -294,7 +294,7 @@ export const load: PageServerLoad = async ({ url }) => {
 						const label = loanLabel(linkedLoan);
 						if (!currentPeriod) return `${label}: rate not set`;
 						const rate = `${currentPeriod.annualRatePct.toFixed(2)}%`;
-						return `${label}: ${currentPeriod.endDate ? `fixed ${rate} to ${currentPeriod.endDate.slice(0, 7)}` : rate}`;
+						return `${label}: ${currentPeriod.endsOn ? `fixed ${rate} to ${currentPeriod.endsOn.slice(0, 7)}` : rate}`;
 					})
 					.join(' · '),
 				paidPct: principal > 0n ? Number((repaid * 1000n) / principal) / 10 : 0,
@@ -401,7 +401,7 @@ export const actions: Actions = {
 			kind: asEnumValue('property.kind', form.get('kind'), 'lived'),
 			currency,
 			valueMinor: value,
-			valuedAt: value > 0n ? new Date().toISOString().slice(0, 10) : null,
+			valuedOn: value > 0n ? new Date().toISOString().slice(0, 10) : null,
 			moneyInMinor: moneyIn,
 			boughtYear: Number(form.get('boughtYear')) || null
 		});
@@ -486,9 +486,9 @@ export const actions: Actions = {
 			tenantName,
 			rentMinor: rent,
 			depositMinor: deposit,
-			startDate: String(form.get('startDate') ?? '').trim() || null,
-			endDate: String(form.get('endDate') ?? '').trim() || null,
-			renewalNoticeDate: String(form.get('renewalNoticeDate') ?? '').trim() || null
+			startsOn: String(form.get('startsOn') ?? '').trim() || null,
+			endsOn: String(form.get('endsOn') ?? '').trim() || null,
+			renewalNoticeOn: String(form.get('renewalNoticeDate') ?? '').trim() || null
 		});
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };

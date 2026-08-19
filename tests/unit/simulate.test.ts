@@ -17,7 +17,7 @@ const terms: LoanTerms = {
 	paymentDay: 15
 };
 const periods: FixationPeriod[] = [
-	{ startDate: '2026-01-01', endDate: null, annualRatePct: 6, paymentMinor: 20_000_00n }
+	{ startsOn: '2026-01-01', endsOn: null, annualRatePct: 6, paymentMinor: 20_000_00n }
 ];
 
 describe('applyRepayment', () => {
@@ -83,48 +83,48 @@ describe('applyRepayment', () => {
 describe('applyFixation', () => {
 	it('closes the running period at the new start and appends the new one', () => {
 		const next = applyFixation(periods, {
-			startDate: '2027-01-01',
-			endDate: '2032-01-01',
+			startsOn: '2027-01-01',
+			endsOn: '2032-01-01',
 			annualRatePct: 4,
 			paymentMinor: 25_000_00n
 		});
 		expect(next).toHaveLength(2);
-		expect(next[0].endDate).toBe('2027-01-01');
+		expect(next[0].endsOn).toBe('2027-01-01');
 		expect(next[1].annualRatePct).toBe(4);
 	});
 
 	it('leaves periods that already ended untouched', () => {
 		const closed: FixationPeriod[] = [
-			{ startDate: '2020-01-01', endDate: '2025-01-01', annualRatePct: 2, paymentMinor: 1n }
+			{ startsOn: '2020-01-01', endsOn: '2025-01-01', annualRatePct: 2, paymentMinor: 1n }
 		];
 		const next = applyFixation(closed, {
-			startDate: '2026-01-01',
-			endDate: null,
+			startsOn: '2026-01-01',
+			endsOn: null,
 			annualRatePct: 5,
 			paymentMinor: 2n
 		});
-		expect(next[0].endDate).toBe('2025-01-01');
+		expect(next[0].endsOn).toBe('2025-01-01');
 	});
 
 	// The 2029 row is a follow-on the bank has already agreed. Dropping it made
 	// the preview hide the fact that saving would destroy it.
 	it('keeps a later agreed period and closes the new one where it begins', () => {
 		const scheduled: FixationPeriod[] = [
-			{ startDate: '2026-01-01', endDate: '2029-01-01', annualRatePct: 2, paymentMinor: 1n },
-			{ startDate: '2029-01-01', endDate: null, annualRatePct: 8, paymentMinor: 3n }
+			{ startsOn: '2026-01-01', endsOn: '2029-01-01', annualRatePct: 2, paymentMinor: 1n },
+			{ startsOn: '2029-01-01', endsOn: null, annualRatePct: 8, paymentMinor: 3n }
 		];
 
 		const next = applyFixation(scheduled, {
-			startDate: '2027-01-01',
-			endDate: null,
+			startsOn: '2027-01-01',
+			endsOn: null,
 			annualRatePct: 4,
 			paymentMinor: 2n
 		});
 
 		expect(next).toEqual([
-			{ startDate: '2026-01-01', endDate: '2027-01-01', annualRatePct: 2, paymentMinor: 1n },
-			{ startDate: '2027-01-01', endDate: '2029-01-01', annualRatePct: 4, paymentMinor: 2n },
-			{ startDate: '2029-01-01', endDate: null, annualRatePct: 8, paymentMinor: 3n }
+			{ startsOn: '2026-01-01', endsOn: '2027-01-01', annualRatePct: 2, paymentMinor: 1n },
+			{ startsOn: '2027-01-01', endsOn: '2029-01-01', annualRatePct: 4, paymentMinor: 2n },
+			{ startsOn: '2029-01-01', endsOn: null, annualRatePct: 8, paymentMinor: 3n }
 		]);
 	});
 });
