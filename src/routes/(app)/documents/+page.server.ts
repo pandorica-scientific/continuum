@@ -7,11 +7,9 @@ import { db } from '$lib/server/db';
 import {
 	account,
 	document,
-	documentAccount,
-	documentPerson,
-	documentProperty,
-	documentSubject,
-	documentTag,
+	documentLink,
+	entity,
+	tagLink,
 	person,
 	property,
 	subject,
@@ -38,8 +36,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		propertyId: url.searchParams.get('propertyId') ?? ''
 	};
 
-	const [docs, people, properties, accounts, subjects, dp, dr, da, ds, dt, tags] =
-		await Promise.all([
+	const [docs, people, properties, accounts, subjects, docLinks, docTags, tags] = await Promise.all(
+		[
 			db.select().from(document).orderBy(document.addedOn),
 			db
 				.select({ id: person.id, name: person.name })
@@ -52,13 +50,24 @@ export const load: PageServerLoad = async ({ url }) => {
 				.where(eq(account.kind, 'brokerage'))
 				.orderBy(account.name),
 			db.select().from(subject).orderBy(subject.name),
-			db.select().from(documentPerson),
-			db.select().from(documentProperty),
-			db.select().from(documentAccount),
-			db.select().from(documentSubject),
-			db.select().from(documentTag),
+			// Four selects became one; the kind that used to be implied by the table
+			// name now comes from `entity`.
+			db
+				.select({
+					documentId: documentLink.documentId,
+					targetId: documentLink.targetId,
+					kind: entity.kind
+				})
+				.from(documentLink)
+				.innerJoin(entity, eq(entity.id, documentLink.targetId)),
+			// A document's own tags: tag links whose target is this document.
+			db
+				.select({ documentId: tagLink.targetId, tagId: tagLink.tagId })
+				.from(tagLink)
+				.innerJoin(document, eq(document.id, tagLink.targetId)),
 			db.select().from(tag).orderBy(tag.name)
-		]);
+		]
+	);
 
 	const nameOf = {
 		person: new Map(people.map((x) => [x.id, x.name])),
@@ -72,16 +81,23 @@ export const load: PageServerLoad = async ({ url }) => {
 	const linked = new Map<string, LinkedDoc>(
 		docs.map((d) => [d.id, { id: d.id, people: [], properties: [], accounts: [], subjects: [] }])
 	);
-	for (const r of dp) linked.get(r.documentId)?.people.push(nameOf.person.get(r.personId) ?? '');
-	for (const r of dr)
-		linked.get(r.documentId)?.properties.push(nameOf.property.get(r.propertyId) ?? '');
-	for (const r of da)
-		linked.get(r.documentId)?.accounts.push(nameOf.account.get(r.accountId) ?? '');
-	for (const r of ds)
-		linked.get(r.documentId)?.subjects.push(nameOf.subject.get(r.subjectId) ?? '');
+	const bucketOf = {
+		person: (d: LinkedDoc) => d.people,
+		property: (d: LinkedDoc) => d.properties,
+		account: (d: LinkedDoc) => d.accounts,
+		subject: (d: LinkedDoc) => d.subjects
+	} as const;
+	for (const link of docLinks) {
+		const doc = linked.get(link.documentId);
+		const kind = link.kind as keyof typeof bucketOf;
+		// A kind this screen has no column for is skipped rather than pushed
+		// somewhere arbitrary — a document tagged is not a document "about" a tag.
+		if (!doc || !(kind in bucketOf)) continue;
+		bucketOf[kind](doc).push(nameOf[kind].get(link.targetId) ?? '');
+	}
 
 	const tagsByDoc = new Map<string, string[]>();
-	for (const r of dt) {
+	for (const r of docTags) {
 		const list = tagsByDoc.get(r.documentId) ?? [];
 		list.push(nameOf.tag.get(r.tagId) ?? '');
 		tagsByDoc.set(r.documentId, list);

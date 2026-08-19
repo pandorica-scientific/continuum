@@ -6,15 +6,15 @@ import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	contact,
-	contactTenancy,
+	contactLink,
 	document,
-	documentProperty,
+	documentLink,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
 	property,
 	propertyBill,
-	propertyTag,
+	tagLink,
 	tag,
 	tenancy
 } from '$lib/server/db/schema';
@@ -243,9 +243,9 @@ export const load: PageServerLoad = async ({ url }) => {
 			// an agent without them being crammed into a single string.
 			const tenantContacts = await db
 				.select({ id: contact.id, name: contact.name, phone: contact.phone, email: contact.email })
-				.from(contactTenancy)
-				.innerJoin(contact, eq(contact.id, contactTenancy.contactId))
-				.where(eq(contactTenancy.tenancyId, currentTenancy.id))
+				.from(contactLink)
+				.innerJoin(contact, eq(contact.id, contactLink.contactId))
+				.where(eq(contactLink.targetId, currentTenancy.id))
 				.orderBy(contact.name);
 
 			lease = {
@@ -311,8 +311,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		const today2 = new Date().toISOString().slice(0, 10);
 		const docLinks = await db
 			.select()
-			.from(documentProperty)
-			.where(eq(documentProperty.propertyId, current.id));
+			.from(documentLink)
+			.where(eq(documentLink.targetId, current.id));
 		const linkedDocIds = new Set(docLinks.map((l) => l.documentId));
 		const propertyDocs = docs
 			.filter((d) => linkedDocIds.has(d.id))
@@ -330,9 +330,9 @@ export const load: PageServerLoad = async ({ url }) => {
 
 		const flatTagRows = await db
 			.select({ name: tag.name })
-			.from(propertyTag)
-			.innerJoin(tag, eq(propertyTag.tagId, tag.id))
-			.where(eq(propertyTag.propertyId, current.id));
+			.from(tagLink)
+			.innerJoin(tag, eq(tagLink.tagId, tag.id))
+			.where(eq(tagLink.targetId, current.id));
 		detail = {
 			id: current.id,
 			name: current.name,

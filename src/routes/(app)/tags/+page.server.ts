@@ -1,5 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, documentTag, property, propertyTag } from '$lib/server/db/schema';
+import { document, property, tagLink } from '$lib/server/db/schema';
 import { convertedTagTotal, tagTotals } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
@@ -14,8 +15,14 @@ export const load: PageServerLoad = async () => {
 		tagTotals(),
 		getBaseCurrency(),
 		loadRateTable(),
-		db.select().from(documentTag),
-		db.select().from(propertyTag),
+		db
+			.select({ documentId: tagLink.targetId, tagId: tagLink.tagId })
+			.from(tagLink)
+			.innerJoin(document, eq(document.id, tagLink.targetId)),
+		db
+			.select({ propertyId: tagLink.targetId, tagId: tagLink.tagId })
+			.from(tagLink)
+			.innerJoin(property, eq(property.id, tagLink.targetId)),
 		db.select({ id: document.id, name: document.name, file: document.storedName }).from(document),
 		db.select({ id: property.id, name: property.name }).from(property)
 	]);

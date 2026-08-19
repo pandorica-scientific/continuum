@@ -51,6 +51,11 @@ async function withLegacyDatabase<T>(
 		// CURRENT Drizzle schema, so any later migration that adds a column has to
 		// be applied on top or the insert names a column the database lacks.
 		await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'), legacy.sql);
+		// NOT 0049/0050. The supertype backfills from `contact`, which arrived in
+		// 0035 and does not exist in this world, so layering the link-table collapse
+		// here would drag in half the history the pre-0027 baseline exists to avoid.
+		// The legacy sections below therefore write `transaction_tag` and
+		// `document_person` directly — the tables that world actually has.
 		return await run(legacy.sql, legacy.db);
 	} finally {
 		await legacy.drop();
@@ -133,6 +138,13 @@ beforeAll(async () => {
 	await executeSqlFile(resolve('drizzle/0034_person_overview_layout.sql'));
 	await executeSqlFile(resolve('drizzle/0043_import_profiles.sql'));
 	await executeSqlFile(resolve('drizzle/0044_import_provenance.sql'));
+	// The supertype and the collapsed link tables, in order, because the current
+	// schema writes `tag_link`. 0049 backfills from `contact`, so 0035 comes
+	// first; 0050 copies from `contact_tenancy`, so 0037 does too.
+	await executeSqlFile(resolve('drizzle/0035_contacts.sql'));
+	await executeSqlFile(resolve('drizzle/0037_tenant_contacts.sql'));
+	await executeSqlFile(resolve('drizzle/0049_entity.sql'));
+	await executeSqlFile(resolve('drizzle/0050_link_tables.sql'));
 	await executeSqlFile(resolve('drizzle/0045_import_queue.sql'));
 }, 30_000);
 
@@ -153,7 +165,7 @@ beforeEach(async () => {
 		drop trigger if exists task1_delay_import_leg on "transaction";
 		drop function if exists task1_delay_import_leg();
 		drop sequence if exists task1_import_leg_arrivals;
-		drop trigger if exists task1_delay_transaction_tag on transaction_tag;
+		drop trigger if exists task1_delay_transaction_tag on tag_link;
 		drop function if exists task1_delay_transaction_tag();
 		drop sequence if exists task1_tag_lock_arrivals;
 		truncate table transfer_pair, "transaction", import_file, import_job,
@@ -520,10 +532,10 @@ describe('import database integrity', () => {
 				{ id: 'current-tag', name: 'Current', normalisedName: 'current' },
 				{ id: 'split-tag', name: 'Split', normalisedName: 'split' }
 			]);
-			await database.insert(schema.transactionTag).values([
-				{ transactionId: 'filing-legacy', tagId: 'legacy-tag' },
-				{ transactionId: 'filing-current', tagId: 'current-tag' }
-			]);
+			// Raw SQL, because this world predates the collapse into `tag_link` and
+			// the current Drizzle schema no longer models the tables it has.
+			await client.unsafe(`insert into transaction_tag (transaction_id, tag_id) values
+				('filing-legacy', 'legacy-tag'), ('filing-current', 'current-tag')`);
 			await database.insert(schema.transactionSplit).values([
 				{
 					id: 'legacy-split-a',
@@ -540,9 +552,9 @@ describe('import database integrity', () => {
 					sort: 1
 				}
 			]);
-			await database
-				.insert(schema.transactionSplitTag)
-				.values({ splitId: 'legacy-split-a', tagId: 'split-tag' });
+			await client.unsafe(
+				`insert into transaction_split_tag (split_id, tag_id) values ('legacy-split-a', 'split-tag')`
+			);
 			await database.insert(schema.loan).values({
 				id: 'collision-loan',
 				name: 'Mortgage',
@@ -628,9 +640,9 @@ describe('import database integrity', () => {
 				{ id: 'legacy-split-a', transactionId: 'split-current' },
 				{ id: 'legacy-split-b', transactionId: 'split-current' }
 			]);
-			expect(await database.select().from(schema.transactionSplitTag)).toEqual([
-				{ splitId: 'legacy-split-a', tagId: 'split-tag' }
-			]);
+			expect(
+				await client.unsafe(`select split_id, tag_id from transaction_split_tag`)
+			).toMatchObject([{ split_id: 'legacy-split-a', tag_id: 'split-tag' }]);
 			expect(await database.select().from(schema.loanEvent)).toMatchObject([
 				{ id: 'collision-loan-event', transactionId: 'filing-current' }
 			]);
@@ -1703,7 +1715,7 @@ describe('import database integrity', () => {
 				perform pg_sleep(0.2);
 				return new;
 			end $$;
-			create trigger task1_delay_transaction_tag before insert on transaction_tag
+			create trigger task1_delay_transaction_tag before insert on tag_link
 			for each row execute function task1_delay_transaction_tag();
 		`);
 		const { updateTransactionTags } = await import('$lib/server/tags');
@@ -1739,7 +1751,7 @@ describe('import database integrity', () => {
 		expect(
 			await testDb.select({ state: schema.transferPair.state }).from(schema.transferPair)
 		).toEqual([{ state: 'auto' }]);
-		expect(await count('transaction_tag')).toBe(1);
+		expect(await count('tag_link')).toBe(1);
 	});
 
 	it('rolls back a proposal transition when either leg update fails', async () => {

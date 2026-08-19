@@ -11,8 +11,7 @@ import {
 	currencyRate,
 	transaction,
 	transactionSplit,
-	transactionSplitTag,
-	transactionTag
+	tagLink
 } from '$lib/server/db/schema';
 import { learnRule } from '$lib/server/categorize';
 import {
@@ -80,17 +79,21 @@ function selectedEffectiveLines(filter: RegisterFilter): SQL {
 	else if (filter.categoryId) clauses.push(sql`effective_line.category_id = ${filter.categoryId}`);
 
 	if (filter.tagId) {
+		// One table for both, distinguished only by which id the link points at.
+		// `tag_link.target_id` is an entity id, and a transaction and its splits are
+		// separate entities, so no kind filter is needed here — the id itself is the
+		// discriminator.
 		clauses.push(sql`(
 			exists (
-				select 1 from ${transactionTag} direct_tag
-				where direct_tag.transaction_id = ${transaction.id}
+				select 1 from ${tagLink} direct_tag
+				where direct_tag.target_id = ${transaction.id}
 				  and direct_tag.tag_id = ${filter.tagId}
 			)
 			or (
 				effective_line.split_id is not null
 				and exists (
-					select 1 from ${transactionSplitTag} split_tag
-					where split_tag.split_id = effective_line.split_id
+					select 1 from ${tagLink} split_tag
+					where split_tag.target_id = effective_line.split_id
 					  and split_tag.tag_id = ${filter.tagId}
 				)
 			)

@@ -5,17 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import {
-	loan,
-	loanTag,
-	property,
-	propertyTag,
-	tag,
-	transaction,
-	transactionSplit,
-	transactionSplitTag,
-	transactionTag
-} from '$lib/server/db/schema';
+import { loan, property, tag, tagLink, transaction, transactionSplit } from '$lib/server/db/schema';
 import { effectiveLines, type LineSource, type SplitSource } from '$lib/transactions/lines';
 
 /** Uniqueness key: trimmed, lowercased, inner whitespace collapsed. */
@@ -229,11 +219,11 @@ export async function setTransactionTags(
 		replaceTagSet(
 			names,
 			tx,
-			() => tx.delete(transactionTag).where(eq(transactionTag.transactionId, transactionId)),
+			() => tx.delete(tagLink).where(eq(tagLink.targetId, transactionId)),
 			(tagIds) =>
 				tx
-					.insert(transactionTag)
-					.values(tagIds.map((tagId) => ({ transactionId, tagId })))
+					.insert(tagLink)
+					.values(tagIds.map((tagId) => ({ tagId, targetId: transactionId })))
 					.onConflictDoNothing()
 		)
 	);
@@ -254,15 +244,14 @@ export async function updateTransactionTags(
 		loadNames: (tx) =>
 			tx
 				.select({ name: tag.name })
-				.from(transactionTag)
-				.innerJoin(tag, eq(transactionTag.tagId, tag.id))
-				.where(eq(transactionTag.transactionId, transactionId)),
-		remove: (tx) =>
-			tx.delete(transactionTag).where(eq(transactionTag.transactionId, transactionId)),
+				.from(tagLink)
+				.innerJoin(tag, eq(tagLink.tagId, tag.id))
+				.where(eq(tagLink.targetId, transactionId)),
+		remove: (tx) => tx.delete(tagLink).where(eq(tagLink.targetId, transactionId)),
 		insert: (tx, tagIds) =>
 			tx
-				.insert(transactionTag)
-				.values(tagIds.map((tagId) => ({ transactionId, tagId })))
+				.insert(tagLink)
+				.values(tagIds.map((tagId) => ({ tagId, targetId: transactionId })))
 				.onConflictDoNothing()
 	});
 }
@@ -278,8 +267,8 @@ export async function addTagsToTransaction(
 ): Promise<void> {
 	if (tagIds.length === 0) return;
 	await handle
-		.insert(transactionTag)
-		.values(tagIds.map((tagId) => ({ transactionId, tagId })))
+		.insert(tagLink)
+		.values(tagIds.map((tagId) => ({ tagId, targetId: transactionId })))
 		.onConflictDoNothing();
 }
 
@@ -293,11 +282,11 @@ export async function setLoanTags(
 		replaceTagSet(
 			names,
 			tx,
-			() => tx.delete(loanTag).where(eq(loanTag.loanId, loanId)),
+			() => tx.delete(tagLink).where(eq(tagLink.targetId, loanId)),
 			(tagIds) =>
 				tx
-					.insert(loanTag)
-					.values(tagIds.map((tagId) => ({ loanId, tagId })))
+					.insert(tagLink)
+					.values(tagIds.map((tagId) => ({ tagId, targetId: loanId })))
 					.onConflictDoNothing()
 		)
 	);
@@ -314,14 +303,14 @@ export async function updateLoanTags(
 		loadNames: (tx) =>
 			tx
 				.select({ name: tag.name })
-				.from(loanTag)
-				.innerJoin(tag, eq(loanTag.tagId, tag.id))
-				.where(eq(loanTag.loanId, loanId)),
-		remove: (tx) => tx.delete(loanTag).where(eq(loanTag.loanId, loanId)),
+				.from(tagLink)
+				.innerJoin(tag, eq(tagLink.tagId, tag.id))
+				.where(eq(tagLink.targetId, loanId)),
+		remove: (tx) => tx.delete(tagLink).where(eq(tagLink.targetId, loanId)),
 		insert: (tx, tagIds) =>
 			tx
-				.insert(loanTag)
-				.values(tagIds.map((tagId) => ({ loanId, tagId })))
+				.insert(tagLink)
+				.values(tagIds.map((tagId) => ({ tagId, targetId: loanId })))
 				.onConflictDoNothing()
 	});
 }
@@ -336,11 +325,11 @@ export async function setPropertyTags(
 		replaceTagSet(
 			names,
 			tx,
-			() => tx.delete(propertyTag).where(eq(propertyTag.propertyId, propertyId)),
+			() => tx.delete(tagLink).where(eq(tagLink.targetId, propertyId)),
 			(tagIds) =>
 				tx
-					.insert(propertyTag)
-					.values(tagIds.map((tagId) => ({ propertyId, tagId })))
+					.insert(tagLink)
+					.values(tagIds.map((tagId) => ({ tagId, targetId: propertyId })))
 					.onConflictDoNothing()
 		)
 	);
@@ -361,14 +350,14 @@ export async function updatePropertyTags(
 		loadNames: (tx) =>
 			tx
 				.select({ name: tag.name })
-				.from(propertyTag)
-				.innerJoin(tag, eq(propertyTag.tagId, tag.id))
-				.where(eq(propertyTag.propertyId, propertyId)),
-		remove: (tx) => tx.delete(propertyTag).where(eq(propertyTag.propertyId, propertyId)),
+				.from(tagLink)
+				.innerJoin(tag, eq(tagLink.tagId, tag.id))
+				.where(eq(tagLink.targetId, propertyId)),
+		remove: (tx) => tx.delete(tagLink).where(eq(tagLink.targetId, propertyId)),
 		insert: (tx, tagIds) =>
 			tx
-				.insert(propertyTag)
-				.values(tagIds.map((tagId) => ({ propertyId, tagId })))
+				.insert(tagLink)
+				.values(tagIds.map((tagId) => ({ tagId, targetId: propertyId })))
 				.onConflictDoNothing()
 	});
 }
@@ -381,11 +370,11 @@ async function replaceSplitTags(
 	await replaceTagSet(
 		names,
 		handle,
-		() => handle.delete(transactionSplitTag).where(eq(transactionSplitTag.splitId, splitId)),
+		() => handle.delete(tagLink).where(eq(tagLink.targetId, splitId)),
 		(tagIds) =>
 			handle
-				.insert(transactionSplitTag)
-				.values(tagIds.map((tagId) => ({ splitId, tagId })))
+				.insert(tagLink)
+				.values(tagIds.map((tagId) => ({ tagId, targetId: splitId })))
 				.onConflictDoNothing()
 	);
 }
@@ -425,15 +414,15 @@ export async function loadTagsFor(
 
 	const [direct, throughSplits] = await Promise.all([
 		handle
-			.select({ transactionId: transactionTag.transactionId, id: tag.id, name: tag.name })
-			.from(transactionTag)
-			.innerJoin(tag, eq(transactionTag.tagId, tag.id))
-			.where(inArray(transactionTag.transactionId, transactionIds)),
+			.select({ transactionId: tagLink.targetId, id: tag.id, name: tag.name })
+			.from(tagLink)
+			.innerJoin(tag, eq(tagLink.tagId, tag.id))
+			.where(inArray(tagLink.targetId, transactionIds)),
 		handle
 			.select({ transactionId: transactionSplit.transactionId, id: tag.id, name: tag.name })
-			.from(transactionSplitTag)
-			.innerJoin(transactionSplit, eq(transactionSplitTag.splitId, transactionSplit.id))
-			.innerJoin(tag, eq(transactionSplitTag.tagId, tag.id))
+			.from(tagLink)
+			.innerJoin(transactionSplit, eq(tagLink.targetId, transactionSplit.id))
+			.innerJoin(tag, eq(tagLink.tagId, tag.id))
 			.where(inArray(transactionSplit.transactionId, transactionIds))
 	]);
 
@@ -467,10 +456,10 @@ export async function loadSplitTagsFor(
 	const out = new Map<string, { id: string; name: string }[]>();
 	if (transactionIds.length === 0) return out;
 	const rows = await handle
-		.select({ splitId: transactionSplitTag.splitId, id: tag.id, name: tag.name })
-		.from(transactionSplitTag)
-		.innerJoin(transactionSplit, eq(transactionSplitTag.splitId, transactionSplit.id))
-		.innerJoin(tag, eq(transactionSplitTag.tagId, tag.id))
+		.select({ splitId: tagLink.targetId, id: tag.id, name: tag.name })
+		.from(tagLink)
+		.innerJoin(transactionSplit, eq(tagLink.targetId, transactionSplit.id))
+		.innerJoin(tag, eq(tagLink.tagId, tag.id))
 		.where(inArray(transactionSplit.transactionId, transactionIds));
 	for (const row of rows) {
 		const list = out.get(row.splitId) ?? [];
@@ -509,8 +498,17 @@ export async function tagTotals(handle: Queryable = db): Promise<
 			// still rendered on the row in the register.
 			.from(transaction),
 		handle.select().from(transactionSplit),
-		handle.select().from(transactionTag),
-		handle.select().from(transactionSplitTag)
+		// `tag_link` holds links to every kind of record, so these two must say
+		// which kind they mean. They used to be separate tables, and the table name
+		// was carrying that meaning for free.
+		handle
+			.select({ transactionId: tagLink.targetId, tagId: tagLink.tagId })
+			.from(tagLink)
+			.innerJoin(transaction, eq(transaction.id, tagLink.targetId)),
+		handle
+			.select({ splitId: tagLink.targetId, tagId: tagLink.tagId })
+			.from(tagLink)
+			.innerJoin(transactionSplit, eq(transactionSplit.id, tagLink.targetId))
 	]);
 
 	const splits = new Map<string, SplitSource[]>();

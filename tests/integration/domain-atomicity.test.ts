@@ -128,19 +128,22 @@ beforeEach(async () => {
 		drop function if exists task_domain_fail_tax_line();
 		drop trigger if exists task_domain_fail_holding on holding;
 		drop function if exists task_domain_fail_holding();
-		drop trigger if exists task_domain_fail_document_tag on document_tag;
+		drop trigger if exists task_domain_fail_document_tag on tag_link;
 		drop function if exists task_domain_fail_document_tag();
 		drop trigger if exists task_domain_fail_property_bill on property_bill;
 		drop function if exists task_domain_fail_property_bill();
-		drop trigger if exists task_domain_slow_tag_replace on transaction_tag;
+		drop trigger if exists task_domain_slow_tag_replace on tag_link;
 		drop function if exists task_domain_slow_tag_replace();
 		drop trigger if exists task_domain_slow_meter on property_bill;
 		drop function if exists task_domain_slow_meter();
-		truncate table transaction_split_tag, transaction_tag, transaction_split,
-			"transaction", loan_tag, property_tag, document_tag, document_subject, document_property, document_account,
-			document_person, property_bill, document, subject, property, tag, account,
+		-- entity is truncated with the rest, and must be: TRUNCATE does not fire
+		-- row triggers, so the retire trigger never runs and every registration
+		-- would otherwise survive into the next test. These suites reuse ids, so a
+		-- stale entity of one kind would then refuse the same id as another.
+		truncate table tag_link, document_link, contact_link, transaction_split,
+			"transaction", property_bill, document, subject, property, tag, account,
 			loan, tax_statement_line, tax_statement, broker_import_state, portfolio_snapshot, holding, broker_position,
-			broker_operation, currency_rate, settings, person restart identity cascade;
+			broker_operation, currency_rate, settings, person, entity restart identity cascade;
 	`);
 });
 
@@ -353,7 +356,7 @@ describe('domain replacement writes', () => {
 				end if;
 				return new;
 			end $$;
-			create trigger task_domain_fail_document_tag before insert on document_tag
+			create trigger task_domain_fail_document_tag before insert on tag_link
 			for each row execute function task_domain_fail_document_tag();
 		`);
 
@@ -388,8 +391,8 @@ describe('domain replacement writes', () => {
 		expect(await testDb.select().from(schema.document)).toHaveLength(0);
 		expect(await testDb.select().from(schema.subject)).toHaveLength(0);
 		expect(await testDb.select().from(schema.tag)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentSubject)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentTag)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentLink)).toHaveLength(0);
+		expect(await testDb.select().from(schema.tagLink)).toHaveLength(0);
 	});
 
 	it('rolls an attached bill document and links back when the property bill insert fails', async () => {
@@ -436,8 +439,8 @@ describe('domain replacement writes', () => {
 
 		expect(await testDb.select().from(schema.propertyBill)).toHaveLength(0);
 		expect(await testDb.select().from(schema.document)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentProperty)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentTag)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentLink)).toHaveLength(0);
+		expect(await testDb.select().from(schema.tagLink)).toHaveLength(0);
 		expect(await testDb.select().from(schema.tag)).toHaveLength(0);
 	});
 
@@ -808,9 +811,7 @@ describe('domain replacement writes', () => {
 			name: 'Base',
 			normalisedName: 'base'
 		});
-		await testDb
-			.insert(schema.transactionTag)
-			.values({ transactionId: 'transaction-tags', tagId: 'tag-base' });
+		await testDb.insert(schema.tagLink).values({ targetId: 'transaction-tags', tagId: 'tag-base' });
 		// With no owner lock, both mutations load Base before either DELETE runs.
 		// The adder then re-inserts that stale name after the remover commits.
 		await harness.sql.unsafe(`
@@ -819,7 +820,7 @@ describe('domain replacement writes', () => {
 				perform pg_sleep(0.2);
 				return null;
 			end $$;
-			create trigger task_domain_slow_tag_replace before delete on transaction_tag
+			create trigger task_domain_slow_tag_replace before delete on tag_link
 			for each statement execute function task_domain_slow_tag_replace();
 		`);
 
@@ -830,8 +831,8 @@ describe('domain replacement writes', () => {
 
 		const names = await testDb
 			.select({ name: schema.tag.name })
-			.from(schema.transactionTag)
-			.innerJoin(schema.tag, eq(schema.transactionTag.tagId, schema.tag.id))
+			.from(schema.tagLink)
+			.innerJoin(schema.tag, eq(schema.tagLink.tagId, schema.tag.id))
 			.orderBy(schema.tag.name);
 		expect(names).toEqual([{ name: 'Beta' }]);
 	});
@@ -849,8 +850,8 @@ describe('domain replacement writes', () => {
 		expect(
 			await testDb
 				.select({ name: schema.tag.name })
-				.from(schema.propertyTag)
-				.innerJoin(schema.tag, eq(schema.propertyTag.tagId, schema.tag.id))
+				.from(schema.tagLink)
+				.innerJoin(schema.tag, eq(schema.tagLink.tagId, schema.tag.id))
 		).toEqual([{ name: 'Home' }]);
 	});
 
@@ -867,8 +868,8 @@ describe('domain replacement writes', () => {
 		expect(
 			await testDb
 				.select({ name: schema.tag.name })
-				.from(schema.loanTag)
-				.innerJoin(schema.tag, eq(schema.loanTag.tagId, schema.tag.id))
+				.from(schema.tagLink)
+				.innerJoin(schema.tag, eq(schema.tagLink.tagId, schema.tag.id))
 		).toEqual([{ name: 'Debt' }]);
 	});
 

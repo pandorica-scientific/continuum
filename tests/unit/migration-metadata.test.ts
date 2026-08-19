@@ -90,12 +90,10 @@ describe('Drizzle migration metadata', () => {
 		expect(snapshot.tables['public.contact'].columns).toHaveProperty('organisation');
 		expect(snapshot.tables['public.contact'].columns).toHaveProperty('job_title');
 		expect(snapshot.tables['public.contact'].columns).toHaveProperty('photo');
-		for (const table of [
-			'contact_tenancy',
-			'contact_property',
-			'contact_loan',
-			'contact_account'
-		]) {
+		// One link table per connector since 0050, not one per pair. A contact
+		// reaches a tenancy, a property, a loan or an account through the same
+		// table, and which kind it is comes from `entity`.
+		for (const table of ['contact_link', 'document_link', 'tag_link', 'entity']) {
 			expect(snapshot.tables).toHaveProperty(`public.${table}`);
 		}
 	});

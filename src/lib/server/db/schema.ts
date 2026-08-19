@@ -918,22 +918,6 @@ export const tag = pgTable('tag', {
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-export const transactionTag = pgTable(
-	'transaction_tag',
-	{
-		transactionId: text('transaction_id')
-			.notNull()
-			.references(() => transaction.id, { onDelete: 'cascade' }),
-		tagId: text('tag_id')
-			.notNull()
-			.references(() => tag.id, { onDelete: 'cascade' })
-	},
-	(table) => [
-		primaryKey({ columns: [table.transactionId, table.tagId] }),
-		index('transaction_tag_tag_idx').on(table.tagId)
-	]
-);
-
 // ---- Rules ----
 
 // An unordered rule: every condition must hold. Category is exclusive and can
@@ -995,131 +979,6 @@ export const subject = pgTable(
 	// "Car" and "car" are the same thing; two records differing only in case
 	// would be the phantom-column problem sneaking back in.
 	(table) => [uniqueIndex('subject_name_ci_idx').on(sql`lower(${table.name})`)]
-);
-
-export const documentPerson = pgTable(
-	'document_person',
-	{
-		documentId: text('document_id')
-			.notNull()
-			.references(() => document.id, { onDelete: 'cascade' }),
-		personId: text('person_id')
-			.notNull()
-			.references(() => person.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.documentId, t.personId] }),
-		index('document_person_person_idx').on(t.personId)
-	]
-);
-
-export const documentProperty = pgTable(
-	'document_property',
-	{
-		documentId: text('document_id')
-			.notNull()
-			.references(() => document.id, { onDelete: 'cascade' }),
-		propertyId: text('property_id')
-			.notNull()
-			.references(() => property.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.documentId, t.propertyId] }),
-		index('document_property_property_idx').on(t.propertyId)
-	]
-);
-
-export const documentAccount = pgTable(
-	'document_account',
-	{
-		documentId: text('document_id')
-			.notNull()
-			.references(() => document.id, { onDelete: 'cascade' }),
-		accountId: text('account_id')
-			.notNull()
-			.references(() => account.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.documentId, t.accountId] }),
-		index('document_account_account_idx').on(t.accountId)
-	]
-);
-
-export const documentSubject = pgTable(
-	'document_subject',
-	{
-		documentId: text('document_id')
-			.notNull()
-			.references(() => document.id, { onDelete: 'cascade' }),
-		subjectId: text('subject_id')
-			.notNull()
-			.references(() => subject.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.documentId, t.subjectId] }),
-		index('document_subject_subject_idx').on(t.subjectId)
-	]
-);
-
-export const documentTag = pgTable(
-	'document_tag',
-	{
-		documentId: text('document_id')
-			.notNull()
-			.references(() => document.id, { onDelete: 'cascade' }),
-		tagId: text('tag_id')
-			.notNull()
-			.references(() => tag.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.documentId, t.tagId] }),
-		index('document_tag_tag_idx').on(t.tagId)
-	]
-);
-
-export const propertyTag = pgTable(
-	'property_tag',
-	{
-		propertyId: text('property_id')
-			.notNull()
-			.references(() => property.id, { onDelete: 'cascade' }),
-		tagId: text('tag_id')
-			.notNull()
-			.references(() => tag.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.propertyId, t.tagId] }),
-		index('property_tag_tag_idx').on(t.tagId)
-	]
-);
-
-export const loanTag = pgTable(
-	'loan_tag',
-	{
-		loanId: text('loan_id')
-			.notNull()
-			.references(() => loan.id, { onDelete: 'cascade' }),
-		tagId: text('tag_id')
-			.notNull()
-			.references(() => tag.id, { onDelete: 'cascade' })
-	},
-	(t) => [primaryKey({ columns: [t.loanId, t.tagId] }), index('loan_tag_tag_idx').on(t.tagId)]
-);
-
-export const transactionSplitTag = pgTable(
-	'transaction_split_tag',
-	{
-		splitId: text('split_id')
-			.notNull()
-			.references(() => transactionSplit.id, { onDelete: 'cascade' }),
-		tagId: text('tag_id')
-			.notNull()
-			.references(() => tag.id, { onDelete: 'cascade' })
-	},
-	(table) => [
-		primaryKey({ columns: [table.splitId, table.tagId] }),
-		index('transaction_split_tag_tag_idx').on(table.tagId)
-	]
 );
 
 // ---- Tax statements ----
@@ -1364,69 +1223,68 @@ export const contact = pgTable('contact', {
 	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-// One explicit link table per pair, as document_person and document_property
-// already do. More tables than a polymorphic column, and in exchange every link
-// keeps a real foreign key and stays typed end to end.
-export const contactTenancy = pgTable(
-	'contact_tenancy',
+// ---- Links ----
+
+/**
+ * A tag on any kind of record.
+ *
+ * One table where there were five — document_tag, property_tag, loan_tag,
+ * transaction_tag, transaction_split_tag — because the far end is an `entity`
+ * rather than one named table. A new module inherits tagging without a table of
+ * its own, and both ends still keep a real foreign key and a working cascade.
+ *
+ * Its own table rather than a shared `entity_link` with a `relation` column: a
+ * tag link will want a colour or a note of its own before long, and there is
+ * nowhere to put one on a table shared with document filing.
+ */
+export const tagLink = pgTable(
+	'tag_link',
 	{
-		contactId: text('contact_id')
+		tagId: text('tag_id')
 			.notNull()
-			.references(() => contact.id, { onDelete: 'cascade' }),
-		tenancyId: text('tenancy_id')
+			.references(() => tag.id, { onDelete: 'cascade' }),
+		targetId: text('target_id')
 			.notNull()
-			.references(() => tenancy.id, { onDelete: 'cascade' })
+			.references(() => entity.id, { onDelete: 'cascade' })
 	},
+	// The primary key leads with tag_id and so cannot serve a lookup that only
+	// knows the target, which is what "everything tagged like this" needs.
 	(t) => [
-		primaryKey({ columns: [t.contactId, t.tenancyId] }),
-		index('contact_tenancy_tenancy_idx').on(t.tenancyId)
+		primaryKey({ columns: [t.tagId, t.targetId] }),
+		index('tag_link_target_idx').on(t.targetId)
 	]
 );
 
-export const contactProperty = pgTable(
-	'contact_property',
+/** A document filed against any kind of record. Replaces four tables. */
+export const documentLink = pgTable(
+	'document_link',
 	{
-		contactId: text('contact_id')
+		documentId: text('document_id')
 			.notNull()
-			.references(() => contact.id, { onDelete: 'cascade' }),
-		propertyId: text('property_id')
+			.references(() => document.id, { onDelete: 'cascade' }),
+		targetId: text('target_id')
 			.notNull()
-			.references(() => property.id, { onDelete: 'cascade' })
+			.references(() => entity.id, { onDelete: 'cascade' })
 	},
 	(t) => [
-		primaryKey({ columns: [t.contactId, t.propertyId] }),
-		index('contact_property_property_idx').on(t.propertyId)
+		primaryKey({ columns: [t.documentId, t.targetId] }),
+		index('document_link_target_idx').on(t.targetId)
 	]
 );
 
-export const contactLoan = pgTable(
-	'contact_loan',
+/** A contact attached to any kind of record. Replaces four tables. */
+export const contactLink = pgTable(
+	'contact_link',
 	{
 		contactId: text('contact_id')
 			.notNull()
 			.references(() => contact.id, { onDelete: 'cascade' }),
-		loanId: text('loan_id')
+		targetId: text('target_id')
 			.notNull()
-			.references(() => loan.id, { onDelete: 'cascade' })
+			.references(() => entity.id, { onDelete: 'cascade' })
 	},
 	(t) => [
-		primaryKey({ columns: [t.contactId, t.loanId] }),
-		index('contact_loan_loan_idx').on(t.loanId)
-	]
-);
-
-export const contactAccount = pgTable(
-	'contact_account',
-	{
-		contactId: text('contact_id')
-			.notNull()
-			.references(() => contact.id, { onDelete: 'cascade' }),
-		accountId: text('account_id')
-			.notNull()
-			.references(() => account.id, { onDelete: 'cascade' })
-	},
-	(t) => [
-		primaryKey({ columns: [t.contactId, t.accountId] }),
-		index('contact_account_account_idx').on(t.accountId)
+		primaryKey({ columns: [t.contactId, t.targetId] }),
+		index('contact_link_target_idx').on(t.targetId)
 	]
 );

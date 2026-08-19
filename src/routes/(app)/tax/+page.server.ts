@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, documentPerson, person } from '$lib/server/db/schema';
+import { document, documentLink, person } from '$lib/server/db/schema';
 import { deleteStatement, loadStatements, saveStatement } from '$lib/server/tax';
 import { effectiveRatePct, payslipYearTotalConverted, taxSeries } from '$lib/tax';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -17,7 +17,10 @@ export const load: PageServerLoad = async () => {
 			.from(person)
 			.orderBy(person.createdAt, person.id),
 		db.select().from(document).where(eq(document.shelf, 'payslips')),
-		db.select().from(documentPerson),
+		db
+			.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
+			.from(documentLink)
+			.innerJoin(person, eq(person.id, documentLink.targetId)),
 		db
 			.select({ id: document.id, name: document.name })
 			.from(document)

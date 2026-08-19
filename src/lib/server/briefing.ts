@@ -1,4 +1,4 @@
-import { isNull, sql } from 'drizzle-orm';
+import { eq, isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { groupMonthlySpending } from '$lib/briefing';
 import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
@@ -11,8 +11,8 @@ import {
 	calendarConflict,
 	category,
 	document,
-	documentPerson,
-	documentProperty,
+	documentLink,
+	entity,
 	loan,
 	loanFixationPeriod,
 	person,
@@ -133,22 +133,34 @@ const documentExpiry: Source = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 	const docs = await db.select().from(document);
 	// What each document belongs to, by current name, for the detail line.
-	const [dp, dr, people, properties] = await Promise.all([
-		db.select().from(documentPerson),
-		db.select().from(documentProperty),
+	const [links, people, properties] = await Promise.all([
+		// One table for every kind of target, so the kind comes from `entity`. Only
+		// people and properties are named on the detail line; other kinds are
+		// skipped below rather than rendered as an empty string.
+		db
+			.select({
+				documentId: documentLink.documentId,
+				targetId: documentLink.targetId,
+				kind: entity.kind
+			})
+			.from(documentLink)
+			.innerJoin(entity, eq(entity.id, documentLink.targetId)),
 		db.select().from(person),
 		db.select().from(property)
 	]);
 	const personName = new Map(people.map((x) => [x.id, x.name]));
 	const propertyName = new Map(properties.map((x) => [x.id, x.name]));
 	const about = new Map<string, string[]>();
-	for (const r of dp)
-		about.set(r.documentId, [...(about.get(r.documentId) ?? []), personName.get(r.personId) ?? '']);
-	for (const r of dr)
-		about.set(r.documentId, [
-			...(about.get(r.documentId) ?? []),
-			propertyName.get(r.propertyId) ?? ''
-		]);
+	for (const link of links) {
+		const name =
+			link.kind === 'person'
+				? personName.get(link.targetId)
+				: link.kind === 'property'
+					? propertyName.get(link.targetId)
+					: undefined;
+		if (name === undefined) continue;
+		about.set(link.documentId, [...(about.get(link.documentId) ?? []), name]);
+	}
 	const items: BriefingItem[] = [];
 	for (const d of docs) {
 		if (!d.expiresOn || d.expiresOn < today) continue;

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { document, documentPerson, person } from '$lib/server/db/schema';
+import { document, documentLink, person } from '$lib/server/db/schema';
 import { formatMinor, parseAmountToMinor, toMajor } from '$lib/money';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/files';
@@ -119,7 +119,12 @@ export const load: PageServerLoad = async () => {
 	const slips = (await db.select().from(document).where(eq(document.shelf, 'payslips'))).filter(
 		(d) => d.amountMinor !== null && d.periodMonth !== null
 	);
-	const slipOwners = await db.select().from(documentPerson);
+	// Which payslip belongs to whom. Filtered to people, because document_link
+	// now also holds a document's properties, accounts and subjects.
+	const slipOwners = await db
+		.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
+		.from(documentLink)
+		.innerJoin(person, eq(person.id, documentLink.targetId));
 	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
 	const salary = people.map((p) => {
 		const own = slips
@@ -238,7 +243,10 @@ export const actions: Actions = {
 				amountCurrency: baseCurrency,
 				periodMonth
 			});
-			await tx.insert(documentPerson).values({ documentId, personId }).onConflictDoNothing();
+			await tx
+				.insert(documentLink)
+				.values({ documentId, targetId: personId })
+				.onConflictDoNothing();
 		});
 		return { ok: true };
 	},
@@ -259,12 +267,18 @@ export const actions: Actions = {
 		}
 		// a correction against the stored file teaches the reader for next time
 		if (doc.storedName) {
-			const link = (
-				await db.select().from(documentPerson).where(eq(documentPerson.documentId, doc.id))
+			// The PERSON this payslip is filed against. `document_link` also holds a
+			// document's properties, accounts and subjects, so this joins `person`
+			// rather than taking the first link and hoping — which is what the old
+			// per-pair table was doing for it implicitly.
+			const owner = (
+				await db
+					.select({ id: person.id, name: person.name })
+					.from(documentLink)
+					.innerJoin(person, eq(person.id, documentLink.targetId))
+					.where(eq(documentLink.documentId, doc.id))
+					.limit(1)
 			)[0];
-			const owner = link
-				? (await db.select().from(person).where(eq(person.id, link.personId)))[0]
-				: null;
 			if (owner) {
 				const reading = await readStoredPayslip(doc.storedName, owner.name);
 				await learnAmountLabel(owner.name, amountMinor, reading.candidates);

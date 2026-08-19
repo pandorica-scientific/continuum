@@ -1,13 +1,7 @@
 import { extname } from 'node:path';
 import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import {
-	contact,
-	contactAccount,
-	contactLoan,
-	contactProperty,
-	contactTenancy
-} from '$lib/server/db/schema';
+import { contact, contactLink, entity } from '$lib/server/db/schema';
 import { removeUpload } from '$lib/server/files';
 import { normaliseSearch } from '$lib/contacts/search';
 
@@ -165,55 +159,47 @@ export const emptyLinks = (): ContactLinks => ({
  * computing a minimal patch would be more code with more ways to leave a stale
  * row behind.
  *
- * Each link table is handled by its own small closure rather than by a generic
- * loop. Drizzle types each table's insert shape separately, so a data-driven
- * version needs a cast to satisfy the compiler — and a cast here would silence
- * exactly the check that catches a link written into the wrong column.
+ * There used to be four link tables here, one per kind, each handled by its own
+ * closure so that no cast could hide a link written into the wrong column. One
+ * `contact_link` removes that hazard rather than guarding against it: the target
+ * is an `entity`, so there is no per-kind column to confuse, and the composite
+ * foreign key on the concrete table means a target id genuinely is a record of
+ * the kind it claims. What the caller still has to get right is which bucket an
+ * id came from, and that is checked when the links are read back.
  */
 export async function replaceContactLinks(id: string, links: ContactLinks): Promise<void> {
 	const unique = (ids: string[]) => [...new Set(ids)].filter(Boolean);
 
 	await db.transaction(async (tx) => {
-		await tx.delete(contactTenancy).where(eq(contactTenancy.contactId, id));
-		const tenancyIds = unique(links.tenancyIds);
-		if (tenancyIds.length > 0) {
+		await tx.delete(contactLink).where(eq(contactLink.contactId, id));
+		const targetIds = unique([
+			...links.tenancyIds,
+			...links.propertyIds,
+			...links.loanIds,
+			...links.accountIds
+		]);
+		if (targetIds.length > 0) {
 			await tx
-				.insert(contactTenancy)
-				.values(tenancyIds.map((tenancyId) => ({ contactId: id, tenancyId })));
-		}
-
-		await tx.delete(contactProperty).where(eq(contactProperty.contactId, id));
-		const propertyIds = unique(links.propertyIds);
-		if (propertyIds.length > 0) {
-			await tx
-				.insert(contactProperty)
-				.values(propertyIds.map((propertyId) => ({ contactId: id, propertyId })));
-		}
-
-		await tx.delete(contactLoan).where(eq(contactLoan.contactId, id));
-		const loanIds = unique(links.loanIds);
-		if (loanIds.length > 0) {
-			await tx.insert(contactLoan).values(loanIds.map((loanId) => ({ contactId: id, loanId })));
-		}
-
-		await tx.delete(contactAccount).where(eq(contactAccount.contactId, id));
-		const accountIds = unique(links.accountIds);
-		if (accountIds.length > 0) {
-			await tx
-				.insert(contactAccount)
-				.values(accountIds.map((accountId) => ({ contactId: id, accountId })));
+				.insert(contactLink)
+				.values(targetIds.map((targetId) => ({ contactId: id, targetId })));
 		}
 	});
 }
 
 /** Every link row, grouped by contact id, for rendering the list in one pass. */
 export async function loadContactLinks(): Promise<Map<string, ContactLinks>> {
-	const [tenancies, properties, loans, accounts] = await Promise.all([
-		db.select().from(contactTenancy),
-		db.select().from(contactProperty),
-		db.select().from(contactLoan),
-		db.select().from(contactAccount)
-	]);
+	// One query where there were four. The kind comes from `entity`, which is
+	// what lets a single table serve every sort of target — and it is authoritative
+	// rather than inferred, because the concrete tables carry a composite foreign
+	// key into (id, kind).
+	const rows = await db
+		.select({
+			contactId: contactLink.contactId,
+			targetId: contactLink.targetId,
+			kind: entity.kind
+		})
+		.from(contactLink)
+		.innerJoin(entity, eq(entity.id, contactLink.targetId));
 
 	const byContact = new Map<string, ContactLinks>();
 	const bucket = (contactId: string) => {
@@ -222,10 +208,15 @@ export async function loadContactLinks(): Promise<Map<string, ContactLinks>> {
 		return entry;
 	};
 
-	for (const row of tenancies) bucket(row.contactId).tenancyIds.push(row.tenancyId);
-	for (const row of properties) bucket(row.contactId).propertyIds.push(row.propertyId);
-	for (const row of loans) bucket(row.contactId).loanIds.push(row.loanId);
-	for (const row of accounts) bucket(row.contactId).accountIds.push(row.accountId);
+	for (const row of rows) {
+		const into = bucket(row.contactId);
+		if (row.kind === 'tenancy') into.tenancyIds.push(row.targetId);
+		else if (row.kind === 'property') into.propertyIds.push(row.targetId);
+		else if (row.kind === 'loan') into.loanIds.push(row.targetId);
+		else if (row.kind === 'account') into.accountIds.push(row.targetId);
+		// Any other kind is a link this screen does not render. Ignored rather than
+		// bucketed somewhere arbitrary, so a future kind cannot show up mislabelled.
+	}
 	return byContact;
 }
 

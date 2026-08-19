@@ -2,15 +2,7 @@ import type { EnumValue } from '$lib/enums';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import {
-	document,
-	documentAccount,
-	documentPerson,
-	documentProperty,
-	documentSubject,
-	documentTag,
-	subject
-} from '$lib/server/db/schema';
+import { document, documentLink, tagLink, subject } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
 
 export interface CreateDocumentInput {
@@ -63,36 +55,22 @@ export async function insertDocumentAggregate(
 		expiryVerb: input.expiryVerb
 	});
 
-	if (input.personIds.length > 0) {
+	// Four inserts became one. The far end of a document link is an `entity`, so
+	// what a target IS no longer decides which table the link goes in — which is
+	// what stops a new module needing a document_<thing> table of its own.
+	const targetIds = [...input.personIds, ...input.propertyIds, ...input.accountIds, ...subjectIds];
+	if (targetIds.length > 0) {
 		await handle
-			.insert(documentPerson)
-			.values(input.personIds.map((personId) => ({ documentId: input.id, personId })))
-			.onConflictDoNothing();
-	}
-	if (input.propertyIds.length > 0) {
-		await handle
-			.insert(documentProperty)
-			.values(input.propertyIds.map((propertyId) => ({ documentId: input.id, propertyId })))
-			.onConflictDoNothing();
-	}
-	if (input.accountIds.length > 0) {
-		await handle
-			.insert(documentAccount)
-			.values(input.accountIds.map((accountId) => ({ documentId: input.id, accountId })))
-			.onConflictDoNothing();
-	}
-	if (subjectIds.length > 0) {
-		await handle
-			.insert(documentSubject)
-			.values(subjectIds.map((subjectId) => ({ documentId: input.id, subjectId })))
+			.insert(documentLink)
+			.values(targetIds.map((targetId) => ({ documentId: input.id, targetId })))
 			.onConflictDoNothing();
 	}
 
 	for (const name of input.tagNames) {
 		const resolved = await upsertTag(name, handle);
 		await handle
-			.insert(documentTag)
-			.values({ documentId: input.id, tagId: resolved.id })
+			.insert(tagLink)
+			.values({ tagId: resolved.id, targetId: input.id })
 			.onConflictDoNothing();
 	}
 }

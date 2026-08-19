@@ -43,15 +43,17 @@ beforeAll(async () => {
 			end if;
 			return new;
 		end $$;
-		create trigger reject_explode before insert on transaction_tag
+		create trigger reject_explode before insert on tag_link
 		for each row execute function reject_explode_tag();
 	`);
 }, 60_000);
 
 beforeEach(async () => {
 	await harness.sql.unsafe(`
-		truncate table transaction_split_tag, transaction_tag, transaction_split,
-			"transaction", currency_rate, tag, category, account restart identity cascade;
+		-- entity too: TRUNCATE fires no row triggers, so registrations would
+		-- otherwise outlive the rows they belong to and collide on a reused id.
+		truncate table tag_link, transaction_split,
+			"transaction", currency_rate, tag, category, account, entity restart identity cascade;
 		insert into account (id, name, currency, bank) values ('a1', 'Current', 'CZK', 'fio');
 		insert into category (id, group_key, name) values
 			('groceries', 'living', 'Groceries'),
@@ -112,11 +114,11 @@ describe('register database aggregates', () => {
 				('cross-household', 'cross-line', -2000, 'household', 1);
 
 			insert into tag (id, name, normalised_name) values ('reno', 'Renovation', 'renovation');
-			insert into transaction_tag values ('direct', 'reno');
-			insert into transaction_split_tag values
-				('direct-groceries', 'reno'),
-				('only-groceries', 'reno'),
-				('cross-household', 'reno');
+			insert into tag_link (tag_id, target_id) values ('reno', 'direct');
+			insert into tag_link (tag_id, target_id) values
+				('reno', 'direct-groceries'),
+				('reno', 'only-groceries'),
+				('reno', 'cross-household');
 		`);
 
 		const uncategorised = await registerPage(filter({ categoryId: UNCATEGORISED }), testDb);
@@ -201,7 +203,7 @@ describe('tag persistence', () => {
 				(id, dedup_fingerprint, account_id, booked_at, amount, currency, transfer_pair_id)
 			values ('paired-leg', 'paired-leg', 'a1', '2026-04-02', -100, 'CZK', 'pair-a');
 			insert into tag (id, name, normalised_name) values ('trip', 'Trip', 'trip');
-			insert into transaction_tag values ('paired-leg', 'trip');
+			insert into tag_link (tag_id, target_id) values ('trip', 'paired-leg');
 		`);
 
 		expect(await tagTotals(testDb)).toMatchObject([
@@ -216,8 +218,8 @@ describe('tag persistence', () => {
 			insert into transaction_split (id, transaction_id, amount_minor, sort)
 			values ('s1', 't1', -100, 0);
 			insert into tag (id, name, normalised_name) values ('reno', 'Renovation', 'renovation');
-			insert into transaction_tag values ('t1', 'reno');
-			insert into transaction_split_tag values ('s1', 'reno');
+			insert into tag_link (tag_id, target_id) values ('reno', 't1');
+			insert into tag_link (tag_id, target_id) values ('reno', 's1');
 		`);
 
 		expect((await loadTagsFor(['t1'], testDb)).get('t1')).toEqual([
@@ -230,13 +232,13 @@ describe('tag persistence', () => {
 			insert into "transaction" (id, dedup_fingerprint, account_id, booked_at, amount, currency)
 			values ('t1', 't1', 'a1', '2026-04-02', -100, 'CZK');
 			insert into tag (id, name, normalised_name) values ('old', 'Old', 'old');
-			insert into transaction_tag values ('t1', 'old');
+			insert into tag_link (tag_id, target_id) values ('old', 't1');
 		`);
 
 		await expect(setTransactionTags('t1', ['Explode'], testDb)).rejects.toThrow();
 		const rows = await harness.sql.unsafe<{ name: string }[]>(`
-			select tag.name from transaction_tag join tag on tag.id = transaction_tag.tag_id
-			where transaction_id = 't1'
+			select tag.name from tag_link join tag on tag.id = tag_link.tag_id
+			where tag_link.target_id = 't1'
 		`);
 		expect(rows).toEqual([{ name: 'Old' }]);
 		expect(await harness.sql.unsafe(`select 1 from tag where normalised_name = 'explode'`)).toEqual(

@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import {
@@ -5,7 +6,7 @@ import {
 	loanEvent,
 	loanFixationPeriod,
 	loanProperty,
-	loanTag,
+	tagLink,
 	property,
 	tag
 } from '$lib/server/db/schema';
@@ -74,7 +75,11 @@ export const load: PageServerLoad = async () => {
 	let latestDebtFree: number | null = null;
 
 	const [loanTagRows, allTags] = await Promise.all([
-		db.select().from(loanTag),
+		// tag_link spans every kind, so this says which one it means.
+		db
+			.select({ loanId: tagLink.targetId, tagId: tagLink.tagId })
+			.from(tagLink)
+			.innerJoin(loan, eq(loan.id, tagLink.targetId)),
 		db.select().from(tag)
 	]);
 	const tagName = new Map(allTags.map((t) => [t.id, t.name]));

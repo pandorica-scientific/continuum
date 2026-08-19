@@ -12,14 +12,13 @@ import { db } from '$lib/server/db';
 import { initialsFor } from '$lib/people';
 import {
 	contact,
-	contactTenancy,
+	contactLink,
 	account,
 	brokerImportState,
 	brokerOperation,
 	currencyRate,
 	document,
-	documentPerson,
-	documentProperty,
+	documentLink,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
@@ -367,7 +366,7 @@ export async function seedDemo(): Promise<void> {
 			phone: '+420 800 207 207'
 		}
 	]);
-	await db.insert(contactTenancy).values({ contactId: tenantContactId, tenancyId: tenancyB });
+	await db.insert(contactLink).values({ contactId: tenantContactId, targetId: tenancyB });
 	await db.insert(propertyBill).values([
 		{ id: randomUUID(), propertyId: flatA, label: 'SVJ fee & repair fund', amountMinor: 485000n },
 		{ id: randomUUID(), propertyId: flatA, label: 'Electricity advance', amountMinor: 240000n },
@@ -523,16 +522,16 @@ export async function seedDemo(): Promise<void> {
 	await db.insert(document).values(payslips);
 	// Real links, not names: payslips belong to Jana, the contract to the flat.
 	await db
-		.insert(documentPerson)
+		.insert(documentLink)
 		.values(
 			payslips
 				.filter((d) => d.shelf === 'payslips')
-				.map((d) => ({ documentId: d.id, personId: jana }))
+				.map((d) => ({ documentId: d.id, targetId: jana }))
 		)
 		.onConflictDoNothing();
 	await db
-		.insert(documentProperty)
-		.values({ documentId: contractId, propertyId: flatB })
+		.insert(documentLink)
+		.values({ documentId: contractId, targetId: flatB })
 		.onConflictDoNothing();
 
 	// Tax statements: two Czech years for Jana (the payslips diverge from the
