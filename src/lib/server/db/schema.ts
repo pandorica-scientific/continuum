@@ -16,7 +16,42 @@ import {
 // Relative, not aliased: drizzle-kit loads this file outside Vite and does not
 // resolve SvelteKit's $lib.
 import type { OverviewPlacement } from '../../overview/layout';
-import type { EnumValue } from '../../enums';
+import type { EntityKind, EnumValue } from '../../enums';
+
+// ---- The linkable-record supertype ----
+
+/**
+ * Every record that can be tagged, filed a document against, or linked to a
+ * contact carries a row here.
+ *
+ * It exists so ONE link table can point at any kind of record and still keep a
+ * real foreign key at both ends. Without it, each connector needed a table per
+ * pair — `document_person`, `document_property`, `property_tag`, `loan_tag` —
+ * and a new module cost three more before it held a column of its own.
+ *
+ * Registration is NOT done here, and must not be attempted in application code.
+ * Migration 0049 puts a BEFORE INSERT trigger on each of the eleven tables, so
+ * inserting a record registers it; the concrete tables also carry a generated
+ * `entity_kind` column and a composite foreign key into `(id, kind)`, which is
+ * what makes a mismatched kind unrepresentable rather than merely discouraged.
+ *
+ * Drizzle models tables, not triggers or generated columns: none of that can be
+ * recreated from this declaration, `db:generate` cannot notice it going missing,
+ * and `drizzle-kit push` would build a database without it. Apply migrations.
+ */
+export const entity = pgTable(
+	'entity',
+	{
+		id: text('id').primaryKey(),
+		kind: text('kind').$type<EntityKind>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('entity_id_kind_key').on(table.id, table.kind),
+		index('entity_kind_idx').on(table.kind)
+	]
+);
 
 // ---- Household and auth ----
 

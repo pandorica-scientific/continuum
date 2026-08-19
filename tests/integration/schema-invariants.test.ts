@@ -39,10 +39,11 @@ describe('foreign keys', () => {
 			group by fk.oid, c.relname
 		`;
 
-		const indexes = await harness.sql<ColumnSet[]>`
+		const indexes = await harness.sql<(ColumnSet & { unique: boolean })[]>`
 			select
 				c.relname as table,
-				string_agg(a.attname, ',' order by k.ord) as columns
+				string_agg(a.attname, ',' order by k.ord) as columns,
+				i.indisunique as unique
 			from pg_index i
 			join pg_class c on c.oid = i.indrelid
 			cross join lateral unnest(string_to_array(i.indkey::text, ' ')::int[])
@@ -54,14 +55,26 @@ describe('foreign keys', () => {
 			  -- source = 'meter', which does nothing for "the bills of this
 			  -- property" — counting it as covering would hide a real scan.
 			  and i.indpred is null
-			group by i.indexrelid, c.relname
+			group by i.indexrelid, c.relname, i.indisunique
 		`;
 
 		// An index covers a foreign key when the key's columns are a PREFIX of the
 		// index's columns — a lookup by (a) is served by an index on (a, b), but
 		// not by one on (b, a).
+		//
+		// The converse also counts, when the shorter index is UNIQUE. Each of the
+		// eleven `(id, entity_kind)` keys added by migration 0049 leads with the
+		// table's own primary key, so the primary-key index already narrows the
+		// lookup to at most one row and `entity_kind` is a stored constant. An
+		// index on the pair would be dead weight, and demanding one here would have
+		// bought eleven of them.
 		const covered = (fk: ColumnSet) =>
-			indexes.some((ix) => ix.table === fk.table && `${ix.columns},`.startsWith(`${fk.columns},`));
+			indexes.some(
+				(ix) =>
+					ix.table === fk.table &&
+					(`${ix.columns},`.startsWith(`${fk.columns},`) ||
+						(ix.unique && `${fk.columns},`.startsWith(`${ix.columns},`)))
+			);
 
 		const uncovered = keys.filter((fk) => !covered(fk)).map((fk) => `${fk.table}(${fk.columns})`);
 		expect(uncovered.sort()).toEqual([]);

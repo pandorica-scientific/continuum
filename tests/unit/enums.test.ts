@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENUMS, ENUM_COLUMNS, asEnumValue, isEnumValue } from '$lib/enums';
+import { ENTITY_KINDS, ENUMS, ENUM_COLUMNS, asEnumValue, isEnumValue } from '$lib/enums';
 import { SHELVES, EXPIRY_VERBS } from '$lib/documents';
 import { DAY_COUNTS } from '$lib/loans';
 import { REVIEW_STATES } from '$lib/transactions/filter';
@@ -26,6 +26,10 @@ describe('the screens and the schema agree', () => {
 
 	it('includes the filed state, which the register could not previously reach', () => {
 		expect(REVIEW_STATES).toContain('filed');
+	});
+
+	it('ENTITY_KINDS is the set the entity.kind constraint enforces', () => {
+		expect(ENTITY_KINDS).toEqual(ENUMS['entity.kind']);
 	});
 });
 

@@ -39,6 +39,31 @@
  *   broker_operation.type — the broker's vocabulary, not ours.
  */
 
+/**
+ * Everything that can be tagged, filed a document against, or linked to a
+ * contact — the records that carry a row in `entity`.
+ *
+ * Exactly what is linked today, plus the three connectors that do the linking.
+ * `category` is deliberately absent: nothing links to a category, and adding a
+ * kind later is one migration, while a trigger on a table that never needed one
+ * is a write on every insert forever.
+ */
+export const ENTITY_KINDS = [
+	'person',
+	'account',
+	'transaction',
+	'transaction_split',
+	'property',
+	'tenancy',
+	'loan',
+	'document',
+	'contact',
+	'tag',
+	'subject'
+] as const;
+
+export type EntityKind = (typeof ENTITY_KINDS)[number];
+
 export const ENUMS = {
 	'person.role': ['admin', 'member'],
 
@@ -84,7 +109,9 @@ export const ENUMS = {
 
 	// P4 strongest, P0 nothing proven. Stable: the classes are what the proof
 	// engine can conclude, not what any one reader happens to support.
-	proof_class: ['P4', 'P3', 'P2', 'P1', 'P0']
+	proof_class: ['P4', 'P3', 'P2', 'P1', 'P0'],
+
+	'entity.kind': ENTITY_KINDS
 } as const satisfies Record<string, readonly string[]>;
 
 export type EnumKey = keyof typeof ENUMS;
@@ -119,7 +146,8 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'document', column: 'shelf', enum: 'document.shelf' },
 	{ table: 'document', column: 'expiry_verb', enum: 'document.expiry_verb' },
 	{ table: 'calendar_account', column: 'provider', enum: 'calendar_account.provider' },
-	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' }
+	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' },
+	{ table: 'entity', column: 'kind', enum: 'entity.kind' }
 ];
 
 /** `<table>_<column>_check` — the locked constraint name. */
