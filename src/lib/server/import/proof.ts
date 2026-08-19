@@ -27,9 +27,12 @@
  * chain perfectly. The lexical checks below are what close that hole.
  */
 import { minorDigits } from '$lib/money';
+import type { EnumValue } from '$lib/enums';
 import type { ParsedRow, ParsedStatement } from './types';
 
-export type ProofClass = 'P4' | 'P3' | 'P2' | 'P1' | 'P0';
+// Declared once, in $lib/enums, so the CHECK constraint on import_file.proof_class
+// and transaction.proof_class cannot drift from this union.
+export type ProofClass = EnumValue<'proof_class'>;
 
 export type CheckStatus = 'pass' | 'fail' | 'unavailable';
 

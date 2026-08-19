@@ -1,3 +1,4 @@
+import { asEnumValue } from '$lib/enums';
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
@@ -19,7 +20,7 @@ import {
 import { saveUpload } from '$lib/server/files';
 import { createDocument } from '$lib/server/documents/mutations';
 import { deriveColumns, isUnlinked, type LinkedDoc } from '$lib/documents-links';
-import { EXPIRY_VERBS, SHELVES, type ShelfKey } from '$lib/documents';
+import { SHELVES, type ShelfKey } from '$lib/documents';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -219,7 +220,7 @@ export const actions: Actions = {
 			ext,
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn,
-			expiryVerb: (EXPIRY_VERBS as readonly string[]).includes(verb) ? verb : 'expires',
+			expiryVerb: asEnumValue('document.expiry_verb', verb, 'expires'),
 			personIds: picked.people,
 			propertyIds: picked.properties,
 			accountIds: picked.accounts,

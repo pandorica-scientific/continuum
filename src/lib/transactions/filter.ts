@@ -3,6 +3,8 @@
 // knows how those params map onto a filter — pure, so it is testable without
 // a database, in keeping with the src/lib split.
 
+import { ENUMS, isEnumValue, type EnumValue } from '$lib/enums';
+
 import { parseAmountToMinor } from '$lib/money';
 
 export type Direction = 'any' | 'in' | 'out';
@@ -21,7 +23,7 @@ export interface RegisterFilter {
 	maxMinor: bigint | null;
 	/** Currency in which amount bounds were entered. */
 	baseCurrency: string;
-	reviewState: string | null;
+	reviewState: EnumValue<'transaction.review_state'> | null;
 	/** Matches a transaction tagged directly or through any of its splits. */
 	tagId: string | null;
 	/** Own-account transfers are hidden unless asked for, as in cash flow. */
@@ -38,8 +40,15 @@ export interface RegisterFilter {
 	page: number;
 }
 
-/** The review states the schema allows; anything else in the URL is noise. */
-export const REVIEW_STATES = ['auto', 'needs_review', 'confirmed'] as const;
+/**
+ * The review states the schema allows; anything else in the URL is noise.
+ *
+ * Derived rather than listed. This was written out by hand and omitted `filed` —
+ * a state the demo seed writes and `ingest.ts` treats as terminal beside
+ * `confirmed` — so a filed transaction could not be selected by any filter on
+ * the register, and the comment above claiming otherwise was simply false.
+ */
+export const REVIEW_STATES = ENUMS['transaction.review_state'];
 
 const DIRECTIONS: Direction[] = ['any', 'in', 'out'];
 
@@ -93,7 +102,7 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		minMinor: bound(params, 'min', baseCurrency),
 		maxMinor: bound(params, 'max', baseCurrency),
 		baseCurrency,
-		reviewState: review && REVIEW_STATES.includes(review as never) ? review : null,
+		reviewState: isEnumValue('transaction.review_state', review) ? review : null,
 		tagId: text(params, 'tag'),
 		includeTransfers: params.get('transfers') === '1',
 		sourceMethod: text(params, 'source'),

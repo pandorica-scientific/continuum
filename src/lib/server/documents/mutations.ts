@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/enums';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
@@ -15,12 +16,12 @@ import { upsertTag } from '$lib/server/tags';
 export interface CreateDocumentInput {
 	id: string;
 	name: string;
-	shelf: string;
+	shelf: EnumValue<'document.shelf'>;
 	storedName: string | null;
 	ext: string;
 	addedOn: string;
 	expiresOn: string | null;
-	expiryVerb: string;
+	expiryVerb: EnumValue<'document.expiry_verb'>;
 	personIds: string[];
 	propertyIds: string[];
 	accountIds: string[];

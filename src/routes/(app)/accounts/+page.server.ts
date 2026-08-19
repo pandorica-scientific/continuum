@@ -1,3 +1,4 @@
+import { asEnumValue } from '$lib/enums';
 import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, sql } from 'drizzle-orm';
@@ -139,7 +140,9 @@ export const actions: Actions = {
 			.trim()
 			.toUpperCase();
 		const bank = String(form.get('bank') ?? 'other');
-		const kind = String(form.get('kind') ?? 'current');
+		// Narrowed at the boundary, so a hand-crafted form post cannot reach the
+		// CHECK constraint and turn a bad field into a failed insert.
+		const kind = asEnumValue('account.kind', form.get('kind'), 'current');
 		const numbersRaw = String(form.get('numbers') ?? '').trim();
 		if (!name) return fail(400, { message: 'The account needs a name.' });
 		if (!/^[A-Z]{3}$/.test(currency))

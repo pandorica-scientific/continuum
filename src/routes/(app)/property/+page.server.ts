@@ -1,3 +1,4 @@
+import { asEnumValue } from '$lib/enums';
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
@@ -396,7 +397,7 @@ export const actions: Actions = {
 			id: randomUUID(),
 			name,
 			sizeLabel: String(form.get('sizeLabel') ?? '').trim(),
-			kind: String(form.get('kind') ?? 'lived'),
+			kind: asEnumValue('property.kind', form.get('kind'), 'lived'),
 			currency,
 			valueMinor: value,
 			valuedAt: value > 0n ? new Date().toISOString().slice(0, 10) : null,

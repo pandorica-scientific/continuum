@@ -51,17 +51,17 @@ with the daily balances reconstructed into a chain, **P4**.
 The evidence scanner in `tabular/statement.ts` is vocabulary-driven, and the
 vocabulary is incomplete rather than wrong:
 
-| Printed | Term list | Contains | Result |
-|---|---|---|---|
-| `Počáteční zůstatek` | `OPENING` | `pocatecni` | matched |
-| `Konečný zůstatek` | `CLOSING` | `konecny` | matched |
-| `Celkový počet transakcí` | `COUNTS` | `pocet polozek` only | **missed** |
-| `Obraty na účtu` | `CREDITS` / `DEBITS` | neither | **missed** |
-| `Zůstatek podle data` | `SUMMARY_TERMS` | German `kontostande` only | **missed** |
+| Printed                   | Term list            | Contains                  | Result     |
+| ------------------------- | -------------------- | ------------------------- | ---------- |
+| `Počáteční zůstatek`      | `OPENING`            | `pocatecni`               | matched    |
+| `Konečný zůstatek`        | `CLOSING`            | `konecny`                 | matched    |
+| `Celkový počet transakcí` | `COUNTS`             | `pocet polozek` only      | **missed** |
+| `Obraty na účtu`          | `CREDITS` / `DEBITS` | neither                   | **missed** |
+| `Zůstatek podle data`     | `SUMMARY_TERMS`      | German `kontostande` only | **missed** |
 
-This is the extension point `vocabulary.ts` was designed for — *"Data, not
+This is the extension point `vocabulary.ts` was designed for — _"Data, not
 logic — the whole point is that adding Portuguese or Hungarian is an edit here
-and nothing else."* These are standard Czech banking phrases, not KB
+and nothing else."_ These are standard Czech banking phrases, not KB
 inventions, so the entries will also serve Česká spořitelna and
 Raiffeisenbank. Note German `kontostande` is already present for exactly the
 balance-recap table Czech lacks a term for, which is what marks this as a gap
@@ -76,8 +76,7 @@ to `COUNTS` in `statement.ts`. The existing extractor already pulls the first
 integer out of the matched row.
 
 Caveat: KB prints the count as two figures in two columns, `1` and `27`, and
-the current code takes `/(\d+)/` — the **first** integer, giving 1 rather than
-28. So the count row needs the same two-value handling as item 2.
+the current code takes `/(\d+)/` — the **first** integer, giving 1 rather than 28. So the count row needs the same two-value handling as item 2.
 
 ### 2. Turnover vocabulary plus two-value rows — the real work
 

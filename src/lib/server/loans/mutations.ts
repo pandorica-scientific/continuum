@@ -1,6 +1,7 @@
+import { asEnumValue, isEnumValue } from '$lib/enums';
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
-import { DAY_COUNTS } from '$lib/loans/amortise';
+
 import { parseAmountToMinor } from '$lib/money';
 import { addRatios, tryRatioFromPercent, type Ratio } from '$lib/property/finance';
 import { db, type Db } from '$lib/server/db';
@@ -299,7 +300,9 @@ export async function createLoan(
 	}
 
 	const regime = input.regime || 'fixed_period';
-	if (!['fixed_period', 'fixed_term', 'floating'].includes(regime)) {
+	// Checked against the one list, not a second copy of it: the form and the
+	// CHECK constraint on loan.regime both come from `ENUMS`.
+	if (!isEnumValue('loan.regime', regime)) {
 		return { ok: false, status: 400, message: 'Choose a valid rate regime.' };
 	}
 	const observedOn = (input.today ?? today()).trim();
@@ -366,10 +369,8 @@ export async function createLoan(
 		};
 	}
 
-	const dayCount = (DAY_COUNTS as readonly string[]).includes(input.dayCount)
-		? input.dayCount
-		: '30/360';
-	const accrualStyle = input.accrualStyle === 'calendar' ? 'calendar' : 'payment';
+	const dayCount = asEnumValue('loan.day_count', input.dayCount, '30/360');
+	const accrualStyle = asEnumValue('loan.accrual_style', input.accrualStyle, 'payment');
 	const paymentDay =
 		Number.isInteger(input.paymentDay) && input.paymentDay! >= 1 && input.paymentDay! <= 31
 			? input.paymentDay
@@ -399,7 +400,7 @@ export async function createLoan(
 			id: loanId,
 			name,
 			lender: input.lender.trim(),
-			kind: input.kind || 'mortgage',
+			kind: asEnumValue('loan.kind', input.kind, 'mortgage'),
 			currency,
 			principalMinor: principal,
 			owedMinor: owed,

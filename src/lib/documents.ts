@@ -1,5 +1,7 @@
 // Shelf definitions shared by the documents screen and its form.
 
+import { ENUMS } from '$lib/enums';
+
 export const SHELVES = [
 	{ key: 'payslips', label: 'Payslips' },
 	{ key: 'tax', label: 'Tax' },
@@ -14,4 +16,5 @@ export const SHELVES = [
 
 export type ShelfKey = (typeof SHELVES)[number]['key'];
 
-export const EXPIRY_VERBS = ['expires', 'ends', 'renews', 'due'] as const;
+/** Derived, so the document form and the CHECK on document.expiry_verb agree. */
+export const EXPIRY_VERBS = ENUMS['document.expiry_verb'];

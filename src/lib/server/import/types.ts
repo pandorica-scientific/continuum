@@ -6,6 +6,8 @@
  * bank issued the file — an ABO export names no issuer at all. Where the
  * issuer is unknown the format itself is the honest label.
  */
+import type { EnumValue } from '$lib/enums';
+
 export type BankId = string;
 
 /**
@@ -19,7 +21,7 @@ export type BankId = string;
 export interface StatementProvenance {
 	/** Which reader produced this: an adapter, a standard, or which assembler. */
 	method: string;
-	proofClass: string;
+	proofClass: EnumValue<'proof_class'>;
 	/** The ledger model the chain closed under, when one did. */
 	ledgerModel?: string;
 	checks: { name: string; status: 'pass' | 'fail' | 'unavailable'; detail: string }[];

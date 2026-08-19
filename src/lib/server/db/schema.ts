@@ -16,6 +16,7 @@ import {
 // Relative, not aliased: drizzle-kit loads this file outside Vite and does not
 // resolve SvelteKit's $lib.
 import type { OverviewPlacement } from '../../overview/layout';
+import type { EnumValue } from '../../enums';
 
 // ---- Household and auth ----
 
@@ -179,7 +180,7 @@ export const account = pgTable(
 		name: text('name').notNull(),
 		emoji: text('emoji').notNull().default('🏦'),
 		bank: text('bank').notNull(), // fio | revolut | mbank | rb | cs | other
-		kind: text('kind').notNull().default('current'), // current | savings | brokerage
+		kind: text('kind').$type<EnumValue<'account.kind'>>().notNull().default('current'),
 		currency: text('currency').notNull(),
 		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 		// bank account number / IBAN in the form statements print it; used to
@@ -223,7 +224,7 @@ export const importFile = pgTable(
 		 * is a query rather than a guess.
 		 */
 		sourceMethod: text('source_method'),
-		proofClass: text('proof_class'),
+		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>(),
 		ledgerModel: text('ledger_model'),
 		currency: text('currency'),
 		openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
@@ -278,7 +279,7 @@ export const importJob = pgTable(
 			onDelete: 'set null'
 		}),
 		/** queued -> running -> done | failed */
-		state: text('state').notNull().default('queued'),
+		state: text('state').$type<EnumValue<'job_state'>>().notNull().default('queued'),
 		claimedAt: timestamp('claimed_at', { withTimezone: true }),
 		finishedAt: timestamp('finished_at', { withTimezone: true }),
 		/** The IngestResult, so the page can show what happened without re-reading. */
@@ -316,7 +317,7 @@ export const importProfile = pgTable('import_profile', {
 	// a person confirmed this mapping against a preview of their own rows
 	verified: boolean('verified').notNull().default(false),
 	// 'builtin' | 'user' | 'imported'
-	origin: text('origin').notNull().default('user'),
+	origin: text('origin').$type<EnumValue<'import_profile.origin'>>().notNull().default('user'),
 	filenamePattern: text('filename_pattern'),
 	lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -373,14 +374,17 @@ export const transaction = pgTable(
 			onDelete: 'set null'
 		}),
 		// auto = categorised by rule, needs_review = ambiguous, confirmed = user decided
-		reviewState: text('review_state').notNull().default('needs_review'),
+		reviewState: text('review_state')
+			.$type<EnumValue<'transaction.review_state'>>()
+			.notNull()
+			.default('needs_review'),
 		reviewReason: text('review_reason'),
 		importFileId: text('import_file_id').references(() => importFile.id, { onDelete: 'set null' }),
 		// How this row was read and how strongly it was proven, carried on the row
 		// itself so it can answer for its own origin even after the file it came
 		// from has been re-parsed or superseded.
 		sourceMethod: text('source_method'),
-		proofClass: text('proof_class'),
+		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>(),
 		transferPairId: text('transfer_pair_id')
 	},
 	(table) => [
@@ -428,7 +432,7 @@ export const transferPair = pgTable(
 		inTransactionId: text('in_transaction_id')
 			.notNull()
 			.references(() => transaction.id, { onDelete: 'cascade' }),
-		state: text('state').notNull().default('auto'), // auto | proposed | confirmed | rejected
+		state: text('state').$type<EnumValue<'transfer_pair.state'>>().notNull().default('auto'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
@@ -475,7 +479,7 @@ export const property = pgTable(
 		name: text('name').notNull(),
 		// e.g. "3+kk · 78 m² · bought 2019"
 		sizeLabel: text('size_label').notNull().default(''),
-		kind: text('kind').notNull(), // lived | rented
+		kind: text('kind').$type<EnumValue<'property.kind'>>().notNull(),
 		currency: text('currency').notNull().default('CZK'),
 		valueMinor: bigint('value_minor', { mode: 'bigint' })
 			.notNull()
@@ -544,7 +548,7 @@ export const propertyBill = pgTable(
 		 * a second energy line appeared beside it and the property's bill total
 		 * counted electricity twice, and renaming a bill to Czech did the same.
 		 */
-		source: text('source').notNull().default('manual'),
+		source: text('source').$type<EnumValue<'property_bill.source'>>().notNull().default('manual'),
 		// the uploaded bill itself, filed in Documents about this property
 		documentId: text('document_id').references(() => document.id, { onDelete: 'set null' })
 	},
@@ -565,7 +569,7 @@ export const loan = pgTable(
 		id: text('id').primaryKey(),
 		name: text('name').notNull(),
 		lender: text('lender').notNull().default(''),
-		kind: text('kind').notNull().default('mortgage'), // mortgage | car | consumer | family
+		kind: text('kind').$type<EnumValue<'loan.kind'>>().notNull().default('mortgage'),
 		currency: text('currency').notNull().default('CZK'),
 		principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
 		owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
@@ -576,14 +580,17 @@ export const loan = pgTable(
 		// fixed_period: rate fixed until a date, then re-fixed (mortgages)
 		// fixed_term:   rate fixed for the whole life of the loan
 		// floating:     rate tracks a reference
-		regime: text('regime').notNull().default('fixed_period'),
+		regime: text('regime').$type<EnumValue<'loan.regime'>>().notNull().default('fixed_period'),
 		// how the bank accrues interest — per loan, because banks differ:
 		// 30/360 (rate ÷ 12), act/365, act/360
-		dayCount: text('day_count').notNull().default('30/360'),
+		dayCount: text('day_count').$type<EnumValue<'loan.day_count'>>().notNull().default('30/360'),
 		// payment: accrues payment-date to payment-date on one balance
 		// calendar: accrues daily over the calendar month, charged on its last
 		//           day and collected with the next instalment (Česká spořitelna)
-		accrualStyle: text('accrual_style').notNull().default('payment'),
+		accrualStyle: text('accrual_style')
+			.$type<EnumValue<'loan.accrual_style'>>()
+			.notNull()
+			.default('payment'),
 		// day of month the payment falls on; actual-day conventions accrue from
 		// payment date to payment date
 		paymentDay: integer('payment_day'),
@@ -673,14 +680,17 @@ export const document = pgTable(
 		id: text('id').primaryKey(),
 		name: text('name').notNull(),
 		// payslips | tax | identity | family | property | tenancy | loans | insurance
-		shelf: text('shelf').notNull(),
+		shelf: text('shelf').$type<EnumValue<'document.shelf'>>().notNull(),
 		// uploaded file on the data volume; a document may be metadata-only
 		storedName: text('stored_name'),
 		ext: text('ext').notNull().default('PDF'),
 		addedOn: date('added_on').notNull(),
 		expiresOn: date('expires_on'),
 		// how the expiry reads: expires | ends | renews
-		expiryVerb: text('expiry_verb').notNull().default('expires'),
+		expiryVerb: text('expiry_verb')
+			.$type<EnumValue<'document.expiry_verb'>>()
+			.notNull()
+			.default('expires'),
 		// money documents (payslips, bills) can carry the amount they are about
 		// and the month they cover — the salary tracker derives from these
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
@@ -821,7 +831,10 @@ export const rule = pgTable(
 		enabled: boolean('enabled').notNull().default(true),
 		// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
 		// rules; migration 0033 retired it and no code writes it any more.
-		provenance: text('provenance').notNull().default('learned'),
+		provenance: text('provenance')
+			.$type<EnumValue<'rule.provenance'>>()
+			.notNull()
+			.default('learned'),
 		// [{ field, op, value }], ANDed. Read only ever as a set with its rule.
 		conditions: jsonb('conditions').notNull(),
 		categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),

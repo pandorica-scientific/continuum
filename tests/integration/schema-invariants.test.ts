@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
+import { ENUMS, ENUM_COLUMNS, checkName } from '$lib/enums';
 
 /**
  * Conventions the schema is locked to as of v0.3.9.
@@ -64,5 +65,44 @@ describe('foreign keys', () => {
 
 		const uncovered = keys.filter((fk) => !covered(fk)).map((fk) => `${fk.table}(${fk.columns})`);
 		expect(uncovered.sort()).toEqual([]);
+	});
+});
+
+describe('enum columns', () => {
+	it('every closed set is enforced by a CHECK the database agrees with', async () => {
+		const rows = await harness.sql<{ name: string; definition: string }[]>`
+			select conname as name, pg_get_constraintdef(oid) as definition
+			from pg_constraint
+			where contype = 'c' and connamespace = 'public'::regnamespace
+		`;
+		const byName = new Map(rows.map((r) => [r.name, r.definition]));
+
+		const missing: string[] = [];
+		const wrong: string[] = [];
+		for (const { table, column, enum: key } of ENUM_COLUMNS) {
+			const definition = byName.get(checkName(table, column));
+			if (!definition) {
+				missing.push(`${table}.${column}`);
+				continue;
+			}
+			// Compare the SET of quoted literals, not the text: PostgreSQL rewrites
+			// `in (...)` as `= ANY (ARRAY[...])` and orders them as it pleases.
+			const inConstraint = new Set(
+				(definition.match(/'[^']*'/g) ?? []).map((quoted) => quoted.slice(1, -1))
+			);
+			const declared = new Set<string>(ENUMS[key]);
+			const absent = [...declared].filter((v) => !inConstraint.has(v));
+			const extra = [...inConstraint].filter((v) => !declared.has(v));
+			if (absent.length || extra.length) {
+				wrong.push(`${table}.${column}: missing ${absent.join('|')} extra ${extra.join('|')}`);
+			}
+		}
+		expect({ missing, wrong }).toEqual({ missing: [], wrong: [] });
+	});
+
+	it('rejects a value outside the set', async () => {
+		await expect(
+			harness.sql`insert into person (id, name, initials, role) values ('e1','X','X','superuser')`
+		).rejects.toThrow(/person_role_check/);
 	});
 });
