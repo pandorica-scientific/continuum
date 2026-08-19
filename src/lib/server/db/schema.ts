@@ -119,7 +119,8 @@ export const webauthnChallenge = pgTable(
 	},
 	(table) => [
 		index('webauthn_challenge_expires_idx').on(table.expiresAt),
-		index('webauthn_challenge_address_created_idx').on(table.address, table.createdAt)
+		index('webauthn_challenge_address_created_idx').on(table.address, table.createdAt),
+		index('webauthn_challenge_person_idx').on(table.personId)
 	]
 );
 
@@ -171,63 +172,71 @@ export const currencyRate = pgTable(
 
 // ---- Accounts and transactions ----
 
-export const account = pgTable('account', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	emoji: text('emoji').notNull().default('🏦'),
-	bank: text('bank').notNull(), // fio | revolut | mbank | rb | cs | other
-	kind: text('kind').notNull().default('current'), // current | savings | brokerage
-	currency: text('currency').notNull(),
-	ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
-	// bank account number / IBAN in the form statements print it; used to
-	// recognise transfers between the household's own accounts
-	numbers: jsonb('numbers').$type<string[]>().notNull().default([]),
-	// authoritative balance: the closing balance of the newest imported
-	// statement (minor units of `currency`), not a sum over transactions
-	balanceMinor: bigint('balance_minor', { mode: 'bigint' })
-		.notNull()
-		.default(sql`0`),
-	balanceAsOf: date('balance_as_of'),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const account = pgTable(
+	'account',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		emoji: text('emoji').notNull().default('🏦'),
+		bank: text('bank').notNull(), // fio | revolut | mbank | rb | cs | other
+		kind: text('kind').notNull().default('current'), // current | savings | brokerage
+		currency: text('currency').notNull(),
+		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		// bank account number / IBAN in the form statements print it; used to
+		// recognise transfers between the household's own accounts
+		numbers: jsonb('numbers').$type<string[]>().notNull().default([]),
+		// authoritative balance: the closing balance of the newest imported
+		// statement (minor units of `currency`), not a sum over transactions
+		balanceMinor: bigint('balance_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		balanceAsOf: date('balance_as_of'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('account_owner_person_idx').on(table.ownerPersonId)]
+);
 
-export const importFile = pgTable('import_file', {
-	id: text('id').primaryKey(),
-	filename: text('filename').notNull(),
-	bank: text('bank').notNull(),
-	format: text('format').notNull(),
-	accountId: text('account_id').references(() => account.id, { onDelete: 'set null' }),
-	// sha256 of the file body; the same file uploaded twice is skipped whole
-	contentHash: text('content_hash').notNull().unique(),
-	// the original bytes, kept on the data volume — parser improvements can
-	// re-parse history instead of asking for seven years of re-uploads
-	storedName: text('stored_name'),
-	rowsRead: integer('rows_read').notNull().default(0),
-	rowsAdded: integer('rows_added').notNull().default(0),
-	rowsDuplicate: integer('rows_duplicate').notNull().default(0),
-	rowsPaired: integer('rows_paired').notNull().default(0),
-	/**
-	 * How the statement was read, and what proved it.
-	 *
-	 * The proof engine decided whether to file this statement and then threw its
-	 * evidence away, so the ledger held numbers with no account of where they
-	 * came from. Keeping it means a row that turns out to be wrong can be traced
-	 * to the reading that produced it, and that "everything that came from OCR"
-	 * is a query rather than a guess.
-	 */
-	sourceMethod: text('source_method'),
-	proofClass: text('proof_class'),
-	ledgerModel: text('ledger_model'),
-	currency: text('currency'),
-	openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
-	closingBalanceMinor: bigint('closing_balance_minor', { mode: 'bigint' }),
-	statedCreditTotalMinor: bigint('stated_credit_total_minor', { mode: 'bigint' }),
-	statedDebitTotalMinor: bigint('stated_debit_total_minor', { mode: 'bigint' }),
-	statedRowCount: integer('stated_row_count'),
-	/** Each check as the evidence panel shows it: name, status, detail. */
-	reconciliation: jsonb('reconciliation').$type<ProofCheckRecord[] | null>(),
-	uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const importFile = pgTable(
+	'import_file',
+	{
+		id: text('id').primaryKey(),
+		filename: text('filename').notNull(),
+		bank: text('bank').notNull(),
+		format: text('format').notNull(),
+		accountId: text('account_id').references(() => account.id, { onDelete: 'set null' }),
+		// sha256 of the file body; the same file uploaded twice is skipped whole
+		contentHash: text('content_hash').notNull().unique(),
+		// the original bytes, kept on the data volume — parser improvements can
+		// re-parse history instead of asking for seven years of re-uploads
+		storedName: text('stored_name'),
+		rowsRead: integer('rows_read').notNull().default(0),
+		rowsAdded: integer('rows_added').notNull().default(0),
+		rowsDuplicate: integer('rows_duplicate').notNull().default(0),
+		rowsPaired: integer('rows_paired').notNull().default(0),
+		/**
+		 * How the statement was read, and what proved it.
+		 *
+		 * The proof engine decided whether to file this statement and then threw its
+		 * evidence away, so the ledger held numbers with no account of where they
+		 * came from. Keeping it means a row that turns out to be wrong can be traced
+		 * to the reading that produced it, and that "everything that came from OCR"
+		 * is a query rather than a guess.
+		 */
+		sourceMethod: text('source_method'),
+		proofClass: text('proof_class'),
+		ledgerModel: text('ledger_model'),
+		currency: text('currency'),
+		openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
+		closingBalanceMinor: bigint('closing_balance_minor', { mode: 'bigint' }),
+		statedCreditTotalMinor: bigint('stated_credit_total_minor', { mode: 'bigint' }),
+		statedDebitTotalMinor: bigint('stated_debit_total_minor', { mode: 'bigint' }),
+		statedRowCount: integer('stated_row_count'),
+		/** Each check as the evidence panel shows it: name, status, detail. */
+		reconciliation: jsonb('reconciliation').$type<ProofCheckRecord[] | null>(),
+		uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('import_file_account_idx').on(table.accountId)]
+);
 
 /** One line of a statement's evidence, as stored. */
 export interface ProofCheckRecord {
@@ -256,25 +265,29 @@ export interface ProofCheckRecord {
  * claim itself is atomic; the lease is what lets a crashed worker's job be
  * picked up again rather than stranded.
  */
-export const importJob = pgTable('import_job', {
-	id: text('id').primaryKey(),
-	filename: text('filename').notNull(),
-	/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
-	payload: text('payload'),
-	byteSize: integer('byte_size').notNull(),
-	/** The account the person chose at upload, when they chose one. */
-	appliesToAccountId: text('applies_to_account_id').references(() => account.id, {
-		onDelete: 'set null'
-	}),
-	/** queued -> running -> done | failed */
-	state: text('state').notNull().default('queued'),
-	claimedAt: timestamp('claimed_at', { withTimezone: true }),
-	finishedAt: timestamp('finished_at', { withTimezone: true }),
-	/** The IngestResult, so the page can show what happened without re-reading. */
-	result: jsonb('result'),
-	error: text('error'),
-	queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const importJob = pgTable(
+	'import_job',
+	{
+		id: text('id').primaryKey(),
+		filename: text('filename').notNull(),
+		/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
+		payload: text('payload'),
+		byteSize: integer('byte_size').notNull(),
+		/** The account the person chose at upload, when they chose one. */
+		appliesToAccountId: text('applies_to_account_id').references(() => account.id, {
+			onDelete: 'set null'
+		}),
+		/** queued -> running -> done | failed */
+		state: text('state').notNull().default('queued'),
+		claimedAt: timestamp('claimed_at', { withTimezone: true }),
+		finishedAt: timestamp('finished_at', { withTimezone: true }),
+		/** The IngestResult, so the page can show what happened without re-reading. */
+		result: jsonb('result'),
+		error: text('error'),
+		queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('import_job_applies_to_account_idx').on(table.appliesToAccountId)]
+);
 
 /**
  * A remembered statement layout.
@@ -373,7 +386,10 @@ export const transaction = pgTable(
 	(table) => [
 		uniqueIndex('transaction_dedup_idx').on(table.accountId, table.dedupFingerprint),
 		index('transaction_booked_idx').on(table.bookedAt),
-		index('transaction_review_idx').on(table.reviewState)
+		index('transaction_review_idx').on(table.reviewState),
+		index('transaction_category_idx').on(table.categoryId),
+		index('transaction_suggested_category_idx').on(table.suggestedCategoryId),
+		index('transaction_import_file_idx').on(table.importFileId)
 	]
 );
 
@@ -402,17 +418,24 @@ export const transactionFingerprintAlias = pgTable(
 // Confirmed/auto legs point back via transaction.transferPairId (a soft
 // pointer, to avoid an FK cycle); proposed pairs exist only here until the
 // user confirms them.
-export const transferPair = pgTable('transfer_pair', {
-	id: text('id').primaryKey(),
-	outTransactionId: text('out_transaction_id')
-		.notNull()
-		.references(() => transaction.id, { onDelete: 'cascade' }),
-	inTransactionId: text('in_transaction_id')
-		.notNull()
-		.references(() => transaction.id, { onDelete: 'cascade' }),
-	state: text('state').notNull().default('auto'), // auto | proposed | confirmed | rejected
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const transferPair = pgTable(
+	'transfer_pair',
+	{
+		id: text('id').primaryKey(),
+		outTransactionId: text('out_transaction_id')
+			.notNull()
+			.references(() => transaction.id, { onDelete: 'cascade' }),
+		inTransactionId: text('in_transaction_id')
+			.notNull()
+			.references(() => transaction.id, { onDelete: 'cascade' }),
+		state: text('state').notNull().default('auto'), // auto | proposed | confirmed | rejected
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('transfer_pair_out_transaction_idx').on(table.outTransactionId),
+		index('transfer_pair_in_transaction_idx').on(table.inTransactionId)
+	]
+);
 
 // A transaction can be claimed by only one active pair, regardless of whether
 // it is the outgoing or incoming leg. Migration 0027 maintains this normalized
@@ -445,53 +468,61 @@ export const markTransferRule = pgTable('mark_transfer_rule', {
 
 // ---- Property ----
 
-export const property = pgTable('property', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	// e.g. "3+kk · 78 m² · bought 2019"
-	sizeLabel: text('size_label').notNull().default(''),
-	kind: text('kind').notNull(), // lived | rented
-	currency: text('currency').notNull().default('CZK'),
-	valueMinor: bigint('value_minor', { mode: 'bigint' })
-		.notNull()
-		.default(sql`0`),
-	valuedAt: date('valued_at'),
-	// what went in: deposit, fees, principal repaid — for the appreciation tile
-	moneyInMinor: bigint('money_in_minor', { mode: 'bigint' })
-		.notNull()
-		.default(sql`0`),
-	boughtYear: integer('bought_year'),
-	ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
-	// uploaded images on the data volume, plus the drawn floor plan:
-	// {plan?, photos, drawing?: {cellCm, rooms: [{name, cells: [[x,y],…]}]}}
-	images: jsonb('images')
-		.$type<{
-			plan?: string;
-			photos: string[];
-			drawing?: { cellCm: number; rooms: { name: string; cells: [number, number][] }[] };
-		}>()
-		.notNull()
-		.default({ photos: [] }),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const property = pgTable(
+	'property',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		// e.g. "3+kk · 78 m² · bought 2019"
+		sizeLabel: text('size_label').notNull().default(''),
+		kind: text('kind').notNull(), // lived | rented
+		currency: text('currency').notNull().default('CZK'),
+		valueMinor: bigint('value_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		valuedAt: date('valued_at'),
+		// what went in: deposit, fees, principal repaid — for the appreciation tile
+		moneyInMinor: bigint('money_in_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		boughtYear: integer('bought_year'),
+		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		// uploaded images on the data volume, plus the drawn floor plan:
+		// {plan?, photos, drawing?: {cellCm, rooms: [{name, cells: [[x,y],…]}]}}
+		images: jsonb('images')
+			.$type<{
+				plan?: string;
+				photos: string[];
+				drawing?: { cellCm: number; rooms: { name: string; cells: [number, number][] }[] };
+			}>()
+			.notNull()
+			.default({ photos: [] }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('property_owner_person_idx').on(table.ownerPersonId)]
+);
 
-export const tenancy = pgTable('tenancy', {
-	id: text('id').primaryKey(),
-	propertyId: text('property_id')
-		.notNull()
-		.references(() => property.id, { onDelete: 'cascade' }),
-	tenantName: text('tenant_name').notNull(),
-	rentMinor: bigint('rent_minor', { mode: 'bigint' })
-		.notNull()
-		.default(sql`0`),
-	depositMinor: bigint('deposit_minor', { mode: 'bigint' })
-		.notNull()
-		.default(sql`0`),
-	startDate: date('start_date'),
-	endDate: date('end_date'),
-	// the date by which a renewal notice must be given
-	renewalNoticeDate: date('renewal_notice_date')
-});
+export const tenancy = pgTable(
+	'tenancy',
+	{
+		id: text('id').primaryKey(),
+		propertyId: text('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' }),
+		tenantName: text('tenant_name').notNull(),
+		rentMinor: bigint('rent_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		depositMinor: bigint('deposit_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		startDate: date('start_date'),
+		endDate: date('end_date'),
+		// the date by which a renewal notice must be given
+		renewalNoticeDate: date('renewal_notice_date')
+	},
+	(table) => [index('tenancy_property_idx').on(table.propertyId)]
+);
 
 export const propertyBill = pgTable(
 	'property_bill',
@@ -520,42 +551,48 @@ export const propertyBill = pgTable(
 	(table) => [
 		uniqueIndex('property_bill_meter_property_idx')
 			.on(table.propertyId)
-			.where(sql`${table.source} = 'meter'`)
+			.where(sql`${table.source} = 'meter'`),
+		index('property_bill_property_idx').on(table.propertyId),
+		index('property_bill_document_idx').on(table.documentId)
 	]
 );
 
 // ---- Loans ----
 
-export const loan = pgTable('loan', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	lender: text('lender').notNull().default(''),
-	kind: text('kind').notNull().default('mortgage'), // mortgage | car | consumer | family
-	currency: text('currency').notNull().default('CZK'),
-	principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
-	owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
-	owedAsOf: date('owed_as_of'),
-	ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
-	startDate: date('start_date'),
-	endDate: date('end_date'),
-	// fixed_period: rate fixed until a date, then re-fixed (mortgages)
-	// fixed_term:   rate fixed for the whole life of the loan
-	// floating:     rate tracks a reference
-	regime: text('regime').notNull().default('fixed_period'),
-	// how the bank accrues interest — per loan, because banks differ:
-	// 30/360 (rate ÷ 12), act/365, act/360
-	dayCount: text('day_count').notNull().default('30/360'),
-	// payment: accrues payment-date to payment-date on one balance
-	// calendar: accrues daily over the calendar month, charged on its last
-	//           day and collected with the next instalment (Česká spořitelna)
-	accrualStyle: text('accrual_style').notNull().default('payment'),
-	// day of month the payment falls on; actual-day conventions accrue from
-	// payment date to payment date
-	paymentDay: integer('payment_day'),
-	// czech mortgage interest on owner-occupied housing is tax deductible
-	interestDeductible: integer('interest_deductible').notNull().default(0),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const loan = pgTable(
+	'loan',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		lender: text('lender').notNull().default(''),
+		kind: text('kind').notNull().default('mortgage'), // mortgage | car | consumer | family
+		currency: text('currency').notNull().default('CZK'),
+		principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
+		owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
+		owedAsOf: date('owed_as_of'),
+		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		startDate: date('start_date'),
+		endDate: date('end_date'),
+		// fixed_period: rate fixed until a date, then re-fixed (mortgages)
+		// fixed_term:   rate fixed for the whole life of the loan
+		// floating:     rate tracks a reference
+		regime: text('regime').notNull().default('fixed_period'),
+		// how the bank accrues interest — per loan, because banks differ:
+		// 30/360 (rate ÷ 12), act/365, act/360
+		dayCount: text('day_count').notNull().default('30/360'),
+		// payment: accrues payment-date to payment-date on one balance
+		// calendar: accrues daily over the calendar month, charged on its last
+		//           day and collected with the next instalment (Česká spořitelna)
+		accrualStyle: text('accrual_style').notNull().default('payment'),
+		// day of month the payment falls on; actual-day conventions accrue from
+		// payment date to payment date
+		paymentDay: integer('payment_day'),
+		// czech mortgage interest on owner-occupied housing is tax deductible
+		interestDeductible: integer('interest_deductible').notNull().default(0),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('loan_owner_person_idx').on(table.ownerPersonId)]
+);
 
 // One mortgage agreement can secure several properties (the flats entered at
 // different values with different shares owed) — the share is explicit, never
@@ -572,7 +609,10 @@ export const loanProperty = pgTable(
 			.references(() => property.id, { onDelete: 'cascade' }),
 		sharePct: numeric('share_pct', { precision: 6, scale: 3 })
 	},
-	(table) => [uniqueIndex('loan_property_idx').on(table.loanId, table.propertyId)]
+	(table) => [
+		uniqueIndex('loan_property_idx').on(table.loanId, table.propertyId),
+		index('loan_property_property_idx').on(table.propertyId)
+	]
 );
 
 // Interest is booked per fixation period so a later re-fix never rewrites
@@ -619,7 +659,10 @@ export const loanEvent = pgTable(
 			onDelete: 'set null'
 		})
 	},
-	(table) => [index('loan_event_loan_idx').on(table.loanId)]
+	(table) => [
+		index('loan_event_loan_idx').on(table.loanId),
+		index('loan_event_transaction_idx').on(table.transactionId)
+	]
 );
 
 // ---- Documents ----
@@ -732,7 +775,10 @@ export const transactionSplit = pgTable(
 		note: text('note'),
 		sort: integer('sort').notNull().default(0)
 	},
-	(table) => [index('transaction_split_txn_idx').on(table.transactionId)]
+	(table) => [
+		index('transaction_split_txn_idx').on(table.transactionId),
+		index('transaction_split_category_idx').on(table.categoryId)
+	]
 );
 
 // Cross-cutting groupings: a renovation, a holiday. Every tag has a running
@@ -755,7 +801,10 @@ export const transactionTag = pgTable(
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
-	(table) => [primaryKey({ columns: [table.transactionId, table.tagId] })]
+	(table) => [
+		primaryKey({ columns: [table.transactionId, table.tagId] }),
+		index('transaction_tag_tag_idx').on(table.tagId)
+	]
 );
 
 // ---- Rules ----
@@ -764,21 +813,25 @@ export const transactionTag = pgTable(
 // contest with another rule; tags are additive and always apply. There is
 // deliberately no unique index on the conditions — two rules claiming the same
 // counterparty is what makes a contested row possible.
-export const rule = pgTable('rule', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	enabled: boolean('enabled').notNull().default(true),
-	// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
-	// rules; migration 0033 retired it and no code writes it any more.
-	provenance: text('provenance').notNull().default('learned'),
-	// [{ field, op, value }], ANDed. Read only ever as a set with its rule.
-	conditions: jsonb('conditions').notNull(),
-	categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),
-	// Evidence, not a tuned weight: confidence is derived from these.
-	acceptedCount: integer('accepted_count').notNull().default(0),
-	correctedCount: integer('corrected_count').notNull().default(0),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const rule = pgTable(
+	'rule',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		enabled: boolean('enabled').notNull().default(true),
+		// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
+		// rules; migration 0033 retired it and no code writes it any more.
+		provenance: text('provenance').notNull().default('learned'),
+		// [{ field, op, value }], ANDed. Read only ever as a set with its rule.
+		conditions: jsonb('conditions').notNull(),
+		categoryId: text('category_id').references(() => category.id, { onDelete: 'set null' }),
+		// Evidence, not a tuned weight: confidence is derived from these.
+		acceptedCount: integer('accepted_count').notNull().default(0),
+		correctedCount: integer('corrected_count').notNull().default(0),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('rule_category_idx').on(table.categoryId)]
+);
 
 export const ruleTag = pgTable(
 	'rule_tag',
@@ -790,7 +843,10 @@ export const ruleTag = pgTable(
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
-	(table) => [primaryKey({ columns: [table.ruleId, table.tagId] })]
+	(table) => [
+		primaryKey({ columns: [table.ruleId, table.tagId] }),
+		index('rule_tag_tag_idx').on(table.tagId)
+	]
 );
 
 // ---- Subjects and entity links ----
@@ -821,7 +877,10 @@ export const documentPerson = pgTable(
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.documentId, t.personId] })]
+	(t) => [
+		primaryKey({ columns: [t.documentId, t.personId] }),
+		index('document_person_person_idx').on(t.personId)
+	]
 );
 
 export const documentProperty = pgTable(
@@ -834,7 +893,10 @@ export const documentProperty = pgTable(
 			.notNull()
 			.references(() => property.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.documentId, t.propertyId] })]
+	(t) => [
+		primaryKey({ columns: [t.documentId, t.propertyId] }),
+		index('document_property_property_idx').on(t.propertyId)
+	]
 );
 
 export const documentAccount = pgTable(
@@ -847,7 +909,10 @@ export const documentAccount = pgTable(
 			.notNull()
 			.references(() => account.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.documentId, t.accountId] })]
+	(t) => [
+		primaryKey({ columns: [t.documentId, t.accountId] }),
+		index('document_account_account_idx').on(t.accountId)
+	]
 );
 
 export const documentSubject = pgTable(
@@ -860,7 +925,10 @@ export const documentSubject = pgTable(
 			.notNull()
 			.references(() => subject.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.documentId, t.subjectId] })]
+	(t) => [
+		primaryKey({ columns: [t.documentId, t.subjectId] }),
+		index('document_subject_subject_idx').on(t.subjectId)
+	]
 );
 
 export const documentTag = pgTable(
@@ -873,7 +941,10 @@ export const documentTag = pgTable(
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.documentId, t.tagId] })]
+	(t) => [
+		primaryKey({ columns: [t.documentId, t.tagId] }),
+		index('document_tag_tag_idx').on(t.tagId)
+	]
 );
 
 export const propertyTag = pgTable(
@@ -886,7 +957,10 @@ export const propertyTag = pgTable(
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.propertyId, t.tagId] })]
+	(t) => [
+		primaryKey({ columns: [t.propertyId, t.tagId] }),
+		index('property_tag_tag_idx').on(t.tagId)
+	]
 );
 
 export const loanTag = pgTable(
@@ -899,7 +973,7 @@ export const loanTag = pgTable(
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.loanId, t.tagId] })]
+	(t) => [primaryKey({ columns: [t.loanId, t.tagId] }), index('loan_tag_tag_idx').on(t.tagId)]
 );
 
 export const transactionSplitTag = pgTable(
@@ -912,7 +986,10 @@ export const transactionSplitTag = pgTable(
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
-	(table) => [primaryKey({ columns: [table.splitId, table.tagId] })]
+	(table) => [
+		primaryKey({ columns: [table.splitId, table.tagId] }),
+		index('transaction_split_tag_tag_idx').on(table.tagId)
+	]
 );
 
 // ---- Tax statements ----
@@ -939,51 +1016,62 @@ export const taxStatement = pgTable(
 		note: text('note'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [uniqueIndex('tax_statement_unique_idx').on(table.personId, table.year, table.country)]
+	(table) => [
+		uniqueIndex('tax_statement_unique_idx').on(table.personId, table.year, table.country),
+		index('tax_statement_document_idx').on(table.documentId)
+	]
 );
 
-export const taxStatementLine = pgTable('tax_statement_line', {
-	id: text('id').primaryKey(),
-	statementId: text('statement_id')
-		.notNull()
-		.references(() => taxStatement.id, { onDelete: 'cascade' }),
-	label: text('label').notNull(),
-	amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
-	sort: integer('sort').notNull().default(0)
-});
+export const taxStatementLine = pgTable(
+	'tax_statement_line',
+	{
+		id: text('id').primaryKey(),
+		statementId: text('statement_id')
+			.notNull()
+			.references(() => taxStatement.id, { onDelete: 'cascade' }),
+		label: text('label').notNull(),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+		sort: integer('sort').notNull().default(0)
+	},
+	(table) => [index('tax_statement_line_statement_idx').on(table.statementId)]
+);
 
 // ---- Calendar ----
 
 // Events someone wrote by hand. The ledger's own events stay derived — they are
 // recomputed from loans, tenancies and documents and never land in a table — so
 // this holds only what a person authored.
-export const calendarEvent = pgTable('calendar_event', {
-	id: text('id').primaryKey(),
-	title: text('title').notNull(),
-	notes: text('notes'),
-	// A key from EVENT_CATEGORIES; supplies the marker emoji. Null is untagged.
-	category: text('category'),
-	allDay: boolean('all_day').notNull().default(false),
-	startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
-	endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
-	// The IANA zone the event was authored in, and NOT redundant beside the two
-	// timestamptz columns above. Recurrence expands against wall-clock time:
-	// "every Tuesday at 09:00" has to stay 09:00 local across the March and
-	// October transitions, and a series expanded purely in UTC silently drifts by
-	// an hour for half the year. The instant alone cannot say which 09:00 was
-	// meant, so the zone travels with the event.
-	tz: text('tz').notNull(),
-	// RFC 5545 rule, without the RRULE: prefix. Null means a single event.
-	rrule: text('rrule'),
-	createdBy: text('created_by').references(() => person.id, { onDelete: 'set null' }),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	// The merge clock: sync compares this against the remote's modification time.
-	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-	// A tombstone rather than a hard delete. Sync has to be able to tell "deleted
-	// here, push the deletion" from "never existed", and a removed row says
-	// nothing at all.
-	deletedAt: timestamp('deleted_at', { withTimezone: true })
-});
+export const calendarEvent = pgTable(
+	'calendar_event',
+	{
+		id: text('id').primaryKey(),
+		title: text('title').notNull(),
+		notes: text('notes'),
+		// A key from EVENT_CATEGORIES; supplies the marker emoji. Null is untagged.
+		category: text('category'),
+		allDay: boolean('all_day').notNull().default(false),
+		startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+		endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+		// The IANA zone the event was authored in, and NOT redundant beside the two
+		// timestamptz columns above. Recurrence expands against wall-clock time:
+		// "every Tuesday at 09:00" has to stay 09:00 local across the March and
+		// October transitions, and a series expanded purely in UTC silently drifts by
+		// an hour for half the year. The instant alone cannot say which 09:00 was
+		// meant, so the zone travels with the event.
+		tz: text('tz').notNull(),
+		// RFC 5545 rule, without the RRULE: prefix. Null means a single event.
+		rrule: text('rrule'),
+		createdBy: text('created_by').references(() => person.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		// The merge clock: sync compares this against the remote's modification time.
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+		// A tombstone rather than a hard delete. Sync has to be able to tell "deleted
+		// here, push the deletion" from "never existed", and a removed row says
+		// nothing at all.
+		deletedAt: timestamp('deleted_at', { withTimezone: true })
+	},
+	(table) => [index('calendar_event_created_by_idx').on(table.createdBy)]
+);
 
 // One occurrence of a recurring event that was moved or cancelled.
 export const calendarEventException = pgTable(
@@ -1100,19 +1188,23 @@ export const calendarSyncLink = pgTable(
 // This is what makes the conflict rule acceptable rather than reckless: the
 // losing edit is recorded and surfaced through the briefing, so an overwritten
 // change is visible instead of simply gone.
-export const calendarConflict = pgTable('calendar_conflict', {
-	id: text('id').primaryKey(),
-	localKey: text('local_key').notNull(),
-	accountId: text('account_id')
-		.notNull()
-		.references(() => calendarAccount.id, { onDelete: 'cascade' }),
-	detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
-	ours: jsonb('ours').notNull(),
-	theirs: jsonb('theirs').notNull(),
-	resolution: text('resolution').$type<'local-won' | 'remote-won' | 'wrote-back'>().notNull(),
-	/** Cleared once someone has seen it, so the briefing stops raising it. */
-	acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true })
-});
+export const calendarConflict = pgTable(
+	'calendar_conflict',
+	{
+		id: text('id').primaryKey(),
+		localKey: text('local_key').notNull(),
+		accountId: text('account_id')
+			.notNull()
+			.references(() => calendarAccount.id, { onDelete: 'cascade' }),
+		detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
+		ours: jsonb('ours').notNull(),
+		theirs: jsonb('theirs').notNull(),
+		resolution: text('resolution').$type<'local-won' | 'remote-won' | 'wrote-back'>().notNull(),
+		/** Cleared once someone has seen it, so the briefing stops raising it. */
+		acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true })
+	},
+	(table) => [index('calendar_conflict_account_idx').on(table.accountId)]
+);
 
 // ---- Contacts ----
 
@@ -1152,7 +1244,10 @@ export const contactTenancy = pgTable(
 			.notNull()
 			.references(() => tenancy.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.contactId, t.tenancyId] })]
+	(t) => [
+		primaryKey({ columns: [t.contactId, t.tenancyId] }),
+		index('contact_tenancy_tenancy_idx').on(t.tenancyId)
+	]
 );
 
 export const contactProperty = pgTable(
@@ -1165,7 +1260,10 @@ export const contactProperty = pgTable(
 			.notNull()
 			.references(() => property.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.contactId, t.propertyId] })]
+	(t) => [
+		primaryKey({ columns: [t.contactId, t.propertyId] }),
+		index('contact_property_property_idx').on(t.propertyId)
+	]
 );
 
 export const contactLoan = pgTable(
@@ -1178,7 +1276,10 @@ export const contactLoan = pgTable(
 			.notNull()
 			.references(() => loan.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.contactId, t.loanId] })]
+	(t) => [
+		primaryKey({ columns: [t.contactId, t.loanId] }),
+		index('contact_loan_loan_idx').on(t.loanId)
+	]
 );
 
 export const contactAccount = pgTable(
@@ -1191,5 +1292,8 @@ export const contactAccount = pgTable(
 			.notNull()
 			.references(() => account.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.contactId, t.accountId] })]
+	(t) => [
+		primaryKey({ columns: [t.contactId, t.accountId] }),
+		index('contact_account_account_idx').on(t.accountId)
+	]
 );
