@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Pure mapping from Home Assistant API payloads to the HomeProvider shapes.
 // No fetch, no WebSocket — unit tests feed canned payloads.
 

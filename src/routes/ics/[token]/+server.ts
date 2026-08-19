@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { error } from '@sveltejs/kit';
 import { buildIcs, icsToken } from '$lib/server/calendar';
 import type { RequestHandler } from './$types';

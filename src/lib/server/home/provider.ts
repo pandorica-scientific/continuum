@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The smart-home capability seam. Screens talk ONLY to this interface; which
 // platform sits behind it is configuration. Adding support for another
 // platform (or expanding what a platform can do) means writing a new provider

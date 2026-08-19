@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Shared response shape and the bearer-token gate for /api/v1.
 
 import { verifyToken } from '$lib/server/api/tokens';

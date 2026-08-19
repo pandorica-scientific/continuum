@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { apiError, json } from '$lib/server/api/respond';
 import { flowData, type Period } from '$lib/server/cashflow';
 import { money } from '$lib/api/serialise';

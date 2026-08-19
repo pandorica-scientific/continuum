@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Bearer tokens for the read-only API. The raw token is shown once at creation
 // and never stored — only its sha256, exactly as sessions are handled.
 

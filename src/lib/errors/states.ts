@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // What each error screen says.
 //
 // Data rather than markup, so the same catalogue serves the error page, a test

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue, isEnumValue } from '$lib/enums';
 import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';

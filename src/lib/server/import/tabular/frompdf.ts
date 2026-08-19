@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * A PDF has no columns — only glyphs at coordinates. This recovers a table.
  *

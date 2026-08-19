@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // One definition of how an opaque bearer token becomes a database key.
 //
 // Sessions, API tokens and enrollment links are all handed out once as random

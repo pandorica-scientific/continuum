@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { fail } from '@sveltejs/kit';
 import { asc, desc } from 'drizzle-orm';
 import { db } from '$lib/server/db';

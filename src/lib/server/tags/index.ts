@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Tags group transactions and split lines into projects — a renovation, a
 // holiday — and every tag carries a running total. They hold no tax meaning;
 // tax treatment belongs to the tax module, not here.

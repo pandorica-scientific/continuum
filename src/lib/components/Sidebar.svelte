@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import BrandMark from './BrandMark.svelte';

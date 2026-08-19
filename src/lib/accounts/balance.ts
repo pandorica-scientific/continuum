@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { convertMinorSync, convertOrFace, type RateTable } from '$lib/server/fx/table';
 
 /** One account conversion for both display and arithmetic. The exact value is

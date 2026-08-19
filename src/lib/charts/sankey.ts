@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A multi-column Sankey, laid out in the pixels of the box it is given.
 //
 // The engine knows nothing about money. It takes a graph of nodes carrying a

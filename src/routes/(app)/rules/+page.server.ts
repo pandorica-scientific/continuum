@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';

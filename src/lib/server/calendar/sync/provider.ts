@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The calendar sync seam.
 //
 // Modelled on HomeProvider (src/lib/server/home/provider.ts), including the

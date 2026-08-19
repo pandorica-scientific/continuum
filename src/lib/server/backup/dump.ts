@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A restorable data dump in plain SQL, produced over the normal database
 // connection — no pg_dump binary required, so backups work in every install
 // (the schema itself is recreated by the app's own migrations on first boot).

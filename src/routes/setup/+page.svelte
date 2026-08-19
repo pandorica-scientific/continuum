@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
 	import { passwordHint } from '$lib/password-policy';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Events, the providers they sync with, and what to do when both sides changed.
  */

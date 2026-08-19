@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Splitting a transaction between categories. All four invariants from the
 // spec live here rather than at the call sites, and the validation itself is
 // pure so it is testable without a database.

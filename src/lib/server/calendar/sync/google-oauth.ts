@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 // The Google authorisation-code flow, kept apart from the adapter: the adapter

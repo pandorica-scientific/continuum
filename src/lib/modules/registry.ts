@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import type { IconName } from '$lib/icons';
 
 // The module registry is the single source of truth for the sidebar and for

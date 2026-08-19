@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { extname } from 'node:path';
 import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';

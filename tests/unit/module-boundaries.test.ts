@@ -16,9 +16,7 @@ const SERVER = 'src/lib/server';
 
 describe('src/lib/server', () => {
 	it('holds directories only', () => {
-		const loose = readdirSync(SERVER).filter((entry) =>
-			statSync(join(SERVER, entry)).isFile()
-		);
+		const loose = readdirSync(SERVER).filter((entry) => statSync(join(SERVER, entry)).isFile());
 		expect(loose).toEqual([]);
 	});
 

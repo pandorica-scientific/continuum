@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asOptionalRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { asc, isNull } from 'drizzle-orm';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Server side of the salary tracker: pull the text out of an uploaded payslip
 // PDF, detect the pay amount and period, and remember which label the user's
 // corrections point at so the next slip for the same person reads itself.

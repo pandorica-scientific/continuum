@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // CalDAV, as spoken by iCloud — and by Fastmail, Nextcloud and Radicale, which
 // is a large part of why this provider comes first.
 //

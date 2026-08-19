@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { goto } from '$app/navigation';
 	import { startAuthentication } from '@simplewebauthn/browser';
 	import { runCeremony } from '$lib/webauthn';

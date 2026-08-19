@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The reader's entry point: a file arrives, something works out what it is, and
 // what it says becomes rows.
 //

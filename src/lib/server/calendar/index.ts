@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { db, type Db } from '$lib/server/db';
 import { document, loan, loanFixationPeriod, property, tenancy } from '$lib/server/db/schema';
 import { periodForMonth } from '$lib/loans/amortise';

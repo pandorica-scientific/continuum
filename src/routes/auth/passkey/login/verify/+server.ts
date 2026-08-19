@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';

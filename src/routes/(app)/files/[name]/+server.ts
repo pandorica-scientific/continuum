@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { error } from '@sveltejs/kit';
 import { openUpload } from '$lib/server/system/files';
 import type { RequestHandler } from './$types';

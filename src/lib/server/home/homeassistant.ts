@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The Home Assistant provider: official REST API for states, services and
 // history, one-shot WebSocket for the area/entity registries (REST does not
 // expose areas). All payload interpretation lives in ha-map.ts, pure and

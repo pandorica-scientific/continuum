@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Currencies and their exchange rates: what every `*_minor` column is denominated in.
  */

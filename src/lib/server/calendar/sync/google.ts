@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Google Calendar.
 //
 // The API is free — 1,000,000 requests a day, no billing account — and this

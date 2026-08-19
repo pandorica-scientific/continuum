@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // One data builder per Overview panel.
 //
 // The board only computes what it is actually showing. Thirteen panels' worth

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { error, json } from '@sveltejs/kit';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { db } from '$lib/server/db';

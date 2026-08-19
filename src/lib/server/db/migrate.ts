@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { db } from './index';
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import type { DayCount } from '$lib/loans';
 import type { FixationPeriod, LoanTerms } from '$lib/loans/amortise';
 import type { YearAgg } from '$lib/loans/simulate';

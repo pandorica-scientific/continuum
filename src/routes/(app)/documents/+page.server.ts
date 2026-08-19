@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
 import { extname } from 'node:path';

@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';

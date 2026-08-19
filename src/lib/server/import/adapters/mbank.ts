@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { parseAmountToMinor } from '$lib/money';
 import { csvLines, splitCsvLine } from '../csv';
 import type { ParsedRow, ParsedStatement } from '../types';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Auto-detected backup destinations: the mounted cloud-sync folders this
 // server can see. Nothing is assumed — only folders that actually exist are
 // offered, and the user can always type any other path.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';

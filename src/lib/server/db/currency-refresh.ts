@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { sql } from 'drizzle-orm';
 import { minorDigits } from '$lib/money';
 import { currency } from './schema';

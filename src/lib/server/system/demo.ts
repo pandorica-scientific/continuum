@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Demo mode: with DEMO=1 a pristine instance seeds itself with a fictional
 // household — Jana & Petr Novák, two flats on one shared mortgage, six months
 // of categorised cash flow, payslips, a portfolio snapshot — so screenshots

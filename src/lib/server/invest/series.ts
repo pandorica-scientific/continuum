@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The "value against money in" chart series. Benchmarks compound every real
 // contribution from its own date — the honest comparison the design demands.
 

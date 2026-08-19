@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { flowData, monthlyHistory, type Period } from '$lib/server/cashflow';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { PageServerLoad } from './$types';

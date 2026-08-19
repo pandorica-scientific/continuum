@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { uuidv7 } from 'uuidv7';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';

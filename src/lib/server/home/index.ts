@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The home module's front door: providers register themselves on import, and
 // the configured one is built from settings. Screens import from here only.
 

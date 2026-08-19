@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 interface EffectiveSpendingLine {
 	day: string;
 	currency: string;

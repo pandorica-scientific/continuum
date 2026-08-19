@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // One import site for the whole schema. Split by domain rather than by table:
 // files that change together live together, and drizzle-kit is pointed at the
 // directory, so a new file is picked up without being registered anywhere.

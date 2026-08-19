@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Shelf definitions shared by the documents screen and its form.
 
 import { ENUMS } from '$lib/enums';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // What-if helpers over the amortisation engine, shared by the server (the
 // saved chart) and the browser (live previews while a repayment or new
 // fixation is being typed — the chart becomes a tool for comparing offers).

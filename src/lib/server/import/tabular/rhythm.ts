@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Record assembly by RHYTHM, for statements that print one movement across
  * several physical lines.

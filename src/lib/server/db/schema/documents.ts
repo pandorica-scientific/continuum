@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Filed paperwork, the subjects it is filed under, and the tags applied to it.
  */

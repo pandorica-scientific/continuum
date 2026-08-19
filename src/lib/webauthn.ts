@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The browser half of a WebAuthn ceremony, which is the same shape whether you
 // are registering a passkey or signing in with one: ask the server for options,
 // hand them to the authenticator, post what it returns back for verification.

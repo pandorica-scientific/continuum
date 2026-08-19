@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asRowId } from '$lib/ids';
 import { uuidv7 } from 'uuidv7';
 import { asc, eq } from 'drizzle-orm';

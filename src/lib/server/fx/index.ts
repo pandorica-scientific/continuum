@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { isCurrencyCode } from '$lib/money';
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';

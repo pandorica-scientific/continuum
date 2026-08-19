@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { invalidateAll } from '$app/navigation';
 	import Panel from './Panel.svelte';
 	import PanelContent from './PanelContent.svelte';

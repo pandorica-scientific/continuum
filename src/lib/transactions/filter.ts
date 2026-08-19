@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The transaction register keeps all of its state in the URL, so a view is
 // linkable and the back button behaves. This module is the only place that
 // knows how those params map onto a filter — pure, so it is testable without

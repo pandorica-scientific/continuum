@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The only file that knows a salary from a mortgage.
 //
 // Turns the cash-flow figures into the plain graph the Sankey engine draws, so

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { db } from '$lib/server/db';
 import { account } from '$lib/server/db/schema';
 import { json } from '$lib/server/api/respond';

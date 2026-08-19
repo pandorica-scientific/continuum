@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { formatMinor, parseAmountToMinor } from '$lib/money';
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import { enhance } from '$app/forms';

@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
 	import type { YearAgg } from '$lib/loans/simulate';
 	import { comparisonBars } from '$lib/loans/scenario';

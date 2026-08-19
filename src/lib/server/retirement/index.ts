@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The projection's inputs, gathered from every corner of the household: cash,
 // portfolio, property, mortgages and rent.
 //

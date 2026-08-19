@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The category tree the whole product shares: 6 expense groups in waterfall
 // order plus income. Groups carry the series colour; the 17 leaves live in
 // the breakdown strip, never as chart labels.

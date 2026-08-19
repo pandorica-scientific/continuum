@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import iconv from 'iconv-lite';
 import { parseFio } from './adapters/fio';
 import { parseRevolut } from './adapters/revolut';

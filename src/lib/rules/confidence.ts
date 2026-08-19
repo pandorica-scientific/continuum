@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // How far a rule can be trusted, as the Wilson score lower bound on its
 // accepted/corrected record.
 //

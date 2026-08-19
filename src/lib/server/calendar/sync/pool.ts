@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Running a batch of provider writes a few at a time.
 //
 // Both adapters used to push strictly one at a time. Correct, but a household

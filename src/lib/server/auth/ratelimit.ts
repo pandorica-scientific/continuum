@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Failed-credential rate limiting. In-memory by design: this is a single-home
 // server, and restarting it may reset a short-lived budget without weakening
 // the database-backed credentials themselves.

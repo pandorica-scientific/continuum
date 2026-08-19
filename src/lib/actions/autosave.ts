@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /** Serialize normal saves while allowing the newest pending snapshot to be
  * handed to a keepalive transport during page teardown. */
 export function createSerializedAutosave<T>(

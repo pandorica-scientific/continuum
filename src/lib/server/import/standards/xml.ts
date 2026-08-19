@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * A small XML reader, scoped to machine-generated financial messages.
  *

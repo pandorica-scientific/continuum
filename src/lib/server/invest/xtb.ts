@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import * as XLSX from 'xlsx';
 import { parseAmountToMinor } from '$lib/money';
 
@@ -6,7 +7,8 @@ import { parseAmountToMinor } from '$lib/money';
 //                       rows beneath them keyed by position id)
 //  - "Cash Operations": every cash movement with a broker-unique ID — this is
 //                       what makes re-uploads idempotent
-//  - "Closed Positions" (unused for now)
+//  - "Closed Positions": authoritative purchase and sale values, and the
+//                       holding span each position occupied
 
 import {
 	registerBrokerAdapter,

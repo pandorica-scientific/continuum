@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { applyAction, deserialize } from '$app/forms';
 import { invalidateAll } from '$app/navigation';
 import type { ActionResult } from '@sveltejs/kit';

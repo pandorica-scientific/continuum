@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * CAMT.053 — the ISO 20022 bank-to-customer statement.
  *
