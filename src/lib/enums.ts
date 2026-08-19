@@ -83,6 +83,7 @@ export const ENUMS = {
 	'transaction.review_state': ['auto', 'needs_review', 'confirmed', 'filed'],
 	'transfer_pair.state': ['auto', 'proposed', 'confirmed', 'rejected'],
 
+	'job.kind': ['import', 'calendar_sync'],
 	job_state: ['queued', 'running', 'done', 'failed'],
 	'import_profile.source': ['delimited', 'xlsx'],
 	'import_profile.origin': ['builtin', 'user', 'imported'],
@@ -138,7 +139,8 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'transaction', column: 'review_state', enum: 'transaction.review_state' },
 	{ table: 'transaction', column: 'proof_class', enum: 'proof_class' },
 	{ table: 'transfer_pair', column: 'state', enum: 'transfer_pair.state' },
-	{ table: 'import_job', column: 'state', enum: 'job_state' },
+	{ table: 'job', column: 'kind', enum: 'job.kind' },
+	{ table: 'job', column: 'state', enum: 'job_state' },
 	{ table: 'import_profile', column: 'source', enum: 'import_profile.source' },
 	{ table: 'import_profile', column: 'origin', enum: 'import_profile.origin' },
 	{ table: 'import_file', column: 'proof_class', enum: 'proof_class' },

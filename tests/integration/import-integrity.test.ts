@@ -145,7 +145,16 @@ beforeAll(async () => {
 	await executeSqlFile(resolve('drizzle/0037_tenant_contacts.sql'));
 	await executeSqlFile(resolve('drizzle/0049_entity.sql'));
 	await executeSqlFile(resolve('drizzle/0050_link_tables.sql'));
+	// The queue moved into `job` in 0051; this suite drives it directly. 0051
+	// migrates rows out of `import_job` (0045) and takes the lease off
+	// `calendar_account` (0038 then 0039), so all three come first.
+	await executeSqlFile(resolve('drizzle/0038_calendar_events.sql'));
+	await executeSqlFile(resolve('drizzle/0039_calendar_sync.sql'));
+	await executeSqlFile(resolve('drizzle/0040_calendar_name.sql'));
+	// 0041 is the one that adds `syncing_since`, which 0051 drops.
+	await executeSqlFile(resolve('drizzle/0041_calendar_sync_lease.sql'));
 	await executeSqlFile(resolve('drizzle/0045_import_queue.sql'));
+	await executeSqlFile(resolve('drizzle/0051_job.sql'));
 }, 30_000);
 
 beforeEach(async () => {
@@ -168,8 +177,10 @@ beforeEach(async () => {
 		drop trigger if exists task1_delay_transaction_tag on tag_link;
 		drop function if exists task1_delay_transaction_tag();
 		drop sequence if exists task1_tag_lock_arrivals;
-		truncate table transfer_pair, "transaction", import_file, import_job,
-			import_profile, account, person, settings, rule, tag, currency_rate
+		-- entity too: TRUNCATE fires no row triggers, so a registration would
+		-- outlive the row it belongs to and collide on a reused id.
+		truncate table transfer_pair, "transaction", import_file, job,
+			import_profile, account, person, settings, rule, tag, currency_rate, entity
 			restart identity cascade;
 	`);
 });
@@ -1133,8 +1144,10 @@ describe('import database integrity', () => {
 
 		// The bytes are released once the job is finished; import_file keeps the
 		// original.
-		const [job] = await testDb.select().from(schema.importJob);
-		expect(job.payload).toBeNull();
+		const [row] = await testDb.select().from(schema.job);
+		expect(row.blob).toBeNull();
+		// The size outlives the bytes, so the upload screen can still say what it read.
+		expect(row.byteSize).toBeGreaterThan(0);
 	}, 30_000);
 
 	it('offers a job again when the worker holding it died, and not before', async () => {
@@ -1146,9 +1159,9 @@ describe('import database integrity', () => {
 		// A worker claimed this and then died: the row says running, and nothing
 		// is coming back for it.
 		await testDb
-			.update(schema.importJob)
+			.update(schema.job)
 			.set({ state: 'running', claimedAt: new Date() })
-			.where(eq(schema.importJob.id, id));
+			.where(eq(schema.job.id, id));
 
 		// While the lease holds, the job is left alone — a slow read must never be
 		// taken away from the worker still doing it.
@@ -1157,9 +1170,9 @@ describe('import database integrity', () => {
 
 		// Once it has expired, the file is read rather than stranded.
 		await testDb
-			.update(schema.importJob)
+			.update(schema.job)
 			.set({ claimedAt: new Date(Date.now() - LEASE_MS - 1000) })
-			.where(eq(schema.importJob.id, id));
+			.where(eq(schema.job.id, id));
 		expect(await runQueue(testDb)).toBe(1);
 		expect(await count('transaction')).toBe(5);
 	}, 30_000);

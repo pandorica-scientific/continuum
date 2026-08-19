@@ -309,47 +309,60 @@ export interface ProofCheckRecord {
 }
 
 /**
- * A statement waiting to be read.
+ * Work that is claimed under a lease.
  *
- * Reading is not always fast. A 140-movement statement spread over eight pages
- * is recovered from glyph coordinates by two assemblers, and every candidate
- * reading is proved before one is chosen; a photograph would have to be
+ * `import_job` and `calendar_account.syncing_since` were the same mechanism
+ * written twice: take the work, stamp when you took it, and let a stale stamp be
+ * taken over so a worker that died strands nothing. This is that mechanism once,
+ * and the next integration inherits it rather than writing a third copy.
+ *
+ * Reading a statement is not always fast. A 140-movement statement spread over
+ * eight pages is recovered from glyph coordinates by two assemblers, and every
+ * candidate reading is proved before one is chosen; a photograph has to be
  * rasterised and recognised first. None of that belongs on a request the person
  * who uploaded the file is waiting behind.
  *
- * The bytes live here rather than on disk so a queued file is transactional
+ * The bytes live in `blob` rather than on disk so a queued file is transactional
  * with its job: a crash between writing the file and recording the job cannot
  * leave one without the other, and nothing has to be swept up afterwards. They
  * are cleared the moment the job finishes, so this table holds only work in
- * flight.
+ * flight — `byteSize` outlives them, so a finished upload can still say what it
+ * read.
  *
- * `claimedAt` is a LEASE, not a lock. The work in the middle is CPU-bound and
- * can run for many seconds, and no database lock belongs open across that. The
- * claim itself is atomic; the lease is what lets a crashed worker's job be
- * picked up again rather than stranded.
+ * `claimedAt` is a LEASE, not a lock. The work in the middle is CPU-bound or
+ * network-bound and can run for many seconds; no database lock belongs open
+ * across that. The claim itself is made atomic by an advisory lock, which is
+ * what lets a crashed worker's job be picked up again rather than stranded.
+ *
+ * `subjectId` is what lets one table serve two trigger models. An import is
+ * QUEUED and has no subject; a calendar pass is about one account, and its job
+ * row exists so a second pass can tell that the first one holds it.
  */
-export const importJob = pgTable(
-	'import_job',
+export const job = pgTable(
+	'job',
 	{
 		id: text('id').primaryKey(),
-		filename: text('filename').notNull(),
-		/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
-		payload: text('payload'),
-		byteSize: integer('byte_size').notNull(),
-		/** The account the person chose at upload, when they chose one. */
-		appliesToAccountId: text('applies_to_account_id').references(() => account.id, {
-			onDelete: 'set null'
-		}),
-		/** queued -> running -> done | failed */
+		kind: text('kind').$type<EnumValue<'job.kind'>>().notNull(),
+		/** What the work is about, for kinds where that is the work. */
+		subjectId: text('subject_id'),
 		state: text('state').$type<EnumValue<'job_state'>>().notNull().default('queued'),
+		filename: text('filename'),
+		/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
+		blob: text('blob'),
+		byteSize: integer('byte_size').notNull().default(0),
 		claimedAt: timestamp('claimed_at', { withTimezone: true }),
-		finishedAt: timestamp('finished_at', { withTimezone: true }),
+		/** So a job that dies every time can be given up on rather than retried for ever. */
+		attempts: integer('attempts').notNull().default(0),
 		/** The IngestResult, so the page can show what happened without re-reading. */
 		result: jsonb('result'),
 		error: text('error'),
-		queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow()
+		queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow(),
+		finishedAt: timestamp('finished_at', { withTimezone: true })
 	},
-	(table) => [index('import_job_applies_to_account_idx').on(table.appliesToAccountId)]
+	(table) => [
+		index('job_claimable_idx').on(table.kind, table.state, table.queuedAt),
+		index('job_subject_idx').on(table.subjectId)
+	]
 );
 
 /**
@@ -1123,18 +1136,6 @@ export const calendarAccount = pgTable('calendar_account', {
 	/** Opaque: a Google syncToken, a CalDAV sync-token, or a ctag. */
 	cursor: text('cursor'),
 	lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
-	/**
-	 * When the pass currently running took this account, or null when none is.
-	 *
-	 * A lease rather than a lock. The middle of a sync pass is network I/O that
-	 * can run for minutes, and no database lock belongs open across that — but
-	 * two overlapping passes each decide what to push from a snapshot the other
-	 * is invalidating, pull the same cursor and send the same writes twice. The
-	 * claim is taken under an advisory lock, so it is atomic and holds across
-	 * processes; a stale one is taken over after LEASE_MINUTES, so a process
-	 * killed mid-pass does not strand the account.
-	 */
-	syncingSince: timestamp('syncing_since', { withTimezone: true }),
 	lastError: text('last_error'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

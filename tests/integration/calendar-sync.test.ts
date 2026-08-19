@@ -724,10 +724,22 @@ describe('regressions', () => {
 	// its own implicit transaction committed as the statement returned and the
 	// xact-scoped lock was gone before the pull began. It excluded nothing.
 	it('refuses a second pass while one is already running', async () => {
+		// The lease lives in `job` since 0051, one row per account, reused.
 		await testDb
-			.update(schema.calendarAccount)
-			.set({ syncingSince: new Date() })
-			.where(eq(schema.calendarAccount.id, ACCOUNT));
+			.insert(schema.job)
+			.values({
+				id: `calendar-sync:${ACCOUNT}`,
+				kind: 'calendar_sync',
+				subjectId: ACCOUNT,
+				state: 'running',
+				claimedAt: new Date()
+			})
+			// One row per account, reused across passes, so setting up a held lease is
+			// an upsert rather than an insert.
+			.onConflictDoUpdate({
+				target: schema.job.id,
+				set: { state: 'running', claimedAt: new Date() }
+			});
 
 		fake.resetCounters();
 		const report = await sync();
@@ -738,20 +750,33 @@ describe('regressions', () => {
 	// A lease, not a lock: a process killed mid-pass must not lock the account out
 	// for good.
 	it('takes over a lease left behind by a pass that died', async () => {
+		const stale = new Date(Date.now() - 60 * 60_000);
 		await testDb
-			.update(schema.calendarAccount)
-			.set({ syncingSince: new Date(Date.now() - 60 * 60_000) })
-			.where(eq(schema.calendarAccount.id, ACCOUNT));
+			.insert(schema.job)
+			.values({
+				id: `calendar-sync:${ACCOUNT}`,
+				kind: 'calendar_sync',
+				subjectId: ACCOUNT,
+				state: 'running',
+				claimedAt: stale,
+				attempts: 1
+			})
+			.onConflictDoUpdate({
+				target: schema.job.id,
+				set: { state: 'running', claimedAt: stale, attempts: 1 }
+			});
 
 		fake.resetCounters();
 		await sync();
 		expect(fake.pullCount).toBe(1);
 
-		const [account] = await testDb
+		const [lease] = await testDb
 			.select()
-			.from(schema.calendarAccount)
-			.where(eq(schema.calendarAccount.id, ACCOUNT));
-		expect(account.syncingSince).toBeNull();
+			.from(schema.job)
+			.where(eq(schema.job.id, `calendar-sync:${ACCOUNT}`));
+		expect(lease.state).toBe('done');
+		// Taken over rather than left alone, and the count says so.
+		expect(lease.attempts).toBe(2);
 	});
 
 	// A pass that throws has to give the claim up on the way out, or the account
@@ -761,10 +786,14 @@ describe('regressions', () => {
 		fake.failNextPush();
 		await expect(sync()).rejects.toThrow();
 
-		const [account] = await testDb
+		const [lease] = await testDb
 			.select()
-			.from(schema.calendarAccount)
-			.where(eq(schema.calendarAccount.id, ACCOUNT));
-		expect(account.syncingSince).toBeNull();
+			.from(schema.job)
+			.where(eq(schema.job.id, `calendar-sync:${ACCOUNT}`));
+		// Not still running: a pass that threw must give the claim up on the way out,
+		// or the account is locked out until the lease expires. The failure is
+		// recorded on the work rather than only on the account.
+		expect(lease.state).toBe('failed');
+		expect(lease.error).toBeTruthy();
 	});
 });
