@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
 import { asc, eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
@@ -171,7 +172,7 @@ export const load: PageServerLoad = async () => {
 	return {
 		inputs,
 		config: { ...RETIRE_DEFAULTS, ...stored.value },
-		autosaveWriterId: randomUUID(),
+		autosaveWriterId: uuidv7(),
 		autosaveBaseVersion: stored.version,
 		personNames: [people[0]?.name ?? 'Person one', people[1]?.name ?? 'Person two'],
 		peopleOptions: people.map((p) => ({ id: p.id, name: p.name })),
@@ -184,7 +185,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	addPayslip: async ({ request }) => {
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '').trim();
+		const personId = asRowId(form.get('personId')).trim();
 		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
 		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
 		// The reader's learned labels stay keyed by name; the link is by id.
@@ -232,7 +233,7 @@ export const actions: Actions = {
 		// a stated amount that matches a line on the slip teaches the reader
 		if (amountRaw && reading) await learnAmountLabel(subject, amountMinor, reading.candidates);
 
-		const documentId = randomUUID();
+		const documentId = uuidv7();
 		await db.transaction(async (tx) => {
 			await tx.insert(document).values({
 				id: documentId,
@@ -255,7 +256,7 @@ export const actions: Actions = {
 
 	setPayslipAmount: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const rows = await db.select().from(document).where(eq(document.id, id));
 		const doc = rows[0];
 		if (!doc) return fail(404, { message: 'Payslip not found.' });
@@ -296,7 +297,7 @@ export const actions: Actions = {
 	save: async ({ request }) => {
 		const form = await request.formData();
 		const revision = Number(form.get('revision'));
-		const writerId = String(form.get('writerId') ?? '');
+		const writerId = asRowId(form.get('writerId'));
 		const baseVersion = Number(form.get('baseVersion'));
 		if (!isRevisionWriterId(writerId)) {
 			return fail(400, { message: 'The save writer is invalid.' });

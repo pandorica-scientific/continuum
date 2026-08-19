@@ -1,5 +1,6 @@
+import { asOptionalRowId, asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
-import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
@@ -367,7 +368,7 @@ export const load: PageServerLoad = async ({ url }) => {
 export const actions: Actions = {
 	tags: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asOptionalRowId(form.get('id'));
 		if (!id) return fail(400, { message: 'Missing property.' });
 		const added = String(form.get('tagName') ?? '').trim();
 		const removed = String(form.get('removeTag') ?? '').trim();
@@ -394,7 +395,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Value and money in must be numbers.' });
 		}
 		await db.insert(property).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			name,
 			sizeLabel: String(form.get('sizeLabel') ?? '').trim(),
 			kind: asEnumValue('property.kind', form.get('kind'), 'lived'),
@@ -409,7 +410,7 @@ export const actions: Actions = {
 
 	uploadImage: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const slot = String(form.get('slot') ?? ''); // plan | photo0 | photo1 | photo2
 		const expectedImage = String(form.get('expectedImage') ?? '') || null;
 		const file = form.get('file');
@@ -436,7 +437,7 @@ export const actions: Actions = {
 
 	removeImage: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const slot = String(form.get('slot') ?? '');
 		const expectedImage = String(form.get('expectedImage') ?? '');
 		if (!expectedImage) return fail(400, { message: 'Nothing to remove.' });
@@ -451,7 +452,7 @@ export const actions: Actions = {
 
 	savePlan: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(String(form.get('drawing') ?? ''));
@@ -465,7 +466,7 @@ export const actions: Actions = {
 
 	addTenancy: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const tenantName = String(form.get('tenantName') ?? '').trim();
 		if (!tenantName) return fail(400, { message: 'The tenant needs a name.' });
 		const rows = await db.select().from(property).where(eq(property.id, propertyId));
@@ -480,7 +481,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Rent and deposit must be numbers.' });
 		}
 		const result = await createTenancy({
-			id: randomUUID(),
+			id: uuidv7(),
 			propertyId,
 			tenantName,
 			rentMinor: rent,
@@ -504,7 +505,7 @@ export const actions: Actions = {
 	 */
 	setBillSource: async ({ request }) => {
 		const form = await request.formData();
-		const billId = String(form.get('billId') ?? '');
+		const billId = asRowId(form.get('billId'));
 		const fromMeter = String(form.get('fromMeter')) === 'true';
 		const result = await setPropertyBillSource(billId, fromMeter);
 		if (!result.ok) return fail(result.status, { message: result.message });
@@ -520,7 +521,7 @@ export const actions: Actions = {
 
 	addBill: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const label = String(form.get('label') ?? '').trim();
 		if (!label) return fail(400, { message: 'The bill needs a label.' });
 		const rows = await db.select().from(property).where(eq(property.id, propertyId));
@@ -544,12 +545,12 @@ export const actions: Actions = {
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
-			documentId = randomUUID();
+			documentId = uuidv7();
 			extension = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
 		}
 
 		await createPropertyBill({
-			id: randomUUID(),
+			id: uuidv7(),
 			propertyId,
 			label,
 			amountMinor: amount,

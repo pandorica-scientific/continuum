@@ -1,5 +1,5 @@
+import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
-import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -148,7 +148,7 @@ export const actions: Actions = {
 		if (!/^[A-Z]{3}$/.test(currency))
 			return fail(400, { message: 'Currency must be a three-letter code.' });
 		await db.insert(account).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			name,
 			emoji: BANK_EMOJI[bank] ?? '🏦',
 			bank,

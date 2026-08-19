@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
@@ -36,8 +37,8 @@ describe('broker_operation.position_id', () => {
 	it('may still be null, because most operations belong to no position', async () => {
 		await harness.sql`insert into broker_operation
 			(id, type, happened_at, amount_minor, currency)
-			values ('op-2', 'Deposit', now(), 100, 'CZK')`;
-		const rows = await harness.sql`select 1 from broker_operation where id = 'op-2'`;
+			values (${rowId('op-2')}, 'Deposit', now(), 100, 'CZK')`;
+		const rows = await harness.sql`select 1 from broker_operation where id = ${rowId('op-2')}`;
 		expect(rows).toHaveLength(1);
 	});
 });
@@ -70,9 +71,9 @@ describe('document.period_on', () => {
 
 	it('accepts the first of a month', async () => {
 		await harness.sql`insert into document (id, name, shelf, added_on, period_on)
-			values ('doc-1', 'March payslip', 'payslips', '2026-04-01', '2026-03-01')`;
+			values (${rowId('doc-1')}, 'March payslip', 'payslips', '2026-04-01', '2026-03-01')`;
 		const [row] = await harness.sql<{ period_on: string }[]>`
-			select to_char(period_on, 'YYYY-MM-DD') as period_on from document where id = 'doc-1'`;
+			select to_char(period_on, 'YYYY-MM-DD') as period_on from document where id = ${rowId('doc-1')}`;
 		expect(row.period_on).toBe('2026-03-01');
 	});
 
@@ -82,14 +83,14 @@ describe('document.period_on', () => {
 		// anything at all — including a value the FX join's regex silently skipped.
 		await expect(
 			harness.sql`insert into document (id, name, shelf, added_on, period_on)
-				values ('doc-2', 'Odd', 'payslips', '2026-04-01', '2026-03-17')`
+				values (${rowId('doc-2')}, 'Odd', 'payslips', '2026-04-01', '2026-03-17')`
 		).rejects.toThrow(/document_period_first_of_month/);
 	});
 
 	it('is still optional, because most documents cover no period', async () => {
 		await harness.sql`insert into document (id, name, shelf, added_on)
-			values ('doc-3', 'Passport', 'identity', '2026-04-01')`;
-		const rows = await harness.sql`select 1 from document where id = 'doc-3'`;
+			values (${rowId('doc-3')}, 'Passport', 'identity', '2026-04-01')`;
+		const rows = await harness.sql`select 1 from document where id = ${rowId('doc-3')}`;
 		expect(rows).toHaveLength(1);
 	});
 });
@@ -104,9 +105,9 @@ describe('loan.interest_deductible', () => {
 
 	it('keeps its default of false', async () => {
 		await harness.sql`insert into loan (id, name, principal_minor, owed_minor)
-			values ('loan-1', 'Mortgage', 1000, 900)`;
+			values (${rowId('loan-1')}, 'Mortgage', 1000, 900)`;
 		const [row] = await harness.sql<{ interest_deductible: boolean }[]>`
-			select interest_deductible from loan where id = 'loan-1'`;
+			select interest_deductible from loan where id = ${rowId('loan-1')}`;
 		expect(row.interest_deductible).toBe(false);
 	});
 });

@@ -21,7 +21,7 @@
  * inserted column produces a mismatch we can ask about rather than a silent
  * shift of every role by one.
  */
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import type { Db } from '$lib/server/db';
 import { profileFromReading } from './tabular/profile';
 import type { ColumnRole } from './tabular/vocabulary';
@@ -68,7 +68,7 @@ export async function confirmMapping(
 	handle: Db
 ): Promise<IngestResult> {
 	const profile = profileFromReading({
-		id: randomUUID(),
+		id: uuidv7(),
 		name: mapping.name,
 		bank: mapping.bank,
 		source: mapping.source,

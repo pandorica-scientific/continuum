@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { calendarConflict } from '$lib/server/db/schema';
@@ -37,7 +37,7 @@ export interface ConflictRecord {
 
 export async function recordConflict(handle: Queryable, record: ConflictRecord): Promise<void> {
 	await handle.insert(calendarConflict).values({
-		id: randomUUID(),
+		id: uuidv7(),
 		localKey: record.localKey,
 		accountId: record.accountId,
 		ours: jsonbSide(record.ours) as never,

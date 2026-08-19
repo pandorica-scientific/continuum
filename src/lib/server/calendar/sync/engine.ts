@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { and, eq, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import {
@@ -731,7 +731,11 @@ async function reapTombstones(tx: Tx) {
 		where deleted_at is not null
 		  and deleted_at < now() - ${sql.raw(`interval '${TOMBSTONE_GRACE_DAYS} days'`)}
 		  and not exists (
-			select 1 from calendar_sync_link where calendar_sync_link.local_key = calendar_event.id
+			-- local_key is text on purpose: it holds an authored event's uuid OR a
+			-- generated event's \`gen:\` key, so it is not always a uuid and the cast
+			-- has to go the other way.
+			select 1 from calendar_sync_link
+			 where calendar_sync_link.local_key = calendar_event.id::text
 		  )
 	`);
 }
@@ -812,7 +816,7 @@ async function applyRemote(
 	if (series.exceptions.length > 0) {
 		await tx.insert(calendarEventException).values(
 			series.exceptions.map((e) => ({
-				id: randomUUID(),
+				id: uuidv7(),
 				eventId: localKey,
 				recurrenceId: e.recurrenceId,
 				cancelled: e.cancelled,

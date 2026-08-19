@@ -1,5 +1,5 @@
+import { uuidv7 } from 'uuidv7';
 import { asEnumValue, isEnumValue } from '$lib/enums';
-import { randomUUID } from 'node:crypto';
 import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 
 import { parseAmountToMinor } from '$lib/money';
@@ -129,7 +129,7 @@ export async function recordRepayment(
 		if (newOwed < 0n) newOwed = 0n;
 
 		await tx.insert(loanEvent).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			loanId: input.loanId,
 			happenedOn,
 			kind: 'extra_payment',
@@ -241,7 +241,7 @@ export async function replaceFixation(
 				)
 			);
 		await tx.insert(loanFixationPeriod).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			loanId: input.loanId,
 			startDate,
 			endDate: persistedEndDate,
@@ -249,7 +249,7 @@ export async function replaceFixation(
 			paymentMinor: payment
 		});
 		await tx.insert(loanEvent).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			loanId: input.loanId,
 			happenedOn: startDate,
 			kind: 'refix',
@@ -375,7 +375,7 @@ export async function createLoan(
 		Number.isInteger(input.paymentDay) && input.paymentDay! >= 1 && input.paymentDay! <= 31
 			? input.paymentDay
 			: null;
-	const loanId = randomUUID();
+	const loanId = uuidv7();
 
 	return handle.transaction(async (tx) => {
 		if (input.secured.length > 1 && explicitShares === 0) {
@@ -416,7 +416,7 @@ export async function createLoan(
 		if (input.secured.length > 0) {
 			await tx.insert(loanProperty).values(
 				input.secured.map((link) => ({
-					id: randomUUID(),
+					id: uuidv7(),
 					loanId,
 					propertyId: link.propertyId,
 					sharePct: link.sharePct
@@ -424,7 +424,7 @@ export async function createLoan(
 			);
 		}
 		await tx.insert(loanFixationPeriod).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			loanId,
 			startDate: startDate ?? observedOn,
 			endDate: regime === 'fixed_period' ? fixedUntil : null,

@@ -1,5 +1,5 @@
+import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
-import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
@@ -220,7 +220,7 @@ export const actions: Actions = {
 
 		const expiresOn = String(form.get('expiresOn') ?? '').trim() || null;
 		const verb = String(form.get('expiryVerb') ?? 'expires');
-		const documentId = randomUUID();
+		const documentId = uuidv7();
 		const tagNames = String(form.get('tags') ?? '')
 			.split(',')
 			.map((t) => t.trim())

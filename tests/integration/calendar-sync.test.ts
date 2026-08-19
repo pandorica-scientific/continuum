@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -10,7 +11,7 @@ import { calendarConflicts, calendarSyncFailures } from '$lib/server/briefing';
 import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
 import { FakeCalendarProvider } from './fake-calendar-provider';
 
-const ACCOUNT = 'acct-1';
+const ACCOUNT = rowId('acct-1');
 
 let harness: Harness;
 let testDb: TestDb;

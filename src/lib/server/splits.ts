@@ -2,7 +2,7 @@
 // spec live here rather than at the call sites, and the validation itself is
 // pure so it is testable without a database.
 
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { asc, eq, inArray, type SQL } from 'drizzle-orm';
 import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import { transaction, transactionSplit } from '$lib/server/db/schema';
@@ -136,7 +136,7 @@ export async function saveSplits(
 				saved.push({ id: line.id, sort: index });
 			} else {
 				// A line the dialog added: a new row, with no tags of its own yet.
-				const id = randomUUID();
+				const id = uuidv7();
 				await tx.insert(transactionSplit).values({ id, transactionId, ...values });
 				saved.push({ id, sort: index });
 			}

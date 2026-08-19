@@ -1,3 +1,4 @@
+import { asOptionalRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { asc, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -283,7 +284,7 @@ export const actions: Actions = {
 	saveEvent: async ({ request, locals }) => {
 		const form = await request.formData();
 		const input = readEvent(form);
-		const id = String(form.get('id') ?? '');
+		const id = asOptionalRowId(form.get('id'));
 		const recurrenceId = String(form.get('recurrenceId') ?? '') || null;
 
 		// Echo the submitted values back on failure so a rejected form does not
@@ -304,7 +305,7 @@ export const actions: Actions = {
 
 	deleteEvent: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asOptionalRowId(form.get('id'));
 		if (!id) return fail(400, { message: 'Which event?' });
 		const recurrenceId = String(form.get('recurrenceId') ?? '') || null;
 

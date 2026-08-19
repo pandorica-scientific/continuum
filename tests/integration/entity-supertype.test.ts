@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENTITY_KINDS } from '$lib/enums';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
@@ -31,43 +32,46 @@ const tag = async (id: string, name: string) =>
 
 describe('registration', () => {
 	it('gives a new row an entity of its own kind, with no help from the caller', async () => {
-		await tag('t-1', 'renovation');
+		await tag(rowId('t-1'), 'renovation');
 		const rows = await harness.sql<{ kind: string }[]>`
-			select kind from entity where id = 't-1'`;
+			select kind from entity where id = ${rowId('t-1')}`;
 		expect(rows).toEqual([{ kind: 'tag' }]);
 	});
 
 	it('registers rows in every kind that has a link table', async () => {
 		// Each of these is inserted with only its own columns; the entity row is
 		// the database's doing.
-		await harness.sql`insert into person (id, name, initials) values ('p-1', 'Jana', 'J')`;
+		await harness.sql`insert into person (id, name, initials) values (${rowId('p-1')}, 'Jana', 'J')`;
 		await harness.sql`insert into account (id, name, bank, currency)
-			values ('a-1', 'Current', 'other', 'CZK')`;
-		await harness.sql`insert into property (id, name, kind) values ('pr-1', 'Flat', 'lived')`;
+			values (${rowId('a-1')}, 'Current', 'other', 'CZK')`;
+		await harness.sql`insert into property (id, name, kind) values (${rowId('pr-1')}, 'Flat', 'lived')`;
 		await harness.sql`insert into document (id, name, shelf, added_on)
-			values ('d-1', 'Lease', 'tenancy', '2026-01-01')`;
-		await harness.sql`insert into contact (id, name) values ('c-1', 'Plumber')`;
-		await harness.sql`insert into subject (id, name) values ('s-1', 'The car')`;
+			values (${rowId('d-1')}, 'Lease', 'tenancy', '2026-01-01')`;
+		await harness.sql`insert into contact (id, name) values (${rowId('c-1')}, 'Plumber')`;
+		await harness.sql`insert into subject (id, name) values (${rowId('s-1')}, 'The car')`;
 
-		const rows = await harness.sql<{ id: string; kind: string }[]>`
-			select id, kind from entity where id in ('p-1', 'a-1', 'pr-1', 'd-1', 'c-1', 's-1')
-			order by id`;
-		expect(rows).toEqual([
-			{ id: 'a-1', kind: 'account' },
-			{ id: 'c-1', kind: 'contact' },
-			{ id: 'd-1', kind: 'document' },
-			{ id: 'p-1', kind: 'person' },
-			{ id: 'pr-1', kind: 'property' },
-			{ id: 's-1', kind: 'subject' }
+		const rows = await harness.sql<{ kind: string }[]>`
+			select kind from entity where id in (${rowId('p-1')}, ${rowId('a-1')}, ${rowId('pr-1')},
+				${rowId('d-1')}, ${rowId('c-1')}, ${rowId('s-1')})
+			order by kind`;
+		// Ordered by kind, not by id: ids are uuids now and sort by nothing a reader
+		// would recognise.
+		expect(rows.map((r) => r.kind)).toEqual([
+			'account',
+			'contact',
+			'document',
+			'person',
+			'property',
+			'subject'
 		]);
 	});
 
 	it('carries the row’s own creation time where the table records one', async () => {
 		await harness.sql`insert into person (id, name, initials, created_at)
-			values ('p-2', 'Petr', 'P', '2019-03-04T10:00:00Z')`;
+			values (${rowId('p-2')}, 'Petr', 'P', '2019-03-04T10:00:00Z')`;
 		const [{ iso }] = await harness.sql<{ iso: string }[]>`
 			select to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS') as iso
-			from entity where id = 'p-2'`;
+			from entity where id = ${rowId('p-2')}`;
 		// Not "now". The demo seed dates rows years back, and an entity younger
 		// than its own record is exactly the divergence a shared audit column is
 		// supposed to remove.
@@ -77,43 +81,44 @@ describe('registration', () => {
 
 describe('kind cannot be wrong', () => {
 	it('refuses a row whose entity is registered as something else', async () => {
-		await harness.sql`insert into entity (id, kind) values ('x-1', 'person')`;
+		await harness.sql`insert into entity (id, kind) values (${rowId('x-1')}, 'person')`;
 		// A tag claiming an id registered as a person is unrepresentable, not merely
 		// discouraged: without this, a link table would accept the id and the bad
 		// row would read as valid.
-		await expect(tag('x-1', 'holiday')).rejects.toThrow(/foreign key|violates/i);
+		await expect(tag(rowId('x-1'), 'holiday')).rejects.toThrow(/foreign key|violates/i);
 	});
 
 	it('refuses an entity of a kind that is not a kind', async () => {
 		await expect(
-			harness.sql`insert into entity (id, kind) values ('x-2', 'spaceship')`
+			harness.sql`insert into entity (id, kind) values (${rowId('x-2')}, 'spaceship')`
 		).rejects.toThrow(/entity_kind_check/);
 	});
 });
 
 describe('lifecycle, in both directions', () => {
 	it('deleting the entity removes the record', async () => {
-		await tag('t-2', 'car');
-		await harness.sql`delete from entity where id = 't-2'`;
-		expect(await harness.sql`select 1 from tag where id = 't-2'`).toHaveLength(0);
+		await tag(rowId('t-2'), 'car');
+		await harness.sql`delete from entity where id = ${rowId('t-2')}`;
+		expect(await harness.sql`select 1 from tag where id = ${rowId('t-2')}`).toHaveLength(0);
 	});
 
 	it('deleting the record retires the entity', async () => {
-		await tag('t-3', 'holiday-2');
-		await harness.sql`delete from tag where id = 't-3'`;
+		await tag(rowId('t-3'), 'holiday-2');
+		await harness.sql`delete from tag where id = ${rowId('t-3')}`;
 		// Without this the supertype accumulates orphans, and a later link could
 		// still attach itself to one.
-		expect(await harness.sql`select 1 from entity where id = 't-3'`).toHaveLength(0);
+		expect(await harness.sql`select 1 from entity where id = ${rowId('t-3')}`).toHaveLength(0);
 	});
 
 	it('leaves no orphan entity behind after a cascade', async () => {
 		// Deleting a property cascades to its tenancies, each of which must retire
 		// its own entity on the way out.
-		await harness.sql`insert into property (id, name, kind) values ('pr-2', 'Flat 2', 'rented')`;
+		await harness.sql`insert into property (id, name, kind) values (${rowId('pr-2')}, 'Flat 2', 'rented')`;
 		await harness.sql`insert into tenancy (id, property_id, tenant_name)
-			values ('tn-1', 'pr-2', 'Someone')`;
-		await harness.sql`delete from property where id = 'pr-2'`;
-		const rows = await harness.sql`select 1 from entity where id in ('pr-2', 'tn-1')`;
+			values (${rowId('tn-1')}, ${rowId('pr-2')}, 'Someone')`;
+		await harness.sql`delete from property where id = ${rowId('pr-2')}`;
+		const rows =
+			await harness.sql`select 1 from entity where id in (${rowId('pr-2')}, ${rowId('tn-1')})`;
 		expect(rows).toHaveLength(0);
 	});
 });

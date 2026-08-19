@@ -25,7 +25,7 @@
  * ordering `loadProfiles` relies on to make a household's own layout win is
  * not yet doing anything.
  */
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { desc, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { importProfile } from '$lib/server/db/schema';
@@ -115,7 +115,7 @@ export async function saveDriftedProfile(
 ): Promise<ImportProfile> {
 	const next: ImportProfile = {
 		...updated,
-		id: randomUUID(),
+		id: uuidv7(),
 		version: previous.version + 1,
 		origin: previous.origin === 'builtin' ? 'user' : previous.origin
 	};

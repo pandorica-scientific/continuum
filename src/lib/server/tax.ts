@@ -1,7 +1,7 @@
 // Database side of tax statements: load, upsert, delete. All arithmetic lives
 // in the pure module; nothing here computes what is owed.
 
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { person, taxStatement, taxStatementLine } from '$lib/server/db/schema';
@@ -69,7 +69,7 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 		// transaction means a failed insert can never leave an empty statement.
 		const saved = await tx
 			.insert(taxStatement)
-			.values({ id: randomUUID(), ...values })
+			.values({ id: uuidv7(), ...values })
 			.onConflictDoUpdate({
 				target: [taxStatement.personId, taxStatement.year, taxStatement.country],
 				set: values
@@ -81,7 +81,7 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 		if (input.lines.length > 0) {
 			await tx.insert(taxStatementLine).values(
 				input.lines.map((line, sort) => ({
-					id: randomUUID(),
+					id: uuidv7(),
 					statementId: id,
 					label: line.label,
 					amountMinor: line.amountMinor,

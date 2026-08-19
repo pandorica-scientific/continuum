@@ -18,7 +18,7 @@
  * that dies mid-read — it becomes claimable again instead of being stranded
  * forever in `running`.
  */
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { and, asc, count, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { job } from '$lib/server/db/schema';
@@ -52,7 +52,7 @@ export async function enqueue(
 	appliesToAccountId?: string,
 	handle: Handle = db
 ): Promise<string> {
-	const id = randomUUID();
+	const id = uuidv7();
 	await handle.insert(job).values({
 		id,
 		kind: 'import',

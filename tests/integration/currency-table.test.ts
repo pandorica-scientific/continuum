@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { refreshCurrencies } from '$lib/server/db/currency-refresh';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
@@ -74,15 +75,15 @@ describe('the currency table', () => {
 		await refreshCurrencies(harness.db);
 		await expect(
 			harness.sql`insert into account (id, name, bank, currency)
-				values ('acc-bad', 'Bad', 'other', 'SYN')`
+				values (${rowId('acc-bad')}, 'Bad', 'other', 'SYN')`
 		).rejects.toThrow(/foreign key|violates/i);
 	});
 
 	it('accepts one it does', async () => {
 		await refreshCurrencies(harness.db);
 		await harness.sql`insert into account (id, name, bank, currency)
-			values ('acc-ok', 'Fine', 'other', 'CZK')`;
-		const rows = await harness.sql`select 1 from account where id = 'acc-ok'`;
+			values (${rowId('acc-ok')}, 'Fine', 'other', 'CZK')`;
+		const rows = await harness.sql`select 1 from account where id = ${rowId('acc-ok')}`;
 		expect(rows).toHaveLength(1);
 	});
 

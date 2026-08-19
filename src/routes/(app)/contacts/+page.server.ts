@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { account, loan, property, tenancy } from '$lib/server/db/schema';
@@ -93,7 +94,8 @@ async function readPhoto(
 export const actions: Actions = {
 	save: async ({ request }) => {
 		const form = await request.formData();
-		const id = typeof form.get('id') === 'string' && form.get('id') ? String(form.get('id')) : null;
+		const id =
+			typeof form.get('id') === 'string' && form.get('id') ? asRowId(form.get('id')) : null;
 		const fields = readFields(form);
 
 		// Echo the submitted values back on every failure path. A rejected form
@@ -107,7 +109,7 @@ export const actions: Actions = {
 		if (!photo.ok) return fail(400, { values: fields, valuesFor: id, message: photo.message });
 
 		const input: ContactInput = { ...fields, photo: photo.photo };
-		const contactId = id ?? randomUUID();
+		const contactId = id ?? uuidv7();
 		const result = id ? await updateContact(id, input) : await createContact(contactId, input);
 
 		if (!result.ok) {

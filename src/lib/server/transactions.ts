@@ -47,7 +47,9 @@ function effectiveLineRelation(): SQL {
 		select
 			(${transaction.amount} - ${fee})::bigint as amount_minor,
 			${transaction.categoryId}::text as category_id,
-			null::text as split_id
+			-- uuid, not text: the two union branches have to agree, and tag_link
+			-- .target_id is a uuid since 0053 so the comparison must be legal.
+			null::uuid as split_id
 		where not exists (
 			select 1 from ${transactionSplit} any_split
 			where any_split.transaction_id = ${transaction.id}
@@ -59,7 +61,7 @@ function effectiveLineRelation(): SQL {
 				else 0::bigint
 			end)::bigint as amount_minor,
 			split.category_id::text as category_id,
-			split.id::text as split_id
+			split.id as split_id
 		from ${transactionSplit} split
 		where split.transaction_id = ${transaction.id}
 	`;
@@ -79,6 +81,10 @@ function selectedEffectiveLines(filter: RegisterFilter): SQL {
 	else if (filter.categoryId) clauses.push(sql`effective_line.category_id = ${filter.categoryId}`);
 
 	if (filter.tagId) {
+		// The id arrives from a URL parameter as a string, and tag_id is uuid since
+		// 0053, so the cast is what makes the comparison legal rather than a
+		// "no operator matches" at query time.
+		//
 		// One table for both, distinguished only by which id the link points at.
 		// `tag_link.target_id` is an entity id, and a transaction and its splits are
 		// separate entities, so no kind filter is needed here — the id itself is the
@@ -87,14 +93,14 @@ function selectedEffectiveLines(filter: RegisterFilter): SQL {
 			exists (
 				select 1 from ${tagLink} direct_tag
 				where direct_tag.target_id = ${transaction.id}
-				  and direct_tag.tag_id = ${filter.tagId}
+				  and direct_tag.tag_id = ${filter.tagId}::uuid
 			)
 			or (
 				effective_line.split_id is not null
 				and exists (
 					select 1 from ${tagLink} split_tag
 					where split_tag.target_id = effective_line.split_id
-					  and split_tag.tag_id = ${filter.tagId}
+					  and split_tag.tag_id = ${filter.tagId}::uuid
 				)
 			)
 		)`);

@@ -1,3 +1,4 @@
+import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -144,13 +145,14 @@ export const actions: Actions = {
 		}
 
 		const result = await saveStatement({
-			personId: String(form.get('personId') ?? ''),
+			personId: asRowId(form.get('personId')),
 			year: Number(form.get('year')),
 			country: String(form.get('country') ?? ''),
 			currency,
 			grossIncomeMinor: gross,
 			taxPaidMinor: taxPaid,
-			documentId: String(form.get('documentId') ?? '') || null,
+			// Optional: a statement need not have a document attached.
+			documentId: asOptionalRowId(form.get('documentId')) ?? null,
 			note: String(form.get('note') ?? '').trim() || null,
 			lines
 		});
@@ -160,7 +162,7 @@ export const actions: Actions = {
 
 	remove: async ({ request }) => {
 		const form = await request.formData();
-		await deleteStatement(String(form.get('id') ?? ''));
+		await deleteStatement(asRowId(form.get('id')));
 		return { ok: true };
 	}
 };

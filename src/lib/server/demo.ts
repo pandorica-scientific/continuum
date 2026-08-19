@@ -4,7 +4,7 @@
 // and first impressions need no real data. Runs only when no person exists;
 // a set-up instance is never touched.
 
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
@@ -60,7 +60,7 @@ async function seedDemoPhoto(file: string): Promise<string | null> {
 		try {
 			const bytes = await readFile(source);
 			await mkdir(dir, { recursive: true });
-			const name = `${randomUUID()}.jpg`;
+			const name = `${uuidv7()}.jpg`;
 			await writeFile(join(dir, name), bytes);
 			return name;
 		} catch {
@@ -94,8 +94,8 @@ export async function seedDemo(): Promise<void> {
 		])
 		.onConflictDoNothing();
 
-	const jana = randomUUID();
-	const petr = randomUUID();
+	const jana = uuidv7();
+	const petr = uuidv7();
 	const passwordHash = await hashPassword(DEMO_PASSWORD);
 	await db.insert(person).values([
 		{
@@ -116,8 +116,8 @@ export async function seedDemo(): Promise<void> {
 		}
 	]);
 
-	const fio = randomUUID();
-	const revolut = randomUUID();
+	const fio = uuidv7();
+	const revolut = uuidv7();
 	await db.insert(account).values([
 		{
 			id: fio,
@@ -154,7 +154,7 @@ export async function seedDemo(): Promise<void> {
 		counterparty: string
 	) =>
 		rows.push({
-			id: randomUUID(),
+			id: uuidv7(),
 			accountId: fio,
 			bookedAt: `${month}-${day}`,
 			amount,
@@ -203,7 +203,7 @@ export async function seedDemo(): Promise<void> {
 	// transactions carry their categories directly, so this is the only rule a
 	// demo instance begins with.
 	await db.insert(rule).values({
-		id: randomUUID(),
+		id: uuidv7(),
 		name: 'Big Alza purchases',
 		provenance: 'manual',
 		conditions: [
@@ -229,8 +229,8 @@ export async function seedDemo(): Promise<void> {
 		][];
 
 	// Two flats, one mortgage over both at explicit shares.
-	const flatA = randomUUID();
-	const flatB = randomUUID();
+	const flatA = uuidv7();
+	const flatB = uuidv7();
 	await db.insert(property).values([
 		{
 			id: flatA,
@@ -295,7 +295,7 @@ export async function seedDemo(): Promise<void> {
 			}
 		}
 	]);
-	const mortgage = randomUUID();
+	const mortgage = uuidv7();
 	await db.insert(loan).values({
 		id: mortgage,
 		name: 'Mortgage ČS',
@@ -313,11 +313,11 @@ export async function seedDemo(): Promise<void> {
 		interestDeductible: true
 	});
 	await db.insert(loanProperty).values([
-		{ id: randomUUID(), loanId: mortgage, propertyId: flatA, sharePct: '62.5' },
-		{ id: randomUUID(), loanId: mortgage, propertyId: flatB, sharePct: '37.5' }
+		{ id: uuidv7(), loanId: mortgage, propertyId: flatA, sharePct: '62.5' },
+		{ id: uuidv7(), loanId: mortgage, propertyId: flatB, sharePct: '37.5' }
 	]);
 	await db.insert(loanFixationPeriod).values({
-		id: randomUUID(),
+		id: uuidv7(),
 		loanId: mortgage,
 		startDate: '2026-02-11',
 		// Relative, and inside the horizon the briefing watches (30 months), so a
@@ -330,7 +330,7 @@ export async function seedDemo(): Promise<void> {
 		paymentMinor: 5445600n
 	});
 
-	const tenancyB = randomUUID();
+	const tenancyB = uuidv7();
 	await db.insert(tenancy).values({
 		id: tenancyB,
 		propertyId: flatB,
@@ -349,7 +349,7 @@ export async function seedDemo(): Promise<void> {
 	// The tenant, and one company the household deals with. Both carry diacritics
 	// on purpose: the demo is where someone first tries the search, and folding
 	// "dvorak" onto "Dvořák" is the thing worth discovering.
-	const tenantContactId = randomUUID();
+	const tenantContactId = uuidv7();
 	await db.insert(contact).values([
 		{
 			id: tenantContactId,
@@ -359,7 +359,7 @@ export async function seedDemo(): Promise<void> {
 			notes: 'Tenant, Flat B.'
 		},
 		{
-			id: randomUUID(),
+			id: uuidv7(),
 			name: 'Jana Řehořová',
 			organisation: 'Česká spořitelna',
 			jobTitle: 'Mortgage adviser',
@@ -368,9 +368,9 @@ export async function seedDemo(): Promise<void> {
 	]);
 	await db.insert(contactLink).values({ contactId: tenantContactId, targetId: tenancyB });
 	await db.insert(propertyBill).values([
-		{ id: randomUUID(), propertyId: flatA, label: 'SVJ fee & repair fund', amountMinor: 485000n },
-		{ id: randomUUID(), propertyId: flatA, label: 'Electricity advance', amountMinor: 240000n },
-		{ id: randomUUID(), propertyId: flatB, label: 'SVJ fee', amountMinor: 310000n }
+		{ id: uuidv7(), propertyId: flatA, label: 'SVJ fee & repair fund', amountMinor: 485000n },
+		{ id: uuidv7(), propertyId: flatA, label: 'Electricity advance', amountMinor: 240000n },
+		{ id: uuidv7(), propertyId: flatB, label: 'SVJ fee', amountMinor: 310000n }
 	]);
 
 	// Three years of monthly reports rather than a single point: a 10 000 Kč
@@ -478,7 +478,7 @@ export async function seedDemo(): Promise<void> {
 		portfolioMinor - valued.slice(1).reduce((sum, v) => sum + v.valueMinor, 0n);
 	await db.insert(holding).values(
 		valued.map((v) => ({
-			id: randomUUID(),
+			id: uuidv7(),
 			ticker: v.ticker,
 			name: v.name,
 			category: v.category,
@@ -498,7 +498,7 @@ export async function seedDemo(): Promise<void> {
 		const year = Number(m.slice(0, 4));
 		const base = 5800000n + BigInt(year - 2024) * 400000n;
 		payslips.push({
-			id: randomUUID(),
+			id: uuidv7(),
 			name: `Payslip ${m} · Jana Nováková`,
 			shelf: 'payslips',
 			addedOn: today,
@@ -508,7 +508,7 @@ export async function seedDemo(): Promise<void> {
 			periodOn: `${m}-01`
 		});
 	}
-	const contractId = randomUUID();
+	const contractId = uuidv7();
 	payslips.push({
 		id: contractId,
 		name: 'Renting contract · Karlín',
@@ -539,7 +539,7 @@ export async function seedDemo(): Promise<void> {
 	// declared figure on purpose — bonuses exist), one Polish year for Petr so
 	// the charts show the two-country case and a rate that is comparable
 	// across currencies that are not.
-	const janaCz2024 = randomUUID();
+	const janaCz2024 = uuidv7();
 	// Five Czech years for Jana and four Polish ones for Petr: enough points for
 	// the effective-rate line to be a trend rather than a dot, with a visible
 	// step where the rate changes rather than a straight climb.
@@ -558,7 +558,7 @@ export async function seedDemo(): Promise<void> {
 	];
 	await db.insert(taxStatement).values([
 		...janaCz.map(([year, grossIncomeMinor, taxPaidMinor]) => ({
-			id: year === 2024 ? janaCz2024 : randomUUID(),
+			id: year === 2024 ? janaCz2024 : uuidv7(),
 			personId: jana,
 			year,
 			country: 'CZ',
@@ -567,7 +567,7 @@ export async function seedDemo(): Promise<void> {
 			taxPaidMinor
 		})),
 		...petrPl.map(([year, grossIncomeMinor, taxPaidMinor]) => ({
-			id: randomUUID(),
+			id: uuidv7(),
 			personId: petr,
 			year,
 			country: 'PL',
@@ -577,7 +577,7 @@ export async function seedDemo(): Promise<void> {
 		}))
 	]);
 	await db.insert(taxStatementLine).values({
-		id: randomUUID(),
+		id: uuidv7(),
 		statementId: janaCz2024,
 		label: 'Social insurance',
 		amountMinor: 9100000n,

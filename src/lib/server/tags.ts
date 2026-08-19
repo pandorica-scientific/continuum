@@ -2,7 +2,7 @@
 // holiday — and every tag carries a running total. They hold no tax meaning;
 // tax treatment belongs to the tax module, not here.
 
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { eq, inArray } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { loan, property, tag, tagLink, transaction, transactionSplit } from '$lib/server/db/schema';
@@ -126,7 +126,7 @@ export async function upsertTag(
 	const normalisedName = normaliseTagName(name);
 	const existing = await handle.select().from(tag).where(eq(tag.normalisedName, normalisedName));
 	if (existing[0]) return { id: existing[0].id, name: existing[0].name };
-	const row = { id: randomUUID(), name: name.trim(), normalisedName };
+	const row = { id: uuidv7(), name: name.trim(), normalisedName };
 	await handle.insert(tag).values(row).onConflictDoNothing();
 	// A concurrent insert would have won the unique index; read back either way.
 	const after = await handle.select().from(tag).where(eq(tag.normalisedName, normalisedName));

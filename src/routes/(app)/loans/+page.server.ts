@@ -1,3 +1,4 @@
+import { asOptionalRowId, asRowId } from '$lib/ids';
 import { eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
@@ -255,7 +256,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	tags: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asOptionalRowId(form.get('id'));
 		if (!id) return fail(400, { message: 'Missing loan.' });
 		const added = String(form.get('tagName') ?? '').trim();
 		const removed = String(form.get('removeTag') ?? '').trim();
@@ -269,7 +270,7 @@ export const actions: Actions = {
 	addRepayment: async ({ request }) => {
 		const form = await request.formData();
 		const result = await recordRepayment({
-			loanId: String(form.get('loanId') ?? ''),
+			loanId: asRowId(form.get('loanId')),
 			date: String(form.get('date') ?? ''),
 			amount: String(form.get('amount') ?? ''),
 			balanceAfter: String(form.get('balanceAfter') ?? ''),
@@ -281,7 +282,7 @@ export const actions: Actions = {
 	addFixation: async ({ request }) => {
 		const form = await request.formData();
 		const result = await replaceFixation({
-			loanId: String(form.get('loanId') ?? ''),
+			loanId: asRowId(form.get('loanId')),
 			startDate: String(form.get('startDate') ?? ''),
 			endDate: String(form.get('endDate') ?? '') || null,
 			rate: String(form.get('rate') ?? ''),

@@ -11,6 +11,7 @@ import {
 	primaryKey,
 	text,
 	timestamp,
+	uuid,
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
 // Relative, not aliased: drizzle-kit loads this file outside Vite and does not
@@ -42,7 +43,7 @@ import type { EntityKind, EnumValue } from '../../enums';
 export const entity = pgTable(
 	'entity',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		kind: text('kind').$type<EntityKind>().notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -56,7 +57,7 @@ export const entity = pgTable(
 // ---- Household and auth ----
 
 export const person = pgTable('person', {
-	id: text('id').primaryKey(),
+	id: uuid('id').primaryKey(),
 	name: text('name').notNull(),
 	initials: text('initials').notNull(),
 	// Permission, not household relationship: 'admin' may manage people and API
@@ -85,7 +86,7 @@ export const session = pgTable(
 	{
 		// sha256 hash of the bearer token; the raw token never touches the database
 		id: text('id').primaryKey(),
-		personId: text('person_id')
+		personId: uuid('person_id')
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
 		authGeneration: integer('auth_generation').notNull(),
@@ -125,7 +126,7 @@ export const enrollmentToken = pgTable('enrollment_token', {
 	// Unique: one live link per person. createEnrollmentToken upserts against
 	// this constraint, which is what makes reissuing atomic — without it two
 	// racing reissues each left a spendable link behind.
-	personId: text('person_id')
+	personId: uuid('person_id')
 		.notNull()
 		.unique()
 		.references(() => person.id, { onDelete: 'cascade' }),
@@ -147,7 +148,7 @@ export const webauthnChallenge = pgTable(
 		// sha256 hex of the challenge, the way sessions and tokens are stored
 		id: text('id').primaryKey(),
 		address: text('address').notNull(),
-		personId: text('person_id').references(() => person.id, { onDelete: 'cascade' }),
+		personId: uuid('person_id').references(() => person.id, { onDelete: 'cascade' }),
 		authGeneration: integer('auth_generation'),
 		authSnapshot: jsonb('auth_snapshot').$type<Record<string, number>>().notNull().default({}),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -167,7 +168,7 @@ export const credential = pgTable(
 	{
 		// base64url credential ID as the authenticator reports it
 		id: text('id').primaryKey(),
-		personId: text('person_id')
+		personId: uuid('person_id')
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
 		authGeneration: integer('auth_generation').notNull(),
@@ -230,7 +231,7 @@ export const currencyRate = pgTable(
 export const account = pgTable(
 	'account',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		emoji: text('emoji').notNull().default('🏦'),
 		bank: text('bank').notNull(), // fio | revolut | mbank | rb | cs | other
@@ -238,7 +239,7 @@ export const account = pgTable(
 		currency: text('currency')
 			.notNull()
 			.references(() => currency.code),
-		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		ownerPersonId: uuid('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 		// bank account number / IBAN in the form statements print it; used to
 		// recognise transfers between the household's own accounts
 		numbers: jsonb('numbers').$type<string[]>().notNull().default([]),
@@ -259,11 +260,11 @@ export const account = pgTable(
 export const importFile = pgTable(
 	'import_file',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		filename: text('filename').notNull(),
 		bank: text('bank').notNull(),
 		format: text('format').notNull(),
-		accountId: text('account_id').references(() => account.id, { onDelete: 'set null' }),
+		accountId: uuid('account_id').references(() => account.id, { onDelete: 'set null' }),
 		// sha256 of the file body; the same file uploaded twice is skipped whole
 		contentHash: text('content_hash').notNull().unique(),
 		// the original bytes, kept on the data volume — parser improvements can
@@ -346,7 +347,7 @@ export const job = pgTable(
 		id: text('id').primaryKey(),
 		kind: text('kind').$type<EnumValue<'job.kind'>>().notNull(),
 		/** What the work is about, for kinds where that is the work. */
-		subjectId: text('subject_id'),
+		subjectId: uuid('subject_id'),
 		state: text('state').$type<EnumValue<'job_state'>>().notNull().default('queued'),
 		filename: text('filename'),
 		/** Base64 of the uploaded bytes; cleared once the job leaves the queue. */
@@ -412,8 +413,8 @@ export const category = pgTable('category', {
 export const transaction = pgTable(
 	'transaction',
 	{
-		id: text('id').primaryKey(),
-		accountId: text('account_id')
+		id: uuid('id').primaryKey(),
+		accountId: uuid('account_id')
 			.notNull()
 			.references(() => account.id, { onDelete: 'cascade' }),
 		bookedAt: date('booked_at').notNull(),
@@ -458,13 +459,13 @@ export const transaction = pgTable(
 			.notNull()
 			.default('needs_review'),
 		reviewReason: text('review_reason'),
-		importFileId: text('import_file_id').references(() => importFile.id, { onDelete: 'set null' }),
+		importFileId: uuid('import_file_id').references(() => importFile.id, { onDelete: 'set null' }),
 		// How this row was read and how strongly it was proven, carried on the row
 		// itself so it can answer for its own origin even after the file it came
 		// from has been re-parsed or superseded.
 		sourceMethod: text('source_method'),
 		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>(),
-		transferPairId: text('transfer_pair_id')
+		transferPairId: uuid('transfer_pair_id')
 	},
 	(table) => [
 		index('transaction_currency_idx').on(table.currency),
@@ -485,11 +486,11 @@ export const transaction = pgTable(
 export const transactionFingerprintAlias = pgTable(
 	'transaction_fingerprint_alias',
 	{
-		accountId: text('account_id')
+		accountId: uuid('account_id')
 			.notNull()
 			.references(() => account.id, { onDelete: 'cascade' }),
 		fingerprint: text('fingerprint').notNull(),
-		transactionId: text('transaction_id')
+		transactionId: uuid('transaction_id')
 			.notNull()
 			.references(() => transaction.id, { onDelete: 'cascade' })
 	},
@@ -506,11 +507,11 @@ export const transactionFingerprintAlias = pgTable(
 export const transferPair = pgTable(
 	'transfer_pair',
 	{
-		id: text('id').primaryKey(),
-		outTransactionId: text('out_transaction_id')
+		id: uuid('id').primaryKey(),
+		outTransactionId: uuid('out_transaction_id')
 			.notNull()
 			.references(() => transaction.id, { onDelete: 'cascade' }),
-		inTransactionId: text('in_transaction_id')
+		inTransactionId: uuid('in_transaction_id')
 			.notNull()
 			.references(() => transaction.id, { onDelete: 'cascade' }),
 		state: text('state').$type<EnumValue<'transfer_pair.state'>>().notNull().default('auto'),
@@ -535,10 +536,10 @@ export const transferPair = pgTable(
 export const transferPairLeg = pgTable(
 	'transfer_pair_leg',
 	{
-		transactionId: text('transaction_id')
+		transactionId: uuid('transaction_id')
 			.primaryKey()
 			.references(() => transaction.id, { onDelete: 'cascade' }),
-		pairId: text('pair_id')
+		pairId: uuid('pair_id')
 			.notNull()
 			.references(() => transferPair.id, { onDelete: 'cascade' })
 	},
@@ -556,7 +557,7 @@ export const markTransferRule = pgTable('mark_transfer_rule', {
 export const property = pgTable(
 	'property',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		// e.g. "3+kk · 78 m² · bought 2019"
 		sizeLabel: text('size_label').notNull().default(''),
@@ -574,7 +575,7 @@ export const property = pgTable(
 			.notNull()
 			.default(sql`0`),
 		boughtYear: integer('bought_year'),
-		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		ownerPersonId: uuid('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 		// uploaded images on the data volume, plus the drawn floor plan:
 		// {plan?, photos, drawing?: {cellCm, rooms: [{name, cells: [[x,y],…]}]}}
 		images: jsonb('images')
@@ -596,8 +597,8 @@ export const property = pgTable(
 export const tenancy = pgTable(
 	'tenancy',
 	{
-		id: text('id').primaryKey(),
-		propertyId: text('property_id')
+		id: uuid('id').primaryKey(),
+		propertyId: uuid('property_id')
 			.notNull()
 			.references(() => property.id, { onDelete: 'cascade' }),
 		tenantName: text('tenant_name').notNull(),
@@ -618,8 +619,8 @@ export const tenancy = pgTable(
 export const propertyBill = pgTable(
 	'property_bill',
 	{
-		id: text('id').primaryKey(),
-		propertyId: text('property_id')
+		id: uuid('id').primaryKey(),
+		propertyId: uuid('property_id')
 			.notNull()
 			.references(() => property.id, { onDelete: 'cascade' }),
 		label: text('label').notNull(),
@@ -637,7 +638,7 @@ export const propertyBill = pgTable(
 		 */
 		source: text('source').$type<EnumValue<'property_bill.source'>>().notNull().default('manual'),
 		// the uploaded bill itself, filed in Documents about this property
-		documentId: text('document_id').references(() => document.id, { onDelete: 'set null' })
+		documentId: uuid('document_id').references(() => document.id, { onDelete: 'set null' })
 	},
 	(table) => [
 		uniqueIndex('property_bill_meter_property_idx')
@@ -653,7 +654,7 @@ export const propertyBill = pgTable(
 export const loan = pgTable(
 	'loan',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		lender: text('lender').notNull().default(''),
 		kind: text('kind').$type<EnumValue<'loan.kind'>>().notNull().default('mortgage'),
@@ -664,7 +665,7 @@ export const loan = pgTable(
 		principalMinor: bigint('principal_minor', { mode: 'bigint' }).notNull(),
 		owedMinor: bigint('owed_minor', { mode: 'bigint' }).notNull(),
 		owedAsOf: date('owed_as_of'),
-		ownerPersonId: text('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		ownerPersonId: uuid('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
 		startDate: date('start_date'),
 		endDate: date('end_date'),
 		// fixed_period: rate fixed until a date, then re-fixed (mortgages)
@@ -700,11 +701,11 @@ export const loan = pgTable(
 export const loanProperty = pgTable(
 	'loan_property',
 	{
-		id: text('id').primaryKey(),
-		loanId: text('loan_id')
+		id: uuid('id').primaryKey(),
+		loanId: uuid('loan_id')
 			.notNull()
 			.references(() => loan.id, { onDelete: 'cascade' }),
-		propertyId: text('property_id')
+		propertyId: uuid('property_id')
 			.notNull()
 			.references(() => property.id, { onDelete: 'cascade' }),
 		sharePct: numeric('share_pct', { precision: 6, scale: 3 })
@@ -722,8 +723,8 @@ export const loanProperty = pgTable(
 export const loanFixationPeriod = pgTable(
 	'loan_fixation_period',
 	{
-		id: text('id').primaryKey(),
-		loanId: text('loan_id')
+		id: uuid('id').primaryKey(),
+		loanId: uuid('loan_id')
 			.notNull()
 			.references(() => loan.id, { onDelete: 'cascade' }),
 		startDate: date('start_date').notNull(),
@@ -744,8 +745,8 @@ export const loanFixationPeriod = pgTable(
 export const loanEvent = pgTable(
 	'loan_event',
 	{
-		id: text('id').primaryKey(),
-		loanId: text('loan_id')
+		id: uuid('id').primaryKey(),
+		loanId: uuid('loan_id')
 			.notNull()
 			.references(() => loan.id, { onDelete: 'cascade' }),
 		happenedOn: date('happened_on').notNull(),
@@ -755,7 +756,7 @@ export const loanEvent = pgTable(
 		// interest portion of a payment, when the statement splits it
 		interestMinor: bigint('interest_minor', { mode: 'bigint' }),
 		note: text('note'),
-		transactionId: text('transaction_id').references(() => transaction.id, {
+		transactionId: uuid('transaction_id').references(() => transaction.id, {
 			onDelete: 'set null'
 		})
 	},
@@ -770,7 +771,7 @@ export const loanEvent = pgTable(
 export const document = pgTable(
 	'document',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		// payslips | tax | identity | family | property | tenancy | loans | insurance
 		shelf: text('shelf').$type<EnumValue<'document.shelf'>>().notNull(),
@@ -847,7 +848,7 @@ export const brokerPosition = pgTable(
 export const holding = pgTable(
 	'holding',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		ticker: text('ticker').notNull(),
 		name: text('name').notNull(),
 		category: text('category').notNull().default('STOCK'),
@@ -912,8 +913,8 @@ export const netWorthSnapshot = pgTable(
 export const transactionSplit = pgTable(
 	'transaction_split',
 	{
-		id: text('id').primaryKey(),
-		transactionId: text('transaction_id')
+		id: uuid('id').primaryKey(),
+		transactionId: uuid('transaction_id')
 			.notNull()
 			.references(() => transaction.id, { onDelete: 'cascade' }),
 		// minor units of the parent transaction's currency, same sign as the parent
@@ -931,7 +932,7 @@ export const transactionSplit = pgTable(
 // Cross-cutting groupings: a renovation, a holiday. Every tag has a running
 // total, which is why no kind column is needed.
 export const tag = pgTable('tag', {
-	id: text('id').primaryKey(),
+	id: uuid('id').primaryKey(),
 	name: text('name').notNull(),
 	// trimmed, lowercased, inner whitespace collapsed — carries the uniqueness
 	normalisedName: text('normalised_name').notNull().unique(),
@@ -947,7 +948,7 @@ export const tag = pgTable('tag', {
 export const rule = pgTable(
 	'rule',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		enabled: boolean('enabled').notNull().default(true),
 		// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
@@ -970,10 +971,10 @@ export const rule = pgTable(
 export const ruleTag = pgTable(
 	'rule_tag',
 	{
-		ruleId: text('rule_id')
+		ruleId: uuid('rule_id')
 			.notNull()
 			.references(() => rule.id, { onDelete: 'cascade' }),
-		tagId: text('tag_id')
+		tagId: uuid('tag_id')
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' })
 	},
@@ -991,7 +992,7 @@ export const ruleTag = pgTable(
 export const subject = pgTable(
 	'subject',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		name: text('name').notNull().unique(),
 		emoji: text('emoji').notNull().default('🏠'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -1010,8 +1011,8 @@ export const subject = pgTable(
 export const taxStatement = pgTable(
 	'tax_statement',
 	{
-		id: text('id').primaryKey(),
-		personId: text('person_id')
+		id: uuid('id').primaryKey(),
+		personId: uuid('person_id')
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
 		year: integer('year').notNull(),
@@ -1023,7 +1024,7 @@ export const taxStatement = pgTable(
 			.references(() => currency.code),
 		grossIncomeMinor: bigint('gross_income_minor', { mode: 'bigint' }).notNull(),
 		taxPaidMinor: bigint('tax_paid_minor', { mode: 'bigint' }).notNull(),
-		documentId: text('document_id').references(() => document.id, { onDelete: 'set null' }),
+		documentId: uuid('document_id').references(() => document.id, { onDelete: 'set null' }),
 		note: text('note'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
@@ -1037,8 +1038,8 @@ export const taxStatement = pgTable(
 export const taxStatementLine = pgTable(
 	'tax_statement_line',
 	{
-		id: text('id').primaryKey(),
-		statementId: text('statement_id')
+		id: uuid('id').primaryKey(),
+		statementId: uuid('statement_id')
 			.notNull()
 			.references(() => taxStatement.id, { onDelete: 'cascade' }),
 		label: text('label').notNull(),
@@ -1056,7 +1057,7 @@ export const taxStatementLine = pgTable(
 export const calendarEvent = pgTable(
 	'calendar_event',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		title: text('title').notNull(),
 		notes: text('notes'),
 		// A key from EVENT_CATEGORIES; supplies the marker emoji. Null is untagged.
@@ -1073,7 +1074,7 @@ export const calendarEvent = pgTable(
 		tz: text('tz').notNull(),
 		// RFC 5545 rule, without the RRULE: prefix. Null means a single event.
 		rrule: text('rrule'),
-		createdBy: text('created_by').references(() => person.id, { onDelete: 'set null' }),
+		createdBy: uuid('created_by').references(() => person.id, { onDelete: 'set null' }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		// The merge clock: sync compares this against the remote's modification time.
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1089,8 +1090,8 @@ export const calendarEvent = pgTable(
 export const calendarEventException = pgTable(
 	'calendar_event_exception',
 	{
-		id: text('id').primaryKey(),
-		eventId: text('event_id')
+		id: uuid('id').primaryKey(),
+		eventId: uuid('event_id')
 			.notNull()
 			.references(() => calendarEvent.id, { onDelete: 'cascade' }),
 		// The occurrence's ORIGINAL start, never where it was moved to. That is
@@ -1130,7 +1131,7 @@ export const calendarEventException = pgTable(
 // whitelist — but a credential that leaks because someone forgot to maintain a
 // list is a bad failure. Here it is excluded by construction.
 export const calendarAccount = pgTable('calendar_account', {
-	id: text('id').primaryKey(),
+	id: uuid('id').primaryKey(),
 	provider: text('provider').$type<'icloud' | 'google'>().notNull(),
 	label: text('label').notNull(),
 	remoteCalId: text('remote_cal_id'),
@@ -1157,7 +1158,7 @@ export const calendarSyncLink = pgTable(
 	{
 		/** An authored event's uuid, or a generated event's `gen:` key. */
 		localKey: text('local_key').notNull(),
-		accountId: text('account_id')
+		accountId: uuid('account_id')
 			.notNull()
 			.references(() => calendarAccount.id, { onDelete: 'cascade' }),
 		remoteId: text('remote_id').notNull(),
@@ -1191,9 +1192,9 @@ export const calendarSyncLink = pgTable(
 export const calendarConflict = pgTable(
 	'calendar_conflict',
 	{
-		id: text('id').primaryKey(),
+		id: uuid('id').primaryKey(),
 		localKey: text('local_key').notNull(),
-		accountId: text('account_id')
+		accountId: uuid('account_id')
 			.notNull()
 			.references(() => calendarAccount.id, { onDelete: 'cascade' }),
 		detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1212,7 +1213,7 @@ export const calendarConflict = pgTable(
 // tenancy.tenantContact, which was one free-text string with no structure and
 // nowhere to put a second number.
 export const contact = pgTable('contact', {
-	id: text('id').primaryKey(),
+	id: uuid('id').primaryKey(),
 	name: text('name').notNull(),
 	// A stored upload name from saveUpload(), served through /files/[name] —
 	// the same convention property photos use. Never a path or a URL.
@@ -1248,10 +1249,10 @@ export const contact = pgTable('contact', {
 export const tagLink = pgTable(
 	'tag_link',
 	{
-		tagId: text('tag_id')
+		tagId: uuid('tag_id')
 			.notNull()
 			.references(() => tag.id, { onDelete: 'cascade' }),
-		targetId: text('target_id')
+		targetId: uuid('target_id')
 			.notNull()
 			.references(() => entity.id, { onDelete: 'cascade' })
 	},
@@ -1267,10 +1268,10 @@ export const tagLink = pgTable(
 export const documentLink = pgTable(
 	'document_link',
 	{
-		documentId: text('document_id')
+		documentId: uuid('document_id')
 			.notNull()
 			.references(() => document.id, { onDelete: 'cascade' }),
-		targetId: text('target_id')
+		targetId: uuid('target_id')
 			.notNull()
 			.references(() => entity.id, { onDelete: 'cascade' })
 	},
@@ -1284,10 +1285,10 @@ export const documentLink = pgTable(
 export const contactLink = pgTable(
 	'contact_link',
 	{
-		contactId: text('contact_id')
+		contactId: uuid('contact_id')
 			.notNull()
 			.references(() => contact.id, { onDelete: 'cascade' }),
-		targetId: text('target_id')
+		targetId: uuid('target_id')
 			.notNull()
 			.references(() => entity.id, { onDelete: 'cascade' })
 	},

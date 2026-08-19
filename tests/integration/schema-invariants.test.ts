@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 import { ENUMS, ENUM_COLUMNS, checkName } from '$lib/enums';
@@ -115,7 +116,7 @@ describe('enum columns', () => {
 
 	it('rejects a value outside the set', async () => {
 		await expect(
-			harness.sql`insert into person (id, name, initials, role) values ('e1','X','X','superuser')`
+			harness.sql`insert into person (id, name, initials, role) values (${rowId('e1')},'X','X','superuser')`
 		).rejects.toThrow(/person_role_check/);
 	});
 });

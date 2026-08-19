@@ -1,3 +1,4 @@
+import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -165,7 +166,9 @@ export const actions: Actions = {
 			.getAll('statements')
 			.filter((f): f is File => f instanceof File && f.size > 0);
 		if (files.length === 0) return fail(400, { message: 'Choose at least one statement file.' });
-		const accountId = String(form.get('accountId') ?? '').trim() || undefined;
+		// Optional: an empty field means "work it out from the statement", which is
+		// not the same as an id that cannot exist.
+		const accountId = asOptionalRowId(form.get('accountId'));
 
 		// Accept the files and return. Reading them is background work: a
 		// multi-page PDF is recovered from glyph coordinates by two assemblers and
@@ -264,7 +267,7 @@ export const actions: Actions = {
 		// Shared with the register, so a correction teaches the categoriser the
 		// same way wherever it is made.
 		const result = await fileTransaction(
-			String(form.get('id') ?? ''),
+			asRowId(form.get('id')),
 			String(form.get('categoryId') ?? '')
 		);
 		if (!result.ok) return fail(result.status, { message: result.message });
@@ -273,7 +276,7 @@ export const actions: Actions = {
 
 	confirmTransfer: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const result = await confirmTransferProposal(id);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
@@ -281,7 +284,7 @@ export const actions: Actions = {
 
 	rejectTransfer: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const result = await rejectTransferProposal(id);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { calendarEvent, calendarEventException } from '$lib/server/db/schema';
@@ -42,7 +42,7 @@ export async function createEvent(
 	const problem = check(input);
 	if (problem) return invalid(problem);
 
-	const id = randomUUID();
+	const id = uuidv7();
 	await handle.insert(calendarEvent).values({
 		id,
 		title: input.title.trim(),
@@ -120,7 +120,7 @@ export async function updateEvent(
 			await tx
 				.insert(calendarEventException)
 				.values({
-					id: randomUUID(),
+					id: uuidv7(),
 					eventId: id,
 					recurrenceId: plan.recurrenceId,
 					...override
@@ -140,7 +140,7 @@ export async function updateEvent(
 				.set({ rrule: plan.truncatedRrule, updatedAt: new Date() })
 				.where(eq(calendarEvent.id, id));
 
-			const newId = randomUUID();
+			const newId = uuidv7();
 			await tx.insert(calendarEvent).values({
 				id: newId,
 				title: input.title.trim(),
@@ -238,7 +238,7 @@ export async function deleteEvent(
 			// RECURRENCE-ID rather than by the occurrence simply not appearing.
 			await tx
 				.insert(calendarEventException)
-				.values({ id: randomUUID(), eventId: id, recurrenceId: plan.recurrenceId, cancelled: true })
+				.values({ id: uuidv7(), eventId: id, recurrenceId: plan.recurrenceId, cancelled: true })
 				.onConflictDoUpdate({
 					target: [calendarEventException.eventId, calendarEventException.recurrenceId],
 					set: { cancelled: true }

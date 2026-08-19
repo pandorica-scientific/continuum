@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
+import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
@@ -255,7 +256,7 @@ async function resolveAccount(
 	// `other` is what the column's own comment reserves for that, and it is the
 	// honest value: a format name is not a bank, and storing one produced an
 	// account called `tabular EUR` and published it through /api/v1.
-	const id = randomUUID();
+	const id = uuidv7();
 	const label = statement.issuer ? (BANK_LABEL[statement.issuer] ?? statement.issuer) : 'Bank';
 	// Suffix from the account number itself, not the bank code after the slash.
 	const numberPart = statement.accountNumber?.split('/')[0].replace(/\D/g, '') ?? '';
@@ -475,7 +476,7 @@ async function ingestStatement(
 		const inserted = await tx
 			.insert(transaction)
 			.values({
-				id: randomUUID(),
+				id: uuidv7(),
 				accountId: acct.id,
 				bookedAt: row.bookedAt,
 				valueDate: row.valueDate,
@@ -730,7 +731,7 @@ export async function ingestFile(
 				};
 			}
 
-			const fileId = randomUUID();
+			const fileId = uuidv7();
 			// The file row must exist before any transaction references it. Its
 			// account is filled in once the first statement resolves one — a file
 			// holding several accounts has no single owner, and the transactions
@@ -983,7 +984,7 @@ async function pairAndCategoriseInTransaction(
 
 	let paired = 0;
 	for (const proposal of proposals) {
-		const pairId = randomUUID();
+		const pairId = uuidv7();
 		if (proposal.confidence === 'auto') {
 			await handle.insert(transferPair).values({
 				id: pairId,

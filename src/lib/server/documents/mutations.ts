@@ -1,5 +1,5 @@
+import { uuidv7 } from 'uuidv7';
 import type { EnumValue } from '$lib/enums';
-import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { document, documentLink, tagLink, subject } from '$lib/server/db/schema';
@@ -35,7 +35,7 @@ export async function insertDocumentAggregate(
 	if (input.newSubjectName) {
 		await handle
 			.insert(subject)
-			.values({ id: randomUUID(), name: input.newSubjectName, emoji: '📁' })
+			.values({ id: uuidv7(), name: input.newSubjectName, emoji: '📁' })
 			.onConflictDoNothing();
 		const existing = await handle
 			.select({ id: subject.id })

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import {
@@ -168,7 +168,7 @@ async function ingestReport(
 			if (report.holdings.length > 0) {
 				await tx.insert(holding).values(
 					report.holdings.map((item) => ({
-						id: randomUUID(),
+						id: uuidv7(),
 						ticker: item.ticker,
 						name: item.name,
 						category: item.category,

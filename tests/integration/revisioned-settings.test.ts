@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
@@ -192,7 +193,7 @@ describe('revisioned settings', () => {
 describe('rule definition mutation', () => {
 	it('takes the pairing lock before a rule row, matching filing lock order', async () => {
 		await testDb.insert(schema.rule).values({
-			id: 'rule-order',
+			id: rowId('rule-order'),
 			name: 'Original',
 			conditions: [{ field: 'description', op: 'contains', value: 'rent' }]
 		});
@@ -205,7 +206,10 @@ describe('rule definition mutation', () => {
 			await lockTransferPairing(tx);
 			announceFirstLock();
 			await firstMayFinish;
-			await tx.update(schema.rule).set({ name: 'Filed' }).where(eq(schema.rule.id, 'rule-order'));
+			await tx
+				.update(schema.rule)
+				.set({ name: 'Filed' })
+				.where(eq(schema.rule.id, rowId('rule-order')));
 		});
 		await firstHasLock;
 
@@ -216,7 +220,7 @@ describe('rule definition mutation', () => {
 				await tx
 					.update(schema.rule)
 					.set({ name: 'Rule edit' })
-					.where(eq(schema.rule.id, 'rule-order'));
+					.where(eq(schema.rule.id, rowId('rule-order')));
 				return true;
 			},
 			async () => undefined,
@@ -235,22 +239,24 @@ describe('rule definition mutation', () => {
 
 	it('rolls the rule and tag replacement back when replay fails', async () => {
 		await testDb.insert(schema.rule).values({
-			id: 'rule-a',
+			id: rowId('rule-a'),
 			name: 'Original',
 			provenance: 'manual',
 			conditions: [{ field: 'counterparty', op: 'contains', value: 'old' }]
 		});
 		await testDb.insert(schema.tag).values({
-			id: 'tag-old',
+			id: rowId('tag-old'),
 			name: 'Old',
 			normalisedName: 'old'
 		});
-		await testDb.insert(schema.ruleTag).values({ ruleId: 'rule-a', tagId: 'tag-old' });
+		await testDb
+			.insert(schema.ruleTag)
+			.values({ ruleId: rowId('rule-a'), tagId: rowId('tag-old') });
 
 		await expect(
 			saveRuleDefinition(
 				{
-					id: 'rule-a',
+					id: rowId('rule-a'),
 					name: 'Replacement',
 					conditions: [{ field: 'counterparty', op: 'contains', value: 'new' }],
 					categoryId: null,
@@ -265,18 +271,20 @@ describe('rule definition mutation', () => {
 		).rejects.toThrow('injected replay failure');
 
 		expect(await testDb.select().from(schema.rule)).toMatchObject([
-			{ id: 'rule-a', name: 'Original' }
+			{ id: rowId('rule-a'), name: 'Original' }
 		]);
-		expect(await testDb.select().from(schema.tag)).toMatchObject([{ id: 'tag-old', name: 'Old' }]);
+		expect(await testDb.select().from(schema.tag)).toMatchObject([
+			{ id: rowId('tag-old'), name: 'Old' }
+		]);
 		expect(await testDb.select().from(schema.ruleTag)).toEqual([
-			{ ruleId: 'rule-a', tagId: 'tag-old' }
+			{ ruleId: rowId('rule-a'), tagId: rowId('tag-old') }
 		]);
 		expect(await testDb.select().from(schema.settings)).toEqual([]);
 	});
 
 	it('rolls a non-save rule mutation back with replay writes', async () => {
 		await testDb.insert(schema.rule).values({
-			id: 'rule-toggle',
+			id: rowId('rule-toggle'),
 			name: 'Toggle me',
 			conditions: [{ field: 'description', op: 'contains', value: 'rent' }]
 		});
@@ -287,7 +295,7 @@ describe('rule definition mutation', () => {
 					await tx
 						.update(schema.rule)
 						.set({ enabled: false })
-						.where(eq(schema.rule.id, 'rule-toggle'));
+						.where(eq(schema.rule.id, rowId('rule-toggle')));
 					return true;
 				},
 				async (tx) => {
@@ -318,7 +326,7 @@ describe('legacy monetary currency migration', () => {
 			{ key: 'home', value: { kind: 'homeassistant', pricePerKwh: '650' } }
 		]);
 		await testDb.insert(schema.rule).values({
-			id: 'legacy-amount',
+			id: rowId('legacy-amount'),
 			name: 'Legacy amount',
 			conditions: [{ field: 'amount', op: 'between', min: '10000', max: null }]
 		});

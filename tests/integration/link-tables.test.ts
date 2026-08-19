@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
@@ -38,73 +39,77 @@ const person = (id: string) =>
 
 describe('one tag table for every kind of record', () => {
 	it('links a tag to records of different kinds through the same table', async () => {
-		await tag('g-1', 'renovation');
-		await property('pr-1');
-		await document('d-1');
-		await harness.sql`insert into tag_link (tag_id, target_id) values ('g-1', 'pr-1'), ('g-1', 'd-1')`;
+		await tag(rowId('g-1'), 'renovation');
+		await property(rowId('pr-1'));
+		await document(rowId('d-1'));
+		await harness.sql`insert into tag_link (tag_id, target_id) values (${rowId('g-1')}, ${rowId('pr-1')}), (${rowId('g-1')}, ${rowId('d-1')})`;
 
 		const rows = await harness.sql<{ kind: string }[]>`
 			select e.kind from tag_link l join entity e on e.id = l.target_id
-			where l.tag_id = 'g-1' order by e.kind`;
+			where l.tag_id = ${rowId('g-1')} order by e.kind`;
 		expect(rows.map((r) => r.kind)).toEqual(['document', 'property']);
 	});
 
 	it('refuses a target that is not a record at all', async () => {
-		await tag('g-2', 'holiday');
+		await tag(rowId('g-2'), 'holiday');
 		await expect(
-			harness.sql`insert into tag_link (tag_id, target_id) values ('g-2', 'no-such-thing')`
+			harness.sql`insert into tag_link (tag_id, target_id) values (${rowId('g-2')}, ${rowId('no-such-thing')})`
 		).rejects.toThrow(/foreign key|violates/i);
 	});
 
 	it('drops the link when the target goes', async () => {
-		await tag('g-3', 'car');
-		await property('pr-2');
-		await harness.sql`insert into tag_link (tag_id, target_id) values ('g-3', 'pr-2')`;
-		await harness.sql`delete from property where id = 'pr-2'`;
-		expect(await harness.sql`select 1 from tag_link where tag_id = 'g-3'`).toHaveLength(0);
+		await tag(rowId('g-3'), 'car');
+		await property(rowId('pr-2'));
+		await harness.sql`insert into tag_link (tag_id, target_id) values (${rowId('g-3')}, ${rowId('pr-2')})`;
+		await harness.sql`delete from property where id = ${rowId('pr-2')}`;
+		expect(await harness.sql`select 1 from tag_link where tag_id = ${rowId('g-3')}`).toHaveLength(
+			0
+		);
 	});
 
 	it('drops the link when the tag goes', async () => {
-		await tag('g-4', 'garden');
-		await property('pr-3');
-		await harness.sql`insert into tag_link (tag_id, target_id) values ('g-4', 'pr-3')`;
-		await harness.sql`delete from tag where id = 'g-4'`;
-		expect(await harness.sql`select 1 from tag_link where tag_id = 'g-4'`).toHaveLength(0);
+		await tag(rowId('g-4'), 'garden');
+		await property(rowId('pr-3'));
+		await harness.sql`insert into tag_link (tag_id, target_id) values (${rowId('g-4')}, ${rowId('pr-3')})`;
+		await harness.sql`delete from tag where id = ${rowId('g-4')}`;
+		expect(await harness.sql`select 1 from tag_link where tag_id = ${rowId('g-4')}`).toHaveLength(
+			0
+		);
 	});
 
 	it('cannot hold the same pair twice', async () => {
-		await tag('g-5', 'twice');
-		await property('pr-4');
-		await harness.sql`insert into tag_link (tag_id, target_id) values ('g-5', 'pr-4')`;
+		await tag(rowId('g-5'), 'twice');
+		await property(rowId('pr-4'));
+		await harness.sql`insert into tag_link (tag_id, target_id) values (${rowId('g-5')}, ${rowId('pr-4')})`;
 		await expect(
-			harness.sql`insert into tag_link (tag_id, target_id) values ('g-5', 'pr-4')`
+			harness.sql`insert into tag_link (tag_id, target_id) values (${rowId('g-5')}, ${rowId('pr-4')})`
 		).rejects.toThrow(/duplicate key|violates/i);
 	});
 });
 
 describe('documents and contacts link the same way', () => {
 	it('files one document against records of several kinds', async () => {
-		await document('d-2');
-		await person('p-1');
-		await property('pr-5');
+		await document(rowId('d-2'));
+		await person(rowId('p-1'));
+		await property(rowId('pr-5'));
 		await harness.sql`insert into document_link (document_id, target_id)
-			values ('d-2', 'p-1'), ('d-2', 'pr-5')`;
+			values (${rowId('d-2')}, ${rowId('p-1')}), (${rowId('d-2')}, ${rowId('pr-5')})`;
 		const rows = await harness.sql<{ kind: string }[]>`
 			select e.kind from document_link l join entity e on e.id = l.target_id
-			where l.document_id = 'd-2' order by e.kind`;
+			where l.document_id = ${rowId('d-2')} order by e.kind`;
 		expect(rows.map((r) => r.kind)).toEqual(['person', 'property']);
 	});
 
 	it('attaches a contact to a property and an account', async () => {
-		await harness.sql`insert into contact (id, name) values ('c-1', 'Plumber')`;
-		await property('pr-6');
+		await harness.sql`insert into contact (id, name) values (${rowId('c-1')}, 'Plumber')`;
+		await property(rowId('pr-6'));
 		await harness.sql`insert into account (id, name, bank, currency)
-			values ('a-1', 'Current', 'other', 'CZK')`;
+			values (${rowId('a-1')}, 'Current', 'other', 'CZK')`;
 		await harness.sql`insert into contact_link (contact_id, target_id)
-			values ('c-1', 'pr-6'), ('c-1', 'a-1')`;
+			values (${rowId('c-1')}, ${rowId('pr-6')}), (${rowId('c-1')}, ${rowId('a-1')})`;
 		const rows = await harness.sql<{ kind: string }[]>`
 			select e.kind from contact_link l join entity e on e.id = l.target_id
-			where l.contact_id = 'c-1' order by e.kind`;
+			where l.contact_id = ${rowId('c-1')} order by e.kind`;
 		expect(rows.map((r) => r.kind)).toEqual(['account', 'property']);
 	});
 });

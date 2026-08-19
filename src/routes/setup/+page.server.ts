@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
@@ -70,7 +70,7 @@ export const actions: Actions = {
 			validated.push({ name: p.name, password: p.password, birthYear });
 		}
 
-		const prepared = validated.map((p) => ({ ...p, id: randomUUID() }));
+		const prepared = validated.map((p) => ({ ...p, id: uuidv7() }));
 
 		// Claim first, then do the expensive work. Concurrent losing requests wait
 		// for the singleton and return without hashing any password. Hashes are

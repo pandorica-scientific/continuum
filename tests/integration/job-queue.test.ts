@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
@@ -40,18 +41,18 @@ const claim = (kind: string) => harness.sql`
 
 describe('claiming', () => {
 	it('hands one queued job to exactly one of two racing workers', async () => {
-		await harness.sql`insert into job (id, kind, state) values ('j1', 'import', 'queued')`;
+		await harness.sql`insert into job (id, kind, state) values (${rowId('j1')}, 'import', 'queued')`;
 		const [a, b] = await Promise.all([claim('import'), claim('import')]);
 		expect(a.length + b.length).toBe(1);
 	});
 
 	it('counts attempts, so a job that keeps dying can be given up on', async () => {
-		await harness.sql`insert into job (id, kind, state) values ('j2', 'import', 'queued')`;
+		await harness.sql`insert into job (id, kind, state) values (${rowId('j2')}, 'import', 'queued')`;
 		await claim('import');
-		await harness.sql`update job set state = 'queued' where id = 'j2'`;
+		await harness.sql`update job set state = 'queued' where id = ${rowId('j2')}`;
 		await claim('import');
 		const [{ attempts }] = await harness.sql<{ attempts: number }[]>`
-			select attempts from job where id = 'j2'`;
+			select attempts from job where id = ${rowId('j2')}`;
 		// The calendar lease had no equivalent: a pass that failed every time was
 		// retried for ever with nothing recording that it had.
 		expect(attempts).toBe(2);
@@ -81,11 +82,11 @@ describe('claiming', () => {
 describe('the shape it has to support', () => {
 	it('carries the uploaded bytes for an import, and lets them be cleared', async () => {
 		await harness.sql`insert into job (id, kind, state, filename, blob, byte_size)
-			values ('j5', 'import', 'queued', 'statement.pdf', 'YmFzZTY0', 8)`;
+			values (${rowId('j5')}, 'import', 'queued', 'statement.pdf', 'YmFzZTY0', 8)`;
 		await harness.sql`update job set blob = null, state = 'done', finished_at = now()
-			where id = 'j5'`;
+			where id = ${rowId('j5')}`;
 		const [row] = await harness.sql<{ blob: string | null; byte_size: number }[]>`
-			select blob, byte_size from job where id = 'j5'`;
+			select blob, byte_size from job where id = ${rowId('j5')}`;
 		// The size outlives the bytes: the upload screen still reports what it read
 		// after the payload has been cleared.
 		expect(row.blob).toBeNull();
@@ -94,20 +95,20 @@ describe('the shape it has to support', () => {
 
 	it('names what a job is about, for kinds where that is the work', async () => {
 		await harness.sql`insert into calendar_account (id, provider, label, credential)
-			values ('cal-1', 'google', 'Mine', 'secret')`;
+			values (${rowId('cal-1')}, 'google', 'Mine', 'secret')`;
 		await harness.sql`insert into job (id, kind, subject_id, state)
-			values ('j6', 'calendar_sync', 'cal-1', 'running')`;
+			values (${rowId('j6')}, 'calendar_sync', ${rowId('cal-1')}, 'running')`;
 		const [row] = await harness.sql<{ subject_id: string }[]>`
-			select subject_id from job where id = 'j6'`;
-		expect(row.subject_id).toBe('cal-1');
+			select subject_id from job where id = ${rowId('j6')}`;
+		expect(row.subject_id).toBe(rowId('cal-1'));
 	});
 
 	it('refuses a kind or a state it does not know', async () => {
 		await expect(
-			harness.sql`insert into job (id, kind, state) values ('j7', 'telepathy', 'queued')`
+			harness.sql`insert into job (id, kind, state) values (${rowId('j7')}, 'telepathy', 'queued')`
 		).rejects.toThrow(/job_kind_check/);
 		await expect(
-			harness.sql`insert into job (id, kind, state) values ('j8', 'import', 'pondering')`
+			harness.sql`insert into job (id, kind, state) values (${rowId('j8')}, 'import', 'pondering')`
 		).rejects.toThrow(/job_state_check/);
 	});
 });
