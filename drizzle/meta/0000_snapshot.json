@@ -1,5 +1,5 @@
 {
-  "id": "6f991187-5d19-454f-bc92-a78193762f5f",
+  "id": "e9a11bda-bcb0-455a-9227-5a2bc0ed58f5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -342,6 +342,12 @@
         "overview_layout": {
           "name": "overview_layout",
           "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "theme": {
+          "name": "theme",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

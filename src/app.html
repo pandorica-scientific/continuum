@@ -5,7 +5,13 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<script>
 			// Dark is the default; light only when explicitly chosen. Runs before paint.
-			if (localStorage.getItem('ledger-theme') === 'light') {
+			//
+			// Read from a cookie rather than localStorage because the choice belongs to
+			// the PERSON, not the browser: the server writes this cookie from their
+			// stored theme on every signed-in load, so it is already right on the first
+			// page after signing in somewhere new. localStorage cannot be written by the
+			// server, so it made two people on one laptop share a theme.
+			if (document.cookie.split('; ').includes('continuum_theme=light')) {
 				document.documentElement.setAttribute('data-ledger-theme', 'light');
 			}
 		</script>

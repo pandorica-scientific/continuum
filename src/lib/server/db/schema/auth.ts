@@ -17,6 +17,7 @@ import {
 // Relative, not aliased: drizzle-kit loads these files outside Vite and
 // does not resolve SvelteKit's $lib.
 import type { OverviewPlacement } from '../../../overview/layout';
+import type { EnumValue } from '../../../enums';
 
 export const person = pgTable('person', {
 	id: uuid('id').primaryKey(),
@@ -40,6 +41,10 @@ export const person = pgTable('person', {
 	// who removed every panel, which is a different and equally valid state.
 	// validateSession selects explicit columns, so this never rides the hot path.
 	overviewLayout: jsonb('overview_layout').$type<OverviewPlacement[]>(),
+	// Null until this person picks one, which reads as dark. Stored on the person
+	// rather than in the browser so it follows them between devices; a cookie
+	// mirrors it so the pre-paint script can apply it without a round trip.
+	theme: text('theme').$type<EnumValue<'person.theme'>>(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

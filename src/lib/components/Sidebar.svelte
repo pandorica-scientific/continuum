@@ -5,6 +5,7 @@
 	import BrandMark from './BrandMark.svelte';
 	import Icon from './Icon.svelte';
 	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
+	import type { Theme } from '$lib/theme';
 
 	interface Props {
 		modules: ModuleToggles;
@@ -33,18 +34,29 @@
 	// own path matches — /loans lights up Assets.
 	const activeArea = $derived(areaForPath(page.url.pathname)?.key);
 
-	let theme: 'dark' | 'light' = $state(
+	// Seeded from what the pre-paint script already applied, which came from the
+	// cookie the server wrote from this person's stored theme.
+	let theme: Theme = $state(
 		browser && document.documentElement.dataset.ledgerTheme === 'light' ? 'light' : 'dark'
 	);
 
-	function setTheme(next: 'dark' | 'light') {
+	// Applied to the document first and persisted after, so the colours change on
+	// the click rather than on the round trip. The server owns the record — it
+	// stores the choice against the person and refreshes the cookie `app.html`
+	// reads before paint — so a failed write costs this tab's choice and nothing
+	// else: the next load paints what was last saved.
+	function setTheme(next: Theme) {
 		theme = next;
 		if (next === 'light') {
 			document.documentElement.setAttribute('data-ledger-theme', 'light');
 		} else {
 			document.documentElement.removeAttribute('data-ledger-theme');
 		}
-		localStorage.setItem('ledger-theme', next);
+		void fetch('/settings/theme', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ theme: next })
+		});
 	}
 
 	// The Import badge counts transactions awaiting review. Import is a screen

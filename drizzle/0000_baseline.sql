@@ -48,6 +48,7 @@ CREATE TABLE "person" (
 	"auth_generation" integer DEFAULT 0 NOT NULL,
 	"deactivated_at" timestamp with time zone,
 	"overview_layout" jsonb,
+	"theme" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -792,6 +793,7 @@ FOR EACH ROW EXECUTE FUNCTION maintain_transfer_pair_legs();--> statement-breakp
 -- Nullable columns need no special handling: `col in (...)` is NULL for a NULL
 -- input, and a CHECK accepts anything that is not false.
 ALTER TABLE person ADD CONSTRAINT person_role_check CHECK (role in ('admin', 'member'));--> statement-breakpoint
+ALTER TABLE person ADD CONSTRAINT person_theme_check CHECK (theme in ('dark', 'light'));--> statement-breakpoint
 ALTER TABLE account ADD CONSTRAINT account_kind_check
 	CHECK (kind in ('current', 'savings', 'brokerage'));--> statement-breakpoint
 ALTER TABLE property ADD CONSTRAINT property_kind_check CHECK (kind in ('lived', 'rented'));--> statement-breakpoint

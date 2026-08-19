@@ -8,9 +8,10 @@ import { missingRateCurrencies } from '$lib/server/fx';
 import { getHouseholdName, getModules } from '$lib/server/settings';
 import { pathDisabled } from '$lib/modules/registry';
 import { displayCurrency, formatMinor } from '$lib/money';
+import { THEME_COOKIE, themeCookieOptions, themeOrDefault } from '$lib/theme';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ url, cookies }) => {
+export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 	const modules = await getModules();
 
 	if (pathDisabled(url.pathname, modules)) {
@@ -35,6 +36,15 @@ export const load: LayoutServerLoad = async ({ url, cookies }) => {
 	// rendered at all — reading it after hydration made it flash on every load.
 	const rateWarningDismissed = cookies.get('continuum_rate_dismissed') ?? null;
 
+	// The person's theme, mirrored into the cookie `app.html` reads before paint.
+	// Written on every load rather than only when it changes, so signing in on a
+	// second device — or as somebody else on this one — is corrected by the first
+	// page rather than by the second.
+	const theme = themeOrDefault(locals.person?.theme);
+	if (cookies.get(THEME_COOKIE) !== theme) {
+		cookies.set(THEME_COOKIE, theme, themeCookieOptions());
+	}
+
 	return {
 		modules,
 		householdLabel,
@@ -48,6 +58,7 @@ export const load: LayoutServerLoad = async ({ url, cookies }) => {
 				: null,
 		netWorthDeltaPositive: (netWorth.deltaThisMonthMinor ?? 0n) >= 0n,
 		baseCurrency: displayCurrency(netWorth.baseCurrency),
-		importBadge: badgeRows[0].count
+		importBadge: badgeRows[0].count,
+		theme
 	};
 };

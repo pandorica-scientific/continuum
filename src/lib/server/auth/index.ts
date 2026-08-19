@@ -9,6 +9,7 @@ import { cookieSecure } from './cookies';
 import { hashToken } from './token-hash';
 import type { Cookies } from '@sveltejs/kit';
 import type { PersonRole } from './policy';
+import type { EnumValue } from '$lib/enums';
 
 const SESSION_COOKIE = 'continuum_session';
 const SESSION_DAYS = 30;
@@ -157,6 +158,8 @@ export interface SessionPerson {
 	name: string;
 	initials: string;
 	role: PersonRole;
+	/** Null until they choose one; the app paints dark until they do. */
+	theme: EnumValue<'person.theme'> | null;
 }
 
 /** The current session's row id, or null when there is no session cookie. */
@@ -179,6 +182,7 @@ export async function validateSession(
 			name: person.name,
 			initials: person.initials,
 			role: person.role,
+			theme: person.theme,
 			deactivatedAt: person.deactivatedAt,
 			sessionAuthGeneration: session.authGeneration,
 			personAuthGeneration: person.authGeneration
@@ -211,7 +215,8 @@ export async function validateSession(
 		id: row.id,
 		name: row.name,
 		initials: row.initials,
-		role: row.role
+		role: row.role,
+		theme: row.theme
 	};
 }
 

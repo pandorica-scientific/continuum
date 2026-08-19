@@ -70,6 +70,10 @@ export const ENUMS = {
 
 	'account.kind': ['current', 'savings', 'brokerage'],
 
+	// A person's chosen theme. Null means never chosen, which reads as dark —
+	// the default — rather than as a third state.
+	'person.theme': ['dark', 'light'],
+
 	'property.kind': ['lived', 'rented'],
 	'property_bill.source': ['manual', 'meter'],
 
@@ -130,6 +134,7 @@ export type EnumValue<K extends EnumKey> = (typeof ENUMS)[K][number];
 export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = [
 	{ table: 'person', column: 'role', enum: 'person.role' },
 	{ table: 'account', column: 'kind', enum: 'account.kind' },
+	{ table: 'person', column: 'theme', enum: 'person.theme' },
 	{ table: 'property', column: 'kind', enum: 'property.kind' },
 	{ table: 'property_bill', column: 'source', enum: 'property_bill.source' },
 	{ table: 'loan', column: 'kind', enum: 'loan.kind' },
