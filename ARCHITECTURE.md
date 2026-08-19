@@ -294,7 +294,7 @@ active. Everything downstream — the session cookie, `validateSession`,
   can name file paths and, in a query, real figures
 - `src/routes/api/v1/` — the read-only JSON API, bearer-token authed, versioned
   in the path so a v2 can exist beside it
-- `drizzle/` — one baseline migration holding the whole schema as of 0.3.9, plus
+- `drizzle/` — one baseline migration holding the whole schema as of 0.3.10, plus
   whatever has been added since; run automatically at boot. Additive-only from
   that baseline. What drizzle-kit cannot generate — triggers, generated columns,
   CHECKs, the `net_worth_component` view, seed rows — is written by hand in the

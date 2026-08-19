@@ -4,7 +4,7 @@ import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 import { ENUMS, ENUM_COLUMNS, checkName } from '$lib/enums';
 
 /**
- * Conventions the schema is locked to as of v0.3.9.
+ * Conventions the schema is locked to as of v0.3.10.
  *
  * These are not style checks. Each one encodes a defect class the schema has
  * already been bitten by, and each is cheap enough to run on every push.

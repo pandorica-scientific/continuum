@@ -116,7 +116,7 @@ afterAll(async () => {
  * schema as it stood before migration 0027 and replayed that migration against
  * deliberately broken data.
  *
- * They went because v0.3.9 collapses every migration into one baseline, so 0027
+ * They went because v0.3.10 collapses every migration into one baseline, so 0027
  * will not exist to replay — and because the world they built could only be
  * written through the CURRENT Drizzle schema, which since the rename names
  * columns that world does not have. Keeping them meant either editing a

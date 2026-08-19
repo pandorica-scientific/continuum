@@ -2,7 +2,9 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
-## 0.3.9 — 2026-08-19
+## 0.3.10 — 2026-08-19
+
+> There is no 0.3.9. Its tag was cut against a commit whose CI could not run, tags are immutable here, and nothing had been published under it — so the number was left behind rather than moved.
 
 > The schema settled into one baseline with its rules enforced by tests, the server code given a place for everything, and every file stamped with its licence.
 
@@ -37,7 +39,7 @@
 - 💸 `refreshRates` inserted whatever currency code the feed offered, leaking unvalidated codes into the selectable list
 - 📄 A document filed against a flat assumed the first link was a person
 
-**⬆️ Upgrading:** ⚠️ **a clean break — 0.3.9 will not start on an 0.3.8 database, and a backup does not carry the data across.** The whole migration chain is replaced by one baseline, so a database that stopped at `0045` fails on boot with `CREATE TABLE "currency"` already existing; and an 0.3.8 backup is a column-by-column `COPY` naming tables and columns this release renamed or removed. Start 0.3.9 on an empty database. This is affordable exactly once, because nothing was running 0.3.8 yet — from this baseline the schema is additive-only, and every release after it upgrades in place.
+**⬆️ Upgrading:** ⚠️ **a clean break — 0.3.10 will not start on an 0.3.8 database, and a backup does not carry the data across.** The whole migration chain is replaced by one baseline, so a database that stopped at `0045` fails on boot with `CREATE TABLE "currency"` already existing; and an 0.3.8 backup is a column-by-column `COPY` naming tables and columns this release renamed or removed. Start 0.3.10 on an empty database. This is affordable exactly once, because nothing was running 0.3.8 yet — from this baseline the schema is additive-only, and every release after it upgrades in place.
 
 ## 0.3.8 — 2026-08-19
 

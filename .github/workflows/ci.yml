@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    # A release is a pushed tag: `git tag v0.3.9 && git push origin v0.3.9`, or
+    # A release is a pushed tag: `git tag v0.3.10 && git push origin v0.3.10`, or
     # a GitHub release published against one. Nothing is published from main:
     # `latest` names the newest RELEASE, because that is the tag `compose.yaml`
     # pulls and people run at home. Publishing it from every merge meant a

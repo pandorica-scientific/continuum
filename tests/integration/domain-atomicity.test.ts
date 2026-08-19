@@ -1125,7 +1125,7 @@ describe('domain replacement writes', () => {
 	});
 
 	// RETIRED: this replayed migration 0029 against a CURRENT schema to check
-	// its one-time backfill. v0.3.9 collapses every migration into one baseline,
+	// its one-time backfill. v0.3.10 collapses every migration into one baseline,
 	// so 0029 will not exist to replay — and since the rename it names a column
 	// (holding.as_of) that no longer exists. The freshness rule it covered is
 	// exercised live by the broker ingest tests.
