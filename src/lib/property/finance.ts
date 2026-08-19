@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 export interface Ratio {
 	numerator: bigint;
 	denominator: bigint;
@@ -95,7 +96,7 @@ export function allocateAtIndex(amountMinor: bigint, shares: Ratio[], index: num
 	);
 }
 
-export interface SecuredPropertyShareInput {
+interface SecuredPropertyShareInput {
 	propertyId: string;
 	sharePct: string | null;
 	/** Property value already converted to the one currency shared by the set. */
@@ -144,7 +145,7 @@ export function sharesForLoan(links: SecuredPropertyShareInput[]): Ratio[] {
 	);
 }
 
-export interface PropertyFinancialInput {
+interface PropertyFinancialInput {
 	day: string;
 	propertyValueMinor: bigint;
 	propertyCurrency: string;
@@ -153,7 +154,7 @@ export interface PropertyFinancialInput {
 	billsMinor: bigint;
 }
 
-export interface PropertyLoanFinancialInput {
+interface PropertyLoanFinancialInput {
 	id: string;
 	principalMinor: bigint;
 	owedMinor: bigint;
@@ -165,7 +166,7 @@ export interface PropertyLoanFinancialInput {
 	shareIndex: number;
 }
 
-export interface AllocatedPropertyLoan {
+interface AllocatedPropertyLoan {
 	id: string;
 	principalPropertyMinor: bigint;
 	owedPropertyMinor: bigint;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { transaction, transferPair } from '$lib/server/db/schema';
@@ -8,7 +9,7 @@ import {
 	type DatabaseHandle
 } from './ingest';
 
-export type TransferDecisionResult = { ok: true } | { ok: false; status: 404; message: string };
+type TransferDecisionResult = { ok: true } | { ok: false; status: 404; message: string };
 
 async function transitionProposal(
 	id: string,

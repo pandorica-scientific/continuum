@@ -1,11 +1,13 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asOptionalRowId, asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';
-import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { category, rule, ruleTag, tag } from '$lib/server/db/schema';
 import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/ingest';
-import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rule-mutations';
+import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
 import { confidence } from '$lib/rules/confidence';
 import { DEFAULT_RULE_PRIOR, normalise, type Condition } from '$lib/rules/match';
 import { CATEGORY_GROUPS } from '$lib/categories';
@@ -136,7 +138,7 @@ async function conditionsFromForm(form: FormData): Promise<Condition[] | null> {
 export const actions: Actions = {
 	toggle: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const changed = await mutateRuleAndReplay(async (tx) => {
 			const rows = await tx
 				.update(rule)
@@ -151,7 +153,7 @@ export const actions: Actions = {
 
 	remove: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const changed = await mutateRuleAndReplay(async (tx) => {
 			const rows = await tx.delete(rule).where(eq(rule.id, id)).returning({ id: rule.id });
 			return rows[0]?.id ?? null;
@@ -182,7 +184,9 @@ export const actions: Actions = {
 
 	save: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '') || randomUUID();
+		// Optional: no id means "create", which is not the same as an id that
+		// cannot exist — and the nil uuid is truthy, so `|| uuidv7()` would not fire.
+		const id = asOptionalRowId(form.get('id')) ?? uuidv7();
 		const name = String(form.get('name') ?? '').trim();
 		const categoryId = String(form.get('categoryId') ?? '') || null;
 		const tagNames = String(form.get('tagNames') ?? '')

@@ -1,1 +1,0 @@
-ALTER TABLE "loan" DROP COLUMN "payment_minor";

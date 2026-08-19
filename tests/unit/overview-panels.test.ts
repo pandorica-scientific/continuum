@@ -35,7 +35,7 @@ describe('the panel registry', () => {
 	});
 
 	it('gives every panel a data builder', () => {
-		const source = readFileSync('src/lib/server/overview.ts', 'utf8');
+		const source = readFileSync('src/lib/server/overview/index.ts', 'utf8');
 		for (const panel of PANELS) {
 			expect(source, `${panel.key} has no builder`).toMatch(new RegExp(`^\\t${panel.key}:`, 'm'));
 		}

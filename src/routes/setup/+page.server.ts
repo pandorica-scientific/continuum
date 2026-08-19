@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
 import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
@@ -6,7 +7,7 @@ import { createSession, hashPassword } from '$lib/server/auth';
 import { initialSetupPeopleLimitError, runInitialSetup } from '$lib/server/auth/generation';
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
-import { passwordMinLength } from '$lib/server/policy';
+import { passwordMinLength } from '$lib/server/system/policy';
 import { passwordLengthError } from '$lib/password-policy';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
@@ -70,7 +71,7 @@ export const actions: Actions = {
 			validated.push({ name: p.name, password: p.password, birthYear });
 		}
 
-		const prepared = validated.map((p) => ({ ...p, id: randomUUID() }));
+		const prepared = validated.map((p) => ({ ...p, id: uuidv7() }));
 
 		// Claim first, then do the expensive work. Concurrent losing requests wait
 		// for the singleton and return without hashing any password. Hashes are

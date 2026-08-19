@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Failed-credential rate limiting. In-memory by design: this is a single-home
 // server, and restarting it may reset a short-lived budget without weakening
 // the database-backed credentials themselves.
@@ -14,13 +15,13 @@ const MAX_CHALLENGE_ISSUES = 60;
 const DEFAULT_MAX_ENTRIES = 4096;
 const DEFAULT_PRUNE_BATCH_SIZE = 64;
 
-export const UNKNOWN_LOGIN_SUBJECT = 'unknown-account';
+const UNKNOWN_LOGIN_SUBJECT = 'unknown-account';
 
 export function loginLimitSubject(personId: string, known: boolean): string {
 	return known ? personId : UNKNOWN_LOGIN_SUBJECT;
 }
 
-export type LimitScope = 'login' | 'api' | 'enroll' | 'passkey-challenge';
+type LimitScope = 'login' | 'api' | 'enroll' | 'passkey-challenge';
 
 interface Entry {
 	count: number;

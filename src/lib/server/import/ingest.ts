@@ -1,4 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
+import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
@@ -15,7 +17,7 @@ import { convertMinorSync, type RateTable } from '$lib/server/fx/table';
 import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
-import { saveUpload } from '$lib/server/files';
+import { saveUpload } from '$lib/server/system/files';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';
@@ -31,7 +33,7 @@ import {
 import type { ParsedRow, ParsedStatement } from './types';
 
 interface LegacyRevolutIdentity {
-	bookedAt: string;
+	bookedOn: string;
 	amountMinor: bigint;
 	currency: string;
 	bankRef?: string | null;
@@ -48,7 +50,7 @@ interface LegacyRevolutIdentity {
 
 function legacyRevolutKey(row: LegacyRevolutIdentity): string {
 	return JSON.stringify([
-		row.bookedAt,
+		row.bookedOn,
 		row.amountMinor.toString(),
 		row.currency,
 		row.bankRef ?? '',
@@ -255,7 +257,7 @@ async function resolveAccount(
 	// `other` is what the column's own comment reserves for that, and it is the
 	// honest value: a format name is not a bank, and storing one produced an
 	// account called `tabular EUR` and published it through /api/v1.
-	const id = randomUUID();
+	const id = uuidv7();
 	const label = statement.issuer ? (BANK_LABEL[statement.issuer] ?? statement.issuer) : 'Bank';
 	// Suffix from the account number itself, not the bank code after the slash.
 	const numberPart = statement.accountNumber?.split('/')[0].replace(/\D/g, '') ?? '';
@@ -296,7 +298,7 @@ class NeedsAccount extends Error {
 }
 
 /** What one statement inside an uploaded file did. */
-export interface StatementOutcome {
+interface StatementOutcome {
 	accountId: string | null;
 	bank: string;
 	currency: string;
@@ -396,8 +398,8 @@ async function ingestStatement(
 		const legacyRows = await tx
 			.select({
 				id: transaction.id,
-				bookedAt: transaction.bookedAt,
-				amountMinor: transaction.amount,
+				bookedOn: transaction.bookedOn,
+				amountMinor: transaction.amountMinor,
 				currency: transaction.currency,
 				bankRef: transaction.bankRef,
 				counterpartyAccount: transaction.counterpartyAccount,
@@ -415,7 +417,7 @@ async function ingestStatement(
 				and(
 					eq(transaction.accountId, acct.id),
 					eq(transaction.fingerprintVersion, 1),
-					inArray(transaction.bookedAt, replayDays),
+					inArray(transaction.bookedOn, replayDays),
 					inArray(transaction.currency, replayCurrencies),
 					sql`not exists (
 							select 1 from ${transactionFingerprintAlias} existing_alias
@@ -452,7 +454,14 @@ async function ingestStatement(
 		// exact legacy source facts and keep the historical row untouched.
 		if (statement.bank === 'revolut') {
 			const fee = row.feeMinor ?? 0n;
-			const key = legacyRevolutKey({ ...row, amountMinor: row.amountMinor - fee });
+			// The boundary between the reader's vocabulary and the schema's: a
+			// ParsedRow says `bookedAt` because that is what the bank printed, and
+			// the stored column says `booked_on`.
+			const key = legacyRevolutKey({
+				...row,
+				bookedOn: row.bookedAt,
+				amountMinor: row.amountMinor - fee
+			});
 			const candidates = legacyRevolut.get(key);
 			let legacyId = candidates?.shift();
 			while (legacyId && usedLegacyIds.has(legacyId)) {
@@ -475,11 +484,11 @@ async function ingestStatement(
 		const inserted = await tx
 			.insert(transaction)
 			.values({
-				id: randomUUID(),
+				id: uuidv7(),
 				accountId: acct.id,
-				bookedAt: row.bookedAt,
-				valueDate: row.valueDate,
-				amount: row.amountMinor,
+				bookedOn: row.bookedAt,
+				valueOn: row.valueDate,
+				amountMinor: row.amountMinor,
 				feeMinor: row.feeMinor,
 				currency: row.currency,
 				balanceAfterMinor: row.balanceAfterMinor,
@@ -511,11 +520,11 @@ async function ingestStatement(
 	if (statement.closingBalanceMinor !== undefined && statement.periodEnd) {
 		await tx
 			.update(account)
-			.set({ balanceMinor: statement.closingBalanceMinor, balanceAsOf: statement.periodEnd })
+			.set({ balanceMinor: statement.closingBalanceMinor, balanceOn: statement.periodEnd })
 			.where(
 				and(
 					eq(account.id, acct.id),
-					or(isNull(account.balanceAsOf), lte(account.balanceAsOf, statement.periodEnd))
+					or(isNull(account.balanceOn), lte(account.balanceOn, statement.periodEnd))
 				)
 			);
 	}
@@ -556,16 +565,16 @@ function assertChainStartsWhereTheAccountLeftOff(
 ): void {
 	// A printed opening balance is its own anchor; the proof engine used it.
 	if (statement.openingBalanceMinor !== undefined) return;
-	if (acct.balanceMinor === null || acct.balanceAsOf === null) return;
+	if (acct.balanceMinor === null || acct.balanceOn === null) return;
 	if (statement.rows.length === 0) return;
 
 	const dates = statement.rows.map((row) => row.bookedAt).sort();
 	const firstMovement = dates[0];
 	// A statement that starts on or before the balance we hold is history being
 	// filled in behind us, not the next instalment.
-	if (firstMovement <= acct.balanceAsOf) return;
+	if (firstMovement <= acct.balanceOn) return;
 	const days =
-		(Date.parse(`${firstMovement}T00:00:00Z`) - Date.parse(`${acct.balanceAsOf}T00:00:00Z`)) /
+		(Date.parse(`${firstMovement}T00:00:00Z`) - Date.parse(`${acct.balanceOn}T00:00:00Z`)) /
 		86_400_000;
 	if (days > ANCHOR_WINDOW_DAYS) return;
 
@@ -582,7 +591,7 @@ function assertChainStartsWhereTheAccountLeftOff(
 	const gap = openings[0] - acct.balanceMinor;
 	const size = formatMinor(gap < 0n ? -gap : gap, statement.currency);
 	throw new StatementRejected(
-		`This statement prints no opening balance, and its first movement starts ${size} ${statement.currency} away from where this account stood on ${acct.balanceAsOf}. Either a movement is missing from the beginning of the file, or an earlier statement has not been imported yet. Nothing has been imported.`
+		`This statement prints no opening balance, and its first movement starts ${size} ${statement.currency} away from where this account stood on ${acct.balanceOn}. Either a movement is missing from the beginning of the file, or an earlier statement has not been imported yet. Nothing has been imported.`
 	);
 }
 
@@ -730,7 +739,7 @@ export async function ingestFile(
 				};
 			}
 
-			const fileId = randomUUID();
+			const fileId = uuidv7();
 			// The file row must exist before any transaction references it. Its
 			// account is filled in once the first statement resolves one — a file
 			// holding several accounts has no single owner, and the transactions
@@ -743,7 +752,14 @@ export async function ingestFile(
 				accountId: null,
 				contentHash,
 				storedName,
-				rowsRead: totalRows
+				rowsRead: totalRows,
+				// Required since 0052: a filed statement must always carry a record of
+				// what read it and how strongly it was proven. What is known here is
+				// the first statement's own reading; the weakest across every statement
+				// in the file is written once they have all been filed, below.
+				currency: statements[0].currency,
+				sourceMethod: statements[0].provenance?.method ?? 'unknown',
+				proofClass: statements[0].provenance?.proofClass ?? 'P0'
 			});
 
 			const outcomes: StatementOutcome[] = [];
@@ -861,7 +877,7 @@ export async function ingestFile(
  * review proposals stay in income/spending until the user confirms them.
  */
 /** Inclusive ISO-day bounds a pairing pass may consider. */
-export interface PairingWindow {
+interface PairingWindow {
 	from: string;
 	to: string;
 }
@@ -945,11 +961,11 @@ async function pairAndCategoriseInTransaction(
 						select 1 from ${transactionSplit} split
 						where split.transaction_id = ${transaction.id}
 					)`,
-					window ? gte(transaction.bookedAt, window.from) : undefined,
-					window ? lte(transaction.bookedAt, window.to) : undefined
+					window ? gte(transaction.bookedOn, window.from) : undefined,
+					window ? lte(transaction.bookedOn, window.to) : undefined
 				)
 			)
-			.orderBy(asc(transaction.bookedAt), asc(transaction.id))
+			.orderBy(asc(transaction.bookedOn), asc(transaction.id))
 			.for('update')
 	).filter((t) => !legsInPairs.has(t.id));
 
@@ -957,8 +973,8 @@ async function pairAndCategoriseInTransaction(
 		candidates.map((t): PairableTx => ({
 			id: t.id,
 			accountId: t.accountId,
-			bookedAt: t.bookedAt,
-			amountMinor: t.amount,
+			bookedOn: t.bookedOn,
+			amountMinor: t.amountMinor,
 			currency: t.currency,
 			counterparty: t.counterparty,
 			counterpartyAccount: t.counterpartyAccount
@@ -976,7 +992,7 @@ async function pairAndCategoriseInTransaction(
 
 	let paired = 0;
 	for (const proposal of proposals) {
-		const pairId = randomUUID();
+		const pairId = uuidv7();
 		if (proposal.confidence === 'auto') {
 			await handle.insert(transferPair).values({
 				id: pairId,
@@ -1051,7 +1067,7 @@ async function pairAndCategoriseInTransaction(
 				counterpartyAccount: t.counterpartyAccount,
 				variableSymbol: t.variableSymbol,
 				description: t.description,
-				amountMinor: t.amount,
+				amountMinor: t.amountMinor,
 				currency: t.currency
 			},
 			rules,

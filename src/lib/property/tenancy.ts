@@ -1,9 +1,10 @@
-export interface TenancyDateRange {
-	startDate: string | null;
-	endDate: string | null;
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+interface TenancyDateRange {
+	startsOn: string | null;
+	endsOn: string | null;
 }
 
-export interface PropertyTenancyRange extends TenancyDateRange {
+interface PropertyTenancyRange extends TenancyDateRange {
 	id: string;
 	propertyId: string;
 }
@@ -11,15 +12,15 @@ export interface PropertyTenancyRange extends TenancyDateRange {
 /** Inclusive date ranges; null means unbounded on that side. */
 export function tenancyRangesOverlap(a: TenancyDateRange, b: TenancyDateRange): boolean {
 	return (
-		(a.endDate === null || b.startDate === null || b.startDate <= a.endDate) &&
-		(b.endDate === null || a.startDate === null || a.startDate <= b.endDate)
+		(a.endsOn === null || b.startsOn === null || b.startsOn <= a.endsOn) &&
+		(b.endsOn === null || a.startsOn === null || a.startsOn <= b.endsOn)
 	);
 }
 
 function isActive(range: TenancyDateRange, today: string): boolean {
 	return (
-		(range.startDate === null || range.startDate <= today) &&
-		(range.endDate === null || range.endDate >= today)
+		(range.startsOn === null || range.startsOn <= today) &&
+		(range.endsOn === null || range.endsOn >= today)
 	);
 }
 
@@ -36,8 +37,8 @@ export function activeTenanciesByProperty<T extends PropertyTenancyRange>(
 	for (const candidate of tenancies) {
 		if (!isActive(candidate, today)) continue;
 		const existing = active.get(candidate.propertyId);
-		const candidateStart = candidate.startDate ?? '';
-		const existingStart = existing?.startDate ?? '';
+		const candidateStart = candidate.startsOn ?? '';
+		const existingStart = existing?.startsOn ?? '';
 		if (
 			!existing ||
 			candidateStart > existingStart ||

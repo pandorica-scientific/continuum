@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Auto-detected backup destinations: the mounted cloud-sync folders this
 // server can see. Nothing is assumed — only folders that actually exist are
 // offered, and the user can always type any other path.
@@ -8,7 +9,7 @@ import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import { labelForDestination } from './policy';
 
-export interface BackupDestination {
+interface BackupDestination {
 	path: string;
 	label: string;
 }

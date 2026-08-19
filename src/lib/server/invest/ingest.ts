@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import {
@@ -11,7 +12,7 @@ import {
 import { brokerAdapters, detectBroker, type BrokerReport } from './adapter';
 import './xtb'; // adapters register themselves on import
 
-export interface BrokerIngestResult {
+interface BrokerIngestResult {
 	broker: string;
 	operationsAdded: number;
 	operationsKnown: number;
@@ -83,7 +84,7 @@ async function ingestReport(
 
 		const existingHolding = state
 			? null
-			: ((await tx.select().from(holding).orderBy(desc(holding.asOf)).limit(1))[0] ?? null);
+			: ((await tx.select().from(holding).orderBy(desc(holding.valuedAt)).limit(1))[0] ?? null);
 		const existingSnapshot =
 			state || existingHolding
 				? null
@@ -91,7 +92,7 @@ async function ingestReport(
 						await tx.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
 					)[0] ?? null);
 		const inferredGeneratedAt = existingHolding
-			? existingHolding.asOf
+			? existingHolding.valuedAt
 			: existingSnapshot
 				? new Date(`${existingSnapshot.day}T23:59:59.999Z`)
 				: null;
@@ -168,7 +169,7 @@ async function ingestReport(
 			if (report.holdings.length > 0) {
 				await tx.insert(holding).values(
 					report.holdings.map((item) => ({
-						id: randomUUID(),
+						id: uuidv7(),
 						ticker: item.ticker,
 						name: item.name,
 						category: item.category,
@@ -176,7 +177,7 @@ async function ingestReport(
 						valueMinor: item.valueMinor,
 						currency: accountCurrency,
 						netProfitPct: item.netProfitPct !== null ? String(item.netProfitPct) : null,
-						asOf: reportTime
+						valuedAt: reportTime
 					}))
 				);
 			}

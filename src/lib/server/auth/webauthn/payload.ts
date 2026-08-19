@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Both verify endpoints take a JSON body straight from the browser, and the
 // sign-in one takes it without a session at all. Parsing defensively here is
 // what keeps a malformed payload a 400 instead of an unhandled TypeError
 // surfacing as a 500 — and, on the sign-in path, a 500 that fires before the
 // rate limiter has counted anything.
 
-export interface WebAuthnBody<T> {
+interface WebAuthnBody<T> {
 	response: T;
 	label: unknown;
 }

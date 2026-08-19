@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { account, category, tag } from '$lib/server/db/schema';
@@ -129,7 +131,7 @@ export const actions: Actions = {
 	file: async ({ request }) => {
 		const form = await request.formData();
 		const result = await fileTransaction(
-			String(form.get('id') ?? ''),
+			asRowId(form.get('id')),
 			String(form.get('categoryId') ?? '')
 		);
 		if (!result.ok) return fail(result.status, { message: result.message });
@@ -138,7 +140,7 @@ export const actions: Actions = {
 
 	split: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const currency = String(form.get('currency') ?? '');
 		const amounts = form.getAll('amount').map(String);
 		const categoryIds = form.getAll('categoryId').map(String);
@@ -193,7 +195,7 @@ export const actions: Actions = {
 
 	unsplit: async ({ request }) => {
 		const form = await request.formData();
-		const result = await deleteSplits(String(form.get('id') ?? ''));
+		const result = await deleteSplits(asRowId(form.get('id')));
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
@@ -201,7 +203,7 @@ export const actions: Actions = {
 	// Tags are set as a whole set, so adding and removing are the same action.
 	tags: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asOptionalRowId(form.get('id'));
 		if (!id) return fail(400, { message: 'Missing transaction.' });
 
 		const added = String(form.get('tagName') ?? '').trim();

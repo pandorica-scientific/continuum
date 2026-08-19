@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { json } from '$lib/server/api/respond';
 import { money } from '$lib/api/serialise';
 import { tagTotals } from '$lib/server/tags';

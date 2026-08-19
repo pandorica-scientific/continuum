@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The "value against money in" chart series. Benchmarks compound every real
 // contribution from its own date — the honest comparison the design demands.
 
@@ -8,7 +9,7 @@ export interface Contribution {
 	amountMinor: bigint;
 }
 
-export interface SnapshotPoint {
+interface SnapshotPoint {
 	day: string;
 	valueMinor: bigint;
 }
@@ -25,14 +26,14 @@ export interface SeriesPoint {
 	isSnapshot: boolean;
 }
 
-export interface CashOp {
+interface CashOp {
 	at: string; // ISO datetime
 	amountMinor: bigint;
 	type?: string;
 	positionId?: string | null;
 }
 
-export interface PositionSpan {
+interface PositionSpan {
 	openedAt: string; // ISO datetime
 	closedAt: string | null;
 	purchaseValueMinor: bigint | null;

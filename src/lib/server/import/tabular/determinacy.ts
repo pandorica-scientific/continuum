@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * What the data itself settles, and what it leaves open.
  *
@@ -8,7 +9,7 @@
  * forced it, or by an honest admission that nothing did.
  */
 
-export type Determinacy<T> =
+type Determinacy<T> =
 	| { kind: 'determined'; value: T; evidence: string }
 	| { kind: 'ambiguous'; candidates: T[]; reason: string }
 	| { kind: 'unavailable'; reason: string };

@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { page } from '$app/state';
 	import ErrorScreen from '$lib/components/ErrorScreen.svelte';
 </script>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import Pill from '$lib/components/Pill.svelte';
 	import type { Hue } from '$lib/ui/hue';
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WebAuthn challenges are server-issued, single-use, short-lived and bounded.
 
 import { createHash } from 'node:crypto';
@@ -22,7 +23,7 @@ interface StoreChallengeOptions {
 	handle?: Db;
 }
 
-export interface StoredChallenge {
+interface StoredChallenge {
 	challenge: string;
 	personId: string | null;
 	authGeneration: number | null;

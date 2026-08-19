@@ -2,7 +2,44 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
-## 0.3.8 — unreleased
+## 0.3.9 — 2026-08-19
+
+> The schema settled into one baseline with its rules enforced by tests, the server code given a place for everything, and every file stamped with its licence.
+
+### ✨ Added
+
+- 🧱 One baseline migration replaces fifty-six, and the schema is additive-only from here
+- 🧮 `net_worth_component` — every valued thing in one view, with the liabilities-are-negative rule applied once, so a new asset type reaches net worth by adding a UNION branch
+- 🔒 A CHECK constraint for all 22 enum columns, generated from the same TypeScript list the screens read, with a test that fails if the two ever disagree
+- 💱 A currency table materialised from CLDR, with foreign keys from every one of the fourteen columns that name a currency
+- 🧬 An `entity` supertype: one link table can point at any kind of record and still keep a real foreign key at both ends
+- 🗂️ Thirteen link tables collapsed into three — `tag_link`, `document_link`, `contact_link`
+- ⚙️ One `job` table with lease semantics, replacing the import queue and the calendar sync lease that had each invented their own
+- 🆔 UUID primary keys, minted time-ordered so they sort by creation
+- 📇 A covering index for every foreign key, held there by a test
+- 📜 An SPDX licence header on all 294 source files, kept there by a lint rule
+- 🧭 The app version and whether it is running under Docker, at the foot of the sidebar
+
+### 🔧 Changed
+
+- 🌓 The theme belongs to the person, not the browser — it follows you between devices instead of being shared by everyone using the same laptop
+- 📐 Money is `*_minor` and always `bigint`, a date is `*_on`, an instant is `*_at` — all four asserted against `information_schema`
+- 📁 Every server domain is a directory with an entry point; cross-cutting plumbing moved to `system/`, and a test keeps `src/lib/server` free of loose files
+- 🧹 Five unreachable exports deleted and 178 declarations un-exported — a module's surface is now what other modules actually use
+- 🏃 CI runs the browser suite in the Playwright image, so no step waits on a package mirror
+
+### 🐛 Fixed
+
+- 🏠 The sidebar stays put and fills the screen at every size; it used to scroll away with the page on a landscape tablet
+- 🎨 Pulling past the top or bottom showed white — the browser paints that area from `theme-color`, which was never set
+- 🧾 A statement could be filed with no record of what read it: `import_file.proof_class` and `source_method` were NOT NULL in the database and nullable in the schema
+- 🔁 Filed transactions were unreachable by any register filter, because the review-state list omitted `filed`
+- 💸 `refreshRates` inserted whatever currency code the feed offered, leaking unvalidated codes into the selectable list
+- 📄 A document filed against a flat assumed the first link was a person
+
+**⬆️ Upgrading:** ⚠️ **a clean break — 0.3.9 will not start on an 0.3.8 database, and a backup does not carry the data across.** The whole migration chain is replaced by one baseline, so a database that stopped at `0045` fails on boot with `CREATE TABLE "currency"` already existing; and an 0.3.8 backup is a column-by-column `COPY` naming tables and columns this release renamed or removed. Start 0.3.9 on an empty database. This is affordable exactly once, because nothing was running 0.3.8 yet — from this baseline the schema is additive-only, and every release after it upgrades in place.
+
+## 0.3.8 — 2026-08-19
 
 > A reader that works out a statement's layout from the file itself, and files nothing it cannot check against the statement's own arithmetic.
 

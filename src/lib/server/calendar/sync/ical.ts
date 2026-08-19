@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // iCalendar (RFC 5545) for the CalDAV adapter.
 //
 // Kept apart from the transport so the fiddly half — escaping, folding,
@@ -55,7 +56,7 @@ function unfold(text: string): string {
 }
 
 /** Escape the four characters that would otherwise end a property early. */
-export function escapeText(value: string): string {
+function escapeText(value: string): string {
 	return value
 		.replace(/\\/g, '\\\\')
 		.replace(/;/g, '\\;')

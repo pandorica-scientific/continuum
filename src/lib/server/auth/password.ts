@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Changing your own password. Every other way in is revoked on success —
 // changing a password after a scare should actually eject the other device,
 // which is the entire point of changing it.
@@ -5,7 +6,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
-import { passwordMinLength } from '$lib/server/policy';
+import { passwordMinLength } from '$lib/server/system/policy';
 import { passwordLengthError } from '$lib/password-policy';
 import { hashPassword, verifyPassword } from './index';
 import { revokeAuthenticationGeneration } from './generation';

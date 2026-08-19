@@ -1,6 +1,7 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { normaliseSearch } from '$lib/contacts/search';
-import { startPostgres, type Harness } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
 /**
  * The contact search fold, run against a real PostgreSQL.
@@ -22,20 +23,11 @@ let harness: Harness;
 beforeAll(async () => {
 	harness = await startPostgres('contact-fold', { max: 1 });
 
-	// Only what the fold and its index touch.
-	await harness.sql.unsafe(`
-		create table contact (
-			id text primary key,
-			name text not null,
-			organisation text
-		);
-	`);
-
 	// Statement by statement, the way drizzle sends them — so this also proves
-	// the migration APPLIES, which is the half that only ever fails on a fresh
-	// database (see its own notes on the ::regdictionary cast and the schema
+	// the baseline APPLIES, which is the half that only ever fails on a fresh
+	// database (see its notes on the ::regdictionary cast and the schema
 	// qualification, both of which were found exactly that way).
-	await harness.applyMigrationFile('0036_contact_search.sql');
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 120_000);
 
 afterAll(async () => {
@@ -74,7 +66,8 @@ describe('contact_fold agrees with normaliseSearch', () => {
 	// on a string but not through to_tsvector/plainto_tsquery would still find
 	// nobody.
 	it('finds a capitalised stroked name from an ASCII term', async () => {
-		await harness.sql`insert into contact (id, name, organisation) values ('1', 'Łukasz Nowak', 'Łódź s.r.o.')`;
+		await harness.sql`insert into contact (id, name, organisation)
+			values (${rowId('lukasz')}, 'Łukasz Nowak', 'Łódź s.r.o.')`;
 		const rows = await harness.sql`
 			select name from contact
 			where to_tsvector('simple', public.contact_fold(coalesce(name, '') || ' ' || coalesce(organisation, '')))

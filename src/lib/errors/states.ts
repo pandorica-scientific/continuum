@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // What each error screen says.
 //
 // Data rather than markup, so the same catalogue serves the error page, a test
@@ -8,7 +9,7 @@
 // already having a bad time, so the sentence that explains what happened and
 // what to do about it is written plainly every time.
 
-export interface ErrorState {
+interface ErrorState {
 	/** The HTTP status, as text. '000' is the browser being unable to reach us at all. */
 	code: string;
 	/** The status' own name, shown small beside the code. */

@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
+import { asEnumValue } from '$lib/enums';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -32,7 +34,7 @@ export const load: PageServerLoad = async () => {
 				kind: account.kind,
 				currency: account.currency,
 				balanceMinor: account.balanceMinor,
-				balanceAsOf: account.balanceAsOf,
+				balanceAsOf: account.balanceOn,
 				ownerName: person.name
 			})
 			.from(account)
@@ -114,9 +116,9 @@ export const load: PageServerLoad = async () => {
 		if (!out || !into) return [];
 		return [
 			{
-				date: out.bookedAt,
+				date: out.bookedOn,
 				route: `${accountName(out.accountId)} → ${accountName(into.accountId)}`,
-				amount: `${formatMinor(-out.amount, out.currency)} ${displayCurrency(out.currency)}`
+				amount: `${formatMinor(-out.amountMinor, out.currency)} ${displayCurrency(out.currency)}`
 			}
 		];
 	});
@@ -139,13 +141,15 @@ export const actions: Actions = {
 			.trim()
 			.toUpperCase();
 		const bank = String(form.get('bank') ?? 'other');
-		const kind = String(form.get('kind') ?? 'current');
+		// Narrowed at the boundary, so a hand-crafted form post cannot reach the
+		// CHECK constraint and turn a bad field into a failed insert.
+		const kind = asEnumValue('account.kind', form.get('kind'), 'current');
 		const numbersRaw = String(form.get('numbers') ?? '').trim();
 		if (!name) return fail(400, { message: 'The account needs a name.' });
 		if (!/^[A-Z]{3}$/.test(currency))
 			return fail(400, { message: 'Currency must be a three-letter code.' });
 		await db.insert(account).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			name,
 			emoji: BANK_EMOJI[bank] ?? '🏦',
 			bank,

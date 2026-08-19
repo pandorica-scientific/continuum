@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import type { SessionPerson } from '$lib/server/auth';
 
 declare global {

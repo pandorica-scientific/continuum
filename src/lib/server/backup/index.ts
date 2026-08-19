@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Backups: a restorable database dump plus a copy of every uploaded file,
 // written straight into a folder of the user's choosing — typically a mounted
 // cloud-sync folder (Google Drive, Dropbox, …), so the sync client carries it

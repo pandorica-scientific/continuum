@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import * as XLSX from 'xlsx';
 import { parseAmountToMinor } from '$lib/money';
 
@@ -6,7 +7,8 @@ import { parseAmountToMinor } from '$lib/money';
 //                       rows beneath them keyed by position id)
 //  - "Cash Operations": every cash movement with a broker-unique ID — this is
 //                       what makes re-uploads idempotent
-//  - "Closed Positions" (unused for now)
+//  - "Closed Positions": authoritative purchase and sale values, and the
+//                       holding span each position occupied
 
 import {
 	registerBrokerAdapter,
@@ -18,10 +20,10 @@ import {
 
 // The normalised shapes live in ./adapter; these aliases keep the XTB parser
 // and its tests reading naturally.
-export type XtbHolding = BrokerHolding;
-export type XtbOperation = BrokerCashOperation;
-export type XtbPosition = BrokerPositionSpan;
-export type XtbReport = BrokerReport;
+type XtbHolding = BrokerHolding;
+type XtbOperation = BrokerCashOperation;
+type XtbPosition = BrokerPositionSpan;
+type XtbReport = BrokerReport;
 
 function toMinor(raw: string, currency: string): bigint {
 	return parseAmountToMinor(raw.replace(/\s/g, ''), currency);

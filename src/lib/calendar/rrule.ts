@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // RFC 5545 recurrence, expanded over a window.
 //
 // Pure and client-safe: no database, no clock, no network. The calendar screen
@@ -10,9 +11,9 @@
 // to an instant against ITS OWN offset — never by adding 7×24h to the previous
 // instant, which would drift by an hour across a DST boundary and keep drifting.
 
-export type Freq = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+type Freq = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
-export interface Rrule {
+interface Rrule {
 	freq: Freq;
 	interval: number;
 	/**
@@ -189,7 +190,7 @@ export function isKnownTimeZone(tz: string): boolean {
 	return buildFormatter(tz) !== null;
 }
 
-export interface Wall {
+interface Wall {
 	year: number;
 	month: number; // 1-12
 	day: number;

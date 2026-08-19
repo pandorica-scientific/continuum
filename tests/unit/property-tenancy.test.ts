@@ -5,15 +5,15 @@ import { createTenancy } from '$lib/server/property/mutations';
 interface Row {
 	id: string;
 	propertyId: string;
-	startDate: string | null;
-	endDate: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
 }
 
-const row = (id: string, startDate: string | null, endDate: string | null): Row => ({
+const row = (id: string, startsOn: string | null, endsOn: string | null): Row => ({
 	id,
 	propertyId: 'flat-a',
-	startDate,
-	endDate
+	startsOn,
+	endsOn
 });
 
 describe('active tenancy policy', () => {
@@ -48,14 +48,14 @@ describe('tenancy range overlap', () => {
 	it('treats open ends and a shared boundary day as overlapping', () => {
 		expect(
 			tenancyRangesOverlap(
-				{ startDate: '2026-01-01', endDate: '2026-02-01' },
-				{ startDate: '2026-02-01', endDate: null }
+				{ startsOn: '2026-01-01', endsOn: '2026-02-01' },
+				{ startsOn: '2026-02-01', endsOn: null }
 			)
 		).toBe(true);
 		expect(
 			tenancyRangesOverlap(
-				{ startDate: '2026-01-01', endDate: '2026-01-31' },
-				{ startDate: '2026-02-01', endDate: null }
+				{ startsOn: '2026-01-01', endsOn: '2026-01-31' },
+				{ startsOn: '2026-02-01', endsOn: null }
 			)
 		).toBe(false);
 	});
@@ -68,9 +68,9 @@ describe('tenancy range overlap', () => {
 				tenantName: 'Tenant',
 				rentMinor: 1n,
 				depositMinor: 0n,
-				startDate: '2026-99-99',
-				endDate: null,
-				renewalNoticeDate: null
+				startsOn: '2026-99-99',
+				endsOn: null,
+				renewalNoticeOn: null
 			})
 		).toMatchObject({ ok: false, status: 400 });
 	});

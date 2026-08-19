@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // One-time enrollment links. A person created by an administrator has no
 // password until they open their link and choose one, so the administrator
 // never knows it. Only the hash is stored — the raw token is shown once, the
@@ -8,7 +9,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { enrollmentToken, person } from '$lib/server/db/schema';
 import { hashToken } from '$lib/server/auth/token-hash';
-import { enrollmentLinkDays } from '$lib/server/policy';
+import { enrollmentLinkDays } from '$lib/server/system/policy';
 import {
 	applySessionCookie,
 	createSessionGrant,
@@ -17,9 +18,9 @@ import {
 } from '$lib/server/auth';
 import type { Cookies } from '@sveltejs/kit';
 
-export type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
+type EnrollmentStatus = 'valid' | 'expired' | 'used' | 'unknown';
 
-export interface EnrollmentRow {
+interface EnrollmentRow {
 	expiresAt: Date;
 	usedAt: Date | null;
 }
@@ -86,7 +87,7 @@ export async function lookupEnrollmentToken(
  * its status from `expired` to `used`, the one distinction enrollmentStatus
  * draws, on a route any unauthenticated visitor can reach.
  */
-export async function consumeEnrollmentToken(
+async function consumeEnrollmentToken(
 	raw: string,
 	on: Queryable = db
 ): Promise<{ personId: string } | null> {

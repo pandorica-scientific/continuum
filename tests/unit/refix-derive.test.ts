@@ -12,7 +12,7 @@ const terms: LoanTerms = {
 	paymentDay: 15
 };
 const periods: FixationPeriod[] = [
-	{ startDate: '2019-03-01', endDate: null, annualRatePct: 4.44, paymentMinor: 21_500_00n }
+	{ startsOn: '2019-03-01', endsOn: null, annualRatePct: 4.44, paymentMinor: 21_500_00n }
 ];
 
 const payoff = () => project(terms, periods).summary.debtFreeMonth!;
@@ -27,12 +27,12 @@ describe('deriving the other half of a re-fixation offer', () => {
 		expect(derived).not.toBeNull();
 		const next: FixationPeriod[] = [
 			{
-				startDate: '2019-03-01',
-				endDate: '2027-03-01',
+				startsOn: '2019-03-01',
+				endsOn: '2027-03-01',
 				annualRatePct: 4.44,
 				paymentMinor: 21_500_00n
 			},
-			{ startDate: '2027-03-01', endDate: null, annualRatePct: 5.5, paymentMinor: derived! }
+			{ startsOn: '2027-03-01', endsOn: null, annualRatePct: 5.5, paymentMinor: derived! }
 		];
 		expect(project(terms, next).summary.debtFreeMonth).toBe(target);
 	});

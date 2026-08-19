@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Finding the transaction table inside a file that is not only a table.
  *
@@ -23,7 +24,7 @@ import { isDateLike } from './determinacy';
 import type { Grid, RawCell } from './grid';
 import { looksLikeFooter, looksLikeSummary, roleOfHeader } from './vocabulary';
 
-export type RegionRole = 'metadata' | 'summary' | 'transactions' | 'footer' | 'other';
+type RegionRole = 'metadata' | 'summary' | 'transactions' | 'footer' | 'other';
 
 export interface Region {
 	/** Row indices into the grid, inclusive. */

@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { category, rule } from '$lib/server/db/schema';
@@ -62,7 +63,7 @@ export async function learnRule(
 	}
 
 	await handle.insert(rule).values({
-		id: randomUUID(),
+		id: uuidv7(),
 		name: condition.value,
 		provenance: 'learned',
 		conditions: [condition],

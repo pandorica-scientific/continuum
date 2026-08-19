@@ -1,9 +1,10 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The one place that knows a transaction may be split. Every consumer — cash
 // flow, the briefing, the register, tag totals — resolves through here, so the
 // branch exists once and is testable without a database.
 
 export interface LineSource {
-	amount: bigint;
+	amountMinor: bigint;
 	feeMinor: bigint | null;
 	categoryId: string | null;
 }
@@ -15,7 +16,7 @@ export interface SplitSource {
 	sort: number;
 }
 
-export interface EffectiveLine {
+interface EffectiveLine {
 	categoryId: string | null;
 	amountMinor: bigint;
 	/** null when the line is the transaction itself rather than a split row. */
@@ -25,18 +26,18 @@ export interface EffectiveLine {
 /**
  * Resolve a transaction into the lines that count, net of the bank's own fee.
  *
- * Splits sum to the gross amount, so the fee comes off the first line by sort
- * order: the lines then sum to exactly `amount - fee` with no rounding drift,
+ * Splits sum to the gross amountMinor, so the fee comes off the first line by sort
+ * order: the lines then sum to exactly `amountMinor - fee` with no rounding drift,
  * matching what an unsplit transaction has always contributed.
  */
 export function effectiveLines(txn: LineSource, splits: SplitSource[]): EffectiveLine[] {
 	// A fee is always a cost: it makes money out more negative and money in less
 	// positive, which is what subtraction does either way. This is the same
-	// arithmetic cashflow.ts has always applied as `amount - feeMinor`.
+	// arithmetic cashflow.ts has always applied as `amountMinor - feeMinor`.
 	const fee = txn.feeMinor ?? 0n;
 
 	if (splits.length === 0) {
-		return [{ categoryId: txn.categoryId, amountMinor: txn.amount - fee, splitId: null }];
+		return [{ categoryId: txn.categoryId, amountMinor: txn.amountMinor - fee, splitId: null }];
 	}
 
 	const ordered = [...splits].sort((a, b) => a.sort - b.sort);

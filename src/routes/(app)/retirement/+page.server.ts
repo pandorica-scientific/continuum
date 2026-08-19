@@ -1,11 +1,13 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
 import { asc, eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { document, documentPerson, person } from '$lib/server/db/schema';
+import { document, documentLink, person } from '$lib/server/db/schema';
 import { formatMinor, parseAmountToMinor, toMajor } from '$lib/money';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { saveUpload } from '$lib/server/files';
+import { saveUpload } from '$lib/server/system/files';
 import { learnAmountLabel, readPayslip, readStoredPayslip } from '$lib/server/salary';
 import { retirementInputs } from '$lib/server/retirement';
 import {
@@ -117,18 +119,25 @@ export const load: PageServerLoad = async () => {
 	// rename cannot orphan it. Amounts come from the PDF (learned per person)
 	// or the user's own entry.
 	const slips = (await db.select().from(document).where(eq(document.shelf, 'payslips'))).filter(
-		(d) => d.amountMinor !== null && d.periodMonth !== null
+		(d) => d.amountMinor !== null && d.periodOn !== null
 	);
-	const slipOwners = await db.select().from(documentPerson);
+	// Which payslip belongs to whom. Filtered to people, because document_link
+	// now also holds a document's properties, accounts and subjects.
+	const slipOwners = await db
+		.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
+		.from(documentLink)
+		.innerJoin(person, eq(person.id, documentLink.targetId));
 	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
 	const salary = people.map((p) => {
 		const own = slips
 			.filter((d) => ownerOf.get(d.id) === p.id)
 			.map((d) => ({
 				id: d.id,
-				periodMonth: d.periodMonth!,
+				// period_on is a real date since 0052; the screens and the form work in
+				// months, which is what an <input type="month"> gives and takes.
+				periodMonth: d.periodOn!.slice(0, 7),
 				amountMinor: d.amountMinor!,
-				currency: d.amountCurrency ?? baseCurrency,
+				currency: d.currency ?? baseCurrency,
 				file: d.storedName
 			}))
 			.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1));
@@ -164,7 +173,7 @@ export const load: PageServerLoad = async () => {
 	return {
 		inputs,
 		config: { ...RETIRE_DEFAULTS, ...stored.value },
-		autosaveWriterId: randomUUID(),
+		autosaveWriterId: uuidv7(),
 		autosaveBaseVersion: stored.version,
 		personNames: [people[0]?.name ?? 'Person one', people[1]?.name ?? 'Person two'],
 		peopleOptions: people.map((p) => ({ id: p.id, name: p.name })),
@@ -177,7 +186,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	addPayslip: async ({ request }) => {
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '').trim();
+		const personId = asRowId(form.get('personId')).trim();
 		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
 		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
 		// The reader's learned labels stay keyed by name; the link is by id.
@@ -225,7 +234,7 @@ export const actions: Actions = {
 		// a stated amount that matches a line on the slip teaches the reader
 		if (amountRaw && reading) await learnAmountLabel(subject, amountMinor, reading.candidates);
 
-		const documentId = randomUUID();
+		const documentId = uuidv7();
 		await db.transaction(async (tx) => {
 			await tx.insert(document).values({
 				id: documentId,
@@ -235,21 +244,24 @@ export const actions: Actions = {
 				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
 				addedOn: new Date().toISOString().slice(0, 10),
 				amountMinor,
-				amountCurrency: baseCurrency,
-				periodMonth
+				currency: baseCurrency,
+				periodOn: `${periodMonth}-01`
 			});
-			await tx.insert(documentPerson).values({ documentId, personId }).onConflictDoNothing();
+			await tx
+				.insert(documentLink)
+				.values({ documentId, targetId: personId })
+				.onConflictDoNothing();
 		});
 		return { ok: true };
 	},
 
 	setPayslipAmount: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const rows = await db.select().from(document).where(eq(document.id, id));
 		const doc = rows[0];
 		if (!doc) return fail(404, { message: 'Payslip not found.' });
-		const currency = payslipEditCurrency(doc.amountCurrency, await getBaseCurrency());
+		const currency = payslipEditCurrency(doc.currency, await getBaseCurrency());
 		let amountMinor: bigint;
 		try {
 			amountMinor = parseAmountToMinor(String(form.get('amount') ?? ''), currency);
@@ -259,28 +271,31 @@ export const actions: Actions = {
 		}
 		// a correction against the stored file teaches the reader for next time
 		if (doc.storedName) {
-			const link = (
-				await db.select().from(documentPerson).where(eq(documentPerson.documentId, doc.id))
+			// The PERSON this payslip is filed against. `document_link` also holds a
+			// document's properties, accounts and subjects, so this joins `person`
+			// rather than taking the first link and hoping — which is what the old
+			// per-pair table was doing for it implicitly.
+			const owner = (
+				await db
+					.select({ id: person.id, name: person.name })
+					.from(documentLink)
+					.innerJoin(person, eq(person.id, documentLink.targetId))
+					.where(eq(documentLink.documentId, doc.id))
+					.limit(1)
 			)[0];
-			const owner = link
-				? (await db.select().from(person).where(eq(person.id, link.personId)))[0]
-				: null;
 			if (owner) {
 				const reading = await readStoredPayslip(doc.storedName, owner.name);
 				await learnAmountLabel(owner.name, amountMinor, reading.candidates);
 			}
 		}
-		await db
-			.update(document)
-			.set({ amountMinor, amountCurrency: currency })
-			.where(eq(document.id, id));
+		await db.update(document).set({ amountMinor, currency: currency }).where(eq(document.id, id));
 		return { ok: true };
 	},
 
 	save: async ({ request }) => {
 		const form = await request.formData();
 		const revision = Number(form.get('revision'));
-		const writerId = String(form.get('writerId') ?? '');
+		const writerId = asRowId(form.get('writerId'));
 		const baseVersion = Number(form.get('baseVersion'));
 		if (!isRevisionWriterId(writerId)) {
 			return fail(400, { message: 'The save writer is invalid.' });

@@ -1,4 +1,5 @@
-export interface NetWorthHistoryPoint {
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+interface NetWorthHistoryPoint {
 	day: string;
 	valueMinor: bigint;
 	currency: string;

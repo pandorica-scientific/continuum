@@ -1,15 +1,14 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { isCurrencyCode } from '$lib/money';
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import {
-	account,
 	brokerOperation,
 	brokerPosition,
 	currencyRate,
 	document as storedDocument,
-	holding,
-	loan,
+	netWorthComponent,
 	portfolioSnapshot,
-	property,
 	settings,
 	taxStatement,
 	transaction
@@ -22,7 +21,7 @@ import { convertMinorSync, faceValueMinor, loadRateTable, missingRateCodes } fro
 const CNB_DAILY_URL =
 	'https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/daily.txt';
 
-export interface CnbRate {
+interface CnbRate {
 	code: string;
 	/** CZK per one unit of `code`. */
 	rate: number;
@@ -73,20 +72,31 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
 	const res = await fetchFn(CNB_DAILY_URL);
 	if (!res.ok) throw new Error(`CNB fixing fetch failed: ${res.status}`);
 	const rates = parseCnbDaily(await res.text());
-	for (const r of rates) {
+	// `currency_rate.code` carries a foreign key into `currency`, so a code the
+	// runtime does not recognise would abort the whole refresh rather than cost
+	// one rate. Skipped here instead, which is also the older bug's fix: an
+	// unchecked code from the feed became selectable through
+	// `availableCurrencies`, which is how a column heading once offered itself
+	// as a currency.
+	const known = rates.filter((r) => isCurrencyCode(r.code));
+	for (const r of known) {
 		await db
 			.insert(currencyRate)
 			.values({ code: r.code, day: r.day, rate: String(r.rate) })
 			.onConflictDoNothing();
 	}
-	return rates.length;
+	if (known.length !== rates.length) {
+		const dropped = rates.filter((r) => !isCurrencyCode(r.code)).map((r) => r.code);
+		console.warn(`FX: ignored ${dropped.length} unrecognised code(s): ${dropped.join(', ')}`);
+	}
+	return known.length;
 }
 
 /**
  * Convert an amount in minor units between currencies at the day's rate.
  * Returns null when no rate is known yet (e.g. before the first fetch).
  */
-export async function convertMinor(
+async function convertMinor(
 	amountMinor: bigint,
 	from: string,
 	to: string,
@@ -119,31 +129,31 @@ export async function missingRateCurrencies(
 	baseCurrency: string,
 	handle: Queryable = db
 ): Promise<import('./table').ApproximateRates> {
-	// Every table computeNetWorth converts from. Property and the portfolio
-	// snapshot were missing, which are the two largest figures on the net-worth
-	// screen — so a flat valued in EUR with no EUR rate was counted at face
-	// value, roughly 25x understated, while the banner raised to say exactly
+	// Everything that carries an amount in a currency of its own. Property and the
+	// portfolio snapshot were missing, which are the two largest figures on the
+	// net-worth screen — so a flat valued in EUR with no EUR rate was counted at
+	// face value, roughly 25x understated, while the banner raised to say exactly
 	// that stayed silent.
+	// The valued things come from `net_worth_component` rather than being listed
+	// one table at a time, so an asset type added to that view is covered here
+	// without a second edit — which is the only way the banner stays honest.
 	// Rates carry forward after their first fixing, so the earliest use of each
 	// currency is sufficient to prove whether any historical fallback occurred.
 	// Keep that aggregation in Postgres instead of returning the whole ledger on
 	// every app-layout load.
 	const rows = (await handle.execute(sql`
 		select currency, min(day)::text as day from (
-			select currency, coalesce(balance_as_of, current_date) as day from ${account}
-			union all select currency, coalesce(value_date, booked_at) as day from ${transaction}
-			union all select currency, coalesce(owed_as_of, current_date) as day from ${loan}
-			union all select currency, as_of::date as day from ${holding}
-			union all select currency, coalesce(valued_at, current_date) as day from ${property}
+			select currency, coalesce(valued_on, current_date) as day from ${netWorthComponent}
+			union all select currency, coalesce(value_on, booked_on) as day from ${transaction}
 			union all select currency, day from ${portfolioSnapshot}
-			union all select ${storedDocument.amountCurrency},
-				case
-					when ${storedDocument.periodMonth} ~ '^\\d{4}-\\d{2}$'
-						then (${storedDocument.periodMonth} || '-01')::date
-					else ${storedDocument.addedOn}
-				end
+			union all select ${storedDocument.currency},
+				-- The month the document covers when it names one, else the day it was
+				-- filed. This used to test a 'YYYY-MM' string against a regex and cast
+				-- it, which silently skipped any value written another way; period_on
+				-- is a real date since 0052 and needs neither.
+				coalesce(${storedDocument.periodOn}, ${storedDocument.addedOn})
 			from ${storedDocument}
-			where ${storedDocument.amountCurrency} is not null
+			where ${storedDocument.currency} is not null
 				and ${storedDocument.amountMinor} is not null
 			union all select currency, happened_at::date from ${brokerOperation}
 			union all select currency, opened_at::date from ${brokerPosition}

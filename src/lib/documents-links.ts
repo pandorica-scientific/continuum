@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Column derivation for the documents screen, from entity links rather than
 // free-text subjects. Labels are the linked records' *current* names, so a
 // rename carries every document with it and a phantom column cannot exist.
@@ -11,7 +12,7 @@ export interface LinkedDoc {
 	subjects: string[];
 }
 
-export interface DocColumn {
+interface DocColumn {
 	label: string;
 	docIds: string[];
 }

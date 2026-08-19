@@ -151,7 +151,7 @@ describe('generated events', () => {
 				remoteHash: 'y',
 				dateOnlyChange: true,
 				newDate: '2026-09-20',
-				binding: { table: 'loanFixationPeriod', rowId: 'p1', field: 'endDate' }
+				binding: { table: 'loanFixationPeriod', rowId: 'p1', field: 'endsOn' }
 			})
 		).toBe('push');
 	});

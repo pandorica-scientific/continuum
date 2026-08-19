@@ -1,1 +1,0 @@
-ALTER TABLE "calendar_account" ADD COLUMN "remote_cal_name" text;

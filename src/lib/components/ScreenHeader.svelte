@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { page } from '$app/state';
 	import Icon from './Icon.svelte';
 	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
@@ -31,8 +32,6 @@
 	// An area holding one screen renders no row at all — a single pill would be
 	// a label pretending to be a choice.
 	const tabs = $derived(screens.length > 1 ? screens : []);
-	// Only where importing belongs — see the registry's offersImport.
-
 	const current = $derived(
 		area?.screens.find(
 			(screen) =>

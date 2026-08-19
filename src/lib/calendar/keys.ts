@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Stable identity for calendar events, on both sides of a sync.
 //
 // Two-way sync needs an id that survives everything: a restart, a rebuilt link
@@ -81,7 +82,7 @@ export function isGeneratedKey(key: string): boolean {
  */
 export const WRITABLE_BINDINGS: Record<string, ReadonlySet<string>> = {
 	loan: new Set(['paymentDay']),
-	tenancy: new Set(['endDate', 'renewalNoticeDate']),
+	tenancy: new Set(['endsOn', 'renewalNoticeOn']),
 	document: new Set(['expiresOn'])
 };
 

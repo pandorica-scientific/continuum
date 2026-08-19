@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Matching and deciding, kept pure so the same code answers both "what would
 // this rule file?" during ingest and "what would this rule match?" in the
 // editor's preview. There is deliberately no SQL translation of these rules —
@@ -50,7 +51,7 @@ export interface RowLike {
 	currency?: string;
 }
 
-export interface RuleDecision {
+interface RuleDecision {
 	kind: 'auto' | 'review';
 	/** The winner, or the suggestion when kind is review. */
 	categoryId: string | null;

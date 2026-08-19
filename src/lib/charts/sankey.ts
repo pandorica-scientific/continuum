@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A multi-column Sankey, laid out in the pixels of the box it is given.
 //
 // The engine knows nothing about money. It takes a graph of nodes carrying a
@@ -11,7 +12,7 @@
 // flush with their nodes, no label collisions, columns conserving their total)
 // are enforced by unit tests across a sweep of widths.
 
-export interface SankeyNodeInput {
+interface SankeyNodeInput {
 	key: string;
 	label: string;
 	value: number;
@@ -20,7 +21,7 @@ export interface SankeyNodeInput {
 	column: number;
 }
 
-export interface SankeyLink {
+interface SankeyLink {
 	from: string;
 	to: string;
 	value: number;
@@ -31,19 +32,19 @@ export interface SankeyGraph {
 	links: SankeyLink[];
 }
 
-export interface SankeyBox {
+interface SankeyBox {
 	width: number;
 	height: number;
 }
 
-export interface SankeyNode extends SankeyNodeInput {
+interface SankeyNode extends SankeyNodeInput {
 	x: number;
 	y: number;
 	w: number;
 	h: number;
 }
 
-export interface SankeyRibbon {
+interface SankeyRibbon {
 	from: string;
 	to: string;
 	/** Left edge, flush with the source node's right side. */
@@ -57,7 +58,7 @@ export interface SankeyRibbon {
 	d: string;
 }
 
-export interface SankeyLabel {
+interface SankeyLabel {
 	key: string;
 	column: number;
 	label: string;
@@ -69,7 +70,7 @@ export interface SankeyLabel {
 	anchor: 'start' | 'end' | 'middle';
 }
 
-export interface SankeyLayout {
+interface SankeyLayout {
 	width: number;
 	height: number;
 	nodes: SankeyNode[];
@@ -78,7 +79,7 @@ export interface SankeyLayout {
 }
 
 /** Chunky blocks, as in the reference diagrams — not the old 11px hairlines. */
-export const NODE_W = 14;
+const NODE_W = 14;
 /** Space between stacked nodes in a column. */
 const NODE_GAP = 10;
 /** Two lines of label, name over value, plus the plate's padding. */
@@ -106,12 +107,7 @@ const gutterFor = (width: number) =>
  * Carried over intact from the waterfall engine it replaces; it is the piece
  * that took the most iterations to get right.
  */
-export function relaxLabels(
-	preferred: number[],
-	minGap: number,
-	minY: number,
-	maxY: number
-): number[] {
+function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: number): number[] {
 	const order = preferred.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
 	const blocks: { sum: number; count: number; items: number[] }[] = [];
 

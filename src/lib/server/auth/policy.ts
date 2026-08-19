@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Permission rules, kept as pure functions so every guard is testable without
 // a database and so the same rule cannot drift between two call sites.
 //
@@ -9,7 +10,7 @@ import { error } from '@sveltejs/kit';
 
 export type PersonRole = 'admin' | 'member';
 
-export interface PolicyPerson {
+interface PolicyPerson {
 	id: string;
 	role: PersonRole;
 }
@@ -47,7 +48,7 @@ export interface PolicyTarget extends PolicyPerson {
 	canSignIn: boolean;
 }
 
-export type PolicyResult = { ok: true } | { ok: false; reason: string };
+type PolicyResult = { ok: true } | { ok: false; reason: string };
 
 const OK: PolicyResult = { ok: true };
 

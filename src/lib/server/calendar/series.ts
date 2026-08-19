@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { createHash } from 'node:crypto';
 import { strip } from '$lib/calendar/markers';
 

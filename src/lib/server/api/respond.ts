@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Shared response shape and the bearer-token gate for /api/v1.
 
 import { verifyToken } from '$lib/server/api/tokens';
@@ -37,7 +38,7 @@ export function readBearerToken(request: Request): string | null {
  * Successful calls deliberately do NOT clear the counter: that would let a
  * caller reset their guessing budget by interleaving one valid request.
  */
-export async function requireToken(request: Request, address: string): Promise<Response | null> {
+async function requireToken(request: Request, address: string): Promise<Response | null> {
 	const wait = blockedForSeconds('api', address);
 	if (wait > 0) return apiError('Too many failed attempts.', 429);
 
@@ -49,7 +50,7 @@ export async function requireToken(request: Request, address: string): Promise<R
 }
 
 /** Every path the hook exempts from the sign-in redirect as self-authenticating. */
-export function isApiPath(pathname: string): boolean {
+function isApiPath(pathname: string): boolean {
 	return pathname === '/api' || pathname.startsWith('/api/');
 }
 

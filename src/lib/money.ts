@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Money is always integer minor units + a currency code. Formatting follows
 // the design: space-grouped thousands, decimals only when they carry
 // information, and every number set in the mono face by the caller.
@@ -83,7 +84,7 @@ export function fromMajor(major: number, currency: string): bigint {
 	return BigInt(Math.round(major * 10 ** minorDigits(currency)));
 }
 
-export interface FormatOptions {
+interface FormatOptions {
 	/** Always print the fraction digits, even when zero. */
 	exact?: boolean;
 	/** Prefix positive amounts with +. */

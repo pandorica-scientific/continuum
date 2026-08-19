@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Minimal CSV splitter that understands quoted fields with embedded
  * delimiters, escaped quotes ("") and CRLF. Enough for bank exports; avoids a

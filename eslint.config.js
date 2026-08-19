@@ -3,6 +3,52 @@ import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 
+const LICENCE_HEADER = '// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0';
+
+// Written here rather than pulled in as a plugin: it is twenty lines, and a
+// dependency that stamps a comment is a dependency to audit, pin and update
+// forever.
+//
+// `.svelte` files take the header inside the first <script> block, not as an
+// HTML comment at the top of the file — a markup comment is part of the
+// component's output, and the licence of the source does not belong in the DOM
+// the reader's browser receives.
+const licence = {
+	rules: {
+		header: {
+			meta: {
+				type: 'problem',
+				fixable: 'code',
+				schema: [],
+				messages: { missing: 'File is missing the SPDX licence header.' }
+			},
+			create(context) {
+				return {
+					Program(node) {
+						const text = context.sourceCode.getText();
+						if (text.includes(LICENCE_HEADER)) return;
+
+						context.report({
+							node,
+							messageId: 'missing',
+							fix(fixer) {
+								if (!context.filename.endsWith('.svelte')) {
+									return fixer.insertTextBeforeRange([0, 0], `${LICENCE_HEADER}\n`);
+								}
+								// After the opening <script ...> tag, so the header lands in the
+								// component's script rather than in its markup.
+								const open = text.indexOf('>', text.indexOf('<script'));
+								if (open === -1) return null;
+								return fixer.insertTextAfterRange([open + 1, open + 1], `\n\t${LICENCE_HEADER}`);
+							}
+						});
+					}
+				};
+			}
+		}
+	}
+};
+
 export default ts.config(
 	js.configs.recommended,
 	...ts.configs.recommended,
@@ -22,6 +68,12 @@ export default ts.config(
 			// plain hrefs are fine and keep the nav registry simple.
 			'svelte/no-navigation-without-resolve': 'off'
 		}
+	},
+	{
+		// src/ only: the tests and the build scripts are not distributed.
+		files: ['src/**/*.ts', 'src/**/*.svelte'],
+		plugins: { licence },
+		rules: { 'licence/header': 'error' }
 	},
 	{
 		ignores: [

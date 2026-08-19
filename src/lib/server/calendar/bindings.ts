@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, loan, tenancy } from '$lib/server/db/schema';
@@ -41,7 +42,7 @@ export function writeBackValue(
 	return newDate;
 }
 
-export interface WriteBackResult {
+interface WriteBackResult {
 	ok: boolean;
 	/** Human-readable, and shown in the briefing. */
 	message: string;
@@ -86,14 +87,14 @@ export async function applyWriteBack(
 			const [row] = await tx.select().from(tenancy).where(eq(tenancy.id, binding.rowId)).limit(1);
 			if (!row) return { ok: false, message: 'The tenancy behind that event is gone.' };
 
-			const field = binding.field === 'endDate' ? 'endDate' : 'renewalNoticeDate';
+			const field = binding.field === 'endsOn' ? 'endsOn' : 'renewalNoticeOn';
 			await tx
 				.update(tenancy)
 				.set({ [field]: value as string })
 				.where(eq(tenancy.id, binding.rowId));
 
 			message =
-				field === 'endDate'
+				field === 'endsOn'
 					? `${row.tenantName}: the lease end moved to ${value}, from a calendar edit.`
 					: `${row.tenantName}: the renewal notice date moved to ${value}, from a calendar edit.`;
 		} else {

@@ -30,7 +30,7 @@ describe('generated event keys', () => {
 	// key were built from the rule alone they would collide, and one would
 	// overwrite the other on every sync.
 	it('distinguishes two bindings under the same rule', () => {
-		const tenancyEnd: OriginBinding = { table: 'tenancy', rowId: '1', field: 'endDate' };
+		const tenancyEnd: OriginBinding = { table: 'tenancy', rowId: '1', field: 'endsOn' };
 		const docExpiry: OriginBinding = { table: 'document', rowId: '1', field: 'expiresOn' };
 		expect(generatedKey('expiry', tenancyEnd)).not.toBe(generatedKey('expiry', docExpiry));
 	});
@@ -40,8 +40,8 @@ describe('generated event keys', () => {
 	// so a key built from rule + table + row alone collides and the feed publishes
 	// two events under one UID.
 	it('distinguishes two fields of the same row under the same rule', () => {
-		const end: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'endDate' };
-		const notice: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'renewalNoticeDate' };
+		const end: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'endsOn' };
+		const notice: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'renewalNoticeOn' };
 		expect(generatedKey('propertyDates', end)).not.toBe(generatedKey('propertyDates', notice));
 	});
 

@@ -33,7 +33,7 @@ const baseCtx: PairingContext = {
 function tx(
 	partial: Partial<PairableTx> & Pick<PairableTx, 'id' | 'accountId' | 'amountMinor'>
 ): PairableTx {
-	return { bookedAt: '2026-07-14', currency: 'CZK', ...partial };
+	return { bookedOn: '2026-07-14', currency: 'CZK', ...partial };
 }
 
 describe('accountKeysMatch', () => {
@@ -107,7 +107,7 @@ describe('proposePairs', () => {
 					amountMinor: -2000000n,
 					counterpartyAccount: '98765432/5500'
 				}),
-				tx({ id: 'in1', accountId: 'rb', amountMinor: 2000000n, bookedAt: '2026-07-15' })
+				tx({ id: 'in1', accountId: 'rb', amountMinor: 2000000n, bookedOn: '2026-07-15' })
 			],
 			baseCtx
 		);
@@ -148,7 +148,7 @@ describe('proposePairs', () => {
 				}),
 				tx({ id: 'b', accountId: 'fio', amountMinor: 1000n }),
 				tx({ id: 'c', accountId: 'rb', amountMinor: 1000n }),
-				tx({ id: 'd', accountId: 'rb', amountMinor: 1000n, bookedAt: '2026-07-16' })
+				tx({ id: 'd', accountId: 'rb', amountMinor: 1000n, bookedOn: '2026-07-16' })
 			],
 			baseCtx
 		);
@@ -164,7 +164,7 @@ describe('proposePairs', () => {
 					id: 'in1',
 					accountId: 'rb',
 					amountMinor: 500000n,
-					bookedAt: '2026-07-30',
+					bookedOn: '2026-07-30',
 					counterparty: 'Nováková, Jana'
 				})
 			],

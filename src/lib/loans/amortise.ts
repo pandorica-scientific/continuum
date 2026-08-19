@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Amortisation with fixation periods. Pure functions over minor units so the
 // bookkeeping rule — interest is booked per fixation period, a re-fix never
 // rewrites history — is enforceable by unit tests.
@@ -18,14 +19,14 @@ export { DAY_COUNTS, type DayCount };
 void DAY_COUNTS; // re-exported for server callers
 
 export interface FixationPeriod {
-	startDate: string; // ISO date
-	endDate: string | null; // null = open-ended
+	startsOn: string; // ISO date
+	endsOn: string | null; // null = open-ended
 	annualRatePct: number;
 	/** monthly payment agreed for this period */
 	paymentMinor: bigint;
 }
 
-export type AccrualStyle = 'payment' | 'calendar';
+type AccrualStyle = 'payment' | 'calendar';
 
 export interface LoanTerms {
 	owedMinor: bigint;
@@ -131,16 +132,16 @@ export function nextMonth(month: string): string {
  */
 export function periodForMonth(periods: FixationPeriod[], month: string): FixationPeriod | null {
 	const day = `${month}-01`;
-	const sorted = [...periods].sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
-	if (sorted.length === 0 || day < sorted[0].startDate) return null;
+	const sorted = [...periods].sort((a, b) => (a.startsOn < b.startsOn ? -1 : 1));
+	if (sorted.length === 0 || day < sorted[0].startsOn) return null;
 	let current: FixationPeriod | null = null;
 	for (const period of sorted) {
-		if (period.startDate <= day && (period.endDate === null || day < period.endDate)) {
+		if (period.startsOn <= day && (period.endsOn === null || day < period.endsOn)) {
 			current = period;
 		}
 	}
 	if (current) return current;
-	const before = sorted.filter((p) => p.startDate <= day);
+	const before = sorted.filter((p) => p.startsOn <= day);
 	return before[before.length - 1] ?? null;
 }
 

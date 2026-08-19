@@ -17,8 +17,8 @@ const LOAN: LoanTerms = {
 };
 
 const PERIODS: FixationPeriod[] = [
-	{ startDate: '2024-03-01', endDate: '2029-03-01', annualRatePct: 4.29, paymentMinor: 3500000n },
-	{ startDate: '2029-03-01', endDate: null, annualRatePct: 5.5, paymentMinor: 3750000n }
+	{ startsOn: '2024-03-01', endsOn: '2029-03-01', annualRatePct: 4.29, paymentMinor: 3500000n },
+	{ startsOn: '2029-03-01', endsOn: null, annualRatePct: 5.5, paymentMinor: 3750000n }
 ];
 
 describe('rateForMonth', () => {
@@ -29,8 +29,8 @@ describe('rateForMonth', () => {
 	});
 	it('falls back to the nearest earlier period in gaps', () => {
 		const gappy: FixationPeriod[] = [
-			{ startDate: '2020-01-01', endDate: '2022-01-01', annualRatePct: 2, paymentMinor: 100000n },
-			{ startDate: '2023-01-01', endDate: null, annualRatePct: 3, paymentMinor: 100000n }
+			{ startsOn: '2020-01-01', endsOn: '2022-01-01', annualRatePct: 2, paymentMinor: 100000n },
+			{ startsOn: '2023-01-01', endsOn: null, annualRatePct: 3, paymentMinor: 100000n }
 		];
 		expect(rateForMonth(gappy, '2022-06')).toBe(2);
 	});
@@ -67,7 +67,7 @@ describe('amortise', () => {
 		const small: LoanTerms = { owedMinor: 500000n, owedAsOfMonth: '2026-01' };
 		const rows = amortise(
 			small,
-			[{ startDate: '2020-01-01', endDate: null, annualRatePct: 6, paymentMinor: 200000n }],
+			[{ startsOn: '2020-01-01', endsOn: null, annualRatePct: 6, paymentMinor: 200000n }],
 			'2027-12'
 		);
 		const last = rows[rows.length - 1];
@@ -80,7 +80,7 @@ describe('amortise', () => {
 		// 12% on 4M is 40 000/month interest; a 24 000 payment falls short.
 		const bad: LoanTerms = { owedMinor: 400000000n, owedAsOfMonth: '2026-01' };
 		const periods: FixationPeriod[] = [
-			{ startDate: '2020-01-01', endDate: null, annualRatePct: 12, paymentMinor: 2400000n }
+			{ startsOn: '2020-01-01', endsOn: null, annualRatePct: 12, paymentMinor: 2400000n }
 		];
 		const rows = amortise(bad, periods, '2026-06');
 		expect(rows[0].principalMinor).toBeLessThan(0n);
@@ -163,7 +163,7 @@ describe('day-count conventions', () => {
 			dayCount: 'act/365'
 		};
 		const periods: FixationPeriod[] = [
-			{ startDate: '2024-01-01', endDate: null, annualRatePct: rate, paymentMinor: 2500000n }
+			{ startsOn: '2024-01-01', endsOn: null, annualRatePct: rate, paymentMinor: 2500000n }
 		];
 		const [first] = amortise(terms, periods, '2026-07');
 		expect(first.interestMinor).toBe(1797151n);
@@ -184,7 +184,7 @@ describe('calendar accrual (Česká spořitelna, verified against real statement
 		dueInterestMinor: 3759593n // May's charge, collected 20/06
 	};
 	const periods: FixationPeriod[] = [
-		{ startDate: '2026-02-11', endDate: '2029-01-31', annualRatePct: 4.44, paymentMinor: 4968100n }
+		{ startsOn: '2026-02-11', endsOn: '2029-01-31', annualRatePct: 4.44, paymentMinor: 4968100n }
 	];
 
 	it('reproduces June 2026 exactly', () => {

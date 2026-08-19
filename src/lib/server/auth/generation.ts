@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { and, eq, ne, sql } from 'drizzle-orm';
 import type { Db, Queryable, Tx } from '$lib/server/db';
 import { credential, person, session, setupClaim } from '$lib/server/db/schema';
 
-export const MAX_INITIAL_SETUP_PEOPLE = 20;
+const MAX_INITIAL_SETUP_PEOPLE = 20;
 
 export function initialSetupPeopleLimitError(count: number): string | null {
 	return count > MAX_INITIAL_SETUP_PEOPLE
@@ -10,14 +11,14 @@ export function initialSetupPeopleLimitError(count: number): string | null {
 		: null;
 }
 
-export interface GenerationSession {
+interface GenerationSession {
 	id: string;
 	personId: string;
 	authGeneration: number;
 	expiresAt: Date;
 }
 
-export interface GenerationCredential {
+interface GenerationCredential {
 	id: string;
 	personId: string;
 	authGeneration: number;

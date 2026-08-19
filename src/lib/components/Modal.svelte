@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import type { Snippet } from 'svelte';
 	import { overlayFocus } from '$lib/actions/overlay';
 

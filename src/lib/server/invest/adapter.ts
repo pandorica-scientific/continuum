@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The broker seam. A broker adapter turns that broker's report file into the
 // one normalised shape the ingest, dedup, and value-curve reconstruction work
 // from — the rest of the investments module never knows which broker it is.
@@ -43,7 +44,7 @@ export interface BrokerReport {
 	positions: BrokerPositionSpan[];
 }
 
-export interface BrokerAdapter {
+interface BrokerAdapter {
 	id: string;
 	label: string;
 	/** cheap check whether this file looks like this broker's report */

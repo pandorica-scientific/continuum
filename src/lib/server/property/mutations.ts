@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { property, propertyBill, tenancy } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
@@ -5,7 +6,7 @@ import { tenancyRangesOverlap } from '$lib/property/tenancy';
 import { validateDrawing } from '$lib/plan';
 import { and, eq } from 'drizzle-orm';
 
-export type PropertyMutationResult =
+type PropertyMutationResult =
 	{ ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
 
 const missingProperty = (): PropertyMutationResult => ({
@@ -14,7 +15,7 @@ const missingProperty = (): PropertyMutationResult => ({
 	message: 'Property not found.'
 });
 
-export interface AttachedBillDocumentInput {
+interface AttachedBillDocumentInput {
 	id: string;
 	name: string;
 	storedName: string;
@@ -22,7 +23,7 @@ export interface AttachedBillDocumentInput {
 	addedOn: string;
 }
 
-export interface CreatePropertyBillInput {
+interface CreatePropertyBillInput {
 	id: string;
 	propertyId: string;
 	label: string;
@@ -68,15 +69,15 @@ export async function createPropertyBill(
 	});
 }
 
-export interface CreateTenancyInput {
+interface CreateTenancyInput {
 	id: string;
 	propertyId: string;
 	tenantName: string;
 	rentMinor: bigint;
 	depositMinor: bigint;
-	startDate: string | null;
-	endDate: string | null;
-	renewalNoticeDate: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
+	renewalNoticeOn: string | null;
 }
 
 function isIsoDay(day: string | null): boolean {
@@ -91,10 +92,10 @@ export async function createTenancy(
 	handle: Db = db
 ): Promise<PropertyMutationResult> {
 	if (
-		!isIsoDay(input.startDate) ||
-		!isIsoDay(input.endDate) ||
-		!isIsoDay(input.renewalNoticeDate) ||
-		(input.startDate !== null && input.endDate !== null && input.startDate > input.endDate)
+		!isIsoDay(input.startsOn) ||
+		!isIsoDay(input.endsOn) ||
+		!isIsoDay(input.renewalNoticeOn) ||
+		(input.startsOn !== null && input.endsOn !== null && input.startsOn > input.endsOn)
 	) {
 		return { ok: false, status: 400, message: 'The tenancy dates are not valid.' };
 	}
@@ -124,7 +125,7 @@ export async function createTenancy(
 	});
 }
 
-export interface SetPropertyImageInput {
+interface SetPropertyImageInput {
 	propertyId: string;
 	slot: string;
 	storedName: string;
@@ -175,12 +176,12 @@ export async function setPropertyImage(
 	});
 }
 
-export interface SetPropertyDrawingInput {
+interface SetPropertyDrawingInput {
 	propertyId: string;
 	drawing: unknown;
 }
 
-export type RemovePropertyImageResult =
+type RemovePropertyImageResult =
 	{ ok: true; removed: string } | { ok: false; status: 400 | 404 | 409; message: string };
 
 /**

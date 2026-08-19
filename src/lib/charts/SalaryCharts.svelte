@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	// The three salary plots: average monthly salary per year (bars), yearly
 	// increase in % (lines), and change in % against age (lines) — people
 	// overlaid in their own colours so trajectories compare directly.

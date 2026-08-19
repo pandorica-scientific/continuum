@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -106,7 +108,7 @@ export const actions: Actions = {
 		const kind = String(form.get('kind') ?? '');
 		const provider = availableHomeProviders().find((p) => p.id === kind);
 		if (!provider) return fail(400, { message: 'Pick a platform.' });
-		const meterPropertyId = String(form.get('meterPropertyId') ?? '');
+		const meterPropertyId = asRowId(form.get('meterPropertyId'));
 		const meterProperties = await db
 			.select({ id: property.id })
 			.from(property)
@@ -160,7 +162,7 @@ export const actions: Actions = {
 
 	toggleDevice: async ({ request }) => {
 		const form = await request.formData();
-		const deviceId = String(form.get('deviceId') ?? '');
+		const deviceId = asRowId(form.get('deviceId'));
 		const on = String(form.get('on')) === 'true';
 		const provider = await configuredHomeProvider();
 		if (!provider) return fail(400, { message: 'No platform connected.' });

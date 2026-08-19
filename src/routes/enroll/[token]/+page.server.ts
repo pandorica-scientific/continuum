@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { completeEnrollment, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
 import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
-import { passwordMinLength } from '$lib/server/policy';
+import { passwordMinLength } from '$lib/server/system/policy';
 import { passwordLengthError } from '$lib/password-policy';
 import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';

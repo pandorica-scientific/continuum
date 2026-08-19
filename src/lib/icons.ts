@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The icon set, drawn as inline SVG primitives.
 //
 // No library and no CDN: this ships as a self-hosted package, so the icons are

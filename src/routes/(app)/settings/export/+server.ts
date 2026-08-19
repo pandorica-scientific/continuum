@@ -1,4 +1,5 @@
-import { exportConfig } from '$lib/server/config-file';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { exportConfig } from '$lib/server/system/config-file';
 import { requireAdmin } from '$lib/server/auth/policy';
 import type { RequestHandler } from './$types';
 

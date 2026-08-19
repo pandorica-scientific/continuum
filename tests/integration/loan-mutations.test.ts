@@ -1,6 +1,7 @@
+import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	createLoan,
 	recordRepayment,
@@ -11,7 +12,7 @@ import {
 let harness: Harness;
 let testDb: TestDb;
 
-async function seedLoan(id = 'loan-a'): Promise<void> {
+async function seedLoan(id = rowId('loan-a')): Promise<void> {
 	await testDb.insert(schema.loan).values({
 		id,
 		name: 'Mortgage',
@@ -20,14 +21,14 @@ async function seedLoan(id = 'loan-a'): Promise<void> {
 		currency: 'CZK',
 		principalMinor: 1_000_000n,
 		owedMinor: 800_000n,
-		owedAsOf: '2026-08-01',
-		startDate: '2024-01-01',
-		endDate: null,
+		owedOn: '2026-08-01',
+		startsOn: '2024-01-01',
+		endsOn: null,
 		regime: 'fixed_period',
 		dayCount: '30/360',
 		accrualStyle: 'payment',
 		paymentDay: 15,
-		interestDeductible: 1
+		interestDeductible: true
 	});
 }
 
@@ -46,8 +47,8 @@ function validLoanInput(overrides: Partial<CreateLoanInput> = {}): CreateLoanInp
 		accrualStyle: 'payment',
 		paymentDay: 15,
 		fixedUntil: '2029-08-15',
-		startDate: '2026-08-15',
-		endDate: '2036-08-15',
+		startsOn: '2026-08-15',
+		endsOn: '2036-08-15',
 		interestDeductible: true,
 		secured: [],
 		today: '2026-08-15',
@@ -61,7 +62,7 @@ beforeAll(async () => {
 	// The real schema, not a hand-written subset of it. The subset that used
 	// to live here had to be kept in step with schema.ts by hand, and a test
 	// passing against a stale copy of a table says nothing about the real one.
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
 beforeEach(async () => {
@@ -87,7 +88,7 @@ describe('loan mutation transactions', () => {
 		expect(
 			await recordRepayment(
 				{
-					loanId: 'loan-a',
+					loanId: rowId('loan-a'),
 					date: '2026-02-30',
 					amount: '1 000',
 					balanceAfter: '',
@@ -99,7 +100,7 @@ describe('loan mutation transactions', () => {
 		expect(
 			await recordRepayment(
 				{
-					loanId: 'loan-a',
+					loanId: rowId('loan-a'),
 					date: '2026-07-31',
 					amount: '1 000',
 					balanceAfter: '',
@@ -115,7 +116,7 @@ describe('loan mutation transactions', () => {
 		expect(
 			await recordRepayment(
 				{
-					loanId: 'loan-a',
+					loanId: rowId('loan-a'),
 					date: '2099-01-01',
 					amount: '1 000',
 					balanceAfter: '',
@@ -131,7 +132,7 @@ describe('loan mutation transactions', () => {
 
 		expect(await testDb.select().from(schema.loanEvent)).toHaveLength(0);
 		expect(await testDb.select().from(schema.loan)).toMatchObject([
-			{ id: 'loan-a', owedMinor: 800_000n, owedAsOf: '2026-08-01' }
+			{ id: rowId('loan-a'), owedMinor: 800_000n, owedOn: '2026-08-01' }
 		]);
 	});
 
@@ -140,14 +141,14 @@ describe('loan mutation transactions', () => {
 
 		for (const input of [
 			{
-				loanId: 'loan-a',
+				loanId: rowId('loan-a'),
 				date: '2026-08-15',
 				amount: '9 000',
 				balanceAfter: '',
 				note: ''
 			},
 			{
-				loanId: 'loan-a',
+				loanId: rowId('loan-a'),
 				date: '2026-08-15',
 				amount: '1 000',
 				balanceAfter: '9 000',
@@ -159,7 +160,7 @@ describe('loan mutation transactions', () => {
 
 		expect(await testDb.select().from(schema.loanEvent)).toHaveLength(0);
 		expect(await testDb.select().from(schema.loan)).toMatchObject([
-			{ id: 'loan-a', owedMinor: 800_000n, owedAsOf: '2026-08-01' }
+			{ id: rowId('loan-a'), owedMinor: 800_000n, owedOn: '2026-08-01' }
 		]);
 	});
 
@@ -170,34 +171,34 @@ describe('loan mutation transactions', () => {
 			validLoanInput({ owed: '6 000 000' }),
 			validLoanInput({ payment: '-1' }),
 			validLoanInput({ today: '2026-02-30' }),
-			validLoanInput({ startDate: '2026-02-30' }),
-			validLoanInput({ startDate: '2027-01-01', endDate: '2026-12-31' }),
-			validLoanInput({ startDate: '2027-01-01', fixedUntil: '2026-12-31' }),
-			validLoanInput({ fixedUntil: '2037-01-01', endDate: '2036-08-15' }),
-			validLoanInput({ startDate: '2026-08-16' }),
+			validLoanInput({ startsOn: '2026-02-30' }),
+			validLoanInput({ startsOn: '2027-01-01', endsOn: '2026-12-31' }),
+			validLoanInput({ startsOn: '2027-01-01', fixedUntil: '2026-12-31' }),
+			validLoanInput({ fixedUntil: '2037-01-01', endsOn: '2036-08-15' }),
+			validLoanInput({ startsOn: '2026-08-16' }),
 			validLoanInput({
-				startDate: '2020-01-01',
+				startsOn: '2020-01-01',
 				fixedUntil: '2024-01-01',
-				endDate: '2025-01-01'
+				endsOn: '2025-01-01'
 			}),
 			validLoanInput({
 				secured: [
-					{ propertyId: 'home-a', sharePct: '60' },
-					{ propertyId: 'home-b', sharePct: '60' }
+					{ propertyId: rowId('home-a'), sharePct: '60' },
+					{ propertyId: rowId('home-b'), sharePct: '60' }
 				]
 			}),
 			validLoanInput({
 				secured: [
-					{ propertyId: 'home-a', sharePct: '80' },
-					{ propertyId: 'home-b', sharePct: null }
+					{ propertyId: rowId('home-a'), sharePct: '80' },
+					{ propertyId: rowId('home-b'), sharePct: null }
 				]
 			}),
 			// `Number` read these as 16, 10 and 0.5; the property page parses the
 			// stored share strictly, and share_pct is numeric(6,3), so accepting
 			// them here would file debt against a share nobody chose.
-			validLoanInput({ secured: [{ propertyId: 'home-a', sharePct: '0x10' }] }),
-			validLoanInput({ secured: [{ propertyId: 'home-a', sharePct: '1e1' }] }),
-			validLoanInput({ secured: [{ propertyId: 'home-a', sharePct: '12.3456' }] })
+			validLoanInput({ secured: [{ propertyId: rowId('home-a'), sharePct: '0x10' }] }),
+			validLoanInput({ secured: [{ propertyId: rowId('home-a'), sharePct: '1e1' }] }),
+			validLoanInput({ secured: [{ propertyId: rowId('home-a'), sharePct: '12.3456' }] })
 		];
 
 		for (const input of invalidInputs) {
@@ -211,15 +212,15 @@ describe('loan mutation transactions', () => {
 	it('requires explicit shares when several secured properties have no values', async () => {
 		await harness.sql.unsafe(`
 			insert into property (id, name, kind, value_minor)
-			values ('home-a', 'Home A', 'lived', 0), ('home-b', 'Home B', 'lived', 0)
+			values ('${rowId('home-a')}', 'Home A', 'lived', 0), ('${rowId('home-b')}', 'Home B', 'lived', 0)
 		`);
 
 		expect(
 			await createLoan(
 				validLoanInput({
 					secured: [
-						{ propertyId: 'home-a', sharePct: null },
-						{ propertyId: 'home-b', sharePct: null }
+						{ propertyId: rowId('home-a'), sharePct: null },
+						{ propertyId: rowId('home-b'), sharePct: null }
 					]
 				}),
 				testDb
@@ -230,14 +231,16 @@ describe('loan mutation transactions', () => {
 
 	it('rejects a replacement fixation that outlasts the loan agreement', async () => {
 		await seedLoan();
-		await harness.sql.unsafe(`update loan set end_date = '2028-12-31' where id = 'loan-a'`);
+		await harness.sql.unsafe(
+			`update loan set ends_on = '2028-12-31' where id = '${rowId('loan-a')}'`
+		);
 
 		expect(
 			await replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2027-01-01',
-					endDate: '2029-01-01',
+					loanId: rowId('loan-a'),
+					startsOn: '2027-01-01',
+					endsOn: '2029-01-01',
 					rate: '3.5',
 					payment: '2 000'
 				},
@@ -253,12 +256,12 @@ describe('loan mutation transactions', () => {
 
 	it('rejects repayments and fixation replacements before the loan agreement starts', async () => {
 		await seedLoan();
-		await harness.sql.unsafe(`update loan set owed_as_of = null where id = 'loan-a'`);
+		await harness.sql.unsafe(`update loan set owed_on = null where id = '${rowId('loan-a')}'`);
 		await testDb.insert(schema.loanFixationPeriod).values({
-			id: 'original',
-			loanId: 'loan-a',
-			startDate: '2024-01-01',
-			endDate: null,
+			id: rowId('original'),
+			loanId: rowId('loan-a'),
+			startsOn: '2024-01-01',
+			endsOn: null,
 			annualRatePct: '4.5',
 			paymentMinor: 20_000n
 		});
@@ -266,7 +269,7 @@ describe('loan mutation transactions', () => {
 		expect(
 			await recordRepayment(
 				{
-					loanId: 'loan-a',
+					loanId: rowId('loan-a'),
 					date: '2023-12-31',
 					amount: '1 000',
 					balanceAfter: '',
@@ -278,9 +281,9 @@ describe('loan mutation transactions', () => {
 		expect(
 			await replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2023-12-31',
-					endDate: null,
+					loanId: rowId('loan-a'),
+					startsOn: '2023-12-31',
+					endsOn: null,
 					rate: '3.5',
 					payment: '18 000'
 				},
@@ -290,10 +293,10 @@ describe('loan mutation transactions', () => {
 
 		expect(await testDb.select().from(schema.loanEvent)).toHaveLength(0);
 		expect(await testDb.select().from(schema.loanFixationPeriod)).toMatchObject([
-			{ id: 'original', startDate: '2024-01-01', endDate: null }
+			{ id: rowId('original'), startsOn: '2024-01-01', endsOn: null }
 		]);
 		expect(await testDb.select().from(schema.loan)).toMatchObject([
-			{ id: 'loan-a', owedMinor: 800_000n, owedAsOf: null }
+			{ id: rowId('loan-a'), owedMinor: 800_000n, owedOn: null }
 		]);
 	});
 
@@ -311,7 +314,7 @@ describe('loan mutation transactions', () => {
 		await expect(
 			recordRepayment(
 				{
-					loanId: 'loan-a',
+					loanId: rowId('loan-a'),
 					date: '2026-08-15',
 					amount: '1 000',
 					balanceAfter: '',
@@ -332,26 +335,26 @@ describe('loan mutation transactions', () => {
 		await seedLoan();
 		await testDb.insert(schema.loanFixationPeriod).values([
 			{
-				id: 'past',
-				loanId: 'loan-a',
-				startDate: '2024-01-01',
-				endDate: '2027-01-01',
+				id: rowId('past'),
+				loanId: rowId('loan-a'),
+				startsOn: '2024-01-01',
+				endsOn: '2027-01-01',
 				annualRatePct: '4.5',
 				paymentMinor: 20_000n
 			},
 			{
-				id: 'future-a',
-				loanId: 'loan-a',
-				startDate: '2027-01-01',
-				endDate: '2029-01-01',
+				id: rowId('future-a'),
+				loanId: rowId('loan-a'),
+				startsOn: '2027-01-01',
+				endsOn: '2029-01-01',
 				annualRatePct: '5',
 				paymentMinor: 22_000n
 			},
 			{
-				id: 'future-b',
-				loanId: 'loan-a',
-				startDate: '2029-01-01',
-				endDate: null,
+				id: rowId('future-b'),
+				loanId: rowId('loan-a'),
+				startsOn: '2029-01-01',
+				endsOn: null,
 				annualRatePct: '6',
 				paymentMinor: 24_000n
 			}
@@ -360,9 +363,9 @@ describe('loan mutation transactions', () => {
 		expect(
 			await replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2026-12-01',
-					endDate: null,
+					loanId: rowId('loan-a'),
+					startsOn: '2026-12-01',
+					endsOn: null,
 					rate: '3.75',
 					payment: '18 000'
 				},
@@ -373,40 +376,40 @@ describe('loan mutation transactions', () => {
 		expect(
 			(await testDb.select().from(schema.loanFixationPeriod)).map((period) => ({
 				id: period.id,
-				startDate: period.startDate,
-				endDate: period.endDate,
+				startsOn: period.startsOn,
+				endsOn: period.endsOn,
 				paymentMinor: period.paymentMinor
 			}))
 		).toEqual(
 			expect.arrayContaining([
 				{
-					id: 'past',
-					startDate: '2024-01-01',
-					endDate: '2026-12-01',
+					id: rowId('past'),
+					startsOn: '2024-01-01',
+					endsOn: '2026-12-01',
 					paymentMinor: 20_000n
 				},
 				expect.objectContaining({
-					startDate: '2026-12-01',
-					endDate: '2027-01-01',
+					startsOn: '2026-12-01',
+					endsOn: '2027-01-01',
 					paymentMinor: 1_800_000n
 				}),
 				{
-					id: 'future-a',
-					startDate: '2027-01-01',
-					endDate: '2029-01-01',
+					id: rowId('future-a'),
+					startsOn: '2027-01-01',
+					endsOn: '2029-01-01',
 					paymentMinor: 22_000n
 				},
 				{
-					id: 'future-b',
-					startDate: '2029-01-01',
-					endDate: null,
+					id: rowId('future-b'),
+					startsOn: '2029-01-01',
+					endsOn: null,
 					paymentMinor: 24_000n
 				}
 			])
 		);
 		expect(await testDb.select().from(schema.loanFixationPeriod)).toHaveLength(4);
 		expect(await testDb.select().from(schema.loanEvent)).toMatchObject([
-			{ loanId: 'loan-a', happenedOn: '2026-12-01', kind: 'refix', amountMinor: 1_800_000n }
+			{ loanId: rowId('loan-a'), happenedOn: '2026-12-01', kind: 'refix', amountMinor: 1_800_000n }
 		]);
 	});
 
@@ -416,18 +419,18 @@ describe('loan mutation transactions', () => {
 		await seedLoan();
 		await testDb.insert(schema.loanFixationPeriod).values([
 			{
-				id: 'past',
-				loanId: 'loan-a',
-				startDate: '2024-01-01',
-				endDate: '2027-01-01',
+				id: rowId('past'),
+				loanId: rowId('loan-a'),
+				startsOn: '2024-01-01',
+				endsOn: '2027-01-01',
 				annualRatePct: '4.5',
 				paymentMinor: 20_000n
 			},
 			{
-				id: 'future-a',
-				loanId: 'loan-a',
-				startDate: '2027-01-01',
-				endDate: null,
+				id: rowId('future-a'),
+				loanId: rowId('loan-a'),
+				startsOn: '2027-01-01',
+				endsOn: null,
 				annualRatePct: '5',
 				paymentMinor: 22_000n
 			}
@@ -436,9 +439,9 @@ describe('loan mutation transactions', () => {
 		expect(
 			await replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2026-12-01',
-					endDate: '2030-12-01',
+					loanId: rowId('loan-a'),
+					startsOn: '2026-12-01',
+					endsOn: '2030-12-01',
 					rate: '3.75',
 					payment: '18 000'
 				},
@@ -447,8 +450,8 @@ describe('loan mutation transactions', () => {
 		).toMatchObject({ ok: false, status: 400 });
 
 		expect(await testDb.select().from(schema.loanFixationPeriod)).toMatchObject([
-			{ id: 'past', startDate: '2024-01-01', endDate: '2027-01-01' },
-			{ id: 'future-a', startDate: '2027-01-01', endDate: null }
+			{ id: rowId('past'), startsOn: '2024-01-01', endsOn: '2027-01-01' },
+			{ id: rowId('future-a'), startsOn: '2027-01-01', endsOn: null }
 		]);
 		expect(await testDb.select().from(schema.loanEvent)).toHaveLength(0);
 	});
@@ -456,10 +459,10 @@ describe('loan mutation transactions', () => {
 	it('rejects invalid fixation dates, rates, and payments without changing the schedule', async () => {
 		await seedLoan();
 		await testDb.insert(schema.loanFixationPeriod).values({
-			id: 'current',
-			loanId: 'loan-a',
-			startDate: '2024-01-01',
-			endDate: null,
+			id: rowId('current'),
+			loanId: rowId('loan-a'),
+			startsOn: '2024-01-01',
+			endsOn: null,
 			annualRatePct: '4.5',
 			paymentMinor: 20_000n
 		});
@@ -467,9 +470,9 @@ describe('loan mutation transactions', () => {
 		expect(
 			await replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2026-02-30',
-					endDate: null,
+					loanId: rowId('loan-a'),
+					startsOn: '2026-02-30',
+					endsOn: null,
 					rate: '3.75',
 					payment: '18 000'
 				},
@@ -483,9 +486,9 @@ describe('loan mutation transactions', () => {
 		expect(
 			await replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2026-12-01',
-					endDate: null,
+					loanId: rowId('loan-a'),
+					startsOn: '2026-12-01',
+					endsOn: null,
 					rate: '101',
 					payment: 'not money'
 				},
@@ -497,7 +500,7 @@ describe('loan mutation transactions', () => {
 			message: 'Rate and payment must be positive numbers.'
 		});
 		expect(await testDb.select().from(schema.loanFixationPeriod)).toMatchObject([
-			{ id: 'current', startDate: '2024-01-01', endDate: null }
+			{ id: rowId('current'), startsOn: '2024-01-01', endsOn: null }
 		]);
 		expect(await testDb.select().from(schema.loanEvent)).toHaveLength(0);
 	});
@@ -506,18 +509,18 @@ describe('loan mutation transactions', () => {
 		await seedLoan();
 		await testDb.insert(schema.loanFixationPeriod).values([
 			{
-				id: 'current',
-				loanId: 'loan-a',
-				startDate: '2024-01-01',
-				endDate: '2027-01-01',
+				id: rowId('current'),
+				loanId: rowId('loan-a'),
+				startsOn: '2024-01-01',
+				endsOn: '2027-01-01',
 				annualRatePct: '4.5',
 				paymentMinor: 20_000n
 			},
 			{
-				id: 'future',
-				loanId: 'loan-a',
-				startDate: '2027-01-01',
-				endDate: null,
+				id: rowId('future'),
+				loanId: rowId('loan-a'),
+				startsOn: '2027-01-01',
+				endsOn: null,
 				annualRatePct: '5',
 				paymentMinor: 22_000n
 			}
@@ -535,9 +538,9 @@ describe('loan mutation transactions', () => {
 		await expect(
 			replaceFixation(
 				{
-					loanId: 'loan-a',
-					startDate: '2026-12-01',
-					endDate: null,
+					loanId: rowId('loan-a'),
+					startsOn: '2026-12-01',
+					endsOn: null,
 					rate: '3.75',
 					payment: '18 000'
 				},
@@ -546,15 +549,15 @@ describe('loan mutation transactions', () => {
 		).rejects.toThrow();
 
 		expect(await testDb.select().from(schema.loanFixationPeriod)).toMatchObject([
-			{ id: 'current', startDate: '2024-01-01', endDate: '2027-01-01' },
-			{ id: 'future', startDate: '2027-01-01', endDate: null }
+			{ id: rowId('current'), startsOn: '2024-01-01', endsOn: '2027-01-01' },
+			{ id: rowId('future'), startsOn: '2027-01-01', endsOn: null }
 		]);
 		expect(await testDb.select().from(schema.loanEvent)).toHaveLength(0);
 	});
 
 	it('rolls loan and secured links back when the initial fixation fails', async () => {
 		await harness.sql.unsafe(
-			`insert into property (id, name, kind) values ('home', 'Home', 'lived')`
+			`insert into property (id, name, kind) values ('${rowId('home')}', 'Home', 'lived')`
 		);
 		await harness.sql.unsafe(`
 			create function fail_initial_fixation() returns trigger language plpgsql as $$
@@ -581,10 +584,10 @@ describe('loan mutation transactions', () => {
 					accrualStyle: 'payment',
 					paymentDay: 15,
 					fixedUntil: '2029-08-15',
-					startDate: '2026-08-15',
-					endDate: null,
+					startsOn: '2026-08-15',
+					endsOn: null,
 					interestDeductible: true,
-					secured: [{ propertyId: 'home', sharePct: '100' }],
+					secured: [{ propertyId: rowId('home'), sharePct: '100' }],
 					today: '2026-08-15'
 				},
 				testDb

@@ -1,20 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { rowId } from '../row-id';
 import { eq } from 'drizzle-orm';
-import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
-import { exportConfig, importConfig } from '$lib/server/config-file';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { exportConfig, importConfig } from '$lib/server/system/config-file';
 import { lockTransferPairing } from '$lib/server/import/ingest';
-import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rule-mutations';
-import { loadRules } from '$lib/server/rules';
+import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
 import { getRevisionedSetting, setRevisionedSetting } from '$lib/server/settings';
-
-const migrationJournal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as {
-	entries: Array<{ idx: number; tag: string }>;
-};
-const moneyCurrencyTag = migrationJournal.entries.find((entry) => entry.idx === 31)?.tag;
-if (!moneyCurrencyTag) throw new Error('Migration journal is missing index 31');
 
 let harness: Harness;
 let testDb: TestDb;
@@ -25,7 +17,7 @@ beforeAll(async () => {
 	// The real schema, not a hand-written subset of it. The subset that used
 	// to live here had to be kept in step with schema.ts by hand, and a test
 	// passing against a stale copy of a table says nothing about the real one.
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
 beforeEach(async () => {
@@ -192,7 +184,7 @@ describe('revisioned settings', () => {
 describe('rule definition mutation', () => {
 	it('takes the pairing lock before a rule row, matching filing lock order', async () => {
 		await testDb.insert(schema.rule).values({
-			id: 'rule-order',
+			id: rowId('rule-order'),
 			name: 'Original',
 			conditions: [{ field: 'description', op: 'contains', value: 'rent' }]
 		});
@@ -205,7 +197,10 @@ describe('rule definition mutation', () => {
 			await lockTransferPairing(tx);
 			announceFirstLock();
 			await firstMayFinish;
-			await tx.update(schema.rule).set({ name: 'Filed' }).where(eq(schema.rule.id, 'rule-order'));
+			await tx
+				.update(schema.rule)
+				.set({ name: 'Filed' })
+				.where(eq(schema.rule.id, rowId('rule-order')));
 		});
 		await firstHasLock;
 
@@ -216,7 +211,7 @@ describe('rule definition mutation', () => {
 				await tx
 					.update(schema.rule)
 					.set({ name: 'Rule edit' })
-					.where(eq(schema.rule.id, 'rule-order'));
+					.where(eq(schema.rule.id, rowId('rule-order')));
 				return true;
 			},
 			async () => undefined,
@@ -235,22 +230,24 @@ describe('rule definition mutation', () => {
 
 	it('rolls the rule and tag replacement back when replay fails', async () => {
 		await testDb.insert(schema.rule).values({
-			id: 'rule-a',
+			id: rowId('rule-a'),
 			name: 'Original',
 			provenance: 'manual',
 			conditions: [{ field: 'counterparty', op: 'contains', value: 'old' }]
 		});
 		await testDb.insert(schema.tag).values({
-			id: 'tag-old',
+			id: rowId('tag-old'),
 			name: 'Old',
 			normalisedName: 'old'
 		});
-		await testDb.insert(schema.ruleTag).values({ ruleId: 'rule-a', tagId: 'tag-old' });
+		await testDb
+			.insert(schema.ruleTag)
+			.values({ ruleId: rowId('rule-a'), tagId: rowId('tag-old') });
 
 		await expect(
 			saveRuleDefinition(
 				{
-					id: 'rule-a',
+					id: rowId('rule-a'),
 					name: 'Replacement',
 					conditions: [{ field: 'counterparty', op: 'contains', value: 'new' }],
 					categoryId: null,
@@ -265,18 +262,20 @@ describe('rule definition mutation', () => {
 		).rejects.toThrow('injected replay failure');
 
 		expect(await testDb.select().from(schema.rule)).toMatchObject([
-			{ id: 'rule-a', name: 'Original' }
+			{ id: rowId('rule-a'), name: 'Original' }
 		]);
-		expect(await testDb.select().from(schema.tag)).toMatchObject([{ id: 'tag-old', name: 'Old' }]);
+		expect(await testDb.select().from(schema.tag)).toMatchObject([
+			{ id: rowId('tag-old'), name: 'Old' }
+		]);
 		expect(await testDb.select().from(schema.ruleTag)).toEqual([
-			{ ruleId: 'rule-a', tagId: 'tag-old' }
+			{ ruleId: rowId('rule-a'), tagId: rowId('tag-old') }
 		]);
 		expect(await testDb.select().from(schema.settings)).toEqual([]);
 	});
 
 	it('rolls a non-save rule mutation back with replay writes', async () => {
 		await testDb.insert(schema.rule).values({
-			id: 'rule-toggle',
+			id: rowId('rule-toggle'),
 			name: 'Toggle me',
 			conditions: [{ field: 'description', op: 'contains', value: 'rent' }]
 		});
@@ -287,7 +286,7 @@ describe('rule definition mutation', () => {
 					await tx
 						.update(schema.rule)
 						.set({ enabled: false })
-						.where(eq(schema.rule.id, 'rule-toggle'));
+						.where(eq(schema.rule.id, rowId('rule-toggle')));
 					return true;
 				},
 				async (tx) => {
@@ -303,44 +302,12 @@ describe('rule definition mutation', () => {
 	});
 });
 
-describe('legacy monetary currency migration', () => {
-	it('is present in the Drizzle journal and split into executable statements', () => {
-		const parsed = readMigrationFiles({ migrationsFolder: 'drizzle' });
-		const migration = parsed[migrationJournal.entries.findIndex((entry) => entry.idx === 31)];
-
-		expect(moneyCurrencyTag).toBe('0031_bind_legacy_money_currencies');
-		expect(migration.sql).toHaveLength(2);
-	});
-
-	it('keeps rule bounds and the meter price in their upgrade-time base currency', async () => {
-		await testDb.insert(schema.settings).values([
-			{ key: 'baseCurrency', value: 'CZK' },
-			{ key: 'home', value: { kind: 'homeassistant', pricePerKwh: '650' } }
-		]);
-		await testDb.insert(schema.rule).values({
-			id: 'legacy-amount',
-			name: 'Legacy amount',
-			conditions: [{ field: 'amount', op: 'between', min: '10000', max: null }]
-		});
-
-		for (const statement of readMigrationFiles({ migrationsFolder: 'drizzle' })[
-			migrationJournal.entries.findIndex((entry) => entry.idx === 31)
-		].sql) {
-			await harness.sql.unsafe(statement);
-		}
-		await testDb
-			.update(schema.settings)
-			.set({ value: 'EUR' })
-			.where(eq(schema.settings.key, 'baseCurrency'));
-
-		expect((await loadRules(testDb))[0].conditions).toEqual([
-			{ field: 'amount', op: 'between', min: '10000', max: null, currency: 'CZK' }
-		]);
-		const home = (await testDb.select().from(schema.settings)).find((row) => row.key === 'home');
-		expect(home?.value).toEqual({
-			kind: 'homeassistant',
-			pricePerKwh: '650',
-			pricePerKwhCurrency: 'CZK'
-		});
-	});
-});
+/*
+ * RETIRED with the migration chain: two cases covering 0031, which stamped the
+ * base currency of the day onto rule bounds and the meter price so a later
+ * change of base currency could not silently reinterpret them.
+ *
+ * The migration ran once, against data written before those fields carried a
+ * currency. Both fields are written with an explicit currency now, and the
+ * squash to a single baseline leaves nothing to replay.
+ */

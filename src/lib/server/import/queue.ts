@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Statements are read in the background, one at a time.
  *
@@ -18,10 +19,10 @@
  * that dies mid-read — it becomes claimable again instead of being stranded
  * forever in `running`.
  */
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import { and, asc, count, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
-import { importJob } from '$lib/server/db/schema';
+import { job } from '$lib/server/db/schema';
 import { ingestFile, type IngestResult } from './ingest';
 
 type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -35,7 +36,7 @@ type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
  */
 export const LEASE_MS = 10 * 60 * 1000;
 
-export interface QueuedJob {
+interface QueuedJob {
 	id: string;
 	filename: string;
 	state: string;
@@ -52,13 +53,14 @@ export async function enqueue(
 	appliesToAccountId?: string,
 	handle: Handle = db
 ): Promise<string> {
-	const id = randomUUID();
-	await handle.insert(importJob).values({
+	const id = uuidv7();
+	await handle.insert(job).values({
 		id,
+		kind: 'import',
 		filename,
-		payload: Buffer.from(bytes).toString('base64'),
+		blob: Buffer.from(bytes).toString('base64'),
 		byteSize: bytes.length,
-		appliesToAccountId: appliesToAccountId ?? null
+		subjectId: appliesToAccountId ?? null
 	});
 	return id;
 }
@@ -69,7 +71,7 @@ export async function enqueue(
  * The advisory lock makes the read-then-claim atomic across processes, which an
  * in-memory guard would not be. It is held only for the claim itself.
  */
-async function claimNext(handle: Handle = db): Promise<typeof importJob.$inferSelect | null> {
+async function claimNext(handle: Handle = db): Promise<typeof job.$inferSelect | null> {
 	const expiry = new Date(Date.now() - LEASE_MS);
 	return await (handle as Db).transaction(async (tx) => {
 		await tx.execute(
@@ -77,21 +79,26 @@ async function claimNext(handle: Handle = db): Promise<typeof importJob.$inferSe
 		);
 		const [next] = await tx
 			.select()
-			.from(importJob)
+			.from(job)
 			.where(
-				or(
-					eq(importJob.state, 'queued'),
-					// A worker that died mid-read left this behind.
-					and(eq(importJob.state, 'running'), lt(importJob.claimedAt, expiry))
+				and(
+					// The table is shared with calendar sync, whose passes are claimed
+					// by the calendar engine and must never be handed to this worker.
+					eq(job.kind, 'import'),
+					or(
+						eq(job.state, 'queued'),
+						// A worker that died mid-read left this behind.
+						and(eq(job.state, 'running'), lt(job.claimedAt, expiry))
+					)
 				)
 			)
-			.orderBy(asc(importJob.queuedAt))
+			.orderBy(asc(job.queuedAt))
 			.limit(1);
 		if (!next) return null;
 		await tx
-			.update(importJob)
+			.update(job)
 			.set({ state: 'running', claimedAt: new Date() })
-			.where(eq(importJob.id, next.id));
+			.where(eq(job.id, next.id));
 		return next;
 	});
 }
@@ -129,17 +136,17 @@ async function drainQueue(handle: Handle = db): Promise<number> {
 	await clearFinished(KEEP_FINISHED_MS, handle);
 	let done = 0;
 	for (;;) {
-		const job = await claimNext(handle);
-		if (!job) return done;
+		const claimed = await claimNext(handle);
+		if (!claimed) return done;
 
 		let result: IngestResult | undefined;
 		let failure: string | undefined;
 		try {
-			const bytes = new Uint8Array(Buffer.from(job.payload ?? '', 'base64'));
+			const bytes = new Uint8Array(Buffer.from(claimed.blob ?? '', 'base64'));
 			result = await ingestFile(
-				job.filename,
+				claimed.filename ?? 'upload',
 				bytes,
-				job.appliesToAccountId ?? undefined,
+				claimed.subjectId ?? undefined,
 				handle as Db,
 				// This is the whole reason the queue exists. Reading a page as an
 				// image takes seconds per page, which is unacceptable on a request
@@ -155,7 +162,7 @@ async function drainQueue(handle: Handle = db): Promise<number> {
 		}
 
 		await handle
-			.update(importJob)
+			.update(job)
 			.set({
 				state: failure ? 'failed' : 'done',
 				finishedAt: new Date(),
@@ -165,9 +172,9 @@ async function drainQueue(handle: Handle = db): Promise<number> {
 				// and asking someone to upload the same statement again because we
 				// could not read it the first time is a poor apology. Cleared once
 				// the job is swept away.
-				payload: (result?.rowsAdded ?? 0) > 0 ? null : job.payload
+				blob: (result?.rowsAdded ?? 0) > 0 ? null : claimed.blob
 			})
-			.where(eq(importJob.id, job.id));
+			.where(eq(job.id, claimed.id));
 		done++;
 	}
 }
@@ -177,8 +184,14 @@ export async function queueStatus(
 	handle: Handle = db
 ): Promise<{ waiting: number; running: number; recent: QueuedJob[] }> {
 	const [[waiting], [running], recent] = await Promise.all([
-		handle.select({ n: count() }).from(importJob).where(eq(importJob.state, 'queued')),
-		handle.select({ n: count() }).from(importJob).where(eq(importJob.state, 'running')),
+		handle
+			.select({ n: count() })
+			.from(job)
+			.where(and(eq(job.kind, 'import'), eq(job.state, 'queued'))),
+		handle
+			.select({ n: count() })
+			.from(job)
+			.where(and(eq(job.kind, 'import'), eq(job.state, 'running'))),
 		// Newest first, so a fresh upload is never pushed off the end by settled
 		// work not yet swept up; reversed below into the order the files arrived.
 		//
@@ -188,29 +201,30 @@ export async function queueStatus(
 		// them away on every poll of a page that polls every 1.5 seconds.
 		handle
 			.select({
-				id: importJob.id,
-				filename: importJob.filename,
-				state: importJob.state,
-				byteSize: importJob.byteSize,
-				queuedAt: importJob.queuedAt,
-				result: importJob.result,
-				error: importJob.error
+				id: job.id,
+				filename: job.filename,
+				state: job.state,
+				byteSize: job.byteSize,
+				queuedAt: job.queuedAt,
+				result: job.result,
+				error: job.error
 			})
-			.from(importJob)
-			.orderBy(desc(importJob.queuedAt))
+			.from(job)
+			.where(eq(job.kind, 'import'))
+			.orderBy(desc(job.queuedAt))
 			.limit(20)
 	]);
 	return {
 		waiting: waiting?.n ?? 0,
 		running: running?.n ?? 0,
-		recent: recent.reverse().map((job) => ({
-			id: job.id,
-			filename: job.filename,
-			state: job.state,
-			byteSize: job.byteSize,
-			queuedAt: job.queuedAt,
-			result: (job.result as IngestResult | null) ?? null,
-			error: job.error
+		recent: recent.reverse().map((row) => ({
+			id: row.id,
+			filename: row.filename ?? 'upload',
+			state: row.state,
+			byteSize: row.byteSize,
+			queuedAt: row.queuedAt,
+			result: (row.result as IngestResult | null) ?? null,
+			error: row.error
 		}))
 	};
 }
@@ -227,12 +241,15 @@ export async function jobBytes(
 	id: string,
 	handle: Handle = db
 ): Promise<{ filename: string; bytes: Uint8Array; accountId?: string } | null> {
-	const [job] = await handle.select().from(importJob).where(eq(importJob.id, id));
-	if (!job?.payload) return null;
+	const [row] = await handle
+		.select()
+		.from(job)
+		.where(and(eq(job.id, id), eq(job.kind, 'import')));
+	if (!row?.blob) return null;
 	return {
-		filename: job.filename,
-		bytes: new Uint8Array(Buffer.from(job.payload, 'base64')),
-		accountId: job.appliesToAccountId ?? undefined
+		filename: row.filename ?? 'upload',
+		bytes: new Uint8Array(Buffer.from(row.blob, 'base64')),
+		accountId: row.subjectId ?? undefined
 	};
 }
 
@@ -244,20 +261,20 @@ export async function jobBytes(
  * upload forever, and the page's list of recent files would fill with months of
  * settled work.
  */
-export const KEEP_FINISHED_MS = 60 * 60 * 1000;
+const KEEP_FINISHED_MS = 60 * 60 * 1000;
 
-export async function clearFinished(
-	olderThanMs = KEEP_FINISHED_MS,
-	handle: Handle = db
-): Promise<number> {
+async function clearFinished(olderThanMs = KEEP_FINISHED_MS, handle: Handle = db): Promise<number> {
 	const removed = await handle
-		.delete(importJob)
+		.delete(job)
 		.where(
 			and(
-				or(eq(importJob.state, 'done'), eq(importJob.state, 'failed')),
-				lt(importJob.finishedAt, new Date(Date.now() - olderThanMs))
+				// Only this module's own kind: a finished calendar pass is swept by the
+				// calendar engine, on its own schedule.
+				eq(job.kind, 'import'),
+				or(eq(job.state, 'done'), eq(job.state, 'failed')),
+				lt(job.finishedAt, new Date(Date.now() - olderThanMs))
 			)
 		)
-		.returning({ id: importJob.id });
+		.returning({ id: job.id });
 	return removed.length;
 }

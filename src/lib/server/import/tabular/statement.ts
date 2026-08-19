@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * From a chosen grid to a statement — or to a precise question.
  *
@@ -26,14 +27,14 @@ import type { RawCell } from './grid';
 import { droppedMovements, transactionRows, type GridChoice, type Region } from './regions';
 import { normalise, roleOfHeader, type ColumnRole } from './vocabulary';
 
-export interface OpenQuestion {
+interface OpenQuestion {
 	dimension:
 		'dateOrder' | 'decimalMark' | 'dateColumn' | 'amountColumn' | 'currency' | 'excludedRow';
 	reason: string;
 	candidates?: string[];
 }
 
-export interface TabularReading {
+interface TabularReading {
 	statement?: ParsedStatement;
 	questions: OpenQuestion[];
 	/** How each column was read, for the mapping wizard to show. */
@@ -514,7 +515,7 @@ function repairNumericRoles(roles: (ColumnRole | undefined)[], body: RawCell[][]
 
 const indexOfRole = (roles: (ColumnRole | undefined)[], role: ColumnRole) => roles.indexOf(role);
 
-export interface ReadOptions {
+interface ReadOptions {
 	/**
 	 * Roles a confirmed profile supplies, resolved by header NAME upstream. When
 	 * present these replace inference entirely — that is the whole value of

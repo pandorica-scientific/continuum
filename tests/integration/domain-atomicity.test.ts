@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { setTimeout as delay } from 'node:timers/promises';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -24,7 +25,7 @@ import { deleteSplits, saveSplits } from '$lib/server/splits';
 import { setSetting } from '$lib/server/settings';
 import { updateLoanTags, updatePropertyTags, updateTransactionTags } from '$lib/server/tags';
 import { saveStatement } from '$lib/server/tax';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -53,7 +54,7 @@ const REPORT: BrokerReport = {
 	],
 	operations: [
 		{
-			id: 'new-operation',
+			id: rowId('new-operation'),
 			type: 'Deposit',
 			ticker: null,
 			happenedAt: '2026-08-15T10:00:00.000Z',
@@ -89,7 +90,7 @@ function resetDelayedHomeProvider(): void {
 
 function delayedHomeProvider(): HomeProvider {
 	return {
-		id: 'domain-delayed',
+		id: rowId('domain-delayed'),
 		label: 'Delayed home fixture',
 		async probe() {
 			return { ok: true, detail: 'connected' };
@@ -107,17 +108,17 @@ function delayedHomeProvider(): HomeProvider {
 }
 
 beforeAll(async () => {
-	harness = await startPostgres('domain-atomicity');
+	harness = await startPostgres(rowId('domain-atomicity'));
 	testDb = harness.db;
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 
 	registerBrokerAdapter({
-		id: 'domain-atomicity',
+		id: rowId('domain-atomicity'),
 		label: 'Domain atomicity fixture',
 		sniff: (fileName) => fileName.endsWith('.atomic'),
 		parse: () => activeReport
 	});
-	registerHomeProvider('domain-delayed', 'Delayed home fixture', delayedHomeProvider);
+	registerHomeProvider(rowId('domain-delayed'), 'Delayed home fixture', delayedHomeProvider);
 }, 30_000);
 
 beforeEach(async () => {
@@ -128,39 +129,42 @@ beforeEach(async () => {
 		drop function if exists task_domain_fail_tax_line();
 		drop trigger if exists task_domain_fail_holding on holding;
 		drop function if exists task_domain_fail_holding();
-		drop trigger if exists task_domain_fail_document_tag on document_tag;
+		drop trigger if exists task_domain_fail_document_tag on tag_link;
 		drop function if exists task_domain_fail_document_tag();
 		drop trigger if exists task_domain_fail_property_bill on property_bill;
 		drop function if exists task_domain_fail_property_bill();
-		drop trigger if exists task_domain_slow_tag_replace on transaction_tag;
+		drop trigger if exists task_domain_slow_tag_replace on tag_link;
 		drop function if exists task_domain_slow_tag_replace();
 		drop trigger if exists task_domain_slow_meter on property_bill;
 		drop function if exists task_domain_slow_meter();
-		truncate table transaction_split_tag, transaction_tag, transaction_split,
-			"transaction", loan_tag, property_tag, document_tag, document_subject, document_property, document_account,
-			document_person, property_bill, document, subject, property, tag, account,
+		-- entity is truncated with the rest, and must be: TRUNCATE does not fire
+		-- row triggers, so the retire trigger never runs and every registration
+		-- would otherwise survive into the next test. These suites reuse ids, so a
+		-- stale entity of one kind would then refuse the same id as another.
+		truncate table tag_link, document_link, contact_link, transaction_split,
+			"transaction", property_bill, document, subject, property, tag, account,
 			loan, tax_statement_line, tax_statement, broker_import_state, portfolio_snapshot, holding, broker_position,
-			broker_operation, currency_rate, settings, person restart identity cascade;
+			broker_operation, currency_rate, settings, person, entity restart identity cascade;
 	`);
 });
 
 describe('home meter sync freshness', () => {
 	async function seedMeterHomes(): Promise<void> {
 		await testDb.insert(schema.property).values([
-			{ id: 'old-home', name: 'Old home', kind: 'lived', currency: 'CZK' },
-			{ id: 'new-home', name: 'New home', kind: 'lived', currency: 'CZK' }
+			{ id: rowId('old-home'), name: 'Old home', kind: 'lived', currency: 'CZK' },
+			{ id: rowId('new-home'), name: 'New home', kind: 'lived', currency: 'CZK' }
 		]);
 		await testDb.insert(schema.propertyBill).values([
 			{
-				id: 'old-meter-bill',
-				propertyId: 'old-home',
+				id: rowId('old-meter-bill'),
+				propertyId: rowId('old-home'),
 				label: 'Old meter',
 				amountMinor: 111n,
 				source: 'meter'
 			},
 			{
-				id: 'new-meter-bill',
-				propertyId: 'new-home',
+				id: rowId('new-meter-bill'),
+				propertyId: rowId('new-home'),
 				label: 'New meter',
 				amountMinor: 222n,
 				source: 'meter'
@@ -169,8 +173,8 @@ describe('home meter sync freshness', () => {
 		await setSetting(
 			'home',
 			{
-				kind: 'domain-delayed',
-				meterPropertyId: 'old-home',
+				kind: rowId('domain-delayed'),
+				meterPropertyId: rowId('old-home'),
 				pricePerKwh: '100',
 				pricePerKwhCurrency: 'CZK',
 				endpoint: 'old-provider'
@@ -188,7 +192,7 @@ describe('home meter sync freshness', () => {
 			'home',
 			{
 				kind: 'demo',
-				meterPropertyId: 'new-home',
+				meterPropertyId: rowId('new-home'),
 				pricePerKwh: '900',
 				pricePerKwhCurrency: 'CZK'
 			},
@@ -201,10 +205,12 @@ describe('home meter sync freshness', () => {
 			await testDb
 				.select({ id: schema.propertyBill.id, amountMinor: schema.propertyBill.amountMinor })
 				.from(schema.propertyBill)
-				.orderBy(schema.propertyBill.id)
+				// Ordered by amount, not by id: ids are uuids since 0053 and sort by
+				// nothing the fixture names would predict.
+				.orderBy(schema.propertyBill.amountMinor)
 		).toEqual([
-			{ id: 'new-meter-bill', amountMinor: 222n },
-			{ id: 'old-meter-bill', amountMinor: 111n }
+			{ id: rowId('old-meter-bill'), amountMinor: 111n },
+			{ id: rowId('new-meter-bill'), amountMinor: 222n }
 		]);
 	});
 
@@ -218,7 +224,9 @@ describe('home meter sync freshness', () => {
 
 		await expect(syncing).resolves.toBeNull();
 		expect(
-			(await testDb.select().from(schema.propertyBill)).find((bill) => bill.id === 'old-meter-bill')
+			(await testDb.select().from(schema.propertyBill)).find(
+				(bill) => bill.id === rowId('old-meter-bill')
+			)
 		).toMatchObject({ amountMinor: 111n });
 	});
 });
@@ -230,31 +238,31 @@ afterAll(async () => {
 describe('domain replacement writes', () => {
 	async function seedSplit(): Promise<void> {
 		await testDb.insert(schema.account).values({
-			id: 'account-split',
+			id: rowId('account-split'),
 			name: 'Split account',
 			bank: 'other',
 			currency: 'CZK'
 		});
 		await testDb.insert(schema.transaction).values({
-			id: 'transaction-split',
-			accountId: 'account-split',
-			bookedAt: '2026-08-15',
-			amount: -100n,
+			id: rowId('transaction-split'),
+			accountId: rowId('account-split'),
+			bookedOn: '2026-08-15',
+			amountMinor: -100n,
 			currency: 'CZK',
 			dedupFingerprint: 'split-fixture',
 			reviewState: 'confirmed'
 		});
 		await testDb.insert(schema.transactionSplit).values([
 			{
-				id: 'split-a',
-				transactionId: 'transaction-split',
+				id: rowId('split-a'),
+				transactionId: rowId('transaction-split'),
 				amountMinor: -40n,
 				categoryId: null,
 				sort: 0
 			},
 			{
-				id: 'split-b',
-				transactionId: 'transaction-split',
+				id: rowId('split-b'),
+				transactionId: rowId('transaction-split'),
 				amountMinor: -60n,
 				categoryId: null,
 				sort: 1
@@ -266,10 +274,10 @@ describe('domain replacement writes', () => {
 		await seedSplit();
 
 		const result = await saveSplits(
-			'transaction-split',
+			rowId('transaction-split'),
 			[
-				{ id: 'split-a', amountMinor: 30n, categoryId: null },
-				{ id: 'split-a', amountMinor: 70n, categoryId: null }
+				{ id: rowId('split-a'), amountMinor: 30n, categoryId: null },
+				{ id: rowId('split-a'), amountMinor: 70n, categoryId: null }
 			],
 			undefined,
 			testDb
@@ -285,8 +293,8 @@ describe('domain replacement writes', () => {
 				.from(schema.transactionSplit)
 				.orderBy(schema.transactionSplit.sort)
 		).toEqual([
-			{ id: 'split-a', amountMinor: -40n },
-			{ id: 'split-b', amountMinor: -60n }
+			{ id: rowId('split-a'), amountMinor: -40n },
+			{ id: rowId('split-b'), amountMinor: -60n }
 		]);
 	});
 
@@ -299,13 +307,13 @@ describe('domain replacement writes', () => {
 		const release = new Promise<void>((resolveRelease) => (releaseParent = resolveRelease));
 		const locked = new Promise<void>((resolveLocked) => (parentLocked = resolveLocked));
 		const holding = blocker.begin(async (connection) => {
-			await connection`select id from "transaction" where id = 'transaction-split' for update`;
+			await connection`select id from "transaction" where id = ${rowId('transaction-split')} for update`;
 			parentLocked();
 			await release;
 		});
 
 		await locked;
-		const deleting = deleteSplits('transaction-split', testDb).then(
+		const deleting = deleteSplits(rowId('transaction-split'), testDb).then(
 			(result) => ({ result, error: null }),
 			(error: unknown) => ({ result: null, error })
 		);
@@ -328,7 +336,7 @@ describe('domain replacement writes', () => {
 			await expect(
 				probe.begin(
 					(connection) =>
-						connection`select id from transaction_split where transaction_id = 'transaction-split' for update nowait`
+						connection`select id from transaction_split where transaction_id = ${rowId('transaction-split')} for update nowait`
 				)
 			).resolves.toHaveLength(2);
 		} finally {
@@ -353,7 +361,7 @@ describe('domain replacement writes', () => {
 				end if;
 				return new;
 			end $$;
-			create trigger task_domain_fail_document_tag before insert on document_tag
+			create trigger task_domain_fail_document_tag before insert on tag_link
 			for each row execute function task_domain_fail_document_tag();
 		`);
 
@@ -361,7 +369,7 @@ describe('domain replacement writes', () => {
 		try {
 			await createDocument(
 				{
-					id: 'document-fail',
+					id: rowId('document-fail'),
 					name: 'Rollback document',
 					shelf: 'family',
 					storedName: 'stored.pdf',
@@ -388,13 +396,13 @@ describe('domain replacement writes', () => {
 		expect(await testDb.select().from(schema.document)).toHaveLength(0);
 		expect(await testDb.select().from(schema.subject)).toHaveLength(0);
 		expect(await testDb.select().from(schema.tag)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentSubject)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentTag)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentLink)).toHaveLength(0);
+		expect(await testDb.select().from(schema.tagLink)).toHaveLength(0);
 	});
 
 	it('rolls an attached bill document and links back when the property bill insert fails', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-a',
+			id: rowId('property-a'),
 			name: 'Flat A',
 			kind: 'lived',
 			currency: 'CZK'
@@ -413,12 +421,12 @@ describe('domain replacement writes', () => {
 		try {
 			await createPropertyBill(
 				{
-					id: 'bill-fail',
-					propertyId: 'property-a',
+					id: rowId('bill-fail'),
+					propertyId: rowId('property-a'),
 					label: 'Explode',
 					amountMinor: 1200n,
 					document: {
-						id: 'bill-document-fail',
+						id: rowId('bill-document-fail'),
 						name: 'Explode · Flat A',
 						storedName: 'bill.pdf',
 						ext: 'PDF',
@@ -436,30 +444,30 @@ describe('domain replacement writes', () => {
 
 		expect(await testDb.select().from(schema.propertyBill)).toHaveLength(0);
 		expect(await testDb.select().from(schema.document)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentProperty)).toHaveLength(0);
-		expect(await testDb.select().from(schema.documentTag)).toHaveLength(0);
+		expect(await testDb.select().from(schema.documentLink)).toHaveLength(0);
+		expect(await testDb.select().from(schema.tagLink)).toHaveLength(0);
 		expect(await testDb.select().from(schema.tag)).toHaveLength(0);
 	});
 
 	it('serializes overlapping tenancy inserts on their property', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-tenancy',
+			id: rowId('property-tenancy'),
 			name: 'Rental flat',
 			kind: 'rented',
 			currency: 'CZK'
 		});
 		const base = {
-			propertyId: 'property-tenancy',
+			propertyId: rowId('property-tenancy'),
 			rentMinor: 20_000n,
 			depositMinor: 40_000n,
-			startDate: '2026-01-01',
-			endDate: '2026-12-31',
-			renewalNoticeDate: null
+			startsOn: '2026-01-01',
+			endsOn: '2026-12-31',
+			renewalNoticeOn: null
 		};
 
 		const outcomes = await Promise.all([
-			createTenancy({ ...base, id: 'tenancy-a', tenantName: 'Tenant A' }, testDb),
-			createTenancy({ ...base, id: 'tenancy-b', tenantName: 'Tenant B' }, testDb)
+			createTenancy({ ...base, id: rowId('tenancy-a'), tenantName: 'Tenant A' }, testDb),
+			createTenancy({ ...base, id: rowId('tenancy-b'), tenantName: 'Tenant B' }, testDb)
 		]);
 
 		expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
@@ -469,7 +477,7 @@ describe('domain replacement writes', () => {
 
 	it('rejects a tenancy whose end precedes its start', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-invalid-tenancy',
+			id: rowId('property-invalid-tenancy'),
 			name: 'Rental flat',
 			kind: 'rented',
 			currency: 'CZK'
@@ -478,14 +486,14 @@ describe('domain replacement writes', () => {
 		expect(
 			await createTenancy(
 				{
-					id: 'tenancy-invalid',
-					propertyId: 'property-invalid-tenancy',
+					id: rowId('tenancy-invalid'),
+					propertyId: rowId('property-invalid-tenancy'),
 					tenantName: 'Tenant',
 					rentMinor: 20_000n,
 					depositMinor: 0n,
-					startDate: '2026-12-31',
-					endDate: '2026-01-01',
-					renewalNoticeDate: null
+					startsOn: '2026-12-31',
+					endsOn: '2026-01-01',
+					renewalNoticeOn: null
 				},
 				testDb
 			)
@@ -495,7 +503,7 @@ describe('domain replacement writes', () => {
 
 	it('merges concurrent property image and drawing updates after locking the row', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-images',
+			id: rowId('property-images'),
 			name: 'Photo flat',
 			kind: 'lived',
 			currency: 'CZK',
@@ -509,14 +517,14 @@ describe('domain replacement writes', () => {
 		const outcomes = await Promise.all([
 			setPropertyImage(
 				{
-					propertyId: 'property-images',
+					propertyId: rowId('property-images'),
 					slot: 'photo1',
 					storedName: 'two.jpg',
 					expectedImage: null
 				},
 				testDb
 			),
-			setPropertyDrawing({ propertyId: 'property-images', drawing }, testDb)
+			setPropertyDrawing({ propertyId: rowId('property-images'), drawing }, testDb)
 		]);
 
 		expect(outcomes).toEqual([{ ok: true }, { ok: true }]);
@@ -529,7 +537,7 @@ describe('domain replacement writes', () => {
 
 	it('preserves both photos when concurrent requests append to the same stale slot', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-photo-appends',
+			id: rowId('property-photo-appends'),
 			name: 'Photo flat',
 			kind: 'lived',
 			currency: 'CZK',
@@ -540,7 +548,7 @@ describe('domain replacement writes', () => {
 			['two.jpg', 'three.jpg'].map((storedName) =>
 				setPropertyImage(
 					{
-						propertyId: 'property-photo-appends',
+						propertyId: rowId('property-photo-appends'),
 						slot: 'photo1',
 						storedName,
 						expectedImage: null
@@ -558,7 +566,7 @@ describe('domain replacement writes', () => {
 
 	it('rejects a property image slot beyond the next append position', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-image-slot',
+			id: rowId('property-image-slot'),
 			name: 'Photo flat',
 			kind: 'lived',
 			currency: 'CZK',
@@ -568,7 +576,7 @@ describe('domain replacement writes', () => {
 		expect(
 			await setPropertyImage(
 				{
-					propertyId: 'property-image-slot',
+					propertyId: rowId('property-image-slot'),
 					slot: 'photo3',
 					storedName: 'gap.jpg',
 					expectedImage: null
@@ -581,14 +589,14 @@ describe('domain replacement writes', () => {
 
 	it('serializes meter-source switches and enforces one meter bill in the database', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-meter',
+			id: rowId('property-meter'),
 			name: 'Meter flat',
 			kind: 'lived',
 			currency: 'CZK'
 		});
 		await testDb.insert(schema.propertyBill).values([
-			{ id: 'bill-a', propertyId: 'property-meter', label: 'Power A' },
-			{ id: 'bill-b', propertyId: 'property-meter', label: 'Power B' }
+			{ id: rowId('bill-a'), propertyId: rowId('property-meter'), label: 'Power A' },
+			{ id: rowId('bill-b'), propertyId: rowId('property-meter'), label: 'Power B' }
 		]);
 		await harness.sql.unsafe(`
 			create function task_domain_slow_meter() returns trigger language plpgsql as $$
@@ -602,8 +610,8 @@ describe('domain replacement writes', () => {
 
 		expect(
 			await Promise.all([
-				setPropertyBillSource('bill-a', true, testDb),
-				setPropertyBillSource('bill-b', true, testDb)
+				setPropertyBillSource(rowId('bill-a'), true, testDb),
+				setPropertyBillSource(rowId('bill-b'), true, testDb)
 			])
 		).toEqual([{ ok: true }, { ok: true }]);
 		expect(
@@ -618,22 +626,22 @@ describe('domain replacement writes', () => {
 
 	it('reselects the meter bill after a concurrent source switch', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-meter-sync',
+			id: rowId('property-meter-sync'),
 			name: 'Meter sync flat',
 			kind: 'lived',
 			currency: 'CZK'
 		});
 		await testDb.insert(schema.propertyBill).values([
 			{
-				id: 'bill-old-meter',
-				propertyId: 'property-meter-sync',
+				id: rowId('bill-old-meter'),
+				propertyId: rowId('property-meter-sync'),
 				label: 'Old meter',
 				amountMinor: 100n,
 				source: 'meter'
 			},
 			{
-				id: 'bill-new-meter',
-				propertyId: 'property-meter-sync',
+				id: rowId('bill-new-meter'),
+				propertyId: rowId('property-meter-sync'),
 				label: 'New meter',
 				amountMinor: 200n,
 				source: 'manual'
@@ -649,84 +657,34 @@ describe('domain replacement writes', () => {
 			for each row execute function task_domain_slow_meter();
 		`);
 
-		const switching = setPropertyBillSource('bill-new-meter', true, testDb);
+		const switching = setPropertyBillSource(rowId('bill-new-meter'), true, testDb);
 		await delay(50);
-		const syncing = updateMeterBillAmount('property-meter-sync', 999n, testDb);
+		const syncing = updateMeterBillAmount(rowId('property-meter-sync'), 999n, testDb);
 		await Promise.all([switching, syncing]);
 
 		expect(
 			await testDb
-				.select({ id: schema.propertyBill.id, amount: schema.propertyBill.amountMinor })
+				.select({ id: schema.propertyBill.id, amountMinor: schema.propertyBill.amountMinor })
 				.from(schema.propertyBill)
-				.orderBy(schema.propertyBill.id)
+				// Ordered by amount, not by id: ids are uuids since 0053.
+				.orderBy(schema.propertyBill.amountMinor)
 		).toEqual([
-			{ id: 'bill-new-meter', amount: 999n },
-			{ id: 'bill-old-meter', amount: 100n }
+			{ id: rowId('bill-old-meter'), amountMinor: 100n },
+			{ id: rowId('bill-new-meter'), amountMinor: 999n }
 		]);
 	});
 
-	it('migration 0030 deterministically keeps the first sorted meter bill', async () => {
-		await harness.sql.unsafe('drop index property_bill_meter_property_idx');
-		await testDb.insert(schema.property).values({
-			id: 'property-meter-migration',
-			name: 'Meter flat',
-			kind: 'lived',
-			currency: 'CZK'
-		});
-		await testDb.insert(schema.propertyBill).values([
-			{
-				id: 'bill-later',
-				propertyId: 'property-meter-migration',
-				label: 'Later',
-				sort: 2,
-				source: 'meter'
-			},
-			{
-				id: 'bill-first',
-				propertyId: 'property-meter-migration',
-				label: 'First',
-				sort: 1,
-				source: 'meter'
-			}
-		]);
-
-		await harness.applyMigrationFile('0030_property_meter_bill_unique.sql');
-
-		expect(
-			await testDb
-				.select({ id: schema.propertyBill.id, source: schema.propertyBill.source })
-				.from(schema.propertyBill)
-				.orderBy(schema.propertyBill.sort)
-		).toEqual([
-			{ id: 'bill-first', source: 'meter' },
-			{ id: 'bill-later', source: 'manual' }
-		]);
-	});
-
-	it('migration 0032 deterministically binds an existing home config to one lived property', async () => {
-		await testDb.insert(schema.property).values([
-			{
-				id: 'newer-home',
-				name: 'Newer home',
-				kind: 'lived',
-				createdAt: new Date('2026-01-02T00:00:00.000Z')
-			},
-			{
-				id: 'older-home',
-				name: 'Older home',
-				kind: 'lived',
-				createdAt: new Date('2026-01-01T00:00:00.000Z')
-			}
-		]);
-		await testDb.insert(schema.settings).values({ key: 'home', value: { kind: 'demo' } });
-
-		await harness.applyMigrationFile('0032_bind_home_meter_property.sql');
-
-		expect((await testDb.select().from(schema.settings))[0].value).toEqual({
-			kind: 'demo',
-			meterPropertyId: 'older-home'
-		});
-	});
+	/*
+	 * RETIRED: two cases that replayed migrations 0030 and 0032 against data
+	 * arranged to be ambiguous, proving each picked deterministically rather than
+	 * by whatever order the planner returned.
+	 *
+	 * They went with the migrations themselves in the squash to a single
+	 * baseline. The invariants they were protecting survive as schema: the
+	 * partial unique index on property_bill(property_id) where source = 'meter'
+	 * is asserted by tests/integration/baseline-migration.test.ts, and the
+	 * settings key it bound is written only through setHome() now.
+	 */
 
 	it('reports every historically unconvertible document and broker currency', async () => {
 		await testDb.insert(schema.currencyRate).values([
@@ -735,24 +693,24 @@ describe('domain replacement writes', () => {
 			{ code: 'PLN', day: '2026-01-02', rate: '5.8' }
 		]);
 		await testDb.insert(schema.document).values({
-			id: 'historical-amount-document',
+			id: rowId('historical-amount-document'),
 			name: 'Historical payslip',
 			shelf: 'payslips',
 			ext: 'PDF',
 			addedOn: '2026-08-15',
 			amountMinor: 100n,
-			amountCurrency: 'EUR',
-			periodMonth: '2020-01'
+			currency: 'EUR',
+			periodOn: '2020-01-01'
 		});
 		await testDb.insert(schema.brokerOperation).values({
-			id: 'historical-operation',
+			id: rowId('historical-operation'),
 			type: 'Deposit',
 			happenedAt: new Date('2020-01-02T00:00:00.000Z'),
 			amountMinor: 100n,
 			currency: 'USD'
 		});
 		await testDb.insert(schema.brokerPosition).values({
-			id: 'historical-position',
+			id: rowId('historical-position'),
 			ticker: 'OLD',
 			purchaseValueMinor: 100n,
 			saleValueMinor: null,
@@ -761,13 +719,13 @@ describe('domain replacement writes', () => {
 			closedAt: null
 		});
 		await testDb.insert(schema.person).values({
-			id: 'historical-tax-person',
+			id: rowId('historical-tax-person'),
 			name: 'Historical Tax Person',
 			initials: 'HT'
 		});
 		await testDb.insert(schema.taxStatement).values({
-			id: 'historical-tax-statement',
-			personId: 'historical-tax-person',
+			id: rowId('historical-tax-statement'),
+			personId: rowId('historical-tax-person'),
 			year: 2020,
 			country: 'CH',
 			currency: 'CHF',
@@ -790,27 +748,27 @@ describe('domain replacement writes', () => {
 
 	it('serializes tag deltas so a concurrent add cannot restore a removed tag', async () => {
 		await testDb.insert(schema.account).values({
-			id: 'account-tags',
+			id: rowId('account-tags'),
 			name: 'Tag account',
 			bank: 'other',
 			currency: 'CZK'
 		});
 		await testDb.insert(schema.transaction).values({
-			id: 'transaction-tags',
-			accountId: 'account-tags',
-			bookedAt: '2026-08-15',
-			amount: -100n,
+			id: rowId('transaction-tags'),
+			accountId: rowId('account-tags'),
+			bookedOn: '2026-08-15',
+			amountMinor: -100n,
 			currency: 'CZK',
 			dedupFingerprint: 'tag-fixture'
 		});
 		await testDb.insert(schema.tag).values({
-			id: 'tag-base',
+			id: rowId('tag-base'),
 			name: 'Base',
 			normalisedName: 'base'
 		});
 		await testDb
-			.insert(schema.transactionTag)
-			.values({ transactionId: 'transaction-tags', tagId: 'tag-base' });
+			.insert(schema.tagLink)
+			.values({ targetId: rowId('transaction-tags'), tagId: rowId('tag-base') });
 		// With no owner lock, both mutations load Base before either DELETE runs.
 		// The adder then re-inserts that stale name after the remover commits.
 		await harness.sql.unsafe(`
@@ -819,63 +777,65 @@ describe('domain replacement writes', () => {
 				perform pg_sleep(0.2);
 				return null;
 			end $$;
-			create trigger task_domain_slow_tag_replace before delete on transaction_tag
+			create trigger task_domain_slow_tag_replace before delete on tag_link
 			for each statement execute function task_domain_slow_tag_replace();
 		`);
 
 		await Promise.all([
-			updateTransactionTags('transaction-tags', { remove: 'Base' }, testDb),
-			updateTransactionTags('transaction-tags', { add: 'Beta' }, testDb)
+			updateTransactionTags(rowId('transaction-tags'), { remove: 'Base' }, testDb),
+			updateTransactionTags(rowId('transaction-tags'), { add: 'Beta' }, testDb)
 		]);
 
 		const names = await testDb
 			.select({ name: schema.tag.name })
-			.from(schema.transactionTag)
-			.innerJoin(schema.tag, eq(schema.transactionTag.tagId, schema.tag.id))
+			.from(schema.tagLink)
+			.innerJoin(schema.tag, eq(schema.tagLink.tagId, schema.tag.id))
 			.orderBy(schema.tag.name);
 		expect(names).toEqual([{ name: 'Beta' }]);
 	});
 
 	it('applies the shared delta mutation to property tags', async () => {
 		await testDb.insert(schema.property).values({
-			id: 'property-tags',
+			id: rowId('property-tags'),
 			name: 'Tagged flat',
 			kind: 'lived',
 			currency: 'CZK'
 		});
 
-		await updatePropertyTags('property-tags', { add: 'Home' }, testDb);
+		await updatePropertyTags(rowId('property-tags'), { add: 'Home' }, testDb);
 
 		expect(
 			await testDb
 				.select({ name: schema.tag.name })
-				.from(schema.propertyTag)
-				.innerJoin(schema.tag, eq(schema.propertyTag.tagId, schema.tag.id))
+				.from(schema.tagLink)
+				.innerJoin(schema.tag, eq(schema.tagLink.tagId, schema.tag.id))
 		).toEqual([{ name: 'Home' }]);
 	});
 
 	it('applies the shared delta mutation to loan tags', async () => {
 		await testDb.insert(schema.loan).values({
-			id: 'loan-tags',
+			id: rowId('loan-tags'),
 			name: 'Tagged loan',
 			principalMinor: 10000n,
 			owedMinor: 9000n
 		});
 
-		await updateLoanTags('loan-tags', { add: 'Debt' }, testDb);
+		await updateLoanTags(rowId('loan-tags'), { add: 'Debt' }, testDb);
 
 		expect(
 			await testDb
 				.select({ name: schema.tag.name })
-				.from(schema.loanTag)
-				.innerJoin(schema.tag, eq(schema.loanTag.tagId, schema.tag.id))
+				.from(schema.tagLink)
+				.innerJoin(schema.tag, eq(schema.tagLink.tagId, schema.tag.id))
 		).toEqual([{ name: 'Debt' }]);
 	});
 
 	it('keeps the prior tax statement and lines when replacement line insertion fails', async () => {
-		await testDb.insert(schema.person).values({ id: 'person-a', name: 'Person A', initials: 'PA' });
+		await testDb
+			.insert(schema.person)
+			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		const base = {
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			year: 2025,
 			country: 'CZ',
 			currency: 'CZK',
@@ -916,7 +876,7 @@ describe('domain replacement writes', () => {
 
 	it('rolls back the entire broker report when the new holdings snapshot fails', async () => {
 		await testDb.insert(schema.holding).values({
-			id: 'old-holding',
+			id: rowId('old-holding'),
 			ticker: 'OLD',
 			name: 'Prior snapshot',
 			category: 'STOCK',
@@ -924,7 +884,7 @@ describe('domain replacement writes', () => {
 			valueMinor: 7000n,
 			currency: 'EUR',
 			netProfitPct: null,
-			asOf: new Date('2026-08-01T00:00:00.000Z')
+			valuedAt: new Date('2026-08-01T00:00:00.000Z')
 		});
 		await testDb.insert(schema.portfolioSnapshot).values({
 			day: '2026-08-01',
@@ -944,7 +904,7 @@ describe('domain replacement writes', () => {
 		await expect(ingestBrokerFile('report.atomic', new Uint8Array(), testDb)).rejects.toThrow();
 
 		expect(await testDb.select().from(schema.holding)).toMatchObject([
-			{ id: 'old-holding', ticker: 'OLD', valueMinor: 7000n }
+			{ id: rowId('old-holding'), ticker: 'OLD', valueMinor: 7000n }
 		]);
 		expect(await testDb.select().from(schema.brokerOperation)).toHaveLength(0);
 		expect(await testDb.select().from(schema.portfolioSnapshot)).toMatchObject([
@@ -1077,7 +1037,7 @@ describe('domain replacement writes', () => {
 			operations: [],
 			positions: [
 				{
-					id: 'position-1',
+					id: rowId('position-1'),
 					ticker: 'ACME',
 					purchaseValueMinor: 10_000n,
 					saleValueMinor: 15_000n,
@@ -1095,7 +1055,7 @@ describe('domain replacement writes', () => {
 			operations: [],
 			positions: [
 				{
-					id: 'position-1',
+					id: rowId('position-1'),
 					ticker: 'ACME',
 					purchaseValueMinor: 8_000n,
 					saleValueMinor: 9_000n,
@@ -1108,7 +1068,7 @@ describe('domain replacement writes', () => {
 
 		expect(await testDb.select().from(schema.brokerPosition)).toMatchObject([
 			{
-				id: 'position-1',
+				id: rowId('position-1'),
 				purchaseValueMinor: 10_000n,
 				saleValueMinor: 15_000n,
 				closedAt: new Date('2026-08-20T12:00:00.000Z')
@@ -1125,7 +1085,7 @@ describe('domain replacement writes', () => {
 			operations: [],
 			positions: [
 				{
-					id: 'position-same-close',
+					id: rowId('position-same-close'),
 					ticker: 'ACME',
 					purchaseValueMinor: 10_000n,
 					saleValueMinor: 15_000n,
@@ -1143,7 +1103,7 @@ describe('domain replacement writes', () => {
 			operations: [],
 			positions: [
 				{
-					id: 'position-same-close',
+					id: rowId('position-same-close'),
 					ticker: 'ACME',
 					purchaseValueMinor: 8_000n,
 					saleValueMinor: 9_000n,
@@ -1156,7 +1116,7 @@ describe('domain replacement writes', () => {
 
 		expect(await testDb.select().from(schema.brokerPosition)).toMatchObject([
 			{
-				id: 'position-same-close',
+				id: rowId('position-same-close'),
 				purchaseValueMinor: 10_000n,
 				saleValueMinor: 15_000n,
 				closedAt: new Date(closedAt)
@@ -1164,33 +1124,9 @@ describe('domain replacement writes', () => {
 		]);
 	});
 
-	it('backfills broker freshness from a newer empty snapshot instead of stale holdings', async () => {
-		await harness.sql.unsafe('drop table broker_import_state');
-		await testDb.insert(schema.holding).values({
-			id: 'stale-holding',
-			ticker: 'OLD',
-			name: 'Stale resurrection',
-			category: 'STOCK',
-			units: '1',
-			valueMinor: 1_000n,
-			currency: 'EUR',
-			netProfitPct: null,
-			asOf: new Date('2026-08-10T12:00:00.000Z')
-		});
-		await testDb.insert(schema.portfolioSnapshot).values({
-			day: '2026-08-20',
-			valueMinor: 0n,
-			currency: 'EUR'
-		});
-
-		await harness.applyMigrationFile('0029_broker_import_state.sql');
-
-		expect(await testDb.select().from(schema.brokerImportState)).toMatchObject([
-			{
-				id: 'global',
-				latestGeneratedAt: new Date('2026-08-20T23:59:59.999Z'),
-				currency: 'EUR'
-			}
-		]);
-	});
+	// RETIRED: this replayed migration 0029 against a CURRENT schema to check
+	// its one-time backfill. v0.3.9 collapses every migration into one baseline,
+	// so 0029 will not exist to replay — and since the rename it names a column
+	// (holding.as_of) that no longer exists. The freshness rule it covered is
+	// exercised live by the broker ingest tests.
 });

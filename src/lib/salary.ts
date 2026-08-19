@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Salary tracking derived from payslips. Pure functions: amount and period
 // detection over extracted text lines, and the year-by-year statistics. The
 // keyword lists are format facts of real payslips (Czech and English), the
@@ -191,7 +192,7 @@ export function detectPeriod(lines: string[]): string | null {
 	return null;
 }
 
-export interface SalaryYear {
+interface SalaryYear {
 	year: number;
 	/** age that year, when the birth year is known */
 	age: number | null;

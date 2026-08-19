@@ -27,7 +27,7 @@ let seq = 0;
 function tx(
 	partial: Partial<PairableTx> & Pick<PairableTx, 'accountId' | 'amountMinor'>
 ): PairableTx {
-	return { id: `t${seq++}`, bookedAt: '2026-07-14', currency: 'CZK', ...partial };
+	return { id: `t${seq++}`, bookedOn: '2026-07-14', currency: 'CZK', ...partial };
 }
 
 describe('name-evidence pairing is review-only and word-bounded', () => {
@@ -89,10 +89,10 @@ describe('deterministic scoring', () => {
 			accountId: 'fio-r',
 			amountMinor: -150000n,
 			counterparty: 'Kiewisz Robert',
-			bookedAt: '2026-07-14'
+			bookedOn: '2026-07-14'
 		});
-		const far = tx({ accountId: 'fio-k', amountMinor: 150000n, bookedAt: '2026-07-12' });
-		const near = tx({ accountId: 'fio-k', amountMinor: 150000n, bookedAt: '2026-07-14' });
+		const far = tx({ accountId: 'fio-k', amountMinor: 150000n, bookedOn: '2026-07-12' });
+		const near = tx({ accountId: 'fio-k', amountMinor: 150000n, bookedOn: '2026-07-14' });
 		const a = proposePairs([out, far, near], ctx);
 		const b = proposePairs([near, far, out], ctx);
 		expect(a).toEqual(b);
@@ -105,8 +105,8 @@ describe('deterministic scoring', () => {
 			amountMinor: -100000n,
 			counterpartyAccount: '2500834780/2010'
 		});
-		const in1 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedAt: '2026-07-14' });
-		const in2 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedAt: '2026-07-14' });
+		const in1 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedOn: '2026-07-14' });
+		const in2 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedOn: '2026-07-14' });
 		const a = proposePairs([out, in1, in2], ctx);
 		const b = proposePairs([in2, in1, out], ctx);
 		expect(a).toEqual(b);
@@ -118,8 +118,8 @@ describe('deterministic scoring', () => {
 			amountMinor: -100000n,
 			counterpartyAccount: '2500834780/2010'
 		});
-		const in1 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedAt: '2026-07-14' });
-		const in2 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedAt: '2026-07-14' });
+		const in1 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedOn: '2026-07-14' });
+		const in2 = tx({ accountId: 'fio-k', amountMinor: 100000n, bookedOn: '2026-07-14' });
 		const pairs = proposePairs([out, in1, in2], ctx);
 		expect(pairs).toHaveLength(1);
 		expect(pairs[0].confidence).toBe('review');
@@ -145,7 +145,7 @@ describe('fees and hard evidence', () => {
 			amountMinor: -2000000n,
 			counterpartyAccount: '2500834780/2010'
 		});
-		const inn = tx({ accountId: 'fio-k', amountMinor: 2000000n, bookedAt: '2026-07-15' });
+		const inn = tx({ accountId: 'fio-k', amountMinor: 2000000n, bookedOn: '2026-07-15' });
 		const pairs = proposePairs([out, inn], ctx);
 		expect(pairs).toEqual([{ outId: out.id, inId: inn.id, confidence: 'auto' }]);
 	});

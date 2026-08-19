@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The Overview board's spatial arithmetic, kept pure: no DOM, no Svelte, no
 // imports from the rest of the app. Every subtle bug on this screen will be a
 // bug in here, so it has to be testable without a browser. Components call

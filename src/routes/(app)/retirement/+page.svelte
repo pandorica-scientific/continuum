@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
 	import { onDestroy } from 'svelte';
 	import { onNavigate } from '$app/navigation';

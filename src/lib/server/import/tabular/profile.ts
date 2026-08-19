@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * A remembered layout.
  *
@@ -18,7 +19,7 @@ import type { DateOrder, DecimalMark } from './determinacy';
 import { transactionRows, type Region } from './regions';
 import { normalise, type ColumnRole } from './vocabulary';
 
-export interface ProfileMapping {
+interface ProfileMapping {
 	/** Role per column, by NAME — the header label, not its index. */
 	columns: { header: string; role: ColumnRole | null }[];
 	dateOrder: DateOrder;
@@ -85,7 +86,7 @@ export function headersOf(region: Region): string[] {
 	return labels ? labels.map((c) => c.text) : [];
 }
 
-export type ProfileMatch =
+type ProfileMatch =
 	| { kind: 'match'; profile: ImportProfile }
 	| {
 			kind: 'drifted';

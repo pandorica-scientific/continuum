@@ -1,19 +1,22 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asOptionalRowId, asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
+import { asEnumValue } from '$lib/enums';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	contact,
-	contactTenancy,
+	contactLink,
 	document,
-	documentProperty,
+	documentLink,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
 	property,
 	propertyBill,
-	propertyTag,
+	tagLink,
 	tag,
 	tenancy
 } from '$lib/server/db/schema';
@@ -22,7 +25,7 @@ import { initialsFor } from '$lib/people';
 import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { removeUpload, saveUpload } from '$lib/server/files';
+import { removeUpload, saveUpload } from '$lib/server/system/files';
 import {
 	createPropertyBill,
 	createTenancy,
@@ -111,8 +114,8 @@ export const load: PageServerLoad = async ({ url }) => {
 				const loanPeriods = periods
 					.filter((period) => period.loanId === linkedLoan.id)
 					.map((period) => ({
-						startDate: period.startDate,
-						endDate: period.endDate,
+						startsOn: period.startsOn,
+						endsOn: period.endsOn,
 						annualRatePct: Number(period.annualRatePct),
 						paymentMinor: period.paymentMinor
 					}));
@@ -157,7 +160,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				label: 'Est. value',
 				value: formatMinor(current.valueMinor, current.currency),
 				color: 'var(--fg1)',
-				note: current.valuedAt ? `valued ${current.valuedAt.slice(0, 7)}` : 'set a value'
+				note: current.valuedOn ? `valued ${current.valuedOn.slice(0, 7)}` : 'set a value'
 			},
 			{
 				label: 'Mortgage owed',
@@ -236,15 +239,15 @@ export const load: PageServerLoad = async ({ url }) => {
 
 		let lease = null;
 		if (currentTenancy) {
-			const days = currentTenancy.endDate ? daysUntil(currentTenancy.endDate) : null;
+			const days = currentTenancy.endsOn ? daysUntil(currentTenancy.endsOn) : null;
 			// How to reach the tenant now lives in the contacts module rather than in
 			// one free-text column, so a tenancy can carry a mobile, a landline and
 			// an agent without them being crammed into a single string.
 			const tenantContacts = await db
 				.select({ id: contact.id, name: contact.name, phone: contact.phone, email: contact.email })
-				.from(contactTenancy)
-				.innerJoin(contact, eq(contact.id, contactTenancy.contactId))
-				.where(eq(contactTenancy.tenancyId, currentTenancy.id))
+				.from(contactLink)
+				.innerJoin(contact, eq(contact.id, contactLink.contactId))
+				.where(eq(contactLink.targetId, currentTenancy.id))
 				.orderBy(contact.name);
 
 			lease = {
@@ -269,10 +272,10 @@ export const load: PageServerLoad = async ({ url }) => {
 						label: 'Deposit held',
 						value: `${formatMinor(currentTenancy.depositMinor, current.currency)} ${displayCurrency(current.currency)}`
 					},
-					{ label: 'Lease ends', value: currentTenancy.endDate ?? 'open-ended' },
-					{ label: 'Since', value: currentTenancy.startDate ?? '—' }
+					{ label: 'Lease ends', value: currentTenancy.endsOn ?? 'open-ended' },
+					{ label: 'Since', value: currentTenancy.startsOn ?? '—' }
 				],
-				renewalNotice: currentTenancy.renewalNoticeDate
+				renewalNotice: currentTenancy.renewalNoticeOn
 			};
 		}
 
@@ -292,7 +295,7 @@ export const load: PageServerLoad = async ({ url }) => {
 						const label = loanLabel(linkedLoan);
 						if (!currentPeriod) return `${label}: rate not set`;
 						const rate = `${currentPeriod.annualRatePct.toFixed(2)}%`;
-						return `${label}: ${currentPeriod.endDate ? `fixed ${rate} to ${currentPeriod.endDate.slice(0, 7)}` : rate}`;
+						return `${label}: ${currentPeriod.endsOn ? `fixed ${rate} to ${currentPeriod.endsOn.slice(0, 7)}` : rate}`;
 					})
 					.join(' · '),
 				paidPct: principal > 0n ? Number((repaid * 1000n) / principal) / 10 : 0,
@@ -310,8 +313,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		const today2 = new Date().toISOString().slice(0, 10);
 		const docLinks = await db
 			.select()
-			.from(documentProperty)
-			.where(eq(documentProperty.propertyId, current.id));
+			.from(documentLink)
+			.where(eq(documentLink.targetId, current.id));
 		const linkedDocIds = new Set(docLinks.map((l) => l.documentId));
 		const propertyDocs = docs
 			.filter((d) => linkedDocIds.has(d.id))
@@ -329,9 +332,9 @@ export const load: PageServerLoad = async ({ url }) => {
 
 		const flatTagRows = await db
 			.select({ name: tag.name })
-			.from(propertyTag)
-			.innerJoin(tag, eq(propertyTag.tagId, tag.id))
-			.where(eq(propertyTag.propertyId, current.id));
+			.from(tagLink)
+			.innerJoin(tag, eq(tagLink.tagId, tag.id))
+			.where(eq(tagLink.targetId, current.id));
 		detail = {
 			id: current.id,
 			name: current.name,
@@ -366,7 +369,7 @@ export const load: PageServerLoad = async ({ url }) => {
 export const actions: Actions = {
 	tags: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asOptionalRowId(form.get('id'));
 		if (!id) return fail(400, { message: 'Missing property.' });
 		const added = String(form.get('tagName') ?? '').trim();
 		const removed = String(form.get('removeTag') ?? '').trim();
@@ -393,13 +396,13 @@ export const actions: Actions = {
 			return fail(400, { message: 'Value and money in must be numbers.' });
 		}
 		await db.insert(property).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			name,
 			sizeLabel: String(form.get('sizeLabel') ?? '').trim(),
-			kind: String(form.get('kind') ?? 'lived'),
+			kind: asEnumValue('property.kind', form.get('kind'), 'lived'),
 			currency,
 			valueMinor: value,
-			valuedAt: value > 0n ? new Date().toISOString().slice(0, 10) : null,
+			valuedOn: value > 0n ? new Date().toISOString().slice(0, 10) : null,
 			moneyInMinor: moneyIn,
 			boughtYear: Number(form.get('boughtYear')) || null
 		});
@@ -408,7 +411,7 @@ export const actions: Actions = {
 
 	uploadImage: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const slot = String(form.get('slot') ?? ''); // plan | photo0 | photo1 | photo2
 		const expectedImage = String(form.get('expectedImage') ?? '') || null;
 		const file = form.get('file');
@@ -435,7 +438,7 @@ export const actions: Actions = {
 
 	removeImage: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const slot = String(form.get('slot') ?? '');
 		const expectedImage = String(form.get('expectedImage') ?? '');
 		if (!expectedImage) return fail(400, { message: 'Nothing to remove.' });
@@ -450,7 +453,7 @@ export const actions: Actions = {
 
 	savePlan: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(String(form.get('drawing') ?? ''));
@@ -464,7 +467,7 @@ export const actions: Actions = {
 
 	addTenancy: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const tenantName = String(form.get('tenantName') ?? '').trim();
 		if (!tenantName) return fail(400, { message: 'The tenant needs a name.' });
 		const rows = await db.select().from(property).where(eq(property.id, propertyId));
@@ -479,14 +482,14 @@ export const actions: Actions = {
 			return fail(400, { message: 'Rent and deposit must be numbers.' });
 		}
 		const result = await createTenancy({
-			id: randomUUID(),
+			id: uuidv7(),
 			propertyId,
 			tenantName,
 			rentMinor: rent,
 			depositMinor: deposit,
-			startDate: String(form.get('startDate') ?? '').trim() || null,
-			endDate: String(form.get('endDate') ?? '').trim() || null,
-			renewalNoticeDate: String(form.get('renewalNoticeDate') ?? '').trim() || null
+			startsOn: String(form.get('startsOn') ?? '').trim() || null,
+			endsOn: String(form.get('endsOn') ?? '').trim() || null,
+			renewalNoticeOn: String(form.get('renewalNoticeDate') ?? '').trim() || null
 		});
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
@@ -503,7 +506,7 @@ export const actions: Actions = {
 	 */
 	setBillSource: async ({ request }) => {
 		const form = await request.formData();
-		const billId = String(form.get('billId') ?? '');
+		const billId = asRowId(form.get('billId'));
 		const fromMeter = String(form.get('fromMeter')) === 'true';
 		const result = await setPropertyBillSource(billId, fromMeter);
 		if (!result.ok) return fail(result.status, { message: result.message });
@@ -519,7 +522,7 @@ export const actions: Actions = {
 
 	addBill: async ({ request }) => {
 		const form = await request.formData();
-		const propertyId = String(form.get('propertyId') ?? '');
+		const propertyId = asRowId(form.get('propertyId'));
 		const label = String(form.get('label') ?? '').trim();
 		if (!label) return fail(400, { message: 'The bill needs a label.' });
 		const rows = await db.select().from(property).where(eq(property.id, propertyId));
@@ -543,12 +546,12 @@ export const actions: Actions = {
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
-			documentId = randomUUID();
+			documentId = uuidv7();
 			extension = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
 		}
 
 		await createPropertyBill({
-			id: randomUUID(),
+			id: uuidv7(),
 			propertyId,
 			label,
 			amountMinor: amount,

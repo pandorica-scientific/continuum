@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * What kind of file is this, decided from its own bytes.
  *
@@ -27,7 +28,7 @@ export type StatementFormat =
 	| 'image'
 	| 'unknown';
 
-export interface FormatSniff {
+interface FormatSniff {
 	format: StatementFormat;
 	/** Why we concluded this — carried into error messages and provenance. */
 	evidence: string;

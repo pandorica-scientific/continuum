@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { createEvent, deleteEvent, updateEvent } from '$lib/server/calendar/mutations';
 import { expand } from '$lib/calendar/rrule';
-import { EXCEPT_FINGERPRINT_REPAIR, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -23,7 +23,7 @@ const base = {
 beforeAll(async () => {
 	harness = await startPostgres('calendar-mutations');
 	testDb = harness.db;
-	await harness.applyMigrations(EXCEPT_FINGERPRINT_REPAIR);
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 60_000);
 
 afterAll(async () => {

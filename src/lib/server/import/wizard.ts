@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Confirming a layout a person has mapped by hand.
  *
@@ -21,7 +22,7 @@
  * inserted column produces a mismatch we can ask about rather than a silent
  * shift of every role by one.
  */
-import { randomUUID } from 'node:crypto';
+import { uuidv7 } from 'uuidv7';
 import type { Db } from '$lib/server/db';
 import { profileFromReading } from './tabular/profile';
 import type { ColumnRole } from './tabular/vocabulary';
@@ -29,7 +30,7 @@ import type { DateOrder, DecimalMark } from './tabular/determinacy';
 import { deleteProfile, saveProfile } from './profiles';
 import { ingestFile, type IngestResult } from './ingest';
 
-export interface ConfirmedMapping {
+interface ConfirmedMapping {
 	/** What to call this layout when it is recognised again. */
 	name: string;
 	bank?: string;
@@ -68,7 +69,7 @@ export async function confirmMapping(
 	handle: Db
 ): Promise<IngestResult> {
 	const profile = profileFromReading({
-		id: randomUUID(),
+		id: uuidv7(),
 		name: mapping.name,
 		bank: mapping.bank,
 		source: mapping.source,

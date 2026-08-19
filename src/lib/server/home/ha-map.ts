@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Pure mapping from Home Assistant API payloads to the HomeProvider shapes.
 // No fetch, no WebSocket — unit tests feed canned payloads.
 
@@ -44,7 +45,7 @@ const DOMAIN_EMOJI: Record<string, string> = {
 	humidifier: '💧'
 };
 
-export const CONTROLLABLE_DOMAINS = new Set([
+const CONTROLLABLE_DOMAINS = new Set([
 	'light',
 	'switch',
 	'cover',

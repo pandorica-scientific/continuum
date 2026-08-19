@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Board from '$lib/overview/Board.svelte';
 	import { panelAvailable } from '$lib/overview/panels';

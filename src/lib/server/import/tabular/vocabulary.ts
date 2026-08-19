@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Words statements use, in the languages our samples actually speak.
  *
@@ -237,7 +238,7 @@ export const SUMMARY_TERMS = [
  * Words that mark page furniture — legal notices, page numbers, contact
  * details. A region made only of these is neither evidence nor movements.
  */
-export const FOOTER_TERMS = [
+const FOOTER_TERMS = [
 	'strana',
 	'strona',
 	'seite',

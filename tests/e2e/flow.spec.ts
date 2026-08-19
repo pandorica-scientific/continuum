@@ -727,4 +727,31 @@ test.describe('signed in', () => {
 		await page.getByRole('button', { name: '🌙 Dark' }).click();
 		await expect(page.locator('html')).not.toHaveAttribute('data-ledger-theme', 'light');
 	});
+
+	// The reload above passed just as well when the choice lived in localStorage.
+	// This is the part that did not: the theme belongs to the PERSON, so it has to
+	// survive a browser that has never seen them, and it must not follow the
+	// browser to somebody else.
+	test('theme follows the person to a browser that has never seen them', async ({
+		page,
+		browser
+	}) => {
+		await page.goto('/overview');
+		await page.getByRole('button', { name: '☀️ Light' }).click();
+		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
+
+		// A second browser context: no localStorage, no cookies, nothing carried
+		// over except the signed-in session.
+		const elsewhere = await browser.newContext({ storageState: AUTH_STATE });
+		try {
+			const other = await elsewhere.newPage();
+			await other.goto('/overview');
+			await expect(other.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
+		} finally {
+			await elsewhere.close();
+		}
+
+		await page.getByRole('button', { name: '🌙 Dark' }).click();
+		await expect(page.locator('html')).not.toHaveAttribute('data-ledger-theme', 'light');
+	});
 });

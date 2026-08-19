@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
+import { isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { calendarConflict } from '$lib/server/db/schema';
 
@@ -27,7 +28,7 @@ function jsonbSide(value: unknown) {
 	return sql`${JSON.stringify(value ?? null)}::jsonb`;
 }
 
-export interface ConflictRecord {
+interface ConflictRecord {
 	localKey: string;
 	accountId: string;
 	ours: unknown;
@@ -37,7 +38,7 @@ export interface ConflictRecord {
 
 export async function recordConflict(handle: Queryable, record: ConflictRecord): Promise<void> {
 	await handle.insert(calendarConflict).values({
-		id: randomUUID(),
+		id: uuidv7(),
 		localKey: record.localKey,
 		accountId: record.accountId,
 		ours: jsonbSide(record.ours) as never,
@@ -65,13 +66,4 @@ export async function acknowledgeConflicts(handle: Queryable = db): Promise<numb
 		.where(isNull(calendarConflict.acknowledgedAt))
 		.returning({ id: calendarConflict.id });
 	return cleared.length;
-}
-
-/** Outstanding conflicts for one account, newest last. */
-export async function listOpenConflicts(accountId: string, handle: Queryable = db) {
-	return handle
-		.select()
-		.from(calendarConflict)
-		.where(and(eq(calendarConflict.accountId, accountId), isNull(calendarConflict.acknowledgedAt)))
-		.orderBy(calendarConflict.detectedAt);
 }

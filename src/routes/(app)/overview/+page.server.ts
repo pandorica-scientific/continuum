@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';

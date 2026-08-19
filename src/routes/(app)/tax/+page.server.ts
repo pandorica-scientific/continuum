@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, documentPerson, person } from '$lib/server/db/schema';
+import { document, documentLink, person } from '$lib/server/db/schema';
 import { deleteStatement, loadStatements, saveStatement } from '$lib/server/tax';
 import { effectiveRatePct, payslipYearTotalConverted, taxSeries } from '$lib/tax';
 import { getBaseCurrency } from '$lib/server/settings';
@@ -17,7 +19,10 @@ export const load: PageServerLoad = async () => {
 			.from(person)
 			.orderBy(person.createdAt, person.id),
 		db.select().from(document).where(eq(document.shelf, 'payslips')),
-		db.select().from(documentPerson),
+		db
+			.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
+			.from(documentLink)
+			.innerJoin(person, eq(person.id, documentLink.targetId)),
 		db
 			.select({ id: document.id, name: document.name })
 			.from(document)
@@ -32,12 +37,12 @@ export const load: PageServerLoad = async () => {
 	// as the retirement screen reads it, so the two screens cannot disagree.
 	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
 	const slips = payslipDocs
-		.filter((d) => d.periodMonth !== null)
+		.filter((d) => d.periodOn !== null)
 		.map((d) => ({
 			personId: ownerOf.get(d.id) ?? '',
-			periodMonth: d.periodMonth!,
+			periodMonth: d.periodOn!.slice(0, 7),
 			amountMinor: d.amountMinor,
-			currency: d.amountCurrency ?? base
+			currency: d.currency ?? base
 		}));
 
 	// Prefill totals for every person × payslip-year, as editable major-unit
@@ -141,13 +146,14 @@ export const actions: Actions = {
 		}
 
 		const result = await saveStatement({
-			personId: String(form.get('personId') ?? ''),
+			personId: asRowId(form.get('personId')),
 			year: Number(form.get('year')),
 			country: String(form.get('country') ?? ''),
 			currency,
 			grossIncomeMinor: gross,
 			taxPaidMinor: taxPaid,
-			documentId: String(form.get('documentId') ?? '') || null,
+			// Optional: a statement need not have a document attached.
+			documentId: asOptionalRowId(form.get('documentId')) ?? null,
 			note: String(form.get('note') ?? '').trim() || null,
 			lines
 		});
@@ -157,7 +163,7 @@ export const actions: Actions = {
 
 	remove: async ({ request }) => {
 		const form = await request.formData();
-		await deleteStatement(String(form.get('id') ?? ''));
+		await deleteStatement(asRowId(form.get('id')));
 		return { ok: true };
 	}
 };

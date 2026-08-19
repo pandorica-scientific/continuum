@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Telling a portfolio statement from a bank statement.
  *
@@ -43,7 +44,7 @@ const BALANCE_TERMS = [
 const DATE_AND_AMOUNT =
 	/(?:\d{4}-\d{2}-\d{2}|\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})[\s\S]{0,120}?[-(]?\d[\d\s.,']*[.,]\d{2}/;
 
-export interface HoldingsVerdict {
+interface HoldingsVerdict {
 	isHoldings: boolean;
 	/** Why, phrased for the person who uploaded it. */
 	reason?: string;

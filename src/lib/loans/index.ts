@@ -1,7 +1,11 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Day-count conventions a loan can accrue interest under. Shared between the
 // server amortisation engine and the loan form.
 
-export const DAY_COUNTS = ['30/360', 'act/365', 'act/360'] as const;
+/** Derived, so the loan form and the CHECK on loan.day_count cannot disagree. */
+import { ENUMS } from '$lib/enums';
+
+export const DAY_COUNTS = ENUMS['loan.day_count'];
 export type DayCount = (typeof DAY_COUNTS)[number];
 
 export const DAY_COUNT_LABELS: Record<DayCount, string> = {

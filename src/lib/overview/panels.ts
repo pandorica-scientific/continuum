@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The panel registry is the single source of truth for what can go on the
 // Overview board, in the same spirit as src/lib/modules/registry.ts for
 // screens. It holds no data and no arithmetic: adding a fourteenth panel is one
@@ -9,7 +10,7 @@
 import type { ModuleKey, ModuleToggles } from '$lib/modules/registry';
 import type { OverviewPlacement, PanelBounds } from './layout';
 
-export interface PanelDefinition {
+interface PanelDefinition {
 	key: string;
 	title: string;
 	emoji: string;
@@ -185,7 +186,7 @@ export const PANELS: PanelDefinition[] = [
 	}
 ];
 
-export const PANEL_BY_KEY: Record<string, PanelDefinition> = Object.fromEntries(
+const PANEL_BY_KEY: Record<string, PanelDefinition> = Object.fromEntries(
 	PANELS.map((panel) => [panel.key, panel])
 );
 

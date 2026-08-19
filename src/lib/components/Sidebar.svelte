@@ -1,9 +1,11 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import BrandMark from './BrandMark.svelte';
 	import Icon from './Icon.svelte';
 	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
+	import type { Theme } from '$lib/theme';
 
 	interface Props {
 		modules: ModuleToggles;
@@ -13,6 +15,8 @@
 		netWorthDeltaPositive: boolean;
 		baseCurrency: string;
 		importBadge: number;
+		version: string;
+		runtime: 'docker' | 'node';
 		onNavigate?: () => void;
 	}
 
@@ -24,6 +28,8 @@
 		netWorthDeltaPositive,
 		baseCurrency,
 		importBadge,
+		version,
+		runtime,
 		onNavigate
 	}: Props = $props();
 
@@ -32,18 +38,35 @@
 	// own path matches — /loans lights up Assets.
 	const activeArea = $derived(areaForPath(page.url.pathname)?.key);
 
-	let theme: 'dark' | 'light' = $state(
+	// Seeded from what the pre-paint script already applied, which came from the
+	// cookie the server wrote from this person's stored theme.
+	let theme: Theme = $state(
 		browser && document.documentElement.dataset.ledgerTheme === 'light' ? 'light' : 'dark'
 	);
 
-	function setTheme(next: 'dark' | 'light') {
+	// Applied to the document first and persisted after, so the colours change on
+	// the click rather than on the round trip. The server owns the record — it
+	// stores the choice against the person and refreshes the cookie `app.html`
+	// reads before paint — so a failed write costs this tab's choice and nothing
+	// else: the next load paints what was last saved.
+	function setTheme(next: Theme) {
 		theme = next;
 		if (next === 'light') {
 			document.documentElement.setAttribute('data-ledger-theme', 'light');
 		} else {
 			document.documentElement.removeAttribute('data-ledger-theme');
 		}
-		localStorage.setItem('ledger-theme', next);
+		// The browser paints its own regions — pull-to-refresh, the rubber band,
+		// a tablet's status bar — from this and not from any stylesheet, so it has
+		// to be moved by hand or those areas keep the old theme's colour.
+		document
+			.querySelector('meta[name="theme-color"]')
+			?.setAttribute('content', next === 'light' ? '#f3f0e9' : '#0e1117');
+		void fetch('/settings/theme', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ theme: next })
+		});
 	}
 
 	// The Import badge counts transactions awaiting review. Import is a screen
@@ -111,6 +134,14 @@
 				<button type="submit" class="sign-out">Sign out</button>
 			</form>
 		</div>
+		<!-- What is running, and how. Deliberately the quietest thing on the panel:
+		     it is read once when something is wrong, and ignored the rest of the
+		     time. Settings → Self-hosting has the rest. -->
+		<a class="install" href="/settings" onclick={onNavigate}>
+			<span class="mono">v{version}</span>
+			<span aria-hidden="true">·</span>
+			<span>{runtime === 'docker' ? 'Docker' : 'Node'}</span>
+		</a>
 	</div>
 </aside>
 
@@ -122,10 +153,16 @@
 		display: flex;
 		flex-direction: column;
 		gap: 22px;
-		position: sticky;
-		top: 0;
-		height: 100vh;
+		/* Fills whatever the wrapper gives it, which is the full screen height in
+		   both layouts — the sticky column on a wide screen and the fixed drawer on
+		   a narrow one. It used to set its own `100vh` and stick on its own, which
+		   made two nested scroll containers once the wrapper did the same, and the
+		   inner one overflowed wherever `vh` and `dvh` disagree.
+		   The background lives here, so this is the element that has to reach the
+		   bottom of the screen — otherwise the page shows beneath the navigation. */
+		height: 100%;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 	.brand {
 		display: flex;
@@ -223,6 +260,23 @@
 		border-top: 1px solid var(--bd);
 		padding-top: 14px;
 	}
+	.install {
+		display: flex;
+		align-items: baseline;
+		gap: 5px;
+		font-size: 11px;
+		/* The dimmest foreground the palette has: present when looked for, never
+		   competing with a navigation row. */
+		color: var(--fg3);
+		text-decoration: none;
+		letter-spacing: 0.01em;
+	}
+
+	.install:hover {
+		color: var(--fg2);
+		text-decoration: none;
+	}
+
 	.themes {
 		display: flex;
 		gap: 6px;

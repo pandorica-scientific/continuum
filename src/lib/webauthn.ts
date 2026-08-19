@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The browser half of a WebAuthn ceremony, which is the same shape whether you
 // are registering a passkey or signing in with one: ask the server for options,
 // hand them to the authenticator, post what it returns back for verification.
@@ -11,7 +12,7 @@ import { problemMessage } from '$lib/http';
 
 const CANCELLED = ['NotAllowedError', 'AbortError'];
 
-export interface CeremonyResult {
+interface CeremonyResult {
 	ok: boolean;
 	/** Empty when the person simply cancelled — nothing to report in that case. */
 	error: string;

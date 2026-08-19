@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asRowId } from '$lib/ids';
+import { uuidv7 } from 'uuidv7';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -12,7 +14,7 @@ import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/serv
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
 import { currentOrigin, passkeysAvailable } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
-import { enrollmentLinkDays, passwordMinLength } from '$lib/server/policy';
+import { enrollmentLinkDays, passwordMinLength } from '$lib/server/system/policy';
 import { env } from '$env/dynamic/private';
 import {
 	BACKUP_CADENCES,
@@ -25,7 +27,7 @@ import {
 	setBackupConfig,
 	type BackupCadence
 } from '$lib/server/backup';
-import { importConfig as importConfigFile } from '$lib/server/config-file';
+import { importConfig as importConfigFile } from '$lib/server/system/config-file';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
 import { getCalendarMarkers } from '$lib/server/calendar';
@@ -41,7 +43,7 @@ import {
 } from '$lib/server/calendar/sync';
 import { startAuth } from '$lib/server/calendar/sync/google-oauth';
 import { calendarAccount } from '$lib/server/db/schema';
-import { serverStatus } from '$lib/server/status';
+import { serverStatus } from '$lib/server/system/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
 import type { Action } from '@sveltejs/kit';
@@ -306,7 +308,7 @@ export const actions = administered({
 		const probe = await built.probe();
 		if (!probe.ok) return fail(400, { message: probe.detail });
 
-		const id = randomUUID();
+		const id = uuidv7();
 		await db.insert(calendarAccount).values({
 			id,
 			provider: provider as 'icloud' | 'google',
@@ -318,7 +320,7 @@ export const actions = administered({
 
 	authoriseGoogle: async ({ request, url }) => {
 		const form = await request.formData();
-		const clientId = String(form.get('clientId') ?? '').trim();
+		const clientId = asRowId(form.get('clientId')).trim();
 		const clientSecret = String(form.get('clientSecret') ?? '').trim();
 		if (!clientId || !clientSecret) {
 			return fail(400, { message: 'The OAuth client ID and secret are both needed.' });
@@ -354,7 +356,7 @@ export const actions = administered({
 		// and there was nothing left to go back to.
 		await deletePendingGoogleAccounts();
 		await db.insert(calendarAccount).values({
-			id: randomUUID(),
+			id: uuidv7(),
 			provider: 'google',
 			label: 'Google Calendar',
 			credential: JSON.stringify({
@@ -369,8 +371,8 @@ export const actions = administered({
 
 	chooseCalendar: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
-		const remoteCalId = String(form.get('remoteCalId') ?? '').trim();
+		const id = asRowId(form.get('id'));
+		const remoteCalId = asRowId(form.get('remoteCalId')).trim();
 		const remoteCalName = String(form.get('remoteCalName') ?? '').trim() || null;
 		if (!id || !remoteCalId) return fail(400, { message: 'Which calendar?' });
 
@@ -386,7 +388,7 @@ export const actions = administered({
 
 	listRemoteCalendars: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		const provider = await providerFor(id);
 		if (!provider) return fail(404, { message: 'No such account.' });
 		try {
@@ -427,7 +429,7 @@ export const actions = administered({
 
 	syncCalendarNow: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 
 		// The background poller skips an account with no calendar chosen; this had
 		// no such guard, so a press between authorising and creating the calendar
@@ -454,7 +456,7 @@ export const actions = administered({
 
 	disconnectCalendar: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const id = asRowId(form.get('id'));
 		// Links and conflicts cascade. The events themselves stay: they are the
 		// household's, not the connection's.
 		await db.delete(calendarAccount).where(eq(calendarAccount.id, id));
@@ -489,6 +491,9 @@ export const actions = administered({
 
 	revokeApiToken: async ({ request }) => {
 		const form = await request.formData();
+		// NOT asRowId: an api_token id is the sha256 of the bearer token, and that
+		// table deliberately keeps a text key. Narrowing it to a uuid turned
+		// revocation into a no-op that still reported success.
 		await revokeToken(String(form.get('id') ?? ''));
 		return { ok: true };
 	},
@@ -622,7 +627,7 @@ export const actions = administered({
 		const birthYear = parseBirthYear(String(form.get('birthYear') ?? ''), new Date());
 		if (birthYear === 'invalid') return fail(400, { message: BIRTH_YEAR_ERROR });
 
-		const id = randomUUID();
+		const id = uuidv7();
 		await db.insert(person).values({
 			id,
 			name,
@@ -651,7 +656,7 @@ export const actions = administered({
 
 	reissueEnrollment: async ({ request, url }) => {
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '');
+		const personId = asRowId(form.get('personId'));
 		const rows = await db
 			.select({
 				id: person.id,
@@ -683,7 +688,7 @@ export const actions = administered({
 
 	deactivatePerson: async ({ request, locals }) => {
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '');
+		const personId = asRowId(form.get('personId'));
 
 		return transactional(async (tx) => {
 			// Counted first, because that call is what takes the locks: every
@@ -711,7 +716,7 @@ export const actions = administered({
 
 	reactivatePerson: async ({ request }) => {
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '');
+		const personId = asRowId(form.get('personId'));
 		const updated = await db
 			.update(person)
 			.set({ deactivatedAt: null })
@@ -723,7 +728,7 @@ export const actions = administered({
 
 	changePersonRole: async ({ request, locals }) => {
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '');
+		const personId = asRowId(form.get('personId'));
 		const next = form.get('role') === 'admin' ? 'admin' : 'member';
 
 		return transactional(async (tx) => {

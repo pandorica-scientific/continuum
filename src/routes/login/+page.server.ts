@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { asRowId } from '$lib/ids';
 import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -33,7 +35,7 @@ export const actions: Actions = {
 	default: async ({ request, cookies, getClientAddress }) => {
 		const address = getClientAddress();
 		const form = await request.formData();
-		const personId = String(form.get('personId') ?? '');
+		const personId = asRowId(form.get('personId'));
 		const password = String(form.get('password') ?? '');
 
 		// Resolve existence with one cheap indexed lookup before spending Argon2.

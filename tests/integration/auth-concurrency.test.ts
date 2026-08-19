@@ -1,3 +1,4 @@
+import { rowId } from '../row-id';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
@@ -20,7 +21,7 @@ import { pruneExpiredSessions, validateSession } from '$lib/server/auth';
 import { verifyToken } from '$lib/server/api/tokens';
 import { hashToken } from '$lib/server/auth/token-hash';
 import type { Cookies } from '@sveltejs/kit';
-import { before, startPostgres, type Harness, type TestDb } from './harness';
+import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -40,12 +41,7 @@ beforeAll(async () => {
 	harness = await startPostgres('auth-concurrency');
 	testDb = harness.db;
 
-	// The world as it was before the migration under test, then that migration.
-	await harness.applyMigrations(before('0027_'));
-	await harness.applyMigrationFile('0028_auth_concurrency.sql');
-	// The baseline stops before this one, but every insert here goes through the
-	// current Drizzle schema, which names every person column including this.
-	await harness.applyMigrationFile('0034_person_overview_layout.sql');
+	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
 beforeEach(async () => {
@@ -62,10 +58,12 @@ afterAll(async () => {
 describe('authentication concurrency', () => {
 	it('allows exactly one initial setup transaction to claim the instance', async () => {
 		const attempts = await Promise.all(
-			['first-admin', 'second-admin'].map((id) =>
+			['first-admin', 'second-admin'].map((name) =>
 				testDb.transaction(async (tx) => {
 					if (!(await claimInitialSetup(tx))) return false;
-					await tx.insert(schema.person).values({ id, name: id, initials: 'A', role: 'admin' });
+					await tx
+						.insert(schema.person)
+						.values({ id: rowId(name), name, initials: 'A', role: 'admin' });
 					return true;
 				})
 			)
@@ -78,11 +76,13 @@ describe('authentication concurrency', () => {
 	it('runs expensive setup work only for the winning claim and caps household rows', async () => {
 		let initializersRun = 0;
 		const attempts = await Promise.all(
-			['first-admin', 'second-admin'].map((id) =>
+			['first-admin', 'second-admin'].map((name) =>
 				runInitialSetup(testDb, async (tx) => {
 					initializersRun++;
-					await tx.insert(schema.person).values({ id, name: id, initials: 'A', role: 'admin' });
-					return id;
+					await tx
+						.insert(schema.person)
+						.values({ id: rowId(name), name, initials: 'A', role: 'admin' });
+					return name;
 				})
 			)
 		);
@@ -95,23 +95,23 @@ describe('authentication concurrency', () => {
 
 	it('leaves no session or credential when revocation races their creation', async () => {
 		await testDb.insert(schema.person).values({
-			id: 'person-a',
+			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
 			passwordHash: 'old-hash'
 		});
 
 		await Promise.all([
-			testDb.transaction((tx) => revokeAuthenticationGeneration(tx, 'person-a')),
+			testDb.transaction((tx) => revokeAuthenticationGeneration(tx, rowId('person-a'))),
 			createSessionAtGeneration(testDb, {
 				id: 'session-a',
-				personId: 'person-a',
+				personId: rowId('person-a'),
 				authGeneration: 0,
 				expiresAt: new Date('2026-09-15T00:00:00Z')
 			}),
 			createCredentialAtGeneration(testDb, {
 				id: 'credential-a',
-				personId: 'person-a',
+				personId: rowId('person-a'),
 				authGeneration: 0,
 				publicKey: 'public-key',
 				counter: 0,
@@ -126,14 +126,14 @@ describe('authentication concurrency', () => {
 
 	it('cannot finish in-flight authentication work after deactivation commits', async () => {
 		await testDb.insert(schema.person).values({
-			id: 'person-a',
+			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
 			authGeneration: 0
 		});
 		await testDb.insert(schema.credential).values({
 			id: 'credential-a',
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			authGeneration: 0,
 			publicKey: 'public-key',
 			counter: 5,
@@ -147,17 +147,17 @@ describe('authentication concurrency', () => {
 		await testDb
 			.update(schema.person)
 			.set({ deactivatedAt: new Date('2026-08-15T12:00:00Z') })
-			.where(eq(schema.person.id, 'person-a'));
+			.where(eq(schema.person.id, rowId('person-a')));
 
 		const sessionCreated = await createSessionAtGeneration(testDb, {
 			id: 'session-after-deactivation',
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			authGeneration: 0,
 			expiresAt: new Date('2026-09-15T00:00:00Z')
 		});
 		const credentialCreated = await createCredentialAtGeneration(testDb, {
 			id: 'credential-after-deactivation',
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			authGeneration: 0,
 			publicKey: 'new-public-key',
 			counter: 0,
@@ -181,14 +181,14 @@ describe('authentication concurrency', () => {
 	it('does not consume enrollment or set a password/session for an inactive person', async () => {
 		const raw = 'inactive-person-enrollment-token';
 		await testDb.insert(schema.person).values({
-			id: 'person-a',
+			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
 			deactivatedAt: new Date('2026-08-15T12:00:00Z')
 		});
 		await testDb.insert(schema.enrollmentToken).values({
 			id: hashToken(raw),
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			expiresAt: new Date('2027-01-01T00:00:00Z')
 		});
 		const cookies = testCookies();
@@ -210,13 +210,13 @@ describe('authentication concurrency', () => {
 	it('allows one concurrent enrollment to commit password, token, and first session', async () => {
 		const raw = 'active-person-enrollment-token';
 		await testDb.insert(schema.person).values({
-			id: 'person-a',
+			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA'
 		});
 		await testDb.insert(schema.enrollmentToken).values({
 			id: hashToken(raw),
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			expiresAt: new Date('2027-01-01T00:00:00Z')
 		});
 		const firstCookies = testCookies();
@@ -243,10 +243,12 @@ describe('authentication concurrency', () => {
 	});
 
 	it('allows one positive counter advance from the same stored counter', async () => {
-		await testDb.insert(schema.person).values({ id: 'person-a', name: 'Person A', initials: 'PA' });
+		await testDb
+			.insert(schema.person)
+			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		await testDb.insert(schema.credential).values({
 			id: 'credential-a',
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			authGeneration: 0,
 			publicKey: 'public-key',
 			counter: 5,
@@ -280,31 +282,35 @@ describe('authentication concurrency', () => {
 	});
 
 	it('binds a discoverable login challenge to the issued person generations', async () => {
-		await testDb.insert(schema.person).values({ id: 'person-a', name: 'Person A', initials: 'PA' });
+		await testDb
+			.insert(schema.person)
+			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		const cookies = testCookies();
 		await storeChallenge(cookies, 'login-challenge', {
 			address: '192.0.2.31',
-			authSnapshot: { 'person-a': 0 },
+			authSnapshot: { [rowId('person-a')]: 0 },
 			handle: testDb
 		});
 		await testDb
 			.update(schema.person)
 			.set({ authGeneration: 1 })
-			.where(eq(schema.person.id, 'person-a'));
+			.where(eq(schema.person.id, rowId('person-a')));
 
 		const stored = await takeChallenge(cookies, testDb);
 		expect(stored).not.toBeNull();
-		expect(challengeGenerationMatches(stored!, 'person-a', 1)).toBe(false);
+		expect(challengeGenerationMatches(stored!, rowId('person-a'), 1)).toBe(false);
 	});
 
 	it('clears an invalid session cookie and prunes expired rows in bounded batches', async () => {
-		await testDb.insert(schema.person).values({ id: 'person-a', name: 'Person A', initials: 'PA' });
+		await testDb
+			.insert(schema.person)
+			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		const cookies = testCookies();
 		cookies.set('continuum_session', 'expired-token', { path: '/' });
 		await testDb.insert(schema.session).values(
 			Array.from({ length: 70 }, (_, index) => ({
 				id: index === 0 ? hashToken('expired-token') : `expired-${index}`,
-				personId: 'person-a',
+				personId: rowId('person-a'),
 				authGeneration: 0,
 				expiresAt: new Date('2026-01-01T00:00:00Z')
 			}))
@@ -318,7 +324,7 @@ describe('authentication concurrency', () => {
 
 	it('refuses and clears a session from an older authentication generation', async () => {
 		await testDb.insert(schema.person).values({
-			id: 'person-a',
+			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
 			authGeneration: 1
@@ -327,7 +333,7 @@ describe('authentication concurrency', () => {
 		cookies.set('continuum_session', 'stale-token', { path: '/' });
 		await testDb.insert(schema.session).values({
 			id: hashToken('stale-token'),
-			personId: 'person-a',
+			personId: rowId('person-a'),
 			authGeneration: 0,
 			expiresAt: new Date('2027-01-01T00:00:00Z')
 		});

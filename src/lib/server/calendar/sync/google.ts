@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Google Calendar.
 //
 // The API is free — 1,000,000 requests a day, no billing account — and this
@@ -45,7 +46,7 @@ function resetWindowStart(): string {
 	return new Date(Date.now() - RESET_WINDOW_DAYS * 86_400_000).toISOString();
 }
 
-export interface GoogleTime {
+interface GoogleTime {
 	date?: string;
 	dateTime?: string;
 	timeZone?: string;

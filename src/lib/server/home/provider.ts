@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The smart-home capability seam. Screens talk ONLY to this interface; which
 // platform sits behind it is configuration. Adding support for another
 // platform (or expanding what a platform can do) means writing a new provider
@@ -76,7 +77,7 @@ export interface ProviderField {
  * Provider registry. A new platform registers a factory here; everything else
  * — settings UI, the Home screen, the bills wiring — picks it up by key.
  */
-export type ProviderFactory = (config: Record<string, string>) => HomeProvider;
+type ProviderFactory = (config: Record<string, string>) => HomeProvider;
 
 interface RegistryEntry {
 	label: string;

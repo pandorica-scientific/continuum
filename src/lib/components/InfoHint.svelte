@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import Icon from '$lib/components/Icon.svelte';
 	import type { Snippet } from 'svelte';
 

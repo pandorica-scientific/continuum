@@ -1,4 +1,5 @@
-export interface DonutSlice<T> {
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+interface DonutSlice<T> {
 	item: T;
 	pct: number;
 	from: number;

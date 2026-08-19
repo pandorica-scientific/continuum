@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // What someone has to do at the provider's end before connecting.
 //
 // The registry's `hint` is one line under the form; this is the walkthrough
@@ -5,7 +6,7 @@
 // its own instructions, and kept as data rather than markup so it can be shown
 // in a bubble, a page, or the docs without being rewritten.
 
-export interface SetupGuide {
+interface SetupGuide {
 	steps: string[];
 	/** The one thing that goes wrong most often, said plainly. */
 	warning?: string;

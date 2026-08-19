@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import { goto } from '$app/navigation';
@@ -241,8 +242,8 @@
 									placeholder="33 000"
 								/></label
 							>
-							<label><span>Since</span><input name="startDate" type="date" /></label>
-							<label><span>Lease ends</span><input name="endDate" type="date" /></label>
+							<label><span>Since</span><input name="startsOn" type="date" /></label>
+							<label><span>Lease ends</span><input name="endsOn" type="date" /></label>
 							<label
 								><span>Renewal notice by</span><input name="renewalNoticeDate" type="date" /></label
 							>

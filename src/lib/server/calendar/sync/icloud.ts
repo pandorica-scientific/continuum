@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // CalDAV, as spoken by iCloud — and by Fastmail, Nextcloud and Radicale, which
 // is a large part of why this provider comes first.
 //
@@ -24,7 +25,7 @@ import { mapPool, PUSH_CONCURRENCY } from '$lib/server/calendar/sync/pool';
 const DEFAULT_HOST = 'https://caldav.icloud.com';
 const TIMEOUT_MS = 20_000;
 
-export interface CalDavConfig {
+interface CalDavConfig {
 	/** Apple ID, or the username for another CalDAV server. */
 	username: string;
 	/** App-specific password. Never a real account password. */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // What "this event / this and following / all events" actually means to the data.
 //
 // Pure: given a scope, a rule and which occurrence was touched, it returns the
@@ -9,7 +10,7 @@ import { expand, formatRrule, parseRrule, toBasicUtc } from '$lib/calendar/rrule
 
 export type EditScope = 'this' | 'following' | 'all';
 
-export type ScopePlan =
+type ScopePlan =
 	/** Override or cancel one occurrence; the series is untouched. */
 	| { kind: 'exception'; recurrenceId: string }
 	/** Truncate the original series and begin a second one at the split. */

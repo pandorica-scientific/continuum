@@ -1,11 +1,13 @@
-import { randomUUID } from 'node:crypto';
-import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
-import { db, type Db, type Tx } from '$lib/server/db';
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { uuidv7 } from 'uuidv7';
+import { and, eq, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import {
 	calendarAccount,
 	calendarEvent,
 	calendarEventException,
-	calendarSyncLink
+	calendarSyncLink,
+	job
 } from '$lib/server/db/schema';
 import { generateEvents, getCalendarMarkers } from '$lib/server/calendar';
 import { hashSeries, type EventSeries } from '$lib/server/calendar/series';
@@ -576,22 +578,24 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 				.set({
 					cursor: pulled.cursor,
 					lastSyncAt: new Date(),
-					syncingSince: null,
 					lastError: report.rejection
 						? `${report.rejected} of ${pushOps.length} writes refused — ${report.rejection}`
 						: null
 				})
 				.where(eq(calendarAccount.id, accountId));
+			// The lease is given up in the same transaction: a pass that reached here
+			// is finished, and holding the claim past that stalls the next one for no
+			// reason.
+			await releaseAccount(tx, accountId);
 		});
 
 		return report;
 	} catch (error) {
 		// The claim is given up on the way out either way, or a pass that threw
 		// would lock the account out until the lease expired.
-		await handle
-			.update(calendarAccount)
-			.set({ syncingSince: null })
-			.where(eq(calendarAccount.id, accountId));
+		// Released on the way out either way, or a pass that threw would lock the
+		// account out until the lease expired.
+		await releaseAccount(handle, accountId, error instanceof Error ? error.message : String(error));
 		throw error;
 	}
 }
@@ -613,23 +617,55 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
  */
 async function claimAccount(handle: Db, accountId: string): Promise<boolean> {
 	const staleBefore = new Date(Date.now() - LEASE_MINUTES * 60_000);
+	const jobId = `calendar-sync:${accountId}`;
 
 	return handle.transaction(async (tx) => {
+		// The advisory lock is what makes read-then-claim atomic ACROSS PROCESSES,
+		// which an in-memory guard would not be. Held only for the claim itself —
+		// the pass that follows is minutes of network I/O and no database lock
+		// belongs open across it.
 		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`calendar-sync:${accountId}`}))`);
 
+		// The lease lives in `job` rather than on the account: it is the same
+		// take-it-and-stamp-it mechanism the import queue uses, and it was written
+		// twice before this. One row per account, reused, so a pass leaves no
+		// history to sweep up.
 		const claimed = await tx
-			.update(calendarAccount)
-			.set({ syncingSince: new Date() })
-			.where(
-				and(
-					eq(calendarAccount.id, accountId),
-					or(isNull(calendarAccount.syncingSince), lt(calendarAccount.syncingSince, staleBefore))
-				)
-			)
-			.returning({ id: calendarAccount.id });
+			.insert(job)
+			.values({
+				id: jobId,
+				kind: 'calendar_sync',
+				subjectId: accountId,
+				state: 'running',
+				claimedAt: new Date(),
+				attempts: 1
+			})
+			.onConflictDoUpdate({
+				target: job.id,
+				set: {
+					state: 'running',
+					claimedAt: new Date(),
+					attempts: sql`${job.attempts} + 1`,
+					finishedAt: null,
+					error: null
+				},
+				// Taken only when nobody holds it, or when whoever did has gone
+				// quiet for longer than the lease. Without the second clause a
+				// process killed mid-pass would lock the account out for good.
+				setWhere: or(ne(job.state, 'running'), lt(job.claimedAt, staleBefore))
+			})
+			.returning({ id: job.id });
 
 		return claimed.length > 0;
 	});
+}
+
+/** Give up the pass, whether it finished or threw. */
+async function releaseAccount(handle: Queryable, accountId: string, error?: string): Promise<void> {
+	await handle
+		.update(job)
+		.set({ state: error ? 'failed' : 'done', finishedAt: new Date(), error: error ?? null })
+		.where(eq(job.id, `calendar-sync:${accountId}`));
 }
 
 /**
@@ -696,7 +732,11 @@ async function reapTombstones(tx: Tx) {
 		where deleted_at is not null
 		  and deleted_at < now() - ${sql.raw(`interval '${TOMBSTONE_GRACE_DAYS} days'`)}
 		  and not exists (
-			select 1 from calendar_sync_link where calendar_sync_link.local_key = calendar_event.id
+			-- local_key is text on purpose: it holds an authored event's uuid OR a
+			-- generated event's \`gen:\` key, so it is not always a uuid and the cast
+			-- has to go the other way.
+			select 1 from calendar_sync_link
+			 where calendar_sync_link.local_key = calendar_event.id::text
 		  )
 	`);
 }
@@ -777,7 +817,7 @@ async function applyRemote(
 	if (series.exceptions.length > 0) {
 		await tx.insert(calendarEventException).values(
 			series.exceptions.map((e) => ({
-				id: randomUUID(),
+				id: uuidv7(),
 				eventId: localKey,
 				recurrenceId: e.recurrenceId,
 				cancelled: e.cancelled,

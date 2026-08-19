@@ -1,4 +1,5 @@
 <script lang="ts">
+	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { buildSankey } from './sankey';
 	import { depthFor, flowGraph, type FlowGraphInput } from './flow-graph';
 	import { formatMinor, fromMajor } from '$lib/money';

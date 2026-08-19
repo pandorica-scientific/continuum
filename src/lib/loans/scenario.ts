@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import type { DayCount } from '$lib/loans';
 import type { FixationPeriod, LoanTerms } from '$lib/loans/amortise';
 import type { YearAgg } from '$lib/loans/simulate';
@@ -12,8 +13,8 @@ export interface ScenarioPayload {
 		paymentDay: number;
 	};
 	periods: {
-		startDate: string;
-		endDate: string | null;
+		startsOn: string;
+		endsOn: string | null;
 		annualRatePct: number;
 		paymentMinor: string;
 	}[];
@@ -25,10 +26,10 @@ export interface ScenarioPayload {
 export function defaultFixationStart(periods: ScenarioPayload['periods'], today: string): string {
 	const current = periods
 		.filter(
-			(period) => period.startDate <= today && (period.endDate === null || period.endDate > today)
+			(period) => period.startsOn <= today && (period.endsOn === null || period.endsOn > today)
 		)
-		.sort((a, b) => (a.startDate < b.startDate ? 1 : -1))[0];
-	return current?.endDate && current.endDate > today ? current.endDate : today;
+		.sort((a, b) => (a.startsOn < b.startsOn ? 1 : -1))[0];
+	return current?.endsOn && current.endsOn > today ? current.endsOn : today;
 }
 
 export function decodeScenarioPayload(payload: ScenarioPayload): {
