@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import { SETUP_GUIDES } from '$lib/calendar/setup-steps';
@@ -30,6 +31,40 @@
 	};
 	const chosenName = (calendars: { id: string; name: string }[]) =>
 		pickedName ?? calendars[0]?.name ?? '';
+
+	// Watch a backup through to its outcome.
+	//
+	// `runBackupNow` answers as soon as the run has *started* — dumping the
+	// database and copying every upload takes as long as it takes, and nobody
+	// should hold a browser open for it. Nothing then looked again, so the
+	// status line stopped at "the result appears here when it finishes", a
+	// promise this page had no way of keeping, until someone reloaded by hand.
+	//
+	// Watching `backupRunning` alone is not enough. The answer this page happens
+	// to render can predate the run — press Save and Back up now in quick
+	// succession and the two invalidations race — and then the flag that would
+	// have armed the watch is never seen at all. So asking for a backup arms it
+	// directly, whatever the loads do.
+	//
+	// It also has to stop. `runBackup` has the run under way before the action
+	// answers, so the first load to land after that is authoritative: a run is
+	// either still going, or its outcome is already recorded. One look that
+	// reports neither means nothing further is coming — a run that died without
+	// recording anything — and the watch ends rather than polling for ever.
+	//
+	// So: how many fresh loads have landed since this page asked for a backup,
+	// or null if it has not asked for one.
+	let looksSinceAsked = $state<number | null>(null);
+	const watchBackup = $derived(data.backupRunning || looksSinceAsked === 0);
+	$effect(() => {
+		if (!watchBackup) return;
+		const timer = setInterval(() => {
+			void invalidateAll().then(() => {
+				if (looksSinceAsked !== null) looksSinceAsked += 1;
+			});
+		}, 1000);
+		return () => clearInterval(timer);
+	});
 </script>
 
 <ScreenHeader
@@ -179,7 +214,13 @@
 				<button type="submit" class="btn">Save</button>
 			</form>
 			<div class="backup-status">
-				<form method="POST" action="?/runBackupNow" use:enhance>
+				<form
+					method="POST"
+					action="?/runBackupNow"
+					use:enhance={() => {
+						looksSinceAsked = 0;
+					}}
+				>
 					<button type="submit" class="btn" disabled={data.backupRunning}>
 						{data.backupRunning ? 'Backing up…' : 'Back up now'}
 					</button>

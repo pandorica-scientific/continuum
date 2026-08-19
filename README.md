@@ -50,7 +50,7 @@ Continuum makes a different trade from conventional finance apps. It never conne
 
 Continuum is for you if you…
 
-- 📊  **are tired of the spreadsheet** — and of losing an evening every month keeping it up to date
+- 📊 **are tired of the spreadsheet** — and of losing an evening every month keeping it up to date
 - 🧩 **have too much to keep track of** — accounts, bills, property, loans, investments and tax, all scattered across different places
 - 🚀 **want setup to be painless** — one Compose file, one command, then a guided setup; no configuration files to edit by hand
 - ⚡ **want it to just work** — give Continuum the file exactly as your bank provided it and let it work out the rest; if something is genuinely ambiguous, it asks
