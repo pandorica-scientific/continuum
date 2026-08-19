@@ -3,8 +3,16 @@
 Docker and Docker Compose are the supported route. Podman, Proxmox, TrueNAS,
 Umbrel and Unraid packaging are planned.
 
+## Quick start
+
+Two files: the Compose file, and the small serve config the Tailscale sidecar
+mounts.
+
 ```sh
+mkdir continuum && cd continuum
 curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
+curl --create-dirs -o docker/tailscale-serve.json \
+  https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docker/tailscale-serve.json
 POSTGRES_PASSWORD=change-me docker compose up -d
 ```
 
@@ -12,18 +20,44 @@ Open `http://your-server` (port 80 by default) and follow the setup wizard.
 Everything — people, base currency (CZK, EUR or PLN), which modules are on — is
 configured there, not in files.
 
+Skipping Tailscale? Then the second file is not needed: `docker compose up -d app
+db` starts the app and the database on their own.
+
+## Where the image comes from
+
+Compose pulls a published image; nothing is built on your machine.
+
+| Registry                                                           | Image                                    |
+| ------------------------------------------------------------------ | ---------------------------------------- |
+| [Docker Hub](https://hub.docker.com/r/kerth92/continuum) — primary | `kerth92/continuum`                      |
+| GitHub Container Registry — mirror, same build                     | `ghcr.io/pandorica-scientific/continuum` |
+
+Each release publishes its version tag and moves `latest` onto it, for
+`linux/amd64` and `linux/arm64`. `compose.yaml` uses `kerth92/continuum:latest`;
+edit that one `image:` line to pin a version (`kerth92/continuum:0.3.10`) or to
+pull from the mirror instead.
+
+To check what is actually running:
+
+```sh
+docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' kerth92/continuum:latest
+```
+
+The image needs a PostgreSQL 17 database, `/data` for uploaded files and
+`/backups` for backups. `compose.yaml` wires all three, which is why it is the
+supported way in rather than a bare `docker run`.
+
 ## What it needs
 
-Measured on a running instance: the app holds about 191 MB of memory at rest and
-Postgres about 69 MB, so roughly **300 MB** for the pair, from a **393 MB** image.
+Measured on a running instance: about 191 MB of memory for the app and 69 MB for
+Postgres — roughly **300 MB** for the pair, from a **393 MB** image.
 
-The image is built for `linux/amd64` and `linux/arm64`, so a Raspberry Pi 4 or 5
-with 2 GB of memory on a 64-bit OS runs it comfortably, as does any x86 mini PC or
-NAS. There is no 32-bit (`armv7`) build, so a Raspberry Pi 3 or older will not run
-it.
+A Raspberry Pi 4 or 5 with 2 GB on a 64-bit OS runs it comfortably, as does any
+x86 mini PC or NAS. There is no 32-bit (`armv7`) build, so a Raspberry Pi 3 or
+older will not run it.
 
-Importing a scanned or photographed statement is the heaviest thing it does — that
-work runs in a background queue, so it slows an import down on a small machine
+Importing a scanned or photographed statement is the heaviest thing it does. That
+work runs in a background queue, so on a small machine it slows the import down
 rather than blocking the interface.
 
 ## Try it first
@@ -33,10 +67,10 @@ DEMO=1 docker compose up -d
 ```
 
 On a pristine instance this seeds a fictional household — six months of
-categorised cash flow, two flats on one shared mortgage, payslips, a portfolio —
-so you can look around before importing anything real. Sign in as Jana Nováková
-with `demo-demo-demo`. An instance that already has people is never touched, and
-every screenshot in the gallery comes from exactly this data.
+categorised cash flow, two flats on one shared mortgage, payslips, a portfolio.
+Sign in as Jana Nováková with `demo-demo-demo`. An instance that already has
+people is never touched, and every screenshot in the gallery comes from exactly
+this data.
 
 ## Tailscale
 
@@ -45,12 +79,6 @@ what makes passkeys possible and a home server has no other easy route to a
 trusted certificate. It is tailnet-only, and until you authenticate it the sidecar
 simply idles while the app stays reachable on the port above. See
 [Networking and passkeys](networking.md).
-
-To leave Tailscale out altogether, start only the two services you need:
-
-```sh
-docker compose up -d app db
-```
 
 ## Environment variables
 
