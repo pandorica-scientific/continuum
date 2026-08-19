@@ -105,3 +105,54 @@ export async function serverStatus(): Promise<ServerStatus> {
 		storage
 	};
 }
+
+/**
+ * The two facts about this installation that never change while it runs, so the
+ * sidebar can show them on every page without paying for `serverStatus()` — a
+ * directory walk and two database queries — on every page.
+ *
+ * Cached for the life of the process, which is exactly how long they are true
+ * for: a new version or a move in or out of a container is a new process.
+ */
+export interface InstallFacts {
+	version: string;
+	/** How it is being run, as far as it can tell from inside. */
+	runtime: 'docker' | 'node';
+}
+
+let cachedInstallFacts: InstallFacts | null = null;
+
+export async function installFacts(): Promise<InstallFacts> {
+	if (cachedInstallFacts) return cachedInstallFacts;
+
+	let version = 'dev';
+	try {
+		const pkg = JSON.parse(await readFile('package.json', 'utf8')) as { version?: string };
+		if (pkg.version) version = pkg.version;
+	} catch {
+		// package.json not next to the built app — keep 'dev'
+	}
+
+	// Two signals, because neither is universal: Docker writes /.dockerenv, and
+	// container runtimes generally leave their name in PID 1's cgroup. Podman and
+	// containerd answer to the second but not the first.
+	let runtime: InstallFacts['runtime'] = 'node';
+	if (
+		await access('/.dockerenv', constants.F_OK).then(
+			() => true,
+			() => false
+		)
+	) {
+		runtime = 'docker';
+	} else {
+		try {
+			const cgroup = await readFile('/proc/1/cgroup', 'utf8');
+			if (/docker|containerd|podman|kubepods/.test(cgroup)) runtime = 'docker';
+		} catch {
+			// no procfs — a plain macOS or Windows host, which is the 'node' answer
+		}
+	}
+
+	cachedInstallFacts = { version, runtime };
+	return cachedInstallFacts;
+}

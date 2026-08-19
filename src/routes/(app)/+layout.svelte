@@ -96,6 +96,8 @@
 			netWorthDeltaPositive={data.netWorthDeltaPositive}
 			baseCurrency={data.baseCurrency}
 			importBadge={data.importBadge}
+			version={data.version}
+			runtime={data.runtime}
 			onNavigate={() => (drawerOpen = false)}
 		/>
 	</div>
@@ -213,7 +215,23 @@
 		display: grid;
 		grid-template-columns: 252px minmax(0, 1fr);
 		min-height: 100vh;
-		align-items: stretch;
+		align-items: start;
+	}
+
+	/* Sticky rather than in the flow: the navigation used to scroll away with the
+	   page, so on anything shorter than the content — a tablet above all — you had
+	   to scroll back to the top to move between screens.
+	   `align-items: start` on the grid is what lets this work: stretched to the
+	   row's full height, a sticky element has nothing left to stick within. */
+	.side {
+		position: sticky;
+		top: 0;
+		/* dvh, not vh: a mobile browser's chrome hides and reappears, and vh is
+		   measured against the largest viewport, so the sidebar would be taller
+		   than the screen and its last item would sit below the fold.
+		   The scrolling belongs to `aside` inside this, which is the element
+		   carrying the background — two scroll containers here would fight. */
+		height: 100dvh;
 	}
 	main {
 		padding: 26px 32px 60px;

@@ -9,6 +9,7 @@ import { getHouseholdName, getModules } from '$lib/server/settings';
 import { pathDisabled } from '$lib/modules/registry';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { THEME_COOKIE, themeCookieOptions, themeOrDefault } from '$lib/theme';
+import { installFacts } from '$lib/server/system/status';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
@@ -18,13 +19,15 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		error(404, 'This module is switched off');
 	}
 
-	const [householdLabel, badgeRows, netWorth] = await Promise.all([
+	const [householdLabel, badgeRows, netWorth, install] = await Promise.all([
 		getHouseholdName(),
 		db
 			.select({ count: sql<number>`count(*)::int` })
 			.from(transaction)
 			.where(sql`${transaction.reviewState} = 'needs_review'`),
-		computeNetWorth()
+		computeNetWorth(),
+		// Cached after the first call: neither fact can change without a restart.
+		installFacts()
 	]);
 
 	// Every converted total falls back to face value when a rate is unknown,
@@ -59,6 +62,8 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		netWorthDeltaPositive: (netWorth.deltaThisMonthMinor ?? 0n) >= 0n,
 		baseCurrency: displayCurrency(netWorth.baseCurrency),
 		importBadge: badgeRows[0].count,
-		theme
+		theme,
+		version: install.version,
+		runtime: install.runtime
 	};
 };

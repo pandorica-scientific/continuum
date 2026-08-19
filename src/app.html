@@ -3,6 +3,13 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- The colour the BROWSER paints where the page does not reach: the
+		     pull-to-refresh area, the rubber band past either end, and the status
+		     bar on a tablet. Without it those regions are white, which is what
+		     "pulling down reveals white" was. Kept in step with the theme by the
+		     script below, because this app picks its theme rather than following
+		     prefers-color-scheme. -->
+		<meta name="theme-color" content="#0e1117" />
 		<script>
 			// Dark is the default; light only when explicitly chosen. Runs before paint.
 			//
@@ -13,6 +20,7 @@
 			// server, so it made two people on one laptop share a theme.
 			if (document.cookie.split('; ').includes('continuum_theme=light')) {
 				document.documentElement.setAttribute('data-ledger-theme', 'light');
+				document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f3f0e9');
 			}
 		</script>
 		%sveltekit.head%
