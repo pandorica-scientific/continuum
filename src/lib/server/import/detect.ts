@@ -18,7 +18,13 @@ import {
 	type Region
 } from './tabular/regions';
 import { readTabular } from './tabular/statement';
-import { PROOF_RANK, decideImport, proveStatement, type ProofClass } from './proof';
+import {
+	PROOF_RANK,
+	accountsForWholeFile,
+	decideImport,
+	proveStatement,
+	type ProofClass
+} from './proof';
 import { headersOf, matchProfile, rolesFromProfile, type ImportProfile } from './tabular/profile';
 import type { ColumnRole } from './tabular/vocabulary';
 import type { DateOrder, DecimalMark } from './tabular/determinacy';
@@ -532,7 +538,13 @@ async function readGenerically(
 		}
 	}
 
-	if (readings.length === 0) return { statements: [], reason: firstReason };
+	// A REFUSAL outranks whatever the first candidate happened to complain about.
+	// Reporting `firstReason` told the person holding a Komerční banka statement
+	// that "every day and month is 12 or lower ... nothing settles the order",
+	// which was true of a fragment that lost and irrelevant to why the file was
+	// turned away: the statement had been read completely and then failed the
+	// proof gate. The reason shown has to be the one that decided the outcome.
+	if (readings.length === 0) return { statements: [], reason: refusedReason ?? firstReason };
 
 	// Separate parts: every one of them belongs in the ledger.
 	if (combine === 'collect') {
@@ -621,6 +633,8 @@ async function readOneGrid(
 	const statements: ParsedStatement[] = [];
 	const reasons: string[] = [];
 	let weakest: ProofClass | undefined;
+	/** The first region that read and then failed the gate, decided after the loop. */
+	let refusal: string | undefined;
 
 	for (const region of choice.transactions) {
 		// A remembered layout answers the questions a person already answered.
@@ -702,12 +716,22 @@ async function readOneGrid(
 			// thing cleanly and win, which is the arbitration this reader is built
 			// on. What can no longer happen is a partial reading being filed as
 			// though it were whole.
-			return {
-				statements: [],
-				refused: true,
-				reason: `That layout was read, but not confidently enough to file: ${decision.reason} (${proof.proofClass}).`
-			};
+			//
+			// Recorded rather than returned, because "a region failed" is not the
+			// same question as "is anything missing". Returning here discarded
+			// regions that had ALREADY accounted for every movement in the file: a
+			// balance-by-date recap reads as a table of movements, fails on its own
+			// arithmetic because its figures are balances, and took a complete
+			// statement down with it. `accountsForWholeFile` settles it after every
+			// region has been seen — see its docblock for why arithmetic can answer
+			// this without recognising what the failing region was.
+			refusal ??= `That layout was read, but not confidently enough to file: ${decision.reason} (${proof.proofClass}).`;
 		}
+	}
+
+	// A refusal stands unless what read leaves nothing unaccounted for.
+	if (refusal && !accountsForWholeFile(statements)) {
+		return { statements: [], refused: true, reason: refusal };
 	}
 
 	if (statements.length > 0) return { statements, proofClass: weakest };

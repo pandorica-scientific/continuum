@@ -348,6 +348,52 @@ export function proveStatement(statement: ParsedStatement, facts?: LexicalFacts)
 /** Ordering for comparison and display. */
 export const PROOF_RANK: Record<ProofClass, number> = { P4: 4, P3: 3, P2: 2, P1: 1, P0: 0 };
 
+/**
+ * Do these readings already account for every movement the file claims?
+ *
+ * Asked when one region of a document read into a statement and another failed:
+ * is the failing region a PART that would go unimported, or the same money
+ * counted a second way?
+ *
+ * Arithmetic answers it, so nothing here has to recognise what the failing
+ * region was. When what read closes the chain against the statement's OWN
+ * printed opening and closing balances, no movement can be missing from it, and
+ * a further region cannot be a part — it is a recap, a summary, or furniture
+ * that happened to carry a date beside a figure.
+ *
+ * That case is ordinary rather than exotic. Komerční banka prints a
+ * "Zůstatek podle data" block giving the balance on each date; it has a date
+ * column beside an amount column and so reads as a table of movements, and it
+ * fails on its own arithmetic because those figures are balances — differencing
+ * them reproduces the movements that were already read. Sparkasse prints the
+ * same thing, which is why `kontostande` is already in SUMMARY_TERMS. No
+ * statement is obliged to mention its balances only once.
+ *
+ * The converse is what this protects, and it is why the test is closure rather
+ * than a count of regions. If what read does NOT reach the printed closing
+ * balance then money is unaccounted for and the failing region really might be
+ * carrying it — so filing what read would import part of a document and record
+ * the file's content hash, and the corrected re-upload would then be refused as
+ * a duplicate. `frompdf.ts` calls that the worst outcome this system can
+ * produce, and it stays refused.
+ *
+ * A reading with no printed endpoints answers nothing either way, so it counts
+ * as not accounted for: silence is not evidence.
+ *
+ * The residual exposure is P1's own, documented at the top of this file — two
+ * omitted movements that offset each other leave the endpoints intact. This
+ * adds no exposure that filing a P1 statement did not already carry.
+ */
+export function accountsForWholeFile(statements: ParsedStatement[]): boolean {
+	if (statements.length === 0) return false;
+	return statements.every((statement) => {
+		const opening = statement.openingBalanceMinor;
+		const closing = statement.closingBalanceMinor;
+		if (opening === undefined || closing === undefined) return false;
+		return opening + statement.rows.reduce((total, row) => total + net(row), 0n) === closing;
+	});
+}
+
 export interface ImportDecision {
 	/** May this statement be filed without asking? */
 	autoImport: boolean;
