@@ -149,11 +149,11 @@ export async function missingRateCurrencies(
 			union all select currency, coalesce(valued_at, current_date) as day from ${property}
 			union all select currency, day from ${portfolioSnapshot}
 			union all select ${storedDocument.amountCurrency},
-				case
-					when ${storedDocument.periodMonth} ~ '^\\d{4}-\\d{2}$'
-						then (${storedDocument.periodMonth} || '-01')::date
-					else ${storedDocument.addedOn}
-				end
+				-- The month the document covers when it names one, else the day it was
+				-- filed. This used to test a 'YYYY-MM' string against a regex and cast
+				-- it, which silently skipped any value written another way; period_on
+				-- is a real date since 0052 and needs neither.
+				coalesce(${storedDocument.periodOn}, ${storedDocument.addedOn})
 			from ${storedDocument}
 			where ${storedDocument.amountCurrency} is not null
 				and ${storedDocument.amountMinor} is not null

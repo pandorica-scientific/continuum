@@ -743,7 +743,14 @@ export async function ingestFile(
 				accountId: null,
 				contentHash,
 				storedName,
-				rowsRead: totalRows
+				rowsRead: totalRows,
+				// Required since 0052: a filed statement must always carry a record of
+				// what read it and how strongly it was proven. What is known here is
+				// the first statement's own reading; the weakest across every statement
+				// in the file is written once they have all been filed, below.
+				currency: statements[0].currency,
+				sourceMethod: statements[0].provenance?.method ?? 'unknown',
+				proofClass: statements[0].provenance?.proofClass ?? 'P0'
 			});
 
 			const outcomes: StatementOutcome[] = [];

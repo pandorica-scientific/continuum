@@ -205,6 +205,9 @@ describe('import database integrity', () => {
 				format: 'csv',
 				accountId: 'jpy',
 				contentHash: 'jpy-content',
+				currency: 'JPY',
+				sourceMethod: 'adapter',
+				proofClass: 'P4',
 				rowsRead: 2
 			});
 			await database.insert(schema.importFile).values({
@@ -214,6 +217,9 @@ describe('import database integrity', () => {
 				format: 'csv',
 				accountId: 'jpy',
 				contentHash: 'jpy-overlap-content',
+				currency: 'CZK',
+				sourceMethod: 'adapter',
+				proofClass: 'P4',
 				rowsRead: 3
 			});
 
@@ -458,6 +464,9 @@ describe('import database integrity', () => {
 					bank: 'revolut',
 					format: 'csv',
 					accountId: 'collision-jpy',
+					currency: 'JPY',
+					sourceMethod: 'adapter',
+					proofClass: 'P4',
 					contentHash: 'legacy-import',
 					rowsRead: 2,
 					rowsAdded: 2
@@ -468,6 +477,9 @@ describe('import database integrity', () => {
 					bank: 'revolut',
 					format: 'csv',
 					accountId: 'collision-jpy',
+					currency: 'JPY',
+					sourceMethod: 'adapter',
+					proofClass: 'P4',
 					contentHash: 'current-import',
 					rowsRead: 2,
 					rowsAdded: 2
@@ -710,6 +722,11 @@ describe('import database integrity', () => {
 					bank: 'revolut',
 					format: 'csv',
 					accountId: `v1-${code}`,
+					currency: code,
+					sourceMethod: 'adapter',
+					// `as const` because inside a .map() the literal widens to `string`,
+					// which the proof-class union no longer accepts.
+					proofClass: 'P4' as const,
 					contentHash: `legacy-${code}`,
 					storedName: `legacy-${code}.csv`,
 					rowsRead: code === 'CZK' ? 2 : 1,
@@ -843,6 +860,9 @@ describe('import database integrity', () => {
 				format: 'csv',
 				accountId: 'v1-false-match',
 				contentHash: 'legacy-false-match',
+				currency: 'CZK',
+				sourceMethod: 'adapter',
+				proofClass: 'P4',
 				rowsRead: 2,
 				rowsAdded: 2
 			});

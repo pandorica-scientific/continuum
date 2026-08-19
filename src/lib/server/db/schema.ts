@@ -285,7 +285,9 @@ export const importFile = pgTable(
 		sourceMethod: text('source_method'),
 		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>(),
 		ledgerModel: text('ledger_model'),
-		currency: text('currency').references(() => currency.code),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
 		openingBalanceMinor: bigint('opening_balance_minor', { mode: 'bigint' }),
 		closingBalanceMinor: bigint('closing_balance_minor', { mode: 'bigint' }),
 		statedCreditTotalMinor: bigint('stated_credit_total_minor', { mode: 'bigint' }),
@@ -683,7 +685,7 @@ export const loan = pgTable(
 		// payment date to payment date
 		paymentDay: integer('payment_day'),
 		// czech mortgage interest on owner-occupied housing is tax deductible
-		interestDeductible: integer('interest_deductible').notNull().default(0),
+		interestDeductible: boolean('interest_deductible').notNull().default(false),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
@@ -786,7 +788,7 @@ export const document = pgTable(
 		// and the month they cover — the salary tracker derives from these
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
 		amountCurrency: text('amount_currency').references(() => currency.code),
-		periodMonth: text('period_month')
+		periodOn: date('period_on')
 	},
 	(table) => [
 		index('document_amount_currency_idx').on(table.amountCurrency),
@@ -812,9 +814,14 @@ export const brokerOperation = pgTable(
 		comment: text('comment'),
 		// the broker position this cash movement belongs to — links purchases and
 		// sells to holding periods for the reconstructed value curve
-		positionId: text('position_id')
+		positionId: text('position_id').references(() => brokerPosition.id, {
+			onDelete: 'set null'
+		})
 	},
-	(table) => [index('broker_operation_currency_idx').on(table.currency)]
+	(table) => [
+		index('broker_operation_currency_idx').on(table.currency),
+		index('broker_operation_position_idx').on(table.positionId)
+	]
 );
 
 // A broker position's holding interval, from the report's Closed Positions

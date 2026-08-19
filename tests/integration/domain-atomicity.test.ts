@@ -745,7 +745,7 @@ describe('domain replacement writes', () => {
 			addedOn: '2026-08-15',
 			amountMinor: 100n,
 			amountCurrency: 'EUR',
-			periodMonth: '2020-01'
+			periodOn: '2020-01-01'
 		});
 		await testDb.insert(schema.brokerOperation).values({
 			id: 'historical-operation',

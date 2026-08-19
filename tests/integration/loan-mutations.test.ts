@@ -27,7 +27,7 @@ async function seedLoan(id = 'loan-a'): Promise<void> {
 		dayCount: '30/360',
 		accrualStyle: 'payment',
 		paymentDay: 15,
-		interestDeductible: 1
+		interestDeductible: true
 	});
 }
 

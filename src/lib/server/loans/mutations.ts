@@ -411,7 +411,7 @@ export async function createLoan(
 			dayCount,
 			accrualStyle,
 			paymentDay,
-			interestDeductible: input.interestDeductible ? 1 : 0
+			interestDeductible: input.interestDeductible
 		});
 		if (input.secured.length > 0) {
 			await tx.insert(loanProperty).values(

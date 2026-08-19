@@ -117,7 +117,7 @@ export const load: PageServerLoad = async () => {
 	// rename cannot orphan it. Amounts come from the PDF (learned per person)
 	// or the user's own entry.
 	const slips = (await db.select().from(document).where(eq(document.shelf, 'payslips'))).filter(
-		(d) => d.amountMinor !== null && d.periodMonth !== null
+		(d) => d.amountMinor !== null && d.periodOn !== null
 	);
 	// Which payslip belongs to whom. Filtered to people, because document_link
 	// now also holds a document's properties, accounts and subjects.
@@ -131,7 +131,9 @@ export const load: PageServerLoad = async () => {
 			.filter((d) => ownerOf.get(d.id) === p.id)
 			.map((d) => ({
 				id: d.id,
-				periodMonth: d.periodMonth!,
+				// period_on is a real date since 0052; the screens and the form work in
+				// months, which is what an <input type="month"> gives and takes.
+				periodMonth: d.periodOn!.slice(0, 7),
 				amountMinor: d.amountMinor!,
 				currency: d.amountCurrency ?? baseCurrency,
 				file: d.storedName
@@ -241,7 +243,7 @@ export const actions: Actions = {
 				addedOn: new Date().toISOString().slice(0, 10),
 				amountMinor,
 				amountCurrency: baseCurrency,
-				periodMonth
+				periodOn: `${periodMonth}-01`
 			});
 			await tx
 				.insert(documentLink)

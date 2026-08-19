@@ -35,10 +35,10 @@ export const load: PageServerLoad = async () => {
 	// as the retirement screen reads it, so the two screens cannot disagree.
 	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
 	const slips = payslipDocs
-		.filter((d) => d.periodMonth !== null)
+		.filter((d) => d.periodOn !== null)
 		.map((d) => ({
 			personId: ownerOf.get(d.id) ?? '',
-			periodMonth: d.periodMonth!,
+			periodMonth: d.periodOn!.slice(0, 7),
 			amountMinor: d.amountMinor,
 			currency: d.amountCurrency ?? base
 		}));

@@ -310,7 +310,7 @@ export async function seedDemo(): Promise<void> {
 		dayCount: 'act/360',
 		accrualStyle: 'calendar',
 		paymentDay: 18,
-		interestDeductible: 1
+		interestDeductible: true
 	});
 	await db.insert(loanProperty).values([
 		{ id: randomUUID(), loanId: mortgage, propertyId: flatA, sharePct: '62.5' },
@@ -504,7 +504,8 @@ export async function seedDemo(): Promise<void> {
 			addedOn: today,
 			amountMinor: base,
 			amountCurrency: 'CZK',
-			periodMonth: m
+			// The month the payslip covers, pinned to its first day.
+			periodOn: `${m}-01`
 		});
 	}
 	const contractId = randomUUID();

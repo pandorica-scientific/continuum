@@ -285,7 +285,7 @@ describe('write-back into the ledger', () => {
 			dayCount: 'act/360',
 			accrualStyle: 'calendar',
 			paymentDay,
-			interestDeductible: 1
+			interestDeductible: true
 		});
 		await testDb.insert(schema.loanFixationPeriod).values({
 			id: randomUUID(),
