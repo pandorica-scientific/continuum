@@ -77,7 +77,7 @@
 				{/each}
 			</div>
 			<div class="ticks mono" class:monthly={data.history.ticks.unit === 'month'}>
-				{#each data.history.ticks.labels as label (label)}
+				{#each data.history.ticks.labels as label, i (i)}
 					<span>{label}</span>
 				{/each}
 			</div>

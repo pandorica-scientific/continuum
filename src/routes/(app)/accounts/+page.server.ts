@@ -87,7 +87,9 @@ export const load: PageServerLoad = async () => {
 				'var(--yellow)',
 				'var(--green)'
 			];
-			return { label: r.name, pct, from, to, color: colors[i % colors.length] };
+			// id, not name: two accounts may legitimately share a name, and a keyed
+			// each block with a repeated key throws rather than degrading.
+			return { id: r.id, label: r.name, pct, from, to, color: colors[i % colors.length] };
 		}
 	);
 
@@ -110,6 +112,13 @@ export const load: PageServerLoad = async () => {
 		if (!out || !into) return [];
 		return [
 			{
+				// The pair's own id. What this list is keyed on in the markup, and it
+				// has to be something unique: it was keyed on date+route, and two
+				// transfers between the same two accounts on the same day — which is
+				// ordinary, a standing order and a manual top-up — produced the same
+				// key twice. Svelte throws `each_key_duplicate` on that during
+				// hydration, which killed the whole page and rendered it blank.
+				id: p.id,
 				date: out.bookedOn,
 				route: `${accountName(out.accountId)} → ${accountName(into.accountId)}`,
 				amount: `${formatMinor(-out.amountMinor, out.currency)} ${displayCurrency(out.currency)}`

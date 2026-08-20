@@ -128,7 +128,7 @@
 
 				{#if labelsFor(contact).length}
 					<div class="linked">
-						{#each labelsFor(contact) as label (label)}<span class="chip">{label}</span>{/each}
+						{#each labelsFor(contact) as label, i (i)}<span class="chip">{label}</span>{/each}
 					</div>
 				{/if}
 

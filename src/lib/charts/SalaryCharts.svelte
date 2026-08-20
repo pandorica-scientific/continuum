@@ -91,7 +91,7 @@
 					y2={PAD.top + innerH}
 					class="base"
 				/>
-				{#each withData as p, pi (p.name)}
+				{#each withData as p, pi (pi)}
 					{#each p.points as pt (pt.year)}
 						{@const h = (pt.avgMajor / maxAvg) * innerH}
 						<rect
@@ -122,7 +122,7 @@
 					>
 				{/each}
 				<text x={PAD.left - 6} y={deltaY(0) + 3} class="mono axis">0</text>
-				{#each withData as p (p.name)}
+				{#each withData as p, pi (pi)}
 					{@const pts = p.points.filter((pt) => pt.deltaPct !== null)}
 					{#if pts.length >= 2}
 						<polyline
@@ -163,7 +163,7 @@
 						>
 					{/each}
 					<text x={PAD.left - 6} y={deltaY(0) + 3} class="mono axis">0</text>
-					{#each withData as p (p.name)}
+					{#each withData as p, pi (pi)}
 						{@const pts = p.points.filter((pt) => pt.age !== null && pt.deltaPct !== null)}
 						{#if pts.length >= 2}
 							<polyline
@@ -195,7 +195,7 @@
 		{/if}
 	</div>
 	<div class="legend">
-		{#each withData as p (p.name)}
+		{#each withData as p, pi (pi)}
 			<span class="key"><span class="dot" style:background="var({p.colorVar})"></span>{p.name}</span
 			>
 		{/each}

@@ -283,7 +283,7 @@
 								     them in Contacts, reusing their record when the name matches. -->
 								<input name="tenantName" placeholder="Martin Dvořák" list="tenant-contacts" />
 								<datalist id="tenant-contacts">
-									{#each data.contactNames as name (name)}<option value={name}></option>{/each}
+									{#each data.contactNames as name, i (i)}<option value={name}></option>{/each}
 								</datalist>
 							</label>
 							<!-- How to reach the tenant is a contact record now, not a string on

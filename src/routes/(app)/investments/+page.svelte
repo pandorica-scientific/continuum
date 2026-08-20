@@ -210,7 +210,7 @@
 					<div class="hole"><span class="mono">{data.donut.length}</span></div>
 				</div>
 				<div class="legend-col">
-					{#each data.donut as s (s.label)}
+					{#each data.donut as s, i (i)}
 						<div class="legend-row">
 							<span class="dot" style:background={s.color}></span>
 							<span class="mono l-ticker">{s.label}</span>

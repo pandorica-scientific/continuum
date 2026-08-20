@@ -124,7 +124,7 @@
 				<div class="hole"><span class="mono">{data.cashTotalFormatted}</span></div>
 			</div>
 			<div class="legend">
-				{#each data.donut as s (s.label)}
+				{#each data.donut as s (s.id)}
 					<div class="legend-row">
 						<span class="dot" style:background={s.color}></span>
 						<span class="legend-label">{s.label}</span>
@@ -178,7 +178,7 @@
 		<Eyebrow emoji="🔁" label="Transfers between your own accounts" />
 		<span class="eyebrow-caption">matched automatically · never counted as income or expense</span>
 	</div>
-	{#each data.transfers as t (t.date + t.route)}
+	{#each data.transfers as t (t.id)}
 		<div class="transfer-row">
 			<span class="mono t-date">{t.date}</span>
 			<span class="t-route">{t.route}</span>

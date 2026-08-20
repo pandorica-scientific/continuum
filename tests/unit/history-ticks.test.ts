@@ -32,6 +32,15 @@ describe('historyTicks', () => {
 		expect(historyTicks(span('2023-01', 40)).labels).toEqual(['2023', '2024', '2025', '2026']);
 	});
 
+	it('repeats a month label once the history passes a year', () => {
+		// "01" comes round again every twelve months. The axis is keyed by
+		// position for exactly this reason: keying a Svelte each block on the
+		// label would throw `each_key_duplicate` and blank the whole screen.
+		const ticks = historyTicks(span('2025-01', 14));
+		expect(ticks.unit).toBe('month');
+		expect(ticks.labels.filter((l) => l === '01')).toHaveLength(2);
+	});
+
 	it('has no labels for an empty history', () => {
 		expect(historyTicks([])).toEqual({ unit: 'month', labels: [] });
 	});
