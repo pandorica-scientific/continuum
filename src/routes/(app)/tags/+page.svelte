@@ -69,7 +69,7 @@
 		text-decoration: none;
 	}
 	.t-name {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.t-linked {
@@ -77,7 +77,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px 14px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.t-more {
@@ -90,15 +90,15 @@
 		flex-wrap: wrap;
 	}
 	.t-part {
-		font-size: 14px;
+		font-size: var(--text-lg);
 	}
 	.t-converted,
 	.t-quiet {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.empty {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 </style>

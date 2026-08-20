@@ -320,7 +320,7 @@
 		border: 1px solid var(--bd2);
 		border-radius: 8px;
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 		padding: 6px 13px;
 		cursor: pointer;
 	}
@@ -332,7 +332,7 @@
 	}
 	.note,
 	.failed {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.45;
 	}
@@ -351,7 +351,7 @@
 		border-radius: 10px;
 	}
 	.tray-label {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -364,7 +364,7 @@
 		border: 1px solid var(--bd);
 		border-radius: 20px;
 		color: var(--fg2);
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		padding: 5px 12px;
 		cursor: pointer;
 	}
@@ -402,13 +402,13 @@
 		opacity: 0.7;
 	}
 	.eyebrow {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--fg3);
 	}
 	.reserved-note {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.45;
 	}
@@ -417,13 +417,13 @@
 		border: none;
 		padding: 0;
 		color: var(--fg3);
-		font-size: 12px;
+		font-size: var(--text-sm);
 		text-decoration: underline;
 		cursor: pointer;
 	}
 	.empty {
 		grid-column: 1 / -1;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 </style>

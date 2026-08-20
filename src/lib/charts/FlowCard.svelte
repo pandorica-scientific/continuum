@@ -85,12 +85,12 @@
 		gap: 2px;
 	}
 	.t-value {
-		font-size: 20px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		white-space: nowrap;
 	}
 	.t-unit {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		margin-left: 5px;
 	}
@@ -98,7 +98,7 @@
 		margin: 0;
 		padding: 40px 0;
 		text-align: center;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 	.breakdown {
@@ -126,12 +126,12 @@
 		flex: 0 0 auto;
 	}
 	.b-label {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		color: var(--fg1);
 	}
 	.b-pct {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		margin-left: auto;
 	}
@@ -140,7 +140,7 @@
 		justify-content: space-between;
 		align-items: baseline;
 		gap: 12px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

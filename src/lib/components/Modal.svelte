@@ -61,14 +61,14 @@
 		gap: 12px;
 	}
 	.title {
-		font-size: 15px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.close {
 		border: 0;
 		background: transparent;
 		color: var(--fg3);
-		font-size: 14px;
+		font-size: var(--text-lg);
 		cursor: pointer;
 		padding: 4px;
 	}

@@ -28,13 +28,35 @@ import { currency } from './money';
 
 // ---- Accounts and transactions ----
 
+/**
+ * The banks an account can belong to.
+ *
+ * A table rather than the hardcoded `<option>` list and emoji map it replaces:
+ * the five Czech banks in the code were the five the author happened to use,
+ * and a household with a sixth had to pick "Other" and lose the name of their
+ * own bank. Seeded with those five plus Other; anything else is added from the
+ * accounts screen.
+ */
+export const bank = pgTable('bank', {
+	key: text('key').primaryKey(),
+	label: text('label').notNull(),
+	emoji: text('emoji').notNull().default('🏦')
+});
+
 export const account = pgTable(
 	'account',
 	{
 		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		emoji: text('emoji').notNull().default('🏦'),
-		bank: text('bank').notNull(), // fio | revolut | mbank | rb | cs | other
+		// Deliberately NOT a foreign key into `bank`. That table is the list the
+		// picker offers and where a label and emoji are looked up — it is not the
+		// set of values this column may hold. Accounts created before routing
+		// became format-first carry a FORMAT name here (`tabular`, `camt053`), and
+		// import-integrity pins that; constraining the column would turn those
+		// rows, and any future adapter naming a new issuer, into a raw constraint
+		// error at import time. Unknown keys fall back to a default emoji.
+		bank: text('bank').notNull(),
 		kind: text('kind').$type<EnumValue<'account.kind'>>().notNull().default('current'),
 		currency: text('currency')
 			.notNull()
@@ -147,11 +169,36 @@ export const importProfile = pgTable('import_profile', {
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+/**
+ * The top level of the category tree: what drives a series colour and where the
+ * group sits in the waterfall.
+ *
+ * A table rather than the constant it replaces, because a household's spending
+ * does not match the seven groups somebody else chose — the reported gaps were
+ * health and subscriptions, and the next household will have different ones.
+ *
+ * `role` is the column that cannot be left out. The waterfall is not a flat
+ * ordering: income opens it, expense groups are its stages, savings closes it.
+ * A group with a colour and a sort order but no role has no defined place in
+ * the chart, and "income" is not merely "the group that happens to sort first".
+ */
+export const categoryGroup = pgTable('category_group', {
+	key: text('key').primaryKey(),
+	label: text('label').notNull(),
+	// Name of a CSS custom property, e.g. `--series-housing`. A token rather
+	// than a hex: each one carries a hand-tuned value per theme, and the set was
+	// validated for separation under colour-vision deficiency. A literal colour
+	// here would be legible in one theme and not the other.
+	colorToken: text('color_token').notNull(),
+	role: text('role').$type<EnumValue<'category_group.role'>>().notNull().default('expense'),
+	sort: integer('sort').notNull().default(0)
+});
+
 export const category = pgTable('category', {
 	id: text('id').primaryKey(),
-	// group drives colour and the waterfall stage: income | taxes | bills |
-	// transport | living | housing | savings
-	groupKey: text('group_key').notNull(),
+	groupKey: text('group_key')
+		.notNull()
+		.references(() => categoryGroup.key),
 	name: text('name').notNull(),
 	sort: integer('sort').notNull().default(0)
 });
@@ -211,6 +258,23 @@ export const transaction = pgTable(
 		// from has been re-parsed or superseded.
 		sourceMethod: text('source_method'),
 		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>(),
+		/**
+		 * A transfer to one of the household's own accounts that has no matching
+		 * leg, asserted by a person rather than proved by two statements.
+		 *
+		 * Pairing needs both sides. Money moved to a savings account whose
+		 * statements are never imported has one side only, so nothing matches and
+		 * the row sits in the review queue looking like unexplained spending —
+		 * which is what "transfer to savings account" was reported as missing.
+		 *
+		 * Kept separate from `transfer_pair_id` rather than folded into it: a
+		 * matched pair is evidence from two statements, this is a claim by a
+		 * person, and a later import that does supply the second leg should be
+		 * able to tell them apart.
+		 */
+		transferToAccountId: uuid('transfer_to_account_id').references(() => account.id, {
+			onDelete: 'set null'
+		}),
 		transferPairId: uuid('transfer_pair_id')
 	},
 	(table) => [
@@ -221,7 +285,8 @@ export const transaction = pgTable(
 		index('transaction_review_idx').on(table.reviewState),
 		index('transaction_category_idx').on(table.categoryId),
 		index('transaction_suggested_category_idx').on(table.suggestedCategoryId),
-		index('transaction_import_file_idx').on(table.importFileId)
+		index('transaction_import_file_idx').on(table.importFileId),
+		index('transaction_transfer_to_account_idx').on(table.transferToAccountId)
 	]
 );
 

@@ -34,7 +34,7 @@
 		height: 100%;
 	}
 	.caption {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.bars {
@@ -63,11 +63,11 @@
 		background: var(--orange);
 	}
 	.day {
-		font-size: 9.5px;
+		font-size: var(--text-2xs);
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

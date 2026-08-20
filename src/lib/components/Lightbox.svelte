@@ -47,7 +47,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--bg);
 		color: var(--fg1);
-		font-size: 15px;
+		font-size: var(--text-xl);
 		cursor: pointer;
 		display: grid;
 		place-items: center;

@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 import { validateSession } from '$lib/server/auth';
 import { authorizeApiRequest } from '$lib/server/api/respond';
 import { maybeRunScheduledBackup } from '$lib/server/backup';
-import { seedCategories } from '$lib/server/categorize';
+import { seedBanks, seedCategories } from '$lib/server/categorize';
 import { db } from '$lib/server/db';
 import { refreshCurrencies } from '$lib/server/db/currency-refresh';
 import { runMigrations } from '$lib/server/db/migrate';
@@ -35,6 +35,8 @@ async function boot(): Promise<void> {
 	// seeds only the two codes it needed to attach those keys.
 	await refreshCurrencies(db);
 	await seedCategories();
+	// Before any account is written: account.bank carries a foreign key here.
+	await seedBanks();
 
 	// DEMO=1 fills a pristine instance with the fictional Novák household so
 	// screenshots and first impressions need no real data. Never touches an

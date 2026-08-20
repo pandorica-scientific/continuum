@@ -112,6 +112,16 @@
 	{/if}
 
 	<main>
+		<!-- Open mode is instance-wide and invisible from inside once you are in, so
+		     it says so on every screen rather than only in Settings. Outside the
+		     rate-warning block on purpose: the two are unrelated, and nesting it
+		     there meant it only appeared when a rate happened to be missing too. -->
+		{#if data.openMode}
+			<p class="open-banner" role="status">
+				This instance is open — anyone who can reach it can sign in as anyone.
+				<a href="/settings">Close it</a>
+			</p>
+		{/if}
 		{#if showRateWarning}
 			<!-- The FACT stays on screen: a figure being approximate is exactly the
 			     kind of thing that must not hide behind an icon. Only the reason
@@ -211,6 +221,20 @@
 </div>
 
 <style>
+	.open-banner {
+		margin: 0 0 12px;
+		padding: 9px 14px;
+		border: 1px solid var(--yellow);
+		background: var(--yellow-wash);
+		border-radius: 10px;
+		font-size: var(--text-sm);
+		color: var(--fg1);
+	}
+	.open-banner a {
+		color: inherit;
+		text-decoration: underline;
+	}
+
 	.shell {
 		display: grid;
 		grid-template-columns: 252px minmax(0, 1fr);
@@ -273,7 +297,7 @@
 		padding: 8px 10px;
 		border-radius: 7px;
 		color: var(--fg1);
-		font-size: 13px;
+		font-size: var(--text-md);
 		text-decoration: none;
 		white-space: nowrap;
 	}
@@ -309,7 +333,7 @@
 		border-radius: 10px;
 		background: var(--card3);
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 		line-height: 1.5;
 	}
 
@@ -318,7 +342,7 @@
 		border: none;
 		background: none;
 		color: var(--fg3);
-		font-size: 18px;
+		font-size: var(--text-2xl);
 		line-height: 1;
 		padding: 0 4px;
 		cursor: pointer;
@@ -391,7 +415,7 @@
 			   the icon lost its contrast against whatever passed beneath. */
 			background: var(--bg2);
 			color: var(--fg1);
-			font-size: 18px;
+			font-size: var(--text-2xl);
 			cursor: pointer;
 		}
 	}

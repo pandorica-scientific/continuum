@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { transaction, transferPair } from '$lib/server/db/schema';
+import { account, transaction, transferPair } from '$lib/server/db/schema';
 import {
 	inTransaction,
 	lockTransferPairing,
@@ -9,7 +9,8 @@ import {
 	type DatabaseHandle
 } from './ingest';
 
-type TransferDecisionResult = { ok: true } | { ok: false; status: 404; message: string };
+type TransferDecisionResult =
+	{ ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
 
 async function transitionProposal(
 	id: string,
@@ -70,6 +71,75 @@ export async function rejectTransferProposal(
 			})
 			.where(inArray(transaction.id, [pair.outTransactionId, pair.inTransactionId]));
 		await pairAndCategorise(tx);
+		return { ok: true };
+	});
+}
+
+/**
+ * Mark a row as a transfer to one of the household's own accounts that is not
+ * imported, so it stops counting as spending.
+ *
+ * Pairing needs both legs. Money moved to a savings account whose statements
+ * never arrive has one leg only, so nothing matches and the row sits in the
+ * review queue looking like unexplained spending.
+ *
+ * The destination must be a real account row, but that account need not have a
+ * single imported statement — an account can be recorded for exactly this.
+ */
+export async function markOneSidedTransfer(
+	id: string,
+	toAccountId: string,
+	handle: DatabaseHandle = db
+): Promise<TransferDecisionResult> {
+	return inTransaction(handle, async (tx) => {
+		const [row] = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');
+		if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
+		if (row.transferPairId) {
+			// It already has a matching leg on another statement, which is stronger
+			// evidence than this claim would be.
+			return { ok: false, status: 409, message: 'This row is already a matched transfer.' };
+		}
+		if (row.accountId === toAccountId) {
+			return { ok: false, status: 400, message: 'A transfer needs a different account.' };
+		}
+
+		const [destination] = await tx.select().from(account).where(eq(account.id, toAccountId));
+		if (!destination) return { ok: false, status: 404, message: 'That account is not there.' };
+
+		await tx
+			.update(transaction)
+			.set({
+				transferToAccountId: toAccountId,
+				reviewState: 'confirmed',
+				reviewReason: null,
+				// A transfer is not spending, so it carries no category — the same
+				// shape a matched pair takes.
+				categoryId: null
+			})
+			.where(eq(transaction.id, id));
+		return { ok: true };
+	});
+}
+
+/** Undo the above: the row goes back to needing a category. */
+export async function clearOneSidedTransfer(
+	id: string,
+	handle: DatabaseHandle = db
+): Promise<TransferDecisionResult> {
+	return inTransaction(handle, async (tx) => {
+		const [row] = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');
+		if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
+		if (!row.transferToAccountId) {
+			return { ok: false, status: 409, message: 'This row is not a one-sided transfer.' };
+		}
+		await tx
+			.update(transaction)
+			.set({
+				transferToAccountId: null,
+				reviewState: 'needs_review',
+				reviewReason: 'no longer a transfer — pick a category'
+			})
+			.where(eq(transaction.id, id));
 		return { ok: true };
 	});
 }

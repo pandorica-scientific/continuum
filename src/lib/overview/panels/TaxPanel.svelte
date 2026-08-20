@@ -51,18 +51,18 @@
 		gap: 10px;
 	}
 	.who {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.when {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.figures {
 		display: flex;
 		justify-content: space-between;
 		gap: 10px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		flex-wrap: wrap;
 	}
 	.paid {
@@ -72,7 +72,7 @@
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

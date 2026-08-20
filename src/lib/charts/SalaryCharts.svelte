@@ -216,7 +216,7 @@
 		min-width: 0;
 	}
 	figcaption {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	svg {
@@ -240,7 +240,7 @@
 		stroke-linejoin: round;
 	}
 	.axis {
-		font-size: 10px;
+		font-size: var(--text-2xs);
 		fill: var(--fg3);
 		text-anchor: end;
 	}
@@ -256,7 +256,7 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.dot {

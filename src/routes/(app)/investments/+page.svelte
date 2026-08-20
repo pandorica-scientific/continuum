@@ -8,6 +8,12 @@
 
 	let { data, form } = $props();
 
+	// Dismissal is keyed on the message itself rather than being a bare boolean:
+	// a new failure must reappear even when the previous one was dismissed, and
+	// a flag somebody has to remember to reset is how that stops happening.
+	let dismissed = $state<string | null>(null);
+	const errorMessage = $derived(form?.message && form.message !== dismissed ? form.message : null);
+
 	async function upload(files: FileList) {
 		const file = files[0];
 		if (!file) return { type: 'error' as const, message: 'Choose a report first.' };
@@ -66,8 +72,18 @@
 	caption="Updated by uploading the XTB account statement. Duplicates are dropped by operation id."
 />
 
-{#if form?.message}
-	<div class="error">{form.message}</div>
+{#if errorMessage}
+	<div class="error" role="alert">
+		<span>{errorMessage}</span>
+		<button
+			type="button"
+			class="dismiss"
+			aria-label="Dismiss"
+			onclick={() => (dismissed = errorMessage)}
+		>
+			✕
+		</button>
+	</div>
 {/if}
 
 <section class="section">
@@ -238,6 +254,7 @@
 			accept=".xlsx"
 			idleText="📥 Drop the XTB account statement here, or click to browse"
 			busyText="Reading the report…"
+			reportErrors={false}
 			onfiles={upload}
 		/>
 		{#if form?.result}
@@ -256,7 +273,20 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	.dismiss {
+		background: none;
+		border: 0;
+		color: inherit;
+		cursor: pointer;
+		font-size: var(--text-lg);
+		line-height: 1;
+		padding: 2px 4px;
 	}
 	.tiles {
 		display: grid;
@@ -278,7 +308,7 @@
 		width: 36px;
 		text-align: right;
 		transform: translateY(-50%);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	svg {
@@ -290,14 +320,14 @@
 		display: flex;
 		justify-content: space-between;
 		margin-left: 46px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.legend {
 		display: flex;
 		gap: 14px 18px;
 		flex-wrap: wrap;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
@@ -314,7 +344,7 @@
 	.l-note {
 		margin-left: auto;
 		color: var(--fg3);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.own-row {
 		display: grid;
@@ -353,7 +383,7 @@
 		background: var(--bg2);
 		display: grid;
 		place-items: center;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.legend-col {
 		flex: 1 1 240px;
@@ -366,7 +396,7 @@
 		grid-template-columns: 11px 90px minmax(0, 1fr) auto;
 		gap: 9px;
 		align-items: center;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.dot {
 		width: 9px;
@@ -399,7 +429,7 @@
 	}
 	.h-head {
 		padding: 0 0 8px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -416,21 +446,21 @@
 		min-width: 0;
 	}
 	.ticker {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.name {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.r {
 		text-align: right;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.muted {
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	:global(.dropzone) {
@@ -440,7 +470,7 @@
 		border-radius: 10px;
 		padding: 14px;
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 		cursor: pointer;
 		text-align: center;
 	}

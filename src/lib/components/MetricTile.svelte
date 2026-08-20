@@ -28,21 +28,21 @@
 		gap: 3px;
 	}
 	.label {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.value {
-		font-size: 19px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		white-space: nowrap;
 	}
 	.unit {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		margin-left: 5px;
 	}
 	.note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 </style>

@@ -18,7 +18,7 @@
 		border: 1px solid;
 		border-radius: 12px;
 		padding: 2px 10px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		font-weight: 600;
 		line-height: 1.2;
 		white-space: nowrap;

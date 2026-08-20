@@ -245,7 +245,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
@@ -257,7 +257,7 @@
 		border: 1px solid var(--bd2);
 		border-radius: 8px;
 		padding: 9px 12px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		background: var(--card);
 		flex: 1 1 260px;
@@ -300,7 +300,7 @@
 		border-radius: 8px;
 		background: transparent;
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.shelf:hover {
 		background: var(--card2);
@@ -316,7 +316,7 @@
 		white-space: nowrap;
 	}
 	.s-count {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.area {
@@ -336,7 +336,7 @@
 		color: var(--fg2);
 		border-radius: 20px;
 		padding: 5px 12px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	.tag-chip:hover {
@@ -348,7 +348,7 @@
 		color: var(--blue);
 	}
 	.t-count {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		color: var(--fg3);
 		margin-left: 3px;
 	}
@@ -370,11 +370,11 @@
 		border-bottom: 1px solid var(--bd);
 	}
 	.col-label {
-		font-size: 13px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.col-count {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.doc {
@@ -386,7 +386,7 @@
 		border-bottom: 1px solid var(--bd);
 	}
 	.ext {
-		font-size: 9.5px;
+		font-size: var(--text-2xs);
 		letter-spacing: 0.04em;
 		color: var(--fg3);
 		border: 1px solid var(--bd);
@@ -401,17 +401,17 @@
 		min-width: 0;
 	}
 	.doc-name {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.meta {
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.add-form {
@@ -440,7 +440,7 @@
 		flex-direction: row !important;
 		align-items: center;
 		gap: 6px;
-		font-size: 13px !important;
+		font-size: var(--text-md) !important;
 		color: var(--fg1) !important;
 	}
 	.tick input {
@@ -448,7 +448,7 @@
 	}
 	.tick-add {
 		padding: 5px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.new-subject {
 		border: 1px solid var(--bd2);
@@ -456,14 +456,14 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 7px 10px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		width: 140px;
 	}
 	.field {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.add-form input,
@@ -473,7 +473,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.expiry {
 		display: flex;

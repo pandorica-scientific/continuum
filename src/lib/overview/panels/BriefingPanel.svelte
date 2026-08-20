@@ -58,24 +58,24 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.b-pill {
 		margin-left: auto;
 	}
 	.b-title {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 		line-height: 1.35;
 	}
 	.b-detail {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.5;
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

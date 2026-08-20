@@ -381,7 +381,7 @@
 
 	.e-time {
 		color: var(--fg3);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 
 	.conflicts {
@@ -395,7 +395,7 @@
 		display: flex;
 		gap: 10px;
 		margin: 0;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 
@@ -424,7 +424,7 @@
 		background: var(--card);
 		border-radius: 20px;
 		padding: 6px 13px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.chip.muted {
@@ -458,12 +458,12 @@
 		gap: 10px;
 	}
 	.month {
-		font-size: 16px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.count {
 		margin-left: auto;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.grid {
@@ -472,7 +472,7 @@
 		gap: 5px;
 	}
 	.weekday {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -503,7 +503,7 @@
 		border-color: var(--bd2);
 	}
 	.num {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.day.today .num {
@@ -540,15 +540,15 @@
 		align-self: center;
 	}
 	.e-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.e-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 	.e-source {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
 	}
@@ -605,10 +605,10 @@
 		min-width: 0;
 	}
 	.r-label {
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.r-detail {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.feed {
@@ -626,20 +626,29 @@
 		min-width: 0;
 	}
 	.f-name {
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.f-detail {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	/* The feed path is the exception: the paragraph below it tells you to
+	   subscribe with this path, and the token in it is the only key. Ellipsing it
+	   on a narrow screen leaves an instruction that cannot be followed, so this
+	   one wraps instead of truncating. */
+	.f-detail.mono {
+		overflow-wrap: anywhere;
+		white-space: normal;
+		overflow: visible;
+	}
 	.f-state {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.quiet {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.55;
 	}

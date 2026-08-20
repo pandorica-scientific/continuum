@@ -187,7 +187,7 @@
 	.c-work,
 	.reach {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 
 	.reach {
@@ -204,7 +204,7 @@
 	}
 
 	.chip {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		border: 1px solid var(--bd2);
 		border-radius: 999px;

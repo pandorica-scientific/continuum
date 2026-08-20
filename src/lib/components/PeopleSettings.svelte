@@ -33,6 +33,8 @@
 		enrollmentLinkDays = DEFAULT_ENROLLMENT_LINK_DAYS,
 		passkeys = false,
 		origin = '',
+		reason = null,
+		worksAt = null,
 		myPasskeys = []
 	}: {
 		people: PersonRow[];
@@ -42,16 +44,26 @@
 		passkeys?: boolean;
 		/** The configured ORIGIN, named on screen when passkeys are unavailable. */
 		origin?: string;
+		/** Why they are unavailable, so the explanation can be the true one. */
+		reason?: 'unconfigured' | 'insecure' | 'other-address' | null;
+		/** The address they do work at, when there is one. */
+		worksAt?: string | null;
 		myPasskeys?: PasskeyRow[];
 	} = $props();
 
 	let adding = $state(false);
 	let passkeyError = $state('');
+	// Cleared when the next ceremony starts, so a stale success cannot sit above
+	// a fresh failure. Without it nothing on screen distinguished "added, and you
+	// may add another" from "that failed" — the button is deliberately always
+	// present, since passkeys are per-device, so its staying said nothing.
+	let passkeyAdded = $state('');
 	let registering = $state(false);
 	const isAdmin = $derived(me?.role === 'admin');
 
 	async function addPasskey() {
 		passkeyError = '';
+		passkeyAdded = '';
 		registering = true;
 		const result = await runCeremony(
 			'/auth/passkey/register/options',
@@ -63,8 +75,10 @@
 			'Could not add that passkey.'
 		);
 		registering = false;
-		if (result.ok) await invalidateAll();
-		else passkeyError = result.error;
+		if (result.ok) {
+			passkeyAdded = 'Passkey added.';
+			await invalidateAll();
+		} else passkeyError = result.error;
 	}
 
 	function note(p: PersonRow): string {
@@ -164,9 +178,20 @@
 				</form>
 			</div>
 		{/each}
+		<!-- "Add another" once one is registered: the button stays on purpose,
+		     because a passkey belongs to a device and a laptop plus a tablet needs
+		     two. Reading "Add a passkey" after adding one made it look as though
+		     nothing had happened. -->
 		<button type="button" class="btn" onclick={addPasskey} disabled={registering}>
-			{registering ? 'Waiting for your device…' : '🔑 Add a passkey'}
+			{#if registering}
+				Waiting for your device…
+			{:else if myPasskeys.length}
+				➕ Add another passkey
+			{:else}
+				🔑 Add a passkey
+			{/if}
 		</button>
+		{#if passkeyAdded}<p class="note" role="status">{passkeyAdded}</p>{/if}
 		{#if passkeyError}<p class="note">{passkeyError}</p>{/if}
 	</div>
 {:else}
@@ -176,15 +201,24 @@
 	     the administrator the actual steps rather than a variable to look up. -->
 	<div class="card people">
 		<p class="note">
-			Passwords are the only sign-in here: passkeys need a secure address, and browsers refuse them
-			over plain HTTP.
-			{#if origin}
-				This instance is configured as <code>{origin}</code>.
+			{#if reason === 'other-address'}
+				<!-- Not a misconfiguration: a passkey is bound to one address, so this
+				     one is simply the wrong one to add or use it from. Saying "needs
+				     HTTPS" here would be wrong and would send someone to fix a setting
+				     that is already correct. -->
+				Passwords are the only sign-in at this address. A passkey belongs to one address, and this instance's
+				is <code>{worksAt}</code> — open that to add or use one.
 			{:else}
-				This instance has no <code>ORIGIN</code> configured.
+				Passwords are the only sign-in here: passkeys need a secure address, and browsers refuse
+				them over plain HTTP.
+				{#if origin}
+					This instance is configured as <code>{origin}</code>.
+				{:else}
+					This instance has no <code>ORIGIN</code> configured.
+				{/if}
 			{/if}
 		</p>
-		{#if isAdmin}
+		{#if isAdmin && reason !== 'other-address'}
 			<ol class="steps note">
 				<li>
 					Authenticate the bundled Tailscale sidecar — <code>docker compose logs tailscale</code> prints
@@ -243,17 +277,17 @@
 		background: var(--card3);
 		display: grid;
 		place-items: center;
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	.mod-label {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.note {
 		color: var(--fg2);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	/* The passkey explanation is prose, not a row: it needs the line height and
 	   the breathing room the bordered rows above deliberately do without. */
@@ -270,7 +304,7 @@
 	}
 	code {
 		font-family: var(--font-mono);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		background: var(--card2);
 		border-radius: 4px;
 		padding: 1px 5px;
@@ -302,7 +336,7 @@
 	.reveal {
 		display: block;
 		word-break: break-all;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		margin-top: 8px;
 		padding: 9px 11px;
 		border: 1px solid var(--bd2);

@@ -30,13 +30,14 @@ import {
 	createPropertyBill,
 	createTenancy,
 	setPropertyBillSource,
+	setPropertyFigure,
 	setPropertyDrawing,
 	removePropertyImage,
 	setPropertyImage
 } from '$lib/server/property/mutations';
 import { updatePropertyTags } from '$lib/server/tags';
 import { periodForMonth } from '$lib/loans/amortise';
-import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
+import { displayCurrency, formatMinor, parseAmountToMinor, toMajorString } from '$lib/money';
 import { propertyFinancials, sharesForLoan } from '$lib/property/finance';
 import { activeTenanciesByProperty } from '$lib/property/tenancy';
 import { listProperties } from '$lib/server/property/queries';
@@ -160,7 +161,15 @@ export const load: PageServerLoad = async ({ url }) => {
 				label: 'Est. value',
 				value: formatMinor(current.valueMinor, current.currency),
 				color: 'var(--fg1)',
-				note: current.valuedOn ? `valued ${current.valuedOn.slice(0, 7)}` : 'set a value'
+				note: current.valuedOn ? `valued ${current.valuedOn.slice(0, 7)}` : 'set a value',
+				// Stored, so it gets a pencil. The raw figures are what the edit form
+				// starts from — a formatted one would have to be re-parsed to be
+				// edited, and the grouping separators differ by currency.
+				edit: {
+					field: 'value',
+					amount: toMajorString(current.valueMinor, current.currency),
+					valuedOn: current.valuedOn
+				}
 			},
 			{
 				label: 'Mortgage owed',
@@ -181,7 +190,9 @@ export const load: PageServerLoad = async ({ url }) => {
 				value: formatMinor(equity, current.currency),
 				color: 'var(--green)',
 				note:
-					current.valueMinor > 0n ? `${Number((equity * 100n) / current.valueMinor)}% of value` : ''
+					current.valueMinor > 0n
+						? `${Number((equity * 100n) / current.valueMinor)}% of value · value less what is owed`
+						: 'value less what is owed'
 			}
 		];
 		if (current.kind === 'rented' && currentTenancy) {
@@ -207,7 +218,12 @@ export const load: PageServerLoad = async ({ url }) => {
 				label: 'Money in',
 				value: formatMinor(current.moneyInMinor, current.currency),
 				color: 'var(--fg2)',
-				note: 'deposit, fees, principal'
+				note: 'deposit, fees, principal',
+				edit: {
+					field: 'moneyIn',
+					amount: toMajorString(current.moneyInMinor, current.currency),
+					valuedOn: null
+				}
 			});
 			metrics.push({
 				label: 'Appreciation',
@@ -356,6 +372,12 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		currencies: await availableCurrencies(),
+		// Names only, for the tenant field's suggestion list. Adding a tenant now
+		// files them in the address book, and seeing who is already there is what
+		// stops the same person being entered twice under two spellings.
+		contactNames: (await db.select({ name: contact.name }).from(contact).orderBy(contact.name)).map(
+			(row) => row.name
+		),
 		tabs: properties.map((p) => ({
 			id: p.id,
 			name: p.name,
@@ -461,6 +483,25 @@ export const actions: Actions = {
 			return fail(400, { message: 'The plan did not parse.' });
 		}
 		const result = await setPropertyDrawing({ propertyId, drawing: parsed });
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Correct one stored figure — the estimate, or what has been put in.
+	 *
+	 * The derived tiles beside them have no pencil on purpose: editing a number
+	 * the next recompute overwrites is worse than not offering the edit.
+	 */
+	setFigure: async ({ request }) => {
+		const form = await request.formData();
+		const field = String(form.get('field') ?? '') === 'moneyIn' ? 'moneyIn' : 'value';
+		const result = await setPropertyFigure({
+			propertyId: asRowId(form.get('propertyId')),
+			field,
+			amount: String(form.get('amount') ?? ''),
+			valuedOn: String(form.get('valuedOn') ?? '').trim() || null
+		});
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},

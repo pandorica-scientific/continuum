@@ -16,6 +16,15 @@
 
 	type Row = (typeof data.rows)[number];
 	let splitting = $state<Row | null>(null);
+
+	// Categories picked since the page rendered, so Save can be disabled while
+	// there is nothing to save. Deliberately NOT bind:value with a seeded record:
+	// binding overrides the `selected` attributes below, and the server-rendered
+	// markup then has nothing selected, so the browser falls back to the first
+	// enabled option and an unfiled row reads as already filed with Salary.
+	let chosen = $state<Record<string, string>>({});
+	const picked = (r: { id: string; categoryId: string | null }) =>
+		chosen[r.id] ?? r.categoryId ?? '';
 </script>
 
 <ScreenHeader
@@ -23,7 +32,9 @@
 	caption="Every row the ledger holds. Search it, narrow it, file what the rules missed."
 />
 
-{#if form?.message}
+{#if form?.message && !form?.id}
+	<!-- Failures that name a row render beside that row instead; showing the same
+	     message here as well reads as two separate failures. -->
 	<div class="error">{form.message}</div>
 {/if}
 
@@ -140,7 +151,8 @@
 					<span class="r-reason">
 						{r.account}
 						{#if r.detail}· {r.detail}{/if}
-						{#if r.isTransfer}· own transfer{/if}
+						{#if r.isTransfer}·
+							{r.transferKind === 'one-sided' ? 'own transfer (one side)' : 'own transfer'}{/if}
 						{#if r.readAs}
 							<!-- Only for readings whose structure was inferred. Every row
 							     here still proved itself against the statement's balances;
@@ -169,10 +181,13 @@
 				{:else}
 					<form method="POST" action="?/file" use:enhance class="cat-form">
 						<input type="hidden" name="id" value={r.id} />
-						<select name="categoryId">
+						<select
+							name="categoryId"
+							onchange={(event) => (chosen[r.id] = event.currentTarget.value)}
+						>
 							<!-- An unfiled row must not look filed, so the prompt holds the
 							     selection until someone actually picks something. -->
-							<option value="" disabled selected={r.categoryId === null}>File as…</option>
+							<option value="" disabled selected={r.categoryId === null}>Choose a category…</option>
 							{#each data.categories as group (group.key)}
 								<optgroup label={group.label}>
 									{#each group.items as c (c.id)}
@@ -181,10 +196,50 @@
 								</optgroup>
 							{/each}
 						</select>
-						<button type="submit" class="btn">File</button>
+						<!-- Disabled until something is chosen: the placeholder posts an empty
+						     category, which the action rejects with a message that used to have
+						     nowhere to appear. The row read as an unresponsive button. -->
+						<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
 					</form>
 					<button type="button" class="btn" onclick={() => (splitting = r)}>Split</button>
 				{/if}
+			</div>
+
+			{#if form?.message && form?.id === r.id}
+				<p class="row-error" role="alert">{form.message}</p>
+			{/if}
+
+			<!-- Receipts. The button next to the category picker says "Save" now, so
+			     this is the control that genuinely attaches a file — which is what
+			     the old "File" button was read as. -->
+			<div class="r-docs">
+				{#each r.documents as doc (doc.id)}
+					<span class="doc-chip">
+						{#if doc.storedName}
+							<a href="/files/{doc.storedName}" target="_blank" rel="noopener">{doc.name}</a>
+						{:else}
+							<span>{doc.name}</span>
+						{/if}
+						<form method="POST" action="?/detachDocument" use:enhance>
+							<input type="hidden" name="id" value={r.id} />
+							<input type="hidden" name="documentId" value={doc.id} />
+							<!-- Unlinks only. The document stays in Documents, because it
+							     belongs to the household and not to this row. -->
+							<button type="submit" aria-label="Detach {doc.name}">✕</button>
+						</form>
+					</span>
+				{/each}
+				<form
+					method="POST"
+					action="?/attachDocument"
+					enctype="multipart/form-data"
+					use:enhance
+					class="attach-form"
+				>
+					<input type="hidden" name="id" value={r.id} />
+					<input type="file" name="file" aria-label="Attach a receipt to this transaction" />
+					<button type="submit" class="btn">Attach</button>
+				</form>
 			</div>
 
 			{#if r.isSplit}
@@ -263,7 +318,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.filters {
 		display: flex;
@@ -279,7 +334,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.filters input,
@@ -289,7 +344,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.f-wide {
 		grid-column: span 2;
@@ -318,6 +373,61 @@
 		justify-content: space-between;
 		gap: 10px 16px;
 	}
+	/* The card is a wrapping flex row, so a full basis is what puts the message
+	   on its own line under the controls that produced it. */
+	.r-docs {
+		flex-basis: 100%;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.doc-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--bd2);
+		border-radius: 999px;
+		padding: 3px 6px 3px 11px;
+		font-size: var(--text-sm);
+	}
+	.doc-chip button {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-xs);
+		padding: 0 3px;
+	}
+	.attach-form {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+	/* A file input's default width is far wider than its box and does not shrink,
+	   which pushed the whole register into horizontal scroll at phone width. */
+	.attach-form input[type='file'] {
+		max-width: 100%;
+		min-width: 0;
+		flex: 1 1 12rem;
+	}
+	.doc-chip {
+		max-width: 100%;
+		min-width: 0;
+	}
+	.doc-chip a,
+	.doc-chip > span {
+		overflow-wrap: anywhere;
+		min-width: 0;
+	}
+	.row-error {
+		flex-basis: 100%;
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--red);
+	}
 	.r-facts {
 		display: grid;
 		grid-template-columns: 76px minmax(0, 1fr) auto;
@@ -327,7 +437,7 @@
 		min-width: 0;
 	}
 	.r-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-mid {
@@ -337,7 +447,7 @@
 		min-width: 0;
 	}
 	.r-merchant {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -349,11 +459,11 @@
 	}
 
 	.r-reason {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-amount {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		white-space: nowrap;
 	}
 	.r-actions {
@@ -363,7 +473,7 @@
 		flex-wrap: wrap;
 	}
 	.r-state {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.cat-form {
@@ -377,7 +487,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	/* The lines of a split, shown under the transaction they divide. */
 	.splits {
@@ -395,18 +505,18 @@
 		grid-template-columns: 76px minmax(0, 1fr) auto;
 		gap: 12px;
 		align-items: baseline;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.s-category {
 		grid-column: 2;
 	}
 	.s-note {
 		grid-column: 2;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.s-amount {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		white-space: nowrap;
 	}
@@ -424,7 +534,7 @@
 		border: 1px solid var(--bd2);
 		border-radius: 999px;
 		padding: 3px 5px 3px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.tag-chip button {
@@ -432,7 +542,7 @@
 		background: none;
 		color: var(--fg3);
 		cursor: pointer;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		padding: 0 3px;
 	}
 	.tag-chip button:hover {
@@ -443,7 +553,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 14px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.pager .disabled {
@@ -452,7 +562,7 @@
 	}
 	.empty {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	@media (max-width: 640px) {
 		.r-facts {

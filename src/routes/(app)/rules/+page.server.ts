@@ -10,7 +10,7 @@ import { pairAndCategorise } from '$lib/server/import/ingest';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
 import { confidence } from '$lib/rules/confidence';
 import { DEFAULT_RULE_PRIOR, normalise, type Condition } from '$lib/rules/match';
-import { CATEGORY_GROUPS } from '$lib/categories';
+import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { Actions, PageServerLoad } from './$types';
@@ -84,11 +84,13 @@ export const load: PageServerLoad = async () => {
 			// Most-corrected first: a rule that keeps being overridden is the one
 			// worth looking at.
 			.sort((a, b) => b.corrected - a.corrected || a.name.localeCompare(b.name)),
-		categories: CATEGORY_GROUPS.map((group) => ({
-			key: group.key,
-			label: group.label,
-			items: categories.filter((c) => c.groupKey === group.key)
-		})).filter((g) => g.items.length > 0),
+		categories: (await loadCategoryGroups())
+			.map((group) => ({
+				key: group.key,
+				label: group.label,
+				items: categories.filter((c) => c.groupKey === group.key)
+			}))
+			.filter((g) => g.items.length > 0),
 		knownTags: tags.map((t) => ({ id: t.id, name: t.name }))
 	};
 };

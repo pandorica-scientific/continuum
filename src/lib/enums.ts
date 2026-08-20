@@ -70,6 +70,11 @@ export const ENUMS = {
 
 	'account.kind': ['current', 'savings', 'brokerage'],
 
+	// Where a category group sits in the waterfall. Not derivable from sort
+	// order: income opens the chart, expense groups are its stages, savings
+	// closes it, and a user-created group has to say which it is.
+	'category_group.role': ['income', 'expense', 'savings'],
+
 	// A person's chosen theme. Null means never chosen, which reads as dark —
 	// the default — rather than as a third state.
 	'person.theme': ['dark', 'light'],
@@ -134,6 +139,7 @@ export type EnumValue<K extends EnumKey> = (typeof ENUMS)[K][number];
 export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = [
 	{ table: 'person', column: 'role', enum: 'person.role' },
 	{ table: 'account', column: 'kind', enum: 'account.kind' },
+	{ table: 'category_group', column: 'role', enum: 'category_group.role' },
 	{ table: 'person', column: 'theme', enum: 'person.theme' },
 	{ table: 'property', column: 'kind', enum: 'property.kind' },
 	{ table: 'property_bill', column: 'source', enum: 'property_bill.source' },

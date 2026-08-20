@@ -180,7 +180,7 @@
 		gap: 12px;
 	}
 	.target {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 		margin: 0;
 	}
@@ -197,7 +197,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.foot {
@@ -209,7 +209,7 @@
 		padding-top: 12px;
 	}
 	.remainder {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		margin-left: auto;
 	}

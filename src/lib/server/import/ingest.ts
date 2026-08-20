@@ -5,6 +5,7 @@ import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	account,
+	bank,
 	currencyRate,
 	importFile,
 	person,
@@ -31,6 +32,7 @@ import {
 	type PairableTx
 } from './pairing';
 import type { ParsedRow, ParsedStatement } from './types';
+import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 interface LegacyRevolutIdentity {
 	bookedOn: string;
@@ -259,6 +261,16 @@ async function resolveAccount(
 	// account called `tabular EUR` and published it through /api/v1.
 	const id = uuidv7();
 	const label = statement.issuer ? (BANK_LABEL[statement.issuer] ?? statement.issuer) : 'Bank';
+	// An adapter that names an issuer the seed does not cover puts it in the
+	// picker, so the next account can be filed under a bank the household demonstrably
+	// uses. Only a real issuer — `statement.bank` is a format name for most
+	// readings, and a format is not a bank.
+	if (statement.issuer) {
+		await handle
+			.insert(bank)
+			.values({ key: statement.issuer, label, emoji: '🏦' })
+			.onConflictDoNothing();
+	}
 	// Suffix from the account number itself, not the bank code after the slash.
 	const numberPart = statement.accountNumber?.split('/')[0].replace(/\D/g, '') ?? '';
 	const suffix = numberPart ? ` ·${numberPart.slice(-4)}` : '';
@@ -1047,7 +1059,13 @@ async function pairAndCategoriseInTransaction(
 	const undecided = await handle
 		.select()
 		.from(transaction)
-		.where(and(isNull(transaction.categoryId), isNull(transaction.transferPairId)))
+		// `notOwnTransfer()` rather than a bare transferPairId check: a one-sided
+		// transfer has no category (a transfer is not spending) and no pair (there
+		// is no second leg), so it matches "undecided" exactly. It survived only
+		// because the loop below skips reviewState 'confirmed', which is a state
+		// this query has no business depending on. A transfer is never a candidate
+		// for categorisation, and now the query says so.
+		.where(and(isNull(transaction.categoryId), notOwnTransfer()))
 		.for('update');
 	// Read proposals after claiming the undecided rows. The global lock excludes
 	// another pairing pass, and waiting for ordinary row editors means their

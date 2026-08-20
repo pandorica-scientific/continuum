@@ -26,6 +26,23 @@ export function passwordLengthError(
 	return password.length < minLength ? `${label} needs at least ${minLength} characters.` : null;
 }
 
+/**
+ * One mismatch rule and message shape for setup, enrollment and password
+ * changes — the same reason the length rule above is shared.
+ *
+ * It had already drifted: enrollment said "The two passwords do not match."
+ * and the settings screen said "The two new passwords do not match.", and
+ * setup asked for the password only once, which is how a typo in the only
+ * password on a fresh instance locked its owner out immediately.
+ */
+export function passwordsMatchError(
+	password: string,
+	confirmation: string,
+	label = 'The two passwords'
+): string | null {
+	return password === confirmation ? null : `${label} do not match.`;
+}
+
 const WORDS = [
 	'zero',
 	'one',

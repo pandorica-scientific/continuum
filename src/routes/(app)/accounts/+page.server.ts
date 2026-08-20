@@ -4,27 +4,19 @@ import { asEnumValue } from '$lib/enums';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { account, person, transaction, transferPair } from '$lib/server/db/schema';
+import { account, bank, person, transaction, transferPair } from '$lib/server/db/schema';
 import { loadRateTable } from '$lib/server/fx/table';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
 import { accountBalanceInBase } from '$lib/accounts/balance';
+import { bankKeyFor } from '$lib/banks';
 import type { Actions, PageServerLoad } from './$types';
-
-const BANK_EMOJI: Record<string, string> = {
-	fio: '🏦',
-	revolut: '💠',
-	mbank: '🅜',
-	rb: '🟡',
-	cs: '🔵',
-	other: '💼'
-};
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const [accounts, rates] = await Promise.all([
+	const [accounts, rates, banks] = await Promise.all([
 		db
 			.select({
 				id: account.id,
@@ -40,8 +32,10 @@ export const load: PageServerLoad = async () => {
 			.from(account)
 			.leftJoin(person, eq(account.ownerPersonId, person.id))
 			.orderBy(account.createdAt, account.id),
-		loadRateTable()
+		loadRateTable(),
+		db.select().from(bank).orderBy(bank.label)
 	]);
+	const bankEmoji = new Map(banks.map((b) => [b.key, b.emoji]));
 	const today = new Date().toISOString().slice(0, 10);
 
 	const rows = [];
@@ -59,7 +53,7 @@ export const load: PageServerLoad = async () => {
 		rows.push({
 			id: a.id,
 			name: a.name,
-			emoji: a.emoji || BANK_EMOJI[a.bank] || '🏦',
+			emoji: a.emoji || bankEmoji.get(a.bank) || '🏦',
 			kind: a.kind,
 			currency: a.currency,
 			meta: [
@@ -125,6 +119,7 @@ export const load: PageServerLoad = async () => {
 
 	return {
 		currencies: await availableCurrencies(),
+		banks: banks.map((b) => ({ key: b.key, label: b.label, emoji: b.emoji })),
 		accounts: rows.map((r) => ({ ...r, balanceMinorBase: undefined })),
 		cashTotalFormatted: formatMinor(cashTotal, baseCurrency),
 		baseCurrencyDisplay: displayCurrency(baseCurrency),
@@ -140,7 +135,7 @@ export const actions: Actions = {
 		const currency = String(form.get('currency') ?? '')
 			.trim()
 			.toUpperCase();
-		const bank = String(form.get('bank') ?? 'other');
+		const bankKey = String(form.get('bank') ?? 'other');
 		// Narrowed at the boundary, so a hand-crafted form post cannot reach the
 		// CHECK constraint and turn a bad field into a failed insert.
 		const kind = asEnumValue('account.kind', form.get('kind'), 'current');
@@ -148,15 +143,44 @@ export const actions: Actions = {
 		if (!name) return fail(400, { message: 'The account needs a name.' });
 		if (!/^[A-Z]{3}$/.test(currency))
 			return fail(400, { message: 'Currency must be a three-letter code.' });
+		const [chosen] = await db.select().from(bank).where(eq(bank.key, bankKey));
+		// account.bank carries a foreign key, so an unknown key would fail the
+		// insert with a constraint error rather than a sentence anyone can read.
+		if (!chosen) return fail(400, { message: 'That bank is not on the list.' });
 		await db.insert(account).values({
 			id: uuidv7(),
 			name,
-			emoji: BANK_EMOJI[bank] ?? '🏦',
-			bank,
+			emoji: chosen.emoji,
+			bank: bankKey,
 			kind,
 			currency,
 			numbers: numbersRaw ? numbersRaw.split(/[,;\s]+/).filter(Boolean) : []
 		});
 		return { ok: true };
+	},
+
+	/**
+	 * Add a bank the list does not have.
+	 *
+	 * Choosing "Other" used to file the account under a row literally called
+	 * Other, losing the name of the bank it is actually with. The five that
+	 * shipped were the five the author banked with.
+	 */
+	addBank: async ({ request }) => {
+		const form = await request.formData();
+		const label = String(form.get('label') ?? '').trim();
+		const emoji = String(form.get('emoji') ?? '').trim() || '🏦';
+		if (!label) return fail(400, { message: 'The bank needs a name.' });
+
+		const key = bankKeyFor(label);
+		if (!key) return fail(400, { message: 'That name has no letters or digits in it.' });
+
+		const [existing] = await db.select().from(bank).where(eq(bank.key, key));
+		// Not an error: the household meant to end up with this bank on the list,
+		// and it is. Reporting a clash would be pedantry about spelling.
+		if (existing) return { ok: true, bankKey: key };
+
+		await db.insert(bank).values({ key, label, emoji });
+		return { ok: true, bankKey: key };
 	}
 };

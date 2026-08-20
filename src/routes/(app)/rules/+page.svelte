@@ -235,7 +235,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
@@ -243,7 +243,7 @@
 	}
 	.scope-note {
 		margin: 0;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.rule-row {
@@ -264,12 +264,12 @@
 		min-width: 0;
 	}
 	.r-name {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.r-conditions,
 	.r-actions-taken {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-score {
@@ -279,14 +279,14 @@
 		gap: 2px;
 	}
 	.r-confidence {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		color: var(--fg2);
 	}
 	.r-confidence.trusted {
 		color: var(--green);
 	}
 	.r-counts {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-buttons {
@@ -302,7 +302,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.rule-form input,
@@ -312,7 +312,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.condition {
@@ -333,7 +333,7 @@
 		padding-top: 12px;
 	}
 	.preview-count {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		margin-left: auto;
 	}
@@ -344,12 +344,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.empty {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	button[disabled] {
 		opacity: 0.45;

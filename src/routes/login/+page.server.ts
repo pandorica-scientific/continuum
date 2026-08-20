@@ -3,7 +3,8 @@ import { asRowId } from '$lib/ids';
 import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
+import { currentOrigin, passkeysUsableFrom } from '$lib/server/auth/webauthn/origin';
+import { isOpenMode } from '$lib/server/auth/open-mode';
 import { person } from '$lib/server/db/schema';
 import { createSession, verifyPassword } from '$lib/server/auth';
 import {
@@ -14,7 +15,8 @@ import {
 } from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
+	const openMode = await isOpenMode();
 	const people = await db
 		.select({ id: person.id, name: person.name, initials: person.initials })
 		.from(person)
@@ -26,9 +28,24 @@ export const load: PageServerLoad = async () => {
 		// spends the per-address failure budget that gates everyone's sign-in, and
 		// behind a reverse proxy or Tailscale the whole household shares one
 		// address.
-		.where(and(isNull(person.deactivatedAt), isNotNull(person.passwordHash)))
+		// In open mode a password is not what makes an account usable, so requiring
+		// one here would hide people who can now perfectly well sign in.
+		.where(
+			openMode
+				? isNull(person.deactivatedAt)
+				: and(isNull(person.deactivatedAt), isNotNull(person.passwordHash))
+		)
 		.orderBy(person.createdAt, person.id);
-	return { people, passkeys: passkeysAvailable() };
+	// Decided from the address actually being browsed, not from the configured
+	// one. Reading only the configuration put this button on every address the
+	// instance answers at, while exactly one of them can verify.
+	const passkeys = passkeysUsableFrom(url.origin, currentOrigin());
+	return {
+		people,
+		openMode,
+		passkeys: passkeys.usable,
+		passkeyWorksAt: passkeys.usable ? null : passkeys.worksAt
+	};
 };
 
 export const actions: Actions = {
@@ -57,7 +74,12 @@ export const actions: Actions = {
 		// `row.deactivatedAt ||` skipped argon2 entirely and returned in about a
 		// millisecond, where a wrong password costs the full ~100ms. verifyPassword
 		// does the same for a null hash rather than returning early.
-		const correct = await verifyPassword(row?.passwordHash ?? null, password);
+		// Open mode: the instance has been told, by an administrator who proved it
+		// with their own password, that no credential is wanted. The account still
+		// has to exist and be usable — that is not a credential check, it is the
+		// same "is this a real, open account" gate every path applies.
+		const open = await isOpenMode();
+		const correct = open || (await verifyPassword(row?.passwordHash ?? null, password));
 		if (!row || row.deactivatedAt || !correct) {
 			recordFailure('login', address, limitSubject);
 			return fail(400, { message: 'Wrong person or password.' });

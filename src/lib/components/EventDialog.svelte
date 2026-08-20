@@ -191,7 +191,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
@@ -213,7 +213,7 @@
 	}
 
 	legend {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		padding: 0 5px;
 	}
@@ -222,7 +222,7 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 6px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 

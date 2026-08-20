@@ -42,7 +42,7 @@
 		color: var(--fg3);
 		border-radius: 6px;
 		padding: 6px 13px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	button.active {

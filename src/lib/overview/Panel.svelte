@@ -116,7 +116,7 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -131,7 +131,7 @@
 		flex: none;
 	}
 	.badge {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.controls button {
@@ -139,7 +139,7 @@
 		border: 1px solid var(--bd);
 		border-radius: 6px;
 		color: var(--fg2);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		line-height: 1;
 		padding: 4px 7px;
 		cursor: pointer;

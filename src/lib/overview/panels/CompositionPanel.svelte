@@ -74,11 +74,11 @@
 		gap: 4px 12px;
 	}
 	.c-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.c-numbers {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		text-align: right;
 		display: flex;
 		gap: 10px;
@@ -126,7 +126,7 @@
 	}
 	.c-detail {
 		grid-column: 1 / -1;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 </style>

@@ -36,7 +36,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		width: 130px;
 	}
 </style>

@@ -55,6 +55,13 @@
 	//
 	// So: how many fresh loads have landed since this page asked for a backup,
 	// or null if it has not asked for one.
+	/** Which category is showing its "move them to" picker, by id. */
+	let deletingLeaf = $state<string | null>(null);
+	const ROLE_LABELS: Record<string, string> = {
+		income: 'Money in',
+		expense: 'Money out',
+		savings: 'Money kept'
+	};
 	let looksSinceAsked = $state<number | null>(null);
 	const watchBackup = $derived(data.backupRunning || looksSinceAsked === 0);
 	$effect(() => {
@@ -146,6 +153,8 @@
 		enrollmentLinkDays={data.enrollmentLinkDays}
 		passkeys={data.passkeys}
 		origin={data.origin}
+		reason={data.passkeyReason}
+		worksAt={data.passkeyWorksAt}
 		myPasskeys={data.myPasskeys}
 	/>
 
@@ -572,10 +581,254 @@
 	</section>
 {/if}
 
+{#if data.isAdmin}
+	<section class="section">
+		<Eyebrow
+			emoji="🗂️"
+			label="Categories"
+			caption="What your spending is filed under. Nothing here is fixed — a household that does not drive can delete Transport."
+		/>
+		<!-- Field names are prefixed (groupLabel, groupRole, categoryName) rather
+		     than the plain label/role/name they would otherwise be. This page is one
+		     document holding a dozen unrelated forms, so a generic name here becomes
+		     a second match for a selector aimed at the person form. -->
+		<div class="card taxonomy">
+			{#each data.taxonomy as group (group.key)}
+				<!-- The key identifies the row: its label lives in an input, so nothing
+				     in the markup otherwise says which group this is. -->
+				<div class="tx-group" data-group={group.key}>
+					<div class="tx-head">
+						<span class="tx-dot" style:background="var({group.colorToken})"></span>
+						<form method="POST" action="?/editGroup" use:enhance class="tx-edit">
+							<input type="hidden" name="groupKey" value={group.key} />
+							<input name="groupLabel" value={group.label} aria-label="Group name" />
+							<select name="colorToken" aria-label="Colour">
+								{#each data.paletteTokens as token (token)}
+									<option value={token} selected={token === group.colorToken}>
+										{token.replace('--series-', '')}
+									</option>
+								{/each}
+							</select>
+							<span class="tx-role">{ROLE_LABELS[group.role] ?? group.role}</span>
+							<button type="submit" class="btn">Save</button>
+						</form>
+						<form method="POST" action="?/removeGroup" use:enhance>
+							<input type="hidden" name="groupKey" value={group.key} />
+							<!-- Only when empty. The categories under it point at this key, and
+							     deleting it out from under them would strand them. -->
+							<button type="submit" class="btn" disabled={group.items.length > 0}>
+								Delete group
+							</button>
+						</form>
+					</div>
+
+					<div class="tx-leaves">
+						{#each group.items as leaf (leaf.id)}
+							<span class="tx-leaf">
+								<span>{leaf.name}</span>
+								<button
+									type="button"
+									aria-label="Delete {leaf.name}"
+									onclick={() => (deletingLeaf = deletingLeaf === leaf.id ? null : leaf.id)}
+								>
+									✕
+								</button>
+							</span>
+							{#if deletingLeaf === leaf.id}
+								<form method="POST" action="?/removeLeaf" use:enhance class="tx-reassign">
+									<input type="hidden" name="categoryId" value={leaf.id} />
+									<!-- Where its history goes. Asked rather than assumed: orphaning
+									     the rows would drop them out of every total that filters on a
+									     category, which reads as money disappearing. -->
+									<label>
+										<span>Move what is filed under “{leaf.name}” to</span>
+										<select name="reassignTo" required>
+											{#each data.allLeaves.filter((l) => l.id !== leaf.id) as target (target.id)}
+												<option value={target.id}>{target.name}</option>
+											{/each}
+										</select>
+									</label>
+									<button type="submit" class="btn">Move and delete</button>
+									<button type="button" class="btn" onclick={() => (deletingLeaf = null)}>
+										Cancel
+									</button>
+								</form>
+							{/if}
+						{/each}
+						<form method="POST" action="?/addLeaf" use:enhance class="tx-add-leaf">
+							<input type="hidden" name="groupKey" value={group.key} />
+							<input
+								name="categoryName"
+								placeholder="New category…"
+								aria-label="New category name"
+							/>
+							<!-- "Add category", not "Add": a bare verb next to a field says
+							     nothing about what it adds, and this page already has an Add
+							     button for people. -->
+							<button type="submit" class="btn">Add category</button>
+						</form>
+					</div>
+				</div>
+			{/each}
+
+			<form method="POST" action="?/addGroup" use:enhance class="tx-add-group">
+				<input name="groupLabel" placeholder="New group, e.g. Pets" aria-label="New group name" />
+				<select name="groupRole" aria-label="Kind">
+					{#each data.groupRoles as role (role)}
+						<option value={role}>{ROLE_LABELS[role] ?? role}</option>
+					{/each}
+				</select>
+				<button type="submit" class="btn">Add group</button>
+				<!-- Colour is not asked for here. The palette is ranked by how well each
+				     colour separates from the others, so the next one down is always the
+				     best remaining choice; it can be changed above afterwards. -->
+				<span class="note">It takes the next colour from the palette.</span>
+			</form>
+		</div>
+	</section>
+{/if}
+
+{#if data.isAdmin}
+	<section class="section">
+		<Eyebrow
+			emoji="🚪"
+			label="Open this instance"
+			caption="Sign in with no password and no passkey — for everyone, on every address."
+		/>
+		<div class="card open-mode" class:on={data.openMode}>
+			{#if data.openMode}
+				<p class="open-warning">
+					<strong>This instance is open.</strong> Anyone who can reach its address can sign in as anyone
+					— including you — and read every statement, salary figure, mortgage balance and tax statement,
+					use the API, and export the lot. On a plain-HTTP address that is everyone on the network.
+				</p>
+				<form method="POST" action="?/disableOpenMode" use:enhance>
+					<!-- No password asked for: the door is already open, so demanding a
+					     credential to close it would only stop the honest. -->
+					<button type="submit" class="btn btn-primary">Close it</button>
+				</form>
+			{:else}
+				<p class="note">
+					Everyone signs in with a password or a passkey. Turning this off means anyone who can
+					reach the address is anyone on this instance. Existing passwords are kept, so turning it
+					back on restores normal sign-in.
+				</p>
+				<form method="POST" action="?/enableOpenMode" use:enhance class="open-form">
+					<label class="field">
+						<span>Your password, to confirm you mean it</span>
+						<input name="password" type="password" autocomplete="current-password" />
+					</label>
+					<button type="submit" class="btn">Open the instance</button>
+				</form>
+			{/if}
+		</div>
+	</section>
+{/if}
+
 <style>
+	.open-mode {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.open-mode.on {
+		border-color: var(--yellow);
+		background: var(--yellow-wash);
+	}
+	.open-warning {
+		margin: 0;
+		font-size: var(--text-md);
+		color: var(--fg1);
+		line-height: 1.55;
+	}
+	.open-form {
+		display: flex;
+		align-items: flex-end;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.taxonomy {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.tx-group {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding-top: 12px;
+		border-top: 1px solid var(--bd);
+	}
+	.tx-head {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.tx-dot {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		flex: none;
+	}
+	.tx-edit {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+		flex: 1;
+	}
+	.tx-role {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		white-space: nowrap;
+	}
+	.tx-leaves {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: center;
+		padding-left: 24px;
+	}
+	.tx-leaf {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--bd2);
+		border-radius: 999px;
+		padding: 3px 6px 3px 11px;
+		font-size: var(--text-sm);
+	}
+	.tx-leaf button {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-xs);
+		padding: 0 3px;
+	}
+	.tx-reassign,
+	.tx-add-leaf,
+	.tx-add-group {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.tx-reassign label {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.tx-add-group {
+		padding-top: 12px;
+		border-top: 1px solid var(--bd);
+	}
 	.calendar-notice {
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 
 	.cal-account,
@@ -596,7 +849,7 @@
 	}
 
 	.ca-state {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
@@ -613,7 +866,7 @@
 	}
 
 	.ca-cal {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
@@ -675,7 +928,7 @@
 		align-items: center;
 		gap: 8px;
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 
 	.interval-input input {
@@ -695,11 +948,11 @@
 		gap: 6px;
 	}
 	.tn-label {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.api-token-raw {
-		font-size: 13px;
+		font-size: var(--text-md);
 		word-break: break-all;
 		color: var(--fg1);
 	}
@@ -713,7 +966,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		flex: 1 1 220px;
 	}
@@ -723,7 +976,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.token-row {
 		display: flex;
@@ -738,11 +991,11 @@
 		gap: 2px;
 	}
 	.tr-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.tr-meta {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.modules {
@@ -762,7 +1015,7 @@
 		border-top: 0;
 	}
 	.emoji {
-		font-size: 15px;
+		font-size: var(--text-xl);
 	}
 	.mod-label {
 		display: flex;
@@ -771,10 +1024,10 @@
 		min-width: 0;
 	}
 	.mod-label > span:first-child {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.switch {
@@ -815,7 +1068,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	select,
@@ -825,7 +1078,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	/* Three equal password fields and a button. This used to borrow .add-form,
 	   whose second column is 90px wide for a birth year — which left the
@@ -840,12 +1093,12 @@
 	}
 	.ok-note {
 		margin: 8px 0 0;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--green);
 	}
 	.prose {
 		margin: 0;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		line-height: 1.55;
 	}
@@ -881,15 +1134,15 @@
 		min-width: 0;
 	}
 	.s-label {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.s-value {
-		font-size: 16px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.s-value.origin {
-		font-size: 13px;
+		font-size: var(--text-md);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

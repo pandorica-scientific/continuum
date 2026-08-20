@@ -221,7 +221,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
@@ -241,7 +241,7 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 6px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 
@@ -255,7 +255,7 @@
 	}
 
 	.unit {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 </style>

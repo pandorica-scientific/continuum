@@ -43,30 +43,30 @@
 		border-bottom: 1px solid var(--bd);
 	}
 	.date {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.merchant {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.cat {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		margin-left: 6px;
 	}
 	.amount {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.open-link {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		padding-top: 10px;
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

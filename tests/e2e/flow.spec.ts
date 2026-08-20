@@ -53,11 +53,26 @@ test('a rejected wizard submission names every module and keeps what was typed',
 	await expect(page.getByPlaceholder(`Password (${HINT})`).first()).toHaveValue('');
 });
 
+test('the wizard refuses a mistyped password rather than storing it', async ({ page }) => {
+	await page.goto('/setup');
+	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');
+	await page.getByPlaceholder('Name').first().fill('Jana Nováková');
+	await page.getByPlaceholder(`Password (${HINT})`).first().fill('correct-horse-battery');
+	await page.getByPlaceholder('Repeat password').first().fill('correct-horse-bettery');
+	await page.getByRole('button', { name: 'Create household' }).click();
+
+	// The only password on a fresh instance: a typo here used to be stored and
+	// lock the owner out immediately, with nothing to fall back on.
+	await expect(page.locator('.error')).toContainText('do not match');
+	await expect(page).toHaveURL(/\/setup/);
+});
+
 test('the wizard creates the household and signs in', async ({ page }) => {
 	await page.goto('/setup');
 	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');
 	await page.getByPlaceholder('Name').first().fill('Jana Nováková');
 	await page.getByPlaceholder(`Password (${HINT})`).first().fill('correct-horse-battery');
+	await page.getByPlaceholder('Repeat password').first().fill('correct-horse-battery');
 	await page.getByRole('button', { name: 'Create household' }).click();
 	await expect(page).toHaveURL(/\/overview/);
 	await expect(page.getByText('Jana & Jan')).toBeVisible();
@@ -86,7 +101,7 @@ test.describe('signed in', () => {
 		await expect(firstRow).toBeVisible();
 		const merchant = await firstRow.locator('.r-merchant').innerText();
 		await firstRow.locator('select[name=categoryId]').selectOption('groceries');
-		await firstRow.getByRole('button', { name: 'File it' }).click();
+		await firstRow.getByRole('button', { name: 'Save' }).click();
 		// The filed row leaves the queue (learned rules may clear more).
 		await expect(page.locator('.review-row', { hasText: merchant })).toHaveCount(0, {
 			timeout: 10000
@@ -98,6 +113,28 @@ test.describe('signed in', () => {
 		await expect(page.getByText('Money in', { exact: true })).toBeVisible();
 		await expect(page.locator('svg path').first()).toBeVisible();
 		await expect(page.getByText('Saved & invested').first()).toBeVisible();
+	});
+
+	// Written for the v0.3.11 report that the Accounts tab did nothing after an
+	// import. It did not reproduce, and the test stays: direct navigation was
+	// already covered above, but nothing covered CLICKING the sub-tab, which is
+	// the path that was reported. See
+	// docs/superpowers/notes/2026-08-20-accounts-hang.md.
+	test('clicking the Accounts tab after an import opens the screen', async ({ page }) => {
+		const consoleErrors: string[] = [];
+		page.on('console', (message) => {
+			if (message.type() === 'error') consoleErrors.push(message.text());
+		});
+		page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
+
+		await page.goto('/cashflow');
+		const tab = page.getByRole('link', { name: 'Accounts', exact: true });
+		await expect(tab).toBeVisible();
+		await tab.click();
+
+		await expect(page).toHaveURL(/\/accounts/, { timeout: 10000 });
+		await expect(page.getByText('Fio CZK').first()).toBeVisible({ timeout: 10000 });
+		expect(consoleErrors, `console errors:\n${consoleErrors.join('\n')}`).toEqual([]);
 	});
 
 	test('the register finds a transaction by text, direction and amount', async ({ page }) => {
@@ -140,7 +177,7 @@ test.describe('signed in', () => {
 		await page.goto('/transactions?q=ACME');
 		const row = page.locator('.txn-row').first();
 		await row.locator('select[name=categoryId]').selectOption('groceries');
-		await row.getByRole('button', { name: 'File' }).click();
+		await row.getByRole('button', { name: 'Save' }).click();
 		// `use:enhance` submits asynchronously. Wait for the server result to be
 		// applied before navigating, otherwise the filtered GET can race the commit.
 		await expect(row.locator('.r-state')).toHaveText('confirmed');
@@ -232,7 +269,7 @@ test.describe('signed in', () => {
 		const filed = page.locator('.txn-row', { hasText: 'filed by rule' }).first();
 		await expect(filed).toBeVisible();
 		await filed.locator('select[name=categoryId]').selectOption('eating-out');
-		await filed.getByRole('button', { name: 'File' }).click();
+		await filed.getByRole('button', { name: 'Save' }).click();
 		await page.waitForTimeout(800);
 
 		// The rule that filed it is the one now carrying the correction. Its
@@ -405,7 +442,15 @@ test.describe('signed in', () => {
 		await expect(propertyTab).toBeVisible();
 
 		await page.goto('/settings');
-		await page.locator('.module-row', { hasText: 'Property' }).getByRole('switch').click();
+		const propertySwitch = page.locator('.module-row', { hasText: 'Property' }).getByRole('switch');
+		await propertySwitch.click();
+		// `click()` resolves when the click dispatches, not when the enhanced
+		// submission finishes. Navigating straight after it raced the POST and the
+		// route was still enabled — proven by holding the POST back: /property
+		// answered 200 where this expects 404. Waiting for the switch to reflect
+		// the new state waits for the whole round trip, which is the thing the
+		// next line actually depends on.
+		await expect(propertySwitch).toHaveAttribute('aria-checked', 'false');
 
 		const response = await page.goto('/property');
 		expect(response?.status()).toBe(404);
@@ -414,11 +459,91 @@ test.describe('signed in', () => {
 		await expect(propertyTab).toHaveCount(0, { timeout: 10000 });
 		await expect(page.locator('aside').getByRole('link', { name: /Assets/ })).toBeVisible();
 
-		// Switch it back on for later runs.
+		// Switch it back on for later runs, waiting the same way.
 		await page.goto('/settings');
-		await page.locator('.module-row', { hasText: 'Property' }).getByRole('switch').click();
+		const backOn = page.locator('.module-row', { hasText: 'Property' }).getByRole('switch');
+		await backOn.click();
+		await expect(backOn).toHaveAttribute('aria-checked', 'true');
 		await page.goto('/loans');
 		await expect(propertyTab).toBeVisible({ timeout: 10000 });
+	});
+
+	test('a household can add its own group and category, and file into them', async ({ page }) => {
+		await page.goto('/settings');
+		const addGroup = page.locator('.tx-add-group');
+		await addGroup.locator('input[name=groupLabel]').fill('Pets');
+		await addGroup.locator('select[name=groupRole]').selectOption('expense');
+		await addGroup.getByRole('button', { name: 'Add group' }).click();
+
+		const petsGroup = page.locator('.tx-group[data-group="pets"]');
+		await expect(petsGroup).toBeVisible();
+
+		await petsGroup.locator('.tx-add-leaf input[name=categoryName]').fill('Vet');
+		await petsGroup.locator('.tx-add-leaf').getByRole('button', { name: 'Add category' }).click();
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Vet' })).toBeVisible();
+
+		// The point of the whole exercise: a category a household invented is
+		// offered where transactions are filed, without a deploy.
+		await page.goto('/transactions');
+		await expect(
+			page.locator('.txn-row').first().locator('select[name=categoryId] option', { hasText: 'Vet' })
+		).toHaveCount(1);
+	});
+
+	test('deleting a category moves what was filed under it', async ({ page }) => {
+		await page.goto('/settings');
+		const petsGroup = page.locator('.tx-group[data-group="pets"]');
+		await petsGroup.locator('.tx-add-leaf input[name=categoryName]').fill('Pet food');
+		await petsGroup.locator('.tx-add-leaf').getByRole('button', { name: 'Add category' }).click();
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Pet food' })).toBeVisible();
+
+		await petsGroup.getByRole('button', { name: 'Delete Vet' }).click();
+		const reassign = petsGroup.locator('.tx-reassign');
+		await reassign.locator('select[name=reassignTo]').selectOption({ label: 'Pet food' });
+		await reassign.getByRole('button', { name: 'Move and delete' }).click();
+
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Vet' })).toHaveCount(0);
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Pet food' })).toBeVisible();
+	});
+
+	test('a group holding categories cannot be deleted out from under them', async ({ page }) => {
+		await page.goto('/settings');
+		const petsGroup = page.locator('.tx-group[data-group="pets"]');
+		await expect(petsGroup.getByRole('button', { name: 'Delete group' })).toBeDisabled();
+	});
+
+	test('a receipt attaches to the transaction it evidences', async ({ page }) => {
+		await page.goto('/transactions?q=ACME');
+		const row = page.locator('.txn-row').first();
+		await expect(row).toBeVisible();
+
+		await row.locator('input[type=file]').setInputFiles({
+			name: 'acme-receipt.pdf',
+			mimeType: 'application/pdf',
+			buffer: Buffer.from('%PDF-1.4 receipt')
+		});
+		// exact: a file input has an implicit button role, and this one's label
+		// begins "Attach a receipt…", which the substring default also matches.
+		await row.getByRole('button', { name: 'Attach', exact: true }).click();
+
+		const chip = row.locator('.doc-chip', { hasText: 'acme-receipt.pdf' });
+		await expect(chip).toBeVisible();
+
+		// It is a real document in the household's files, not a private blob on the
+		// row — filed under Receipts, because the documents screen builds its
+		// columns from people, properties, accounts and subjects, and a document
+		// linked only to a transaction would show in none of them.
+		await page.goto('/documents');
+		await expect(page.getByText('Receipts').first()).toBeVisible();
+		await expect(page.getByText('acme-receipt.pdf').first()).toBeVisible();
+
+		// Detaching unlinks it and leaves the document alone.
+		await page.goto('/transactions?q=ACME');
+		const attached = page.locator('.txn-row').first().locator('.doc-chip');
+		await attached.getByRole('button', { name: /Detach/ }).click();
+		await expect(page.locator('.txn-row').first().locator('.doc-chip')).toHaveCount(0);
+		await page.goto('/documents');
+		await expect(page.getByText('acme-receipt.pdf').first()).toBeVisible();
 	});
 
 	test('documents: adding one builds its shelf and person column', async ({ page }) => {
@@ -547,7 +672,15 @@ test.describe('signed in', () => {
 		await page.goto('/settings');
 		await page.locator('input[name=dir]').fill(dest);
 		await page.locator('select[name=cadence]').selectOption('weekly');
+		// The backup reads the destination this save stores, so it must not start
+		// until the save has landed. Pressing both in succession raced them, and
+		// the run failed with "No backup destination is set" — after which the
+		// text below never appears and the wait times out.
+		const saved = page.waitForResponse(
+			(r) => r.request().method() === 'POST' && r.url().includes('saveBackup')
+		);
 		await page.locator('.backup-form').getByRole('button', { name: 'Save' }).click();
+		await saved;
 		await page.getByRole('button', { name: 'Back up now' }).click();
 		// the dump itself can take a while
 		await expect(page.getByText(/Database dumped/)).toBeVisible({ timeout: 20000 });

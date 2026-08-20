@@ -4,6 +4,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
@@ -12,6 +13,23 @@
 	let { data, form } = $props();
 
 	let assignAccountId = $state('');
+
+	// Categories picked since the page rendered, so Save can be disabled while
+	// there is nothing to save. Deliberately NOT bind:value with a seeded record:
+	// binding overrides the `selected` attributes below, and the server-rendered
+	// markup then has nothing selected, so the browser falls back to the first
+	// enabled option and an unguessed row reads as already filed with Salary.
+	const ROLE_LABELS: Record<string, string> = {
+		income: 'Money in',
+		expense: 'Money out',
+		savings: 'Money kept'
+	};
+	let addingCategory = $state(false);
+	/** Blank means "put it in an existing group"; a name here creates one. */
+	let newGroupLabel = $state('');
+	let chosen = $state<Record<string, string>>({});
+	const picked = (r: { id: string; suggestedCategoryId: string | null }) =>
+		chosen[r.id] ?? r.suggestedCategoryId ?? '';
 
 	// The choice disambiguates the upload it was made for. Holding it across
 	// uploads forced every later batch into the same account, and resolveAccount
@@ -60,7 +78,9 @@
 	caption="Statements in, transactions filed. Only the ambiguous ones ask for you."
 />
 
-{#if form?.message}
+{#if form?.message && !form?.id}
+	<!-- Failures that name a row render beside that row instead; showing the same
+	     message here as well reads as two separate failures. -->
 	<div class="error">{form.message}</div>
 {/if}
 
@@ -333,10 +353,15 @@
 				{:else}
 					<form method="POST" action="?/categorize" use:enhance class="cat-form">
 						<input type="hidden" name="id" value={r.id} />
-						<select name="categoryId">
+						<select
+							name="categoryId"
+							onchange={(event) => (chosen[r.id] = event.currentTarget.value)}
+						>
 							<!-- Without a suggestion the prompt holds the selection, so an
 							     unguessed row never looks as though it were already filed. -->
-							<option value="" disabled selected={r.suggestedCategoryId === null}>File as…</option>
+							<option value="" disabled selected={r.suggestedCategoryId === null}>
+								Choose a category…
+							</option>
 							{#each data.categories as group (group.key)}
 								<optgroup label={group.label}>
 									{#each group.items as c (c.id)}
@@ -345,13 +370,101 @@
 								</optgroup>
 							{/each}
 						</select>
-						<button type="submit" class="btn">File it</button>
+						<!-- Disabled until something is chosen: the placeholder posts an empty
+						     category, which the action rejects with a message that used to have
+						     nowhere to appear. The row read as an unresponsive button. -->
+						<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
+					</form>
+					<!-- Reachable from the row that prompted it. Nothing fitting is felt
+					     here, not on a settings screen. -->
+					<button type="button" class="btn" onclick={() => (addingCategory = true)}>
+						➕ New category…
+					</button>
+					<!-- The case pairing cannot reach: money moved to an account whose
+					     statements never arrive, so there is no second leg to match and
+					     the row looks like unexplained spending. -->
+					<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
+						<input type="hidden" name="id" value={r.id} />
+						<select name="toAccountId" aria-label="Transferred to">
+							<option value="" disabled selected>Moved to my…</option>
+							{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
+								<option value={a.id}>{a.name}</option>
+							{/each}
+						</select>
+						<button type="submit" class="btn">It is a transfer</button>
 					</form>
 				{/if}
 			</div>
+
+			{#if form?.message && form?.id === r.id}
+				<p class="row-error" role="alert">{form.message}</p>
+			{/if}
 		</div>
 	{/each}
 </section>
+
+{#if addingCategory}
+	<Modal title="New category" onclose={() => (addingCategory = false)}>
+		<form
+			method="POST"
+			action="?/addCategory"
+			use:enhance={() => {
+				return async ({ result, update }) => {
+					// Stay open on a refusal so the message lands next to the field that
+					// caused it, rather than closing and losing what was typed.
+					if (result.type === 'success') {
+						addingCategory = false;
+						newGroupLabel = '';
+					}
+					await update();
+				};
+			}}
+			class="cat-modal"
+		>
+			<label>
+				<span>Name</span>
+				<input name="name" placeholder="Pharmacy" required />
+			</label>
+			<label>
+				<span>Group</span>
+				<select name="groupKey" disabled={newGroupLabel.trim() !== ''}>
+					{#each data.groups as g (g.key)}
+						<option value={g.key}>{g.label}</option>
+					{/each}
+				</select>
+			</label>
+			<div class="cat-newgroup">
+				<label>
+					<span>…or start a new group</span>
+					<input name="newGroupLabel" bind:value={newGroupLabel} placeholder="Pets" />
+				</label>
+				{#if newGroupLabel.trim()}
+					<label>
+						<span>Is it money in, money out, or money kept?</span>
+						<select name="newGroupRole">
+							{#each data.groupRoles as role (role)}
+								<option value={role}>{ROLE_LABELS[role] ?? role}</option>
+							{/each}
+						</select>
+					</label>
+					<!-- Colour is not asked for. The palette is ranked by how well each
+					     colour separates from the others under colour-vision deficiency,
+					     so the next one down is always the best remaining choice — and a
+					     free colour picker would produce two series nobody can tell
+					     apart. It can be changed afterwards from Settings. -->
+					<p class="cat-note">It takes the next colour from the palette.</p>
+				{/if}
+			</div>
+			{#if form?.message}
+				<p class="cat-error" role="alert">{form.message}</p>
+			{/if}
+			<div class="cat-actions">
+				<button type="submit" class="btn btn-primary">Add category</button>
+				<button type="button" class="btn" onclick={() => (addingCategory = false)}>Cancel</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
 
 <style>
 	.error {
@@ -360,7 +473,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	:global(.dropzone) {
 		padding: 34px 24px;
@@ -376,7 +489,7 @@
 		align-items: baseline;
 		gap: 10px;
 		flex-wrap: wrap;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.assign select {
@@ -385,10 +498,10 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.assign-note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.wizard {
 		display: grid;
@@ -408,12 +521,12 @@
 
 	.w-head {
 		font-weight: 600;
-		font-size: 0.9rem;
+		font-size: var(--text-lg);
 		overflow-wrap: anywhere;
 	}
 
 	.w-sample {
-		font-size: 0.75rem;
+		font-size: var(--text-sm);
 		opacity: 0.7;
 		overflow-wrap: anywhere;
 	}
@@ -443,7 +556,7 @@
 
 	.i-meta {
 		opacity: 0.75;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 	}
 
 	.i-body {
@@ -452,7 +565,7 @@
 
 	.i-proof {
 		margin: 0 0 0.4rem;
-		font-size: 0.9rem;
+		font-size: var(--text-lg);
 	}
 
 	.i-checks {
@@ -460,7 +573,7 @@
 		padding-left: 1rem;
 		display: grid;
 		gap: 0.2rem;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 	}
 
 	.i-checks .c-name {
@@ -473,7 +586,7 @@
 
 	.queue-depth {
 		margin: 0 0 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 		opacity: 0.75;
 	}
 
@@ -487,7 +600,7 @@
 		gap: 14px;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.result-row:first-child {
 		border-top: 0;
@@ -500,7 +613,7 @@
 	}
 	.r-meta {
 		color: var(--fg3);
-		font-size: 12px;
+		font-size: var(--text-sm);
 		white-space: nowrap;
 	}
 	.tiles {
@@ -513,6 +626,49 @@
 		flex-direction: column;
 		gap: 10px;
 	}
+	.one-sided {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.cat-modal {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.cat-modal label {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.cat-newgroup {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding-top: 10px;
+		border-top: 1px solid var(--bd);
+	}
+	.cat-note {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.cat-error {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--red);
+	}
+	.cat-actions {
+		display: flex;
+		gap: 8px;
+	}
+	.row-error {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--red);
+	}
 	.r-facts {
 		display: grid;
 		grid-template-columns: 76px minmax(0, 1fr) auto;
@@ -520,7 +676,7 @@
 		align-items: baseline;
 	}
 	.r-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-mid {
@@ -530,15 +686,15 @@
 		min-width: 0;
 	}
 	.r-merchant {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.r-reason {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-amount {
-		font-size: 14px;
+		font-size: var(--text-lg);
 	}
 	.r-actions {
 		display: flex;
@@ -558,7 +714,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	@media (max-width: 640px) {
 		.r-facts {

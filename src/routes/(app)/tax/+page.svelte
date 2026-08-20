@@ -119,7 +119,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
@@ -128,7 +128,7 @@
 		margin-top: 6px;
 	}
 	.g-name {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -148,7 +148,7 @@
 		min-width: 0;
 	}
 	.t-year {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.t-mid {
@@ -158,7 +158,7 @@
 		min-width: 0;
 	}
 	.t-figures {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.t-rate {
 		color: var(--green);
@@ -166,14 +166,14 @@
 	.t-lines,
 	.t-doc,
 	.t-note {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		display: flex;
 		gap: 12px;
 		flex-wrap: wrap;
 	}
 	.t-diverges {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--yellow);
 	}
 	.t-actions {
@@ -182,6 +182,6 @@
 	}
 	.empty {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 </style>

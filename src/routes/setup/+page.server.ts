@@ -8,7 +8,7 @@ import { initialSetupPeopleLimitError, runInitialSetup } from '$lib/server/auth/
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
 import { passwordMinLength } from '$lib/server/system/policy';
-import { passwordLengthError } from '$lib/password-policy';
+import { passwordLengthError, passwordsMatchError } from '$lib/password-policy';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import type { Actions, PageServerLoad } from './$types';
@@ -27,6 +27,7 @@ export const actions: Actions = {
 
 		const names = form.getAll('personName').map((v) => String(v).trim());
 		const passwords = form.getAll('personPassword').map((v) => String(v));
+		const confirmations = form.getAll('personPasswordConfirm').map((v) => String(v));
 		const birthYears = form.getAll('personBirthYear').map((v) => String(v).trim());
 
 		const modules = Object.fromEntries(
@@ -50,7 +51,12 @@ export const actions: Actions = {
 		}
 
 		const people = names
-			.map((name, i) => ({ name, password: passwords[i] ?? '', birthYear: birthYears[i] ?? '' }))
+			.map((name, i) => ({
+				name,
+				password: passwords[i] ?? '',
+				confirmation: confirmations[i] ?? '',
+				birthYear: birthYears[i] ?? ''
+			}))
 			.filter((p) => p.name.length > 0);
 
 		if (people.length === 0) {
@@ -64,6 +70,11 @@ export const actions: Actions = {
 		for (const p of people) {
 			const passwordError = passwordLengthError(p.password, minLength, `${p.name}'s password`);
 			if (passwordError) return reject(400, passwordError);
+			// Asked twice because this is the only password on a fresh instance: a
+			// typo here locked the owner out of their own household immediately,
+			// with nothing to fall back on.
+			const mismatch = passwordsMatchError(p.password, p.confirmation, `${p.name}'s passwords`);
+			if (mismatch) return reject(400, mismatch);
 			const birthYear = parseBirthYear(p.birthYear, now);
 			if (birthYear === 'invalid') {
 				return reject(400, `${p.name}: ${BIRTH_YEAR_ERROR.toLowerCase()}`);

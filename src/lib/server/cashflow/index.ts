@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { and, isNull, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { and, sql } from 'drizzle-orm';
+import { db, type Queryable } from '$lib/server/db';
 import { category, transaction } from '$lib/server/db/schema';
+import { notOwnTransfer } from '$lib/server/transactions/transfers';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { toMajor } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
 import { loadSplits } from '$lib/server/splits';
 import { effectiveLines } from '$lib/transactions/lines';
-import { CATEGORY_GROUPS } from '$lib/categories';
+import { expenseGroups as stagesOf, loadCategoryGroups } from '$lib/server/categorize/groups';
 import type { FlowFigures } from '$lib/charts/flow-graph';
 
 export type Period = 'ytd' | 'month';
@@ -25,22 +26,43 @@ export interface FlowData {
 	}[];
 }
 
-function periodRange(
+/**
+ * The window a period covers, anchored on the newest month that actually holds
+ * data rather than on the calendar.
+ *
+ * Statements arrive after a month ends, so "this month" is routinely empty and
+ * both the Money screen and the Overview panel rendered nothing at all.
+ * Anchoring on the data means a household mid-way through importing sees July
+ * and is told, in the caption, that it is looking at July.
+ *
+ * `anchorMonth` is null only on an instance with no transactions, where falling
+ * back to today keeps the empty state exactly as it was.
+ */
+export function periodRange(
 	period: Period,
+	anchorMonth: string | null,
 	today = new Date()
 ): { start: string; end: string; caption: string } {
-	const y = today.getFullYear();
-	const m = today.getMonth();
+	const anchor = anchorMonth
+		? new Date(Date.UTC(Number(anchorMonth.slice(0, 4)), Number(anchorMonth.slice(5, 7)) - 1, 1))
+		: today;
+	// UTC throughout. The previous version read the year and month in local time
+	// and then built the boundaries with Date.UTC, which lands on the wrong month
+	// for anyone west of UTC during the first hours of one.
+	const y = anchor.getUTCFullYear();
+	const m = anchor.getUTCMonth();
+	const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+	const monthName = (index: number) =>
+		new Date(Date.UTC(2000, index, 1)).toLocaleString('en', { month: 'long' });
+
 	if (period === 'month') {
-		const start = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
-		const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
-		return { start, end, caption: today.toLocaleString('en', { month: 'long', year: 'numeric' }) };
+		return {
+			start: new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10),
+			end,
+			caption: `${monthName(m)} ${y}`
+		};
 	}
-	return {
-		start: `${y}-01-01`,
-		end: new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10),
-		caption: `January – ${today.toLocaleString('en', { month: 'long' })} ${y}`
-	};
+	return { start: `${y}-01-01`, end, caption: `January – ${monthName(m)} ${y}` };
 }
 
 /**
@@ -50,7 +72,7 @@ function periodRange(
 export async function flowData(period: Period): Promise<FlowData> {
 	const base = await getBaseCurrency();
 	const rates = await loadRateTable();
-	const { start, end, caption } = periodRange(period);
+	const { start, end, caption } = periodRange(period, await latestMonthWithData());
 
 	// The value date decides which month a movement belongs to when the bank
 	// provides one — card payments started in June and booked in July count in
@@ -61,14 +83,14 @@ export async function flowData(period: Period): Promise<FlowData> {
 			.select()
 			.from(transaction)
 			.where(
-				and(
-					isNull(transaction.transferPairId),
-					sql`${effectiveDate} >= ${start}`,
-					sql`${effectiveDate} <= ${end}`
-				)
+				and(notOwnTransfer(), sql`${effectiveDate} >= ${start}`, sql`${effectiveDate} <= ${end}`)
 			),
 		db.select().from(category)
 	]);
+	const groups = await loadCategoryGroups();
+	const incomeKeys = new Set(groups.filter((g) => g.role === 'income').map((g) => g.key));
+	const savingsKeys = new Set(groups.filter((g) => g.role === 'savings').map((g) => g.key));
+	const savingsGroup = groups.find((g) => g.role === 'savings') ?? null;
 	const categoryById = new Map(categories.map((c) => [c.id, c]));
 	const splitsByTxn = await loadSplits(rows.map((r) => r.id));
 
@@ -109,29 +131,33 @@ export async function flowData(period: Period): Promise<FlowData> {
 	// Income sources: income-group leaves with nonzero sums, plus a bucket for
 	// not-yet-categorised inflows so the chart never lies about the total.
 	const sources = categories
-		.filter((c) => c.groupKey === 'income')
+		.filter((c) => incomeKeys.has(c.groupKey))
 		.map((c) => ({ name: c.name, amount: byCategory.get(c.id) ?? 0 }))
 		.filter((s) => s.amount > 0.005);
 	if (uncategorisedIn > 0.005) sources.push({ name: 'Unfiled income', amount: uncategorisedIn });
 
 	const totalIn = sources.reduce((s, x) => s + x.amount, 0);
 
-	const expenseGroups = CATEGORY_GROUPS.filter((g) => g.key !== 'income' && g.key !== 'savings');
+	const expenseGroups = stagesOf(groups);
 	const stages = expenseGroups.map((g) => ({
 		key: g.key,
 		label: g.label,
-		colorVar: g.colorVar,
+		colorVar: g.colorToken,
 		// expenses are negative sums; the chart wants positive magnitudes
 		amount: Math.max(0, -groupTotal(g.key))
 	}));
-	// Not-yet-categorised outflows ride in the Food & lifestyle stage (the
-	// catch-all group) so the trunk never overstates what survived; they show
-	// up as an explicit "Unfiled" leaf in the breakdown below.
+	// Not-yet-categorised outflows ride in the catch-all stage so the trunk never
+	// overstates what survived; they show up as an explicit "Unfiled" leaf in the
+	// breakdown below.
+	//
+	// That used to name 'living' outright. Groups are a household's own now and
+	// any of them can be deleted, so this takes the last expense stage when the
+	// seeded catch-all is gone — and when there are no expense stages at all, the
+	// unfiled amount simply has nowhere to ride and is left out of the trunk
+	// rather than silently attached to something it does not belong to.
 	const unfiledOut = -uncategorisedOut;
-	if (unfiledOut > 0.005) {
-		const living = stages.find((s) => s.key === 'living');
-		if (living) living.amount += unfiledOut;
-	}
+	const catchAll = stages.find((s) => s.key === 'living') ?? stages[stages.length - 1];
+	if (unfiledOut > 0.005 && catchAll) catchAll.amount += unfiledOut;
 
 	const totalStaged = stages.reduce((s, x) => s + x.amount, 0);
 	const kept = totalIn - totalStaged;
@@ -140,25 +166,28 @@ export async function flowData(period: Period): Promise<FlowData> {
 		...expenseGroups.map((g) => ({
 			key: g.key,
 			label: g.label,
-			colorVar: g.colorVar,
+			colorVar: g.colorToken,
 			pct:
 				totalIn > 0 ? Math.round((stages.find((s) => s.key === g.key)!.amount / totalIn) * 100) : 0,
 			leaves: [
 				...categories
 					.filter((c) => c.groupKey === g.key)
 					.map((c) => ({ name: c.name, value: Math.abs(byCategory.get(c.id) ?? 0) })),
-				...(g.key === 'living' && unfiledOut > 0.005
+				...(g.key === catchAll?.key && unfiledOut > 0.005
 					? [{ name: 'Unfiled', value: unfiledOut }]
 					: [])
 			].filter((l) => l.value > 0.005)
 		})),
+		// What is left after every stage. Read from the savings-role group rather
+		// than the literal key and colour it used to hardcode, so a household that
+		// renames or recolours it sees that here too.
 		{
-			key: 'savings',
-			label: 'Saved & invested',
-			colorVar: '--teal',
+			key: savingsGroup?.key ?? 'savings',
+			label: savingsGroup?.label ?? 'Saved & invested',
+			colorVar: savingsGroup?.colorToken ?? '--series-savings',
 			pct: totalIn > 0 ? Math.round((kept / totalIn) * 100) : 0,
 			leaves: categories
-				.filter((c) => c.groupKey === 'savings')
+				.filter((c) => savingsKeys.has(c.groupKey))
 				.map((c) => ({ name: c.name, value: Math.abs(byCategory.get(c.id) ?? 0) }))
 				.filter((l) => l.value > 0.005)
 		}
@@ -178,11 +207,33 @@ interface MonthBar {
 	spent: number;
 }
 
+/**
+ * The newest month holding a transaction that is not a transfer leg, as
+ * `YYYY-MM`, or null on an instance with nothing imported.
+ *
+ * Neither rule here is a free choice — both are the rules monthlyHistory and
+ * flowData already apply. The effective date is the value date when the bank
+ * prints one, and transfer legs are excluded. A month whose only movement was
+ * between the household's own accounts has no spending to show, so anchoring on
+ * it would reproduce the empty chart this exists to fix.
+ */
+export async function latestMonthWithData(handle: Queryable = db): Promise<string | null> {
+	const [row] = await handle
+		.select({
+			month: sql<
+				string | null
+			>`to_char(max(coalesce(${transaction.valueOn}, ${transaction.bookedOn})), 'YYYY-MM')`
+		})
+		.from(transaction)
+		.where(notOwnTransfer());
+	return row?.month ?? null;
+}
+
 /** Earned vs spent per month over the whole record, transfers excluded. */
 export async function monthlyHistory(): Promise<MonthBar[]> {
 	const base = await getBaseCurrency();
 	const rates = await loadRateTable();
-	const rows = await db.select().from(transaction).where(isNull(transaction.transferPairId));
+	const rows = await db.select().from(transaction).where(notOwnTransfer());
 
 	const byMonth = new Map<string, { earned: number; spent: number }>();
 	for (const t of rows) {

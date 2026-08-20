@@ -21,6 +21,7 @@ import {
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
+import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 interface BriefingItem {
 	emoji: string;
@@ -188,7 +189,7 @@ const overspend: Source = async () => {
 	// Aggregated in JavaScript rather than SQL because a transaction may be
 	// split across categories, and effectiveLines is the only thing that knows.
 	const [txns, categories, rates, baseCurrency] = await Promise.all([
-		db.select().from(transaction).where(isNull(transaction.transferPairId)),
+		db.select().from(transaction).where(notOwnTransfer()),
 		db.select().from(category),
 		loadRateTable(),
 		getBaseCurrency()

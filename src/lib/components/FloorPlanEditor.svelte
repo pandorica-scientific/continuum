@@ -339,7 +339,7 @@
 		color: var(--fg3);
 		border-radius: 6px;
 		padding: 6px 12px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	.seg button.active {
@@ -354,7 +354,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.scale input {
@@ -364,10 +364,10 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 6px 9px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.hint {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		display: flex;
 		gap: 12px;
@@ -376,7 +376,7 @@
 	}
 	.dims {
 		color: var(--fg1);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	svg {
 		width: 100%;
@@ -407,7 +407,7 @@
 	}
 	.room-name {
 		fill: var(--fg1);
-		font-size: 22px;
+		font-size: var(--text-3xl);
 		font-family: var(--font-sans);
 		text-anchor: middle;
 		dominant-baseline: middle;
@@ -415,7 +415,7 @@
 	}
 	.room-area {
 		fill: var(--fg3);
-		font-size: 16px;
+		font-size: var(--text-xl);
 		text-anchor: middle;
 		dominant-baseline: middle;
 		pointer-events: none;
@@ -439,13 +439,13 @@
 	.save-error {
 		margin: 0;
 		color: var(--red);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.name-label {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.name-input {
@@ -454,10 +454,10 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.spacer {

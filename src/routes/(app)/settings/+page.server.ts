@@ -12,8 +12,21 @@ import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
-import { currentOrigin, passkeysAvailable } from '$lib/server/auth/webauthn/origin';
+import { currentOrigin, passkeysUsableFrom } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
+import { loadCategoryGroups } from '$lib/server/categorize/groups';
+import {
+	createCategory,
+	createCategoryGroup,
+	deleteCategory,
+	deleteCategoryGroup,
+	renameCategoryGroup
+} from '$lib/server/categorize/taxonomy';
+import { CATEGORY_GROUP_SEED, RESERVE_COLOR_TOKENS } from '$lib/categories';
+import { passwordsMatchError } from '$lib/password-policy';
+import { disableOpenMode, enableOpenMode, isOpenMode } from '$lib/server/auth/open-mode';
+import { asEnumValue, ENUMS } from '$lib/enums';
+import { category } from '$lib/server/db/schema';
 import { enrollmentLinkDays, passwordMinLength } from '$lib/server/system/policy';
 import { env } from '$env/dynamic/private';
 import {
@@ -125,7 +138,12 @@ async function policyTarget(tx: Tx, personId: string) {
 	return { id: row.id, role: row.role, canSignIn: canSignIn(row) };
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	// Decided from the address actually being browsed, not from the configured
+	// one: reading only the configuration put the passkey controls on every
+	// address the instance answers at, while exactly one of them can verify.
+	const passkeyUse = passkeysUsableFrom(url.origin, currentOrigin());
+	const openMode = await isOpenMode();
 	// Members reach this page for their own password and passkeys. Everything
 	// else on it — backup destinations on the host filesystem, server status,
 	// the API token list — is administrator business and is not fetched at all
@@ -176,10 +194,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.orderBy(person.createdAt, person.id),
 		isAdmin ? getBackupConfig() : null,
 		isAdmin ? getLastBackupRun() : null,
-		// Gated on passkeysAvailable() as well as on being signed in: a plain-HTTP
+		// Gated on usability here as well as on being signed in: a plain-HTTP
 		// LAN instance never renders the passkey card, so this was a round trip
 		// per person per visit for the entire life of that deployment.
-		passkeysAvailable() && locals.person
+		passkeyUse.usable && locals.person
 			? db
 					.select({
 						id: credential.id,
@@ -199,8 +217,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 		isAdmin ? getSyncIntervalMinutes() : 15
 	]);
 
+	const groups = await loadCategoryGroups();
+	const leaves = await db.select().from(category).orderBy(category.groupKey, category.sort);
+
 	return {
 		isAdmin,
+		taxonomy: groups.map((group) => ({
+			key: group.key,
+			label: group.label,
+			colorToken: group.colorToken,
+			role: group.role,
+			items: leaves
+				.filter((leaf) => leaf.groupKey === group.key)
+				.map((leaf) => ({ id: leaf.id, name: leaf.name }))
+		})),
+		// Every leaf, for the "move them to" picker a deletion needs.
+		allLeaves: leaves.map((leaf) => ({ id: leaf.id, name: leaf.name })),
+		groupRoles: ENUMS['category_group.role'],
+		// The whole palette, so a group can be recoloured to any of it — including
+		// a token another group is using, which is a legitimate choice when a
+		// household has more groups than there are distinct colours.
+		paletteTokens: [...CATEGORY_GROUP_SEED.map((seed) => seed.colorToken), ...RESERVE_COLOR_TOKENS],
 		calendarAccounts,
 		calendarMarkers,
 		calendarSyncMinutes,
@@ -216,7 +253,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// The component needs to know who you are to decide which controls are
 		// yours and whether you may administer anyone.
 		me: locals.person,
-		passkeys: passkeysAvailable(),
+		openMode,
+		passkeys: passkeyUse.usable,
+		passkeyWorksAt: passkeyUse.usable ? null : passkeyUse.worksAt,
+		passkeyReason: passkeyUse.usable ? null : passkeyUse.reason,
 		// Named on screen when passkeys are unavailable, so the explanation points
 		// at the value actually in force rather than at a variable name.
 		origin: currentOrigin(),
@@ -498,6 +538,85 @@ export const actions = administered({
 		return { ok: true };
 	},
 
+	/**
+	 * Open the instance to anyone who can reach it.
+	 *
+	 * The administrator's own password is required — not as a second factor, but
+	 * because it is the last moment a password can prove that the person asking
+	 * for this is the person who will live with it.
+	 */
+	enableOpenMode: async ({ request, locals }) => {
+		if (!locals.person) return fail(403, { message: 'Sign in first.' });
+		const form = await request.formData();
+		const result = await enableOpenMode(locals.person.id, String(form.get('password') ?? ''));
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/** Close it again. Deliberately asks for nothing — the door is already open. */
+	disableOpenMode: async () => {
+		await disableOpenMode();
+		return { ok: true };
+	},
+
+	// ---- The category tree ----
+	//
+	// Groups and leaves were a constant until this release; these five actions
+	// are what make them a household's own. Colour is chosen from the palette
+	// rather than typed: every token carries a value per theme and the set was
+	// validated for separation under colour-vision deficiency, so a free hex
+	// would be illegible in one theme or indistinguishable in both.
+
+	addGroup: async ({ request }) => {
+		const form = await request.formData();
+		const result = await createCategoryGroup({
+			label: String(form.get('groupLabel') ?? ''),
+			role: asEnumValue('category_group.role', form.get('groupRole'), 'expense')
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	editGroup: async ({ request }) => {
+		const form = await request.formData();
+		const result = await renameCategoryGroup(String(form.get('groupKey') ?? ''), {
+			label: String(form.get('groupLabel') ?? ''),
+			colorToken: String(form.get('colorToken') ?? '')
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	removeGroup: async ({ request }) => {
+		const form = await request.formData();
+		const result = await deleteCategoryGroup(String(form.get('groupKey') ?? ''));
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	addLeaf: async ({ request }) => {
+		const form = await request.formData();
+		const result = await createCategory({
+			groupKey: String(form.get('groupKey') ?? ''),
+			name: String(form.get('categoryName') ?? '')
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	removeLeaf: async ({ request }) => {
+		const form = await request.formData();
+		// Reassignment is required, not optional: orphaning the rows would drop
+		// them out of every total that filters on a category, which reads as money
+		// vanishing.
+		const result = await deleteCategory(
+			String(form.get('categoryId') ?? ''),
+			String(form.get('reassignTo') ?? '')
+		);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
 	toggleModule: async ({ request }) => {
 		const form = await request.formData();
 		const key = String(form.get('key') ?? '') as ModuleKey;
@@ -605,7 +724,8 @@ export const actions = administered({
 		const current = String(form.get('currentPassword') ?? '');
 		const next = String(form.get('newPassword') ?? '');
 		const confirm = String(form.get('confirmPassword') ?? '');
-		if (next !== confirm) return fail(400, { message: 'The two new passwords do not match.' });
+		const mismatch = passwordsMatchError(next, confirm, 'The two new passwords');
+		if (mismatch) return fail(400, { message: mismatch });
 
 		const keep = currentSessionId(cookies);
 		const result = await changeOwnPassword(locals.person.id, current, next, keep);

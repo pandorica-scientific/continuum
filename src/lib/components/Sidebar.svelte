@@ -171,7 +171,7 @@
 		padding: 0 8px;
 	}
 	.wordmark {
-		font-size: 15.5px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
@@ -185,17 +185,17 @@
 		gap: 3px;
 	}
 	.amount {
-		font-size: 19px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
 	.ccy {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		margin-left: 5px;
 	}
 	.delta {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	/* One row per area, no group headings: the areas are the grouping now. */
 	nav {
@@ -211,7 +211,7 @@
 		padding: 8px 10px;
 		border-radius: 8px;
 		color: var(--fg2);
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 400;
 	}
 	/* Tinted with the row's OWN colour rather than a neutral grey: the icon
@@ -246,7 +246,7 @@
 		white-space: nowrap;
 	}
 	.badge {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		color: var(--fg-inverse);
 		background: var(--yellow);
 		border-radius: 20px;
@@ -264,7 +264,7 @@
 		display: flex;
 		align-items: baseline;
 		gap: 5px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		/* The dimmest foreground the palette has: present when looked for, never
 		   competing with a navigation row. */
 		color: var(--fg3);
@@ -288,7 +288,7 @@
 		color: var(--fg3);
 		border-radius: 8px;
 		padding: 7px 4px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	.themes button.active {
@@ -306,7 +306,7 @@
 		border: 0;
 		background: transparent;
 		color: var(--fg2);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		cursor: pointer;
 		padding: 2px 0;
 	}
@@ -320,11 +320,11 @@
 		background: var(--card3);
 		display: grid;
 		place-items: center;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		flex: 0 0 auto;
 	}
 	.name {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		min-width: 0;
 		flex: 1;

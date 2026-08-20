@@ -3,10 +3,30 @@
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 
 	let { data, form } = $props();
 
 	let adding = $state(false);
+
+	/** Sentinel option: not a bank key, so it can never be stored as one. */
+	const ADD_BANK = '__add__';
+	let bankKey = $state('fio');
+	let addingBank = $state(false);
+	// What the select should fall back to if the dialog is dismissed, so choosing
+	// "Add a bank…" and then changing your mind does not leave the field on a
+	// sentinel the server would refuse.
+	let bankBefore = $state('fio');
+
+	function onBankChange() {
+		if (bankKey === ADD_BANK) {
+			addingBank = true;
+			bankKey = bankBefore;
+		} else {
+			bankBefore = bankKey;
+		}
+	}
 
 	const donutGradient = $derived(
 		data.donut.length
@@ -58,13 +78,14 @@
 		{#if adding}
 			<form method="POST" action="?/addAccount" use:enhance class="add-form">
 				<input name="name" placeholder="Name (e.g. Fio joint account)" />
-				<select name="bank">
-					<option value="fio">Fio banka</option>
-					<option value="revolut">Revolut</option>
-					<option value="mbank">mBank</option>
-					<option value="rb">Raiffeisenbank</option>
-					<option value="cs">Česká spořitelna</option>
-					<option value="other">Other</option>
+				<!-- The list is data now, so a bank added below appears here without a
+				     deploy. Picking the sentinel opens the dialog rather than filing the
+				     account under a bank literally called Other. -->
+				<select name="bank" bind:value={bankKey} onchange={onBankChange}>
+					{#each data.banks as b (b.key)}
+						<option value={b.key}>{b.label}</option>
+					{/each}
+					<option value={ADD_BANK}>➕ Add a bank…</option>
 				</select>
 				<select name="currency">
 					{#each data.currencies as c (c)}<option>{c}</option>{/each}
@@ -74,7 +95,19 @@
 					<option value="savings">Savings</option>
 					<option value="brokerage">Brokerage</option>
 				</select>
-				<input name="numbers" placeholder="Account number(s), comma separated" />
+				<!-- The placeholder alone could not say why this is wanted, and on a
+				     narrow screen it was cut off before it finished saying what it is. -->
+				<div class="numbers-field">
+					<input name="numbers" placeholder="Account number(s), comma separated" />
+					<InfoHint label="Why account numbers are needed">
+						The numbers this account is known by, as your statements print them — an account number
+						or an IBAN. Several go in comma separated.
+						<br /><br />
+						Continuum matches them against the counterparty on every imported row, so money moved between
+						two of your own accounts is recognised as a transfer and left out of spending and income.
+						Without them, moving savings looks like money spent.
+					</InfoHint>
+				</div>
 				<button type="submit" class="btn">Add</button>
 			</form>
 		{:else}
@@ -105,6 +138,41 @@
 	</div>
 </section>
 
+{#if addingBank}
+	<Modal title="Add a bank" onclose={() => (addingBank = false)}>
+		<form
+			method="POST"
+			action="?/addBank"
+			use:enhance={() => {
+				return async ({ result, update }) => {
+					// Select the bank that was just added, so the account form carries on
+					// where it left off instead of making the choice a second time.
+					if (result.type === 'success' && typeof result.data?.bankKey === 'string') {
+						bankKey = result.data.bankKey;
+						bankBefore = bankKey;
+					}
+					addingBank = false;
+					await update();
+				};
+			}}
+			class="bank-form"
+		>
+			<label>
+				<span>Name</span>
+				<input name="label" placeholder="Komerční banka" required />
+			</label>
+			<label>
+				<span>Emoji</span>
+				<input name="emoji" placeholder="🏦" maxlength="4" />
+			</label>
+			<div class="row">
+				<button type="submit" class="btn btn-primary">Add bank</button>
+				<button type="button" class="btn" onclick={() => (addingBank = false)}>Cancel</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
 <section class="card">
 	<div class="eyebrow-row" style="padding-bottom: 4px;">
 		<Eyebrow emoji="🔁" label="Transfers between your own accounts" />
@@ -128,7 +196,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.grid-2 {
 		display: grid;
@@ -149,7 +217,7 @@
 		border-top: 1px solid var(--bd);
 	}
 	.emoji {
-		font-size: 15px;
+		font-size: var(--text-xl);
 	}
 	.names {
 		display: flex;
@@ -158,10 +226,10 @@
 		min-width: 0;
 	}
 	.name {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.meta {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.balances {
@@ -171,16 +239,16 @@
 		text-align: right;
 	}
 	.balance {
-		font-size: 14.5px;
+		font-size: var(--text-lg);
 	}
 	.equivalent {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.empty {
 		margin: 0;
 		padding: 10px 0;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 	.add-btn {
@@ -194,6 +262,33 @@
 		padding-top: 11px;
 		border-top: 1px solid var(--bd);
 	}
+	/* Occupies the numbers column of the grid, so the hint travels with the field
+	   it explains instead of being parked at the end of the row. */
+	.bank-form {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.bank-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.bank-form .row {
+		display: flex;
+		gap: 8px;
+	}
+	.numbers-field {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+	.numbers-field input {
+		flex: 1;
+	}
 	.add-form input,
 	.add-form select {
 		border: 1px solid var(--bd2);
@@ -201,7 +296,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.sits {
@@ -232,7 +327,7 @@
 		place-items: center;
 	}
 	.hole .mono {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.legend {
 		flex: 1 1 190px;
@@ -245,7 +340,7 @@
 		grid-template-columns: 11px minmax(0, 1fr) auto;
 		gap: 9px;
 		align-items: center;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.dot {
 		width: 9px;
@@ -265,10 +360,10 @@
 		gap: 12px;
 		padding: 9px 0;
 		border-top: 1px solid var(--bd);
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.t-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.t-route {

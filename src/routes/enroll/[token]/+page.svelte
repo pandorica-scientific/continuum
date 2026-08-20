@@ -61,7 +61,7 @@
 		gap: 9px;
 	}
 	.wordmark {
-		font-size: 15.5px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
@@ -71,7 +71,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.form {
 		display: flex;
@@ -80,7 +80,7 @@
 		padding: 18px;
 	}
 	.lead {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		margin: 0;
 	}
@@ -90,6 +90,6 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 9px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 </style>

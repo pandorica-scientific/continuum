@@ -39,7 +39,7 @@
 		margin-bottom: 12px;
 	}
 	.caption {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

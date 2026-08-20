@@ -241,6 +241,9 @@ export const actions: Actions = {
 			personIds: picked.people,
 			propertyIds: picked.properties,
 			accountIds: picked.accounts,
+			// The documents screen files against people, property and accounts; a
+			// receipt is attached from the transaction it evidences instead.
+			transactionIds: [],
 			subjectIds: picked.subjects,
 			newSubjectName: newSubject || undefined,
 			tagNames

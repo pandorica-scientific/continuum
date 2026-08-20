@@ -200,7 +200,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.setup {
 		display: flex;
@@ -222,7 +222,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	input,
@@ -232,14 +232,14 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.row {
 		display: flex;
 		gap: 8px;
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.55;
 		margin: 0;
@@ -259,7 +259,7 @@
 		padding: 10px 15px;
 	}
 	.a-item {
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.rooms {
 		display: grid;
@@ -278,11 +278,11 @@
 		gap: 12px;
 	}
 	.r-name {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 600;
 	}
 	.r-climate {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.devices {
@@ -316,14 +316,14 @@
 		opacity: 0.75;
 	}
 	.d-emoji {
-		font-size: 15px;
+		font-size: var(--text-xl);
 	}
 	.d-name {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		min-width: 0;
 	}
 	.d-state {
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	.bars {
 		display: flex;
@@ -348,17 +348,17 @@
 		align-items: baseline;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.w-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.w-label {
 		color: var(--fg2);
 	}
 	.open-link {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.disconnect {
 		display: flex;

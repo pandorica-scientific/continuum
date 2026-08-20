@@ -107,13 +107,13 @@
 		align-items: flex-start;
 	}
 	.name {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		color: var(--fg1);
 		line-height: 1.25;
 	}
 	.value {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg2);
 		line-height: 1.2;
 	}

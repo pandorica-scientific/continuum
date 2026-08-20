@@ -141,7 +141,7 @@
 		gap: 8px;
 	}
 	.c-title {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	svg {
@@ -149,14 +149,14 @@
 		height: auto;
 	}
 	.axis {
-		font-size: 10px;
+		font-size: var(--text-2xs);
 		fill: var(--fg3);
 	}
 	.legend {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px 14px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.l-item {

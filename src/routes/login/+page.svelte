@@ -22,6 +22,13 @@
 
 	{#if data.passkeys}
 		<PasskeyButton />
+	{:else if data.passkeyWorksAt}
+		<!-- A passkey is bound to one address. Silence here read as "this build has
+		     no passkeys"; naming the address that works turns a dead end into a
+		     next step. -->
+		<p class="passkey-note">
+			Passkeys work at <code>{data.passkeyWorksAt}</code> — sign in with a password here.
+		</p>
 	{/if}
 
 	<form method="POST" class="card form">
@@ -39,12 +46,41 @@
 			{/each}
 		</div>
 		<input type="hidden" name="personId" value={personId} />
-		<input name="password" type="password" placeholder="Password" autocomplete="current-password" />
+		{#if data.openMode}
+			<!-- No credential is being asked for, so no field is shown. Saying so
+			     plainly matters: a sign-in box that simply lets you in is otherwise
+			     indistinguishable from one that is broken. -->
+			<p class="open-note">
+				This instance is open — anyone who can reach it can sign in as anyone. Turn that off in
+				Settings.
+			</p>
+		{:else}
+			<input
+				name="password"
+				type="password"
+				placeholder="Password"
+				autocomplete="current-password"
+			/>
+		{/if}
 		<button type="submit" class="btn btn-primary">Sign in</button>
 	</form>
 </div>
 
 <style>
+	.open-note {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--yellow);
+		line-height: 1.5;
+	}
+
+	.passkey-note {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		text-align: center;
+	}
+
 	.wrap {
 		max-width: 380px;
 		margin: 0 auto;
@@ -59,7 +95,7 @@
 		gap: 9px;
 	}
 	.wordmark {
-		font-size: 15.5px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
@@ -69,7 +105,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.form {
 		display: flex;
@@ -91,7 +127,7 @@
 		color: var(--fg2);
 		border-radius: 8px;
 		padding: 9px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		cursor: pointer;
 		text-align: left;
 	}
@@ -107,7 +143,7 @@
 		background: var(--card3);
 		display: grid;
 		place-items: center;
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	input[name='password'] {
 		border: 1px solid var(--bd2);
@@ -115,6 +151,6 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 9px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 </style>

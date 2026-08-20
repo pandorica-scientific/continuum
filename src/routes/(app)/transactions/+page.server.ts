@@ -19,7 +19,16 @@ import {
 	SOURCE_LABELS,
 	sourceLabel
 } from '$lib/transactions/provenance';
-import { CATEGORY_GROUPS } from '$lib/categories';
+import { loadCategoryGroups } from '$lib/server/categorize/groups';
+import {
+	attachDocumentToTransaction,
+	detachDocumentFromTransaction,
+	loadTransactionDocuments
+} from '$lib/server/transactions/documents';
+import { createDocument } from '$lib/server/documents/mutations';
+import { saveUpload } from '$lib/server/system/files';
+import { uuidv7 } from 'uuidv7';
+import { extname } from 'node:path';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -38,11 +47,12 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 	const rowIds = page.rows.map((r) => r.id);
-	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags] = await Promise.all([
+	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags, docsByTxn] = await Promise.all([
 		loadSplits(rowIds),
 		loadTagsFor(rowIds),
 		loadSplitTagsFor(rowIds),
-		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name)
+		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
+		loadTransactionDocuments(rowIds)
 	]);
 
 	/** A page link that carries every active filter forward. */
@@ -76,6 +86,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				reviewState: r.reviewState,
 				account: r.accountName,
 				isTransfer: r.isTransfer,
+				transferKind: r.transferKind,
 				// Only shown when the structure was worked out rather than declared:
 				// a row from a published format has nothing interesting to say here,
 				// and saying it on every row would be noise.
@@ -90,6 +101,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				// from the parent transaction on save.
 				amountMajor: formatMinor(r.amount < 0n ? -r.amount : r.amount, r.currency),
 				tags: tagsByTxn.get(r.id) ?? [],
+				documents: docsByTxn.get(r.id) ?? [],
 				isSplit: splits.length > 0,
 				splits: splits.map((s) => ({
 					id: s.id,
@@ -119,22 +131,90 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		proofLabels: PROOF_LABELS,
 		accounts,
-		categories: CATEGORY_GROUPS.map((group) => ({
-			key: group.key,
-			label: group.label,
-			items: categories.filter((c) => c.groupKey === group.key)
-		})).filter((g) => g.items.length > 0)
+		categories: (await loadCategoryGroups())
+			.map((group) => ({
+				key: group.key,
+				label: group.label,
+				items: categories.filter((c) => c.groupKey === group.key)
+			}))
+			.filter((g) => g.items.length > 0)
 	};
 };
 
 export const actions: Actions = {
 	file: async ({ request }) => {
 		const form = await request.formData();
-		const result = await fileTransaction(
-			asRowId(form.get('id')),
-			String(form.get('categoryId') ?? '')
-		);
-		if (!result.ok) return fail(result.status, { message: result.message });
+		const id = asRowId(form.get('id'));
+		const result = await fileTransaction(id, String(form.get('categoryId') ?? ''));
+		// The id travels with the failure so the screen can render the message
+		// against the row that produced it rather than in a banner at the top,
+		// where it read as unrelated to the button that was just pressed.
+		if (!result.ok) return fail(result.status, { id, message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Attach a receipt to a transaction.
+	 *
+	 * Either a file, which becomes a document on the receipts shelf and is then
+	 * linked, or a document already in the household's files. No schema work
+	 * behind it: `document_link` targets any entity and a transaction is one.
+	 */
+	attachDocument: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('id'));
+		const existingId = String(form.get('documentId') ?? '').trim();
+
+		if (existingId) {
+			const linked = await attachDocumentToTransaction(id, existingId);
+			if (!linked.ok) return fail(linked.status, { id, message: linked.message });
+			return { ok: true };
+		}
+
+		const file = form.get('file');
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { id, message: 'Choose a file, or a document you already have.' });
+		}
+		let storedName: string;
+		try {
+			storedName = await saveUpload(file);
+		} catch (err) {
+			return fail(400, { id, message: err instanceof Error ? err.message : 'Upload failed.' });
+		}
+
+		const documentId = uuidv7();
+		await createDocument({
+			id: documentId,
+			name: file.name || 'Receipt',
+			shelf: 'family',
+			storedName,
+			ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
+			addedOn: new Date().toISOString().slice(0, 10),
+			expiresOn: null,
+			expiryVerb: 'expires',
+			personIds: [],
+			propertyIds: [],
+			accountIds: [],
+			// Linked in the same aggregate the documents screen uses, so the file and
+			// its link commit together or not at all.
+			transactionIds: [id],
+			subjectIds: [],
+			// Also filed under a subject, and this is not decoration. The documents
+			// screen builds its columns from people, properties, accounts and
+			// subjects — a document linked only to a transaction would appear in no
+			// column at all, so a receipt you just attached would be missing from
+			// your own files. The subject is upserted by name, so they collect in
+			// one place.
+			newSubjectName: 'Receipts',
+			tagNames: ['receipt']
+		});
+		return { ok: true };
+	},
+
+	detachDocument: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('id'));
+		await detachDocumentFromTransaction(id, String(form.get('documentId') ?? ''));
 		return { ok: true };
 	},
 

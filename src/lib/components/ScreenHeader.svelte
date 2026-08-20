@@ -95,7 +95,7 @@
 	}
 	h1 {
 		margin: 0;
-		font-size: 28px;
+		font-size: var(--text-4xl);
 		font-weight: 600;
 		letter-spacing: -0.02em;
 		line-height: 1.2;
@@ -110,7 +110,7 @@
 		display: flex;
 	}
 	.caption {
-		font-size: 13.6px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 	.actions {
@@ -123,7 +123,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		border: 1px solid var(--bd);
 		border-radius: 8px;
@@ -148,7 +148,7 @@
 		display: none;
 	}
 	.tab {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		padding: 5px 12px;
 		border-radius: 20px;

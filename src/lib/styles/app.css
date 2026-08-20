@@ -55,8 +55,70 @@
 	--indigo-wash: rgba(123, 140, 232, 0.07);
 	--brand-wash: rgba(74, 134, 200, 0.07);
 
+	/* ── Category series colours ──────────────────────────────────────────────
+	 * Generated in OKLCH and validated, not chosen by eye. Every pair was
+	 * measured for separation under normal, protan and deutan vision against the
+	 * card these sit on; the palette that shipped before failed both themes —
+	 * housing and living were 2.7 apart under deuteranopia where 8 is the floor,
+	 * and in light mode transport and bills were 0.3.
+	 *
+	 * Lightness alternates between adjacent groups on purpose. Equal hue spacing
+	 * does not give equal perceptual spacing: the amber/olive pair collapses to
+	 * 0.7 at a single lightness, and separating on lightness too is what saves it.
+	 *
+	 * Order below is waterfall order, which is the order "adjacent" means.
+	 */
+	--series-income: #75a322;
+	--series-taxes: #ac2f3b;
+	--series-bills: #da7306;
+	--series-subscriptions: #7d43a8;
+	--series-health: #7189f3;
+	--series-transport: #786000;
+	--series-living: #d365aa;
+	--series-housing: #006b98;
+	--series-savings: #00a6ad;
+
+	/* Reserve, for groups a household adds. Ranked by measured separation from
+	 * everything above and from each other: 1 stands on its own, 2–4 need the
+	 * series named beside them, 5–10 are carried by their label and the colour
+	 * only helps. Assign in order; do not reach past what is used.
+	 */
+	--series-r1: #008f75;
+	--series-r2: #007369;
+	--series-r3: #5f6ed7;
+	--series-r4: #00ad72;
+	--series-r5: #00a0d0;
+	--series-r6: #ab6900;
+	--series-r7: #9e57b9;
+	--series-r8: #008b93;
+	--series-r9: #009250;
+	--series-r10: #3d5abd;
+
 	--font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: 'Source Code Pro', ui-monospace, monospace;
+
+	/* The type ramp.
+	 *
+	 * There used to be twenty-two distinct font sizes, and 12 / 12.5 / 13 / 13.5
+	 * were all in heavy use — 267 declarations across those four alone. Half a
+	 * pixel is not a size difference anyone chose; it is drift. But it is visible
+	 * when two such elements sit next to each other, and it was reported as the
+	 * app using different fonts in different places, which is what unequal sizes
+	 * in one family look like.
+	 *
+	 * The steps are the values already most used, so this merged the half-pixel
+	 * neighbours into their nearest whole rather than imposing a new scale. Add a
+	 * step here rather than a one-off px value in a component.
+	 */
+	--text-2xs: 10px;
+	--text-xs: 11px;
+	--text-sm: 12px;
+	--text-md: 13px;
+	--text-lg: 14px;
+	--text-xl: 16px;
+	--text-2xl: 19px;
+	--text-3xl: 22px;
+	--text-4xl: 28px;
 }
 
 html[data-ledger-theme='light'] {
@@ -117,6 +179,29 @@ html[data-ledger-theme='light'] {
 	--orange-wash: rgba(224, 123, 30, 0.06);
 	--indigo-wash: rgba(112, 128, 224, 0.06);
 	--brand-wash: rgba(63, 124, 191, 0.06);
+
+	/* Category series, light theme. Its own steps from the same hues — not the
+	 * dark values lightened, which would fail contrast against a white card. */
+	--series-income: #83af3e;
+	--series-taxes: #b23e46;
+	--series-bills: #e38231;
+	--series-subscriptions: #844fad;
+	--series-health: #7e96fb;
+	--series-transport: #826900;
+	--series-living: #de75b5;
+	--series-housing: #0074a4;
+	--series-savings: #00b4bb;
+
+	--series-r1: #009d81;
+	--series-r2: #008075;
+	--series-r3: #6b7cdf;
+	--series-r4: #23ba7d;
+	--series-r5: #00aee1;
+	--series-r6: #bb7400;
+	--series-r7: #a966c2;
+	--series-r8: #0098a1;
+	--series-r9: #189f5a;
+	--series-r10: #4967c5;
 }
 
 html,
@@ -141,7 +226,7 @@ body {
 	background-attachment: fixed;
 	color: var(--fg1);
 	font-family: var(--font-sans);
-	font-size: 16px;
+	font-size: var(--text-xl);
 	line-height: 1.55;
 	-webkit-font-smoothing: antialiased;
 }
@@ -180,7 +265,7 @@ textarea {
 	color: var(--fg1);
 	border-radius: 8px;
 	padding: 8px 11px;
-	font-size: 13.5px;
+	font-size: var(--text-md);
 }
 input[type='checkbox'],
 input[type='radio'] {
@@ -205,7 +290,7 @@ input[type='file']::file-selector-button {
 	padding: 5px 11px;
 	margin-right: 10px;
 	font-family: inherit;
-	font-size: 13px;
+	font-size: var(--text-md);
 	cursor: pointer;
 }
 input[type='file']::file-selector-button:hover {
@@ -238,11 +323,15 @@ input[type='file']::file-selector-button:hover {
 }
 
 .eyebrow {
-	font-size: 11px;
+	font-size: var(--text-xs);
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 	color: var(--fg3);
-	white-space: nowrap;
+	/* Deliberately NOT nowrap. Most eyebrows are two words and will not wrap
+	   anyway, but the long ones — "Backups (one restorable dump plus every
+	   uploaded file)" — rendered 436px wide inside a 390px viewport and pushed
+	   the whole settings page into horizontal scroll. */
+	min-width: 0;
 }
 
 .eyebrow-row {
@@ -254,7 +343,7 @@ input[type='file']::file-selector-button:hover {
 }
 
 .eyebrow-caption {
-	font-size: 13.6px;
+	font-size: var(--text-md);
 	color: var(--fg3);
 }
 
@@ -270,12 +359,34 @@ input[type='file']::file-selector-button:hover {
 	color: var(--fg1);
 	border-radius: 8px;
 	padding: 7px 13px;
-	font-size: 13px;
+	font-size: var(--text-md);
 	cursor: pointer;
 	white-space: nowrap;
+	/* Short enough to register on a fast click. A press that leaves no trace was
+	   reported as the button not working at all. */
+	transition:
+		background-color 90ms ease-out,
+		transform 90ms ease-out;
 }
 .btn:hover {
 	background: var(--card2);
+}
+/* The press itself. Colour and displacement together, because either alone is
+   easy to miss on a dark background at this size. */
+.btn:active:not(:disabled) {
+	background: var(--card3);
+	transform: translateY(1px);
+}
+.btn:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+/* Without this a disabled button is indistinguishable from a live one, so
+   pressing it and getting nothing looks like the same failure this release is
+   fixing elsewhere. */
+.btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
 }
 
 .btn-primary {
@@ -286,4 +397,21 @@ input[type='file']::file-selector-button:hover {
 .btn-primary:hover {
 	background: var(--blue);
 	opacity: 0.9;
+}
+.btn-primary:active:not(:disabled) {
+	background: var(--blue);
+	opacity: 0.78;
+	transform: translateY(1px);
+}
+
+/* Honour a stated preference for less motion: the colour change still reports
+   the press, which is the part that carries the information. */
+@media (prefers-reduced-motion: reduce) {
+	.btn {
+		transition: background-color 90ms ease-out;
+	}
+	.btn:active:not(:disabled),
+	.btn-primary:active:not(:disabled) {
+		transform: none;
+	}
 }

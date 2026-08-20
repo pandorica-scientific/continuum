@@ -176,7 +176,7 @@ export async function seedDemo(): Promise<void> {
 		add(m, '15', -288000n, 'groceries', 'Lidl');
 		add(m, '22', -274000n, 'groceries', 'Kaufland');
 		add(m, '10', -240000n, 'energy', 'ČEZ Prodej');
-		add(m, '11', -64900n, 'internet-phone', 'O2 Czech Republic');
+		add(m, '11', -64900n, 'phone', 'O2 Czech Republic');
 		add(m, '12', -182000n, 'fuel-tolls', 'Shell');
 		add(m, '18', -245000n, 'eating-out', 'Restaurace U Nováků');
 		add(m, '20', -119000n, 'everything-else', 'Alza.cz');

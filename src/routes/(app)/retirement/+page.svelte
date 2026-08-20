@@ -518,7 +518,7 @@
 	.save-error {
 		margin: 0;
 		color: var(--red);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.error {
 		border: 1px solid var(--red);
@@ -526,7 +526,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.salary-grid {
 		display: grid;
@@ -540,17 +540,17 @@
 		min-width: 0;
 	}
 	.p-name {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 600;
 	}
 	.salary-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.salary-table th {
 		text-align: left;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		font-weight: 500;
 		color: var(--fg3);
 		padding: 4px 8px 6px 0;
@@ -578,7 +578,7 @@
 		align-items: center;
 	}
 	.slip-month {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.slip input {
@@ -587,16 +587,16 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 5px 9px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		font-family: var(--font-mono);
 	}
 	.slip-file {
 		text-decoration: none;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.slip-save {
 		padding: 5px 10px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.payslip-form {
 		display: grid;
@@ -608,7 +608,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.payslip-form input,
@@ -618,7 +618,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.verdict {
 		background: var(--blue-tint);
@@ -631,7 +631,7 @@
 	}
 	.verdict p {
 		margin: 0;
-		font-size: 18px;
+		font-size: var(--text-2xl);
 		line-height: 1.6;
 		color: var(--fg1);
 	}
@@ -643,7 +643,7 @@
 		white-space: nowrap;
 	}
 	.verdict-line {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 11px;
@@ -664,7 +664,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 7px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.control.wide {
@@ -679,7 +679,7 @@
 		border: 1px solid var(--bd2);
 		border-radius: 8px;
 		padding: 9px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		background: var(--card);
 		width: 100%;
@@ -706,7 +706,7 @@
 		color: var(--fg2);
 		border-radius: 8px;
 		padding: 8px 6px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		white-space: nowrap;
 	}
@@ -716,7 +716,7 @@
 		color: var(--fg-inverse);
 	}
 	.quiet {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.table {
@@ -731,7 +731,7 @@
 		align-items: baseline;
 	}
 	.t-head {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -741,7 +741,7 @@
 	.t-row {
 		padding: 10px 0;
 		border-bottom: 1px solid var(--bd);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.t-row.now {
 		background: var(--card2);
@@ -759,7 +759,7 @@
 		width: 36px;
 		text-align: right;
 		transform: translateY(-50%);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.years {
@@ -770,7 +770,7 @@
 	.year {
 		position: absolute;
 		transform: translateX(-50%);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
 	}
@@ -790,7 +790,7 @@
 		display: flex;
 		gap: 14px 18px;
 		flex-wrap: wrap;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
@@ -807,7 +807,7 @@
 	.l-note {
 		margin-left: auto;
 		color: var(--fg3);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	@media (max-width: 720px) {
 		.t-head,

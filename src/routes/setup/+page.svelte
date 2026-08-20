@@ -79,7 +79,16 @@
 					<input
 						name="personPassword"
 						type="password"
+						autocomplete="new-password"
 						placeholder={`Password (${passwordHint(data.passwordMinLength)})`}
+					/>
+					<!-- The only password on a fresh instance, so it is asked twice. A
+					     typo here used to lock the owner out with nothing to fall back on. -->
+					<input
+						name="personPasswordConfirm"
+						type="password"
+						autocomplete="new-password"
+						placeholder="Repeat password"
 					/>
 				</div>
 			{/each}
@@ -116,19 +125,19 @@
 		gap: 9px;
 	}
 	.wordmark {
-		font-size: 15.5px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
 	h1 {
 		margin: 10px 0 0;
-		font-size: 28px;
+		font-size: var(--text-4xl);
 		font-weight: 600;
 		letter-spacing: -0.02em;
 	}
 	.lead {
 		margin: 0;
-		font-size: 13.6px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 	.error {
@@ -137,7 +146,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.form {
 		display: flex;
@@ -149,7 +158,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	input,
@@ -159,7 +168,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	fieldset {
 		border: 0;
@@ -181,7 +190,7 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.note {

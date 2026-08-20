@@ -68,7 +68,7 @@
 		fill: var(--green);
 	}
 	.year {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		fill: var(--fg3);
 		text-anchor: middle;
 	}
@@ -81,7 +81,7 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.dot {

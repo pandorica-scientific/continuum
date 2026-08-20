@@ -112,7 +112,7 @@
 		   both themes, which is why Lightbox uses the same family. */
 		background: var(--bg2);
 		color: var(--fg1);
-		font-size: 12px;
+		font-size: var(--text-sm);
 		line-height: 1.5;
 		/* Heavier than a card's shadow: this floats above the page and needs to
 		   read as detached rather than as part of what is under it. */

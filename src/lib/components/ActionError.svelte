@@ -15,6 +15,6 @@
 		color: var(--red);
 		border-radius: 10px;
 		padding: 9px 12px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 </style>

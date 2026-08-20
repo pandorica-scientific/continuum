@@ -71,11 +71,11 @@
 		flex-wrap: wrap;
 	}
 	.p-title {
-		font-size: 13px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.p-note {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.p-note b {

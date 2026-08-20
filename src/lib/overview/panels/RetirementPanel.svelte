@@ -21,16 +21,16 @@
 		gap: 10px;
 	}
 	.headline {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 		line-height: 1.4;
 	}
 	.detail {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.5;
 	}
 	.open-link {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 </style>

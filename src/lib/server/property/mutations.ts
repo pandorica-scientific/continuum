@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { property, propertyBill, tenancy } from '$lib/server/db/schema';
+import { contact, contactLink, property, propertyBill, tenancy } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { tenancyRangesOverlap } from '$lib/property/tenancy';
+import { normalise } from '$lib/rules/match';
+import { uuidv7 } from 'uuidv7';
 import { validateDrawing } from '$lib/plan';
+import { parseAmountToMinor } from '$lib/money';
 import { and, eq } from 'drizzle-orm';
 
 type PropertyMutationResult =
@@ -52,6 +55,7 @@ export async function createPropertyBill(
 					personIds: [],
 					propertyIds: [input.propertyId],
 					accountIds: [],
+					transactionIds: [],
 					subjectIds: [],
 					tagNames: ['bill']
 				},
@@ -121,7 +125,115 @@ export async function createTenancy(
 		}
 
 		await tx.insert(tenancy).values(input);
+		await linkTenantContact(tx, input.id, input.tenantName);
 		return { ok: true };
+	});
+}
+
+/**
+ * Attach the tenant to the address book, reusing their contact if they are
+ * already in it.
+ *
+ * Adding a tenant used to leave Contacts untouched, so the person you had just
+ * agreed a lease with was not in the address book and had to be typed in a
+ * second time.
+ *
+ * Matching is on the normalised name — case-folded, diacritics stripped — so
+ * "martin dvorak" typed in a hurry finds the existing "Martin Dvořák" instead
+ * of creating a near-duplicate nobody would spot. That is an exact match on a
+ * normalised string, not a fuzzy one: two different people who genuinely share
+ * a name would still be merged here, and the alternative — silently creating a
+ * second record every time — is the bug being fixed. Splitting them afterwards
+ * is possible from Contacts; finding a duplicate you never saw is not.
+ *
+ * Runs inside the caller's transaction, so a tenancy refused for overlapping
+ * cannot leave a contact behind.
+ */
+async function linkTenantContact(tx: Queryable, tenancyId: string, tenantName: string) {
+	const wanted = normalise(tenantName);
+	if (!wanted) return;
+
+	const existing = (await tx.select({ id: contact.id, name: contact.name }).from(contact)).find(
+		(row) => normalise(row.name) === wanted
+	);
+
+	const contactId = existing?.id ?? uuidv7();
+	if (!existing) {
+		await tx.insert(contact).values({
+			id: contactId,
+			name: tenantName.trim(),
+			// Enough for the Contacts screen to group them; everything else about
+			// them is added there, where there is room for it.
+			category: 'tenant'
+		});
+	}
+
+	// The tenancy row above registered itself in `entity` by trigger, which is
+	// what this foreign key points at.
+	await tx.insert(contactLink).values({ contactId, targetId: tenancyId }).onConflictDoNothing();
+}
+
+interface SetPropertyFigureInput {
+	propertyId: string;
+	/** Only the two figures the property actually stores. */
+	field: 'value' | 'moneyIn';
+	amount: string;
+	/** The day the estimate is as of. Ignored for `moneyIn`. */
+	valuedOn: string | null;
+}
+
+/**
+ * Correct one stored figure on a property.
+ *
+ * Only two of the numbers on that screen are stored — the estimated value and
+ * what has been put in. Mortgage owed, equity, rent yield, cash flow and
+ * appreciation are all computed from the loans and the tenancy, and offering a
+ * pencil on those would promise an edit the next recompute silently discards.
+ * They are explained instead.
+ */
+export async function setPropertyFigure(
+	input: SetPropertyFigureInput,
+	handle: Db = db
+): Promise<PropertyMutationResult> {
+	if (input.valuedOn !== null && !isIsoDay(input.valuedOn)) {
+		return { ok: false, status: 400, message: 'That is not a valid date.' };
+	}
+
+	return handle.transaction(async (tx) => {
+		const rows = await tx
+			.select({ id: property.id, currency: property.currency })
+			.from(property)
+			.where(eq(property.id, input.propertyId))
+			.for('update');
+		const row = rows[0];
+		if (!row) return missingProperty();
+
+		let minor: bigint;
+		try {
+			minor = parseAmountToMinor(input.amount, row.currency);
+		} catch {
+			return { ok: false as const, status: 400, message: 'That is not an amount.' };
+		}
+		if (minor < 0n) {
+			return { ok: false as const, status: 400, message: 'That cannot be negative.' };
+		}
+
+		if (input.field === 'value') {
+			await tx
+				.update(property)
+				// The date the estimate is as of, not the date it was typed: the screen
+				// prints "valued 2026-08" beside it, and a wrong date there makes a
+				// stale estimate look current.
+				.set({ valueMinor: minor, valuedOn: input.valuedOn })
+				.where(eq(property.id, input.propertyId));
+		} else {
+			// Deliberately leaves valuedOn alone. Money in is not a valuation.
+			await tx
+				.update(property)
+				.set({ moneyInMinor: minor })
+				.where(eq(property.id, input.propertyId));
+		}
+		return { ok: true as const };
 	});
 }
 

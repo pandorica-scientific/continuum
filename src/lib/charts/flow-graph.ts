@@ -83,7 +83,14 @@ export function flowGraph(input: FlowGraphInput, depth: 2 | 3 | 4 = 4): SankeyGr
 				colorVar: stage.colorVar
 			})),
 		...(input.kept > 0
-			? [{ key: 'kept', label: input.remainderLabel, value: input.kept, colorVar: '--teal' }]
+			? [
+					{
+						key: 'kept',
+						label: input.remainderLabel,
+						value: input.kept,
+						colorVar: '--series-savings'
+					}
+				]
 			: [])
 	];
 

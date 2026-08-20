@@ -18,6 +18,12 @@ interface CreateDocumentInput {
 	personIds: string[];
 	propertyIds: string[];
 	accountIds: string[];
+	/**
+	 * Transactions this document belongs to — a receipt against the payment it
+	 * evidences. Needs no table of its own: the far end of a document link is an
+	 * `entity`, and `transaction` is a registered kind.
+	 */
+	transactionIds: string[];
 	subjectIds: string[];
 	newSubjectName?: string;
 	tagNames: string[];
@@ -59,7 +65,13 @@ export async function insertDocumentAggregate(
 	// Four inserts became one. The far end of a document link is an `entity`, so
 	// what a target IS no longer decides which table the link goes in — which is
 	// what stops a new module needing a document_<thing> table of its own.
-	const targetIds = [...input.personIds, ...input.propertyIds, ...input.accountIds, ...subjectIds];
+	const targetIds = [
+		...input.personIds,
+		...input.propertyIds,
+		...input.accountIds,
+		...input.transactionIds,
+		...subjectIds
+	];
 	if (targetIds.length > 0) {
 		await handle
 			.insert(documentLink)

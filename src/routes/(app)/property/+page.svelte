@@ -2,6 +2,7 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
 	import TagInput from '$lib/components/TagInput.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
@@ -16,6 +17,17 @@
 	let addingProperty = $state(false);
 	let editingPlan = $state(false);
 	let addingTenancy = $state(false);
+	// A lease with no agreed end. The date input is disabled rather than hidden so
+	// the field it replaces stays where the eye expects it.
+	let openEnded = $state(false);
+	/** Which figure tile is open for editing, by its label. */
+	let editingFigure = $state<string | null>(null);
+	const figureSaved =
+		() =>
+		async ({ update }: { update: () => Promise<void> }) => {
+			editingFigure = null;
+			await update();
+		};
 	let addingBill = $state(false);
 	let lightbox = $state<string | null>(null);
 </script>
@@ -106,15 +118,58 @@
 				{/each}
 				<form method="POST" action="?/tags" use:enhance>
 					<input type="hidden" name="id" value={data.detail.id} />
-					<TagInput transactionId={data.detail.id} known={[]} placeholder="tag…" />
+					<TagInput transactionId={data.detail.id} known={[]} placeholder="Add a tag…" />
 				</form>
+				<!-- A bare box reading "tag…" beside no label explained nothing about
+				     what a tag is or why this flat would want one. -->
+				<InfoHint label="What a tag is for">
+					A tag groups spending that belongs to one project, across whatever categories it happens
+					to touch — a bathroom renovation is materials, a tradesman and a permit fee, filed under
+					three different categories.
+					<br /><br />
+					Tag them all “bathroom” and the Tags screen shows what the project has cost so far. The same
+					tag works on transactions, documents and loans, so everything about one project can be found
+					together.
+				</InfoHint>
 			</span>
 		</div>
 		<div class="tiles">
 			{#each data.detail.metrics as m (m.label)}
 				<div class="tile">
-					<span class="t-label">{m.label}</span>
-					<span class="mono t-value" style:color={m.color}>{m.value}</span>
+					<span class="t-label">
+						{m.label}
+						{#if m.edit}
+							<!-- Only on the two figures the property actually stores. The rest
+							     are computed from the loans and the tenancy, and a pencil on
+							     those would offer an edit the next recompute discards. -->
+							<button
+								type="button"
+								class="pencil"
+								aria-label="Edit {m.label}"
+								onclick={() => (editingFigure = editingFigure === m.label ? null : m.label)}
+							>
+								✏️
+							</button>
+						{/if}
+					</span>
+					{#if m.edit && editingFigure === m.label}
+						<form method="POST" action="?/setFigure" use:enhance={figureSaved} class="figure-form">
+							<input type="hidden" name="propertyId" value={data.detail.id} />
+							<input type="hidden" name="field" value={m.edit.field} />
+							<input name="amount" inputmode="decimal" value={m.edit.amount} />
+							{#if m.edit.field === 'value'}
+								<input name="valuedOn" type="date" value={m.edit.valuedOn ?? ''} />
+							{/if}
+							<div class="figure-actions">
+								<button type="submit" class="btn btn-primary">Save</button>
+								<button type="button" class="btn" onclick={() => (editingFigure = null)}>
+									Cancel
+								</button>
+							</div>
+						</form>
+					{:else}
+						<span class="mono t-value" style:color={m.color}>{m.value}</span>
+					{/if}
 					<span class="t-note">{m.note}</span>
 				</div>
 			{/each}
@@ -221,9 +276,16 @@
 					<form method="POST" action="?/addTenancy" use:enhance class="card add-form">
 						<input type="hidden" name="propertyId" value={data.detail.id} />
 						<div class="grid">
-							<label
-								><span>Tenant</span><input name="tenantName" placeholder="Martin Dvořák" /></label
-							>
+							<label>
+								<span>Tenant</span>
+								<!-- Suggests who is already in the address book, so the same person
+								     is not entered twice under two spellings. Adding a tenant files
+								     them in Contacts, reusing their record when the name matches. -->
+								<input name="tenantName" placeholder="Martin Dvořák" list="tenant-contacts" />
+								<datalist id="tenant-contacts">
+									{#each data.contactNames as name (name)}<option value={name}></option>{/each}
+								</datalist>
+							</label>
 							<!-- How to reach the tenant is a contact record now, not a string on
 						     the tenancy: it is attached from the Contacts screen once the
 						     tenancy exists, so a tenant with two numbers and an agent is
@@ -243,7 +305,22 @@
 								/></label
 							>
 							<label><span>Since</span><input name="startsOn" type="date" /></label>
-							<label><span>Lease ends</span><input name="endsOn" type="date" /></label>
+							<label>
+								<span>Lease ends</span>
+								<input
+									name="endsOn"
+									type="date"
+									disabled={openEnded}
+									value={openEnded ? '' : undefined}
+								/>
+							</label>
+							<label class="t-check">
+								<input type="checkbox" bind:checked={openEnded} />
+								<!-- A lease can run until somebody ends it. Requiring a date meant
+								     inventing one, and an invented end date drives the renewal
+								     reminder and the occupancy figures. -->
+								<span>No end date — runs until ended</span>
+							</label>
 							<label
 								><span>Renewal notice by</span><input name="renewalNoticeDate" type="date" /></label
 							>
@@ -410,7 +487,7 @@
 		color: var(--red);
 		border-radius: 12px;
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.switcher {
 		display: flex;
@@ -426,7 +503,7 @@
 		color: var(--fg2);
 		border-radius: 10px;
 		padding: 10px 15px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		cursor: pointer;
 	}
 	.tab:hover {
@@ -438,7 +515,7 @@
 		border-color: var(--bd2);
 	}
 	.tab .tag {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.tab.add {
@@ -458,16 +535,37 @@
 		flex-direction: column;
 		gap: 2px;
 	}
+	.pencil {
+		background: none;
+		border: 0;
+		padding: 0 0 0 4px;
+		cursor: pointer;
+		font-size: var(--text-2xs);
+		opacity: 0.65;
+	}
+	.pencil:hover {
+		opacity: 1;
+	}
+	.figure-form {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 4px 0;
+	}
+	.figure-actions {
+		display: flex;
+		gap: 6px;
+	}
 	.t-label {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.t-value {
-		font-size: 18px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 	}
 	.t-note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.two-col {
@@ -498,7 +596,7 @@
 	}
 	.plan-edit {
 		padding: 5px 11px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.photos {
 		display: flex;
@@ -525,7 +623,7 @@
 		background: var(--card3);
 		display: grid;
 		place-items: center;
-		font-size: 14px;
+		font-size: var(--text-lg);
 	}
 	.t-names {
 		display: flex;
@@ -534,11 +632,11 @@
 		min-width: 0;
 	}
 	.t-name {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 	}
 	.t-contact {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.facts {
@@ -552,18 +650,18 @@
 		gap: 1px;
 	}
 	.f-label {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.f-value {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.bill {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
 		gap: 12px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.doc {
 		display: grid;
@@ -573,7 +671,7 @@
 		padding: 4px 0;
 	}
 	.ext {
-		font-size: 9.5px;
+		font-size: var(--text-2xs);
 		letter-spacing: 0.04em;
 		color: var(--fg3);
 		border: 1px solid var(--bd);
@@ -588,14 +686,14 @@
 		min-width: 0;
 	}
 	.doc-name {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.doc-meta {
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	.b-label {
 		color: var(--fg2);
@@ -607,7 +705,7 @@
 	}
 	.b-file {
 		text-decoration: none;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		margin-left: 4px;
 	}
 	.b-meter {
@@ -620,7 +718,7 @@
 		border-radius: 6px;
 		background: none;
 		color: var(--fg3);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		cursor: pointer;
 		opacity: 0.45;
 	}
@@ -639,11 +737,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.55;
 	}
@@ -675,11 +773,11 @@
 		border-color: var(--blue);
 	}
 	.a-title {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 	}
 	.a-note {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.add-form {
@@ -692,11 +790,23 @@
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: 12px;
 	}
+	/* A checkbox beside its own words, rather than under a label like the date
+	   and amount fields above it. */
+	.t-check {
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		align-self: end;
+		padding-bottom: 8px;
+	}
+	.t-check input {
+		width: auto;
+	}
 	label {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	input,
@@ -706,7 +816,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.row {
 		display: flex;
@@ -725,7 +835,7 @@
 		border: 1px solid var(--bd2);
 		border-radius: 999px;
 		padding: 3px 5px 3px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.tag-chip button {
@@ -733,7 +843,7 @@
 		background: none;
 		color: var(--fg3);
 		cursor: pointer;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		padding: 0 3px;
 	}
 </style>

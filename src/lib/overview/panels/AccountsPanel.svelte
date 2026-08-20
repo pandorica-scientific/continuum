@@ -46,11 +46,11 @@
 		gap: 4px 12px;
 	}
 	.label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.figures {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		display: flex;
 		gap: 10px;
 	}
@@ -73,11 +73,11 @@
 		justify-content: space-between;
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		font-weight: 600;
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

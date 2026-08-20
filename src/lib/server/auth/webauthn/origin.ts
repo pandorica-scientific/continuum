@@ -49,3 +49,51 @@ export function currentOrigin(): string {
 export function passkeysAvailable(): boolean {
 	return isSecureOrigin(currentOrigin());
 }
+
+export type PasskeyAvailability =
+	| { usable: true }
+	| {
+			usable: false;
+			/** Why not, so the screen can say something better than nothing. */
+			reason: 'unconfigured' | 'insecure' | 'other-address';
+			/** The address that would work, when there is one. */
+			worksAt: string | null;
+	  };
+
+/**
+ * Whether passkeys can work at the address actually being browsed.
+ *
+ * `passkeysAvailable()` below answers a different question — whether the
+ * CONFIGURED origin supports them — and that is what put the button on
+ * `continuum.local` and on an iPad, where it could never verify. A credential
+ * is bound to one relying-party ID, so exactly one address works, and the only
+ * address the browser will report is the one in its bar.
+ *
+ * Comparing normalised origins rather than raw strings: WebAuthn compares
+ * `clientDataJSON.origin` by exact equality, so an ORIGIN written with a
+ * trailing slash or a capital letter parses fine, reports itself secure, and
+ * then fails every ceremony naming nothing useful.
+ */
+export function passkeysUsableFrom(
+	requestOrigin: string,
+	configuredOrigin: string
+): PasskeyAvailability {
+	const configured = normalise(configuredOrigin);
+	if (!configured) return { usable: false, reason: 'unconfigured', worksAt: null };
+
+	const here = normalise(requestOrigin);
+	if (here !== configured) return { usable: false, reason: 'other-address', worksAt: configured };
+	if (!isSecureOrigin(configured)) {
+		return { usable: false, reason: 'insecure', worksAt: configured };
+	}
+	return { usable: true };
+}
+
+/** An origin in the form a browser reports, or '' when it cannot be read. */
+function normalise(origin: string): string {
+	try {
+		return new URL(origin).origin;
+	} catch {
+		return '';
+	}
+}

@@ -118,7 +118,7 @@
 		flex-direction: column;
 		justify-content: flex-end;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	label > input {
@@ -130,7 +130,7 @@
 		color: var(--fg1);
 		border-radius: 8px;
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.row {
 		display: flex;
@@ -139,7 +139,7 @@
 		flex-wrap: wrap;
 	}
 	.hint {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.btn:disabled {
