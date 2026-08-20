@@ -2,6 +2,51 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.3.11 — 2026-08-20
+
+> Everything here traces to one session of real use: real statements, a real XTB report, an iPad, and a list of what broke or confused. Nothing was added on a hunch.
+
+> The category tree stopped being a constant and became the household's own, and the chart palette was measured rather than chosen — the one that shipped before was indistinguishable to a colour-blind reader in both themes.
+
+### ✨ Added
+
+- 🗂️ Category groups are data, not code — add, rename, recolour and delete them, from the review queue where the need is felt or from Settings
+- ❤️ **Health & care** and **Subscriptions** groups; Pharmacy, Doctor & dentist and Reimbursements categories, and Internet and Phone split apart
+- 🎨 A chart palette generated in OKLCH and validated for separation under normal, protanopic and deuteranopic vision — nine group colours plus ten reserve, each with its own light and dark value
+- 🔁 One-sided transfers: money moved to an account whose statements you never import stops counting as spending
+- 🧾 Receipts on transactions — attach a file to the payment it evidences, filed in Documents under Receipts
+- 🏦 Add a bank the list does not have, instead of filing the account under "Other"
+- ✏️ Loans can be edited, including which properties secure a mortgage and in what share
+- 🏠 Estimated value and money-in are editable on a property; the figures derived from loans are not, and say where they come from
+- 📅 A lease can have no end date, and adding a tenant now files them in Contacts, reusing their record when the name matches
+- 🚪 Open mode — an administrator can drop credentials for the whole instance, confirmed with their own password, and every screen says so while it is on
+- 🔑 The setup wizard asks for the password twice; a typo in the only password on a fresh instance used to lock its owner out immediately
+- 📏 Narrow-viewport tests across fourteen screens, for overflow and clipped text — the widths where the reported truncation actually happened
+
+### 🔧 Changed
+
+- 📆 The money screens show the newest month that holds data, and name it. Statements arrive after a month ends, so "this month" was routinely empty
+- 🔑 Passkeys are offered based on the address you are browsing, not the one in `ORIGIN` — and where they are absent, the screen names the address that works
+- 🔠 Twenty-two font sizes became a nine-step ramp. Half a pixel is not a size anyone chose, and 12 / 12.5 / 13 / 13.5px side by side is what "different fonts" looks like
+- 🖱️ Buttons show they were pressed, show when they are disabled, and show keyboard focus — none of which existed
+- 🧮 Every screen reads the category groups from the database, so a group a household adds appears in the charts and filters without a deploy
+
+### 🐛 Fixed
+
+- 📈 **XTB imports failed on any report containing a dividend, a withholding tax or a closed position.** Operations were written before the positions they reference, against a foreign key that is not deferrable
+- 🧾 An import failure was rendered twice; it is now shown once, and can be dismissed
+- 🏷️ "File" on a transaction did nothing visible — it meant _file under a category_, is now called Save, is disabled until one is chosen, and shows its refusal beside the row that caused it
+- 📊 "Saved each month" had no scale and no readout; hovering a bar now shows the month and the amount
+- 📊 "Every month on record" labelled years on a three-month history; it labels months until there are two years of it
+- 📱 Settings scrolled sideways on a phone, and the calendar feed token — which the text beside it tells you to copy — was cut off
+- 🔑 "Add a passkey" reads "Add another" once you have one; passkeys are per-device and the button stays on purpose
+- 🇨🇿 The Czech interest-deductibility claim is gone from Loans, where there is no jurisdiction concept and the tax statements carry the real figures
+
+### ⬆️ Upgrading
+
+- Two additive migrations, applied automatically at boot: a `bank` table and a `category_group` table. Nothing is dropped and no column changes type
+- The chart colours change. The palette that shipped before failed measurable separation in both themes — housing and living were indistinguishable to a deuteranopic reader, and in the light theme transport and bills were effectively one colour
+
 ## 0.3.10 — 2026-08-19
 
 > There is no 0.3.9. Its tag was cut against a commit whose CI could not run, tags are immutable here, and nothing had been published under it — so the number was left behind rather than moved.
