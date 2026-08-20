@@ -5,6 +5,7 @@
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
@@ -380,18 +381,34 @@
 					<button type="button" class="btn" onclick={() => (addingCategory = true)}>
 						➕ New category…
 					</button>
-					<!-- The case pairing cannot reach: money moved to an account whose
+					<!-- The second answer to the same question, so it is marked as an
+					     alternative rather than lined up as a fourth control. This is the
+					     case pairing cannot reach: money moved to an account whose
 					     statements never arrive, so there is no second leg to match and
 					     the row looks like unexplained spending. -->
 					<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
 						<input type="hidden" name="id" value={r.id} />
-						<select name="toAccountId" aria-label="Transferred to">
-							<option value="" disabled selected>Moved to my…</option>
-							{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
-								<option value={a.id}>{a.name}</option>
-							{/each}
-						</select>
-						<button type="submit" class="btn">It is a transfer</button>
+						<InfoHint label="What “not spending” means">
+							Money moved between your own accounts is neither income nor spending, so this row
+							stops counting in either.
+							<br /><br />
+							Both sides are normally matched automatically when you import both statements. Use this
+							when the other account's statements never arrive — a savings account you do not import —
+							so there is no second half to match against.
+						</InfoHint>
+						<label class="os-phrase">
+							<span>Moved to</span>
+							<select name="toAccountId" required aria-label="Which of your accounts">
+								<option value="" disabled selected>which account?</option>
+								{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
+									<option value={a.id}>{a.name}</option>
+								{/each}
+							</select>
+						</label>
+						<!-- Named for what it does to the figures, not for what it is
+						     called internally: "It is a transfer" said nothing about why
+						     you would press it. -->
+						<button type="submit" class="btn">Not spending</button>
 					</form>
 				{/if}
 			</div>
@@ -630,6 +647,14 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.os-phrase {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: var(--text-sm);
+		color: var(--fg3);
 	}
 	.cat-modal {
 		display: flex;
@@ -698,10 +723,17 @@
 	}
 	.r-actions {
 		display: flex;
+		align-items: center;
 		gap: 8px;
 		flex-wrap: wrap;
 		border-top: 1px solid var(--bd);
 		padding-top: 10px;
+	}
+	/* Filing sits left, the transfer answer sits right. They answer the same
+	   question, and opposite ends say they are alternatives far better than five
+	   controls in one queue did. */
+	.one-sided {
+		margin-left: auto;
 	}
 	.cat-form {
 		display: flex;
