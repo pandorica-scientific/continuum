@@ -857,7 +857,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'🏠'"
+          "default": "'\ud83c\udfe0'"
         },
         "created_at": {
           "name": "created_at",
@@ -1270,7 +1270,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'🏦'"
+          "default": "'\ud83c\udfe6'"
         },
         "bank": {
           "name": "bank",
@@ -1391,6 +1391,38 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.bank": {
+      "name": "bank",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "emoji": {
+          "name": "emoji",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'\ud83c\udfe6'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.category": {
       "name": "category",
       "schema": "",
@@ -1412,6 +1444,72 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "sort": {
+          "name": "sort",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_catch_all": {
+          "name": "is_catch_all",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "category_group_key_category_group_key_fk": {
+          "name": "category_group_key_category_group_key_fk",
+          "tableFrom": "category",
+          "tableTo": "category_group",
+          "columnsFrom": [
+            "group_key"
+          ],
+          "columnsTo": [
+            "key"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.category_group": {
+      "name": "category_group",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "color_token": {
+          "name": "color_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'expense'"
         },
         "sort": {
           "name": "sort",
@@ -1502,6 +1600,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "acknowledged_at": {
+          "name": "acknowledged_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "source_method": {
           "name": "source_method",
@@ -2127,6 +2231,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "transfer_to_account_id": {
+          "name": "transfer_to_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "transfer_pair_id": {
           "name": "transfer_pair_id",
           "type": "uuid",
@@ -2260,6 +2370,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "transaction_transfer_to_account_idx": {
+          "name": "transaction_transfer_to_account_idx",
+          "columns": [
+            {
+              "expression": "transfer_to_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2334,6 +2459,19 @@
           "tableTo": "import_file",
           "columnsFrom": [
             "import_file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "transaction_transfer_to_account_id_account_id_fk": {
+          "name": "transaction_transfer_to_account_id_account_id_fk",
+          "tableFrom": "transaction",
+          "tableTo": "account",
+          "columnsFrom": [
+            "transfer_to_account_id"
           ],
           "columnsTo": [
             "id"

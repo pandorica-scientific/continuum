@@ -4,7 +4,8 @@ import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { category, rule, ruleTag, tag } from '$lib/server/db/schema';
+import { loadCategories } from '$lib/server/categorize/leaves';
+import { rule, ruleTag, tag } from '$lib/server/db/schema';
 import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/ingest';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
@@ -42,7 +43,7 @@ function describe(condition: Condition, currency: string): string {
 export const load: PageServerLoad = async () => {
 	const [rows, categories, tags, threshold, base] = await Promise.all([
 		db.select().from(rule),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
+		loadCategories(),
 		db.select().from(tag).orderBy(tag.name),
 		autoThreshold(),
 		getBaseCurrency()

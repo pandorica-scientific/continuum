@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
+import { loadCategories } from '$lib/server/categorize/leaves';
 import { credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword } from '$lib/server/auth/password';
@@ -18,6 +19,7 @@ import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import {
 	createCategory,
 	createCategoryGroup,
+	countCategoryDependants,
 	deleteCategory,
 	deleteCategoryGroup,
 	renameCategoryGroup
@@ -26,7 +28,6 @@ import { CATEGORY_GROUP_SEED, RESERVE_COLOR_TOKENS } from '$lib/categories';
 import { passwordsMatchError } from '$lib/password-policy';
 import { disableOpenMode, enableOpenMode, isOpenMode } from '$lib/server/auth/open-mode';
 import { asEnumValue, ENUMS } from '$lib/enums';
-import { category } from '$lib/server/db/schema';
 import { enrollmentLinkDays, passwordMinLength } from '$lib/server/system/policy';
 import { env } from '$env/dynamic/private';
 import {
@@ -218,7 +219,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	]);
 
 	const groups = await loadCategoryGroups();
-	const leaves = await db.select().from(category).orderBy(category.groupKey, category.sort);
+	const leaves = await loadCategories();
 
 	return {
 		isAdmin,
@@ -606,15 +607,26 @@ export const actions = administered({
 
 	removeLeaf: async ({ request }) => {
 		const form = await request.formData();
-		// Reassignment is required, not optional: orphaning the rows would drop
-		// them out of every total that filters on a category, which reads as money
+		// An empty destination means "there was nothing to move" — the screen only
+		// offers a delete without one when the count below said so. It is checked
+		// again here rather than trusted: deleteCategory refuses if anything has
+		// been filed under it in the meantime. Orphaning the rows would drop them
+		// out of every total that filters on a category, which reads as money
 		// vanishing.
 		const result = await deleteCategory(
 			String(form.get('categoryId') ?? ''),
-			String(form.get('reassignTo') ?? '')
+			String(form.get('reassignTo') ?? '') || null
 		);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
+	},
+
+	/** What still points at a category, so the screen can ask only when there is
+	 *  something to ask about. */
+	countLeafDependants: async ({ request }) => {
+		const form = await request.formData();
+		const dependants = await countCategoryDependants(String(form.get('categoryId') ?? ''));
+		return { dependants };
 	},
 
 	toggleModule: async ({ request }) => {

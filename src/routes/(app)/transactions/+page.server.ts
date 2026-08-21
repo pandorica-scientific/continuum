@@ -2,7 +2,8 @@
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { account, category, tag } from '$lib/server/db/schema';
+import { loadCategories } from '$lib/server/categorize/leaves';
+import { account, tag } from '$lib/server/db/schema';
 import { getBaseCurrency } from '$lib/server/settings';
 import { fileTransaction, PAGE_SIZE, registerPage } from '$lib/server/transactions';
 import { deleteSplits, loadSplits, saveSplits } from '$lib/server/splits';
@@ -38,7 +39,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const [page, categories, accounts] = await Promise.all([
 		registerPage(filter),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
+		loadCategories(),
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)

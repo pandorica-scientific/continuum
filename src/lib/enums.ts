@@ -111,7 +111,11 @@ export const ENUMS = {
 		'property',
 		'tenancy',
 		'loans',
-		'insurance'
+		'insurance',
+		// Bank statements, filed automatically when one is accepted. The bytes
+		// were always kept (import_file.stored_name); this is what makes them
+		// reachable.
+		'statements'
 	],
 	'document.expiry_verb': ['expires', 'ends', 'renews', 'due'],
 

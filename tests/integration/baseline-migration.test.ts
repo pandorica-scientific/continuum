@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENUM_COLUMNS } from '$lib/enums';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
@@ -28,19 +26,16 @@ afterAll(async () => {
 });
 
 describe('the baseline migration', () => {
-	it('is the first migration, and everything after it is additive', () => {
-		const files = migrationFiles();
-		expect(files[0]).toBe('0000_baseline.sql');
-
-		// The v0.3.9 lock is "one baseline, then additive-only" — not "one file
-		// forever". What must never appear again is a migration that drops or
-		// retypes something, because the baseline is the only rebuild this schema
-		// gets. Asserting the count instead let the real rule go unchecked.
-		const destructive = /\b(drop\s+(table|column|constraint)|alter\s+column\s+.*\btype\b)/i;
-		for (const file of files.slice(1)) {
-			const sql = readFileSync(resolve('drizzle', file), 'utf8');
-			expect(destructive.test(sql), `${file} is not additive`).toBe(false);
-		}
+	it('is the only migration', () => {
+		// Continuum has no users, so there is nothing to migrate FROM. `drizzle/`
+		// describes the schema as it is now, in one file, rather than describing
+		// how it got here — a chain of steps nobody will ever walk.
+		//
+		// Adding a second file is not forbidden by accident: fold the change into
+		// the baseline instead, and migrate any live instance by hand. The moment
+		// somebody other than us is running this, that stops being true and this
+		// test is the place the decision gets revisited.
+		expect(migrationFiles()).toEqual(['0000_baseline.sql']);
 	});
 
 	it('creates the tables the app reads, and none the squash retired', async () => {

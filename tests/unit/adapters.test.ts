@@ -41,7 +41,10 @@ describe('Fio adapter', () => {
 });
 
 describe('Revolut adapter', () => {
-	const statement = parseRevolut(readFileSync(fixture('revolut.csv'), 'utf-8'));
+	// One pocket in this fixture, so one statement. The adapter returns a list
+	// now, because Revolut writes every pocket into the same file and each keeps
+	// its own running balance — see revolut-pockets.test.ts.
+	const [statement] = parseRevolut(readFileSync(fixture('revolut.csv'), 'utf-8'));
 
 	it('keeps only completed rows and reads amounts', () => {
 		expect(statement.rows).toHaveLength(7);

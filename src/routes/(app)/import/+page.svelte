@@ -146,6 +146,26 @@
 								.rowsPaired} paired
 						{/if}
 					</span>
+					<!-- A read under way cannot be stopped from here, so the control says
+					     so rather than pretending. Anything else can go: a cancellation
+					     while it waits, a tidy-up once it has settled. A settled row also
+					     leaves on its own after ten minutes. -->
+					<form method="POST" action="?/dismissJob" use:enhance class="inline-form">
+						<input type="hidden" name="jobId" value={job.id} />
+						<button
+							type="submit"
+							class="r-dismiss"
+							disabled={job.state === 'running'}
+							title={job.state === 'running'
+								? 'Being read right now — it can go once it finishes'
+								: job.state === 'queued'
+									? 'Cancel this file'
+									: 'Clear this from the queue'}
+							aria-label="Dismiss {job.filename}"
+						>
+							✕
+						</button>
+					</form>
 				</div>
 			{/each}
 		</div>
@@ -278,6 +298,15 @@
 						<span class="i-meta mono">
 							{file.rowsAdded} filed{#if file.readAs}&nbsp;· {file.readAs}{/if}
 						</span>
+						<!-- Acknowledging hides the row. It deletes nothing: the import,
+						     its transactions, its stored file and its document all stay,
+						     and the content hash still makes a re-upload a duplicate. -->
+						<form method="POST" action="?/acknowledgeImport" use:enhance class="inline-form">
+							<input type="hidden" name="fileId" value={file.id} />
+							<button type="submit" class="r-dismiss" aria-label="Acknowledge {file.filename}">
+								✕
+							</button>
+						</form>
 					</summary>
 					<div class="i-body">
 						{#if file.proofLabel}
@@ -639,6 +668,22 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.r-dismiss {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		padding: 0 var(--space-3);
+		font-size: var(--text-md);
+		line-height: 1;
+	}
+	.r-dismiss:hover:not(:disabled) {
+		color: var(--fg1);
+	}
+	.r-dismiss:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
 	}
 	.r-meta {
 		color: var(--fg3);

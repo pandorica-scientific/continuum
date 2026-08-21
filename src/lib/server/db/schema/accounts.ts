@@ -97,6 +97,14 @@ export const importFile = pgTable(
 		rowsDuplicate: integer('rows_duplicate').notNull().default(0),
 		rowsPaired: integer('rows_paired').notNull().default(0),
 		/**
+		 * When somebody said they had finished looking at this import.
+		 *
+		 * Hides the row from the recent-imports list and nothing else: the record,
+		 * its transactions, its stored file and its document all stay exactly where
+		 * they are, and the content hash still makes a re-upload a duplicate.
+		 */
+		acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+		/**
 		 * How the statement was read, and what proved it.
 		 *
 		 * The proof engine decided whether to file this statement and then threw its
@@ -200,7 +208,16 @@ export const category = pgTable('category', {
 		.notNull()
 		.references(() => categoryGroup.key),
 	name: text('name').notNull(),
-	sort: integer('sort').notNull().default(0)
+	sort: integer('sort').notNull().default(0),
+	/**
+	 * A catch-all: "Everything else", "Other income". Always last inside its
+	 * group, whatever `sort` says, and not draggable.
+	 *
+	 * A flag rather than a name match, so a household that renames "Everything
+	 * else" to "Odds and ends" keeps the behaviour. Whether a category is a
+	 * catch-all is a fact about how the household thinks, not about the seed.
+	 */
+	isCatchAll: boolean('is_catch_all').notNull().default(false)
 });
 
 export const transaction = pgTable(

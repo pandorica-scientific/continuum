@@ -185,6 +185,46 @@ export async function createCategory(
 	});
 }
 
+/** What still points at a category, so nothing has to be guessed at. */
+export interface CategoryDependants {
+	/** Transactions filed under it, plus those merely suggested it. */
+	transactions: number;
+	/** Split lines, which carry their own category and are money too. */
+	splits: number;
+	/** Learned or hand-written rules that file into it. */
+	rules: number;
+	/** Whether anything at all points at it. */
+	any: boolean;
+}
+
+/**
+ * Count before asking.
+ *
+ * The delete control used to open a "move what is filed under this to…" form
+ * unconditionally, so removing a category nothing had ever used cost the same
+ * three decisions as removing a heavily used one.
+ *
+ * Rules are counted apart from money on purpose: they fail differently. A rule
+ * left pointing at a deleted category still matches and files nothing, so the
+ * categoriser quietly stops working — which is why deleteCategory repoints them
+ * rather than letting the foreign key null them out.
+ */
+export async function countCategoryDependants(
+	id: string,
+	handle: Db = db
+): Promise<CategoryDependants> {
+	const [[filed], [suggested], [splitLines], [ruleRows]] = await Promise.all([
+		handle.select({ n: count() }).from(transaction).where(eq(transaction.categoryId, id)),
+		handle.select({ n: count() }).from(transaction).where(eq(transaction.suggestedCategoryId, id)),
+		handle.select({ n: count() }).from(transactionSplit).where(eq(transactionSplit.categoryId, id)),
+		handle.select({ n: count() }).from(rule).where(eq(rule.categoryId, id))
+	]);
+	const transactions = (filed?.n ?? 0) + (suggested?.n ?? 0);
+	const splits = splitLines?.n ?? 0;
+	const rules = ruleRows?.n ?? 0;
+	return { transactions, splits, rules, any: transactions + splits + rules > 0 };
+}
+
 /**
  * Delete a category, moving everything filed under it somewhere else.
  *
@@ -195,11 +235,26 @@ export async function createCategory(
  */
 export async function deleteCategory(
 	id: string,
-	reassignTo: string,
+	reassignTo: string | null,
 	handle: Db = db
 ): Promise<TaxonomyResult> {
-	if (id === reassignTo) {
+	if (reassignTo !== null && id === reassignTo) {
 		return { ok: false, status: 400, message: 'Choose a different category to move them to.' };
+	}
+
+	// Nothing points at it, so there is nothing to move and nothing to ask.
+	if (reassignTo === null) {
+		const dependants = await countCategoryDependants(id, handle);
+		if (dependants.any) {
+			return {
+				ok: false,
+				status: 409,
+				message: 'Something is still filed under that category — say where it should go.'
+			};
+		}
+		const deleted = await handle.delete(category).where(eq(category.id, id)).returning();
+		if (deleted.length === 0) return { ok: false, status: 404, message: 'Category not found.' };
+		return { ok: true };
 	}
 
 	return handle.transaction(async (tx) => {

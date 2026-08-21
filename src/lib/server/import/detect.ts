@@ -135,6 +135,35 @@ function assertAgreesWithItsOwnNumbers(
 }
 
 /**
+ * Fio's movement list, as opposed to its statement.
+ *
+ * The FULL ordered header, not a substring of it. `detect.ts` already records
+ * what a loose signature costs: `#Numer rachunku` is merely Polish for "account
+ * number", and it claimed 120 unrelated files in a 486-file corpus. "Datum" and
+ * "Objem" would do the same to every Czech CSV ever exported.
+ */
+function isFioMovementList(head: string): boolean {
+	const columns = [
+		'Datum',
+		'Objem',
+		'Měna',
+		'Protiúčet',
+		'Kód banky',
+		'Zpráva pro příjemce',
+		'Poznámka',
+		'Typ'
+	];
+	const line = head.split(/\r?\n/, 1)[0] ?? '';
+	const found = line.split(';').map((cell) =>
+		cell
+			.replace(/^\ufeff/, '')
+			.replace(/^"|"$/g, '')
+			.trim()
+	);
+	return found.length === columns.length && columns.every((name, i) => found[i] === name);
+}
+
+/**
  * An adapter's claim on a file is a hypothesis, not a verdict.
  *
  * The signatures are substrings of ordinary text. `#Numer rachunku` is simply
@@ -423,6 +452,20 @@ async function parseByFormat(
 
 	if (head.includes('Výpis č.') && head.includes('z účtu')) {
 		return adapterOrGeneric(() => parseFio(utf8), readTextAsUnknownLayout);
+	}
+	if (isFioMovementList(head)) {
+		// Refused by name rather than offered the mapping wizard. The wizard asks
+		// "what are these columns", and the columns are not the problem: this
+		// export prints no balance of any kind, so nothing in it can show whether
+		// every row is there. It is P0 by construction, and decideImport refuses
+		// P0 even for a mapping somebody confirmed — correctly, and that rule
+		// stands. Sending them to a screen where no answer can succeed is what
+		// was wrong.
+		throw new Error(
+			'This is Fio’s “Pohyby na účtu” export. It lists movements but prints no balances, ' +
+				'so nothing in it can show whether every row is there. In Internetbanking choose ' +
+				'“Výpis z účtu” instead — same account, and it prints the opening and closing balances.'
+		);
 	}
 	if (head.startsWith('Type,Product,Started Date') || head.includes('Type,Product,Started Date')) {
 		return adapterOrGeneric(() => parseRevolut(utf8), readTextAsUnknownLayout);

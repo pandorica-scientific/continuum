@@ -120,6 +120,8 @@ interface CategoryDef {
 	groupKey: string;
 	name: string;
 	sort: number;
+	/** Always last inside its group, whatever `sort` says. See category.isCatchAll. */
+	isCatchAll?: boolean;
 }
 
 export const CATEGORY_SEED: CategoryDef[] = [
@@ -130,7 +132,7 @@ export const CATEGORY_SEED: CategoryDef[] = [
 	// Money coming back to the household is income at the ledger level, whatever
 	// prompted it — an expense claim, a refund, a shared bill settled up.
 	{ id: 'reimbursements', groupKey: 'income', name: 'Reimbursements', sort: 3 },
-	{ id: 'other-income', groupKey: 'income', name: 'Other income', sort: 4 },
+	{ id: 'other-income', groupKey: 'income', name: 'Other income', sort: 4, isCatchAll: true },
 	// taxes & fees
 	{ id: 'taxes-fees', groupKey: 'taxes', name: 'Taxes & fees', sort: 0 },
 	// bills & utilities — internet and phone were one leaf and could not be told
@@ -153,7 +155,7 @@ export const CATEGORY_SEED: CategoryDef[] = [
 	{ id: 'eating-out', groupKey: 'living', name: 'Eating out', sort: 1 },
 	{ id: 'travel', groupKey: 'living', name: 'Travel', sort: 2 },
 	{ id: 'kids', groupKey: 'living', name: 'Kids', sort: 3 },
-	{ id: 'everything-else', groupKey: 'living', name: 'Everything else', sort: 4 },
+	{ id: 'everything-else', groupKey: 'living', name: 'Everything else', sort: 4, isCatchAll: true },
 	// housing
 	{ id: 'mortgage-main', groupKey: 'housing', name: 'Mortgage · home', sort: 0 },
 	{ id: 'mortgage-rental', groupKey: 'housing', name: 'Mortgage · rental', sort: 1 },

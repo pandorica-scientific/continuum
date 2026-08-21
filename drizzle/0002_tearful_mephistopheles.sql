@@ -1,3 +1,0 @@
-ALTER TABLE "transaction" ADD COLUMN "transfer_to_account_id" uuid;--> statement-breakpoint
-ALTER TABLE "transaction" ADD CONSTRAINT "transaction_transfer_to_account_id_account_id_fk" FOREIGN KEY ("transfer_to_account_id") REFERENCES "public"."account"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "transaction_transfer_to_account_idx" ON "transaction" USING btree ("transfer_to_account_id");

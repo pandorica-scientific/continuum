@@ -167,7 +167,8 @@ CREATE TABLE "category" (
 	"id" text PRIMARY KEY NOT NULL,
 	"group_key" text NOT NULL,
 	"name" text NOT NULL,
-	"sort" integer DEFAULT 0 NOT NULL
+	"sort" integer DEFAULT 0 NOT NULL,
+	"is_catch_all" boolean DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "import_file" (
@@ -182,6 +183,7 @@ CREATE TABLE "import_file" (
 	"rows_added" integer DEFAULT 0 NOT NULL,
 	"rows_duplicate" integer DEFAULT 0 NOT NULL,
 	"rows_paired" integer DEFAULT 0 NOT NULL,
+	"acknowledged_at" timestamp with time zone,
 	"source_method" text NOT NULL,
 	"proof_class" text NOT NULL,
 	"ledger_model" text,
@@ -829,7 +831,8 @@ ALTER TABLE import_file ADD CONSTRAINT import_file_proof_class_check
 ALTER TABLE rule ADD CONSTRAINT rule_provenance_check
 	CHECK (provenance in ('learned', 'manual'));--> statement-breakpoint
 ALTER TABLE document ADD CONSTRAINT document_shelf_check CHECK (shelf in (
-	'payslips', 'tax', 'identity', 'family', 'health', 'property', 'tenancy', 'loans', 'insurance'));--> statement-breakpoint
+	'payslips', 'tax', 'identity', 'family', 'health', 'property', 'tenancy', 'loans',
+	'insurance', 'statements'));--> statement-breakpoint
 ALTER TABLE document ADD CONSTRAINT document_expiry_verb_check
 	CHECK (expiry_verb in ('expires', 'ends', 'renews', 'due'));--> statement-breakpoint
 -- No normalisation on a bad provider: one that is neither of these cannot be
@@ -1001,3 +1004,73 @@ INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '�
 INSERT INTO currency (code, exponent, name)
 VALUES ('CZK', 2, 'Czech Koruna'), ('EUR', 2, 'Euro')
 ON CONFLICT (code) DO NOTHING;
+--> statement-breakpoint
+
+-- ---- Banks and category groups ----
+--
+-- Folded in from what were separate migrations. Continuum has no users, so
+-- `drizzle/` carries ONE file describing the current schema rather than a
+-- chain describing how it got here — see tests/integration/baseline-migration.
+--
+-- The reference rows below are seeded here for the same reason `currency` and
+-- `subject` are seeded above: a foreign key points at them, so an empty table
+-- refuses every insert that follows. `seedBanks()` and `seedCategories()`
+-- rewrite them idempotently on every boot, so this is a floor rather than a
+-- source of truth.
+--
+-- What is NOT carried over is the statement that adopted whatever `group_key`
+-- existing category rows already named. That was migration logic — it upgraded
+-- data written by an older version — and Continuum has no older version to
+-- upgrade from.
+CREATE TABLE "bank" (
+	"key" text PRIMARY KEY NOT NULL,
+	"label" text NOT NULL,
+	"emoji" text DEFAULT '🏦' NOT NULL
+);--> statement-breakpoint
+
+CREATE TABLE "category_group" (
+	"key" text PRIMARY KEY NOT NULL,
+	"label" text NOT NULL,
+	"color_token" text NOT NULL,
+	"role" text DEFAULT 'expense' NOT NULL,
+	"sort" integer DEFAULT 0 NOT NULL
+);--> statement-breakpoint
+
+INSERT INTO "category_group" ("key", "label", "color_token", "role", "sort") VALUES
+	('income',        'Income',            '--series-income',        'income',  0),
+	('taxes',         'Taxes & fees',      '--series-taxes',         'expense', 1),
+	('bills',         'Bills & utilities', '--series-bills',         'expense', 2),
+	('subscriptions', 'Subscriptions',     '--series-subscriptions', 'expense', 3),
+	('health',        'Health & care',     '--series-health',        'expense', 4),
+	('transport',     'Transport',         '--series-transport',     'expense', 5),
+	('living',        'Food & lifestyle',  '--series-living',        'expense', 6),
+	('housing',       'Housing',           '--series-housing',       'expense', 7),
+	('savings',       'Saved & invested',  '--series-savings',       'savings', 8)
+ON CONFLICT ("key") DO NOTHING;--> statement-breakpoint
+
+INSERT INTO "bank" ("key", "label", "emoji") VALUES
+	('fio', 'Fio banka', '🏦'),
+	('revolut', 'Revolut', '💠'),
+	('mbank', 'mBank', '🅜'),
+	('rb', 'Raiffeisenbank', '🟡'),
+	('cs', 'Česká spořitelna', '🔵'),
+	('other', 'Other', '💼')
+ON CONFLICT ("key") DO NOTHING;--> statement-breakpoint
+
+ALTER TABLE "category" ADD CONSTRAINT "category_group_key_category_group_key_fk"
+	FOREIGN KEY ("group_key") REFERENCES "public"."category_group"("key")
+	ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+
+-- drizzle-kit models neither CHECK constraints nor the index a foreign key
+-- wants, so both are carried by hand exactly as the rest of this file is.
+ALTER TABLE category_group ADD CONSTRAINT category_group_role_check
+	CHECK (role in ('income', 'expense', 'savings'));--> statement-breakpoint
+
+CREATE INDEX "category_group_key_idx" ON "category" USING btree ("group_key");--> statement-breakpoint
+
+-- ---- The far side of a one-sided transfer ----
+ALTER TABLE "transaction" ADD COLUMN "transfer_to_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "transaction" ADD CONSTRAINT "transaction_transfer_to_account_id_account_id_fk"
+	FOREIGN KEY ("transfer_to_account_id") REFERENCES "public"."account"("id")
+	ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "transaction_transfer_to_account_idx" ON "transaction" USING btree ("transfer_to_account_id");

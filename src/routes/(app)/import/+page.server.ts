@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
-import { desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { account, category, importFile, transaction, transferPair } from '$lib/server/db/schema';
+import { loadCategories } from '$lib/server/categorize/leaves';
+import { account, importFile, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
-import { enqueue, jobBytes, queueStatus, runQueue } from '$lib/server/import/queue';
+import { dismissJob, enqueue, jobBytes, queueStatus, runQueue } from '$lib/server/import/queue';
 import { previewLayout } from '$lib/server/import/detect';
 import { confirmMapping } from '$lib/server/import/wizard';
 import { loadProfiles } from '$lib/server/import/profiles';
@@ -66,6 +67,9 @@ export const load: PageServerLoad = async () => {
 				reconciliation: importFile.reconciliation
 			})
 			.from(importFile)
+			// Acknowledged imports leave this list and nothing else — the record,
+			// its transactions, its stored file and its document all stay.
+			.where(isNull(importFile.acknowledgedAt))
 			.orderBy(desc(importFile.uploadedAt))
 			.limit(8),
 		db
@@ -100,7 +104,7 @@ export const load: PageServerLoad = async () => {
 			.where(eq(transaction.reviewState, 'needs_review'))
 			.orderBy(desc(transaction.bookedOn))
 			.limit(50),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
+		loadCategories(),
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
@@ -212,6 +216,26 @@ export const actions: Actions = {
 	 * its own it is a dead end — the person knows what their bank's columns mean
 	 * and has no way to say so. This is what they get to point at.
 	 */
+	/** Take a file out of the queue: a cancellation while it waits, a tidy-up
+	 *  once it has settled. Refused while it is being read. */
+	dismissJob: async ({ request }) => {
+		const form = await request.formData();
+		const result = await dismissJob(String(form.get('jobId') ?? ''));
+		if (!result.ok) return fail(409, { message: result.message });
+		return { ok: true };
+	},
+
+	/** "I have looked at this one." Hides the row; deletes nothing. */
+	acknowledgeImport: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('fileId'));
+		await db
+			.update(schema.importFile)
+			.set({ acknowledgedAt: new Date() })
+			.where(eq(schema.importFile.id, id));
+		return { ok: true };
+	},
+
 	previewLayout: async ({ request }) => {
 		const form = await request.formData();
 		const jobId = String(form.get('jobId') ?? '');
