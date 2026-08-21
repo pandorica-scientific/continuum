@@ -92,7 +92,10 @@ Keep `--restart unless-stopped` on the app container. It connects to the databas
 at start rather than on the first request, so a database that is not up yet ends
 the process, and the restart policy is what brings it back.
 
-`ORIGIN` must be the address you actually type, port included: map `-p
+`ORIGIN` is optional and only governs passkeys. Sign-in works at whatever
+address you browse to, because form submissions are checked against that
+address rather than against a configured one. If you do set it — to turn
+passkeys on — it must be the address you actually type, port included: map `-p
 8080:3000` and it is `http://localhost:8080`, browse to a LAN name and it is
 `http://continuum.local`. Add `-e DEMO=1` to the app container to seed the demo
 household described below, and point the `/backups` mount at a host folder to
@@ -187,7 +190,7 @@ All optional, all in `.env` next to `compose.yaml`.
 | ---------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_PASSWORD`    | `continuum`         | Database password. Set this.                                                                                                                        |
 | `CONTINUUM_PORT`       | `80`                | Host port, if something else already owns 80.                                                                                                       |
-| `ORIGIN`               | `http://localhost`  | The address you actually browse to. Form submissions are origin-checked.                                                                            |
+| `ORIGIN`               | unset               | Optional. The one `https://` address passkeys are bound to; sign-in works at every address without it.                                              |
 | `CONTINUUM_MAX_UPLOAD` | `32M`               | Largest accepted upload. A phone photo does not fit the server's own 512 KB default.                                                                |
 | `CONTINUUM_BACKUPS`    | `continuum-backups` | Host folder for backups — point it at a cloud-synced directory.                                                                                     |
 | `DEMO`                 | unset               | `1` seeds the demo household on a pristine instance.                                                                                                |

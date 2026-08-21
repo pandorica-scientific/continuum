@@ -3,6 +3,7 @@ import { redirect, type Handle, type HandleServerError, type ServerInit } from '
 import { building } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { validateSession } from '$lib/server/auth';
+import { csrfRefusal, sameSiteFormPost } from '$lib/server/auth/csrf';
 import { authorizeApiRequest } from '$lib/server/api/respond';
 import { maybeRunScheduledBackup } from '$lib/server/backup';
 import { seedBanks, seedCategories } from '$lib/server/categorize';
@@ -150,6 +151,13 @@ const PUBLIC_PATHS = [
 ];
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Before ensureReady(): a request that is going to be refused has no business
+	// waiting on the boot migrations, and this decision needs nothing from the
+	// database. SvelteKit's own origin check used to run even earlier, ahead of
+	// this hook entirely — which is why it could not be improved and had to be
+	// replaced (see vite.config.ts and $lib/server/auth/csrf).
+	if (!sameSiteFormPost(event.request)) return csrfRefusal(event.request);
+
 	await ensureReady();
 
 	const { pathname } = event.url;

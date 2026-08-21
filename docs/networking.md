@@ -17,15 +17,14 @@ address. Two steps fix it for every device on the network, no cloud involved:
 The app sits on plain port 80 by default, so the name alone is the whole address —
 just tell it what that address is:
 
-```sh
-# .env
-ORIGIN=http://continuum.local
-```
+Nothing to configure: form submissions are checked against the address your
+browser actually used, so `http://continuum.local`, the LAN IP and
+`http://localhost` all work at once without any of them being named anywhere.
 
-`ORIGIN` must match whatever address you actually browse to — form submissions are
-origin-checked and will be refused otherwise. A bare `continuum` without a suffix
-is not reliable in browsers (it reads as a search), so `.local` or your router's
-suffix is the practical spelling.
+A bare `continuum` without a suffix is not reliable in browsers (it reads as a
+search), so `.local` or your router's suffix is the practical spelling.
+
+`ORIGIN` stays optional and governs only passkeys — see below.
 
 ## Passkeys and Tailscale
 

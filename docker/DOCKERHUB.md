@@ -51,14 +51,14 @@ household — sign in as _Jana Nováková_ / `demo-demo-demo`.
 
 ## Volumes & environment
 
-|                |                                                               |
-| -------------- | ------------------------------------------------------------- |
-| `/data`        | uploaded files: documents, photos, original statements        |
-| `/backups`     | backup destination — bind-mount a cloud-synced host folder    |
-| `DATABASE_URL` | PostgreSQL connection (compose wires this)                    |
-| `ORIGIN`       | the URL the server is reached at; `https://` enables passkeys |
-| `DEMO`         | `1` seeds demo data on a pristine instance                    |
-| `TS_AUTHKEY`   | Tailscale auth key, for the optional `tailscale` profile      |
+|                |                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `/data`        | uploaded files: documents, photos, original statements                                                |
+| `/backups`     | backup destination — bind-mount a cloud-synced host folder                                            |
+| `DATABASE_URL` | PostgreSQL connection (compose wires this)                                                            |
+| `ORIGIN`       | optional; the one `https://` address passkeys are bound to. Sign-in works at every address without it |
+| `DEMO`         | `1` seeds demo data on a pristine instance                                                            |
+| `TS_AUTHKEY`   | Tailscale auth key, for the optional `tailscale` profile                                              |
 
 Operational overrides are optional:
 

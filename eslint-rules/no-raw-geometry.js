@@ -30,7 +30,9 @@
 // The scale, mirroring app.css. A unit test reads app.css and asserts these
 // agree, because a lint rule that has drifted from the tokens it enforces is
 // worse than no lint rule.
+/** @type {Record<number, string>} */
 const RADIUS = { 4: 'xs', 6: 'sm', 8: 'md', 10: 'lg', 12: 'xl', 16: '2xl', 999: 'pill' };
+/** @type {Record<number, number>} */
 const SPACE = { 2: 1, 4: 2, 6: 3, 8: 4, 10: 5, 12: 6, 14: 7, 16: 8 };
 
 const PROPERTIES = ['border-radius', 'gap', 'row-gap', 'column-gap'];
@@ -46,8 +48,10 @@ export default {
 			exemptionNeedsReason: 'A geometry exemption must say why: /* geometry-exempt: the reason */.'
 		}
 	},
+	/** @param {import('eslint').Rule.RuleContext} context */
 	create(context) {
 		return {
+			/** @param {import('estree').Program} node */
 			Program(node) {
 				const text = context.sourceCode.getText();
 				const open = text.indexOf('<style');
