@@ -2,12 +2,16 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import Sankey from './Sankey.svelte';
 	import { formatMinor, displayCurrency, fromMajor } from '$lib/money';
+	import { signTone } from './tone';
 	import type { FlowData } from '$lib/server/cashflow';
 
 	let { flow, currency }: { flow: FlowData; currency: string } = $props();
 
 	const fmt = (v: number) => formatMinor(fromMajor(v, currency), currency);
 	const unit = $derived(displayCurrency(currency));
+	// "In" is unsigned by construction. "Kept" is not: a month that spent more
+	// than it earned reported its shortfall in the colour of a gain.
+	const keptTone = $derived(signTone(flow.totals.kept));
 </script>
 
 <div class="card flow-card">
@@ -24,7 +28,7 @@
 		</div>
 		<div class="total">
 			<span class="eyebrow" style="letter-spacing: 0.07em;">Kept</span>
-			<span class="mono t-value" style="color: var(--green);"
+			<span class="mono t-value" style:color="var({keptTone})"
 				>{fmt(flow.totals.kept)}<span class="t-unit">{unit}</span></span
 			>
 		</div>

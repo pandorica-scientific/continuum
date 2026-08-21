@@ -41,7 +41,10 @@
 				})
 				.filter(Boolean)
 				.join(' ');
-		// dots mark only hard market values from reports, not reconstruction
+		// Which points are hard market values from a report rather than
+		// reconstruction. This decides whether the actual line is drawn at all;
+		// it no longer draws a marker per point — a single snapshot rendered as
+		// one dot at the right-hand end, which read as a defect rather than data.
 		const actualPoints = data.series
 			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
@@ -172,9 +175,6 @@
 						vector-effect="non-scaling-stroke"
 					/>
 				{/if}
-				{#each chart.actualPoints as p (p.x)}
-					<circle cx={p.x} cy={p.y} r="4" fill="var(--teal)" />
-				{/each}
 			</svg>
 		</div>
 		<div class="years mono">

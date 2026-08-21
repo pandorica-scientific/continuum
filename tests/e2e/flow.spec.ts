@@ -67,6 +67,34 @@ test('the wizard refuses a mistyped password rather than storing it', async ({ p
 	await expect(page).toHaveURL(/\/setup/);
 });
 
+// Four inputs per person — name, birth year, password, repeat — in a row that
+// declared three columns, so the repeat box wrapped onto a line of its own and
+// read as a field belonging to nobody. Placed above the test that creates the
+// household: after that, the wizard no longer exists.
+test('the four person fields share one row', async ({ page }) => {
+	await page.goto('/setup');
+
+	const name = page.locator('input[name="personName"]').first();
+	const password = page.locator('input[name="personPassword"]').first();
+	const confirm = page.locator('input[name="personPasswordConfirm"]').first();
+
+	const [nameBox, passwordBox, confirmBox] = await Promise.all([
+		name.boundingBox(),
+		password.boundingBox(),
+		confirm.boundingBox()
+	]);
+	expect(nameBox).not.toBeNull();
+	expect(passwordBox).not.toBeNull();
+	expect(confirmBox).not.toBeNull();
+
+	// One row means one top edge, within a pixel of rounding.
+	expect(Math.abs(confirmBox!.y - passwordBox!.y)).toBeLessThan(2);
+	expect(Math.abs(passwordBox!.y - nameBox!.y)).toBeLessThan(2);
+
+	// And beside the password box, not beneath it.
+	expect(confirmBox!.x).toBeGreaterThan(passwordBox!.x);
+});
+
 test('the wizard creates the household and signs in', async ({ page }) => {
 	await page.goto('/setup');
 	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');

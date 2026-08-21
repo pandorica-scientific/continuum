@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
@@ -15,6 +16,22 @@
 	let { data, form } = $props();
 
 	let adding = $state(false);
+	/** Close on success, stay open on a refusal so what was typed is still there
+	 *  to correct. Leaving it open on success is what made the wizard for the
+	 *  next one appear the moment one was added. */
+	const closeOnSuccess =
+		(close: () => void) =>
+		() =>
+		async ({
+			update,
+			result
+		}: {
+			update: () => Promise<void>;
+			result: import('@sveltejs/kit').ActionResult;
+		}) => {
+			await update();
+			if (shouldCloseAfterAction(result.type)) close();
+		};
 	let regime = $state('fixed_period');
 	let open = $state<string | null>(null);
 	let repayFor = $state<string | null>(null);
@@ -224,7 +241,12 @@
 	{/each}
 
 	{#if adding}
-		<form method="POST" action="?/addLoan" use:enhance class="card add-form">
+		<form
+			method="POST"
+			action="?/addLoan"
+			use:enhance={closeOnSuccess(() => (adding = false))}
+			class="card add-form"
+		>
 			<div class="grid">
 				<label><span>Name</span><input name="name" placeholder="Mortgage · Karlín" /></label>
 				<label><span>Lender</span><input name="lender" placeholder="Česká spořitelna" /></label>

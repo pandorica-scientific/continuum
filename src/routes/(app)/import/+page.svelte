@@ -528,11 +528,18 @@
 	.w-columns {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		/* Three bands — header, role, sample — owned by this grid rather than by
+		   each column. Every .w-col opts into them with subgrid instead of
+		   starting a grid of its own, which is what let one two-line header push
+		   its own select down and nobody else's. */
+		grid-auto-rows: auto;
 		gap: 0.75rem;
 	}
 
 	.w-col {
 		display: grid;
+		grid-row: span 3;
+		grid-template-rows: subgrid;
 		gap: 0.25rem;
 	}
 
@@ -569,6 +576,10 @@
 		gap: 1rem;
 		cursor: pointer;
 		padding: 0.35rem 0;
+		/* The same token .result-row uses for the queue above. Without it this
+		   inherited body's --text-xl, so one filename was 16px in the recent list
+		   and 13px in the queue. */
+		font-size: var(--text-md);
 	}
 
 	.i-meta {
@@ -615,6 +626,9 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 14px;
+		/* A refused row carries a sentence and a button, not a word. Without this
+		   it stayed on one line and pushed the page 817px wide at 390px. */
+		flex-wrap: wrap;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
 		font-size: var(--text-md);
@@ -631,7 +645,13 @@
 	.r-meta {
 		color: var(--fg3);
 		font-size: var(--text-sm);
-		white-space: nowrap;
+		/* Was `white-space: nowrap`, which suits "waiting" and "12 added · 3 known
+		   · 1 paired" and is catastrophic for the other thing this holds: the
+		   reader's refusal sentence, followed by a "Map its columns" button. A
+		   flex item will not shrink below its content without min-width:0, so on
+		   a phone that single row became 1160px wide. */
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.tiles {
 		display: grid;

@@ -38,3 +38,27 @@ export function bankKeyFor(label: string): string {
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '');
 }
+
+/**
+ * The order banks are offered in when somebody is choosing one.
+ *
+ * Alphabetical among the real institutions, with "Other" last. It is a
+ * fallback rather than a bank, and sorting it by its label dropped it into the
+ * middle of the list — between Monzo and Revolut — where it read as one more
+ * institution somebody had added.
+ *
+ * The "add a bank" control is not in this list at all: the markup renders it
+ * after these options, because it is an action rather than a choice.
+ *
+ * `localeCompare` rather than `<`, so "Česká spořitelna" sorts before "Fio
+ * banka" instead of after "Zurich".
+ */
+const FALLBACK_KEY = 'other';
+
+export function orderBanksForChoosing<T extends { key: string; label: string }>(banks: T[]): T[] {
+	return [...banks].sort((a, b) => {
+		if (a.key === FALLBACK_KEY) return b.key === FALLBACK_KEY ? 0 : 1;
+		if (b.key === FALLBACK_KEY) return -1;
+		return a.label.localeCompare(b.label);
+	});
+}

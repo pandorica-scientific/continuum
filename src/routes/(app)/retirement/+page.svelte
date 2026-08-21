@@ -386,16 +386,16 @@
 				vector-effect="non-scaling-stroke"
 			/>
 		</svg>
-		<div class="years mono">
-			{#each chart.years as year (year.label)}
-				<span class="year" style:left={year.left}>{year.label}</span>
-			{/each}
-			{#if chart.crossing}
-				<span class="year crossing" style:left={chart.crossing.left}>
-					{chart.crossing.label}
-				</span>
-			{/if}
-		</div>
+	</div>
+	<div class="years mono">
+		{#each chart.years as year (year.label)}
+			<span class="year" style:left={year.left}>{year.label}</span>
+		{/each}
+		{#if chart.crossing}
+			<span class="year crossing" style:left={chart.crossing.left}>
+				{chart.crossing.label}
+			</span>
+		{/if}
 	</div>
 	<div class="legend">
 		<span class="l"
@@ -599,6 +599,10 @@
 		font-size: var(--text-xs);
 	}
 	.payslip-form {
+		/* Named rather than repeated: five selectors below depend on these being
+		   the same number, and that is exactly the kind of agreement that rots
+		   silently when it is written out five times. */
+		--payslip-control-h: 36px;
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 		gap: 12px;
@@ -619,6 +623,44 @@
 		border-radius: 8px;
 		padding: 8px 11px;
 		font-size: var(--text-md);
+	}
+	/* One height for every control in this row.
+	   The row is `align-items: end`, so anything taller than its neighbours does
+	   not sit lower — it rides UP, and the payslip field did: 42px against 36
+	   for the selects, 34 for the amount and 32 for the button. Four heights,
+	   four baselines. A file input is the culprit because its button gives it an
+	   intrinsic height nothing else in the row shares, which no amount of
+	   padding on the input itself can settle. So the height is stated once, and
+	   the button is styled to live inside it. */
+	.payslip-form input,
+	.payslip-form select,
+	.payslip-form .btn {
+		height: var(--payslip-control-h);
+		box-sizing: border-box;
+	}
+	/* min-width:0 is what lets a grid item be narrower than its content — a file
+	   input reports the width of its button plus the filename and would
+	   otherwise refuse its 1fr track. */
+	.payslip-form input[type='file'] {
+		min-width: 0;
+		max-width: 100%;
+		padding: 0 8px;
+		font-size: var(--text-sm);
+		line-height: calc(var(--payslip-control-h) - 2px);
+	}
+	.payslip-form input[type='file']::file-selector-button {
+		margin: 0 9px 0 0;
+		padding: 3px 10px;
+		border: 1px solid var(--bd2);
+		border-radius: 6px;
+		background: var(--bg2);
+		color: var(--fg1);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.payslip-form label {
+		min-width: 0;
 	}
 	.verdict {
 		background: var(--blue-tint);
@@ -766,6 +808,11 @@
 		position: relative;
 		height: 16px;
 		margin-top: 4px;
+		/* .chart's left padding used to provide this, while this row lived inside
+		   it. That containment is also what made the axis labels — positioned as
+		   a percentage of .chart — resolve 20px too low, dropping "0.0" onto the
+		   first year. The row is a sibling now, so it needs its own gutter. */
+		margin-left: 46px;
 	}
 	.year {
 		position: absolute;

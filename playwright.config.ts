@@ -16,7 +16,8 @@ export default defineConfig({
 		{
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
-			testIgnore: /accounts|passkey|board|errors/
+			testIgnore:
+				/accounts|passkey|board|errors|add-form-closes|retirement-chart|import-mapping-layout|import-typography|visual-baseline/
 		},
 		// The error screens need a signed-in session, which the wizard in
 		// flow.spec.ts is what creates. Alphabetical order would put this file
@@ -45,6 +46,27 @@ export default defineConfig({
 			use: { viewport: { width: 1440, height: 900 } },
 			testMatch: /board/,
 			dependencies: ['accounts']
+		},
+		// The v0.3.11 polish specs. Every one of them needs the household and the
+		// imported statement that flow.spec.ts creates, and three of their
+		// filenames sort BEFORE flow.spec.ts — so they say what they depend on
+		// rather than relying on the alphabet to be kind.
+		{
+			name: 'polish',
+			use: { viewport: { width: 1440, height: 900 } },
+			testMatch: /add-form-closes|retirement-chart|import-mapping-layout|import-typography/,
+			dependencies: ['desktop']
+		},
+		// The Part 0 pixel baseline. Its own project, depending on `polish`, so it
+		// always runs AFTER every spec that mutates the database — `polish` adds a
+		// property and leaves a failed job in the import queue. Were it merely one
+		// more file inside `polish`, running it alone would photograph different
+		// screens from running the whole suite.
+		{
+			name: 'visual',
+			use: { viewport: { width: 1440, height: 900 } },
+			testMatch: /visual-baseline/,
+			dependencies: ['polish']
 		},
 		// Narrow widths. These now cover the signed-in screens too, not just the
 		// login page: a field whose label was cut off before it finished on a small

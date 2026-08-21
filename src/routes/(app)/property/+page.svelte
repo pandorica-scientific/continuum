@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import { goto } from '$app/navigation';
@@ -15,6 +16,22 @@
 	let { data, form } = $props();
 
 	let addingProperty = $state(false);
+	/** Close on success, stay open on a refusal so what was typed is still there
+	 *  to correct. Leaving it open on success is what made the wizard for the
+	 *  next one appear the moment one was added. */
+	const closeOnSuccess =
+		(close: () => void) =>
+		() =>
+		async ({
+			update,
+			result
+		}: {
+			update: () => Promise<void>;
+			result: import('@sveltejs/kit').ActionResult;
+		}) => {
+			await update();
+			if (shouldCloseAfterAction(result.type)) close();
+		};
 	let editingPlan = $state(false);
 	let addingTenancy = $state(false);
 	// A lease with no agreed end. The date input is disabled rather than hidden so
@@ -56,7 +73,12 @@
 </section>
 
 {#if addingProperty}
-	<form method="POST" action="?/addProperty" use:enhance class="card add-form">
+	<form
+		method="POST"
+		action="?/addProperty"
+		use:enhance={closeOnSuccess(() => (addingProperty = false))}
+		class="card add-form"
+	>
 		<div class="grid">
 			<label><span>Name</span><input name="name" placeholder="Karlín, Praha 8" /></label>
 			<label><span>Size line</span><input name="sizeLabel" placeholder="3+kk · 78 m²" /></label>

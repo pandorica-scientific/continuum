@@ -11,7 +11,7 @@ import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
 import { accountBalanceInBase } from '$lib/accounts/balance';
-import { bankKeyFor } from '$lib/banks';
+import { bankKeyFor, orderBanksForChoosing } from '$lib/banks';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -128,7 +128,11 @@ export const load: PageServerLoad = async () => {
 
 	return {
 		currencies: await availableCurrencies(),
-		banks: banks.map((b) => ({ key: b.key, label: b.label, emoji: b.emoji })),
+		// "Other" is a fallback rather than an institution, so it goes last —
+		// just above the "add a bank" control the markup renders after this list.
+		banks: orderBanksForChoosing(
+			banks.map((b) => ({ key: b.key, label: b.label, emoji: b.emoji }))
+		),
 		accounts: rows.map((r) => ({ ...r, balanceMinorBase: undefined })),
 		cashTotalFormatted: formatMinor(cashTotal, baseCurrency),
 		baseCurrencyDisplay: displayCurrency(baseCurrency),

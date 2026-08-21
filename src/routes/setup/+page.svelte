@@ -112,7 +112,10 @@
 
 <style>
 	.wrap {
-		max-width: 560px;
+		/* Four fields per person — name, birth year, password, repeat — need more
+		   than the 560px this used to be, where the fourth wrapped onto its own
+		   row and read as a field belonging to nobody. */
+		max-width: 640px;
 		margin: 0 auto;
 		padding: 48px 20px 80px;
 		display: flex;
@@ -183,7 +186,7 @@
 	}
 	.person-row {
 		display: grid;
-		grid-template-columns: minmax(0, 1.2fr) 90px minmax(0, 1fr);
+		grid-template-columns: minmax(0, 1.2fr) 84px minmax(0, 1fr) minmax(0, 1fr);
 		gap: 8px;
 	}
 	.toggle {
@@ -196,7 +199,17 @@
 	.note {
 		color: var(--fg3);
 	}
-	@media (max-width: 560px) {
+	/* Below the width where four boxes stay usable, the row becomes two lines —
+	   who they are, then the password twice — rather than four stacked boxes
+	   that lose which pair belongs together. Two declared columns and four
+	   children auto-flow into exactly that shape. */
+	@media (max-width: 640px) {
+		.person-row {
+			grid-template-columns: minmax(0, 1fr) 84px;
+		}
+	}
+
+	@media (max-width: 380px) {
 		.person-row {
 			grid-template-columns: minmax(0, 1fr);
 		}
