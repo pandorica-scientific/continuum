@@ -226,7 +226,7 @@
 		padding: 9px 14px;
 		border: 1px solid var(--yellow);
 		background: var(--yellow-wash);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		font-size: var(--text-sm);
 		color: var(--fg1);
 	}
@@ -275,7 +275,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	.quick-menu {
@@ -284,7 +284,7 @@
 		/* Opaque: this floats over whatever is scrolling beneath it. */
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 4px;
 		box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
 		min-width: 190px;
@@ -293,7 +293,7 @@
 	.quick-item {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		padding: 8px 10px;
 		border-radius: 7px;
 		color: var(--fg1);
@@ -314,7 +314,7 @@
 		cursor: pointer;
 		width: 52px;
 		height: 52px;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background: var(--brand);
 		color: var(--fg-inverse);
 	}
@@ -325,12 +325,12 @@
 	.rate-warning {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		margin: 0;
 		padding: 12px 14px;
 		border: 1px solid var(--bd2);
 		border-left: 3px solid var(--orange);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		background: var(--card3);
 		color: var(--fg2);
 		font-size: var(--text-md);
@@ -407,7 +407,7 @@
 			z-index: 10;
 			width: 44px;
 			height: 44px;
-			border-radius: 12px;
+			border-radius: var(--radius-xl);
 			border: 1px solid var(--bd2);
 			/* Opaque, because this floats over content that scrolls under it.
 			   --card3 is rgba(255,255,255,0.09) in the dark theme — a tint meant to

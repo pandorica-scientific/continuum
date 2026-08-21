@@ -317,19 +317,19 @@
 	.editor {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.modes {
 		display: flex;
 		align-items: center;
-		gap: 14px;
+		gap: var(--space-7);
 		flex-wrap: wrap;
 	}
 	.seg {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 3px;
 		background: var(--card);
 	}
@@ -337,7 +337,7 @@
 		border: 0;
 		background: transparent;
 		color: var(--fg3);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		padding: 6px 12px;
 		font-size: var(--text-sm);
 		cursor: pointer;
@@ -353,7 +353,7 @@
 	.scale {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
@@ -362,7 +362,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 6px 9px;
 		font-size: var(--text-sm);
 	}
@@ -370,7 +370,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		display: flex;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		flex-wrap: wrap;
 	}
@@ -383,7 +383,7 @@
 		height: auto;
 		display: block;
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: var(--card);
 		touch-action: none;
 		cursor: crosshair;
@@ -433,7 +433,7 @@
 	.toolbar {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.save-error {
@@ -444,7 +444,7 @@
 	.name-label {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
@@ -452,7 +452,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		font-size: var(--text-md);
 	}

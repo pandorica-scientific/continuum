@@ -91,7 +91,7 @@
 	.titles {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	h1 {
 		margin: 0;
@@ -116,17 +116,17 @@
 	.actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.synced {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		background: var(--card);
 		white-space: nowrap;
@@ -136,7 +136,7 @@
 	   would shift every screen's content down by a variable amount. */
 	.subtabs {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		align-items: center;
 		border-bottom: 1px solid var(--bd);
 		padding-bottom: 10px;

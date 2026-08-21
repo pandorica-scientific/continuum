@@ -16,7 +16,7 @@
 	.pill {
 		display: inline-block;
 		border: 1px solid;
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 2px 10px;
 		font-size: var(--text-xs);
 		font-weight: 600;

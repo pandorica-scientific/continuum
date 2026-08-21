@@ -507,13 +507,13 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.switcher {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.tab {
@@ -523,7 +523,7 @@
 		border: 1px solid var(--bd);
 		background: var(--card);
 		color: var(--fg2);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 10px 15px;
 		font-size: var(--text-md);
 		cursor: pointer;
@@ -546,16 +546,16 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.tile {
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 12px 14px;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.pencil {
 		background: none;
@@ -571,12 +571,12 @@
 	.figure-form {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 		padding: 4px 0;
 	}
 	.figure-actions {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.t-label {
 		font-size: var(--text-sm);
@@ -593,7 +593,7 @@
 	.two-col {
 		display: grid;
 		grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-		gap: 16px;
+		gap: var(--space-8);
 		align-items: start;
 	}
 	@media (max-width: 900px) {
@@ -604,11 +604,11 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.plan {
 		height: 300px;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1px solid var(--bd);
 	}
@@ -622,21 +622,21 @@
 	}
 	.photos {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		overflow-x: auto;
 		padding-bottom: 4px;
 	}
 	.photo {
 		flex: 0 0 200px;
 		height: 144px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		border: 1px solid var(--bd);
 	}
 	.tenant {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.avatar {
 		width: 40px;
@@ -664,7 +664,7 @@
 	.facts {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.fact {
 		display: flex;
@@ -682,7 +682,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		font-size: var(--text-md);
 	}
 	.doc {
@@ -704,7 +704,7 @@
 	.doc-names {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.doc-name {
@@ -723,7 +723,7 @@
 	.bill-form {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 110px auto;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.b-file {
 		text-decoration: none;
@@ -737,7 +737,7 @@
 		margin-left: 6px;
 		padding: 1px 5px;
 		border: 1px solid transparent;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		background: none;
 		color: var(--fg3);
 		font-size: var(--text-xs);
@@ -770,23 +770,23 @@
 	.track {
 		height: 8px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.fill {
 		height: 100%;
 		background: var(--green);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 	}
 	.add-tile {
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 18px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 4px;
+		gap: var(--space-2);
 		cursor: pointer;
 		text-align: left;
 		color: var(--fg2);
@@ -805,19 +805,19 @@
 	.add-form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	/* A checkbox beside its own words, rather than under a label like the date
 	   and amount fields above it. */
 	.t-check {
 		flex-direction: row;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		align-self: end;
 		padding-bottom: 8px;
 	}
@@ -831,31 +831,22 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	input,
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.p-tags {
 		display: inline-flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tag-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 5px 3px 10px;
 		font-size: var(--text-sm);
 		color: var(--fg2);

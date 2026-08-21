@@ -243,19 +243,19 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.toolbar input[type='text'] {
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 9px 12px;
 		font-size: var(--text-md);
 		color: var(--fg1);
@@ -280,24 +280,24 @@
 	.rail {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.shelves {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.shelf {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		width: 100%;
 		text-align: left;
 		border: 0;
 		cursor: pointer;
 		padding: 8px 10px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: transparent;
 		color: var(--fg2);
 		font-size: var(--text-md);
@@ -322,12 +322,12 @@
 	.area {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 		min-width: 0;
 	}
 	.tag-chips {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
 	.tag-chip {
@@ -355,12 +355,12 @@
 	.columns {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.col {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.col-head {
 		display: flex;
@@ -397,7 +397,7 @@
 	.names {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.doc-name {
@@ -417,12 +417,12 @@
 	.add-form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	label,
 	/* Checkboxes, not autocomplete: at household scale every possible owner
@@ -439,7 +439,7 @@
 	.tick {
 		flex-direction: row !important;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		font-size: var(--text-md) !important;
 		color: var(--fg1) !important;
 	}
@@ -454,30 +454,15 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 10px;
 		font-size: var(--text-md);
 		width: 140px;
 	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 	.add-form input,
-	.add-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	.expiry {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		min-width: 0;
 	}
@@ -491,6 +476,6 @@
 	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 </style>

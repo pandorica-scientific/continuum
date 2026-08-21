@@ -524,7 +524,7 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
@@ -536,7 +536,7 @@
 	.person-block {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		min-width: 0;
 	}
 	.p-name {
@@ -569,12 +569,12 @@
 	.recent {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	.slip {
 		display: grid;
 		grid-template-columns: 64px minmax(0, 1fr) auto auto;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	.slip-month {
@@ -585,7 +585,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 5px 9px;
 		font-size: var(--text-sm);
 		font-family: var(--font-mono);
@@ -605,7 +605,7 @@
 		--payslip-control-h: 36px;
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: end;
 	}
 	.payslip-form label {
@@ -616,14 +616,6 @@
 		color: var(--fg3);
 	}
 	.payslip-form input,
-	.payslip-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	/* One height for every control in this row.
 	   The row is `align-items: end`, so anything taller than its neighbours does
 	   not sit lower — it rides UP, and the payslip field did: 42px against 36
@@ -652,7 +644,7 @@
 		margin: 0 9px 0 0;
 		padding: 3px 10px;
 		border: 1px solid var(--bd2);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		background: var(--bg2);
 		color: var(--fg1);
 		font: inherit;
@@ -665,11 +657,11 @@
 	.verdict {
 		background: var(--blue-tint);
 		border: 1px solid var(--blue);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 18px 22px;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.verdict p {
 		margin: 0;
@@ -693,7 +685,7 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.controls {
 		display: grid;
@@ -719,7 +711,7 @@
 	}
 	input[type='number'] {
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 9px 11px;
 		font-size: var(--text-md);
 		color: var(--fg1);
@@ -739,14 +731,14 @@
 	}
 	.seg {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.seg button {
 		flex: 1 1 0;
 		border: 1px solid var(--bd);
 		background: transparent;
 		color: var(--fg2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 6px;
 		font-size: var(--text-sm);
 		cursor: pointer;

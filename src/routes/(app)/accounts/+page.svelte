@@ -194,14 +194,14 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.grid-2 {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.list {
 		display: flex;
@@ -212,7 +212,7 @@
 		display: grid;
 		grid-template-columns: 26px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 11px 0;
 		border-top: 1px solid var(--bd);
 	}
@@ -258,7 +258,7 @@
 	.add-form {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr) auto;
-		gap: 8px;
+		gap: var(--space-4);
 		padding-top: 11px;
 		border-top: 1px solid var(--bd);
 	}
@@ -267,7 +267,7 @@
 	.bank-form {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.bank-form label {
 		display: flex;
@@ -278,12 +278,12 @@
 	}
 	.bank-form .row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.numbers-field {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		min-width: 0;
 	}
 	.numbers-field input {
@@ -294,7 +294,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 11px;
 		font-size: var(--text-md);
 		min-width: 0;
@@ -302,7 +302,7 @@
 	.sits {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.donut-wrap {
 		display: flex;
@@ -333,7 +333,7 @@
 		flex: 1 1 190px;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.legend-row {
 		display: grid;
@@ -357,7 +357,7 @@
 		display: grid;
 		grid-template-columns: 62px minmax(0, 1fr) auto;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 9px 0;
 		border-top: 1px solid var(--bd);
 		font-size: var(--text-md);

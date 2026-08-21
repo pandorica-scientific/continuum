@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { formatRrule, parseRrule } from '$lib/calendar/rrule';
+	import Field from '$lib/components/Field.svelte';
 
 	let {
 		value = null,
@@ -117,8 +118,7 @@
 
 <input type="hidden" name="rrule" value={rrule} />
 
-<label class="field">
-	<span>Repeats</span>
+<Field label="Repeats">
 	<select bind:value={pattern}>
 		<option value="none">Does not repeat</option>
 		<option value="daily">Daily</option>
@@ -127,11 +127,10 @@
 		<option value="monthlyWeekday">Monthly, on a chosen weekday</option>
 		<option value="yearly">Yearly</option>
 	</select>
-</label>
+</Field>
 
 {#if pattern !== 'none'}
-	<label class="field">
-		<span>Every</span>
+	<Field label="Every">
 		<div class="row">
 			<input class="num" type="number" min="1" max="99" bind:value={interval} />
 			<span class="unit">
@@ -152,7 +151,7 @@
 								: 'months'}
 			</span>
 		</div>
-	</label>
+	</Field>
 {/if}
 
 {#if pattern === 'weekly'}
@@ -176,8 +175,7 @@
 {/if}
 
 {#if pattern === 'monthlyWeekday'}
-	<label class="field">
-		<span>On the</span>
+	<Field label="On the">
 		<div class="row">
 			<select bind:value={setPos}>
 				{#each positions as position (position.value)}
@@ -186,7 +184,7 @@
 			</select>
 			<span class="unit">{weekdayName} of the month</span>
 		</div>
-	</label>
+	</Field>
 {/if}
 
 {#if pattern !== 'none'}
@@ -217,18 +215,10 @@
 {/if}
 
 <style>
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	.wrap {
@@ -240,7 +230,7 @@
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		font-size: var(--text-md);
 		color: var(--fg1);
 	}

@@ -369,25 +369,25 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.loan {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.head {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		gap: 16px;
+		gap: var(--space-8);
 		flex-wrap: wrap;
 	}
 	.names {
@@ -406,7 +406,7 @@
 	.facts {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.fact {
 		display: flex;
@@ -423,18 +423,18 @@
 	.progress {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.track {
 		height: 8px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.fill {
 		height: 100%;
 		background: var(--green);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 	}
 	.note {
 		font-size: var(--text-xs);
@@ -452,39 +452,39 @@
 	.detail {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 		border-top: 1px solid var(--bd);
 		padding-top: 14px;
 	}
 	.edit-form {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 		padding-top: 12px;
 		border-top: 1px solid var(--bd);
 	}
 	.edit-form .sec-row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	.edit-form .sec-check {
 		flex-direction: row;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.edit-form .secured {
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.actions-row {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.mini-title {
@@ -499,12 +499,12 @@
 	.events {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.event {
 		display: grid;
 		grid-template-columns: 86px minmax(0, 1fr) auto;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		padding: 7px 0;
 		border-bottom: 1px solid var(--bd);
@@ -523,12 +523,12 @@
 	.add-tile {
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 18px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 4px;
+		gap: var(--space-2);
 		cursor: pointer;
 		text-align: left;
 		color: var(--fg2);
@@ -547,12 +547,12 @@
 	.add-form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	label {
 		display: flex;
@@ -561,19 +561,10 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	input,
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	.toggle {
 		flex-direction: row;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		font-size: var(--text-md);
 		color: var(--fg2);
 	}
@@ -583,7 +574,7 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.secured legend {
 		font-size: var(--text-sm);
@@ -593,25 +584,25 @@
 	.secured-row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 200px;
-		gap: 10px;
+		gap: var(--space-5);
 		align-items: center;
 	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.l-tags {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tag-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 5px 3px 10px;
 		font-size: var(--text-sm);
 		color: var(--fg2);

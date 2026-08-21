@@ -104,7 +104,7 @@
 		max-width: 340px;
 		padding: 10px 12px;
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		/* --bg2, not --card. In the dark theme --card is rgba(255,255,255,0.03) —
 		   a 3% tint meant to sit ON the page background, not to be a surface of its
 		   own. A floating bubble painted with it is effectively transparent and

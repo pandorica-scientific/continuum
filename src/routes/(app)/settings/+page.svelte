@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import { SETUP_GUIDES } from '$lib/calendar/setup-steps';
+	import Field from '$lib/components/Field.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import ActionError from '$lib/components/ActionError.svelte';
@@ -126,14 +127,13 @@
 		/>
 		<div class="card">
 			<form method="POST" action="?/setBaseCurrency" use:enhance class="currency-form">
-				<label class="field">
-					<span>Base currency</span>
+				<Field label="Base currency">
 					<select name="baseCurrency" value={data.baseCurrency}>
 						{#each data.currencies as c (c)}
 							<option value={c}>{currencyLabel(c)}</option>
 						{/each}
 					</select>
-				</label>
+				</Field>
 				<button type="submit" class="btn">Save</button>
 			</form>
 		</div>
@@ -213,14 +213,13 @@
 						{/each}
 					</datalist>
 				</label>
-				<label class="field">
-					<span>How often</span>
+				<Field label="How often">
 					<select name="cadence" value={data.backup.cadence}>
 						<option value="off">Off</option>
 						<option value="weekly">Weekly</option>
 						<option value="monthly">Monthly</option>
 					</select>
-				</label>
+				</Field>
 				<button type="submit" class="btn">Save</button>
 			</form>
 			<div class="backup-status">
@@ -470,8 +469,7 @@
 					<!-- Rendered from the provider's own field list. Adding a provider
 					     never edits this screen. -->
 					{#each provider.fields as field (field.key)}
-						<label class="field">
-							<span>{field.label}</span>
+						<Field label={field.label}>
 							<input
 								name={field.key}
 								type={field.secret ? 'password' : field.kind === 'url' ? 'url' : 'text'}
@@ -479,7 +477,7 @@
 								required={field.required}
 								autocomplete="off"
 							/>
-						</label>
+						</Field>
 					{/each}
 				</div>
 				<div class="ca-row">
@@ -714,10 +712,9 @@
 					back on restores normal sign-in.
 				</p>
 				<form method="POST" action="?/enableOpenMode" use:enhance class="open-form">
-					<label class="field">
-						<span>Your password, to confirm you mean it</span>
+					<Field label="Your password, to confirm you mean it">
 						<input name="password" type="password" autocomplete="current-password" />
-					</label>
+					</Field>
 					<button type="submit" class="btn">Open the instance</button>
 				</form>
 			{/if}
@@ -729,7 +726,7 @@
 	.open-mode {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.open-mode.on {
 		border-color: var(--yellow);
@@ -744,37 +741,37 @@
 	.open-form {
 		display: flex;
 		align-items: flex-end;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.taxonomy {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.tx-group {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 		padding-top: 12px;
 		border-top: 1px solid var(--bd);
 	}
 	.tx-head {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.tx-dot {
 		width: 14px;
 		height: 14px;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		flex: none;
 	}
 	.tx-edit {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		flex: 1;
 	}
@@ -786,16 +783,16 @@
 	.tx-leaves {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 		padding-left: 24px;
 	}
 	.tx-leaf {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 6px 3px 11px;
 		font-size: var(--text-sm);
 	}
@@ -812,13 +809,13 @@
 	.tx-add-group {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.tx-reassign label {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
@@ -835,13 +832,13 @@
 	.cal-connect {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	.ca-head {
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 
 	.ca-label {
@@ -873,7 +870,7 @@
 	.ca-row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 
@@ -881,7 +878,7 @@
 		font-weight: 600;
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 
 	.warn {
@@ -913,20 +910,20 @@
 	.marker-row {
 		display: flex;
 		align-items: flex-start;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 
 	.interval {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 		flex: 1;
 	}
 
 	.interval-input {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		color: var(--fg3);
 		font-size: var(--text-md);
 	}
@@ -945,7 +942,7 @@
 		border-color: var(--blue);
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tn-label {
 		font-size: var(--text-sm);
@@ -958,7 +955,7 @@
 	}
 	.token-add {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		align-items: flex-end;
 		flex-wrap: wrap;
 	}
@@ -970,25 +967,17 @@
 		color: var(--fg3);
 		flex: 1 1 220px;
 	}
-	.token-add input {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	.token-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.tr-main {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.tr-label {
 		font-size: var(--text-md);
@@ -1007,7 +996,7 @@
 		display: grid;
 		grid-template-columns: 26px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 11px 0;
 		border-top: 1px solid var(--bd);
 	}
@@ -1046,7 +1035,7 @@
 		left: 2px;
 		width: 16px;
 		height: 16px;
-		border-radius: 16px;
+		border-radius: var(--radius-2xl);
 		background: var(--fg3);
 	}
 	.switch.on {
@@ -1061,24 +1050,8 @@
 	.currency-form {
 		display: flex;
 		align-items: flex-end;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	select,
-	input {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
 	}
 	/* Three equal password fields and a button. This used to borrow .add-form,
 	   whose second column is 90px wide for a birth year — which left the
@@ -1087,7 +1060,7 @@
 	.password-form {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-		gap: 8px;
+		gap: var(--space-4);
 		padding-top: 11px;
 		border-top: 1px solid var(--bd);
 	}
@@ -1105,12 +1078,12 @@
 	.stack-card {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.backup-form {
 		display: flex;
 		align-items: flex-end;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.backup-form .dest {
@@ -1119,18 +1092,18 @@
 	.backup-status {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.status-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.status {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.s-label {
@@ -1150,7 +1123,7 @@
 	.config-row {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.import-label input[type='file'] {

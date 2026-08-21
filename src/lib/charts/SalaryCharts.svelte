@@ -212,7 +212,7 @@
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 		min-width: 0;
 	}
 	figcaption {
@@ -224,7 +224,7 @@
 		display: block;
 		background: var(--card2);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 	}
 	.grid {
 		stroke: var(--bd);
@@ -249,7 +249,7 @@
 	}
 	.legend {
 		display: flex;
-		gap: 16px;
+		gap: var(--space-8);
 		flex-wrap: wrap;
 	}
 	.key {

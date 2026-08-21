@@ -58,16 +58,16 @@
 	.preview {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		background: var(--card2);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 13px 15px;
 	}
 	.p-head {
 		display: flex;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.p-title {

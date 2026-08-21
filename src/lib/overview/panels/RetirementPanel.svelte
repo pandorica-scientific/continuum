@@ -18,7 +18,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.headline {
 		font-size: var(--text-lg);

@@ -253,7 +253,7 @@
 		align-items: center;
 		gap: 9px;
 		border: 1px solid;
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 4px 13px;
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
@@ -285,12 +285,12 @@
 
 	.actions {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 
 	.actions a {
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 10px 18px;
 		font-size: var(--text-md);
 		text-decoration: none;
@@ -344,7 +344,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		min-width: 0;
 	}
 

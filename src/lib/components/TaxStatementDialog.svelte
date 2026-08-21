@@ -162,7 +162,7 @@
 	.tax-form {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.grid {
 		display: grid;
@@ -181,7 +181,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 11px;
 		font-size: var(--text-md);
 		min-width: 0;
@@ -193,7 +193,7 @@
 	.line {
 		display: grid;
 		grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.add-line {
 		align-self: flex-start;

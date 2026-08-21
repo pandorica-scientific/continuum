@@ -21,7 +21,7 @@
 	.tile {
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 12px 14px;
 		display: flex;
 		flex-direction: column;

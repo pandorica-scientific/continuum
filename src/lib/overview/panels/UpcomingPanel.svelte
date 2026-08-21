@@ -34,7 +34,7 @@
 		display: grid;
 		grid-template-columns: 52px minmax(0, 1fr) auto;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 8px 0;
 		border-bottom: 1px solid var(--bd);
 	}

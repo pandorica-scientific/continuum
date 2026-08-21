@@ -10,6 +10,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
 	import MetricTile from '$lib/components/MetricTile.svelte';
+	import Field from '$lib/components/Field.svelte';
 
 	let { data, form } = $props();
 
@@ -225,8 +226,7 @@
 			</div>
 
 			<div class="w-conventions">
-				<label class="field">
-					<span>Dates read as</span>
+				<Field label="Dates read as">
 					<select name="dateOrder">
 						{#each DATE_ORDER_CHOICES as choice (choice.value)}
 							<option value={choice.value} selected={form.preview.dateOrder === choice.value}>
@@ -234,9 +234,8 @@
 							</option>
 						{/each}
 					</select>
-				</label>
-				<label class="field">
-					<span>Decimal mark</span>
+				</Field>
+				<Field label="Decimal mark">
 					<select name="decimalMark">
 						{#each DECIMAL_CHOICES as choice (choice.value)}
 							<option value={choice.value} selected={form.preview.decimalMark === choice.value}>
@@ -244,16 +243,15 @@
 							</option>
 						{/each}
 					</select>
-				</label>
-				<label class="field">
-					<span>Name this layout</span>
+				</Field>
+				<Field label="Name this layout">
 					<input
 						name="name"
 						placeholder="e.g. Bank Mandiri current account"
 						value={form.preview.drift?.profileName ?? ''}
 						required
 					/>
-				</label>
+				</Field>
 			</div>
 
 			<button type="submit" class="btn primary">Read it this way</button>
@@ -488,7 +486,7 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
@@ -504,7 +502,7 @@
 	.assign {
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 		font-size: var(--text-sm);
 		color: var(--fg3);
@@ -513,7 +511,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		font-size: var(--text-md);
 	}
@@ -625,7 +623,7 @@
 	.result-row {
 		display: flex;
 		justify-content: space-between;
-		gap: 14px;
+		gap: var(--space-7);
 		/* A refused row carries a sentence and a button, not a word. Without this
 		   it stayed on one line and pushed the page 817px wide at 390px. */
 		flex-wrap: wrap;
@@ -656,30 +654,30 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.review-row {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.one-sided {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
 	.os-phrase {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.cat-modal {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.cat-modal label {
 		display: flex;
@@ -691,7 +689,7 @@
 	.cat-newgroup {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		padding-top: 10px;
 		border-top: 1px solid var(--bd);
 	}
@@ -707,7 +705,7 @@
 	}
 	.cat-actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.row-error {
 		margin: 0;
@@ -717,7 +715,7 @@
 	.r-facts {
 		display: grid;
 		grid-template-columns: 76px minmax(0, 1fr) auto;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 	}
 	.r-date {
@@ -727,7 +725,7 @@
 	.r-mid {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.r-merchant {
@@ -744,7 +742,7 @@
 	.r-actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		border-top: 1px solid var(--bd);
 		padding-top: 10px;
@@ -757,14 +755,14 @@
 	}
 	.cat-form {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	select {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		font-size: var(--text-md);
 	}

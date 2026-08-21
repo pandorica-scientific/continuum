@@ -119,6 +119,40 @@
 	--text-2xl: 19px;
 	--text-3xl: 22px;
 	--text-4xl: 28px;
+
+	/* ---- Geometry ----
+	 * Measured from the code rather than chosen. A tidier scale of
+	 * {4,6,8,12,16} was tested against every gap and radius in the product and
+	 * would have visibly moved 112 gaps and 62 corners — that is a restyle, not a
+	 * standardisation. These are the values already dominant, so adopting them is
+	 * invisible, which is the entire point.
+	 *
+	 * Add a step here rather than a one-off px value in a component — the same
+	 * rule the type scale above states, now enforced by design/no-raw-geometry.
+	 */
+	--radius-xs: 4px;
+	--radius-sm: 6px;
+	--radius-md: 8px;
+	--radius-lg: 10px;
+	--radius-xl: 12px;
+	--radius-2xl: 16px;
+	--radius-pill: 999px;
+
+	--space-1: 2px;
+	--space-2: 4px;
+	--space-3: 6px;
+	--space-4: 8px;
+	--space-5: 10px;
+	--space-6: 12px;
+	--space-7: 14px;
+	--space-8: 16px;
+
+	/* One height for anything a person types into or presses in a form row.
+	 * Applied where a row needs its controls to agree — NOT globally: forcing it
+	 * on every control in the product changed nine of fourteen screens, which is
+	 * a restyle rather than a standardisation.
+	 */
+	--control-h: 36px;
 }
 
 html[data-ledger-theme='light'] {
@@ -351,6 +385,48 @@ input[type='file']::file-selector-button:hover {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+}
+
+/* ---- Form controls ----
+ * The look of a box somebody types into, copied into twenty-seven component
+ * stylesheets and already drifted — the vertical padding reads 5, 6, 7, 8 or
+ * 9px depending on which file you open. One definition, next to `.btn`, which
+ * has worked this way all along.
+ *
+ * Bare element selectors on purpose: most of the copies this replaces styled
+ * `input, select` directly, so adopting it costs no markup change.
+ *
+ * `:where()` rather than a bare `:not()` chain, and this is load-bearing. A
+ * plain `input:not([a]):not([b]):not([c])` carries the specificity of its three
+ * attribute selectors — (0,3,1) — which BEATS an ordinary component override
+ * like `.toolbar input[type='text']` at (0,2,1). Written that way this base
+ * layer silently wins every argument it is supposed to lose. `:where()`
+ * contributes nothing, so this stays a floor a component can still stand on.
+ *
+ * Checkboxes, radios and ranges are excluded: they are not boxes somebody types
+ * into, and the browser's own rendering of them is the right one.
+ */
+input:where(:not([type='checkbox'], [type='radio'], [type='range'])),
+select,
+textarea {
+	border: 1px solid var(--bd2);
+	background: var(--card);
+	color: var(--fg1);
+	border-radius: var(--radius-md);
+	padding: var(--space-4) 11px;
+	font-size: var(--text-md);
+	font-family: inherit;
+}
+
+/* `.field` was already a convention — defined independently in five files.
+ * This promotes it rather than inventing it. */
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	font-size: var(--text-sm);
+	color: var(--fg3);
+	min-width: 0;
 }
 
 .btn {

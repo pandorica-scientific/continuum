@@ -30,7 +30,7 @@
 	.wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		height: 100%;
 	}
 	.caption {
@@ -40,7 +40,7 @@
 	.bars {
 		display: flex;
 		align-items: flex-end;
-		gap: 4px;
+		gap: var(--space-2);
 		flex: 1;
 		min-height: 60px;
 	}
@@ -50,7 +50,7 @@
 		flex-direction: column;
 		justify-content: flex-end;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-2);
 		height: 100%;
 	}
 	.bar {

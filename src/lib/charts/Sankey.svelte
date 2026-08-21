@@ -96,7 +96,7 @@
 		   plate the design system keeps for exactly this. A text-shadow alone
 		   is not enough over a saturated band. */
 		background: var(--plate);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		padding: 3px 7px;
 	}
 	.label.end {

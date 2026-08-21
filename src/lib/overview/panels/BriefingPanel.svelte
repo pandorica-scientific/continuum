@@ -37,7 +37,7 @@
 	.briefing {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.brief-card {
 		text-align: left;
@@ -46,7 +46,7 @@
 		gap: 7px;
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 13px 15px;
 		color: var(--fg1);
 	}
@@ -57,7 +57,7 @@
 	.b-top {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}

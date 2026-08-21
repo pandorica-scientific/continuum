@@ -88,7 +88,7 @@
 		flex-direction: column;
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 14px 16px;
 		height: 100%;
 		min-height: 0;
@@ -108,7 +108,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
+		gap: var(--space-5);
 		margin-bottom: 10px;
 		flex: none;
 	}
@@ -127,7 +127,7 @@
 	.controls {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		flex: none;
 	}
 	.badge {
@@ -137,7 +137,7 @@
 	.controls button {
 		background: var(--card2);
 		border: 1px solid var(--bd);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		color: var(--fg2);
 		font-size: var(--text-xs);
 		line-height: 1;

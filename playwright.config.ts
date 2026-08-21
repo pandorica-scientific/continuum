@@ -57,16 +57,22 @@ export default defineConfig({
 			testMatch: /add-form-closes|retirement-chart|import-mapping-layout|import-typography/,
 			dependencies: ['desktop']
 		},
-		// The Part 0 pixel baseline. Its own project, depending on `polish`, so it
-		// always runs AFTER every spec that mutates the database — `polish` adds a
-		// property and leaves a failed job in the import queue. Were it merely one
-		// more file inside `polish`, running it alone would photograph different
-		// screens from running the whole suite.
+		// The Part 0 pixel baseline. Its own project, and it depends on EVERY
+		// project that writes to the database — `polish` adds a property and leaves
+		// a failed job in the import queue, `accounts` adds a second person, and
+		// `board` customises a layout.
+		//
+		// Depending on only some of them was a real defect: the snapshots were
+		// captured through `--project=visual`, which pulled in `polish` but not
+		// `accounts`, and then failed under `npm run test:e2e` because the second
+		// person now existed and the retirement screen said "Tomáš Dvořák" where
+		// the snapshot said "Person two". A baseline that is only valid for one
+		// way of invoking the suite is not a baseline.
 		{
 			name: 'visual',
 			use: { viewport: { width: 1440, height: 900 } },
 			testMatch: /visual-baseline/,
-			dependencies: ['polish']
+			dependencies: ['polish', 'board']
 		},
 		// Narrow widths. These now cover the signed-in screens too, not just the
 		// login page: a field whose label was cut off before it finished on a small

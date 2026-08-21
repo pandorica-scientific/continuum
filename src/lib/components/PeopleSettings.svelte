@@ -257,7 +257,7 @@
 		display: grid;
 		grid-template-columns: 26px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 11px 0;
 		border-top: 1px solid var(--bd);
 	}
@@ -294,7 +294,7 @@
 	.steps {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 		margin: 10px 0;
 		padding-left: 18px;
 		line-height: 1.5;
@@ -306,7 +306,7 @@
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
 		background: var(--card2);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		padding: 1px 5px;
 		/* A tailnet name or a compose command should wrap inside the card rather
 		   than push it wider on a phone. */
@@ -314,14 +314,14 @@
 	}
 	.row-actions {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 		justify-content: flex-end;
 	}
 	.add-form {
 		display: grid;
 		grid-template-columns: minmax(0, 1.2fr) 90px minmax(0, 1fr) auto;
-		gap: 6px;
+		gap: var(--space-3);
 		padding-top: 11px;
 	}
 	/* Came along with the rule above when this list moved out of the settings
@@ -340,7 +340,7 @@
 		margin-top: 8px;
 		padding: 9px 11px;
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: var(--card2);
 	}
 </style>

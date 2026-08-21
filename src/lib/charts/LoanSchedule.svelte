@@ -55,7 +55,7 @@
 	.wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	svg {
 		width: 100%;

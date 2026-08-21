@@ -133,12 +133,12 @@
 	.charts {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.chart {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.c-title {
 		font-size: var(--text-sm);
@@ -162,7 +162,7 @@
 	.l-item {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.dot {
 		width: 8px;

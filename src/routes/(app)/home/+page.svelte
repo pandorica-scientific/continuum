@@ -198,25 +198,25 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.setup {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 		max-width: 720px;
 	}
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	label {
 		display: flex;
@@ -225,18 +225,9 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	input,
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.quiet {
 		font-size: var(--text-sm);
@@ -247,7 +238,7 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.attention {
 		display: flex;
@@ -255,7 +246,7 @@
 		flex-wrap: wrap;
 		border: 1px solid var(--yellow);
 		background: var(--yellow-tint);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 10px 15px;
 	}
 	.a-item {
@@ -264,18 +255,18 @@
 	.rooms {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.room {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.r-head {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.r-name {
 		font-size: var(--text-lg);
@@ -288,16 +279,16 @@
 	.devices {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.device {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 4px;
+		gap: var(--space-2);
 		border: 1px solid var(--bd);
 		background: transparent;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 9px 10px;
 		cursor: pointer;
 		text-align: left;
@@ -328,7 +319,7 @@
 	.bars {
 		display: flex;
 		align-items: flex-end;
-		gap: 4px;
+		gap: var(--space-2);
 		height: 120px;
 	}
 	.bar-wrap {
@@ -344,7 +335,7 @@
 	.week-row {
 		display: grid;
 		grid-template-columns: 52px minmax(0, 1fr);
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);

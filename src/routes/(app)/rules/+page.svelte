@@ -233,13 +233,13 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.scope-note {
 		margin: 0;
@@ -259,7 +259,7 @@
 	.r-main {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		flex: 1 1 320px;
 		min-width: 0;
 	}
@@ -276,7 +276,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.r-confidence {
 		font-size: var(--text-lg);
@@ -291,12 +291,12 @@
 	}
 	.r-buttons {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.rule-form {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.rule-form label {
 		display: flex;
@@ -310,7 +310,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 11px;
 		font-size: var(--text-md);
 		min-width: 0;
@@ -318,7 +318,7 @@
 	.condition {
 		display: grid;
 		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	.add-condition {
@@ -327,7 +327,7 @@
 	.foot {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
@@ -343,7 +343,7 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}

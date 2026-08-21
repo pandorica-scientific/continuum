@@ -52,13 +52,13 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.title {
 		font-size: var(--text-xl);

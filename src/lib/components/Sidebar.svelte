@@ -178,7 +178,7 @@
 	.networth {
 		padding: 10px 12px;
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		background: var(--card);
 		display: flex;
 		flex-direction: column;
@@ -201,15 +201,15 @@
 	nav {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.nav-item {
 		display: grid;
 		grid-template-columns: 20px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		padding: 8px 10px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--fg2);
 		font-size: var(--text-md);
 		font-weight: 400;
@@ -256,7 +256,7 @@
 		margin-top: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		border-top: 1px solid var(--bd);
 		padding-top: 14px;
 	}
@@ -279,14 +279,14 @@
 
 	.themes {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.themes button {
 		flex: 1 1 0;
 		border: 1px solid var(--bd);
 		background: transparent;
 		color: var(--fg3);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 4px;
 		font-size: var(--text-sm);
 		cursor: pointer;
@@ -299,7 +299,7 @@
 	.person {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		padding: 0 4px;
 	}
 	.sign-out {

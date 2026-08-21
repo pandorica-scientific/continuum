@@ -141,7 +141,7 @@
 <style>
 	.search-row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		margin-bottom: 12px;
 		flex-wrap: wrap;
 	}
@@ -198,7 +198,7 @@
 
 	.linked {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 		grid-column: 2 / -1;
 	}
@@ -207,7 +207,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 2px 8px;
 	}
 

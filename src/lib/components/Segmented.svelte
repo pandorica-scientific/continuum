@@ -30,9 +30,9 @@
 <style>
 	.segmented {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 3px;
 		background: var(--card);
 	}
@@ -40,7 +40,7 @@
 		border: 0;
 		background: transparent;
 		color: var(--fg3);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		padding: 6px 13px;
 		font-size: var(--text-sm);
 		cursor: pointer;

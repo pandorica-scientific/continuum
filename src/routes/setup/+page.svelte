@@ -5,6 +5,7 @@
 	import { passwordHint } from '$lib/password-policy';
 
 	import { currencyLabel } from '$lib/currencies';
+	import Field from '$lib/components/Field.svelte';
 
 	let { data, form } = $props();
 
@@ -42,23 +43,21 @@
 	{/if}
 
 	<form method="POST" class="card form">
-		<label class="field">
-			<span>Household name</span>
+		<Field label="Household name">
 			<input
 				name="householdName"
 				placeholder="e.g. Robert & Tereza"
 				value={entered?.householdName ?? ''}
 			/>
-		</label>
+		</Field>
 
-		<label class="field">
-			<span>Base currency — totals convert to this; balances keep their own currency</span>
+		<Field label="Base currency — totals convert to this; balances keep their own currency">
 			<select name="baseCurrency">
 				{#each data.currencies as c (c)}
 					<option value={c} selected={c === selectedCurrency}>{currencyLabel(c)}</option>
 				{/each}
 			</select>
-		</label>
+		</Field>
 
 		<fieldset>
 			<legend class="eyebrow">People</legend>
@@ -120,7 +119,7 @@
 		padding: 48px 20px 80px;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.brand {
 		display: flex;
@@ -147,7 +146,7 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
@@ -156,22 +155,6 @@
 		flex-direction: column;
 		gap: 18px;
 		padding: 18px;
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	input,
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
 	}
 	fieldset {
 		border: 0;
@@ -187,12 +170,12 @@
 	.person-row {
 		display: grid;
 		grid-template-columns: minmax(0, 1.2fr) 84px minmax(0, 1fr) minmax(0, 1fr);
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.toggle {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		font-size: var(--text-md);
 		color: var(--fg2);
 	}

@@ -98,17 +98,17 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.history {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.bars {
 		display: flex;
 		align-items: flex-end;
-		gap: 2px;
+		gap: var(--space-1);
 		height: 168px;
 	}
 	.pair {

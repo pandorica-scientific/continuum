@@ -5,6 +5,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import SplitDialog from '$lib/components/SplitDialog.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
+	import Field from '$lib/components/Field.svelte';
 
 	let { data, form } = $props();
 
@@ -103,8 +104,7 @@
 					{/each}
 				</select>
 			</label>
-			<label class="field">
-				<span>Read as</span>
+			<Field label="Read as">
 				<select name="source">
 					<option value="">However it was read</option>
 					{#each data.sourceMethods as method (method.value)}
@@ -113,7 +113,7 @@
 						</option>
 					{/each}
 				</select>
-			</label>
+			</Field>
 			<label class="f-check">
 				<input type="checkbox" name="transfers" value="1" checked={data.filter.includeTransfers} />
 				<span>Show own transfers</span>
@@ -316,19 +316,19 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
 	.filters {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	label {
 		display: flex;
@@ -338,14 +338,6 @@
 		color: var(--fg3);
 	}
 	.filters input,
-	.filters select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: var(--text-md);
-	}
 	.f-wide {
 		grid-column: span 2;
 	}
@@ -361,7 +353,7 @@
 	}
 	.f-actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	/* The row mirrors the import review row, so the same transaction reads the
@@ -380,14 +372,14 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.doc-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 6px 3px 11px;
 		font-size: var(--text-sm);
 	}
@@ -402,7 +394,7 @@
 	.attach-form {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 		min-width: 0;
 	}
@@ -431,7 +423,7 @@
 	.r-facts {
 		display: grid;
 		grid-template-columns: 76px minmax(0, 1fr) auto;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		flex: 1 1 380px;
 		min-width: 0;
@@ -443,7 +435,7 @@
 	.r-mid {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.r-merchant {
@@ -469,7 +461,7 @@
 	.r-actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.r-state {
@@ -478,14 +470,14 @@
 	}
 	.cat-form {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.r-actions select {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		font-size: var(--text-md);
 	}
@@ -498,12 +490,12 @@
 		border-top: 1px solid var(--bd);
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.split-line {
 		display: grid;
 		grid-template-columns: 76px minmax(0, 1fr) auto;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		font-size: var(--text-md);
 	}
@@ -525,14 +517,14 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tag-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 5px 3px 10px;
 		font-size: var(--text-sm);
 		color: var(--fg2);
@@ -552,7 +544,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 14px;
+		gap: var(--space-7);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}

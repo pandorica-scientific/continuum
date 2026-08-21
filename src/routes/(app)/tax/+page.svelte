@@ -117,7 +117,7 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
@@ -143,7 +143,7 @@
 	.t-facts {
 		display: flex;
 		align-items: baseline;
-		gap: 14px;
+		gap: var(--space-7);
 		flex: 1 1 340px;
 		min-width: 0;
 	}
@@ -169,7 +169,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		display: flex;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.t-diverges {
@@ -178,7 +178,7 @@
 	}
 	.t-actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.empty {
 		color: var(--fg3);

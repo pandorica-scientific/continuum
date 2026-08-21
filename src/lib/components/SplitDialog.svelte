@@ -177,7 +177,7 @@
 	.split-form {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.target {
 		font-size: var(--text-md);
@@ -187,7 +187,7 @@
 	.split-line {
 		display: grid;
 		grid-template-columns: 130px minmax(0, 1fr) minmax(150px, 0.8fr) auto;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	.split-form input,
@@ -195,7 +195,7 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 11px;
 		font-size: var(--text-md);
 		min-width: 0;
@@ -203,7 +203,7 @@
 	.foot {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;

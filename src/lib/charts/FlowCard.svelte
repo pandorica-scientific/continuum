@@ -75,7 +75,7 @@
 		padding: 18px 20px 20px;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.totals {
 		display: flex;
@@ -86,7 +86,7 @@
 	.total {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.t-value {
 		font-size: var(--text-2xl);
@@ -121,7 +121,7 @@
 	.b-head {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.b-dot {
 		width: 9px;
@@ -143,7 +143,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}

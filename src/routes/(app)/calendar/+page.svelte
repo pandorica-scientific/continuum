@@ -387,13 +387,13 @@
 	.conflicts {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 		border-color: var(--yellow);
 	}
 
 	.conflict {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		margin: 0;
 		font-size: var(--text-md);
 		color: var(--fg2);
@@ -408,18 +408,18 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 16px;
+		gap: var(--space-8);
 		flex-wrap: wrap;
 	}
 	.chips {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.chip {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		border: 1px solid var(--bd);
 		background: var(--card);
 		border-radius: 20px;
@@ -433,13 +433,13 @@
 	.dot {
 		width: 8px;
 		height: 8px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		flex: 0 0 auto;
 	}
 	.layout {
 		display: grid;
 		grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-		gap: 16px;
+		gap: var(--space-8);
 		align-items: start;
 	}
 	@media (max-width: 900px) {
@@ -450,12 +450,12 @@
 	.cal {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.cal-head {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.month {
 		font-size: var(--text-xl);
@@ -483,12 +483,12 @@
 		min-height: 58px;
 		border: 1px solid var(--bd);
 		background: transparent;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 6px 7px 7px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 6px;
+		gap: var(--space-3);
 		cursor: pointer;
 	}
 	.day:hover {
@@ -522,7 +522,7 @@
 	.agenda {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
 	}
@@ -555,12 +555,12 @@
 	.side {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.rule {
 		display: grid;
@@ -586,7 +586,7 @@
 		left: 2px;
 		width: 16px;
 		height: 16px;
-		border-radius: 16px;
+		border-radius: var(--radius-2xl);
 		background: var(--fg3);
 	}
 	.switch.on {
@@ -614,7 +614,7 @@
 	.feed {
 		display: grid;
 		grid-template-columns: 20px minmax(0, 1fr) auto;
-		gap: 10px;
+		gap: var(--space-5);
 		align-items: center;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);

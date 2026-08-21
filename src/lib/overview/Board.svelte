@@ -311,14 +311,14 @@
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 		margin-bottom: 16px;
 	}
 	.bar button {
 		background: var(--card2);
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--fg2);
 		font-size: var(--text-md);
 		padding: 6px 13px;
@@ -342,13 +342,13 @@
 	.tray {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		padding: 12px 14px;
 		margin-bottom: 16px;
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 	}
 	.tray-label {
 		font-size: var(--text-xs);
@@ -359,7 +359,7 @@
 	.tray button {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		background: var(--card2);
 		border: 1px solid var(--bd);
 		border-radius: 20px;
@@ -394,11 +394,11 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 8px;
+		gap: var(--space-4);
 		height: 100%;
 		padding: 14px 16px;
 		border: 1px dashed var(--bd2);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		opacity: 0.7;
 	}
 	.eyebrow {

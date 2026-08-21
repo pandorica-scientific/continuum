@@ -59,7 +59,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 14px;
+		gap: var(--space-7);
 		flex-wrap: wrap;
 		color: inherit;
 		text-decoration: none;
@@ -86,7 +86,7 @@
 	.t-figures {
 		display: flex;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.t-part {

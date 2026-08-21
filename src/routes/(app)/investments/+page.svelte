@@ -271,13 +271,13 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.dismiss {
 		background: none;
@@ -291,12 +291,12 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.chart-card {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.chart {
 		position: relative;
@@ -349,7 +349,7 @@
 	.own-row {
 		display: grid;
 		grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
-		gap: 16px;
+		gap: var(--space-8);
 		align-items: start;
 	}
 	@media (max-width: 1100px) {
@@ -360,7 +360,7 @@
 	.own {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.donut-wrap {
 		display: flex;
@@ -389,7 +389,7 @@
 		flex: 1 1 240px;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.legend-row {
 		display: grid;
@@ -418,7 +418,7 @@
 	.holdings {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	.h-head,
 	.h-row {
@@ -467,7 +467,7 @@
 		margin-top: 12px;
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 14px;
 		color: var(--fg2);
 		font-size: var(--text-md);

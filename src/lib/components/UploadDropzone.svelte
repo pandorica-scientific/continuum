@@ -79,7 +79,7 @@
 <style>
 	.dropzone {
 		border: 1.5px dashed var(--bd2);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 24px;
 		cursor: pointer;
 	}

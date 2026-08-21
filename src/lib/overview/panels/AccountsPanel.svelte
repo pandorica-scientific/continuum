@@ -38,7 +38,7 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.row {
 		display: grid;
@@ -52,7 +52,7 @@
 	.figures {
 		font-size: var(--text-sm);
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.pct {
 		color: var(--fg3);
@@ -61,12 +61,12 @@
 		grid-column: 1 / -1;
 		height: 6px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.bar {
 		height: 100%;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 	}
 	.total {
 		display: flex;

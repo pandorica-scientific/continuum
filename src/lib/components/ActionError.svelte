@@ -13,7 +13,7 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 9px 12px;
 		font-size: var(--text-md);
 	}

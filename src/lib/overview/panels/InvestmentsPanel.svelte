@@ -43,12 +43,12 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.headline {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.value {
 		font-size: var(--text-2xl);
@@ -61,7 +61,7 @@
 	.rows {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.row {
 		display: flex;

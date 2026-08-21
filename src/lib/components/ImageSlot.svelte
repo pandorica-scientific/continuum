@@ -201,12 +201,12 @@
 		top: 6px;
 		right: 6px;
 		display: flex;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	.slot-action {
 		min-width: 26px;
 		height: 26px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--bd2);
 		background: var(--plate);
 		color: var(--fg1);
