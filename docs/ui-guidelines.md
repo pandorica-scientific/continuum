@@ -111,6 +111,14 @@ Three levels per hue, not interchangeable:
 Inter variable for text, Source Code Pro for figures — **both self-hosted**, imported in
 `src/routes/+layout.svelte`. Body base 16px / 1.55.
 
+**Sizes come from the ramp, never from a number you picked.** `--text-2xs` 10 · `--text-xs`
+11 · `--text-sm` 12 · `--text-md` 13 · `--text-lg` 14 · `--text-xl` 16 · `--text-2xl` 19 ·
+`--text-3xl` 22 · `--text-4xl` 28. The table below is what each role resolves to; where it
+still shows a half-pixel value, the code has since been snapped to the nearest step. There
+used to be twenty-two distinct sizes, four of them within a pixel of each other in 267
+declarations — which is what "the app uses different fonts in different places" actually
+looks like. Add a step here rather than a one-off px value in a component.
+
 | Role                      | Size      | Weight           | Notes                                       |
 | ------------------------- | --------- | ---------------- | ------------------------------------------- |
 | Screen title `h1`         | 28px      | 600              | `letter-spacing: -0.02em`, emoji-prefixed   |
@@ -130,6 +138,17 @@ opacity.
 ---
 
 ## Space, radius, border
+
+**Radius and gap come from the scale**: `--radius-xs/sm/md/lg/xl/2xl/pill` (4 · 6 · 8 · 10 ·
+12 · 16 · 999) and `--space-1…8` (2 · 4 · 6 · 8 · 10 · 12 · 14 · 16). `design/no-raw-geometry`
+fails the build on a raw px value for `border-radius` or any `gap` **when the scale already
+names that number** — the escape hatch is `/* geometry-exempt: why */`, deliberate and
+greppable. Padding is deliberately not policed: 51 distinct pairs, dominated by odd
+horizontal values, so a scale there would be a restyle rather than a description.
+
+**One control height.** `--control-h` (36px) is the floor for every input, select, textarea
+and `.btn`, applied in `app.css`. A row of controls agrees without any of them being told
+about the others.
 
 - Main content padding `26px 32px 60px`; gap between sections `26px`.
 - Sidebar `252px` (`src/routes/(app)/+layout.svelte:213`).
@@ -193,10 +212,18 @@ Runes mode is forced project-wide.
 - `style:prop={...}` for genuinely dynamic values (a hue), not for layout.
 
 Base control styling for `input`, `select` and `textarea` already lives in `app.css` —
-border, background, colour, radius, padding, font-size. **Do not restate those six
-properties**; that duplication caused drift across two screens in a day.
-`input[type='file']::file-selector-button` is styled there too, because the browser draws
-that button and it inherits nothing.
+border, background, colour, radius, padding, font-size, **line-height and `min-height`**.
+**Do not restate any of them**; that duplication caused drift across two screens in a day,
+and restating the padding is what made one dialog's file field half again as tall as the
+select beside it. The last two are what make a row line up at all: left to the browser, a
+text input, a select and a textarea of the same nominal size come out at three different
+heights. `input[type='file']` and its `::file-selector-button` are styled there too —
+the browser draws that button, it inherits nothing, and its intrinsic height is what a
+file field takes unless the stylesheet puts it inside `--control-h`.
+
+A control that is deliberately smaller — an inline toggle inside a sentence, a compact save
+on a list row — says `min-height: auto` for itself. That is the opt-out, and it should be
+rare enough to notice.
 
 ---
 
@@ -228,6 +255,10 @@ don't rediscover them.
   wider without `scrollbar-gutter: stable`, and anything anchored right moves.
 - **A light grey chip inside a dark card** on four upload forms — the file input's
   browser-drawn button inherits nothing.
+- **A row of fields at four different heights** — 42px file field, 36px selects, 34px text
+  inputs, 32px button, and the row `align-items: end`, so the tallest rode _up_ rather than
+  sitting lower. Every one of them looked individually fine; only side by side does it read
+  as "a few pixels too high".
 - **A lone sub-tab pill** — an area with one screen renders no tab row. A single pill is a
   label pretending to be a choice.
 - **A wrapping tab row** shifting content down by a variable amount — the Money area's seven

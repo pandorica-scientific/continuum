@@ -50,7 +50,13 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   that stays inside the figures until confirmed. Pairing takes a
   transaction-scoped advisory lock before transaction rows, and
   `transfer_pair_leg` gives each active leg one owner. Confirmed, filed or split
-  movements are human-owned and automatic replay cannot overwrite them.
+  movements are human-owned and automatic replay cannot overwrite them. A
+  one-sided transfer — money sent to an own account whose statements are never
+  imported — has no counterpart to pair with, so it is a person's assertion
+  (`transaction.transfer_to_account_id`) rather than evidence. Both kinds are
+  excluded from income and spending by one condition, `notOwnTransfer()`, applied
+  at seven call sites; a site checking only one of them counts a transfer as
+  spending.
 - **Loans**: interest is booked per fixation period; rate, payment, day-count
   convention and accrual style are per-loan data, verified to the haléř
   against real Česká spořitelna statements.
@@ -111,6 +117,35 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   drops below it after a single correction; a unit test pins that pair so
   tuning either number cannot silently stop rules from filing. Only an explicit
   confirmation counts as acceptance — silence is not consent.
+- **The category tree is data**: groups and categories are rows a household
+  owns, keyed by a slug derived once at creation and never rewritten when a
+  label is edited — rules and history point at the key, so renaming is free.
+  Deleting is not: a category with dependants requires an explicit `reassignTo`,
+  and transactions, split lines, suggestions and rules move to it inside one
+  transaction rather than being orphaned. A catch-all sorts last in every
+  ordering by definition, so it carries no sort position to disagree with.
+  Every screen reads the groups from the database; nothing enumerates them in
+  code.
+- **Salary is one row per person per month**: a payslip states gross, a bank
+  credit states net, and `salary_entry` carries both so neither has to win and a
+  month evidenced twice is one row rather than two competing figures. Whichever
+  arrives second fills the column the first left empty. A figure a person typed
+  is flagged `overridden` and no later automatic reading overwrites it, which is
+  what makes a derived entry editable at all. `salary_attribution` maps a
+  counterparty key to the person it pays, by prefix with a minimum key length so
+  one attribution cannot become a wildcard.
+- **A property's value is a series**: `property_valuation` holds every reading
+  with its date and source, and `property.value_minor` keeps meaning "the most
+  recent" — every existing reader (net worth, the tiles, appreciation) is
+  unchanged, and a valuation dated in the past therefore does not move today's
+  figure. `property_opening` records what it cost to buy, so money-in is computed
+  rather than reconstructed from transactions that predate the ledger.
+- **Tax on realised gains is an estimate, and configured**: the rate is a
+  setting and the holding-period exemption is a switch that is off unless a
+  household turns it on. The three-year Czech time test is a fact about one
+  country, not about investing, so it is data rather than arithmetic. The figure
+  knows nothing about losses carried forward, other income or anything held
+  outside this instance, and the screen says so.
 - **No starter rules**: an install begins with the category taxonomy and
   nothing else. Every rule is earned from a correction someone made, which is
   what the confidence score claims to measure. The 42 curated Czech/Polish

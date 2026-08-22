@@ -5,7 +5,7 @@
 
 import { env } from '$env/dynamic/private';
 
-export function isSecureOrigin(origin: string): boolean {
+function isSecureOrigin(origin: string): boolean {
 	let url: URL;
 	try {
 		url = new URL(origin);

@@ -26,6 +26,35 @@ search), so `.local` or your router's suffix is the practical spelling.
 
 `ORIGIN` stays optional and governs only passkeys — see below.
 
+## One browser cannot reach it and another can
+
+Reported on a Mac where Safari opened `http://continuum.local` and the LAN IP and
+Chrome opened neither. Nothing in Continuum treats one browser differently, and a
+server that answers Safari is answering — so what differs is on the browser side.
+The error Chrome prints is the whole diagnosis; check these in order.
+
+- **"Always use secure connections" (HTTPS-First).** Chrome silently rewrites a
+  typed `http://` address to `https://`, and nothing here listens on 443 — so both
+  the name and the raw IP fail while Safari, which does not upgrade, works.
+  `chrome://settings/security` → turn it off, or add an exception for the host.
+  The tell is an address bar that shows `https://` after you typed `http://`, or an
+  error naming SSL — `ERR_SSL_PROTOCOL_ERROR`, `ERR_CONNECTION_REFUSED` on 443.
+- **A pinned HSTS entry**, if that browser once reached the machine over HTTPS —
+  through the Tailscale name, a reverse proxy, or an earlier experiment. It applies
+  per hostname and outlives the certificate. Check and clear it at
+  `chrome://net-internals/#hsts`.
+- **Secure DNS (DNS-over-HTTPS).** A public resolver cannot answer for `.local`,
+  which is mDNS on the local link, so the name fails and the raw IP still works.
+  `chrome://settings/security` → Use secure DNS. This one explains a failing name
+  only; if the IP fails too, it is not this.
+- **An extension, VPN or proxy that blocks private address ranges.** Try an
+  Incognito window with extensions disabled, then the same address in a new
+  profile. A managed work profile can carry a policy the rest of the system does
+  not see — `chrome://policy` lists what is being enforced.
+
+None of these are things a self-hosted app can fix from the server: an HTTPS
+upgrade never reaches it, and a blocked request never leaves the machine.
+
 ## Passkeys and Tailscale
 
 Continuum supports **passkeys** — Face ID, Touch ID, Windows Hello — alongside

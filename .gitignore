@@ -4,6 +4,9 @@ bank_data_examples_do_not_share/
 # Local scratch work
 scratch-workspace/
 
+# Local agent settings
+.claude/
+
 # Uploaded user files (statements, photos, documents) — live on the data volume
 data/
 

@@ -69,12 +69,29 @@ export default defineConfig({
 		// person now existed and the retirement screen said "Tomáš Dvořák" where
 		// the snapshot said "Person two". A baseline that is only valid for one
 		// way of invoking the suite is not a baseline.
-		{
-			name: 'visual',
-			use: { viewport: { width: 1440, height: 900 } },
-			testMatch: /visual-baseline/,
-			dependencies: ['polish', 'board']
-		},
+		// Baselines are captured per platform — `…-darwin.png` — because the same
+		// page does not rasterise identically on two operating systems: hinting,
+		// subpixel positioning and emoji come from the system, not from the app.
+		// Committing them is what makes the guard a guard; a baseline written on
+		// the spot always matches whatever was drawn.
+		//
+		// There are no Linux baselines, and generating a second set that has to be
+		// regenerated in a container on every UI change costs more than it buys:
+		// the guard exists to catch a geometry sweep changing the look, and it
+		// catches that on the machine the sweep is written on. So the project is
+		// only registered where its baselines exist. On CI the fourteen tests
+		// would otherwise fail as "snapshot doesn't exist", which reads as a
+		// broken build rather than a missing platform.
+		...(process.platform === 'darwin'
+			? [
+					{
+						name: 'visual',
+						use: { viewport: { width: 1440, height: 900 } },
+						testMatch: /visual-baseline/,
+						dependencies: ['polish', 'board']
+					}
+				]
+			: []),
 		// Narrow widths. These now cover the signed-in screens too, not just the
 		// login page: a field whose label was cut off before it finished on a small
 		// screen is exactly the kind of defect only a narrow viewport finds, and

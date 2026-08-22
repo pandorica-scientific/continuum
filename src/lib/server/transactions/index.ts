@@ -24,18 +24,9 @@ import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';
 import { attributeSalary, recordSalary, rememberAttribution } from '$lib/server/salary';
-import { DEFAULT_PAGE_SIZE, UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
+import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 import type { EnumValue } from '$lib/enums';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
-
-/**
- * Rows per page when nothing asks for another size.
- *
- * Re-exported rather than declared: the register offers 10, 25 and 50 from the
- * URL, and the set of legal sizes belongs with the code that parses that URL.
- * Two constants would be one constant and a copy of it waiting to disagree.
- */
-export const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /** Text the search box matches against — what a person actually remembers. */
 function searchable(term: string): SQL {

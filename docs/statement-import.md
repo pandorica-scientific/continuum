@@ -211,6 +211,17 @@ by position would instead shift every role one to the right and read plausibly.
 
 ---
 
+## The file itself
+
+Every accepted statement is **filed in Documents**, on its own Statements shelf,
+tagged with the bank, the account and the year, and linked to the import that read
+it. The original file was always kept on the data volume — a parser change
+re-reads history rather than asking for seven years of exports again — but until
+this release nothing surfaced it, so the only way to look at the PDF a figure came
+from was through the filesystem.
+
+---
+
 ## Provenance
 
 Every filed row records **how it was read** and **how strongly it was proven**;
