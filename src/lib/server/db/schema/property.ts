@@ -63,6 +63,68 @@ export const property = pgTable(
 	]
 );
 
+/**
+ * What a property has been worth, over time.
+ *
+ * `property.value_minor` is a single number, so a flat could say what it is
+ * worth today and nothing about how it got there — no line to plot, and no way
+ * to enter what it was worth when it was bought. This is the series; the column
+ * stays as the latest of these, so every existing reader keeps working.
+ */
+export const propertyValuation = pgTable(
+	'property_valuation',
+	{
+		id: uuid('id').primaryKey(),
+		propertyId: uuid('property_id')
+			.notNull()
+			.references(() => property.id, { onDelete: 'cascade' }),
+		valuedOn: date('valued_on').notNull(),
+		valueMinor: bigint('value_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency')
+			.notNull()
+			.references(() => currency.code),
+		/** purchase | estimate | appraisal | index — where the figure came from. */
+		source: text('source').notNull().default('estimate'),
+		note: text('note').notNull().default('')
+	},
+	(table) => [
+		index('property_valuation_property_idx').on(table.propertyId, table.valuedOn),
+		index('property_valuation_currency_idx').on(table.currency)
+	]
+);
+
+/**
+ * The position a property was in when it was bought.
+ *
+ * Adding a flat owned for years meant reconstructing money-in from transactions
+ * that predate the ledger — so it was typed as one number or left wrong. This
+ * records what was actually paid, once, and money-in is computed from it.
+ */
+export const propertyOpening = pgTable(
+	'property_opening',
+	{
+		propertyId: uuid('property_id')
+			.primaryKey()
+			.references(() => property.id, { onDelete: 'cascade' }),
+		purchasedOn: date('purchased_on'),
+		priceMinor: bigint('price_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		/** Fees, transfer tax, legal — what buying it cost beyond the price. */
+		costsMinor: bigint('costs_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		depositMinor: bigint('deposit_minor', { mode: 'bigint' })
+			.notNull()
+			.default(sql`0`),
+		currency: text('currency')
+			.notNull()
+			.default('CZK')
+			.references(() => currency.code)
+	},
+	(table) => [index('property_opening_currency_idx').on(table.currency)]
+);
+
 export const tenancy = pgTable(
 	'tenancy',
 	{

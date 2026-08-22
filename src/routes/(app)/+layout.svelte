@@ -112,16 +112,13 @@
 	{/if}
 
 	<main>
-		<!-- Open mode is instance-wide and invisible from inside once you are in, so
-		     it says so on every screen rather than only in Settings. Outside the
-		     rate-warning block on purpose: the two are unrelated, and nesting it
-		     there meant it only appeared when a rate happened to be missing too. -->
-		{#if data.openMode}
-			<p class="open-banner" role="status">
-				This instance is open — anyone who can reach it can sign in as anyone.
-				<a href="/settings">Close it</a>
-			</p>
-		{/if}
+		<!-- The open-instance banner used to live here, on every screen. It now
+		     appears in Settings, where it can be acted on, and on the SIGN-IN page,
+		     which is where somebody who did not expect an open instance actually
+		     meets it — before they are inside.
+		     The trade is deliberate and worth naming: somebody who did not turn it
+		     on will not be reminded unless they visit Settings. Against that, a
+		     warning on every screen forever is one nobody reads. -->
 		{#if showRateWarning}
 			<!-- The FACT stays on screen: a figure being approximate is exactly the
 			     kind of thing that must not hide behind an icon. Only the reason
@@ -221,20 +218,6 @@
 </div>
 
 <style>
-	.open-banner {
-		margin: 0 0 12px;
-		padding: 9px 14px;
-		border: 1px solid var(--yellow);
-		background: var(--yellow-wash);
-		border-radius: var(--radius-lg);
-		font-size: var(--text-sm);
-		color: var(--fg1);
-	}
-	.open-banner a {
-		color: inherit;
-		text-decoration: underline;
-	}
-
 	.shell {
 		display: grid;
 		grid-template-columns: 252px minmax(0, 1fr);

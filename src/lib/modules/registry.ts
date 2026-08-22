@@ -90,6 +90,10 @@ interface Area {
  * Home and Calendar are separate rows rather than one Household area, so the
  * calendar is one click away rather than two. Retirement stands alone because
  * it answers a different question from the rest of Assets.
+ *
+ * Documents is its own row, after Calendar. It shared an "Admin" row with
+ * Settings, which put paperwork somebody looks at often behind the same click
+ * as configuration somebody looks at rarely.
  */
 export const AREAS: Area[] = [
 	{
@@ -156,16 +160,26 @@ export const AREAS: Area[] = [
 		]
 	},
 	{
-		key: 'admin',
-		label: 'Admin',
+		key: 'documents',
+		label: 'Documents',
 		icon: 'folders',
 		hue: 'fg3',
-		screens: [
-			{ path: '/documents', label: 'Documents', icon: 'folders', module: 'documents' },
-			{ path: '/settings', label: 'Settings', icon: 'gear' }
-		]
+		screens: [{ path: '/documents', label: 'Documents', icon: 'folders', module: 'documents' }]
 	}
 ];
+
+/**
+ * Settings is reached from the gear beside the wordmark, not from the sidebar.
+ *
+ * It used to share an "Admin" row with Documents, which put filed paperwork —
+ * something looked at often — behind the same click as the instance's
+ * configuration, something looked at rarely. Documents is its own row now, and
+ * Settings is chrome.
+ *
+ * `/settings` therefore belongs to no area, which `areaForPath` returns
+ * undefined for. That is not an oversight and the navigation must tolerate it.
+ */
+export const SETTINGS_PATH = '/settings';
 
 export const DEFAULT_MODULES: ModuleToggles = Object.fromEntries(
 	MODULE_KEYS.map((key) => [key, true])

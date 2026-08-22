@@ -40,6 +40,26 @@
 	);
 
 	const amount = (value: number) => formatMinor(fromMajor(value, currency), currency);
+
+	/**
+	 * What the pointer is over, and where to say it.
+	 *
+	 * A label is drawn permanently only where the band has room for one. The rest
+	 * are reachable by hovering, which is what lets a crowded diagram stay
+	 * readable without hiding what it holds. The breakdown strip beneath the chart
+	 * stays for touch, where there is no hover at all.
+	 */
+	let hovered = $state<{ label: string; value: number; x: number; y: number } | null>(null);
+
+	function show(event: PointerEvent, label: string, value: number) {
+		const box = element(event)?.getBoundingClientRect();
+		const host = box && element(event)?.closest('.sankey')?.getBoundingClientRect();
+		if (!box || !host) return;
+		hovered = { label, value, x: box.left - host.left + box.width / 2, y: box.top - host.top };
+	}
+
+	const element = (event: PointerEvent) =>
+		event.currentTarget instanceof Element ? event.currentTarget : null;
 </script>
 
 <div class="sankey" bind:this={box} style:height="{height}px">
@@ -56,10 +76,18 @@
 					height={node.h}
 					rx="2"
 					fill="var({node.colorVar})"
+					class="node"
+					role="img"
+					aria-label="{node.label}: {amount(node.value)}"
+					onpointerenter={(e) => show(e, node.label, node.value)}
+					onpointerleave={() => (hovered = null)}
 				/>
 			{/each}
 		</svg>
-		{#each layout.labels as label (label.key)}
+		<!-- Only where there is room. The rest are on hover, and every one of them
+		     is in the breakdown strip beneath the chart regardless — which is what
+		     a touch device reads instead. -->
+		{#each layout.labels.filter((l) => l.fits) as label (label.key)}
 			<div
 				class="label {label.anchor}"
 				style:left="{label.x}px"
@@ -70,6 +98,12 @@
 				<span class="value mono">{amount(label.value)}</span>
 			</div>
 		{/each}
+		{#if hovered}
+			<div class="tip" style:left="{hovered.x}px" style:top="{hovered.y}px" role="status">
+				<span class="name">{hovered.label}</span>
+				<span class="value mono">{amount(hovered.value)}</span>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -80,6 +114,26 @@
 	}
 	svg {
 		display: block;
+	}
+	.node {
+		cursor: default;
+	}
+	/* Above the plate a label uses, because it is answering a question somebody
+	   is asking right now. */
+	.tip {
+		position: absolute;
+		z-index: 2;
+		transform: translate(-50%, calc(-100% - 6px));
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		pointer-events: none;
+		white-space: nowrap;
+		background: var(--bg2);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-sm);
+		padding: var(--space-2) var(--space-4);
+		box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
 	}
 	/* Labels sit outside their node, name over value, as a printed Sankey does.
 	   Absolutely positioned in the same pixel space as the diagram, so they are
@@ -103,8 +157,11 @@
 		transform: translateX(-100%);
 		align-items: flex-end;
 	}
+	/* Centred on its node rather than starting at it: a middle column has ribbons
+	   on both sides, so the label sits above the band it names. */
 	.label.middle {
-		align-items: flex-start;
+		align-items: center;
+		transform: translateX(-50%);
 	}
 	.name {
 		font-size: var(--text-sm);

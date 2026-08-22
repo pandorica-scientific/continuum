@@ -350,21 +350,24 @@ test.describe('open mode', () => {
 		await page.locator('.open-form input[name=password]').fill('correct-horse-battery');
 		await page.getByRole('button', { name: 'Open the instance' }).click();
 
-		// Said on every screen, not just this one.
-		await expect(page.locator('.open-banner')).toBeVisible();
+		// Said in Settings, where it can be acted on — and NOT on every screen.
+		// A warning that never leaves is one nobody reads; the trade is that
+		// somebody who did not turn it on meets it on the sign-in page instead,
+		// before they are inside.
+		await expect(page.locator('.open-mode.on')).toBeVisible();
 		await page.goto('/overview');
-		await expect(page.locator('.open-banner')).toBeVisible();
+		await expect(page.locator('.open-mode')).toHaveCount(0);
 	});
 
 	test('the wrong password does not open it', async ({ page }) => {
 		await page.goto('/settings');
 		// Already open from the test above, so close it first to test the guard.
 		await page.getByRole('button', { name: 'Close it' }).click();
-		await expect(page.locator('.open-banner')).toHaveCount(0);
+		await expect(page.locator('.open-mode.on')).toHaveCount(0);
 
 		await page.locator('.open-form input[name=password]').fill('not-the-password');
 		await page.getByRole('button', { name: 'Open the instance' }).click();
-		await expect(page.locator('.open-banner')).toHaveCount(0);
+		await expect(page.locator('.open-mode.on')).toHaveCount(0);
 	});
 
 	test('with it on, signing in asks for nothing', async ({ browser }) => {
@@ -373,7 +376,7 @@ test.describe('open mode', () => {
 		await adminPage.goto('/settings');
 		await adminPage.locator('.open-form input[name=password]').fill('correct-horse-battery');
 		await adminPage.getByRole('button', { name: 'Open the instance' }).click();
-		await expect(adminPage.locator('.open-banner')).toBeVisible();
+		await expect(adminPage.locator('.open-mode.on')).toBeVisible();
 
 		// A browser that has never seen this instance.
 		// EMPTY storage state, explicitly. `browser.newContext()` inherits the
@@ -395,7 +398,7 @@ test.describe('open mode', () => {
 		// intact — turning it off is a restoration, not a repair.
 		await adminPage.goto('/settings');
 		await adminPage.getByRole('button', { name: 'Close it' }).click();
-		await expect(adminPage.locator('.open-banner')).toHaveCount(0);
+		await expect(adminPage.locator('.open-mode.on')).toHaveCount(0);
 
 		const after = await browser.newContext({ storageState: { cookies: [], origins: [] } });
 		const afterPage = await after.newPage();

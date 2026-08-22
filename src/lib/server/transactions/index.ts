@@ -23,6 +23,7 @@ import {
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';
+import { attributeSalary, recordSalary, rememberAttribution } from '$lib/server/salary';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
@@ -330,10 +331,31 @@ type FileResult = { ok: true } | { ok: false; status: number; message: string };
  * correction made in the register carries the same weight as one made in the
  * review queue.
  */
+/**
+ * Whether filing into this category means "this is somebody's pay".
+ *
+ * Matched on the seeded id rather than the label, so renaming "Salary" to
+ * "Wages" keeps working — and on the id alone rather than the income ROLE,
+ * because rent received and dividends are income too and are nobody's salary.
+ */
+async function isSalaryCategory(categoryId: string, handle: Queryable): Promise<boolean> {
+	if (categoryId === 'salary') return true;
+	const [row] = await handle.select().from(category).where(eq(category.id, categoryId));
+	return row?.id === 'salary';
+}
+
 export async function fileTransaction(
 	id: string,
 	categoryId: string,
-	handle: Db = db
+	handle: Db = db,
+	/**
+	 * Whose salary this is, when the screen has just asked.
+	 *
+	 * Only read when the category is a salary one and the account is joint. An
+	 * account with an owner answers the question itself, and asking anyway would
+	 * be a question with one possible answer.
+	 */
+	salaryFor?: { personId: string; remember?: boolean }
 ): Promise<FileResult> {
 	if (!id || !categoryId)
 		return { ok: false, status: 400, message: 'Missing transaction or category.' };
@@ -389,6 +411,49 @@ export async function fileTransaction(
 		// own neighbourhood — and reading the whole unpaired ledger under row
 		// locks made one click of "File" wait on it.
 		await pairAndCategorise(tx, pairingWindowAround([row.bookedOn]));
+
+		// Money in, filed as salary, is salary history — the ledger already knew
+		// it and the salary screen could not see it. Recorded as NET, because a
+		// bank credit is what arrived after tax; a payslip fills the gross column
+		// of the same month.
+		if (row.amountMinor > 0n && (await isSalaryCategory(categoryId, tx))) {
+			const [acct] = await tx.select().from(account).where(eq(account.id, row.accountId));
+			const whose =
+				salaryFor?.personId ??
+				(
+					await attributeSalary(
+						{
+							accountOwnerPersonId: acct?.ownerPersonId ?? null,
+							counterparty: row.counterparty,
+							accountId: row.accountId
+						},
+						tx as unknown as Db
+					)
+				).personId;
+
+			if (whose) {
+				await recordSalary(
+					{
+						personId: whose,
+						periodMonth: row.bookedOn.slice(0, 7),
+						currency: row.currency,
+						netMinor: row.amountMinor,
+						source: 'statement',
+						transactionId: row.id
+					},
+					tx as unknown as Db
+				);
+				if (salaryFor?.remember && row.counterparty) {
+					await rememberAttribution(
+						{ matchKey: row.counterparty, personId: whose, accountId: row.accountId },
+						tx as unknown as Db
+					);
+				}
+			}
+			// Nobody to attribute it to leaves the money filed and the salary
+			// unrecorded, which is the honest outcome: guessing whose pay it is
+			// would corrupt two retirement projections rather than one.
+		}
 		return { ok: true };
 	});
 }

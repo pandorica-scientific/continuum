@@ -395,6 +395,23 @@
 							value={r.suggestedCategoryId}
 							onpick={(id) => (chosen[r.id] = id)}
 						/>
+						<!-- The one category that needs a second answer, and only when the
+						     account cannot give it: money into a JOINT account filed as
+						     salary belongs to somebody, and nothing here knows who. An
+						     account with an owner is never asked. -->
+						{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
+							<label class="whose">
+								<span>Whose?</span>
+								<select name="salaryPersonId" required>
+									<option value="" disabled selected>Pick a person</option>
+									{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+								</select>
+							</label>
+							<label class="whose remember">
+								<input type="checkbox" name="rememberWhose" checked />
+								<span>Remember for “{r.merchant}”</span>
+							</label>
+						{/if}
 						<!-- Disabled until something is chosen: the placeholder posts an empty
 						     category, which the action rejects with a message that used to have
 						     nowhere to appear. The row read as an unresponsive button. -->
@@ -508,6 +525,17 @@
 {/if}
 
 <style>
+	.whose {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.whose.remember {
+		color: var(--fg3);
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);

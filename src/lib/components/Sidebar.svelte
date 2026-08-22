@@ -4,7 +4,12 @@
 	import { page } from '$app/state';
 	import BrandMark from './BrandMark.svelte';
 	import Icon from './Icon.svelte';
-	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
+	import {
+		areaForPath,
+		SETTINGS_PATH,
+		visibleAreas,
+		type ModuleToggles
+	} from '$lib/modules/registry';
 	import type { Theme } from '$lib/theme';
 
 	interface Props {
@@ -71,6 +76,12 @@
 
 	// The Import badge counts transactions awaiting review. Import is a screen
 	// inside Money now, so the count surfaces on the area that holds it.
+	// /settings belongs to no area now, so nothing in the nav lights up for it —
+	// the gear does instead.
+	const onSettings = $derived(
+		page.url.pathname === SETTINGS_PATH || page.url.pathname.startsWith(SETTINGS_PATH + '/')
+	);
+
 	const badgeArea = $derived(
 		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key
 	);
@@ -80,6 +91,20 @@
 	<div class="brand">
 		<BrandMark size={22} />
 		<span class="wordmark">Continuum</span>
+		<!-- Settings lives here rather than in the navigation. It used to share an
+		     "Admin" row with Documents, which put configuration somebody opens
+		     rarely behind the same click as paperwork somebody opens often. A gear
+		     beside the wordmark is where chrome belongs. -->
+		<a
+			class="settings"
+			href={SETTINGS_PATH}
+			aria-label="Settings"
+			aria-current={onSettings ? 'page' : undefined}
+			class:active={onSettings}
+			onclick={onNavigate}
+		>
+			<Icon name="gear" size={16} />
+		</a>
 	</div>
 
 	{#if netWorth !== null}
@@ -146,6 +171,21 @@
 </aside>
 
 <style>
+	.settings {
+		margin-left: auto;
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border-radius: var(--radius-sm);
+		color: var(--fg3);
+	}
+	.settings:hover,
+	.settings.active {
+		color: var(--fg1);
+		background: var(--card2);
+	}
+
 	aside {
 		background: var(--side);
 		border-right: 1px solid var(--bd);

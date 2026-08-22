@@ -2,6 +2,7 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
@@ -49,6 +50,14 @@
 			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
 		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))];
+		// A rule where each year begins, so the labels beneath the plot have
+		// something to point at. Drawn at the FIRST month of each year rather than
+		// spaced evenly: the series can start mid-year, and an evenly spaced rule
+		// would sit wherever it liked and quietly mislead.
+		const yearLines = years
+			.map((year) => data.series.findIndex((p) => p.month.slice(0, 4) === year))
+			.filter((index) => index > 0)
+			.map((index) => x(index));
 		// One unit for the whole axis: millions when the top gridline reaches
 		// them, thousands otherwise.
 		const inMillions = max >= 1e6;
@@ -65,6 +74,7 @@
 			actual: line((p) => p.actual),
 			actualPoints,
 			years,
+			yearLines,
 			axis
 		};
 	});
@@ -121,7 +131,78 @@
 			value={data.metrics.annualised ?? '—'}
 			note="nominal, on money in"
 		/>
+		<!-- An estimate, and it says so. It knows nothing about losses carried
+		     forward from earlier years, other income, allowances, or anything held
+		     outside this instance. The rate is configured below rather than
+		     assumed: it differs by country. -->
+		<MetricTile
+			label="Tax on {data.tax.year} gains"
+			value={data.tax.configured ? data.tax.estimated : '—'}
+			unit={data.tax.configured ? data.accountUnit : undefined}
+			note={data.tax.configured
+				? `estimate · ${data.tax.ratePct}% of ${data.tax.taxable}`
+				: 'set a rate below'}
+		/>
 	</div>
+
+	{#if data.tax.configured && data.tax.disposals > 0}
+		<div class="card tax-detail">
+			<Eyebrow emoji="🧾" label="How that is worked out" />
+			<dl class="tax-lines">
+				<dt>Realised in {data.tax.year}</dt>
+				<dd class="mono" style:color={data.tax.realisedPositive ? 'var(--green)' : 'var(--red)'}>
+					{data.tax.realised}
+				</dd>
+				<dt>from {data.tax.disposals} {data.tax.disposals === 1 ? 'disposal' : 'disposals'}</dt>
+				<dd></dd>
+				{#if data.tax.exemptLongHeld}
+					<dt>
+						Exempt — held {data.tax.exemptAfterYears}+ years ({data.tax.exemptDisposals})
+					</dt>
+					<dd class="mono">−{data.tax.exempt}</dd>
+				{/if}
+				<dt class="total">Taxable</dt>
+				<dd class="mono total">{data.tax.taxable}</dd>
+				<dt class="total">At {data.tax.ratePct}%</dt>
+				<dd class="mono total">{data.tax.estimated}</dd>
+			</dl>
+			<p class="quiet">
+				An estimate from what your broker reported, nothing more. Losses carried forward from
+				earlier years, other income and allowances are not in it.
+			</p>
+		</div>
+	{/if}
+
+	<form method="POST" action="?/setTax" use:enhance class="card tax-form">
+		<Eyebrow emoji="⚖️" label="How gains are taxed here" />
+		<div class="tax-fields">
+			<label class="field">
+				<span>Rate on realised gains</span>
+				<input name="ratePct" inputmode="decimal" value={data.tax.ratePct || ''} placeholder="15" />
+			</label>
+			<label class="toggle">
+				<input type="checkbox" name="exemptLongHeld" checked={data.tax.exemptLongHeld} />
+				<span>Exempt what was held a long time</span>
+			</label>
+			<label class="field">
+				<span>Exempt after (years)</span>
+				<input
+					name="exemptAfterYears"
+					inputmode="numeric"
+					value={data.tax.exemptAfterYears}
+					disabled={!data.tax.exemptLongHeld}
+				/>
+			</label>
+			<button type="submit" class="btn btn-primary">Save</button>
+		</div>
+		<!-- Off unless switched on, because a holding-period exemption is a fact
+		     about one country. The Czech time test is three years; somewhere else
+		     it is a different number, or nothing at all. -->
+		<p class="quiet">
+			Both are yours to set. The exemption matches the Czech three-year time test when you turn it
+			on, and is off by default because it applies nowhere else.
+		</p>
+	</form>
 </section>
 
 {#if chart}
@@ -139,6 +220,19 @@
 			<svg viewBox="0 0 800 200" preserveAspectRatio="none">
 				{#each [0, 50, 100, 150] as gy (gy)}
 					<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+				{/each}
+				<!-- Where each year begins. Structure rather than data, so it is drawn
+				     at the weight the horizontal gridlines already use. -->
+				{#each chart.yearLines as gx (gx)}
+					<line
+						x1={gx}
+						y1="0"
+						x2={gx}
+						y2="200"
+						stroke="var(--bd)"
+						stroke-width="1"
+						vector-effect="non-scaling-stroke"
+					/>
 				{/each}
 				<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
 				<polyline
@@ -267,6 +361,43 @@
 </div>
 
 <style>
+	.tax-detail {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.tax-lines {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: var(--space-3) var(--space-8);
+		margin: 0;
+		font-size: var(--text-md);
+	}
+	.tax-lines dt {
+		color: var(--fg3);
+	}
+	.tax-lines dd {
+		margin: 0;
+		text-align: right;
+	}
+	.tax-lines .total {
+		color: var(--fg1);
+		font-weight: 500;
+		border-top: 1px solid var(--bd);
+		padding-top: var(--space-3);
+	}
+	.tax-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.tax-fields {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-6);
+		flex-wrap: wrap;
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);
@@ -362,24 +493,30 @@
 		flex-direction: column;
 		gap: var(--space-8);
 	}
+	/* Chart on the left, legend on the right — the reported fault was a donut
+	   drawn at a fixed 148px in a card far wider than that, with its legend
+	   stacked underneath and most of the box empty. */
 	.donut-wrap {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		align-items: center;
-		gap: 18px;
+		gap: 22px;
+		flex-wrap: wrap;
 	}
 	.donut {
-		width: 148px;
-		height: 148px;
-		border-radius: 148px;
-		flex: 0 0 148px;
+		/* Sized from the box rather than pinned: it grows with the card and stops
+		   at a size beyond which a pie says nothing more. */
+		width: clamp(148px, 34%, 240px);
+		aspect-ratio: 1;
+		border-radius: 50%;
+		flex: 0 1 auto;
 		display: grid;
 		place-items: center;
 	}
 	.hole {
-		width: 88px;
-		height: 88px;
-		border-radius: 88px;
+		width: 58%;
+		aspect-ratio: 1;
+		border-radius: 50%;
 		background: var(--bg2);
 		display: grid;
 		place-items: center;

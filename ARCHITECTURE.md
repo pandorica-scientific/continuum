@@ -294,11 +294,16 @@ active. Everything downstream — the session cookie, `validateSession`,
   can name file paths and, in a query, real figures
 - `src/routes/api/v1/` — the read-only JSON API, bearer-token authed, versioned
   in the path so a v2 can exist beside it
-- `drizzle/` — one baseline migration holding the whole schema as of 0.3.10, plus
-  whatever has been added since; run automatically at boot. Additive-only from
-  that baseline. What drizzle-kit cannot generate — triggers, generated columns,
-  CHECKs, the `net_worth_component` view, seed rows — is written by hand in the
-  appendix at the foot of the file
+- `drizzle/` — ONE file, describing the schema as it is now rather than how it
+  got here, run automatically at boot. Continuum has no users, so there is
+  nothing to migrate from: a schema change is folded into the baseline and any
+  live instance is migrated by hand. `tests/integration/baseline-migration`
+  enforces that there is exactly one file, and is where that decision gets
+  revisited the day somebody else is running this. What drizzle-kit cannot
+  generate — triggers, generated columns, CHECKs, the `net_worth_component`
+  view, seed rows — is written by hand in the appendix at the foot of the file.
+  After editing it, run `drizzle-kit generate`, fold anything it proposes into
+  the baseline, and promote its snapshot so `meta/` still describes the schema
 - `docs/superpowers/` — the specs and implementation plans each feature was
   built from, including what was deliberately deferred
 - `tests/unit` — pure logic; `tests/acceptance` — real files, self-skipping;

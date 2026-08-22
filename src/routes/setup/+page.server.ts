@@ -38,9 +38,20 @@ export const actions: Actions = {
 		// was typed — losing a half-filled household to one bad password is its own
 		// bug. Passwords are deliberately absent: echoing one would write it into the
 		// response HTML, where the browser and any cache along the way can keep it.
+		// Asked for explicitly. Everyone who can reach the address is everyone on
+		// the instance, including the administrator — see auth/open-mode.ts, which
+		// records the consequence rather than mitigating it.
+		//
+		// Turning it on LATER requires an administrator to re-enter their password,
+		// because that is the last moment a password can prove intent. There is no
+		// password here yet and no instance to protect, so ticking the box IS the
+		// intent, and that is the whole difference.
+		const openMode = form.get('openMode') === 'on';
+
 		const entered = {
 			householdName,
 			baseCurrency,
+			openMode,
 			modules,
 			people: names.map((name, i) => ({ name, birthYear: birthYears[i] ?? '' }))
 		};
@@ -68,18 +79,24 @@ export const actions: Actions = {
 		const minLength = passwordMinLength();
 		const validated: { name: string; password: string; birthYear: number | null }[] = [];
 		for (const p of people) {
-			const passwordError = passwordLengthError(p.password, minLength, `${p.name}'s password`);
-			if (passwordError) return reject(400, passwordError);
-			// Asked twice because this is the only password on a fresh instance: a
-			// typo here locked the owner out of their own household immediately,
-			// with nothing to fall back on.
-			const mismatch = passwordsMatchError(p.password, p.confirmation, `${p.name}'s passwords`);
-			if (mismatch) return reject(400, mismatch);
+			// With no password protection there is nothing to validate: the fields
+			// are disabled on screen and whatever arrives is ignored. Passwords are
+			// never DELETED by open mode — there simply are none to store yet, and
+			// closing the instance later takes everyone through the normal path.
+			if (!openMode) {
+				const passwordError = passwordLengthError(p.password, minLength, `${p.name}'s password`);
+				if (passwordError) return reject(400, passwordError);
+				// Asked twice because this is the only password on a fresh instance: a
+				// typo here locked the owner out of their own household immediately,
+				// with nothing to fall back on.
+				const mismatch = passwordsMatchError(p.password, p.confirmation, `${p.name}'s passwords`);
+				if (mismatch) return reject(400, mismatch);
+			}
 			const birthYear = parseBirthYear(p.birthYear, now);
 			if (birthYear === 'invalid') {
 				return reject(400, `${p.name}: ${BIRTH_YEAR_ERROR.toLowerCase()}`);
 			}
-			validated.push({ name: p.name, password: p.password, birthYear });
+			validated.push({ name: p.name, password: openMode ? '' : p.password, birthYear });
 		}
 
 		const prepared = validated.map((p) => ({ ...p, id: uuidv7() }));
@@ -93,7 +110,11 @@ export const actions: Actions = {
 		const initialized = await runInitialSetup(db, async (tx) => {
 			const firstId = prepared[0].id;
 			for (const p of prepared) {
-				const hash = await hashPassword(p.password);
+				// No password, not an empty one. Hashing '' would store a credential
+				// that an empty form field could later satisfy — the opposite of what
+				// "this instance has no passwords yet" means. Closing the instance
+				// later takes everyone through the normal path of setting one.
+				const hash = openMode ? null : await hashPassword(p.password);
 				await tx.insert(person).values({
 					id: p.id,
 					name: p.name,
@@ -108,6 +129,7 @@ export const actions: Actions = {
 			await setSetting('householdName', householdName || people.map((p) => p.name).join(' & '), tx);
 			await setSetting('baseCurrency', baseCurrency, tx);
 			await setSetting('modules', modules, tx);
+			if (openMode) await setSetting('openMode', true, tx);
 			return firstId;
 		});
 		if (!initialized.claimed) {

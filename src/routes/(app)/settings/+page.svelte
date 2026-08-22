@@ -92,42 +92,98 @@
 	 * A catch-all is excluded from both: it is pinned last by its flag, so
 	 * letting it be picked up would promise a move the ordering will not honour.
 	 */
+	/**
+	 * Reordering the categories inside a group.
+	 *
+	 * POINTER events, not HTML5 drag-and-drop. The first version used `draggable`,
+	 * which does not fire on touch at all — so reordering worked on a desktop and
+	 * simply did nothing on a phone or tablet. Pointer events cover mouse, touch
+	 * and pen with one code path.
+	 *
+	 * The order also rearranges UNDER the finger rather than only on release. A
+	 * drag with no feedback until you let go is a guess, and the first version
+	 * made you take it.
+	 *
+	 * The arrow keys stay: they are how this is reachable without a pointer at
+	 * all, and for a single step they are quicker than dragging.
+	 */
 	let dragging = $state<{ group: string; id: string } | null>(null);
+	/** The order being shown while a drag is in flight, per group. */
+	let liveOrder = $state<Record<string, string[]>>({});
 
-	function movableIds(group: { items: { id: string; isCatchAll?: boolean }[] }): string[] {
+	type Leaf = { id: string; name: string; isCatchAll?: boolean };
+	type Group = { key: string; items: Leaf[] };
+
+	function movableIds(group: Group): string[] {
 		return group.items.filter((item) => !item.isCatchAll).map((item) => item.id);
+	}
+
+	/** What to render: the live order during a drag, the server's otherwise. */
+	function shownItems(group: Group): Leaf[] {
+		const order = liveOrder[group.key];
+		if (!order) return group.items;
+		const byId = new Map(group.items.map((item) => [item.id, item]));
+		const moved = order.map((id) => byId.get(id)).filter((item): item is Leaf => !!item);
+		// The catch-all is never in the order — it is pinned last by its flag.
+		return [...moved, ...group.items.filter((item) => item.isCatchAll)];
 	}
 
 	async function commitOrder(groupKey: string, order: string[]) {
 		await submitAction('?/reorderLeaves', formOf({ groupKey, order: order.join(',') }));
 	}
 
-	/** Put `id` where `target` currently is, and write the whole group's order. */
-	async function moveTo(
-		group: { key: string; items: { id: string; isCatchAll?: boolean }[] },
-		id: string,
-		targetId: string
-	) {
-		const ids = movableIds(group);
-		const from = ids.indexOf(id);
-		const to = ids.indexOf(targetId);
-		if (from < 0 || to < 0 || from === to) return;
-		ids.splice(to, 0, ...ids.splice(from, 1));
-		await commitOrder(group.key, ids);
-	}
-
 	/** One step left or right, for the keyboard. */
-	async function nudge(
-		group: { key: string; items: { id: string; isCatchAll?: boolean }[] },
-		id: string,
-		delta: number
-	) {
+	async function nudge(group: Group, id: string, delta: number) {
 		const ids = movableIds(group);
 		const from = ids.indexOf(id);
 		const to = from + delta;
 		if (from < 0 || to < 0 || to >= ids.length) return;
 		ids.splice(to, 0, ...ids.splice(from, 1));
 		await commitOrder(group.key, ids);
+	}
+
+	function startDrag(event: PointerEvent, group: Group, id: string) {
+		// Only a primary press, and never the delete button inside the chip.
+		if (!event.isPrimary) return;
+		event.preventDefault();
+		(event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+		dragging = { group: group.key, id };
+		liveOrder = { ...liveOrder, [group.key]: movableIds(group) };
+	}
+
+	/**
+	 * Rearrange under the finger.
+	 *
+	 * The chip beneath the pointer is found by hit-testing rather than by
+	 * listening on every chip: during a pointer capture every event goes to the
+	 * element that captured it, so the others never hear about it.
+	 */
+	function moveDrag(event: PointerEvent) {
+		if (!dragging) return;
+		const over = document
+			.elementFromPoint(event.clientX, event.clientY)
+			?.closest<HTMLElement>('[data-leaf]');
+		const targetId = over?.dataset.leaf;
+		if (!targetId || targetId === dragging.id) return;
+
+		const order = [...(liveOrder[dragging.group] ?? [])];
+		const from = order.indexOf(dragging.id);
+		const to = order.indexOf(targetId);
+		if (from < 0 || to < 0 || from === to) return;
+		order.splice(to, 0, ...order.splice(from, 1));
+		liveOrder = { ...liveOrder, [dragging.group]: order };
+	}
+
+	async function endDrag() {
+		if (!dragging) return;
+		const { group } = dragging;
+		const order = liveOrder[group];
+		dragging = null;
+		if (order) await commitOrder(group, order);
+		// Cleared after the save, so the chips do not jump back to the old order
+		// for the instant between letting go and the page reloading.
+		liveOrder = { ...liveOrder, [group]: undefined as unknown as string[] };
+		delete liveOrder[group];
 	}
 
 	async function askToDelete(leaf: { id: string; name: string }) {
@@ -755,7 +811,7 @@
 					</div>
 
 					<div class="tx-leaves">
-						{#each group.items as leaf (leaf.id)}
+						{#each shownItems(group) as leaf (leaf.id)}
 							{#if leaf.isCatchAll}
 								<!-- Pinned last by its flag, so it offers no grip and takes no
 								     focus: a chip that looks draggable and then refuses to move is
@@ -767,21 +823,10 @@
 								<span
 									class="tx-leaf"
 									class:dragging={dragging?.id === leaf.id}
-									draggable="true"
+									data-leaf={leaf.id}
 									role="button"
 									tabindex="0"
-									aria-label="{leaf.name} — use the arrow keys to move it"
-									ondragstart={() => (dragging = { group: group.key, id: leaf.id })}
-									ondragend={() => (dragging = null)}
-									ondragover={(e) => {
-										if (dragging && dragging.group === group.key) e.preventDefault();
-									}}
-									ondrop={(e) => {
-										e.preventDefault();
-										if (dragging && dragging.group === group.key)
-											moveTo(group, dragging.id, leaf.id);
-										dragging = null;
-									}}
+									aria-label="{leaf.name} — drag it, or use the arrow keys"
 									onkeydown={(e) => {
 										if (e.key === 'ArrowLeft') {
 											e.preventDefault();
@@ -792,7 +837,20 @@
 										}
 									}}
 								>
-									<span class="grip" aria-hidden="true">⠿</span>
+									<!-- The grip is the handle, not the whole chip: pressing anywhere
+									     on it would make the delete button inside impossible to hit on
+									     a touch screen. touch-action:none stops the browser scrolling
+									     the page instead of giving us the move. -->
+									<span
+										class="grip"
+										aria-hidden="true"
+										onpointerdown={(e) => startDrag(e, group, leaf.id)}
+										onpointermove={moveDrag}
+										onpointerup={endDrag}
+										onpointercancel={endDrag}
+									>
+										⠿
+									</span>
 									{@render chipBody(leaf)}
 								</span>
 							{/if}
@@ -932,12 +990,19 @@
 		cursor: grab;
 		font-size: var(--text-sm);
 		line-height: 1;
+		padding: 0 var(--space-1);
+		/* Without this the browser takes the gesture as a scroll and the chip never
+		   moves — which is exactly how the first version failed on a phone. */
+		touch-action: none;
 	}
-	.tx-leaf[draggable='true'] {
-		cursor: grab;
+	.tx-leaf .grip:active {
+		cursor: grabbing;
 	}
 	.tx-leaf.dragging {
-		opacity: 0.45;
+		/* Lifted rather than faded: it is being carried, and the chips around it
+		   are already rearranging to show where it will land. */
+		background: var(--card2);
+		box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
 	}
 	.tx-leaf:focus-visible {
 		outline: 2px solid var(--blue);

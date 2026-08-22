@@ -18,7 +18,8 @@ import {
 	propertyBill,
 	tagLink,
 	tag,
-	tenancy
+	tenancy,
+	propertyOpening
 } from '$lib/server/db/schema';
 import { SHELVES } from '$lib/documents';
 import { initialsFor } from '$lib/people';
@@ -38,6 +39,7 @@ import {
 import { updatePropertyTags } from '$lib/server/tags';
 import { periodForMonth } from '$lib/loans/amortise';
 import { displayCurrency, formatMinor, parseAmountToMinor, toMajorString } from '$lib/money';
+import { recordOpening, recordValuation, valuationHistory } from '$lib/server/property';
 import { propertyFinancials, sharesForLoan } from '$lib/property/finance';
 import { activeTenanciesByProperty } from '$lib/property/tenancy';
 import { listProperties } from '$lib/server/property/queries';
@@ -351,8 +353,33 @@ export const load: PageServerLoad = async ({ url }) => {
 			.from(tagLink)
 			.innerJoin(tag, eq(tagLink.tagId, tag.id))
 			.where(eq(tagLink.targetId, current.id));
+		// What it has been worth, and what it cost to buy. Both were unreachable
+		// before: only the latest value was stored, and money-in was a single
+		// number somebody had to reconstruct.
+		const [history, opening] = await Promise.all([
+			valuationHistory(current.id),
+			db.select().from(propertyOpening).where(eq(propertyOpening.propertyId, current.id))
+		]);
+		const valueSeries = history.map((v) => ({
+			on: v.valuedOn,
+			value: formatMinor(v.valueMinor, v.currency),
+			raw: Number(v.valueMinor),
+			source: v.source,
+			note: v.note
+		}));
+
 		detail = {
 			id: current.id,
+			currency: current.currency,
+			valueSeries,
+			opening: opening[0]
+				? {
+						purchasedOn: opening[0].purchasedOn,
+						price: toMajorString(opening[0].priceMinor, current.currency),
+						costs: toMajorString(opening[0].costsMinor, current.currency),
+						deposit: toMajorString(opening[0].depositMinor, current.currency)
+					}
+				: null,
 			name: current.name,
 			tags: flatTagRows.map((r) => r.name),
 			sizeLabel: current.sizeLabel,
@@ -501,6 +528,52 @@ export const actions: Actions = {
 			field,
 			amount: String(form.get('amount') ?? ''),
 			valuedOn: String(form.get('valuedOn') ?? '').trim() || null
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/** Another point on the value line. A past date leaves today's figure alone. */
+	addValuation: async ({ request }) => {
+		const form = await request.formData();
+		const currency = String(form.get('currency') ?? 'CZK');
+		let valueMinor: bigint;
+		try {
+			valueMinor = parseAmountToMinor(String(form.get('value') ?? ''), currency);
+		} catch {
+			return fail(400, { message: 'That value is not a number.' });
+		}
+		const result = await recordValuation(asRowId(form.get('propertyId')), {
+			valuedOn: String(form.get('valuedOn') ?? '').trim(),
+			valueMinor,
+			source: String(form.get('source') ?? 'estimate'),
+			note: String(form.get('note') ?? '')
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/** What buying it cost, recorded once instead of reconstructed. */
+	setOpening: async ({ request }) => {
+		const form = await request.formData();
+		const currency = String(form.get('currency') ?? 'CZK');
+		const amount = (field: string) => {
+			const raw = String(form.get(field) ?? '').trim();
+			return raw ? parseAmountToMinor(raw, currency) : 0n;
+		};
+		let figures;
+		try {
+			figures = {
+				priceMinor: amount('price'),
+				costsMinor: amount('costs'),
+				depositMinor: amount('deposit')
+			};
+		} catch {
+			return fail(400, { message: 'Those figures are not numbers.' });
+		}
+		const result = await recordOpening(asRowId(form.get('propertyId')), {
+			purchasedOn: String(form.get('purchasedOn') ?? '').trim() || null,
+			...figures
 		});
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };

@@ -11,7 +11,6 @@ import { displayCurrency, formatMinor } from '$lib/money';
 import { THEME_COOKIE, themeCookieOptions, themeOrDefault } from '$lib/theme';
 import { installFacts } from '$lib/server/system/status';
 import type { LayoutServerLoad } from './$types';
-import { isOpenMode } from '$lib/server/auth/open-mode';
 
 export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 	const modules = await getModules();
@@ -53,7 +52,6 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		modules,
 		// Carried on every screen, not just Settings: an instance anyone can walk
 		// into should say so wherever you are looking, or the state is a surprise.
-		openMode: await isOpenMode(),
 		householdLabel,
 		missingRates,
 		rateWarningDismissed,

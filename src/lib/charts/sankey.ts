@@ -60,6 +60,15 @@ interface SankeyRibbon {
 
 interface SankeyLabel {
 	key: string;
+	/**
+	 * Whether the band this names is tall enough to carry a label.
+	 *
+	 * relaxLabels() spaces labels by LABEL_H and clamps the block into the box,
+	 * so when a column has more labels than the box has room for, the tail simply
+	 * runs off the bottom of the card — which is what "text shows all and is not
+	 * scaled" described. Spacing was never the problem; quantity was.
+	 */
+	fits: boolean;
 	column: number;
 	label: string;
 	value: number;
@@ -84,6 +93,15 @@ const NODE_W = 14;
 const NODE_GAP = 10;
 /** Two lines of label, name over value, plus the plate's padding. */
 const LABEL_H = 36;
+/**
+ * The smallest share of its column a node can be and still be named.
+ *
+ * Ten percent, which on a household's cash flow is the handful of groups worth
+ * reading off the diagram directly. Everything smaller is in the breakdown
+ * strip beneath the chart and on hover — it is not hidden, it is just not
+ * shouted over the top of the picture.
+ */
+const LABEL_MIN_SHARE = 0.1;
 /** Room reserved outside the first and last columns for their labels. A fixed
  *  96 clipped the longer ones against the card edge, and an 88 floor still cut
  *  "Saved & invested" once the narrow layout dropped to three columns. It
@@ -184,30 +202,74 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 			? innerLeft
 			: innerLeft + (columns.indexOf(column) / (columns.length - 1)) * span;
 
-	// Ordering: by mean parent position where there is one, else by value. Two
-	// median sweeps then reduce crossings. Deterministic — the same graph always
-	// draws the same picture.
+	// Ordering: alternating barycentre sweeps over INDICES.
+	//
+	// This has been wrong twice, in ways worth recording. It first claimed "two
+	// median sweeps" and did one forward pass. The pass was then written to order
+	// each column by its parents' mean POSITION — reading `placed`, which is not
+	// filled until the placement loop below, so it read an empty map, returned
+	// null for every node, and silently degraded to "sort by value". The backward
+	// sweep was doing all the work, from a seed that ignored the graph.
+	//
+	// Sweeps therefore run on each other's output, not on geometry that does not
+	// exist yet: seed by value, then alternate — order each column by where its
+	// parents sit, then by where its children sit — until it settles. Barycentre
+	// ordering is not guaranteed optimal, but it converges quickly and is
+	// deterministic, so the same graph always draws the same picture.
 	const placed = new Map<string, SankeyNode>();
+	const order = new Map<number, string[]>();
 	for (const column of columns) {
-		const inColumn = graph.nodes.filter((n) => n.column === column);
-		const parentY = (key: string) => {
-			const parents = graph.links
-				.filter((l) => l.to === key)
-				.map((l) => placed.get(l.from))
-				.filter((p): p is SankeyNode => !!p);
-			if (parents.length === 0) return null;
-			return parents.reduce((sum, p) => sum + p.y + p.h / 2, 0) / parents.length;
-		};
-		const ordered = inColumn
-			.map((node) => ({ node, key: parentY(node.key) }))
-			.sort((a, b) => {
-				if (a.key !== null && b.key !== null) return a.key - b.key;
-				if (a.key !== null) return -1;
-				if (b.key !== null) return 1;
-				return b.node.value - a.node.value;
-			})
-			.map((entry) => entry.node);
+		order.set(
+			column,
+			graph.nodes
+				.filter((n) => n.column === column)
+				.sort((a, b) => b.value - a.value)
+				.map((n) => n.key)
+		);
+	}
 
+	const indexIn = (column: number, key: string) => order.get(column)?.indexOf(key) ?? -1;
+
+	/**
+	 * Reorder one column by the mean index of its neighbours in another.
+	 *
+	 * A node with no neighbour there keeps its place: it has nothing to say about
+	 * crossings, and sweeping it to one end would move it for no reason.
+	 */
+	function sweep(column: number, neighbour: number, edge: 'parents' | 'children') {
+		const keys = order.get(column) ?? [];
+		const meanOf = (key: string) => {
+			const indices = graph.links
+				.filter((link) => (edge === 'parents' ? link.to === key : link.from === key))
+				.map((link) => indexIn(neighbour, edge === 'parents' ? link.from : link.to))
+				.filter((index) => index >= 0);
+			return indices.length ? indices.reduce((sum, i) => sum + i, 0) / indices.length : null;
+		};
+		const withMeans = keys.map((key, position) => ({ key, position, mean: meanOf(key) }));
+		withMeans.sort((a, b) => {
+			if (a.mean !== null && b.mean !== null) return a.mean - b.mean || a.position - b.position;
+			if (a.mean === null && b.mean === null) return a.position - b.position;
+			return a.mean === null ? 1 : -1;
+		});
+		order.set(
+			column,
+			withMeans.map((entry) => entry.key)
+		);
+	}
+
+	// Four passes settles every graph this draws; more changes nothing and the
+	// loop is cheap enough not to warrant detecting that.
+	for (let pass = 0; pass < 4; pass++) {
+		for (let i = 1; i < columns.length; i++) sweep(columns[i], columns[i - 1], 'parents');
+		for (let i = columns.length - 2; i >= 0; i--) sweep(columns[i], columns[i + 1], 'children');
+	}
+
+	// Now place them, in the order the two sweeps settled on.
+	for (const column of columns) {
+		const byKey = new Map(graph.nodes.filter((n) => n.column === column).map((n) => [n.key, n]));
+		const ordered = (order.get(column) ?? [])
+			.map((key) => byKey.get(key))
+			.filter((node): node is SankeyNodeInput => !!node);
 		const stackHeight =
 			ordered.reduce((sum, n) => sum + n.value * scale, 0) + (ordered.length - 1) * NODE_GAP;
 		let y = Math.max(0, (box.height - stackHeight) / 2);
@@ -220,24 +282,52 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 		}
 	}
 
-	// Ribbons leave their source stacked in target order and arrive stacked in
-	// source order, so bands do not cross themselves within a node.
+	// Ribbons leave their source stacked in TARGET order and arrive stacked in
+	// SOURCE order, so bands do not cross themselves within a node.
+	//
+	// That needs two passes, which is what was missing: the single sorted list
+	// below fed both cursors, so a ribbon's arrival offset was assigned in target
+	// order too and every node's incoming bands were stacked by where they were
+	// going rather than where they came from.
 	const outCursor = new Map<string, number>();
 	const inCursor = new Map<string, number>();
 	const columnOf = (key: string) => placed.get(key)?.column ?? 0;
-	const sortedLinks = [...graph.links].sort(
+	const y0For = new Map<SankeyLink, number>();
+	const y1For = new Map<SankeyLink, number>();
+
+	for (const link of [...graph.links].sort(
 		(a, b) =>
 			columnOf(a.from) - columnOf(b.from) || (placed.get(a.to)?.y ?? 0) - (placed.get(b.to)?.y ?? 0)
+	)) {
+		const from = placed.get(link.from);
+		if (!from) continue;
+		const thickness = Math.max(1, link.value * scale);
+		y0For.set(link, from.y + (outCursor.get(from.key) ?? 0));
+		outCursor.set(from.key, (outCursor.get(from.key) ?? 0) + thickness);
+	}
+
+	for (const link of [...graph.links].sort(
+		(a, b) =>
+			columnOf(a.from) - columnOf(b.from) ||
+			(placed.get(a.from)?.y ?? 0) - (placed.get(b.from)?.y ?? 0)
+	)) {
+		const to = placed.get(link.to);
+		if (!to) continue;
+		const thickness = Math.max(1, link.value * scale);
+		y1For.set(link, to.y + (inCursor.get(to.key) ?? 0));
+		inCursor.set(to.key, (inCursor.get(to.key) ?? 0) + thickness);
+	}
+
+	const sortedLinks = [...graph.links].sort(
+		(a, b) => columnOf(a.from) - columnOf(b.from) || (y0For.get(a) ?? 0) - (y0For.get(b) ?? 0)
 	);
 	for (const link of sortedLinks) {
 		const from = placed.get(link.from);
 		const to = placed.get(link.to);
 		if (!from || !to) continue;
 		const thickness = Math.max(1, link.value * scale);
-		const y0 = from.y + (outCursor.get(from.key) ?? 0);
-		const y1 = to.y + (inCursor.get(to.key) ?? 0);
-		outCursor.set(from.key, (outCursor.get(from.key) ?? 0) + thickness);
-		inCursor.set(to.key, (inCursor.get(to.key) ?? 0) + thickness);
+		const y0 = y0For.get(link) ?? from.y;
+		const y1 = y1For.get(link) ?? to.y;
 		const x0 = from.x + from.w;
 		const x1 = to.x;
 		layout.ribbons.push({
@@ -258,19 +348,44 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 	const last = columns[columns.length - 1];
 	for (const column of columns) {
 		const inColumn = layout.nodes.filter((n) => n.column === column);
-		const preferred = inColumn.map((n) => n.y + n.h / 2 - LABEL_H / 2);
+		const first = column === columns[0];
+		const isLast = column === last;
+		// The outer columns label into their gutters, centred on the band. A MIDDLE
+		// column has ribbons on both sides, so its label goes ABOVE the band rather
+		// than beside it — a label beside a middle node lands on the diagram, which
+		// is what "the text on the right is on the plot" was.
+		const preferred = inColumn.map((n) =>
+			first || isLast ? n.y + n.h / 2 - LABEL_H / 2 : n.y - LABEL_H - 2
+		);
+		// Relaxed either way. Skipping this for the middle columns let two adjacent
+		// groups' labels sit on top of each other, which the invariant suite caught.
 		const relaxed = relaxLabels(preferred, LABEL_H, 0, Math.max(0, box.height - LABEL_H));
+		// How many labels this column has room for at all. Decided before
+		// relaxation rather than after: relaxing decides WHERE they go, and no
+		// arrangement helps once there are more than fit.
+		const room = Math.max(1, Math.floor(box.height / LABEL_H));
+		const columnTotalHere = inColumn.reduce((sum, n) => sum + n.value, 0);
+
 		inColumn.forEach((node, i) => {
-			const first = column === columns[0];
+			// A label is worth drawing when the band is a real share of the column.
+			// Height alone was the wrong test: on a tall chart a 1% sliver clears
+			// the pixel threshold and still names something invisible.
+			const share = columnTotalHere > 0 ? node.value / columnTotalHere : 0;
 			layout.labels.push({
 				key: node.key,
 				column,
 				label: node.label,
 				value: node.value,
-				x: first ? node.x - 8 : node.x + node.w + 8,
+				fits: inColumn.length <= room && share >= LABEL_MIN_SHARE,
+				// The first column labels to its left and the last to its right, into
+				// the gutters reserved for exactly that. A MIDDLE column has ribbons on
+				// both sides, so a label beside it lands on the diagram — which is what
+				// "text in the right is on the plot" was. It sits above its node
+				// instead, in the gap the stacking already leaves.
+				x: first ? node.x - 8 : isLast ? node.x + node.w + 8 : node.x + node.w / 2,
 				y: relaxed[i],
 				height: LABEL_H,
-				anchor: first ? 'end' : column === last ? 'start' : 'middle'
+				anchor: first ? 'end' : isLast ? 'start' : 'middle'
 			});
 		});
 	}

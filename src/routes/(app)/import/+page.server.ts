@@ -48,7 +48,8 @@ export const load: PageServerLoad = async () => {
 		reviewRows,
 		categories,
 		accounts,
-		groups
+		groups,
+		people
 	] = await Promise.all([
 		queueStatus(),
 		// What each recent import was checked against. The proof engine decided
@@ -97,6 +98,9 @@ export const load: PageServerLoad = async () => {
 				suggestedCategoryId: transaction.suggestedCategoryId,
 				transferPairId: transaction.transferPairId,
 				accountId: transaction.accountId,
+				// Whether the account has an owner. A joint one cannot answer "whose
+				// salary is this?" by itself, so the screen has to ask.
+				accountOwnerPersonId: account.ownerPersonId,
 				accountName: account.name
 			})
 			.from(transaction)
@@ -109,7 +113,13 @@ export const load: PageServerLoad = async () => {
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
 			.orderBy(account.createdAt, account.id),
-		loadCategoryGroups()
+		loadCategoryGroups(),
+		// For the "whose salary is this?" sub-select on a joint account.
+		db
+			.select({ id: schema.person.id, name: schema.person.name })
+			.from(schema.person)
+			.where(isNull(schema.person.deactivatedAt))
+			.orderBy(schema.person.name)
 	]);
 
 	const total = readAgg[0].count;
@@ -160,6 +170,7 @@ export const load: PageServerLoad = async () => {
 			// So the "moved to my…" picker can leave out the account the money
 			// actually left, which is never the destination.
 			accountId: r.accountId,
+			accountIsJoint: r.accountOwnerPersonId === null,
 			// The engine's best guess, pre-selected below so a contested or
 			// unproven row arrives with a suggestion rather than nothing.
 			suggestedCategoryId: r.suggestedCategoryId
@@ -169,6 +180,7 @@ export const load: PageServerLoad = async () => {
 		// new category, and a group with nothing in it yet is exactly the case.
 		groups: groups.map((group) => ({ key: group.key, label: group.label })),
 		groupRoles: ENUMS['category_group.role'],
+		people,
 		categories: groups
 			.map((group) => ({
 				key: group.key,
@@ -307,7 +319,17 @@ export const actions: Actions = {
 		const id = asRowId(form.get('id'));
 		// Shared with the register, so a correction teaches the categoriser the
 		// same way wherever it is made.
-		const result = await fileTransaction(id, String(form.get('categoryId') ?? ''));
+		// Whose salary it is, when the screen has just asked — only reached for a
+		// salary category on a joint account. An owned account answers it itself.
+		const salaryPersonId = asOptionalRowId(form.get('salaryPersonId'));
+		const result = await fileTransaction(
+			id,
+			String(form.get('categoryId') ?? ''),
+			undefined,
+			salaryPersonId
+				? { personId: salaryPersonId, remember: form.get('rememberWhose') === 'on' }
+				: undefined
+		);
 		// The id travels with the failure so the screen can render the message
 		// against the row that produced it rather than in a banner at the top.
 		if (!result.ok) return fail(result.status, { id, message: result.message });

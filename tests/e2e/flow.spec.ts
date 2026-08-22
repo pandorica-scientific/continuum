@@ -44,7 +44,10 @@ test('a rejected wizard submission names every module and keeps what was typed',
 	// Every module in the registry is named on screen. The wizard used to hold its
 	// own label map beside the registry, so a module present in one and not the
 	// other — Tax — rendered a checkbox with nothing next to it.
-	const toggles = page.locator('label.toggle');
+	// Scoped to the modules fieldset. `.toggle` is a shared style, and the wizard
+	// now carries another one — the no-password option — so counting every
+	// `.toggle` on the page would be counting two different questions.
+	const toggles = page.locator('fieldset').filter({ hasText: 'Modules' }).locator('label.toggle');
 	await expect(toggles).toHaveCount(MODULE_KEYS.length);
 	for (const key of MODULE_KEYS) {
 		await expect(toggles.filter({ hasText: MODULES[key].label })).toHaveCount(1);

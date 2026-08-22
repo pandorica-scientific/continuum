@@ -19,17 +19,51 @@
 - ✏️ Loans can be edited, including which properties secure a mortgage and in what share
 - 🏠 Estimated value and money-in are editable on a property; the figures derived from loans are not, and say where they come from
 - 📅 A lease can have no end date, and adding a tenant now files them in Contacts, reusing their record when the name matches
-- 🚪 Open mode — an administrator can drop credentials for the whole instance, confirmed with their own password, and every screen says so while it is on
+- 🚪 Open mode — an administrator can drop credentials for the whole instance, confirmed with their own password; the setup wizard can start one that way too
 - 🔑 The setup wizard asks for the password twice; a typo in the only password on a fresh instance used to lock its owner out immediately
 - 📏 Narrow-viewport tests across fourteen screens, for overflow and clipped text — the widths where the reported truncation actually happened
 
+### ✨ Added — second pass
+
+> A second session of real use on the build the list above produced: the same household, the same statements, now on a phone as well as a desktop.
+
+- 🧾 **Every accepted statement is filed in Documents**, on its own Statements shelf, tagged with the bank, the account and the year. The file was always kept; nothing ever surfaced it
+- 💼 **Salary history reads the ledger.** A salary credit you have already categorised becomes salary history — net from the bank, gross from a payslip, both on the same month rather than averaged into a figure that is neither
+- 📈 **A property's value is a series, not a number** — enter what it was worth in past years and see the line. Recording what it cost to buy computes money-in instead of asking you to reconstruct it
+- ⚖️ **Tax on realised investment gains**, at a rate you set. The holding-period exemption matches the Czech three-year time test and is off by default, because it applies nowhere else
+- 🖱️ **Categories can be dragged into the order you want**, or moved with the arrow keys. A catch-all — "Everything else", "Other income" — stays last whatever else is added
+- ✏️ **Accounts are editable**: name, bank, type, and the account numbers statements are matched against, which were recorded and learned but never shown
+- 👤 **An account can belong to someone.** Everything was joint by omission, because nothing ever set an owner
+- 🎛️ Loans gained rate regime, interest accrual, day count and deductibility to their edit — described the loan, so changing one re-derives the schedule without touching a recorded fixation period
+- ✕ The import queue and the recent-import list can be cleared, and a finished job leaves on its own after ten minutes
+- 📐 A geometry scale — radius, spacing and one control height — enforced by a lint rule, so a raw value beside a token cannot drift back in
+
 ### 🔧 Changed
 
+- 🌐 **`ORIGIN` no longer decides whether a form is accepted.** Sign-in works at every address the server answers on — `localhost`, a LAN IP, `continuum.local`, a tailnet name — because the check compares what the browser sent against the host it sent it to. `ORIGIN` is optional now and governs only passkeys
+- 🗂️ **Documents is its own sidebar row**, after Calendar, and Settings is the gear beside the wordmark. They shared an "Admin" row, which put paperwork you open often behind the same click as configuration you open rarely
+- 🚪 The open-instance warning moved from every screen to Settings and the sign-in page — where somebody who did not expect it actually meets it, before they are inside
+- 🗑️ Deleting a category counts what depends on it first: an unused one goes without a question, and one with history asks in a dialog naming how many transactions and rules are filed under it
+- 💧 One definition for form controls, replacing the recipe copied into twenty-seven stylesheets — where its padding had already drifted
 - 📆 The money screens show the newest month that holds data, and name it. Statements arrive after a month ends, so "this month" was routinely empty
 - 🔑 Passkeys are offered based on the address you are browsing, not the one in `ORIGIN` — and where they are absent, the screen names the address that works
 - 🔠 Twenty-two font sizes became a nine-step ramp. Half a pixel is not a size anyone chose, and 12 / 12.5 / 13 / 13.5px side by side is what "different fonts" looks like
 - 🖱️ Buttons show they were pressed, show when they are disabled, and show keyboard focus — none of which existed
 - 🧮 Every screen reads the category groups from the database, so a group a household adds appears in the charts and filters without a deploy
+
+### 🐛 Fixed — second pass
+
+- 💳 **A Revolut export could not be imported at all.** Revolut writes every pocket into one file and each keeps its own running balance, so a Savings pocket three rows long was being checked against a Current account's chain: the statement proved nothing and was refused. Read as one statement per pocket, the same 1 798-row file proves on every row
+- 🏦 **Fio's "Pohyby na účtu" export is refused by name.** It prints no balances at all, so nothing in it can show whether every row is there — it used to offer a mapping screen no answer could satisfy. It now says which export to download instead
+- 💾 **Retirement assumptions never saved.** The page issued a UUIDv7 and the check accepted only versions 1–5, so every autosave was refused with "The save writer is invalid". No assumption had ever been stored
+- ⬇️ **"Choose a category…" opened off the bottom of the page.** A native select's popup is placed by the browser; the replacement measures the room it has and opens upwards when there is more above
+- 🔀 **Ribbons crossed on the cash-flow diagram.** Its ordering pass read the positions of the previous column before anything had been placed there, so it always got nothing back and every column silently fell back to ordering by size alone. On a real household year — four income sources, seven groups, thirty-two ribbons — that drew 57 crossings. It now draws none
+- 🏷️ **Labels no longer lie across the diagram.** The rightmost column's names were printed over the ribbons they belonged to; they sit outside the last band now
+- 🔟 **Only bands worth reading are named** — a tenth of their column or more. Size on screen was the old test, which on a tall chart gave a name to a one-percent sliver and left seventeen of them overlapping. Everything else is in the strip underneath, and on hover
+- 🏷️ Cash flow showed a negative "Kept" in green
+- 📏 The salary-history row carried controls of five different heights; the setup wizard's repeat-password box fell onto a line of its own; the mapping wizard's columns did not line up; "0.0" on the retirement chart sat on top of the year beneath it
+- ➕ Adding a property or a loan immediately reopened the form for the next one
+- 🔵 The line on "Value against money in" ended in a dot that read as a defect
 
 ### 🐛 Fixed
 
@@ -44,7 +78,8 @@
 
 ### ⬆️ Upgrading
 
-- Two additive migrations, applied automatically at boot: a `bank` table and a `category_group` table. Nothing is dropped and no column changes type
+- **`drizzle/` now carries one file describing the schema as it is**, rather than a chain describing how it got here. Continuum has no users, so there is nothing to migrate from; a fresh instance builds itself at boot exactly as before
+- **`ORIGIN` changed meaning and is now optional.** It no longer decides whether a form submission is accepted — that is checked against the address your browser actually used. Set it only to enable passkeys, at the one HTTPS address they bind to. `compose.yaml` no longer defaults it
 - The chart colours change. The palette that shipped before failed measurable separation in both themes — housing and living were indistinguishable to a deuteranopic reader, and in the light theme transport and bills were effectively one colour
 
 ## 0.3.10 — 2026-08-19

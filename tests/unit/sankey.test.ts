@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { flowGraph } from '$lib/charts/flow-graph';
 import { buildSankey, type SankeyGraph } from '$lib/charts/sankey';
 
 // A four-column graph shaped like the real one: two sources into a total, the
@@ -141,5 +142,236 @@ describe('label gutters', () => {
 			expect(firstX).toBeGreaterThanOrEqual(112);
 			expect(box.width - (lastNode.x + lastNode.w)).toBeGreaterThanOrEqual(112);
 		}
+	});
+});
+
+/**
+ * Ribbons crossing each other was reported from a real cash flow, and the file
+ * explained why on its own: the ordering comment promised "two median sweeps"
+ * and the code did one forward pass. A forward pass places a node before
+ * anything downstream of it exists, so nothing could ever settle a column by
+ * where its children ended up.
+ */
+describe('crossings', () => {
+	/** Two ribbons cross when their ends are ordered oppositely. */
+	function crossings(ribbons: { x0: number; y0: number; y1: number }[]): number {
+		let count = 0;
+		for (let i = 0; i < ribbons.length; i++) {
+			for (let j = i + 1; j < ribbons.length; j++) {
+				const a = ribbons[i];
+				const b = ribbons[j];
+				// Only ribbons spanning the same gap can cross.
+				if (a.x0 !== b.x0) continue;
+				if ((a.y0 - b.y0) * (a.y1 - b.y1) < 0) count += 1;
+			}
+		}
+		return count;
+	}
+
+	// Measured, not assumed. The first version of this test asserted zero
+	// crossings on a graph that had none either way — it passed with the sweep
+	// disabled, which makes it a test of nothing. This shape has three crossings
+	// without the backward sweep and none with it.
+	it('untangles a column whose children are declared in the opposite order', () => {
+		const graph = {
+			nodes: [
+				{ key: 'in', label: 'Income', value: 90, colorVar: '--green', column: 0 },
+				{ key: 'a', label: 'A', value: 30, colorVar: '--blue', column: 1 },
+				{ key: 'b', label: 'B', value: 30, colorVar: '--teal', column: 1 },
+				{ key: 'c', label: 'C', value: 30, colorVar: '--purple', column: 1 },
+				{ key: 'x', label: 'X', value: 30, colorVar: '--blue', column: 2 },
+				{ key: 'y', label: 'Y', value: 30, colorVar: '--teal', column: 2 },
+				{ key: 'z', label: 'Z', value: 30, colorVar: '--purple', column: 2 }
+			],
+			links: [
+				{ from: 'in', to: 'a', value: 30 },
+				{ from: 'in', to: 'b', value: 30 },
+				{ from: 'in', to: 'c', value: 30 },
+				// The leaves are declared in reverse, so ordering column 1 by its
+				// parents alone — all three share one — leaves every ribbon crossing.
+				{ from: 'c', to: 'x', value: 30 },
+				{ from: 'b', to: 'y', value: 30 },
+				{ from: 'a', to: 'z', value: 30 }
+			]
+		};
+
+		const layout = buildSankey(graph, { width: 800, height: 300 });
+		expect(crossings(layout.ribbons)).toBe(0);
+	});
+
+	// The shape that was reported: four income sources, seven groups and a long
+	// tail of small leaves. Ordered by value alone — which is what the code was
+	// really doing, because its "forward pass" read a map that had not been
+	// filled yet — this draws 57 crossings. With the sweeps it draws none.
+	it('draws a household cash flow without a single crossing', () => {
+		// Shaped like the screenshot: four income sources, seven groups, and the
+		// long tail of small leaves that was fanning out and crossing.
+		const input = {
+			sources: [
+				{ name: 'Salary', amount: 33237 },
+				{ name: 'Rent received', amount: 6000 },
+				{ name: 'Reimbursements', amount: 4500 },
+				{ name: 'Interest', amount: 989 }
+			],
+			stages: [
+				{ key: 'taxes', label: 'Taxes & fees', colorVar: '--a', amount: 16150 },
+				{ key: 'living', label: 'Food & lifestyle', colorVar: '--b', amount: 14277 },
+				{ key: 'bills', label: 'Bills & utilities', colorVar: '--c', amount: 4170 },
+				{ key: 'transport', label: 'Transport', colorVar: '--d', amount: 3524 },
+				{ key: 'housing', label: 'Housing', colorVar: '--e', amount: 5377 },
+				{ key: 'health', label: 'Health & care', colorVar: '--f', amount: 203 },
+				{ key: 'subs', label: 'Subscriptions', colorVar: '--g', amount: 380 }
+			],
+			remainderLabel: 'Saved & invested',
+			kept: 3885,
+			breakdown: [
+				{
+					key: 'living',
+					leaves: [
+						{ name: 'Groceries', value: 1523 },
+						{ name: 'Eating out', value: 1420 },
+						{ name: 'Travel', value: 655 },
+						{ name: 'Kids', value: 696 },
+						{ name: 'Dog', value: 196 },
+						{ name: 'Entertainment', value: 40 },
+						{ name: 'Home', value: 1501 },
+						{ name: 'Presents', value: 128 },
+						{ name: 'Clothes', value: 167 },
+						{ name: 'Everything else', value: 7946 }
+					]
+				},
+				{
+					key: 'bills',
+					leaves: [
+						{ name: 'Energy', value: 162 },
+						{ name: 'Phone', value: 66 },
+						{ name: 'Rent', value: 3942 }
+					]
+				},
+				{
+					key: 'transport',
+					leaves: [
+						{ name: 'Car loan', value: 3188 },
+						{ name: 'Fuel & tolls', value: 137 },
+						{ name: 'Maintenance', value: 198 }
+					]
+				},
+				{
+					key: 'health',
+					leaves: [
+						{ name: 'Pharmacy', value: 135 },
+						{ name: 'Hairdresser', value: 67 }
+					]
+				},
+				{ key: 'housing', leaves: [{ name: 'Mortgage · rental', value: 5377 }] },
+				{ key: 'kept', leaves: [{ name: 'Cash buffer', value: 3885 }] }
+			]
+		};
+		const layout = buildSankey(flowGraph(input, 4), { width: 1240, height: 560 });
+
+		expect(layout.ribbons.length).toBeGreaterThan(30);
+		expect(crossings(layout.ribbons)).toBe(0);
+	});
+
+	// Ten percent of its column. Height alone was the wrong test: on a tall chart
+	// a one-percent sliver clears any pixel threshold and still names something
+	// invisible. Everything else is in the breakdown strip and on hover.
+	it('names only the bands worth reading off the diagram', () => {
+		// Shaped like the screenshot: four income sources, seven groups, and the
+		// long tail of small leaves that was fanning out and crossing.
+		const input = {
+			sources: [
+				{ name: 'Salary', amount: 33237 },
+				{ name: 'Rent received', amount: 6000 },
+				{ name: 'Reimbursements', amount: 4500 },
+				{ name: 'Interest', amount: 989 }
+			],
+			stages: [
+				{ key: 'taxes', label: 'Taxes & fees', colorVar: '--a', amount: 16150 },
+				{ key: 'living', label: 'Food & lifestyle', colorVar: '--b', amount: 14277 },
+				{ key: 'bills', label: 'Bills & utilities', colorVar: '--c', amount: 4170 },
+				{ key: 'transport', label: 'Transport', colorVar: '--d', amount: 3524 },
+				{ key: 'housing', label: 'Housing', colorVar: '--e', amount: 5377 },
+				{ key: 'health', label: 'Health & care', colorVar: '--f', amount: 203 },
+				{ key: 'subs', label: 'Subscriptions', colorVar: '--g', amount: 380 }
+			],
+			remainderLabel: 'Saved & invested',
+			kept: 3885,
+			breakdown: [
+				{
+					key: 'living',
+					leaves: [
+						{ name: 'Groceries', value: 1523 },
+						{ name: 'Eating out', value: 1420 },
+						{ name: 'Travel', value: 655 },
+						{ name: 'Kids', value: 696 },
+						{ name: 'Dog', value: 196 },
+						{ name: 'Entertainment', value: 40 },
+						{ name: 'Home', value: 1501 },
+						{ name: 'Presents', value: 128 },
+						{ name: 'Clothes', value: 167 },
+						{ name: 'Everything else', value: 7946 }
+					]
+				},
+				{
+					key: 'bills',
+					leaves: [
+						{ name: 'Energy', value: 162 },
+						{ name: 'Phone', value: 66 },
+						{ name: 'Rent', value: 3942 }
+					]
+				},
+				{
+					key: 'transport',
+					leaves: [
+						{ name: 'Car loan', value: 3188 },
+						{ name: 'Fuel & tolls', value: 137 },
+						{ name: 'Maintenance', value: 198 }
+					]
+				},
+				{
+					key: 'health',
+					leaves: [
+						{ name: 'Pharmacy', value: 135 },
+						{ name: 'Hairdresser', value: 67 }
+					]
+				},
+				{ key: 'housing', leaves: [{ name: 'Mortgage · rental', value: 5377 }] },
+				{ key: 'kept', leaves: [{ name: 'Cash buffer', value: 3885 }] }
+			]
+		};
+		const layout = buildSankey(flowGraph(input, 4), { width: 1240, height: 560 });
+		const drawn = layout.labels.filter((l) => l.fits).map((l) => l.label);
+
+		expect(drawn).toContain('Taxes & fees');
+		expect(drawn).toContain('Food & lifestyle');
+		// 380 of roughly 48 000 in its column.
+		expect(drawn).not.toContain('Subscriptions');
+		expect(drawn.length).toBeLessThan(layout.labels.length / 3);
+	});
+
+	it('stacks a node’s incoming bands by where they came from', () => {
+		// Two sources into one target. The bands must arrive in the order the
+		// sources sit in, or they cross each other inside the target.
+		const graph = {
+			nodes: [
+				{ key: 'top', label: 'Top', value: 30, colorVar: '--green', column: 0 },
+				{ key: 'bottom', label: 'Bottom', value: 70, colorVar: '--green', column: 0 },
+				{ key: 'pot', label: 'Pot', value: 100, colorVar: '--blue', column: 1 }
+			],
+			links: [
+				{ from: 'bottom', to: 'pot', value: 70 },
+				{ from: 'top', to: 'pot', value: 30 }
+			]
+		};
+
+		const layout = buildSankey(graph, { width: 800, height: 300 });
+		const at = (key: string) => layout.nodes.find((n) => n.key === key)!;
+		const ribbon = (from: string) => layout.ribbons.find((r) => r.from === from)!;
+
+		// Whichever way the sources ended up stacked, the arrivals follow suit.
+		const sourcesInOrder = at('top').y < at('bottom').y ? ['top', 'bottom'] : ['bottom', 'top'];
+		expect(ribbon(sourcesInOrder[0]).y1).toBeLessThan(ribbon(sourcesInOrder[1]).y1);
+		expect(crossings(layout.ribbons)).toBe(0);
 	});
 });

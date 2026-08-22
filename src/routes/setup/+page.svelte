@@ -2,6 +2,7 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
+	import { untrack } from 'svelte';
 	import { passwordHint } from '$lib/password-policy';
 
 	import { currencyLabel } from '$lib/currencies';
@@ -22,6 +23,11 @@
 	// Rows the wizard shows: what came back, never fewer than two, plus any the
 	// person added by hand.
 	let extraRows = $state(0);
+	/** Asked for explicitly, and never a default: see auth/open-mode.ts. */
+	// The initial value, read once. Deliberately not reactive: a rejected
+	// submission re-renders with what was typed, and re-deriving here would fight
+	// the tick somebody has since changed.
+	let openMode = $state(untrack(() => Boolean(entered?.openMode)));
 	const peopleCount = $derived(Math.max(enteredPeople.length, 2) + extraRows);
 </script>
 
@@ -79,7 +85,10 @@
 						name="personPassword"
 						type="password"
 						autocomplete="new-password"
-						placeholder={`Password (${passwordHint(data.passwordMinLength)})`}
+						disabled={openMode}
+						placeholder={openMode
+							? 'No password'
+							: `Password (${passwordHint(data.passwordMinLength)})`}
 					/>
 					<!-- The only password on a fresh instance, so it is asked twice. A
 					     typo here used to lock the owner out with nothing to fall back on. -->
@@ -87,11 +96,26 @@
 						name="personPasswordConfirm"
 						type="password"
 						autocomplete="new-password"
+						disabled={openMode}
 						placeholder="Repeat password"
 					/>
 				</div>
 			{/each}
 			<button type="button" class="btn" onclick={() => (extraRows += 1)}>➕ Add a person</button>
+		</fieldset>
+
+		<fieldset>
+			<legend class="eyebrow">Sign in</legend>
+			<label class="toggle">
+				<input type="checkbox" name="openMode" bind:checked={openMode} />
+				<span>
+					No password — anyone who can reach this can sign in as anyone
+					<span class="note">
+						— including as the administrator. On a plain-HTTP address that is everyone on your
+						network. You can close it later in Settings, and everybody sets a password then.
+					</span>
+				</span>
+			</label>
 		</fieldset>
 
 		<fieldset>
