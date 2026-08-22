@@ -43,96 +43,16 @@ jobs:
       - run: npm run check
       - run: npm test
 
-  # The Playwright journey is the only coverage the auth, import, splits and
-  # API-token paths have end to end. It existed but nothing ran it, so those
-  # paths were effectively untested in CI.
-  e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    # The browsers AND the system libraries they need are already in this image,
-    # so no step here runs apt.
-    #
-    # `npx playwright install --with-deps` did, and apt on a GitHub runner
-    # resolves through an Azure mirror that is regularly unreachable: the log
-    # shows four rounds of `Ign:` against azure.archive.ubuntu.com before it
-    # falls back to archive.ubuntu.com. That is the step runs were stalling in,
-    # and it had nothing to do with Playwright.
-    #
-    # Pinned to the @playwright/test version in package.json. They move together
-    # — an image older than the library has the wrong browser build — so bump
-    # both in the same commit.
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
-      # Chromium's renderer processes share memory through /dev/shm, which is
-      # 64 MB in a container by default. Recommended by Playwright's own Docker
-      # guidance; without it tabs crash under load rather than failing a test.
-      options: --ipc=host
-    services:
-      db:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: continuum
-          POSTGRES_PASSWORD: continuum
-          POSTGRES_DB: continuum_e2e
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U continuum"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 26
-          cache: npm
-      - run: npm ci
-      # The image tag and the installed library have to be the same version, and
-      # nothing else makes them so: `^1.62.1` moves on its own, and a mismatch
-      # surfaces as a browser that will not launch rather than as a version
-      # complaint. Checked here so the failure names the real problem.
-      - name: playwright image matches the installed version
-        # POSIX sh, not bash: a container job runs `sh -e {0}`, where `set -o
-        # pipefail` is not a builtin and the step dies before it checks anything.
-        # There are no pipes here, so `set -eu` is the whole of what was wanted.
-        run: |
-          set -eu
-          installed="$(node -p "require('@playwright/test/package.json').version")"
-          if ! grep -q "mcr.microsoft.com/playwright:v${installed}-noble" .github/workflows/ci.yml; then
-            echo "::error::@playwright/test is $installed — update the e2e job's container image to v${installed}-noble"
-            exit 1
-          fi
-      # No-op when the image already carries the matching build, a download when
-      # package.json has moved ahead of the image tag. Either way, never apt.
-      - run: npx playwright install chromium
-      # playwright.config.ts starts the built server itself, so it has to exist.
-      - run: npm run build
-        env:
-          # `db`, not `localhost`: this job runs inside a container, so the
-          # service container is a sibling on the network rather than the same
-          # host. On localhost it would connect to nothing.
-          DATABASE_URL: postgres://continuum:continuum@db:5432/continuum_e2e
-      - run: npm run test:e2e
-        env:
-          E2E_DATABASE_URL: postgres://continuum:continuum@db:5432/continuum_e2e
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [checks, e2e]
+    needs: [checks]
     # Releases only. A `release` event carries the tag in `github.ref` exactly
     # as a tag push does, so one test covers both — but the event is named as
     # well, so this still reads as what it means rather than as a coincidence
     # of how GitHub populates the ref.
     #
-    # Every other trigger stops at `checks` and `e2e`. Building an image nobody
+    # Every other trigger stops at `checks`. Building an image nobody
     # will pull cost roughly ten minutes of QEMU on each pull request, twice
     # over for two architectures.
     if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')

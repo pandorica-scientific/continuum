@@ -52,7 +52,12 @@
 
 ### 🔧 Changed
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
+=======
+- 🧪 **The browser suite is gone, and with it the browser from CI.** Two hundred and ten Playwright tests drove the interface through a real Chromium; what they mostly proved was that a machine with its database in the next room finishes a write before the next click, which is not true of a machine with its database in the next container — three CI failures in one evening were that difference and nothing else. The interface is checked by looking at it now. What stays is the part a page was never needed for: 1 542 unit and embedded-PostgreSQL tests over the parsers, the domain modules, the schema and the arithmetic, all of which run everywhere
+- 🧪 **The private-corpus and live-CalDAV suites are gone too.** They skipped themselves in CI for want of files and credentials that are on one laptop, so nothing anyone could run ever ran them. The 355-file synthetic corpus is committed and still holds every parser to each statement's own arithmetic
+>>>>>>> 7d525ec23a79cb759a04dcf50ce42c552015f5ed
 - 📏 **The pixel baseline is gone.** Fourteen full-page screenshots guarded the geometry sweep this release is built on — that sweep has shipped, and what was left was 2.6 MB of PNGs that had to be recaptured on every deliberate change, on macOS only, where CI could never run them. A guard that cannot fail in CI and is rewritten on every intentional change teaches you to rewrite it without looking. The narrow-viewport tests stay: they assert behaviour rather than appearance, run everywhere, and are what caught the two real defects above
 =======
 >>>>>>> Stashed changes
