@@ -1,6 +1,6 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { DEFAULT_PASSWORD_MIN_LENGTH, passwordHint } from '../../src/lib/password-policy';
 import { MODULE_KEYS, MODULES } from '../../src/lib/modules/registry';
 
@@ -1017,13 +1017,35 @@ test.describe('signed in', () => {
 		expect(json.settings.backupLastRun).toBeUndefined();
 	});
 
+	/**
+	 * Choose a theme, and wait for the record to have it.
+	 *
+	 * The click paints the new theme at once and persists it behind that, so the
+	 * server's copy is a moment behind the screen. Anything that reads the SERVER
+	 * — a reload, a second browser — therefore has to wait for the write to be
+	 * acknowledged rather than race it. On a laptop the write always won, so this
+	 * was invisible until CI, where the database is a network hop from the app
+	 * and the reload arrived first: the layout mirrors the stored theme into the
+	 * cookie on every load, so a reload that overtakes the write is answered with
+	 * the theme the person still officially has.
+	 */
+	async function chooseTheme(page: Page, name: '☀️ Light' | '🌙 Dark') {
+		const stored = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === '/settings/theme' &&
+				response.request().method() === 'PUT'
+		);
+		await page.getByRole('button', { name }).click();
+		expect((await stored).ok()).toBe(true);
+	}
+
 	test('theme choice persists across reloads', async ({ page }) => {
 		await page.goto('/overview');
-		await page.getByRole('button', { name: '☀️ Light' }).click();
+		await chooseTheme(page, '☀️ Light');
 		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
 		await page.reload();
 		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
-		await page.getByRole('button', { name: '🌙 Dark' }).click();
+		await chooseTheme(page, '🌙 Dark');
 		await expect(page.locator('html')).not.toHaveAttribute('data-ledger-theme', 'light');
 	});
 
@@ -1036,7 +1058,7 @@ test.describe('signed in', () => {
 		browser
 	}) => {
 		await page.goto('/overview');
-		await page.getByRole('button', { name: '☀️ Light' }).click();
+		await chooseTheme(page, '☀️ Light');
 		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
 
 		// A second browser context: no localStorage, no cookies, nothing carried
@@ -1050,7 +1072,7 @@ test.describe('signed in', () => {
 			await elsewhere.close();
 		}
 
-		await page.getByRole('button', { name: '🌙 Dark' }).click();
+		await chooseTheme(page, '🌙 Dark');
 		await expect(page.locator('html')).not.toHaveAttribute('data-ledger-theme', 'light');
 	});
 });

@@ -38,6 +38,7 @@
 
 ### 🔧 Changed
 
+- 📏 **The pixel baseline is gone.** Fourteen full-page screenshots guarded the geometry sweep this release is built on — that sweep has shipped, and what was left was 2.6 MB of PNGs that had to be recaptured on every deliberate change, on macOS only, where CI could never run them. A guard that cannot fail in CI and is rewritten on every intentional change teaches you to rewrite it without looking. The narrow-viewport tests stay: they assert behaviour rather than appearance, run everywhere, and are what caught the two real defects above
 - 🌐 **`ORIGIN` no longer decides whether a form is accepted.** Sign-in works at every address the server answers on — `localhost`, a LAN IP, `continuum.local`, a tailnet name — because the check compares what the browser sent against the host it sent it to. `ORIGIN` is optional now and governs only passkeys
 - 🗂️ **Documents is its own sidebar row**, after Calendar, and Settings is the gear beside the wordmark. They shared an "Admin" row, which put paperwork you open often behind the same click as configuration you open rarely
 - 🚪 The open-instance warning moved from every screen to Settings and the sign-in page — where somebody who did not expect it actually meets it, before they are inside

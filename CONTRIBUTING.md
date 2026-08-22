@@ -62,19 +62,6 @@ npm run build && npm run test:e2e   # Playwright journey; needs the db running
 Docker image, so a change that breaks `docker/Dockerfile` fails the pipeline
 even when the tests pass.
 
-**The pixel baseline is macOS-only.** `tests/e2e/visual-baseline.spec.ts` compares
-fourteen screens against committed PNGs, and a page does not rasterise identically
-on two operating systems — the baselines are `…-darwin.png` and the project only
-registers on macOS, so the suite is fourteen tests shorter on Linux and in CI. If
-you deliberately change how something looks, capture the new baseline on a Mac with
-
-```sh
-npm run test:e2e -- --update-snapshots
-```
-
-and commit the PNGs with the change. A failure there is not a stale screenshot; it
-is the interface having moved, so read the diff image before you regenerate.
-
 ### Database changes
 
 Schema lives in `src/lib/server/db/schema/`, split by domain with `index.ts` as

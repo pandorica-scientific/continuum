@@ -17,7 +17,7 @@ export default defineConfig({
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
 			testIgnore:
-				/accounts|passkey|board|errors|add-form-closes|retirement-chart|import-mapping-layout|import-typography|visual-baseline|category-delete|category-picker|category-reorder|investments-tax/
+				/accounts|passkey|board|errors|add-form-closes|retirement-chart|import-mapping-layout|import-typography|category-delete|category-picker|category-reorder|investments-tax/
 		},
 		// The error screens need a signed-in session, which the wizard in
 		// flow.spec.ts is what creates. Alphabetical order would put this file
@@ -58,40 +58,6 @@ export default defineConfig({
 				/add-form-closes|retirement-chart|import-mapping-layout|import-typography|category-delete|category-picker|category-reorder|investments-tax/,
 			dependencies: ['desktop']
 		},
-		// The Part 0 pixel baseline. Its own project, and it depends on EVERY
-		// project that writes to the database — `polish` adds a property and leaves
-		// a failed job in the import queue, `accounts` adds a second person, and
-		// `board` customises a layout.
-		//
-		// Depending on only some of them was a real defect: the snapshots were
-		// captured through `--project=visual`, which pulled in `polish` but not
-		// `accounts`, and then failed under `npm run test:e2e` because the second
-		// person now existed and the retirement screen said "Tomáš Dvořák" where
-		// the snapshot said "Person two". A baseline that is only valid for one
-		// way of invoking the suite is not a baseline.
-		// Baselines are captured per platform — `…-darwin.png` — because the same
-		// page does not rasterise identically on two operating systems: hinting,
-		// subpixel positioning and emoji come from the system, not from the app.
-		// Committing them is what makes the guard a guard; a baseline written on
-		// the spot always matches whatever was drawn.
-		//
-		// There are no Linux baselines, and generating a second set that has to be
-		// regenerated in a container on every UI change costs more than it buys:
-		// the guard exists to catch a geometry sweep changing the look, and it
-		// catches that on the machine the sweep is written on. So the project is
-		// only registered where its baselines exist. On CI the fourteen tests
-		// would otherwise fail as "snapshot doesn't exist", which reads as a
-		// broken build rather than a missing platform.
-		...(process.platform === 'darwin'
-			? [
-					{
-						name: 'visual',
-						use: { viewport: { width: 1440, height: 900 } },
-						testMatch: /visual-baseline/,
-						dependencies: ['polish', 'board']
-					}
-				]
-			: []),
 		// Narrow widths. These now cover the signed-in screens too, not just the
 		// login page: a field whose label was cut off before it finished on a small
 		// screen is exactly the kind of defect only a narrow viewport finds, and
