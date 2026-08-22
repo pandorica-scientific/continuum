@@ -2,6 +2,20 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.1 — 2026-08-22
+
+> One defect that only ever showed on somebody else's machine, and the removal of the tests that could not tell you about it.
+
+### 🐛 Fixed
+
+- 📏 **A name on the cash-flow diagram is never cut in half, on any machine.** The engine guessed each name's width from its character count, so where the guess was beaten the renderer cut the name to fit the box drawn for it — and the guess is beaten by any face wider than Inter, which is what every browser draws in for the moment before the webfont arrives, and what another operating system falls back to entirely. It showed as "Saved & invested" clipped on a phone-width Overview on Linux and not on macOS. The names are now measured in the faces they are actually drawn in, the diagram is laid out again when the real face arrives, and a name that still cannot be drawn whole is left out rather than cut — the breakdown strip under the chart lists every band with its figure, which is what a phone reads anyway
+
+### 🔧 Changed
+
+- 🧪 **The browser suite is gone, and with it the browser from CI.** Two hundred and ten Playwright tests drove the interface through a real Chromium; what they mostly proved was that a machine with its database in the next room finishes a write before the next click, which is not true of a machine with its database in the next container — three CI failures in one evening were that difference and nothing else. The interface is checked by looking at it now. What stays is the part a page was never needed for: 1 542 unit and embedded-PostgreSQL tests over the parsers, the domain modules, the schema and the arithmetic, all of which run everywhere
+- 🧪 **The private-corpus and live-CalDAV suites are gone too.** They skipped themselves in CI for want of files and credentials that are on one laptop, so nothing anyone could run ever ran them. The 355-file synthetic corpus is committed and still holds every parser to each statement's own arithmetic
+- 📏 **The pixel baseline is gone.** Fourteen full-page screenshots guarded the geometry sweep 0.4.0 was built on — that sweep has shipped, and what was left was 2.6 MB of PNGs that had to be recaptured on every deliberate change, on macOS only, where CI could never run them. A guard that cannot fail in CI and is rewritten on every intentional change teaches you to rewrite it without looking. It went first, and the rest of the browser suite followed it
+
 ## 0.4.0 — 2026-08-22
 
 > A minor release rather than the eleventh patch of 0.3: three sessions of real use — real statements, a real XTB report, an iPad, a phone — turned into five things the product could not do before. Salary reads the ledger, a property's value is a series, realised gains carry tax, the category tree belongs to the household rather than to the source code, and an instance can be run with no credentials at all. Nothing here was added on a hunch.
@@ -38,7 +52,10 @@
 
 ### 🔧 Changed
 
+<<<<<<< Updated upstream
 - 📏 **The pixel baseline is gone.** Fourteen full-page screenshots guarded the geometry sweep this release is built on — that sweep has shipped, and what was left was 2.6 MB of PNGs that had to be recaptured on every deliberate change, on macOS only, where CI could never run them. A guard that cannot fail in CI and is rewritten on every intentional change teaches you to rewrite it without looking. The narrow-viewport tests stay: they assert behaviour rather than appearance, run everywhere, and are what caught the two real defects above
+=======
+>>>>>>> Stashed changes
 - 🌐 **`ORIGIN` no longer decides whether a form is accepted.** Sign-in works at every address the server answers on — `localhost`, a LAN IP, `continuum.local`, a tailnet name — because the check compares what the browser sent against the host it sent it to. `ORIGIN` is optional now and governs only passkeys
 - 🗂️ **Documents is its own sidebar row**, after Calendar, and Settings is the gear beside the wordmark. They shared an "Admin" row, which put paperwork you open often behind the same click as configuration you open rarely
 - 🚪 The open-instance warning moved from every screen to Settings and the sign-in page — where somebody who did not expect it actually meets it, before they are inside
@@ -62,7 +79,6 @@
 
 ### 🐛 Fixed
 
-- 📏 **A name on the cash-flow diagram is never cut in half, on any machine.** The engine guessed each name's width from its character count, so where the guess was beaten the renderer cut the name to fit the box drawn for it — and the guess is beaten by any face wider than Inter, which is what every browser draws in for the moment before the webfont arrives, and what another operating system falls back to entirely. It showed as "Saved & invested" clipped on a phone-width Overview on Linux and not on macOS. The names are now measured in the faces they are actually drawn in, the diagram is laid out again when the real face arrives, and a name that still cannot be drawn whole is left out rather than cut — the breakdown strip under the chart lists every band with its figure, which is what a phone reads anyway
 - 📈 **XTB imports failed on any report containing a dividend, a withholding tax or a closed position.** Operations were written before the positions they reference, against a foreign key that is not deferrable
 - 🧾 An import failure was rendered twice; it is now shown once, and can be dismissed
 - 🏷️ "File" on a transaction did nothing visible — it meant _file under a category_, is now called Save, is disabled until one is chosen, and shows its refusal beside the row that caused it

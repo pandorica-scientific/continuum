@@ -34,7 +34,7 @@ Compose pulls a published image; nothing is built on your machine.
 
 Each release publishes its version tag and moves `latest` onto it, for
 `linux/amd64` and `linux/arm64`. `compose.yaml` uses `kerth92/continuum:latest`;
-edit that one `image:` line to pin a version (`kerth92/continuum:0.4.0`) or to
+edit that one `image:` line to pin a version (`kerth92/continuum:0.4.1`) or to
 pull from the mirror instead.
 
 To check what is actually running:
