@@ -41,6 +41,7 @@
 		const context = document.createElement('canvas').getContext('2d');
 		if (!context) return estimateText;
 		const style = getComputedStyle(element);
+		const sans = style.getPropertyValue('--font-sans');
 		const mono = style.getPropertyValue('--font-mono');
 		return (text, font, kind) => {
 			// 500 is `.name`'s weight and 400 the value's; a variable face is
