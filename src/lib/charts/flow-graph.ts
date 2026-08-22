@@ -55,7 +55,8 @@ export function flowGraph(input: FlowGraphInput, depth: 2 | 3 | 4 = 4): SankeyGr
 			label: source.name,
 			value: source.amount,
 			colorVar: INCOME,
-			column: 0
+			column: 0,
+			showValue: true
 		});
 	});
 
@@ -65,7 +66,8 @@ export function flowGraph(input: FlowGraphInput, depth: 2 | 3 | 4 = 4): SankeyGr
 			label: 'Income',
 			value: total,
 			colorVar: INCOME,
-			column: incomeColumn
+			column: incomeColumn,
+			showValue: true
 		});
 		sources.forEach((source, i) => {
 			graph.links.push({ from: `src:${i}`, to: 'income', value: source.amount });

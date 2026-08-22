@@ -72,6 +72,9 @@ describe.each(SIZES)('laid out at $width × $height', (box) => {
 		expect(height(0)).toBeCloseTo(height(2), 0);
 	});
 
+	// Flush at both ends, and asserted because it has been given up once: holding
+	// the ribbons back opened a clear channel for the middle names, and left every
+	// band starting in mid-air a hand's width clear of the block it came from.
 	it('starts ribbons and ends them flush with their nodes', () => {
 		for (const ribbon of layout.ribbons) {
 			const from = layout.nodes.find((n) => n.key === ribbon.from)!;
@@ -82,6 +85,33 @@ describe.each(SIZES)('laid out at $width × $height', (box) => {
 			expect(ribbon.y0 + ribbon.thickness).toBeLessThanOrEqual(from.y + from.h + 0.001);
 			expect(ribbon.y1).toBeGreaterThanOrEqual(to.y - 0.001);
 			expect(ribbon.y1 + ribbon.thickness).toBeLessThanOrEqual(to.y + to.h + 0.001);
+		}
+	});
+
+	// At a node's right edge its outgoing ribbons cover its height exactly — they
+	// sum to its value — so only outside the first and last columns is there any
+	// space a name can occupy without the flow underneath it. That is where the
+	// unplated labels go, and this holds them to it. Labels are measured at the
+	// full width of their margin rather than of their text, so it is true of a
+	// name of any length. The middle columns are the ones that cannot have this,
+	// and carry a plate instead — asserted separately below.
+	it('never lets a ribbon into the space an unplated label is drawn in', () => {
+		for (const label of layout.labels.filter((l) => l.fits && !l.plate)) {
+			const left = label.anchor === 'end' ? label.x - label.width : label.x;
+			const right = left + label.width;
+			for (const ribbon of layout.ribbons) {
+				const clear = right <= ribbon.x0 + 0.001 || left >= ribbon.x1 - 0.001;
+				expect(clear).toBe(true);
+			}
+		}
+	});
+
+	// A plate is drawn where — and only where — the name has flow beneath it.
+	it('plates exactly the names that are drawn over the diagram', () => {
+		const columns = [...new Set(layout.labels.map((l) => l.column))].sort((a, b) => a - b);
+		for (const label of layout.labels) {
+			const outside = label.column === columns[0] || label.column === columns[columns.length - 1];
+			expect(label.plate).toBe(!outside);
 		}
 	});
 
@@ -127,20 +157,101 @@ describe('buildSankey', () => {
 	});
 });
 
-// The right-hand labels are drawn outside the last node, so the box has to
-// reserve room for them. A fixed gutter clipped the longer names against the
-// card edge at moderate widths.
-describe('label gutters', () => {
-	it('keeps the outer columns clear of the box edges at every size', () => {
+// Labels are drawn outside their nodes, so the box reserves room for them: a
+// margin left of the first column and a channel right of every other. That
+// reservation used to be a fixed 112px, which both clipped the longer names and
+// spent the same width on a column of short ones. It is measured from the names
+// the column actually holds now.
+/** One large source and four small ones, as a real household's income is. */
+const crowdedSources: SankeyGraph = {
+	nodes: [
+		{ key: 'a', label: 'Salary', value: 33_237, colorVar: '--green', column: 0, showValue: true },
+		{
+			key: 'b',
+			label: 'Rent received',
+			value: 5845,
+			colorVar: '--green',
+			column: 0,
+			showValue: true
+		},
+		{
+			key: 'c',
+			label: 'Reimbursements',
+			value: 4363,
+			colorVar: '--green',
+			column: 0,
+			showValue: true
+		},
+		{
+			key: 'd',
+			label: 'Other income',
+			value: 1245,
+			colorVar: '--green',
+			column: 0,
+			showValue: true
+		},
+		{ key: 'e', label: 'Interest', value: 34, colorVar: '--green', column: 0, showValue: true },
+		{ key: 'in', label: 'Income', value: 44_724, colorVar: '--green', column: 1, showValue: true }
+	],
+	links: [
+		{ from: 'a', to: 'in', value: 33_237 },
+		{ from: 'b', to: 'in', value: 5845 },
+		{ from: 'c', to: 'in', value: 4363 },
+		{ from: 'd', to: 'in', value: 1245 },
+		{ from: 'e', to: 'in', value: 34 }
+	]
+};
+
+describe('label channels', () => {
+	it('keeps every label inside the box at every size', () => {
 		for (const box of SIZES) {
 			const layout = buildSankey(graph, box);
-			const columns = [...new Set(layout.nodes.map((n) => n.column))].sort((a, b) => a - b);
-			const firstX = Math.min(
-				...layout.nodes.filter((n) => n.column === columns[0]).map((n) => n.x)
-			);
-			const lastNode = layout.nodes.filter((n) => n.column === columns[columns.length - 1])[0];
-			expect(firstX).toBeGreaterThanOrEqual(112);
-			expect(box.width - (lastNode.x + lastNode.w)).toBeGreaterThanOrEqual(112);
+			for (const label of layout.labels.filter((l) => l.fits)) {
+				const left = label.anchor === 'end' ? label.x - label.width : label.x;
+				expect(left).toBeGreaterThanOrEqual(-0.001);
+				expect(left + label.width).toBeLessThanOrEqual(box.width + 0.001);
+				expect(label.y).toBeGreaterThanOrEqual(-0.001);
+				expect(label.y + label.height).toBeLessThanOrEqual(box.height + 0.001);
+			}
+		}
+	});
+
+	// Centring is not always possible: four small sources stacked at the bottom of
+	// a column have bands thinner than their own names, and relaxing spreads them
+	// down the card. What was reported as "the smaller ones are pushed down" is
+	// that, and the fix is not to pretend otherwise but to join each name back to
+	// the band it belongs to.
+	it('draws a leader from every name that could not stay level with its band', () => {
+		const layout = buildSankey(crowdedSources, { width: 1240, height: 560 });
+		let displaced = 0;
+
+		for (const node of layout.nodes) {
+			const label = layout.labels.find((l) => l.key === node.key)!;
+			const drift = Math.abs(label.y + label.height / 2 - (node.y + node.h / 2));
+			if (drift <= 1) {
+				expect(label.leader).toBeNull();
+				continue;
+			}
+			displaced += 1;
+			expect(label.leader).not.toBeNull();
+			// It starts on the band's own edge and ends where the name was put.
+			expect(label.leader!.y1).toBeCloseTo(node.y + node.h / 2, 3);
+			expect(label.leader!.y2).toBeCloseTo(label.y + label.height / 2, 3);
+			expect(label.leader!.x2).toBeCloseTo(label.x, 3);
+		}
+
+		expect(displaced).toBeGreaterThan(0);
+	});
+
+	// The point of the rewrite: a name is level with the middle of the band it
+	// names, in every column — not above it, and not level with a neighbour's.
+	// Relaxation moves one only where two bands are thinner than their own names,
+	// which the overlap invariant covers separately.
+	it('centres every label on the band it names', () => {
+		const layout = buildSankey(graph, { width: 1240, height: 560 });
+		for (const node of layout.nodes) {
+			const label = layout.labels.find((l) => l.key === node.key)!;
+			expect(label.y + label.height / 2).toBeCloseTo(node.y + node.h / 2, 3);
 		}
 	});
 });
@@ -273,12 +384,10 @@ describe('crossings', () => {
 		expect(crossings(layout.ribbons)).toBe(0);
 	});
 
-	// Ten percent of its column. Height alone was the wrong test: on a tall chart
-	// a one-percent sliver clears any pixel threshold and still names something
-	// invisible. Everything else is in the breakdown strip and on hover.
-	it('names only the bands worth reading off the diagram', () => {
-		// Shaped like the screenshot: four income sources, seven groups, and the
-		// long tail of small leaves that was fanning out and crossing.
+	// A tenth of its column used to be the test for whether a band was named at
+	// all, which left seventeen of them nameless on a real year. Type size is the
+	// variable now, not the guest list: the column shrinks to fit what it holds.
+	it('names every band on a real cash flow, at one size per column', () => {
 		const input = {
 			sources: [
 				{ name: 'Salary', amount: 33237 },
@@ -341,13 +450,71 @@ describe('crossings', () => {
 			]
 		};
 		const layout = buildSankey(flowGraph(input, 4), { width: 1240, height: 560 });
-		const drawn = layout.labels.filter((l) => l.fits).map((l) => l.label);
 
-		expect(drawn).toContain('Taxes & fees');
-		expect(drawn).toContain('Food & lifestyle');
-		// 380 of roughly 48 000 in its column.
-		expect(drawn).not.toContain('Subscriptions');
-		expect(drawn.length).toBeLessThan(layout.labels.length / 3);
+		expect(layout.labels).toHaveLength(33);
+		expect(layout.labels.every((l) => l.fits)).toBe(true);
+		// The income side is read as figures, the spending side as names — every
+		// spending figure is already in the breakdown strip under the diagram.
+		const shows = (column: number) => layout.labels.find((l) => l.column === column)!.showValue;
+		expect(shows(0)).toBe(true);
+		expect(shows(1)).toBe(true);
+		expect(shows(2)).toBe(false);
+		expect(shows(3)).toBe(false);
+		// One size per column, so a column reads as a column.
+		for (const column of [0, 1, 2, 3]) {
+			const fonts = new Set(layout.labels.filter((l) => l.column === column).map((l) => l.font));
+			expect(fonts.size).toBe(1);
+		}
+	});
+
+	/** Thirteen names down one column, at values that make "biggest" mean something. */
+	const crowded = (count: number) => ({
+		nodes: [
+			{
+				key: 'in',
+				label: 'Income',
+				value: count * 10,
+				colorVar: '--green',
+				column: 0,
+				showValue: true
+			},
+			...Array.from({ length: count }, (_, i) => ({
+				key: `leaf${i}`,
+				label: `Category ${i + 1}`,
+				value: count - i,
+				colorVar: '--blue',
+				column: 1
+			}))
+		],
+		links: Array.from({ length: count }, (_, i) => ({
+			from: 'in',
+			to: `leaf${i}`,
+			value: count - i
+		}))
+	});
+
+	it('shrinks a crowded column’s type rather than dropping its names', () => {
+		const roomy = buildSankey(crowded(13), { width: 900, height: 560 });
+		const tight = buildSankey(crowded(13), { width: 900, height: 300 });
+		const font = (layout: typeof roomy) => layout.labels.find((l) => l.column === 1)!.font;
+
+		expect(font(tight)).toBeLessThan(font(roomy));
+		expect(tight.labels.every((l) => l.fits)).toBe(true);
+	});
+
+	// Shrinking covers every household this draws; only a column with more names
+	// than a floor-sized label can stack loses any. The biggest bands keep theirs,
+	// and the rest are still on hover and in the breakdown strip.
+	it('drops only what a floor-sized label still cannot fit, smallest first', () => {
+		const layout = buildSankey(crowded(40), { width: 900, height: 300 });
+		const named = layout.labels.filter((l) => l.column === 1 && l.fits);
+		const dropped = layout.labels.filter((l) => l.column === 1 && !l.fits);
+
+		expect(named.length).toBeGreaterThan(10);
+		expect(dropped.length).toBeGreaterThan(0);
+		expect(Math.max(...dropped.map((l) => l.value))).toBeLessThan(
+			Math.min(...named.map((l) => l.value))
+		);
 	});
 
 	it('stacks a node’s incoming bands by where they came from', () => {

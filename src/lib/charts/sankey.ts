@@ -19,6 +19,15 @@ interface SankeyNodeInput {
 	/** CSS custom property name of the node's colour. */
 	colorVar: string;
 	column: number;
+	/**
+	 * Whether the label carries the amount under the name.
+	 *
+	 * Set by whoever builds the graph, because it is a question about meaning
+	 * rather than geometry: on the cash-flow chart the income side is read as
+	 * figures and the spending side as names, since every spending figure is
+	 * already in the breakdown strip under the diagram.
+	 */
+	showValue?: boolean;
 }
 
 interface SankeyLink {
@@ -47,7 +56,7 @@ interface SankeyNode extends SankeyNodeInput {
 interface SankeyRibbon {
 	from: string;
 	to: string;
-	/** Left edge, flush with the source node's right side. */
+	/** Left edge: the far side of the source column's label channel. */
 	x0: number;
 	y0: number;
 	/** Right edge, flush with the target node's left side. */
@@ -61,22 +70,34 @@ interface SankeyRibbon {
 interface SankeyLabel {
 	key: string;
 	/**
-	 * Whether the band this names is tall enough to carry a label.
+	 * Whether this name is drawn at all.
 	 *
-	 * relaxLabels() spaces labels by LABEL_H and clamps the block into the box,
-	 * so when a column has more labels than the box has room for, the tail simply
-	 * runs off the bottom of the card — which is what "text shows all and is not
-	 * scaled" described. Spacing was never the problem; quantity was.
+	 * A column shrinks its type to fit every one of its names before it drops
+	 * any (see planColumn). Only when a column still cannot fit them at the
+	 * smallest readable size do the smallest bands lose their label — and they
+	 * are still on hover and in the breakdown strip.
 	 */
 	fits: boolean;
 	column: number;
 	label: string;
 	value: number;
+	/** Whether to draw the amount under the name. */
+	showValue: boolean;
 	x: number;
-	/** Top edge; `height` is the space the two lines occupy. */
+	/** Top edge; `height` is the space the label occupies. */
 	y: number;
 	height: number;
-	anchor: 'start' | 'end' | 'middle';
+	/** Type size for this column, in px. Crowded columns get smaller type. */
+	font: number;
+	/** The room this label has. Anything longer is ellipsised. */
+	width: number;
+	anchor: 'start' | 'end';
+	/** Whether it is drawn over the flow and needs a plate behind it. */
+	plate: boolean;
+	/** The band's colour, so a leader line reads as belonging to it. */
+	colorVar: string;
+	/** Joins a name to its band where the band was too thin to hold it level. */
+	leader: { x1: number; y1: number; x2: number; y2: number } | null;
 }
 
 interface SankeyLayout {
@@ -91,25 +112,50 @@ interface SankeyLayout {
 const NODE_W = 14;
 /** Space between stacked nodes in a column. */
 const NODE_GAP = 10;
-/** Two lines of label, name over value, plus the plate's padding. */
-const LABEL_H = 36;
+
 /**
- * The smallest share of its column a node can be and still be named.
- *
- * Ten percent, which on a household's cash flow is the handful of groups worth
- * reading off the diagram directly. Everything smaller is in the breakdown
- * strip beneath the chart and on hover — it is not hidden, it is just not
- * shouted over the top of the picture.
+ * The type size labels are drawn at, and the floor a crowded column may shrink
+ * to before it starts dropping names.
  */
-const LABEL_MIN_SHARE = 0.1;
-/** Room reserved outside the first and last columns for their labels. A fixed
- *  96 clipped the longer ones against the card edge, and an 88 floor still cut
- *  "Saved & invested" once the narrow layout dropped to three columns. It
- *  scales with the box above a floor wide enough for the longest label. */
-const MIN_GUTTER = 112;
-const MAX_GUTTER = 150;
-const gutterFor = (width: number) =>
-	Math.max(MIN_GUTTER, Math.min(MAX_GUTTER, Math.round(width * 0.14)));
+const MAX_FONT = 13;
+const MIN_FONT = 9;
+/** The amount is drawn smaller than the name it sits under. */
+const VALUE_RATIO = 0.85;
+const LINE = 1.3;
+/** Breathing room around a label, inside the height and channel reserved for it. */
+const PAD_X = 6;
+const PAD_Y = 3;
+/** Ribbons need a run long enough to read as a flow rather than a smear. */
+const MIN_RUN = 48;
+/**
+ * The gap between an outer column's blocks and its names.
+ *
+ * It is there so a leader line has something to slope along. A band thinner than
+ * its own name cannot keep that name level with itself once its neighbours want
+ * the same rows, and a name pushed off its band with nothing joining the two
+ * names nothing at all.
+ */
+const LEADER = 22;
+
+const labelHeight = (font: number, withValue: boolean) =>
+	Math.ceil(font * LINE) + (withValue ? Math.ceil(font * VALUE_RATIO * LINE) + 1 : 0) + PAD_Y * 2;
+
+/**
+ * Estimated width of a run of text.
+ *
+ * The engine has no DOM to measure in. 0.62em per character is the measured
+ * average for the UI face across the names this draws, rounded up rather than
+ * to the mean: the renderer ellipsises anything that beats the estimate, and a
+ * narrow-viewport guard treats an ellipsis as clipped text, which is what an
+ * under-estimate cost the first time.
+ */
+const textWidth = (chars: number, font: number) => chars * font * 0.62;
+
+/** How many characters a grouped amount with two decimals occupies. */
+function valueChars(value: number): number {
+	const whole = Math.round(Math.abs(value)).toString();
+	return whole.length + Math.floor((whole.length - 1) / 3) + 3;
+}
 
 /**
  * Resolve vertical collisions in one column: walk the sorted positions, and
@@ -157,14 +203,62 @@ function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: nu
 	return out;
 }
 
+/**
+ * How far along the run the Bézier control points sit.
+ *
+ * A third, which is what Highcharts uses. The engine this replaces put both at
+ * the midpoint — the steepest middle a cubic can have, and the reason a dozen
+ * parallel bands smeared into each other. A third holds each band flat as it
+ * leaves its block and turns once, so neighbours stay distinguishable.
+ */
+const CURVE = 0.33;
+
 function ribbonPath(x0: number, y0: number, x1: number, y1: number, thickness: number): string {
-	// Control points at the horizontal midpoint: the shape carried over from the
-	// engine this replaces.
-	const mid = (x0 + x1) / 2;
+	const c0 = x0 + (x1 - x0) * CURVE;
+	const c1 = x1 - (x1 - x0) * CURVE;
 	return (
-		`M${x0},${y0} C${mid},${y0} ${mid},${y1} ${x1},${y1} ` +
-		`L${x1},${y1 + thickness} C${mid},${y1 + thickness} ${mid},${y0 + thickness} ${x0},${y0 + thickness} Z`
+		`M${x0},${y0} C${c0},${y0} ${c1},${y1} ${x1},${y1} ` +
+		`L${x1},${y1 + thickness} C${c1},${y1 + thickness} ${c0},${y0 + thickness} ${x0},${y0 + thickness} Z`
 	);
+}
+
+interface ColumnPlan {
+	/** Type size every label in this column is drawn at. */
+	font: number;
+	/** Height one label occupies at that size. */
+	height: number;
+	/** Width the column's names need, before the box has its say. */
+	lane: number;
+	/** How many labels the column has room for at that size. */
+	room: number;
+	withValue: boolean;
+}
+
+/**
+ * Choose one type size for a column: the largest at which every one of its
+ * names fits the height, down to a readable floor.
+ *
+ * Per column rather than per chart, because the columns are not alike — four
+ * income sources and twenty-five leaves want different sizes, and sizing the
+ * whole chart for its most crowded column would shrink the names that had room.
+ */
+function planColumn(nodes: SankeyNodeInput[], boxHeight: number): ColumnPlan {
+	const withValue = nodes.some((n) => n.showValue);
+	let font = MAX_FONT;
+	while (font > MIN_FONT && nodes.length * (labelHeight(font, withValue) + 1) > boxHeight) font--;
+	const height = labelHeight(font, withValue);
+	const lane =
+		Math.max(
+			0,
+			...nodes.map((n) =>
+				Math.max(
+					textWidth(n.label.length, font),
+					n.showValue ? textWidth(valueChars(n.value), font * VALUE_RATIO) : 0
+				)
+			)
+		) +
+		PAD_X * 2;
+	return { font, height, lane, room: Math.floor(boxHeight / (height + 1)), withValue };
 }
 
 export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
@@ -193,14 +287,106 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 	// A graph of zeroes would divide by zero and draw NaN; give it a flat scale.
 	const scale = columnTotal > 0 ? usable / columnTotal : 0;
 
-	const gutter = gutterFor(box.width);
-	const innerLeft = gutter;
-	const innerRight = box.width - gutter;
-	const span = Math.max(NODE_W, innerRight - innerLeft - NODE_W);
-	const columnX = (column: number) =>
+	// Margins, and where a name can go without lying on the flow.
+	//
+	// At a node's right edge its outgoing ribbons cover its height exactly — they
+	// sum to its value — so on a MIDDLE column there is no free space beside a
+	// band at all: not to its right, where its own ribbons leave, and not to its
+	// left, where its parents' arrive. Only two places on the whole diagram carry
+	// no ribbons: outside the first column, and outside the last.
+	//
+	// Holding the ribbons back to open a channel for the middle names did work,
+	// and it cost more than it bought: every band then started in mid-air, a
+	// hand's width clear of the block it came out of. So the ribbons are flush
+	// again. The outer columns write into their margins, and the middle ones
+	// write over their own flow on a plate — which is what the printed diagrams
+	// this is modelled on do too.
+	const plans = new Map<number, ColumnPlan>();
+	for (const column of columns) {
+		plans.set(
+			column,
+			planColumn(
+				graph.nodes.filter((n) => n.column === column),
+				box.height
+			)
+		);
+	}
+
+	// Only the outer columns reserve width, because they are the only ones whose
+	// names are drawn outside the diagram. The reservation carries a little more
+	// than the text needs: LEADER is the run a leader line has to slope along
+	// when a band is too thin to hold its own name where it sits.
+	const first = columns[0];
+	const last = columns[columns.length - 1];
+	const outer = (column: number) => column === first || column === last;
+	const runs = Math.max(1, columns.length - 1);
+	// What the names need, and what the leader lines would like on top of it.
+	// They are given up in that order: a leader is an explanation, and explaining
+	// a name that has been cut in half is worth less than not cutting it.
+	const needs = (column: number) => (outer(column) ? (plans.get(column)?.lane ?? 0) + PAD_X : 0);
+	const slope = (column: number) => (outer(column) ? LEADER - PAD_X : 0);
+	const both = (of: (column: number) => number) => of(first) + (columns.length > 1 ? of(last) : 0);
+	const spare = Math.max(0, box.width - columns.length * NODE_W - runs * MIN_RUN);
+	const slopeScale =
+		both(slope) > 0 ? Math.max(0, Math.min(1, (spare - both(needs)) / both(slope))) : 0;
+	// Only once the leaders have given up everything do the names themselves
+	// shrink. Type shrinks by the same factor, so they go on fitting until they
+	// hit the floor and have to be cut.
+	const squeeze = both(needs) > spare ? Math.max(0, spare / both(needs)) : 1;
+	if (squeeze < 1) {
+		for (const [column, plan] of plans) {
+			const font = Math.max(MIN_FONT, Math.floor(plan.font * squeeze));
+			const height = labelHeight(font, plan.withValue);
+			plans.set(column, {
+				...plan,
+				font,
+				height,
+				lane: plan.lane * squeeze,
+				room: Math.floor(box.height / (height + 1))
+			});
+		}
+	}
+	/** How far an outer column's names stand off their blocks. */
+	const standoff = (column: number) =>
+		outer(column) ? PAD_X + Math.round(slope(column) * slopeScale) : PAD_X;
+	const margin = (column: number) =>
+		outer(column)
+			? Math.round(needs(column) * squeeze) + Math.round(slope(column) * slopeScale)
+			: 0;
+
+	const run =
 		columns.length === 1
-			? innerLeft
-			: innerLeft + (columns.indexOf(column) / (columns.length - 1)) * span;
+			? 0
+			: Math.max(
+					MIN_RUN,
+					(box.width - margin(first) - margin(last) - columns.length * NODE_W) / runs
+				);
+
+	// A middle column writes inside the run its own ribbons occupy, so what bounds
+	// its names is the run rather than a margin. Half of it was the first guess and
+	// cut "Food & lifestyle" in half on a tablet; they get all of it bar a gap
+	// before the next column's blocks, and shrink their type if even that is short.
+	const roomInRun = Math.max(0, run - PAD_X * 3);
+	for (const [column, plan] of plans) {
+		if (outer(column) || plan.lane <= roomInRun || plan.lane <= 0) continue;
+		const ratio = roomInRun / plan.lane;
+		const font = Math.max(MIN_FONT, Math.floor(plan.font * ratio));
+		const height = labelHeight(font, plan.withValue);
+		plans.set(column, {
+			...plan,
+			font,
+			height,
+			lane: Math.min(plan.lane * ratio, roomInRun),
+			room: Math.floor(box.height / (height + 1))
+		});
+	}
+
+	const xOf = new Map<number, number>();
+	let cursor = margin(first);
+	for (const column of columns) {
+		xOf.set(column, cursor);
+		cursor += NODE_W + (column === last ? 0 : run);
+	}
 
 	// Ordering: alternating barycentre sweeps over INDICES.
 	//
@@ -275,7 +461,7 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 		let y = Math.max(0, (box.height - stackHeight) / 2);
 		for (const node of ordered) {
 			const h = Math.max(1, node.value * scale);
-			const shaped: SankeyNode = { ...node, x: columnX(column), y, w: NODE_W, h };
+			const shaped: SankeyNode = { ...node, x: xOf.get(column) ?? 0, y, w: NODE_W, h };
 			placed.set(node.key, shaped);
 			layout.nodes.push(shaped);
 			y += h + NODE_GAP;
@@ -343,49 +529,74 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 		});
 	}
 
-	// Labels sit outside the nodes, name over value: the first column anchors
-	// right of its gutter, the last anchors left, the rest sit above their node.
-	const last = columns[columns.length - 1];
+	// Every label is centred on the band it names, in every column — that is the
+	// requirement. What varies is where the column can put it, and what has to
+	// happen when a band is too thin to hold its own name.
 	for (const column of columns) {
 		const inColumn = layout.nodes.filter((n) => n.column === column);
-		const first = column === columns[0];
-		const isLast = column === last;
-		// The outer columns label into their gutters, centred on the band. A MIDDLE
-		// column has ribbons on both sides, so its label goes ABOVE the band rather
-		// than beside it — a label beside a middle node lands on the diagram, which
-		// is what "the text on the right is on the plot" was.
-		const preferred = inColumn.map((n) =>
-			first || isLast ? n.y + n.h / 2 - LABEL_H / 2 : n.y - LABEL_H - 2
+		const plan = plans.get(column);
+		if (!plan) continue;
+		const { font, height, room } = plan;
+		const isFirst = column === first;
+		const outside = outer(column);
+
+		const preferred = inColumn.map((n) => n.y + n.h / 2 - height / 2);
+		// Centring is what is asked for; relaxing is what makes it possible when
+		// two bands are thinner than their own names. Labels keep their order and
+		// are pushed apart the least the collision allows — and whatever is pushed
+		// gets a leader line, below, so it still reads as belonging to its band.
+		const relaxed = relaxLabels(preferred, height + 1, 0, Math.max(0, box.height - height));
+
+		// Shrinking the type is tried first and covers every real household; this
+		// only bites on a column with more names than a floor-sized label can
+		// stack. The biggest bands keep theirs.
+		const named = new Set(
+			[...inColumn]
+				.sort((a, b) => b.value - a.value)
+				.slice(0, room)
+				.map((n) => n.key)
 		);
-		// Relaxed either way. Skipping this for the middle columns let two adjacent
-		// groups' labels sit on top of each other, which the invariant suite caught.
-		const relaxed = relaxLabels(preferred, LABEL_H, 0, Math.max(0, box.height - LABEL_H));
-		// How many labels this column has room for at all. Decided before
-		// relaxation rather than after: relaxing decides WHERE they go, and no
-		// arrangement helps once there are more than fit.
-		const room = Math.max(1, Math.floor(box.height / LABEL_H));
-		const columnTotalHere = inColumn.reduce((sum, n) => sum + n.value, 0);
+		// An outer column has its margin. A middle one has only the run its own
+		// ribbons occupy, and takes half of it at most, so a long name can never
+		// reach the next column's blocks.
+		const width = outside
+			? Math.max(0, margin(column) - standoff(column))
+			: Math.max(0, Math.min(plan.lane, roomInRun));
 
 		inColumn.forEach((node, i) => {
-			// A label is worth drawing when the band is a real share of the column.
-			// Height alone was the wrong test: on a tall chart a 1% sliver clears
-			// the pixel threshold and still names something invisible.
-			const share = columnTotalHere > 0 ? node.value / columnTotalHere : 0;
+			const nodeCentre = node.y + node.h / 2;
+			const labelCentre = relaxed[i] + height / 2;
+			// Where the label sits: outside the diagram for the outer columns, and
+			// against its own block for the rest.
+			const x = isFirst ? node.x - standoff(column) : node.x + node.w + standoff(column);
 			layout.labels.push({
 				key: node.key,
 				column,
 				label: node.label,
 				value: node.value,
-				fits: inColumn.length <= room && share >= LABEL_MIN_SHARE,
-				// The first column labels to its left and the last to its right, into
-				// the gutters reserved for exactly that. A MIDDLE column has ribbons on
-				// both sides, so a label beside it lands on the diagram — which is what
-				// "text in the right is on the plot" was. It sits above its node
-				// instead, in the gap the stacking already leaves.
-				x: first ? node.x - 8 : isLast ? node.x + node.w + 8 : node.x + node.w / 2,
+				showValue: !!node.showValue,
+				fits: named.has(node.key),
+				// Only a middle column writes over the flow, so only it needs the
+				// plate that lifts text off a saturated band.
+				plate: !outside,
+				colorVar: node.colorVar,
+				x,
 				y: relaxed[i],
-				height: LABEL_H,
-				anchor: first ? 'end' : isLast ? 'start' : 'middle'
+				height,
+				font,
+				width,
+				anchor: isFirst ? 'end' : 'start',
+				// Drawn only where the name had to leave its band. Anything closer
+				// than a pixel is level with it and needs no explaining.
+				leader:
+					Math.abs(labelCentre - nodeCentre) > 1
+						? {
+								x1: isFirst ? node.x : node.x + node.w,
+								y1: nodeCentre,
+								x2: x,
+								y2: labelCentre
+							}
+						: null
 			});
 		});
 	}

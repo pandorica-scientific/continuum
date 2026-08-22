@@ -42,6 +42,17 @@
 	const amount = (value: number) => formatMinor(fromMajor(value, currency), currency);
 
 	/**
+	 * The joins between a name and its band, for the names that could not stay
+	 * level with one. Drawn inside the SVG so they sit under the ribbons' own
+	 * edges rather than over the labels.
+	 */
+	const leaders = $derived(
+		layout.labels
+			.filter((l) => l.fits && l.leader)
+			.map((l) => ({ key: l.key, colorVar: l.colorVar, ...l.leader! }))
+	);
+
+	/**
 	 * What the pointer is over, and where to say it.
 	 *
 	 * A label is drawn permanently only where the band has room for one. The rest
@@ -83,19 +94,33 @@
 					onpointerleave={() => (hovered = null)}
 				/>
 			{/each}
+			{#each leaders as leader (leader.key)}
+				<line
+					x1={leader.x1}
+					y1={leader.y1}
+					x2={leader.x2}
+					y2={leader.y2}
+					class="leader"
+					stroke="var({leader.colorVar})"
+				/>
+			{/each}
 		</svg>
-		<!-- Only where there is room. The rest are on hover, and every one of them
-		     is in the breakdown strip beneath the chart regardless — which is what
-		     a touch device reads instead. -->
+		<!-- Each in the channel its column reserved, centred on the band it names.
+		     A column shrinks its type to fit every name before it drops any; what
+		     a very crowded one still cannot fit is on hover and in the breakdown
+		     strip beneath the chart, which is what a touch device reads instead. -->
 		{#each layout.labels.filter((l) => l.fits) as label (label.key)}
 			<div
 				class="label {label.anchor}"
+				class:plate={label.plate}
 				style:left="{label.x}px"
 				style:top="{label.y}px"
 				style:height="{label.height}px"
+				style:font-size="{label.font}px"
+				style:max-width="{label.width}px"
 			>
 				<span class="name">{label.label}</span>
-				<span class="value mono">{amount(label.value)}</span>
+				{#if label.showValue}<span class="value mono">{amount(label.value)}</span>{/if}
 			</div>
 		{/each}
 		{#if hovered}
@@ -135,9 +160,11 @@
 		padding: var(--space-2) var(--space-4);
 		box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
 	}
-	/* Labels sit outside their node, name over value, as a printed Sankey does.
-	   Absolutely positioned in the same pixel space as the diagram, so they are
-	   never scaled with it. */
+	/* Labels sit in the channel their column reserved, beside the band they name.
+	   Absolutely positioned in the same pixel space as the diagram, and given the
+	   type size that column settled on — so a crowded column reads smaller rather
+	   than losing its names. No plate: nothing is drawn in a channel, so there is
+	   nothing to lift the text off. */
 	.label {
 		position: absolute;
 		display: flex;
@@ -145,33 +172,52 @@
 		justify-content: center;
 		gap: 1px;
 		pointer-events: none;
-		white-space: nowrap;
-		/* Labels sit over the ribbons they describe, so they carry the halo
-		   plate the design system keeps for exactly this. A text-shadow alone
-		   is not enough over a saturated band. */
-		background: var(--plate);
-		border-radius: var(--radius-sm);
-		padding: 3px 7px;
 	}
 	.label.end {
 		transform: translateX(-100%);
 		align-items: flex-end;
+		text-align: right;
 	}
-	/* Centred on its node rather than starting at it: a middle column has ribbons
-	   on both sides, so the label sits above the band it names. */
-	.label.middle {
-		align-items: center;
-		transform: translateX(-50%);
+	.label.start {
+		align-items: flex-start;
+	}
+	/* A middle column has ribbons on both sides of every band — its own leaving,
+	   its parents' arriving — so there is no free space beside one to write in.
+	   Those names are drawn over the flow, and the plate is what lifts them off
+	   a saturated band; a text-shadow alone is not enough. */
+	.label.plate {
+		background: var(--plate);
+		border-radius: var(--radius-sm);
+		padding: 0 5px;
+	}
+	.leader {
+		stroke-width: 1;
+		opacity: 0.5;
+	}
+	/* The engine estimates text width without a DOM to measure in. Where the
+	   estimate is beaten, the name is cut rather than allowed into the diagram. */
+	.name,
+	.value {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.name {
-		font-size: var(--text-sm);
+		font-size: 1em;
 		font-weight: 500;
 		color: var(--fg1);
-		line-height: 1.25;
+		line-height: 1.3;
 	}
 	.value {
-		font-size: var(--text-xs);
+		font-size: 0.85em;
 		color: var(--fg2);
-		line-height: 1.2;
+		line-height: 1.3;
+	}
+	.tip .name {
+		font-size: var(--text-sm);
+	}
+	.tip .value {
+		font-size: var(--text-xs);
 	}
 </style>
