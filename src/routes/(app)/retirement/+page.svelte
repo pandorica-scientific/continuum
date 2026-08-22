@@ -594,15 +594,14 @@
 		text-decoration: none;
 		font-size: var(--text-sm);
 	}
+	/* Deliberately smaller than a form control: it rides inside a payslip row,
+	   not beside a field. */
 	.slip-save {
+		min-height: auto;
 		padding: 5px 10px;
 		font-size: var(--text-xs);
 	}
 	.payslip-form {
-		/* Named rather than repeated: five selectors below depend on these being
-		   the same number, and that is exactly the kind of agreement that rots
-		   silently when it is written out five times. */
-		--payslip-control-h: 36px;
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 		gap: var(--space-6);
@@ -614,45 +613,18 @@
 		gap: 5px;
 		font-size: var(--text-sm);
 		color: var(--fg3);
+		/* Lets a label — and the file input inside it, which reports the width of
+		   its button plus the filename — be narrower than its content and fit a
+		   1fr track. */
+		min-width: 0;
 	}
-	.payslip-form input,
-	/* One height for every control in this row.
-	   The row is `align-items: end`, so anything taller than its neighbours does
-	   not sit lower — it rides UP, and the payslip field did: 42px against 36
-	   for the selects, 34 for the amount and 32 for the button. Four heights,
-	   four baselines. A file input is the culprit because its button gives it an
-	   intrinsic height nothing else in the row shares, which no amount of
-	   padding on the input itself can settle. So the height is stated once, and
-	   the button is styled to live inside it. */
-	.payslip-form input,
-	.payslip-form select,
-	.payslip-form .btn {
-		height: var(--payslip-control-h);
-		box-sizing: border-box;
-	}
-	/* min-width:0 is what lets a grid item be narrower than its content — a file
-	   input reports the width of its button plus the filename and would
-	   otherwise refuse its 1fr track. */
+	/* This row used to state its own control height, its own file-input padding
+	   and its own file-button styling — the fix for a file field that measured
+	   42px beside 36px selects and rode UP out of the row. That fix now lives in
+	   the base control layer and applies to every file field in the product, so
+	   what is left here is only what is particular to this row. */
 	.payslip-form input[type='file'] {
-		min-width: 0;
-		max-width: 100%;
-		padding: 0 8px;
 		font-size: var(--text-sm);
-		line-height: calc(var(--payslip-control-h) - 2px);
-	}
-	.payslip-form input[type='file']::file-selector-button {
-		margin: 0 9px 0 0;
-		padding: 3px 10px;
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-sm);
-		background: var(--bg2);
-		color: var(--fg1);
-		font: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.payslip-form label {
-		min-width: 0;
 	}
 	.verdict {
 		background: var(--blue-tint);

@@ -227,7 +227,7 @@ test.describe('signed in', () => {
 		await row.getByRole('button', { name: 'Save' }).click();
 		// `use:enhance` submits asynchronously. Wait for the server result to be
 		// applied before navigating, otherwise the filtered GET can race the commit.
-		await expect(row.locator('.r-state')).toHaveText('confirmed');
+		await expect(row.locator('.r-file .pill')).toHaveText('confirmed');
 
 		await page.goto('/transactions?q=ACME&category=groceries');
 		await expect(page.locator('.txn-row')).toHaveCount(1);
@@ -274,6 +274,51 @@ test.describe('signed in', () => {
 		await expect(row).toBeVisible();
 		// Tagged at transaction level, so the whole transaction counts.
 		await expect(row).toContainText('32 892');
+	});
+
+	test('the register shows the number of rows the reader asked for', async ({ page }) => {
+		await page.goto('/transactions');
+		const rows = page.locator('.txn-row');
+		const total = Number((await page.locator('.filter-total').innerText()).split(' ')[0]);
+
+		// 10 is the default, so start from a size that is not.
+		await expect(page.locator('.per-page').getByRole('link', { name: '10' })).toHaveClass(/active/);
+		await page.locator('.per-page').getByRole('link', { name: '25', exact: true }).click();
+		await expect(page).toHaveURL(/per=25/);
+		await expect(rows).toHaveCount(Math.min(25, total));
+
+		// Every other part of this view lives in the URL, so a narrowed view stays
+		// shareable at the size it was read in — including through Apply, which as
+		// a GET form submits only its own fields.
+		await page.locator('input[name=q]').fill('ACME');
+		await page.getByRole('button', { name: 'Apply' }).click();
+		await expect(page).toHaveURL(/per=25/);
+
+		// Clear resets everything, page size included.
+		await page.getByRole('link', { name: 'Clear' }).click();
+		await expect(page).not.toHaveURL(/per=/);
+		await expect(page.locator('.per-page').getByRole('link', { name: '10' })).toHaveClass(/active/);
+	});
+
+	test('a tag can be removed, and what carried it is untagged', async ({ page }) => {
+		await page.goto('/transactions?q=ACME');
+		await page.locator('.txn-row .tag-input').first().fill('Mistake');
+		await page.locator('.txn-row .tag-input').first().press('Enter');
+		await expect(page.locator('.txn-row .tag-chip', { hasText: 'Mistake' })).toBeVisible({
+			timeout: 10000
+		});
+
+		await page.goto('/tags');
+		const row = page.locator('.tag-row', { hasText: 'Mistake' });
+		// Two taps, and the confirmation says what it reaches before it is taken.
+		await row.getByRole('button', { name: 'Remove Mistake' }).click();
+		await expect(row.locator('.t-reach')).toContainText('untags 1');
+		await row.getByRole('button', { name: 'Delete?' }).click();
+		await expect(page.locator('.tag-row', { hasText: 'Mistake' })).toHaveCount(0);
+
+		// The transaction is untagged by the delete itself — nothing had to visit it.
+		await page.goto('/transactions?q=ACME');
+		await expect(page.locator('.txn-row .tag-chip', { hasText: 'Mistake' })).toHaveCount(0);
 	});
 
 	test('the rules screen lists what filing taught it, and nothing else', async ({ page }) => {
@@ -479,6 +524,39 @@ test.describe('signed in', () => {
 		await expect(page.locator('.tax-row', { hasText: '2026' })).toContainText('1 305 000');
 	});
 
+	test('a tax statement files its own paperwork on the Tax shelf', async ({ page }) => {
+		await page.goto('/tax');
+		await page.getByRole('button', { name: 'Add statement' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.locator('.tax-person').selectOption({ index: 0 });
+		await dialog.locator('.tax-year').fill('2024');
+		await dialog.locator('.tax-country').fill('CZ');
+		// The currency is picked, not typed: free text accepted display symbols and
+		// misspellings, and stored them as if they were currency codes.
+		await dialog.locator('.tax-currency').selectOption('CZK');
+		await dialog.locator('.tax-gross').fill('900000');
+		await dialog.locator('.tax-paid').fill('135000');
+
+		// The statement brings its own document. Before this, attaching anything
+		// meant leaving the screen to file it on the documents shelf first.
+		await dialog.locator('.tax-file').setInputFiles({
+			name: 'danove-priznani-2024.pdf',
+			mimeType: 'application/pdf',
+			buffer: Buffer.from('%PDF-1.4 tax statement')
+		});
+		await dialog.getByRole('button', { name: 'Save statement' }).click();
+
+		// The row names the document, which is the statement's end of the link.
+		const row = page.locator('.tax-row', { hasText: '2024' });
+		await expect(row).toBeVisible({ timeout: 10000 });
+		await expect(row.locator('.t-doc')).toContainText('2024 CZ tax statement');
+
+		// And the document's end: on the Tax shelf, filed against the person, so
+		// it is reachable from the household's files and not only from here.
+		await page.goto('/documents?shelf=tax');
+		await expect(page.getByText('2024 CZ tax statement').first()).toBeVisible();
+	});
+
 	test('switching a module off removes its sub-tab and 404s its routes', async ({ page }) => {
 		// The sidebar names areas, not screens. Property is a screen inside
 		// Assets, so switching it off takes away its sub-tab; the Assets row
@@ -570,17 +648,25 @@ test.describe('signed in', () => {
 		const row = page.locator('.txn-row').first();
 		await expect(row).toBeVisible();
 
-		await row.locator('input[type=file]').setInputFiles({
+		// Receipts live behind one button per row now — a file input under every
+		// transaction cost a line each on a page that is only transactions.
+		await row.getByRole('button', { name: /^Receipts for/ }).click();
+		const receipts = page.getByRole('dialog');
+		await receipts.locator('input[type=file]').setInputFiles({
 			name: 'acme-receipt.pdf',
 			mimeType: 'application/pdf',
 			buffer: Buffer.from('%PDF-1.4 receipt')
 		});
 		// exact: a file input has an implicit button role, and this one's label
 		// begins "Attach a receipt…", which the substring default also matches.
-		await row.getByRole('button', { name: 'Attach', exact: true }).click();
+		await receipts.getByRole('button', { name: 'Attach', exact: true }).click();
 
-		const chip = row.locator('.doc-chip', { hasText: 'acme-receipt.pdf' });
+		const chip = receipts.locator('.doc-chip', { hasText: 'acme-receipt.pdf' });
 		await expect(chip).toBeVisible();
+		// The count is on the face of the button, so a row with evidence filed
+		// against it says so without opening anything.
+		await receipts.getByRole('button', { name: 'Close' }).click();
+		await expect(row.locator('.doc-count')).toHaveText('1');
 
 		// It is a real document in the household's files, not a private blob on the
 		// row — filed under Receipts, because the documents screen builds its
@@ -590,13 +676,40 @@ test.describe('signed in', () => {
 		await expect(page.getByText('Receipts').first()).toBeVisible();
 		await expect(page.getByText('acme-receipt.pdf').first()).toBeVisible();
 
-		// Detaching unlinks it and leaves the document alone.
+		// Removing it deletes the document rather than unlinking it. Unlinking left
+		// the file on the shelf, unreachable from the row it came from, and the
+		// documents screen had no delete of its own — so it became litter.
 		await page.goto('/transactions?q=ACME');
-		const attached = page.locator('.txn-row').first().locator('.doc-chip');
-		await attached.getByRole('button', { name: /Detach/ }).click();
-		await expect(page.locator('.txn-row').first().locator('.doc-chip')).toHaveCount(0);
+		await page
+			.locator('.txn-row')
+			.first()
+			.getByRole('button', { name: /^Receipts for/ })
+			.click();
+		const reopened = page.getByRole('dialog');
+		// Two taps: it deletes a stored file, from everywhere it was filed.
+		await reopened
+			.locator('.doc-chip')
+			.getByRole('button', { name: /^Remove/ })
+			.click();
+		await reopened.getByRole('button', { name: 'Delete?' }).click();
+		await expect(reopened.locator('.doc-chip')).toHaveCount(0);
 		await page.goto('/documents');
-		await expect(page.getByText('acme-receipt.pdf').first()).toBeVisible();
+		await expect(page.getByText('acme-receipt.pdf')).toHaveCount(0);
+	});
+
+	test('a document can be removed from the shelf it was filed on', async ({ page }) => {
+		await page.goto('/documents');
+		await page.getByRole('button', { name: '➕ Add document' }).click();
+		await page.getByPlaceholder('Passport · Robert').fill('Misfiled note');
+		await page.locator('select[name=shelf]').selectOption('family');
+		await page.locator('.tick', { hasText: 'Jana Nováková' }).locator('input').check();
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect(page.getByText('Misfiled note')).toBeVisible();
+
+		const card = page.locator('.doc', { hasText: 'Misfiled note' }).first();
+		await card.getByRole('button', { name: 'Remove Misfiled note' }).click();
+		await card.getByRole('button', { name: 'Delete?' }).click();
+		await expect(page.getByText('Misfiled note')).toHaveCount(0);
 	});
 
 	test('documents: adding one builds its shelf and person column', async ({ page }) => {

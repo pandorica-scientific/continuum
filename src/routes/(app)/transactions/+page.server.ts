@@ -5,7 +5,7 @@ import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
 import { account, tag } from '$lib/server/db/schema';
 import { getBaseCurrency } from '$lib/server/settings';
-import { fileTransaction, PAGE_SIZE, registerPage } from '$lib/server/transactions';
+import { fileTransaction, registerPage } from '$lib/server/transactions';
 import { deleteSplits, loadSplits, saveSplits } from '$lib/server/splits';
 import {
 	loadSplitTagsFor,
@@ -13,7 +13,12 @@ import {
 	setSplitTagSets,
 	updateTransactionTags
 } from '$lib/server/tags';
-import { parseFilter, REVIEW_STATES } from '$lib/transactions/filter';
+import {
+	DEFAULT_PAGE_SIZE,
+	PAGE_SIZES,
+	parseFilter,
+	REVIEW_STATES
+} from '$lib/transactions/filter';
 import {
 	INFERRED_SOURCES,
 	PROOF_LABELS,
@@ -26,7 +31,7 @@ import {
 	detachDocumentFromTransaction,
 	loadTransactionDocuments
 } from '$lib/server/transactions/documents';
-import { createDocument } from '$lib/server/documents/mutations';
+import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
 import { saveUpload } from '$lib/server/system/files';
 import { uuidv7 } from 'uuidv7';
 import { extname } from 'node:path';
@@ -60,6 +65,20 @@ export const load: PageServerLoad = async ({ url }) => {
 	const pageHref = (n: number) => {
 		const params = new URLSearchParams(url.searchParams);
 		params.set('page', String(n));
+		return `?${params}`;
+	};
+
+	/**
+	 * Switching page size returns to page one.
+	 *
+	 * Staying put would be arithmetic nobody asked for: page 6 of 50 is page 26
+	 * of 10, and landing three hundred rows into the ledger is not what pressing
+	 * "10" means.
+	 */
+	const sizeHref = (size: number) => {
+		const params = new URLSearchParams(url.searchParams);
+		params.set('per', String(size));
+		params.delete('page');
 		return `?${params}`;
 	};
 
@@ -107,6 +126,10 @@ export const load: PageServerLoad = async ({ url }) => {
 				splits: splits.map((s) => ({
 					id: s.id,
 					amount: `${formatMinor(s.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
+					// Coloured like the transaction it divides: a split line reading in
+					// neutral grey under a red parent looks like a different kind of
+					// figure rather than a share of the same one.
+					negative: s.amountMinor < 0n,
 					amountMajor: formatMinor(s.amountMinor < 0n ? -s.amountMinor : s.amountMinor, r.currency),
 					categoryId: s.categoryId,
 					categoryLabel: s.categoryId ? (categoryName.get(s.categoryId) ?? null) : null,
@@ -121,7 +144,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		total: page.total,
 		pageCount: page.pageCount,
-		pageSize: PAGE_SIZE,
+		pageSize: filter.pageSize,
+		defaultPageSize: DEFAULT_PAGE_SIZE,
+		pageSizes: PAGE_SIZES.map((size) => ({
+			size,
+			href: sizeHref(size),
+			active: size === filter.pageSize
+		})),
 		knownTags,
 		reviewStates: REVIEW_STATES,
 		// Offered as a filter because these are the readings whose structure was
@@ -212,10 +241,28 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
+	/**
+	 * Remove a receipt from a transaction.
+	 *
+	 * This deletes the document, not just the link. Unlinking only left the file
+	 * on the Documents shelf with no way to reach it from the row it came from
+	 * and — until now — no way to delete it there either, so every removed
+	 * receipt became litter nobody could clear.
+	 *
+	 * The control says "Delete" and asks twice, because this is not local to the
+	 * transaction: a receipt filed against something else as well goes from there
+	 * too.
+	 */
 	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
-		await detachDocumentFromTransaction(id, String(form.get('documentId') ?? ''));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { id, message: 'Which receipt?' });
+
+		// Unlink first: if the document is already gone, the row must still end up
+		// without a dangling reference to it.
+		await detachDocumentFromTransaction(id, documentId);
+		await deleteDocument(documentId);
 		return { ok: true };
 	},
 

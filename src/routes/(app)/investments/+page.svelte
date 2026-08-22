@@ -15,6 +15,12 @@
 	let dismissed = $state<string | null>(null);
 	const errorMessage = $derived(form?.message && form.message !== dismissed ? form.message : null);
 
+	// The threshold field follows the checkbox as it is clicked, not as it was
+	// last saved. Reading `data` directly left the field disabled until a reload,
+	// and a disabled field is never posted — so switching the exemption on and
+	// typing a threshold in the same visit saved neither it nor the rate.
+	let exemptLongHeld = $derived(data.tax.exemptLongHeld);
+
 	async function upload(files: FileList) {
 		const file = files[0];
 		if (!file) return { type: 'error' as const, message: 'Choose a report first.' };
@@ -49,15 +55,20 @@
 		const actualPoints = data.series
 			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
-		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))];
 		// A rule where each year begins, so the labels beneath the plot have
 		// something to point at. Drawn at the FIRST month of each year rather than
 		// spaced evenly: the series can start mid-year, and an evenly spaced rule
 		// would sit wherever it liked and quietly mislead.
-		const yearLines = years
-			.map((year) => data.series.findIndex((p) => p.month.slice(0, 4) === year))
-			.filter((index) => index > 0)
-			.map((index) => x(index));
+		//
+		// The labels are positioned from the same index as the rules. They used to
+		// be laid out space-between, which put every one of them somewhere the
+		// rule was not.
+		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))].map((year) => {
+			const index = data.series.findIndex((p) => p.month.slice(0, 4) === year);
+			const left = (x(index) / CW) * 100;
+			return { year, left, end: left > 90 };
+		});
+		const yearLines = years.filter((y) => y.left > 0).map((y) => (y.left / 100) * CW);
 		// One unit for the whole axis: millions when the top gridline reaches
 		// them, thousands otherwise.
 		const inMillions = max >= 1e6;
@@ -173,7 +184,19 @@
 		</div>
 	{/if}
 
-	<form method="POST" action="?/setTax" use:enhance class="card tax-form">
+	<!-- reset: false. A successful submit otherwise resets the form, and a reset
+	     restores each field to its DOM default — which is empty, because Svelte
+	     sets a dynamic value as a property and never writes the attribute. The
+	     rate came back only because its value had changed and was re-applied;
+	     the threshold, unchanged at 3, was left blank the moment it saved. -->
+	<form
+		method="POST"
+		action="?/setTax"
+		use:enhance={() =>
+			async ({ update }) =>
+				update({ reset: false })}
+		class="card tax-form"
+	>
 		<Eyebrow emoji="⚖️" label="How gains are taxed here" />
 		<div class="tax-fields">
 			<label class="field">
@@ -181,7 +204,7 @@
 				<input name="ratePct" inputmode="decimal" value={data.tax.ratePct || ''} placeholder="15" />
 			</label>
 			<label class="toggle">
-				<input type="checkbox" name="exemptLongHeld" checked={data.tax.exemptLongHeld} />
+				<input type="checkbox" name="exemptLongHeld" bind:checked={exemptLongHeld} />
 				<span>Exempt what was held a long time</span>
 			</label>
 			<label class="field">
@@ -190,7 +213,7 @@
 					name="exemptAfterYears"
 					inputmode="numeric"
 					value={data.tax.exemptAfterYears}
-					disabled={!data.tax.exemptLongHeld}
+					disabled={!exemptLongHeld}
 				/>
 			</label>
 			<button type="submit" class="btn btn-primary">Save</button>
@@ -219,7 +242,15 @@
 			{/each}
 			<svg viewBox="0 0 800 200" preserveAspectRatio="none">
 				{#each [0, 50, 100, 150] as gy (gy)}
-					<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+					<line
+						x1="0"
+						y1={gy}
+						x2="800"
+						y2={gy}
+						stroke="var(--bd)"
+						stroke-width="1"
+						vector-effect="non-scaling-stroke"
+					/>
 				{/each}
 				<!-- Where each year begins. Structure rather than data, so it is drawn
 				     at the weight the horizontal gridlines already use. -->
@@ -234,7 +265,15 @@
 						vector-effect="non-scaling-stroke"
 					/>
 				{/each}
-				<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
+				<line
+					x1="0"
+					y1="200"
+					x2="800"
+					y2="200"
+					stroke="var(--bd2)"
+					stroke-width="1"
+					vector-effect="non-scaling-stroke"
+				/>
 				<polyline
 					points={chart.bench5}
 					fill="none"
@@ -272,7 +311,8 @@
 			</svg>
 		</div>
 		<div class="years mono">
-			{#each chart.years as y (y)}<span>{y}</span>{/each}
+			{#each chart.years as y (y.year)}<span style:left="{y.left}%" class:end={y.end}>{y.year}</span
+				>{/each}
 		</div>
 		<div class="legend">
 			<span class="l"
@@ -447,12 +487,25 @@
 		height: auto;
 		display: block;
 	}
+	/* Each label sits at its own year rule rather than being spread evenly. The
+	   last one is pulled back inside the plot so it cannot run off the edge. */
 	.years {
-		display: flex;
-		justify-content: space-between;
+		position: relative;
+		height: 1.2em;
 		margin-left: 46px;
 		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	.years span {
+		position: absolute;
+		top: 0;
+		padding-left: 4px;
+		white-space: nowrap;
+	}
+	.years span.end {
+		transform: translateX(-100%);
+		padding-left: 0;
+		padding-right: 4px;
 	}
 	.legend {
 		display: flex;

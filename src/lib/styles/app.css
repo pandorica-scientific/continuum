@@ -148,9 +148,12 @@
 	--space-8: 16px;
 
 	/* One height for anything a person types into or presses in a form row.
-	 * Applied where a row needs its controls to agree — NOT globally: forcing it
-	 * on every control in the product changed nine of fourteen screens, which is
-	 * a restyle rather than a standardisation.
+	 * The base control layer applies it as a `min-height` to every input, select
+	 * and textarea, and a `.btn` at the default padding and type size already
+	 * measures it — so a control and the button beside it agree without either
+	 * being told about the other. It is a floor, not a fixed height: a textarea
+	 * still grows with its rows, and a control a screen has deliberately made
+	 * smaller keeps its own padding and only stops being SHORTER than this.
 	 */
 	--control-h: 36px;
 }
@@ -287,44 +290,48 @@ input::placeholder {
 	color: var(--fg3);
 }
 
-/* The base look every screen's controls share. Component-scoped rules always
-   win on specificity, so existing screens keep their (identical) declarations
-   and a new screen no longer has to restate these six properties — the drift
-   this prevents bit two screens in one day. */
-input:not([type='checkbox']):not([type='radio']),
-select,
-textarea {
-	border: 1px solid var(--bd2);
-	background: var(--card);
-	color: var(--fg1);
-	border-radius: 8px;
-	padding: 8px 11px;
-	font-size: var(--text-md);
-}
+/* The base look every screen's controls share lives in one place — the
+   `:where()` block further down, next to `.btn`. This block used to restate it
+   with a `:not()` chain whose specificity (0,3,1) quietly beat ordinary
+   component overrides, so a screen could not adjust its own controls; the two
+   copies had also already drifted apart on radius and padding. */
 input[type='checkbox'],
 input[type='radio'] {
 	accent-color: var(--blue);
 }
 
 /* A file field's "Choose File" button is drawn by the browser and inherits none
-   of the rules above, so it kept its platform default — a light grey chip sat
-   inside a dark card on the payslip, document, bill and restore forms. Styling
-   the pseudo-element here covers all four the way the base rule above covers
-   every other control. */
+ * of the rules above, so it kept its platform default — a light grey chip sat
+ * inside a dark card on the payslip, document, bill and restore forms.
+ *
+ * The button also gives the field an intrinsic height nothing else in a form
+ * row shares: left alone it measured 42px beside 36px selects and 34px text
+ * inputs, which is the "one box is taller than the one next to it" the tax
+ * dialog showed. No amount of padding on the input settles that — the button
+ * has to be made to live INSIDE the shared control height, which is what the
+ * flat padding and the small button below do. The payslip form worked this out
+ * for its own row; this is that fix, stated once for every file field.
+ */
 input[type='file'] {
-	padding: 5px 6px;
+	padding: 0 var(--space-4);
+	line-height: calc(var(--control-h) - 2px);
 	color: var(--fg2);
 	cursor: pointer;
+	/* A file input reports the width of its button plus the filename and will
+	   otherwise refuse to shrink into a 1fr grid track. */
+	min-width: 0;
+	max-width: 100%;
 }
 input[type='file']::file-selector-button {
 	border: 1px solid var(--bd2);
 	background: var(--card2);
 	color: var(--fg1);
-	border-radius: 6px;
-	padding: 5px 11px;
-	margin-right: 10px;
+	border-radius: var(--radius-sm);
+	padding: var(--space-1) var(--space-5);
+	margin: 0 var(--space-5) 0 0;
 	font-family: inherit;
-	font-size: var(--text-md);
+	font-size: var(--text-sm);
+	line-height: normal;
 	cursor: pointer;
 }
 input[type='file']::file-selector-button:hover {
@@ -416,6 +423,17 @@ textarea {
 	padding: var(--space-4) 11px;
 	font-size: var(--text-md);
 	font-family: inherit;
+	/* One line box and one floor, or controls of the same nominal size still come
+	 * out a few pixels apart: the browser's own line height for a text input, a
+	 * select and a textarea are three different numbers, and a select adds room
+	 * for its arrow on top. Side by side that reads as fields sitting slightly
+	 * too high or too low — reported on the tax dialog and true product-wide.
+	 *
+	 * `min-height` rather than `height`: a textarea keeps growing with its rows,
+	 * and nothing that was already taller gets cropped.
+	 */
+	line-height: 1.35;
+	min-height: var(--control-h);
 }
 
 /* `.field` was already a convention — defined independently in five files.
@@ -438,6 +456,26 @@ textarea {
 	font-size: var(--text-md);
 	cursor: pointer;
 	white-space: nowrap;
+	/* The same floor the fields stand on. A default button measured 32px against
+	 * their 36 — the button beside a filter box, a Clear next to a search field,
+	 * the remove button on a form row all sat four pixels short, which is the
+	 * "a few pixels too low" this release is chasing.
+	 *
+	 * inline-flex because `.btn` is worn by anchors too: a `<button>` centres its
+	 * own text inside a taller box, an `<a>` does not, and half the button-shaped
+	 * things in the product are links. A button that has been made deliberately
+	 * smaller — an inline toggle inside a sentence, a compact save on a row —
+	 * says `min-height: auto` for itself.
+	 */
+	min-height: var(--control-h);
+	/* The same line box the fields use. Without it a `<button>` (line height
+	   `normal`) and an `<a class="btn">` (inheriting the body's 1.55) came out a
+	   fraction of a pixel apart side by side. */
+	line-height: 1.35;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-3);
 	/* Short enough to register on a fast click. A press that leaves no trace was
 	   reported as the button not working at all. */
 	transition:

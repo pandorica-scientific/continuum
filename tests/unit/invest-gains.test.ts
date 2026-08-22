@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
-import { realisedGains, yearsHeld, type ClosedPosition } from '$lib/invest/gains';
+import {
+	DEFAULT_GAINS_POLICY,
+	parseGainsPolicy,
+	realisedGains,
+	yearsHeld,
+	type ClosedPosition
+} from '$lib/invest/gains';
 
 const at = (iso: string) => new Date(`${iso}T12:00:00Z`);
 
@@ -127,6 +133,71 @@ describe('realisedGains', () => {
 			taxableMinor: 0n,
 			estimatedTaxMinor: 0n,
 			disposals: 0
+		});
+	});
+});
+
+describe('parseGainsPolicy', () => {
+	const form = (over: Partial<Parameters<typeof parseGainsPolicy>[0]> = {}) => ({
+		ratePct: '15',
+		exemptLongHeld: false,
+		exemptAfterYears: '3',
+		...over
+	});
+
+	it('reads a rate and a threshold', () => {
+		expect(parseGainsPolicy(form())).toEqual({
+			policy: { ratePct: 15, exemptLongHeld: false, exemptAfterYears: 3 }
+		});
+	});
+
+	it('accepts a comma as the decimal separator', () => {
+		expect(parseGainsPolicy(form({ ratePct: '12,5' }))).toEqual({
+			policy: { ratePct: 12.5, exemptLongHeld: false, exemptAfterYears: 3 }
+		});
+	});
+
+	// The reported fault: the threshold field is disabled while the exemption is
+	// off, a disabled field is not posted, and rejecting its absence threw away
+	// the rate typed beside it.
+	it('keeps the stored threshold when the field was not posted', () => {
+		expect(
+			parseGainsPolicy(form({ exemptAfterYears: null, exemptLongHeld: true }), {
+				ratePct: 0,
+				exemptLongHeld: false,
+				exemptAfterYears: 5
+			})
+		).toEqual({ policy: { ratePct: 15, exemptLongHeld: true, exemptAfterYears: 5 } });
+	});
+
+	it('falls back to the default threshold when nothing is stored yet', () => {
+		expect(parseGainsPolicy(form({ exemptAfterYears: '' }))).toEqual({
+			policy: {
+				ratePct: 15,
+				exemptLongHeld: false,
+				exemptAfterYears: DEFAULT_GAINS_POLICY.exemptAfterYears
+			}
+		});
+	});
+
+	it('reads a blank rate as untaxed rather than refusing it', () => {
+		expect(parseGainsPolicy(form({ ratePct: '' }))).toEqual({
+			policy: { ratePct: 0, exemptLongHeld: false, exemptAfterYears: 3 }
+		});
+	});
+
+	it('refuses a rate outside 0–100 and a threshold that is not whole years', () => {
+		expect(parseGainsPolicy(form({ ratePct: '101' }))).toEqual({
+			message: 'The rate must be a percentage between 0 and 100.'
+		});
+		expect(parseGainsPolicy(form({ ratePct: 'lots' }))).toEqual({
+			message: 'The rate must be a percentage between 0 and 100.'
+		});
+		expect(parseGainsPolicy(form({ exemptAfterYears: '2.5' }))).toEqual({
+			message: 'The exemption threshold must be a whole number of years.'
+		});
+		expect(parseGainsPolicy(form({ exemptAfterYears: '0' }))).toEqual({
+			message: 'The exemption threshold must be a whole number of years.'
 		});
 	});
 });

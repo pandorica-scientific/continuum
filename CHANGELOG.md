@@ -51,6 +51,34 @@
 - 🖱️ Buttons show they were pressed, show when they are disabled, and show keyboard focus — none of which existed
 - 🧮 Every screen reads the category groups from the database, so a group a household adds appears in the charts and filters without a deploy
 
+### ✨ Added — third pass
+
+- 🗑️ **A tag can be deleted.** Everything carrying it is untagged by the delete itself, and any rule that applied it stops applying it — the confirmation says how much of each before it is taken
+- 🗑️ **A document can be deleted.** There was no way to unfile one at all: a mistyped name, a receipt attached to the wrong row, a duplicate scan — all of it stayed on the shelf forever. Removing one takes its links, its tags and the stored file with it
+- 🧾 **A tax statement can bring its own paperwork.** Attaching a document assumed one had already been filed elsewhere: the only control was a picker of Tax-shelf documents somebody had to go and create first, on another screen, before the statement could be recorded. The statement now takes the file itself, files it on the Tax shelf against the same person — under a name derived from the year and country, so the shelf and the statement cannot disagree — and points at it. The file and the row commit together, so neither can exist without the other
+
+### 🔧 Changed — third pass
+
+- 📎 **Receipts moved behind one button per transaction.** A file input and its chips under every row cost a line each on a page that is nothing but rows; the paperclip carries the count, and the dialog behind it holds the attachments
+- 🔟 **The register shows 10, 25 or 50 rows a page** — ten by default — chosen beside the running total. It lives in the URL like every other part of the view, so a narrowed register stays shareable at the size it was read in
+- 🟥 **A negative amount is red.** It was the same near-white as the merchant beside it, so only the minus sign said which way the money went — and the sign is the first thing a scanning eye drops. Split lines take the colour of the share they are
+- 💰 **A transaction's amount sits under its date**, at the size of the line beside it. Weight and colour still carry the sign — at the old display size it was the loudest thing on a screen made of hundreds of them
+- 🗑️ **Removing a receipt deletes the document, not just the link.** Unlinking left the file on the Documents shelf with no route back to the row it came from. It asks twice, because a receipt filed against something else goes from there too
+- ✏️ **The pencil on an account sits beside its name.** The row is a three-column grid and held four children, so the button was pushed onto a second grid row — the bottom of the card
+- 📄 **A document's name wraps rather than truncating.** Half of "Fio · 1234567890/2010 · July 2026" identifies nothing
+- 🏷️ **A transaction's state is a pill, at the end of its row.** It reads in the palette every other state in Continuum uses — green for settled, amber for waiting on you, purple for a split — and sits under the paperclip, where the row's own facts belong. As plain grey text ahead of the controls it was both the quietest thing on the row and the first thing read
+- 🔗 **Category, Save, Split and the paperclip sit at one gap**, as the strip of controls they are, rather than spread at the gap between separate things
+- 💱 **A tax statement's currency is chosen, not typed.** The field was free text, so a display symbol, a misspelling or a currency nothing can convert all went in as if they were codes — "Kč" once did. It is now the same list every other money screen offers, derived from the rates actually quoted
+
+### 🐛 Fixed — third pass
+
+- 📏 **Every field is one height, and the boxes in a row line up.** A text input, a select and a file field measured 34, 36 and 42 pixels at the same nominal size — the browser gives each of them a different line box, and a file field is as tall as the Choose File button inside it. Side by side that reads as fields sitting a few pixels too high or too low, which is what the tax dialog showed: the upload box stood half again as tall as the shelf picker beside it. One line box and one floor now apply to every input, select, textarea and button in the product, and the file field's button is styled to live inside that height rather than set it
+- 🧾 **The itemised lines on a tax statement line up with the fields under them.** The two boxes split 1.4 to 1 with their own gap while the section below them split evenly — so the seam between label and amount landed a hundred pixels away from the seam it sat above. They share the same two columns now, and the remove button rides in the amount's column rather than taking one of its own
+- ⚖️ **The tax rate on investment gains could not be saved.** The years field is disabled until the exemption is switched on, a disabled field is not posted at all, and the action refused the absence — so pressing Save reported "The exemption threshold must be a whole number of years" and stored neither the years nor the rate typed beside them. The field now follows the checkbox as it is clicked, and an unposted threshold keeps what was already stored
+- 🏷️ **A transaction filed before review had no state at all.** `filed` is one of the four states the schema allows, and the register named three of them — so those rows showed a blank state and the state filter offered an empty option. The names and colours now live beside the states themselves, where a fifth one cannot compile without them
+- 🔢 **The threshold went blank the moment it saved.** A successful submit reset the form, and a reset empties any field whose value the framework set as a property rather than an attribute. The figure was stored correctly; the box that should have shown it was empty
+- 📈 **The years under "Value against money in" did not line up with the rules they name.** They were spread evenly across the axis while the rules stand where each year actually begins; both now come from the same point in the series. The horizontal gridlines are drawn at the weight the vertical ones already used, so every rule on the chart is one hairline
+
 ### 🐛 Fixed — second pass
 
 - 💳 **A Revolut export could not be imported at all.** Revolut writes every pocket into one file and each keeps its own running balance, so a Savings pocket three rows long was being checked against a Current account's chain: the statement proved nothing and was refused. Read as one statement per pocket, the same 1 798-row file proves on every row

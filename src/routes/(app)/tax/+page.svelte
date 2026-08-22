@@ -104,6 +104,7 @@
 		<TaxStatementDialog
 			people={data.people}
 			taxDocs={data.taxDocs}
+			currencies={data.currencies}
 			prefillTotals={data.prefillTotals}
 			baseCurrency={data.baseCurrency}
 			existing={editing === 'new' ? null : editing}

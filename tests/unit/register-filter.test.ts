@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { parseFilter } from '$lib/transactions/filter';
+import {
+	DEFAULT_PAGE_SIZE,
+	PAGE_SIZES,
+	REVIEW_HUES,
+	REVIEW_LABELS,
+	REVIEW_STATES,
+	parseFilter
+} from '$lib/transactions/filter';
 
 // The register's whole state lives in the URL, so parsing is the seam worth
 // testing: every screen behaviour follows from what these params turn into.
@@ -25,7 +32,8 @@ describe('parseFilter', () => {
 			tagId: null,
 			includeTransfers: false,
 			sourceMethod: null,
-			page: 1
+			page: 1,
+			pageSize: DEFAULT_PAGE_SIZE
 		});
 	});
 
@@ -105,5 +113,32 @@ describe('parseFilter', () => {
 	it('passes account through and reads the uncategorised sentinel', () => {
 		expect(parseFilter(params('account=acc-1'), 'CZK').accountId).toBe('acc-1');
 		expect(parseFilter(params('category=none'), 'CZK').categoryId).toBe('none');
+	});
+
+	it('takes page size from the URL, but only one the register offers', () => {
+		for (const size of PAGE_SIZES) {
+			expect(parseFilter(params(`per=${size}`), 'CZK').pageSize).toBe(size);
+		}
+	});
+
+	it('falls back to the default for a size nothing offers', () => {
+		// The value reaches SQL as a LIMIT and the URL is the one part of this
+		// filter anybody can hand-edit, so membership is checked rather than range:
+		// ?per=1000000 must not be a request to render the whole ledger.
+		for (const bad of ['1000000', '0', '-10', '49', 'lots', '25.5', '']) {
+			expect(parseFilter(params(`per=${bad}`), 'CZK').pageSize).toBe(DEFAULT_PAGE_SIZE);
+		}
+	});
+});
+
+// The register shows a review state as a pill and offers it in a filter. A
+// state with no entry here reached the screen as a blank one — `filed` did,
+// for as long as the map lived in the page and named three of the four.
+describe('review state presentation', () => {
+	it('names and colours every state the schema allows', () => {
+		for (const state of REVIEW_STATES) {
+			expect(REVIEW_LABELS[state], `no label for ${state}`).toBeTruthy();
+			expect(REVIEW_HUES[state], `no hue for ${state}`).toBeTruthy();
+		}
 	});
 });

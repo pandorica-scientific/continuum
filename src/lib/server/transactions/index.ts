@@ -24,11 +24,18 @@ import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';
 import { attributeSalary, recordSalary, rememberAttribution } from '$lib/server/salary';
-import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
+import { DEFAULT_PAGE_SIZE, UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
+import type { EnumValue } from '$lib/enums';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
-/** Rows per page. Enough that a month of a busy account fits in one or two. */
-export const PAGE_SIZE = 50;
+/**
+ * Rows per page when nothing asks for another size.
+ *
+ * Re-exported rather than declared: the register offers 10, 25 and 50 from the
+ * URL, and the set of legal sizes belongs with the code that parses that URL.
+ * Two constants would be one constant and a copy of it waiting to disagree.
+ */
+export const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /** Text the search box matches against — what a person actually remembers. */
 function searchable(term: string): SQL {
@@ -207,7 +214,8 @@ interface RegisterRow {
 	description: string | null;
 	categoryId: string | null;
 	categoryLabel: string | null;
-	reviewState: string;
+	/** The enum, not a bare string: the register colours and names each state. */
+	reviewState: EnumValue<'transaction.review_state'>;
 	accountId: string;
 	accountName: string;
 	isTransfer: boolean;
@@ -270,8 +278,8 @@ export async function registerPage(
 			.leftJoin(category, eq(transaction.categoryId, category.id))
 			.where(where)
 			.orderBy(desc(transaction.bookedOn), asc(transaction.id))
-			.limit(PAGE_SIZE)
-			.offset((filter.page - 1) * PAGE_SIZE),
+			.limit(filter.pageSize)
+			.offset((filter.page - 1) * filter.pageSize),
 		// Only one aggregate row per currency crosses the wire, regardless of
 		// ledger size. This replaces loading every matching transaction and split
 		// into Node merely to count and sum them.
@@ -320,7 +328,7 @@ export async function registerPage(
 		})),
 		total,
 		totals,
-		pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE))
+		pageCount: Math.max(1, Math.ceil(total / filter.pageSize))
 	};
 }
 

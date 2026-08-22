@@ -791,6 +791,7 @@
 		padding: 8px;
 	}
 	.plan-edit {
+		min-height: auto;
 		padding: 5px 11px;
 		font-size: var(--text-sm);
 	}
@@ -907,7 +908,10 @@
 	.b-meter {
 		display: inline;
 	}
+	/* Sits inline inside a sentence, so it takes its height from the line it is
+	   part of rather than the form-control floor. */
 	.b-meter-btn {
+		min-height: auto;
 		margin-left: 6px;
 		padding: 1px 5px;
 		border: 1px solid transparent;

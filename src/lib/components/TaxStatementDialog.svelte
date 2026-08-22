@@ -4,6 +4,7 @@
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import ActionError from '$lib/components/ActionError.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import { currencyLabel } from '$lib/currencies';
 
 	interface Existing {
 		id: string;
@@ -21,6 +22,7 @@
 	let {
 		people,
 		taxDocs,
+		currencies,
 		prefillTotals,
 		baseCurrency,
 		existing,
@@ -28,6 +30,7 @@
 	}: {
 		people: { id: string; name: string }[];
 		taxDocs: { id: string; name: string }[];
+		currencies: string[];
 		prefillTotals: Record<string, { amount: string; months: number }>;
 		baseCurrency: string;
 		existing: Existing | null;
@@ -48,6 +51,13 @@
 		]
 	);
 	let actionError = $state<string | null>(null);
+	let fileName = $state<string | null>(null);
+
+	// A statement saved in a currency the rate source no longer quotes must still
+	// show its own currency selected, rather than silently becoming another one.
+	const currencyOptions = $derived(
+		currencies.includes(currency) ? currencies : [currency, ...currencies]
+	);
 
 	// Prefill applies while creating, and stops the moment the gross field is
 	// touched. Editing an existing statement never prefills: a saved figure is
@@ -63,6 +73,7 @@
 	<form
 		method="POST"
 		action="?/save"
+		enctype="multipart/form-data"
 		use:enhance={() =>
 			async ({ update, result }) => {
 				actionError = messageFromActionResult(result);
@@ -91,7 +102,14 @@
 			</label>
 			<label>
 				<span>Currency</span>
-				<input name="currency" placeholder="CZK" bind:value={currency} />
+				<!-- Was free text, which accepted anything: a display symbol, a
+				     misspelling, a currency nothing can convert. The list is the same
+				     one the accounts and property screens offer. -->
+				<select class="tax-currency" name="currency" bind:value={currency}>
+					{#each currencyOptions as c (c)}
+						<option value={c}>{currencyLabel(c)}</option>
+					{/each}
+				</select>
 			</label>
 			<label>
 				<span
@@ -117,15 +135,21 @@
 		{#each lines as line, i (i)}
 			<div class="line">
 				<input name="lineLabel" placeholder="Social insurance" bind:value={line.label} />
-				<input name="lineAmount" placeholder="0" inputmode="decimal" bind:value={line.amount} />
-				{#if lines.length > 1}
-					<button
-						type="button"
-						class="btn"
-						onclick={() => (lines = lines.filter((_, j) => j !== i))}
-						aria-label="Remove line {i + 1}">✕</button
-					>
-				{/if}
+				<!-- The remove button shares the amount's column rather than taking one
+				     of its own: a third column would move the split between label and
+				     amount away from the split between the two fields below the moment
+				     a second line existed. -->
+				<div class="line-amount">
+					<input name="lineAmount" placeholder="0" inputmode="decimal" bind:value={line.amount} />
+					{#if lines.length > 1}
+						<button
+							type="button"
+							class="btn line-remove"
+							onclick={() => (lines = lines.filter((_, j) => j !== i))}
+							aria-label="Remove line {i + 1}">✕</button
+						>
+					{/if}
+				</div>
 			</div>
 		{/each}
 		<button
@@ -136,16 +160,39 @@
 			＋ Add line
 		</button>
 
+		<span class="section-label">The statement itself</span>
 		<div class="grid">
 			<label>
-				<span>Statement document (Tax shelf)</span>
-				<select name="documentId" bind:value={documentId}>
+				<!-- Uploading files it on the Tax shelf against this person, so the
+				     document exists because the statement does — no separate trip to
+				     the documents screen first. -->
+				<span>Upload the statement</span>
+				<input
+					class="tax-file"
+					type="file"
+					name="file"
+					accept=".pdf,.png,.jpg,.jpeg,.webp"
+					onchange={(e) => (fileName = e.currentTarget.files?.[0]?.name ?? null)}
+				/>
+			</label>
+			<label>
+				<span>…or one already on the Tax shelf</span>
+				<select name="documentId" bind:value={documentId} disabled={fileName !== null}>
 					<option value="">None attached</option>
 					{#each taxDocs as d (d.id)}
 						<option value={d.id}>{d.name}</option>
 					{/each}
 				</select>
 			</label>
+		</div>
+		{#if fileName}
+			<span class="attach-note">
+				{fileName} will be filed on the Tax shelf as “{year}
+				{country.trim().toUpperCase() || '—'} tax statement”.
+			</span>
+		{/if}
+
+		<div class="grid">
 			<label>
 				<span>Note</span>
 				<input name="note" bind:value={note} placeholder="joint filing, refund pending, …" />
@@ -176,24 +223,38 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	/* Only what the base control layer cannot know: these live in 1fr grid
+	 * tracks and have to be allowed to be narrower than their content. The look
+	 * and the height come from the base layer — restating them here is what gave
+	 * the file field 8px of padding on top of its button and made it half again
+	 * as tall as the select beside it. */
 	.tax-form input,
 	.tax-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 8px 11px;
-		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.section-label {
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	.attach-note {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	/* Same two columns and the same gap as `.grid` above and below, so the split
+	 * between label and amount lands on the split between the two fields in the
+	 * section under it rather than 100px to the right of it. */
 	.line {
 		display: grid;
-		grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: var(--space-6);
+	}
+	.line-amount {
+		display: flex;
 		gap: var(--space-4);
+		min-width: 0;
+	}
+	.line-amount input {
+		flex: 1 1 auto;
 	}
 	.add-line {
 		align-self: flex-start;

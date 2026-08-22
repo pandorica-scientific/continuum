@@ -17,7 +17,7 @@ import {
 	tag
 } from '$lib/server/db/schema';
 import { saveUpload } from '$lib/server/system/files';
-import { createDocument } from '$lib/server/documents/mutations';
+import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
 import { deriveColumns, isUnlinked, type LinkedDoc } from '$lib/documents-links';
 import { SHELVES, type ShelfKey } from '$lib/documents';
 import type { Actions, PageServerLoad } from './$types';
@@ -248,6 +248,22 @@ export const actions: Actions = {
 			newSubjectName: newSubject || undefined,
 			tagNames
 		});
+		return { ok: true };
+	},
+
+	/**
+	 * Remove a document from the household.
+	 *
+	 * There was no way to do this at all: a document could be filed but never
+	 * unfiled, so a mistyped name or a receipt attached to the wrong row stayed
+	 * on the shelf forever. The mutation owns the cascade and the file.
+	 */
+	deleteDocument: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which document?' });
+		const outcome = await deleteDocument(id);
+		if (!outcome.ok) return fail(404, { id, message: 'That document is no longer there.' });
 		return { ok: true };
 	}
 };

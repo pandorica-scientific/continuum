@@ -19,6 +19,17 @@
 		newSubjectOpen = false;
 	});
 
+	// Two taps rather than a browser confirm(): this deletes a stored file and
+	// every link to it, and a native dialog blocks the page while it is open.
+	// Keyed by document id, not by column — the same document appears in every
+	// column it belongs to, and arming one copy should arm the document.
+	let confirming = $state<string | null>(null);
+	$effect(() => {
+		// A delete reloads the page data; nothing should still be armed after it.
+		void data.columns;
+		confirming = null;
+	});
+
 	function navigate(shelf: string, q: string, tag = '') {
 		const parts: string[] = [];
 		if (shelf !== 'all') parts.push(`shelf=${encodeURIComponent(shelf)}`);
@@ -226,6 +237,21 @@
 									{d.meta}
 								</span>
 							</div>
+							{#if confirming === d.id}
+								<form method="POST" action="?/deleteDocument" use:enhance>
+									<input type="hidden" name="id" value={d.id} />
+									<button type="submit" class="del confirm">Delete?</button>
+								</form>
+							{:else}
+								<button
+									type="button"
+									class="del"
+									aria-label="Remove {d.name}"
+									onclick={() => (confirming = d.id)}
+								>
+									✕
+								</button>
+							{/if}
 						</div>
 					{/each}
 				</div>
@@ -379,11 +405,25 @@
 	}
 	.doc {
 		display: grid;
-		grid-template-columns: 38px minmax(0, 1fr);
+		grid-template-columns: 38px minmax(0, 1fr) auto;
 		gap: 11px;
 		align-items: center;
 		padding: 10px 2px;
 		border-bottom: 1px solid var(--bd);
+	}
+	.del {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-sm);
+		padding: 2px 4px;
+	}
+	.del:hover {
+		color: var(--red);
+	}
+	.del.confirm {
+		color: var(--red);
 	}
 	.ext {
 		font-size: var(--text-2xs);
@@ -400,12 +440,14 @@
 		gap: var(--space-1);
 		min-width: 0;
 	}
+	/* Wraps rather than truncating. The remove button took the width the ellipsis
+	   was living on, and a document is found by its name — half of
+	   "Fio · 1234567890/2010 · July 2026" identifies nothing. */
 	.doc-name {
 		font-size: var(--text-md);
 		color: var(--fg1);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
+		min-width: 0;
 	}
 	.meta {
 		font-size: var(--text-xs);
@@ -447,6 +489,7 @@
 		width: auto;
 	}
 	.tick-add {
+		min-height: auto;
 		padding: 5px 10px;
 		font-size: var(--text-sm);
 	}

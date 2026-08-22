@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asOptionalRowId, asRowId } from '$lib/ids';
+import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -8,28 +9,35 @@ import { deleteStatement, loadStatements, saveStatement } from '$lib/server/tax'
 import { effectiveRatePct, payslipYearTotalConverted, taxSeries } from '$lib/tax';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { availableCurrencies } from '$lib/server/fx/currencies';
+import { removeUpload, saveUpload } from '$lib/server/system/files';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const [statements, people, payslipDocs, slipOwners, taxDocs, base, rates] = await Promise.all([
-		loadStatements(),
-		db
-			.select({ id: person.id, name: person.name })
-			.from(person)
-			.orderBy(person.createdAt, person.id),
-		db.select().from(document).where(eq(document.shelf, 'payslips')),
-		db
-			.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
-			.from(documentLink)
-			.innerJoin(person, eq(person.id, documentLink.targetId)),
-		db
-			.select({ id: document.id, name: document.name })
-			.from(document)
-			.where(eq(document.shelf, 'tax')),
-		getBaseCurrency(),
-		loadRateTable()
-	]);
+	const [statements, people, payslipDocs, slipOwners, taxDocs, base, rates, currencies] =
+		await Promise.all([
+			loadStatements(),
+			db
+				.select({ id: person.id, name: person.name })
+				.from(person)
+				.orderBy(person.createdAt, person.id),
+			db.select().from(document).where(eq(document.shelf, 'payslips')),
+			db
+				.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
+				.from(documentLink)
+				.innerJoin(person, eq(person.id, documentLink.targetId)),
+			db
+				.select({ id: document.id, name: document.name })
+				.from(document)
+				.where(eq(document.shelf, 'tax'))
+				.orderBy(document.addedOn),
+			getBaseCurrency(),
+			loadRateTable(),
+			// The same list every other money screen offers, derived from the rate
+			// table — a code typed by hand could name a currency nothing can convert.
+			availableCurrencies()
+		]);
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
@@ -66,6 +74,7 @@ export const load: PageServerLoad = async () => {
 		// Form values carry the ISO code. Display symbols belong only in labels;
 		// sending "Kč" back through the currency input stored a non-currency.
 		baseCurrency: base,
+		currencies,
 		people,
 		taxDocs,
 		prefillTotals,
@@ -121,7 +130,11 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	save: async ({ request }) => {
 		const form = await request.formData();
-		const currency = (String(form.get('currency') ?? '').trim() || 'CZK').toUpperCase();
+		// No fixed fallback: an empty field means "the household's own currency",
+		// which is configured, not a constant this file gets to decide.
+		const currency = (String(form.get('currency') ?? '').trim() || (await getBaseCurrency()))
+			.trim()
+			.toUpperCase();
 		if (!/^[A-Z]{3}$/.test(currency)) {
 			return fail(400, { message: 'Use a three-letter currency code.' });
 		}
@@ -145,19 +158,50 @@ export const actions: Actions = {
 			return fail(400, { message: 'An amount will not parse.' });
 		}
 
-		const result = await saveStatement({
-			personId: asRowId(form.get('personId')),
-			year: Number(form.get('year')),
-			country: String(form.get('country') ?? ''),
-			currency,
-			grossIncomeMinor: gross,
-			taxPaidMinor: taxPaid,
-			// Optional: a statement need not have a document attached.
-			documentId: asOptionalRowId(form.get('documentId')) ?? null,
-			note: String(form.get('note') ?? '').trim() || null,
-			lines
-		});
-		if (!result.ok) return fail(result.status, { message: result.message });
+		// The statement itself can bring its paperwork with it: a file chosen here
+		// becomes a document on the Tax shelf, filed against the same person, and
+		// the statement points at it. Before this, attaching anything meant leaving
+		// the screen, filing the document elsewhere, and coming back.
+		const file = form.get('file');
+		let attachment: { storedName: string; ext: string; addedOn: string } | null = null;
+		if (file instanceof File && file.size > 0) {
+			try {
+				attachment = {
+					storedName: await saveUpload(file),
+					ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
+					addedOn: new Date().toISOString().slice(0, 10)
+				};
+			} catch (err) {
+				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
+			}
+		}
+
+		// The file is on the volume before the row is, so every way out of the save
+		// that does not commit the statement takes the file with it — refusal and
+		// failure alike. An upload nothing points at is invisible litter.
+		let result;
+		try {
+			result = await saveStatement({
+				personId: asRowId(form.get('personId')),
+				year: Number(form.get('year')),
+				country: String(form.get('country') ?? ''),
+				currency,
+				grossIncomeMinor: gross,
+				taxPaidMinor: taxPaid,
+				// Optional: a statement need not have a document attached.
+				documentId: asOptionalRowId(form.get('documentId')) ?? null,
+				note: String(form.get('note') ?? '').trim() || null,
+				lines,
+				attachment
+			});
+		} catch (err) {
+			if (attachment) await removeUpload(attachment.storedName);
+			throw err;
+		}
+		if (!result.ok) {
+			if (attachment) await removeUpload(attachment.storedName);
+			return fail(result.status, { message: result.message });
+		}
 		return { ok: true };
 	},
 

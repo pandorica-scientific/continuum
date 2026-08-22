@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
@@ -8,7 +9,8 @@ import {
 	detachDocumentFromTransaction,
 	loadTransactionDocuments
 } from '$lib/server/transactions/documents';
-import { createDocument } from '$lib/server/documents/mutations';
+import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
+import { upsertTag } from '$lib/server/tags';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -37,6 +39,13 @@ async function addDocument(id: string, name: string) {
 		},
 		testDb
 	);
+}
+
+/** A tag to hang on a document, so the cascade has something to take with it. */
+async function aTag(): Promise<string> {
+	// Through upsertTag, not a raw insert: `normalised_name` is what the table
+	// deduplicates on and the mutation is what fills it.
+	return (await upsertTag('receipt', testDb)).id;
 }
 
 beforeAll(async () => {
@@ -124,5 +133,43 @@ describe('documents on a transaction', () => {
 	it('returns nothing for transactions with no documents', async () => {
 		expect((await loadTransactionDocuments([TXN], testDb)).size).toBe(0);
 		expect((await loadTransactionDocuments([], testDb)).size).toBe(0);
+	});
+
+	/**
+	 * Removing a receipt from a transaction deletes the document. Unlinking alone
+	 * left the file on the shelf with no route back to the row it came from.
+	 */
+	describe('deleting a document', () => {
+		it('takes its links with it, and its entity row', async () => {
+			await attachDocumentToTransaction(TXN, DOC, testDb);
+			await attachDocumentToTransaction(OTHER_TXN, DOC, testDb);
+			await testDb.insert(schema.tagLink).values({ tagId: await aTag(), targetId: DOC });
+
+			expect(await deleteDocument(DOC, testDb)).toEqual({ ok: true, removedFile: false });
+
+			expect(await testDb.select().from(schema.document)).toHaveLength(0);
+			// Not enumerated in application code: the AFTER DELETE trigger retires
+			// the entity row and every link cascades from there.
+			expect(await testDb.select().from(schema.documentLink)).toHaveLength(0);
+			expect(await testDb.select().from(schema.tagLink)).toHaveLength(0);
+			expect(
+				await testDb.select().from(schema.entity).where(eq(schema.entity.id, DOC))
+			).toHaveLength(0);
+			expect((await loadTransactionDocuments([TXN, OTHER_TXN], testDb)).size).toBe(0);
+		});
+
+		it('leaves other documents alone', async () => {
+			const other = rowId('doc-b');
+			await addDocument(other, 'Keep me');
+			await deleteDocument(DOC, testDb);
+			expect(await testDb.select().from(schema.document)).toHaveLength(1);
+		});
+
+		it('says so when the document is not there', async () => {
+			expect(await deleteDocument(rowId('nope'), testDb)).toEqual({
+				ok: false,
+				removedFile: false
+			});
+		});
 	});
 });

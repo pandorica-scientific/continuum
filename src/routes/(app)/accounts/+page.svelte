@@ -80,7 +80,17 @@
 			<div class="row">
 				<span class="emoji">{a.emoji}</span>
 				<div class="names">
-					<span class="name">{a.name}</span>
+					<div class="name-line">
+						<span class="name">{a.name}</span>
+						<button
+							type="button"
+							class="edit"
+							aria-label="Edit {a.name}"
+							onclick={() => (editing = editing === a.id ? null : a.id)}
+						>
+							✎
+						</button>
+					</div>
 					<!-- The numbers this account is known by. They were written when it was
 					     created AND learned from statements as they arrived, but shown
 					     nowhere — so the one thing that explains why a transfer did or did
@@ -96,14 +106,6 @@
 						<span class="mono equivalent">{a.baseEquivalent}</span>
 					{/if}
 				</div>
-				<button
-					type="button"
-					class="edit"
-					aria-label="Edit {a.name}"
-					onclick={() => (editing = editing === a.id ? null : a.id)}
-				>
-					✎
-				</button>
 			</div>
 
 			{#if editing === a.id}
@@ -207,24 +209,21 @@
 		{/if}
 	</div>
 
-	<div class="card sits">
-		<Eyebrow emoji="🥧" label="Where the cash sits" />
-		<div class="donut-wrap">
-			<div class="donut" style:background={donutGradient}>
-				<div class="hole"><span class="mono">{data.cashTotalFormatted}</span></div>
-			</div>
-			<div class="legend">
-				{#each data.donut as s (s.id)}
-					<div class="legend-row">
-						<span class="dot" style:background={s.color}></span>
-						<span class="legend-label">{s.label}</span>
-						<span class="mono legend-pct">{s.pct.toFixed(1)}%</span>
-					</div>
-				{:else}
-					<span class="empty">The split appears once balances are known.</span>
-				{/each}
-			</div>
+	<div class="card transfers">
+		<div class="eyebrow-row" style="padding-bottom: 4px;">
+			<Eyebrow emoji="🔁" label="Transfers between your own accounts" />
+			<span class="eyebrow-caption">matched automatically · never counted as income or expense</span
+			>
 		</div>
+		{#each data.transfers as t (t.id)}
+			<div class="transfer-row">
+				<span class="mono t-date">{t.date}</span>
+				<span class="t-route">{t.route}</span>
+				<span class="mono">{t.amount}</span>
+			</div>
+		{:else}
+			<p class="empty">Matched pairs from imported statements will appear here.</p>
+		{/each}
 	</div>
 </section>
 
@@ -263,20 +262,24 @@
 	</Modal>
 {/if}
 
-<section class="card">
-	<div class="eyebrow-row" style="padding-bottom: 4px;">
-		<Eyebrow emoji="🔁" label="Transfers between your own accounts" />
-		<span class="eyebrow-caption">matched automatically · never counted as income or expense</span>
-	</div>
-	{#each data.transfers as t (t.id)}
-		<div class="transfer-row">
-			<span class="mono t-date">{t.date}</span>
-			<span class="t-route">{t.route}</span>
-			<span class="mono">{t.amount}</span>
+<section class="card sits">
+	<Eyebrow emoji="🥧" label="Where the cash sits" />
+	<div class="donut-wrap">
+		<div class="donut" style:background={donutGradient}>
+			<div class="hole"><span class="mono">{data.cashTotalFormatted}</span></div>
 		</div>
-	{:else}
-		<p class="empty">Matched pairs from imported statements will appear here.</p>
-	{/each}
+		<div class="legend">
+			{#each data.donut as s (s.id)}
+				<div class="legend-row">
+					<span class="dot" style:background={s.color}></span>
+					<span class="legend-label">{s.label}</span>
+					<span class="mono legend-pct">{s.pct.toFixed(1)}%</span>
+				</div>
+			{:else}
+				<span class="empty">The split appears once balances are known.</span>
+			{/each}
+		</div>
+	</div>
 </section>
 
 <style>
@@ -285,13 +288,21 @@
 		color: var(--fg3);
 		overflow-wrap: anywhere;
 	}
+	.name-line {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: 0;
+	}
 	.edit {
 		background: none;
 		border: 0;
 		color: var(--fg3);
 		cursor: pointer;
 		font-size: var(--text-md);
-		padding: 0 var(--space-3);
+		line-height: 1;
+		padding: 0;
+		flex: none;
 	}
 	.edit:hover {
 		color: var(--fg1);
@@ -424,6 +435,11 @@
 		flex-direction: column;
 		gap: var(--space-8);
 	}
+	.transfers {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
 	.donut-wrap {
 		display: flex;
 		align-items: center;
@@ -450,10 +466,13 @@
 		font-size: var(--text-md);
 	}
 	.legend {
+		/* Full width now, so the rows spread across the row instead of stacking in a
+		   single narrow column with the rest of the card left blank. */
 		flex: 1 1 190px;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+		gap: var(--space-4) var(--space-8);
+		align-content: center;
 	}
 	.legend-row {
 		display: grid;
@@ -475,7 +494,7 @@
 	}
 	.transfer-row {
 		display: grid;
-		grid-template-columns: 62px minmax(0, 1fr) auto;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: baseline;
 		gap: var(--space-6);
 		padding: 9px 0;
@@ -485,6 +504,7 @@
 	.t-date {
 		font-size: var(--text-sm);
 		color: var(--fg3);
+		white-space: nowrap;
 	}
 	.t-route {
 		color: var(--fg2);

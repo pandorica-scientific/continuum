@@ -17,7 +17,7 @@ export default defineConfig({
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
 			testIgnore:
-				/accounts|passkey|board|errors|add-form-closes|retirement-chart|import-mapping-layout|import-typography|visual-baseline|category-delete|category-picker|category-reorder/
+				/accounts|passkey|board|errors|add-form-closes|retirement-chart|import-mapping-layout|import-typography|visual-baseline|category-delete|category-picker|category-reorder|investments-tax/
 		},
 		// The error screens need a signed-in session, which the wizard in
 		// flow.spec.ts is what creates. Alphabetical order would put this file
@@ -55,7 +55,7 @@ export default defineConfig({
 			name: 'polish',
 			use: { viewport: { width: 1440, height: 900 } },
 			testMatch:
-				/add-form-closes|retirement-chart|import-mapping-layout|import-typography|category-delete|category-picker|category-reorder/,
+				/add-form-closes|retirement-chart|import-mapping-layout|import-typography|category-delete|category-picker|category-reorder|investments-tax/,
 			dependencies: ['desktop']
 		},
 		// The Part 0 pixel baseline. Its own project, and it depends on EVERY

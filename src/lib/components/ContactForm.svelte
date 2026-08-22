@@ -226,6 +226,7 @@
 	}
 
 	.tick-add {
+		min-height: auto;
 		padding: 5px 10px;
 		font-size: var(--text-sm);
 	}

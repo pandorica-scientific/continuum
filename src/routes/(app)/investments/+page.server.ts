@@ -7,7 +7,12 @@ import { ingestBrokerFile } from '$lib/server/invest/ingest';
 import { annualisedReturn, buildSeries } from '$lib/server/invest/series';
 import { convertMinorSync, convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getSetting, setSetting } from '$lib/server/settings';
-import { realisedGains, type GainsPolicy } from '$lib/invest/gains';
+import {
+	DEFAULT_GAINS_POLICY,
+	parseGainsPolicy,
+	realisedGains,
+	type GainsPolicy
+} from '$lib/invest/gains';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
@@ -24,11 +29,7 @@ export const load: PageServerLoad = async () => {
 		// How this household is taxed on what it sells. Configured rather than
 		// assumed: the rate differs by country, and the holding-period exemption
 		// below is a Czech rule that would produce wrong figures anywhere else.
-		getSetting<GainsPolicy>('investTax', {
-			ratePct: 0,
-			exemptLongHeld: false,
-			exemptAfterYears: 3
-		})
+		getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY)
 	]);
 
 	const latestSnapshot = snapshots[snapshots.length - 1] ?? null;
@@ -212,19 +213,18 @@ export const actions: Actions = {
 	/** How this household is taxed on what it sells. Configured, never assumed. */
 	setTax: async ({ request }) => {
 		const form = await request.formData();
-		const ratePct = Number(String(form.get('ratePct') ?? '').replace(',', '.'));
-		const years = Number(form.get('exemptAfterYears'));
-		if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > 100) {
-			return fail(400, { message: 'The rate must be a percentage between 0 and 100.' });
-		}
-		if (!Number.isInteger(years) || years < 1 || years > 50) {
-			return fail(400, { message: 'The exemption threshold must be a whole number of years.' });
-		}
-		await setSetting('investTax', {
-			ratePct,
-			exemptLongHeld: form.get('exemptLongHeld') === 'on',
-			exemptAfterYears: years
-		});
+		const current = await getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY);
+		const text = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value : null);
+		const parsed = parseGainsPolicy(
+			{
+				ratePct: text(form.get('ratePct')),
+				exemptLongHeld: form.get('exemptLongHeld') === 'on',
+				exemptAfterYears: text(form.get('exemptAfterYears'))
+			},
+			current
+		);
+		if ('message' in parsed) return fail(400, { message: parsed.message });
+		await setSetting('investTax', parsed.policy);
 		return { ok: true };
 	},
 

@@ -105,3 +105,46 @@ export function realisedGains(
 		exemptDisposals
 	};
 }
+
+/** Untaxed, no holding-period exemption, until a household says otherwise. */
+export const DEFAULT_GAINS_POLICY: GainsPolicy = {
+	ratePct: 0,
+	exemptLongHeld: false,
+	exemptAfterYears: 3
+};
+
+/** What the form posted, before it is known to be a policy. */
+export interface GainsPolicyForm {
+	ratePct: string | null;
+	exemptLongHeld: boolean;
+	exemptAfterYears: string | null;
+}
+
+/**
+ * The posted form read as a policy, or the reason it is not one.
+ *
+ * A blank threshold is not a mistake to reject: the field is disabled while the
+ * exemption is off, and a disabled field is not posted at all. Rejecting the
+ * absence threw away the rate somebody had just typed beside it.
+ */
+export function parseGainsPolicy(
+	form: GainsPolicyForm,
+	current: GainsPolicy = DEFAULT_GAINS_POLICY
+): { policy: GainsPolicy } | { message: string } {
+	const ratePct = Number(
+		String(form.ratePct ?? '')
+			.replace(',', '.')
+			.trim() || '0'
+	);
+	if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > 100) {
+		return { message: 'The rate must be a percentage between 0 and 100.' };
+	}
+	const yearsRaw = String(form.exemptAfterYears ?? '').trim();
+	const years = yearsRaw === '' ? current.exemptAfterYears : Number(yearsRaw);
+	if (yearsRaw !== '' && (!Number.isInteger(years) || years < 1 || years > 50)) {
+		return { message: 'The exemption threshold must be a whole number of years.' };
+	}
+	return {
+		policy: { ratePct, exemptLongHeld: form.exemptLongHeld, exemptAfterYears: years }
+	};
+}
