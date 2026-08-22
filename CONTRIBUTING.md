@@ -55,7 +55,6 @@ Everything below runs in CI on every pull request, so run it locally first:
 npm run lint       # eslint + prettier --check
 npm run check      # svelte-check, TypeScript strict
 npm test           # unit + embedded-PostgreSQL integration tests (vitest)
-npm run build && npm run test:e2e   # Playwright journey; needs the db running
 ```
 
 `npm run format` applies Prettier. CI additionally builds the multi-architecture
@@ -182,15 +181,18 @@ be sent back.
 - Parsers, pairing, categorisation, loan schedules and chart layout are pure
   functions with unit tests — add one with your change.
 - A parser must reproduce each statement's own `opening + rows = closing`. The
-  acceptance suite enforces this against real files when they are present
-  locally, and never in CI.
+  synthetic corpus in `tests/fixtures/synthetic` enforces this on 355 committed
+  files across 24 locales and 20 currencies, and runs everywhere.
 - Multi-row and concurrent behavior belongs in `tests/integration`, whose
   suites start isolated embedded PostgreSQL instances. Use an injectable
   database handle in the domain mutation so the test can force rollback and
   interleave transactions without driving a page.
-- Playwright remains the user-journey boundary for authentication, uploads,
-  dialogs and API tokens. Extend it when a visible workflow changes; do not use
-  it in place of a focused unit or database regression.
+- **There are no browser tests.** The interface is checked by looking at it, on
+  the machine of whoever changed it. What that leaves to automation is
+  behaviour, so anything worth pinning has to be reachable without a page: put
+  it in a domain module and test it in `tests/integration`, or in a pure
+  function and test it in `tests/unit`. "It is covered end to end" is no longer
+  an answer.
 
 Write the test so that it fails without your change. A test that passes either
 way is documentation, not coverage.
