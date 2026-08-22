@@ -341,6 +341,9 @@ active. Everything downstream — the session cookie, `validateSession`,
   the baseline, and promote its snapshot so `meta/` still describes the schema
 - `docs/superpowers/` — the specs and implementation plans each feature was
   built from, including what was deliberately deferred
-- `tests/unit` — pure logic; `tests/acceptance` — real files, self-skipping;
-  `tests/integration` — isolated embedded-PostgreSQL rollback and concurrency
-  cases; `tests/e2e` — one ordered Playwright journey against a reset database
+- `tests/unit` — pure logic; `tests/acceptance` — the committed synthetic
+  statement corpus; `tests/integration` — isolated embedded-PostgreSQL rollback
+  and concurrency cases. There is no browser suite: the interface is verified by
+  looking at it, so everything automation is asked to hold has to be reachable
+  without a page — which is what keeps behaviour in domain modules rather than
+  in a component
