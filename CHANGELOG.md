@@ -61,6 +61,7 @@
 
 ### 🐛 Fixed
 
+- 📏 **A name on the cash-flow diagram is never cut in half, on any machine.** The engine guessed each name's width from its character count, so where the guess was beaten the renderer cut the name to fit the box drawn for it — and the guess is beaten by any face wider than Inter, which is what every browser draws in for the moment before the webfont arrives, and what another operating system falls back to entirely. It showed as "Saved & invested" clipped on a phone-width Overview on Linux and not on macOS. The names are now measured in the faces they are actually drawn in, the diagram is laid out again when the real face arrives, and a name that still cannot be drawn whole is left out rather than cut — the breakdown strip under the chart lists every band with its figure, which is what a phone reads anyway
 - 📈 **XTB imports failed on any report containing a dividend, a withholding tax or a closed position.** Operations were written before the positions they reference, against a foreign key that is not deferrable
 - 🧾 An import failure was rendered twice; it is now shown once, and can be dismissed
 - 🏷️ "File" on a transaction did nothing visible — it meant _file under a category_, is now called Save, is disabled until one is chosen, and shows its refusal beside the row that caused it

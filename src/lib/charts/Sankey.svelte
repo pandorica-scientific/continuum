@@ -1,6 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-	import { buildSankey } from './sankey';
+	import { buildSankey, estimateText, type MeasureText } from './sankey';
 	import { depthFor, flowGraph, type FlowGraphInput } from './flow-graph';
 	import { formatMinor, fromMajor } from '$lib/money';
 
@@ -29,13 +29,57 @@
 		return () => observer.disconnect();
 	});
 
+	/**
+	 * Text measured in the faces it will actually be drawn in.
+	 *
+	 * A canvas measures the same string the same way the page lays it out, which
+	 * is what makes a label's box agree with its label on every machine. The
+	 * families come from the tokens rather than being written out here, so a
+	 * change to either is followed rather than copied.
+	 */
+	function canvasMeasure(element: HTMLElement): MeasureText {
+		const context = document.createElement('canvas').getContext('2d');
+		if (!context) return estimateText;
+		const style = getComputedStyle(element);
+		const mono = style.getPropertyValue('--font-mono');
+		return (text, font, kind) => {
+			// 500 is `.name`'s weight and 400 the value's; a variable face is
+			// genuinely wider at the heavier one.
+			context.font = kind === 'value' ? `400 ${font}px ${mono}` : `500 ${font}px ${sans}`;
+			return context.measureText(text).width;
+		};
+	}
+
+	/**
+	 * Replaced once the real faces are in, which lays the diagram out again.
+	 *
+	 * Until a webfont arrives the browser draws in a fallback that is WIDER than
+	 * Inter, and which fallback it is depends on the operating system. A layout
+	 * measured then is right for what is on screen at that moment and wrong a
+	 * moment later — so it is measured again when the swap happens. Nothing else
+	 * would trigger that: the panel is still exactly as wide as it was.
+	 */
+	let measure = $state<MeasureText>(estimateText);
+	$effect(() => {
+		const element = box;
+		if (!element) return;
+		let live = true;
+		measure = canvasMeasure(element);
+		document.fonts?.ready.then(() => {
+			if (live) measure = canvasMeasure(element);
+		});
+		return () => {
+			live = false;
+		};
+	});
+
 	// The diagram is laid out in the box's own pixels, so labels stay the size
 	// they were designed at however wide the panel is. Height follows width so
 	// the ribbons keep a readable slope rather than flattening.
 	const height = $derived(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, width * 0.46)));
 	const layout = $derived(
 		width > 0
-			? buildSankey(flowGraph(flow, depthFor(width)), { width, height })
+			? buildSankey(flowGraph(flow, depthFor(width)), { width, height }, measure)
 			: { width: 0, height: MIN_HEIGHT, nodes: [], ribbons: [], labels: [] }
 	);
 
@@ -194,8 +238,10 @@
 		stroke-width: 1;
 		opacity: 0.5;
 	}
-	/* The engine estimates text width without a DOM to measure in. Where the
-	   estimate is beaten, the name is cut rather than allowed into the diagram. */
+	/* The engine measures every name in the face it is drawn in and drops one it
+	   cannot fit whole, so this is a backstop rather than the mechanism: it keeps
+	   a name inside its box in the one frame between a webfont arriving and the
+	   relayout that follows it. */
 	.name,
 	.value {
 		max-width: 100%;

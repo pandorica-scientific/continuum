@@ -141,20 +141,54 @@ const labelHeight = (font: number, withValue: boolean) =>
 	Math.ceil(font * LINE) + (withValue ? Math.ceil(font * VALUE_RATIO * LINE) + 1 : 0) + PAD_Y * 2;
 
 /**
- * Estimated width of a run of text.
+ * How wide a run of text will actually be.
  *
- * The engine has no DOM to measure in. 0.62em per character is the measured
- * average for the UI face across the names this draws, rounded up rather than
- * to the mean: the renderer ellipsises anything that beats the estimate, and a
- * narrow-viewport guard treats an ellipsis as clipped text, which is what an
- * under-estimate cost the first time.
+ * The engine is pure and has no DOM, so the caller supplies this. The renderer
+ * passes a canvas measurer using the very faces the labels are drawn in, which
+ * is the only version that is right on every machine: the fallback face a
+ * browser uses before a webfont arrives is wider than the webfont, and Linux
+ * and macOS do not fall back to the same one. An estimate cannot know any of
+ * that, and a name laid out against an estimate that is beaten is a name cut in
+ * half — first on a narrow viewport, then on somebody else's operating system.
  */
-const textWidth = (chars: number, font: number) => chars * font * 0.62;
+export type MeasureText = (text: string, font: number, kind: 'name' | 'value') => number;
+
+/**
+ * The fallback for callers with nothing to measure with — tests, and any layout
+ * computed before the page exists. 0.62em per character is the measured average
+ * for the UI face across the names this draws, rounded up rather than to the
+ * mean.
+ */
+export const estimateText: MeasureText = (text, font) => text.length * font * 0.62;
+
+/**
+ * A stand-in for a formatted amount, for measuring only.
+ *
+ * Figures are drawn in the mono face, where every glyph is one width, so a run
+ * of zeroes as long as the amount measures exactly as wide as the amount — and
+ * the engine does not have to know how a currency is formatted to size a box
+ * for it.
+ */
+const valueSample = (value: number) => '0'.repeat(valueChars(value));
 
 /** How many characters a grouped amount with two decimals occupies. */
 function valueChars(value: number): number {
 	const whole = Math.round(Math.abs(value)).toString();
 	return whole.length + Math.floor((whole.length - 1) / 3) + 3;
+}
+
+/** The wider of the two lines a label holds: its name, and the amount under it. */
+function labelWidth(
+	label: string,
+	value: number,
+	showValue: boolean,
+	font: number,
+	measure: MeasureText
+): number {
+	return Math.max(
+		measure(label, font, 'name'),
+		showValue ? measure(valueSample(value), font * VALUE_RATIO, 'value') : 0
+	);
 }
 
 /**
@@ -242,26 +276,22 @@ interface ColumnPlan {
  * income sources and twenty-five leaves want different sizes, and sizing the
  * whole chart for its most crowded column would shrink the names that had room.
  */
-function planColumn(nodes: SankeyNodeInput[], boxHeight: number): ColumnPlan {
+function planColumn(nodes: SankeyNodeInput[], boxHeight: number, measure: MeasureText): ColumnPlan {
 	const withValue = nodes.some((n) => n.showValue);
 	let font = MAX_FONT;
 	while (font > MIN_FONT && nodes.length * (labelHeight(font, withValue) + 1) > boxHeight) font--;
 	const height = labelHeight(font, withValue);
 	const lane =
-		Math.max(
-			0,
-			...nodes.map((n) =>
-				Math.max(
-					textWidth(n.label.length, font),
-					n.showValue ? textWidth(valueChars(n.value), font * VALUE_RATIO) : 0
-				)
-			)
-		) +
+		Math.max(0, ...nodes.map((n) => labelWidth(n.label, n.value, !!n.showValue, font, measure))) +
 		PAD_X * 2;
 	return { font, height, lane, room: Math.floor(boxHeight / (height + 1)), withValue };
 }
 
-export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
+export function buildSankey(
+	graph: SankeyGraph,
+	box: SankeyBox,
+	measure: MeasureText = estimateText
+): SankeyLayout {
 	const columns = [...new Set(graph.nodes.map((n) => n.column))].sort((a, b) => a - b);
 	const layout: SankeyLayout = {
 		width: box.width,
@@ -307,7 +337,8 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 			column,
 			planColumn(
 				graph.nodes.filter((n) => n.column === column),
-				box.height
+				box.height,
+				measure
 			)
 		);
 	}
@@ -575,7 +606,16 @@ export function buildSankey(graph: SankeyGraph, box: SankeyBox): SankeyLayout {
 				label: node.label,
 				value: node.value,
 				showValue: !!node.showValue,
-				fits: named.has(node.key),
+				// Room in the column, AND room on the row. The second is the one a
+				// squeeze can take away: type shrinks to a floor and the reservation
+				// goes on shrinking past it, so a narrow viewport reaches a point
+				// where the box is narrower than the name it was drawn for. A name
+				// cut in half is worse than one that is not there — the breakdown
+				// strip under the chart lists every band with its figure, and that is
+				// what a phone reads anyway.
+				fits:
+					named.has(node.key) &&
+					labelWidth(node.label, node.value, !!node.showValue, font, measure) <= width + 0.5,
 				// Only a middle column writes over the flow, so only it needs the
 				// plate that lifts text off a saturated band.
 				plate: !outside,

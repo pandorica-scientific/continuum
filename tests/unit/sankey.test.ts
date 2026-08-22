@@ -139,6 +139,53 @@ describe('buildSankey', () => {
 		expect(x(2)).toBeLessThan(x(3));
 	});
 
+	// The defect this closes: the engine used to guess a name's width from its
+	// character count, so on a machine whose font was wider than the guess — a
+	// fallback face before the webfont arrives, or another operating system's
+	// idea of sans-serif — the box came out narrower than the name and the
+	// renderer cut it. Nothing in the engine could see that had happened.
+	describe('measuring names', () => {
+		const box = { width: 900, height: 460 };
+		const named = (layout: ReturnType<typeof buildSankey>) =>
+			layout.labels.filter((l) => l.fits).map((l) => l.label);
+
+		it('drops a name it cannot draw whole rather than cutting it', () => {
+			// Every name measures wider than the diagram itself.
+			const wide = buildSankey(graph, box, () => box.width * 2);
+			expect(named(wide)).toEqual([]);
+		});
+
+		it('keeps the names when they measure narrow enough to fit', () => {
+			const narrow = buildSankey(graph, box, () => 8);
+			expect(named(narrow).length).toBeGreaterThan(0);
+		});
+
+		it('asks for the face each line is drawn in', () => {
+			const kinds = new Set<string>();
+			buildSankey(
+				{
+					nodes: [
+						{
+							key: 'a',
+							label: 'A',
+							value: 10,
+							colorVar: '--teal',
+							column: 0,
+							showValue: true
+						}
+					],
+					links: []
+				},
+				box,
+				(_text, _font, kind) => {
+					kinds.add(kind);
+					return 10;
+				}
+			);
+			expect([...kinds].sort()).toEqual(['name', 'value']);
+		});
+	});
+
 	it('survives a graph with a single node', () => {
 		const layout = buildSankey(
 			{ nodes: [{ key: 'a', label: 'A', value: 10, colorVar: '--teal', column: 0 }], links: [] },
