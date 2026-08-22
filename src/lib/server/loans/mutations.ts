@@ -304,6 +304,14 @@ export interface UpdateLoanInput {
 	paymentDay: number | null;
 	endsOn: string | null;
 	secured: SecuredPropertyInput[];
+	/** How the rate is set: a fixation period, a fixed term, or floating. */
+	regime: string;
+	/** Whether interest is charged on the payment date or over the calendar month. */
+	accrualStyle: string;
+	/** The convention interest is counted with — 30/360, act/365, act/360. */
+	dayCount: string;
+	/** Whether this loan's interest reduces taxable income. */
+	interestDeductible: boolean;
 }
 
 /**
@@ -314,12 +322,19 @@ export interface UpdateLoanInput {
  * second flat — the reported case, and the shape of a real household with one
  * mortgage over two properties — meant starting again.
  *
- * Deliberately does NOT touch rate, payment, principal, balance or currency.
- * Those have their own operations (`replaceFixation`, `recordRepayment`) that
- * understand the history they rewrite. Above all it never deletes a fixation
- * period: that history is the loan's evidence, every interest figure is derived
- * from it, and nothing else the app stores could reconstruct it. An edit is a
- * correction to a description, not permission to discard the record.
+ * Rate REGIME, accrual style, day count and deductibility are here too, and the
+ * distinction is worth stating because it is what keeps this safe. They describe
+ * HOW the loan works — how its rate is set, how interest is counted — and
+ * changing one re-derives the schedule from the periods already recorded. They
+ * do not rewrite a period, and they cannot remove one.
+ *
+ * Deliberately still does NOT touch rate, payment, principal, balance or
+ * currency. Those have their own operations (`replaceFixation`,
+ * `recordRepayment`) that understand the history they rewrite. Above all this
+ * never deletes a fixation period: that history is the loan's evidence, every
+ * interest figure is derived from it, and nothing else the app stores could
+ * reconstruct it. An edit is a correction to a description, not permission to
+ * discard the record.
  */
 export async function updateLoan(
 	id: string,
@@ -396,7 +411,16 @@ export async function updateLoan(
 				lender: input.lender.trim(),
 				kind: asEnumValue('loan.kind', input.kind, existing.kind),
 				paymentDay,
-				endsOn
+				endsOn,
+				// How the loan works, as opposed to what it has done. Each of these
+				// re-derives the schedule from the periods already recorded; none of
+				// them rewrites or removes one. asEnumValue narrows at the boundary, so
+				// a hand-crafted form post falls back to what is stored rather than
+				// reaching the CHECK constraint.
+				regime: asEnumValue('loan.regime', input.regime, existing.regime),
+				accrualStyle: asEnumValue('loan.accrual_style', input.accrualStyle, existing.accrualStyle),
+				dayCount: asEnumValue('loan.day_count', input.dayCount, existing.dayCount),
+				interestDeductible: input.interestDeductible
 			})
 			.where(eq(loan.id, id));
 

@@ -16,6 +16,20 @@ const AUTH_STATE = 'test-results/e2e-auth.json';
 
 test.describe.configure({ mode: 'serial' });
 
+/**
+ * Choose a category from the picker that replaced the native select.
+ *
+ * The select's popup could not be steered and opened downwards off the bottom
+ * of the review queue, so it is a listbox now: a trigger, and options carrying
+ * their id in `data-value`. The hidden input still posts `categoryId`, so
+ * nothing about the server side changed.
+ */
+async function pickCategory(scope: import('@playwright/test').Locator, id: string) {
+	const picker = scope.locator('.picker').first();
+	await picker.locator('.trigger').click();
+	await picker.locator(`.option[data-value="${id}"]`).click();
+}
+
 test('first visit redirects to the setup wizard', async ({ page }) => {
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/setup/);
@@ -128,7 +142,7 @@ test.describe('signed in', () => {
 		const firstRow = page.locator('.review-row').first();
 		await expect(firstRow).toBeVisible();
 		const merchant = await firstRow.locator('.r-merchant').innerText();
-		await firstRow.locator('select[name=categoryId]').selectOption('groceries');
+		await pickCategory(firstRow, 'groceries');
 		await firstRow.getByRole('button', { name: 'Save' }).click();
 		// The filed row leaves the queue (learned rules may clear more).
 		await expect(page.locator('.review-row', { hasText: merchant })).toHaveCount(0, {
@@ -193,7 +207,9 @@ test.describe('signed in', () => {
 		await page.goto('/transactions?review=needs_review');
 		const unfiled = page.locator('.txn-row').first();
 		await expect(unfiled).toBeVisible();
-		await expect(unfiled.locator('select[name=categoryId]')).toHaveValue('');
+		// The hidden input the picker posts through: empty means unfiled, which is
+		// what stops an unguessed row looking as though it were already filed.
+		await expect(unfiled.locator('input[name=categoryId]')).toHaveValue('');
 	});
 
 	test('the register totals the filtered set and recategorises a row', async ({ page }) => {
@@ -204,7 +220,7 @@ test.describe('signed in', () => {
 		// exactly as filing it from the review queue would.
 		await page.goto('/transactions?q=ACME');
 		const row = page.locator('.txn-row').first();
-		await row.locator('select[name=categoryId]').selectOption('groceries');
+		await pickCategory(row, 'groceries');
 		await row.getByRole('button', { name: 'Save' }).click();
 		// `use:enhance` submits asynchronously. Wait for the server result to be
 		// applied before navigating, otherwise the filtered GET can race the commit.
@@ -296,7 +312,7 @@ test.describe('signed in', () => {
 		await page.goto('/transactions');
 		const filed = page.locator('.txn-row', { hasText: 'filed by rule' }).first();
 		await expect(filed).toBeVisible();
-		await filed.locator('select[name=categoryId]').selectOption('eating-out');
+		await pickCategory(filed, 'eating-out');
 		await filed.getByRole('button', { name: 'Save' }).click();
 		await page.waitForTimeout(800);
 
@@ -513,12 +529,20 @@ test.describe('signed in', () => {
 		// The point of the whole exercise: a category a household invented is
 		// offered where transactions are filed, without a deploy.
 		await page.goto('/transactions');
-		await expect(
-			page.locator('.txn-row').first().locator('select[name=categoryId] option', { hasText: 'Vet' })
-		).toHaveCount(1);
+		const picker = page.locator('.txn-row').first().locator('.picker').first();
+		await picker.locator('.trigger').click();
+		await expect(picker.locator('.option', { hasText: 'Vet' })).toHaveCount(1);
 	});
 
-	test('deleting a category moves what was filed under it', async ({ page }) => {
+	// Renamed to what it actually exercises. It never filed anything into Vet —
+	// the test above only checks the category is OFFERED — so this was always the
+	// unused case, walked through a form that asked for a destination anyway.
+	// Now nothing is asked, because there is nothing to ask about.
+	//
+	// The reassignment path is covered where transactions really exist:
+	// tests/integration/category-delete.test.ts for the move itself, and
+	// tests/e2e/category-delete.spec.ts for the dialog.
+	test('an unused category is deleted without being asked anything', async ({ page }) => {
 		await page.goto('/settings');
 		const petsGroup = page.locator('.tx-group[data-group="pets"]');
 		await petsGroup.locator('.tx-add-leaf input[name=categoryName]').fill('Pet food');
@@ -526,11 +550,9 @@ test.describe('signed in', () => {
 		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Pet food' })).toBeVisible();
 
 		await petsGroup.getByRole('button', { name: 'Delete Vet' }).click();
-		const reassign = petsGroup.locator('.tx-reassign');
-		await reassign.locator('select[name=reassignTo]').selectOption({ label: 'Pet food' });
-		await reassign.getByRole('button', { name: 'Move and delete' }).click();
 
 		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Vet' })).toHaveCount(0);
+		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Pet food' })).toBeVisible();
 	});
 

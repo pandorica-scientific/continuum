@@ -1,9 +1,16 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import {
+		messageFromActionResult,
+		shouldCloseAfterAction,
+		submitAction
+	} from '$lib/actions/result';
+	import { deserialize } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import InfoHint from '$lib/components/InfoHint.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { SETUP_GUIDES } from '$lib/calendar/setup-steps';
 	import Field from '$lib/components/Field.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -57,7 +64,122 @@
 	// So: how many fresh loads have landed since this page asked for a backup,
 	// or null if it has not asked for one.
 	/** Which category is showing its "move them to" picker, by id. */
-	let deletingLeaf = $state<string | null>(null);
+	/**
+	 * The category whose ✕ was pressed, once we know what depends on it.
+	 *
+	 * The count comes first and decides everything: nothing filed under it and
+	 * the delete simply happens, because there is no question to ask. Only when
+	 * something does depend on it is a dialog worth anybody's attention.
+	 */
+	let deletingLeaf = $state<{
+		id: string;
+		name: string;
+		transactions: number;
+		splits: number;
+		rules: number;
+	} | null>(null);
+	let deleteError = $state<string | null>(null);
+	let checkingLeaf = $state<string | null>(null);
+
+	/**
+	 * Reordering the categories inside a group.
+	 *
+	 * Two ways in, because one is not enough. Dragging is what was asked for and
+	 * is what a mouse expects; the arrow keys are what makes it reachable without
+	 * one, and they are not a lesser path — holding a chip and pressing ← or →
+	 * is faster than dragging for a single step.
+	 *
+	 * A catch-all is excluded from both: it is pinned last by its flag, so
+	 * letting it be picked up would promise a move the ordering will not honour.
+	 */
+	let dragging = $state<{ group: string; id: string } | null>(null);
+
+	function movableIds(group: { items: { id: string; isCatchAll?: boolean }[] }): string[] {
+		return group.items.filter((item) => !item.isCatchAll).map((item) => item.id);
+	}
+
+	async function commitOrder(groupKey: string, order: string[]) {
+		await submitAction('?/reorderLeaves', formOf({ groupKey, order: order.join(',') }));
+	}
+
+	/** Put `id` where `target` currently is, and write the whole group's order. */
+	async function moveTo(
+		group: { key: string; items: { id: string; isCatchAll?: boolean }[] },
+		id: string,
+		targetId: string
+	) {
+		const ids = movableIds(group);
+		const from = ids.indexOf(id);
+		const to = ids.indexOf(targetId);
+		if (from < 0 || to < 0 || from === to) return;
+		ids.splice(to, 0, ...ids.splice(from, 1));
+		await commitOrder(group.key, ids);
+	}
+
+	/** One step left or right, for the keyboard. */
+	async function nudge(
+		group: { key: string; items: { id: string; isCatchAll?: boolean }[] },
+		id: string,
+		delta: number
+	) {
+		const ids = movableIds(group);
+		const from = ids.indexOf(id);
+		const to = from + delta;
+		if (from < 0 || to < 0 || to >= ids.length) return;
+		ids.splice(to, 0, ...ids.splice(from, 1));
+		await commitOrder(group.key, ids);
+	}
+
+	async function askToDelete(leaf: { id: string; name: string }) {
+		checkingLeaf = leaf.id;
+		deleteError = null;
+		const body = new FormData();
+		body.set('categoryId', leaf.id);
+		const response = await fetch('?/countLeafDependants', {
+			method: 'POST',
+			body,
+			headers: { 'x-sveltekit-action': 'true' }
+		});
+		const counts = readDependants(await response.text());
+		checkingLeaf = null;
+		if (!counts) {
+			deleteError = 'Could not check what is filed under that category.';
+			return;
+		}
+		if (!counts.any) {
+			// Nothing points at it, so there is nothing to decide.
+			await submitAction('?/removeLeaf', formOf({ categoryId: leaf.id }));
+			return;
+		}
+		deletingLeaf = { id: leaf.id, name: leaf.name, ...counts };
+	}
+
+	function formOf(fields: Record<string, string>): FormData {
+		const body = new FormData();
+		for (const [key, value] of Object.entries(fields)) body.set(key, value);
+		return body;
+	}
+
+	/** The action result carries the counts; anything else means the check failed. */
+	function readDependants(
+		payload: string
+	): { transactions: number; splits: number; rules: number; any: boolean } | null {
+		try {
+			const result = deserialize(payload);
+			if (result.type !== 'success') return null;
+			const data = result.data as { dependants?: Record<string, number | boolean> } | undefined;
+			const d = data?.dependants;
+			if (!d) return null;
+			return {
+				transactions: Number(d.transactions ?? 0),
+				splits: Number(d.splits ?? 0),
+				rules: Number(d.rules ?? 0),
+				any: Boolean(d.any)
+			};
+		} catch {
+			return null;
+		}
+	}
 	const ROLE_LABELS: Record<string, string> = {
 		income: 'Money in',
 		expense: 'Money out',
@@ -75,6 +197,18 @@
 		return () => clearInterval(timer);
 	});
 </script>
+
+{#snippet chipBody(leaf: { id: string; name: string })}
+	<span>{leaf.name}</span>
+	<button
+		type="button"
+		aria-label="Delete {leaf.name}"
+		disabled={checkingLeaf === leaf.id}
+		onclick={() => askToDelete(leaf)}
+	>
+		✕
+	</button>
+{/snippet}
 
 <ScreenHeader
 	title="Settings"
@@ -622,35 +756,45 @@
 
 					<div class="tx-leaves">
 						{#each group.items as leaf (leaf.id)}
-							<span class="tx-leaf">
-								<span>{leaf.name}</span>
-								<button
-									type="button"
-									aria-label="Delete {leaf.name}"
-									onclick={() => (deletingLeaf = deletingLeaf === leaf.id ? null : leaf.id)}
+							{#if leaf.isCatchAll}
+								<!-- Pinned last by its flag, so it offers no grip and takes no
+								     focus: a chip that looks draggable and then refuses to move is
+								     worse than one that never offered. -->
+								<span class="tx-leaf pinned" title="Always last in this group">
+									{@render chipBody(leaf)}
+								</span>
+							{:else}
+								<span
+									class="tx-leaf"
+									class:dragging={dragging?.id === leaf.id}
+									draggable="true"
+									role="button"
+									tabindex="0"
+									aria-label="{leaf.name} — use the arrow keys to move it"
+									ondragstart={() => (dragging = { group: group.key, id: leaf.id })}
+									ondragend={() => (dragging = null)}
+									ondragover={(e) => {
+										if (dragging && dragging.group === group.key) e.preventDefault();
+									}}
+									ondrop={(e) => {
+										e.preventDefault();
+										if (dragging && dragging.group === group.key)
+											moveTo(group, dragging.id, leaf.id);
+										dragging = null;
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'ArrowLeft') {
+											e.preventDefault();
+											nudge(group, leaf.id, -1);
+										} else if (e.key === 'ArrowRight') {
+											e.preventDefault();
+											nudge(group, leaf.id, 1);
+										}
+									}}
 								>
-									✕
-								</button>
-							</span>
-							{#if deletingLeaf === leaf.id}
-								<form method="POST" action="?/removeLeaf" use:enhance class="tx-reassign">
-									<input type="hidden" name="categoryId" value={leaf.id} />
-									<!-- Where its history goes. Asked rather than assumed: orphaning
-									     the rows would drop them out of every total that filters on a
-									     category, which reads as money disappearing. -->
-									<label>
-										<span>Move what is filed under “{leaf.name}” to</span>
-										<select name="reassignTo" required>
-											{#each data.allLeaves.filter((l) => l.id !== leaf.id) as target (target.id)}
-												<option value={target.id}>{target.name}</option>
-											{/each}
-										</select>
-									</label>
-									<button type="submit" class="btn">Move and delete</button>
-									<button type="button" class="btn" onclick={() => (deletingLeaf = null)}>
-										Cancel
-									</button>
-								</form>
+									<span class="grip" aria-hidden="true">⠿</span>
+									{@render chipBody(leaf)}
+								</span>
 							{/if}
 						{/each}
 						<form method="POST" action="?/addLeaf" use:enhance class="tx-add-leaf">
@@ -722,7 +866,107 @@
 	</section>
 {/if}
 
+{#if deletingLeaf}
+	<!-- Asked in a dialog rather than in the list, because the list is where the
+	     other categories are and pushing them down to make room for a question
+	     loses the thing being asked about. Only reached when something actually
+	     depends on the category: an unused one is deleted without a word. -->
+	<Modal title="Delete “{deletingLeaf.name}”?" onclose={() => (deletingLeaf = null)}>
+		<form
+			method="POST"
+			action="?/removeLeaf"
+			use:enhance={() =>
+				async ({ update, result }) => {
+					deleteError = messageFromActionResult(result);
+					await update();
+					if (shouldCloseAfterAction(result.type)) deletingLeaf = null;
+				}}
+			class="tx-delete"
+		>
+			<input type="hidden" name="categoryId" value={deletingLeaf.id} />
+
+			<p class="tx-counts">
+				{#if deletingLeaf.transactions > 0}
+					<strong>{deletingLeaf.transactions}</strong>
+					{deletingLeaf.transactions === 1 ? 'transaction' : 'transactions'}
+				{/if}{#if deletingLeaf.splits > 0}{deletingLeaf.transactions > 0 ? ', ' : ''}<strong
+						>{deletingLeaf.splits}</strong
+					>
+					{deletingLeaf.splits === 1
+						? 'split line'
+						: 'split lines'}{/if}{#if deletingLeaf.rules > 0}{deletingLeaf.transactions +
+						deletingLeaf.splits >
+					0
+						? ' and '
+						: ''}<strong>{deletingLeaf.rules}</strong>
+					{deletingLeaf.rules === 1 ? 'rule' : 'rules'}{/if}
+				{deletingLeaf.transactions + deletingLeaf.splits + deletingLeaf.rules === 1 ? 'is' : 'are'} filed
+				under it.
+			</p>
+
+			<!-- A rule left pointing at a deleted category still matches and files
+			     nothing, so the categoriser quietly stops working. That is why they
+			     are named here rather than folded into the transaction count. -->
+			<label class="field">
+				<span>Move them all to</span>
+				<select name="reassignTo" required>
+					{#each data.allLeaves.filter((l) => l.id !== deletingLeaf?.id) as target (target.id)}
+						<option value={target.id}>{target.name}</option>
+					{/each}
+				</select>
+			</label>
+
+			{#if deleteError}<p class="error">{deleteError}</p>{/if}
+
+			<div class="tx-delete-actions">
+				<button type="button" class="btn" onclick={() => (deletingLeaf = null)}>Cancel</button>
+				<button type="submit" class="btn btn-primary">Move and delete</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
 <style>
+	.tx-leaf .grip {
+		color: var(--fg3);
+		cursor: grab;
+		font-size: var(--text-sm);
+		line-height: 1;
+	}
+	.tx-leaf[draggable='true'] {
+		cursor: grab;
+	}
+	.tx-leaf.dragging {
+		opacity: 0.45;
+	}
+	.tx-leaf:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+	}
+	/* A catch-all is pinned last by its flag, so it offers no grip: a chip that
+	   looks draggable and then refuses to move is worse than one that never
+	   offered. */
+	.tx-leaf.pinned {
+		opacity: 0.85;
+	}
+
+	.tx-delete {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+		padding: var(--space-6) 0 0;
+	}
+	.tx-counts {
+		margin: 0;
+		color: var(--fg2);
+		font-size: var(--text-md);
+	}
+	.tx-delete-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-4);
+	}
+
 	.open-mode {
 		display: flex;
 		flex-direction: column;
@@ -804,20 +1048,12 @@
 		font-size: var(--text-xs);
 		padding: 0 3px;
 	}
-	.tx-reassign,
 	.tx-add-leaf,
 	.tx-add-group {
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
 		flex-wrap: wrap;
-	}
-	.tx-reassign label {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 	.tx-add-group {
 		padding-top: 12px;

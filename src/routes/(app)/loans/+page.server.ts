@@ -191,6 +191,12 @@ export const load: PageServerLoad = async () => {
 				kind: l.kind,
 				paymentDay: l.paymentDay,
 				endsOn: l.endsOn,
+				// How the loan works, as opposed to what it has done. Reported as
+				// fixed and uncorrectable.
+				regime: l.regime,
+				accrualStyle: l.accrualStyle,
+				dayCount: l.dayCount,
+				interestDeductible: l.interestDeductible,
 				secured: links
 					.filter((link) => link.loanId === l.id)
 					.map((link) => ({ propertyId: link.propertyId, sharePct: link.sharePct }))
@@ -331,7 +337,13 @@ export const actions: Actions = {
 			kind: String(form.get('kind') ?? 'mortgage'),
 			paymentDay: paymentDayRaw ? Number(paymentDayRaw) : null,
 			endsOn: String(form.get('endsOn') ?? '').trim() || null,
-			secured
+			secured,
+			// How the loan works. Reported as fixed and uncorrectable: a rate regime
+			// or accrual style entered wrongly meant starting the loan again.
+			regime: String(form.get('regime') ?? ''),
+			accrualStyle: String(form.get('accrualStyle') ?? ''),
+			dayCount: String(form.get('dayCount') ?? ''),
+			interestDeductible: form.get('interestDeductible') === 'on'
 		});
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };

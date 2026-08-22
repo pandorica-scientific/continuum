@@ -32,6 +32,14 @@
 			await update();
 			if (shouldCloseAfterAction(result.type)) close();
 		};
+	/** The rate regimes, named once and used by both the add and the edit form —
+	 *  they were spelled out inline, so the two could disagree. */
+	const REGIMES = [
+		{ value: 'fixed_period', label: 'Fixed until a date, then re-fixed' },
+		{ value: 'fixed_term', label: 'Fixed for the whole term' },
+		{ value: 'floating', label: 'Floating' }
+	] as const;
+
 	let regime = $state('fixed_period');
 	let open = $state<string | null>(null);
 	let repayFor = $state<string | null>(null);
@@ -178,6 +186,49 @@
 									<span>Payment day</span>
 									<input name="paymentDay" inputmode="numeric" value={l.edit.paymentDay ?? ''} />
 								</label>
+								<!-- How the loan works. Changing one of these re-derives the
+								     schedule from the periods already recorded; none of them can
+								     rewrite or remove a period, which is what keeps them safe to
+								     put beside a name and a lender. -->
+								<label>
+									<span>Rate regime</span>
+									<select name="regime">
+										{#each REGIMES as option (option.value)}
+											<option value={option.value} selected={l.edit.regime === option.value}>
+												{option.label}
+											</option>
+										{/each}
+									</select>
+								</label>
+								<label>
+									<span>Interest accrual</span>
+									<select name="accrualStyle">
+										<option value="payment" selected={l.edit.accrualStyle === 'payment'}>
+											On the payment date
+										</option>
+										<option value="calendar" selected={l.edit.accrualStyle === 'calendar'}>
+											Over the calendar month
+										</option>
+									</select>
+								</label>
+								<label>
+									<span>Day count</span>
+									<select name="dayCount">
+										{#each DAY_COUNTS as count (count)}
+											<option value={count} selected={l.edit.dayCount === count}>
+												{DAY_COUNT_LABELS[count]}
+											</option>
+										{/each}
+									</select>
+								</label>
+								<label class="toggle">
+									<input
+										type="checkbox"
+										name="interestDeductible"
+										checked={l.edit.interestDeductible}
+									/>
+									<span>Interest reduces taxable income</span>
+								</label>
 								<label>
 									<span>Ends</span>
 									<input name="endsOn" type="date" value={l.edit.endsOn ?? ''} />
@@ -295,9 +346,9 @@
 				<label
 					><span>Rate regime</span>
 					<select name="regime" bind:value={regime}>
-						<option value="fixed_period">Fixed until a date, then re-fixed</option>
-						<option value="fixed_term">Fixed for the whole term</option>
-						<option value="floating">Floating</option>
+						{#each REGIMES as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
 					</select></label
 				>
 				{#if regime === 'fixed_period'}

@@ -185,6 +185,51 @@ export async function createCategory(
 	});
 }
 
+/**
+ * Set the order of the categories inside one group.
+ *
+ * The whole group is rewritten in one transaction rather than the moved chip
+ * being nudged: a sequence of "swap these two" updates leaves a half-applied
+ * order visible if anything fails between them, and two people reordering at
+ * once would interleave into something neither of them asked for.
+ *
+ * Catch-alls are excluded from the sequence entirely. They are pinned last by
+ * `is_catch_all` in every ordering, so giving them a `sort` would be writing a
+ * number nothing reads — and a number nothing reads is one that eventually
+ * disagrees with the truth.
+ */
+export async function reorderCategories(
+	groupKey: string,
+	orderedIds: string[],
+	handle: Db = db
+): Promise<TaxonomyResult> {
+	return handle.transaction(async (tx) => {
+		const inGroup = await tx.select().from(category).where(eq(category.groupKey, groupKey));
+		if (inGroup.length === 0) {
+			return { ok: false as const, status: 404, message: 'That group has no categories.' };
+		}
+
+		const movable = new Set(inGroup.filter((row) => !row.isCatchAll).map((row) => row.id));
+		const wanted = orderedIds.filter((id) => movable.has(id));
+
+		// Every movable category must appear exactly once. A short list would
+		// silently leave the rest wherever they were, which reads as a reorder
+		// that half worked.
+		if (wanted.length !== movable.size || new Set(wanted).size !== wanted.length) {
+			return {
+				ok: false as const,
+				status: 400,
+				message: 'That order does not name every category in the group exactly once.'
+			};
+		}
+
+		for (const [index, id] of wanted.entries()) {
+			await tx.update(category).set({ sort: index }).where(eq(category.id, id));
+		}
+		return { ok: true as const };
+	});
+}
+
 /** What still points at a category, so nothing has to be guessed at. */
 export interface CategoryDependants {
 	/** Transactions filed under it, plus those merely suggested it. */

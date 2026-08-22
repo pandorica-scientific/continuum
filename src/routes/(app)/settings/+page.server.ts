@@ -22,7 +22,8 @@ import {
 	countCategoryDependants,
 	deleteCategory,
 	deleteCategoryGroup,
-	renameCategoryGroup
+	renameCategoryGroup,
+	reorderCategories
 } from '$lib/server/categorize/taxonomy';
 import { CATEGORY_GROUP_SEED, RESERVE_COLOR_TOKENS } from '$lib/categories';
 import { passwordsMatchError } from '$lib/password-policy';
@@ -230,7 +231,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			role: group.role,
 			items: leaves
 				.filter((leaf) => leaf.groupKey === group.key)
-				.map((leaf) => ({ id: leaf.id, name: leaf.name }))
+				// isCatchAll travels with each leaf: the screen needs it to know which
+				// chips are draggable, and a chip that looks draggable and then refuses
+				// to move is worse than one that never offered.
+				.map((leaf) => ({ id: leaf.id, name: leaf.name, isCatchAll: leaf.isCatchAll }))
 		})),
 		// Every leaf, for the "move them to" picker a deletion needs.
 		allLeaves: leaves.map((leaf) => ({ id: leaf.id, name: leaf.name })),
@@ -591,6 +595,19 @@ export const actions = administered({
 	removeGroup: async ({ request }) => {
 		const form = await request.formData();
 		const result = await deleteCategoryGroup(String(form.get('groupKey') ?? ''));
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/** The order of the categories inside one group, as a person arranged them. */
+	reorderLeaves: async ({ request }) => {
+		const form = await request.formData();
+		const result = await reorderCategories(
+			String(form.get('groupKey') ?? ''),
+			String(form.get('order') ?? '')
+				.split(',')
+				.filter(Boolean)
+		);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},

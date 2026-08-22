@@ -54,9 +54,37 @@ for (const path of SCREENS) {
 		// Everything else on those screens is still compared to the pixel.
 		const volatile = [
 			page.locator('.status').filter({ hasText: 'Uptime' }),
-			page.getByText(/Last backup|Last attempt failed/),
+			// The row, not the sentence inside it. Masking the text itself was
+			// unstable in a way that took a while to see: Playwright sizes a mask to
+			// the element, and this sentence carries a file count — "3958 new files
+			// copied" — so the masked RECTANGLE changed width between runs and the
+			// diff appeared at its edges. A mask must cover something whose geometry
+			// does not move.
+			page.locator('.card').filter({ hasText: 'Back up now' }),
 			page.locator('.f-detail'),
-			page.getByText(/last synced/)
+			page.getByText(/last synced/),
+			// Anything derived from TODAY'S DATE. These are not slow-moving: they
+			// change at midnight, so without masking this suite fails every night
+			// and starts training whoever sees it to update the snapshots without
+			// looking — which is exactly how a screenshot guard stops being one.
+			//
+			//   Calendar — the "today" cell. Masking every day cell rather than just
+			//              today's, because yesterday's ALSO changes: it loses the
+			//              highlight it had when the baseline was taken. The grid
+			//              itself stays visible, so a layout change is still caught.
+			//   Settings — "created … · last used …" on API tokens and passkeys.
+			page.locator('.day'),
+			// Whole ROWS, not the sentences inside them. A mask is sized to its
+			// element, so masking text whose length changes — "last used never"
+			// becoming "last used 22/08/2026" — moves the masked rectangle and the
+			// diff reappears at its edges. This is the second time that caught me
+			// out; the rule is that a mask must cover something whose geometry does
+			// not depend on what it says.
+			page.locator('.token-row'),
+			page.locator('.mod-label').filter({ hasText: /last used|never used/ }),
+			// A document's added date, which is today's for anything filed today —
+			// every imported statement, as of Part 3.
+			page.getByText(/^\d{4}-\d{2}-\d{2}$/)
 		];
 
 		await expect(page).toHaveScreenshot(`${path.slice(1)}.png`, {

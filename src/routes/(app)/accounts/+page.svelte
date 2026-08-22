@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
@@ -12,6 +13,22 @@
 
 	/** Sentinel option: not a bank key, so it can never be stored as one. */
 	const ADD_BANK = '__add__';
+	let editing = $state<string | null>(null);
+	/** Close on success, stay open on a refusal so a correction is not lost. */
+	const closeOnSuccess =
+		(close: () => void) =>
+		() =>
+		async ({
+			update,
+			result
+		}: {
+			update: () => Promise<void>;
+			result: import('@sveltejs/kit').ActionResult;
+		}) => {
+			await update();
+			if (shouldCloseAfterAction(result.type)) close();
+		};
+
 	let bankKey = $state('fio');
 	let addingBank = $state(false);
 	// What the select should fall back to if the dialog is dismissed, so choosing
@@ -64,6 +81,13 @@
 				<span class="emoji">{a.emoji}</span>
 				<div class="names">
 					<span class="name">{a.name}</span>
+					<!-- The numbers this account is known by. They were written when it was
+					     created AND learned from statements as they arrived, but shown
+					     nowhere — so the one thing that explains why a transfer did or did
+					     not pair was unreachable. -->
+					{#if a.numbers.length > 0}
+						<span class="mono numbers">{a.numbers.join(' · ')}</span>
+					{/if}
 					<span class="meta">{a.meta}</span>
 				</div>
 				<div class="balances">
@@ -72,7 +96,69 @@
 						<span class="mono equivalent">{a.baseEquivalent}</span>
 					{/if}
 				</div>
+				<button
+					type="button"
+					class="edit"
+					aria-label="Edit {a.name}"
+					onclick={() => (editing = editing === a.id ? null : a.id)}
+				>
+					✎
+				</button>
 			</div>
+
+			{#if editing === a.id}
+				<form
+					method="POST"
+					action="?/editAccount"
+					use:enhance={closeOnSuccess(() => (editing = null))}
+					class="edit-form"
+				>
+					<input type="hidden" name="id" value={a.id} />
+					<label class="field"><span>Name</span><input name="name" value={a.name} /></label>
+					<label class="field"><span>Emoji</span><input name="emoji" value={a.ownEmoji} /></label>
+					<label class="field">
+						<span>Bank</span>
+						<select name="bank" value={a.bank}>
+							{#each data.banks as b (b.key)}<option value={b.key}>{b.label}</option>{/each}
+						</select>
+					</label>
+					<label class="field">
+						<span>Type</span>
+						<select name="kind" value={a.kind}>
+							<option value="current">Current</option>
+							<option value="savings">Savings</option>
+							<option value="brokerage">Brokerage</option>
+						</select>
+					</label>
+					<label class="field">
+						<span>Whose</span>
+						<select name="ownerPersonId" value={a.ownerPersonId ?? ''}>
+							<!-- Joint is a real answer, not an absence — which is all it was
+							     until now, because nothing ever set an owner. -->
+							<option value="">Joint</option>
+							{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+						</select>
+					</label>
+					<label class="field">
+						<span>Currency</span>
+						<!-- Locked once anything is filed here: every stored amount is minor
+						     units OF THIS CURRENCY, so changing it would reinterpret history
+						     rather than convert it. The server refuses it too; this only
+						     avoids offering something that will be refused. -->
+						<select name="currency" value={a.currency} disabled={!a.canChangeCurrency}>
+							{#each data.currencies as c (c)}<option>{c}</option>{/each}
+						</select>
+					</label>
+					<label class="field numbers-field">
+						<span>Account number(s)</span>
+						<input name="numbers" value={a.numbers.join(', ')} />
+					</label>
+					<div class="edit-actions">
+						<button type="button" class="btn" onclick={() => (editing = null)}>Cancel</button>
+						<button type="submit" class="btn btn-primary">Save</button>
+					</div>
+				</form>
+			{/if}
 		{/each}
 
 		{#if adding}
@@ -94,6 +180,10 @@
 					<option value="current">Current</option>
 					<option value="savings">Savings</option>
 					<option value="brokerage">Brokerage</option>
+				</select>
+				<select name="ownerPersonId" aria-label="Whose account this is">
+					<option value="">Joint</option>
+					{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 				</select>
 				<!-- The placeholder alone could not say why this is wanted, and on a
 				     narrow screen it was cut off before it finished saying what it is. -->
@@ -190,6 +280,36 @@
 </section>
 
 <style>
+	.numbers {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		overflow-wrap: anywhere;
+	}
+	.edit {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-md);
+		padding: 0 var(--space-3);
+	}
+	.edit:hover {
+		color: var(--fg1);
+	}
+	.edit-form {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: var(--space-6);
+		padding: var(--space-6) 0;
+		border-top: 1px solid var(--bd);
+	}
+	.edit-actions {
+		display: flex;
+		align-items: flex-end;
+		justify-content: flex-end;
+		gap: var(--space-4);
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);

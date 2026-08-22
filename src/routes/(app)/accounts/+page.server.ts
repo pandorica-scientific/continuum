@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
+import { asOptionalRowId, asRowId } from '$lib/ids';
+import { parseAccountNumbers, updateAccount } from '$lib/server/accounts';
 import { fail } from '@sveltejs/kit';
-import { desc, eq, inArray, sql } from 'drizzle-orm';
+import { desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, bank, person, transaction, transferPair } from '$lib/server/db/schema';
 import { loadRateTable } from '$lib/server/fx/table';
@@ -16,7 +18,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const [accounts, rates, banks] = await Promise.all([
+	const [accounts, rates, banks, people] = await Promise.all([
 		db
 			.select({
 				id: account.id,
@@ -27,16 +29,39 @@ export const load: PageServerLoad = async () => {
 				currency: account.currency,
 				balanceMinor: account.balanceMinor,
 				balanceAsOf: account.balanceOn,
+				numbers: account.numbers,
+				ownerPersonId: account.ownerPersonId,
 				ownerName: person.name
 			})
 			.from(account)
 			.leftJoin(person, eq(account.ownerPersonId, person.id))
 			.orderBy(account.createdAt, account.id),
 		loadRateTable(),
-		db.select().from(bank).orderBy(bank.label)
+		db.select().from(bank).orderBy(bank.label),
+		// Whose an account is. Everything has been joint by omission until now:
+		// addAccount never set an owner, so the join below always found nobody and
+		// the row said "joint" because there was nothing else it could say.
+		db
+			.select({ id: person.id, name: person.name })
+			.from(person)
+			.where(isNull(person.deactivatedAt))
+			.orderBy(person.name)
 	]);
 	const bankEmoji = new Map(banks.map((b) => [b.key, b.emoji]));
 	const today = new Date().toISOString().slice(0, 10);
+
+	// How many transactions each account holds. Currency may only be corrected
+	// while an account is empty: every stored amount is minor units OF THAT
+	// currency, so a later change would reinterpret history rather than convert
+	// it. Counted here so the form does not offer what the server will refuse.
+	const held = new Map(
+		(
+			await db
+				.select({ accountId: transaction.accountId, n: sql<number>`count(*)::int` })
+				.from(transaction)
+				.groupBy(transaction.accountId)
+		).map((row) => [row.accountId, row.n])
+	);
 
 	const rows = [];
 	for (const a of accounts) {
@@ -53,6 +78,18 @@ export const load: PageServerLoad = async () => {
 		rows.push({
 			id: a.id,
 			name: a.name,
+			bank: a.bank,
+			ownerPersonId: a.ownerPersonId,
+			canChangeCurrency: (held.get(a.id) ?? 0) === 0,
+			// What the person actually typed, for the edit form. The display emoji
+			// below falls back to the bank's, which is not the same thing: putting a
+			// fallback into an edit field turns "unset" into a value on the next save.
+			ownEmoji: a.emoji || '',
+			// The numbers this account is known by. Written when it was created AND
+			// learned from statements as they arrive, but never shown until now — so
+			// the one thing that explains why a transfer did or did not pair was
+			// unreachable.
+			numbers: a.numbers ?? [],
 			emoji: a.emoji || bankEmoji.get(a.bank) || '🏦',
 			kind: a.kind,
 			currency: a.currency,
@@ -134,6 +171,7 @@ export const load: PageServerLoad = async () => {
 			banks.map((b) => ({ key: b.key, label: b.label, emoji: b.emoji }))
 		),
 		accounts: rows.map((r) => ({ ...r, balanceMinorBase: undefined })),
+		people,
 		cashTotalFormatted: formatMinor(cashTotal, baseCurrency),
 		baseCurrencyDisplay: displayCurrency(baseCurrency),
 		donut,
@@ -163,12 +201,32 @@ export const actions: Actions = {
 		await db.insert(account).values({
 			id: uuidv7(),
 			name,
+			ownerPersonId: asOptionalRowId(form.get('ownerPersonId')) ?? null,
 			emoji: chosen.emoji,
 			bank: bankKey,
 			kind,
 			currency,
 			numbers: numbersRaw ? numbersRaw.split(/[,;\s]+/).filter(Boolean) : []
 		});
+		return { ok: true };
+	},
+
+	editAccount: async ({ request }) => {
+		const form = await request.formData();
+		const result = await updateAccount(asRowId(form.get('id')), {
+			name: String(form.get('name') ?? ''),
+			emoji: String(form.get('emoji') ?? ''),
+			bank: String(form.get('bank') ?? 'other'),
+			kind: String(form.get('kind') ?? 'current'),
+			// Empty means joint. A real answer, not an absence.
+			ownerPersonId: asOptionalRowId(form.get('ownerPersonId')) ?? null,
+			numbers: parseAccountNumbers(String(form.get('numbers') ?? '')),
+			currency:
+				String(form.get('currency') ?? '')
+					.trim()
+					.toUpperCase() || null
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
 

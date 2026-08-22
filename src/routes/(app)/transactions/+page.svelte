@@ -2,6 +2,7 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import CategoryPicker from '$lib/components/CategoryPicker.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import SplitDialog from '$lib/components/SplitDialog.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
@@ -181,21 +182,16 @@
 				{:else}
 					<form method="POST" action="?/file" use:enhance class="cat-form">
 						<input type="hidden" name="id" value={r.id} />
-						<select
+						<!-- The register is a long page and these rows run to the bottom of
+						     it, which is where a native select's popup opened downwards past
+						     the fold. An unfiled row must not look filed, so the value starts
+						     empty until someone actually picks something. -->
+						<CategoryPicker
 							name="categoryId"
-							onchange={(event) => (chosen[r.id] = event.currentTarget.value)}
-						>
-							<!-- An unfiled row must not look filed, so the prompt holds the
-							     selection until someone actually picks something. -->
-							<option value="" disabled selected={r.categoryId === null}>Choose a category…</option>
-							{#each data.categories as group (group.key)}
-								<optgroup label={group.label}>
-									{#each group.items as c (c.id)}
-										<option value={c.id} selected={r.categoryId === c.id}>{c.name}</option>
-									{/each}
-								</optgroup>
-							{/each}
-						</select>
+							groups={data.categories}
+							value={r.categoryId}
+							onpick={(id) => (chosen[r.id] = id)}
+						/>
 						<!-- Disabled until something is chosen: the placeholder posts an empty
 						     category, which the action rejects with a message that used to have
 						     nowhere to appear. The row read as an unresponsive button. -->
@@ -472,14 +468,6 @@
 		display: flex;
 		gap: var(--space-4);
 		flex-wrap: wrap;
-	}
-	.r-actions select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 7px 11px;
-		font-size: var(--text-md);
 	}
 	/* The lines of a split, shown under the transaction they divide. */
 	.splits {

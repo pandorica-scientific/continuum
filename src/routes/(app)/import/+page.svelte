@@ -3,6 +3,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { submitAction } from '$lib/actions/result';
+	import CategoryPicker from '$lib/components/CategoryPicker.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
@@ -381,23 +382,19 @@
 				{:else}
 					<form method="POST" action="?/categorize" use:enhance class="cat-form">
 						<input type="hidden" name="id" value={r.id} />
-						<select
+						<!-- Not a native select. Its popup is placed by the browser, and on
+						     this screen — a long queue of rows, each with a chooser — opening
+						     one near the bottom expanded downwards past the fold, so the
+						     categories were off-screen until you scrolled to find them.
+						     CategoryPicker measures the room it has and opens upwards when
+						     there is more above. Without a suggestion the value starts empty,
+						     so an unguessed row never looks as though it were already filed. -->
+						<CategoryPicker
 							name="categoryId"
-							onchange={(event) => (chosen[r.id] = event.currentTarget.value)}
-						>
-							<!-- Without a suggestion the prompt holds the selection, so an
-							     unguessed row never looks as though it were already filed. -->
-							<option value="" disabled selected={r.suggestedCategoryId === null}>
-								Choose a category…
-							</option>
-							{#each data.categories as group (group.key)}
-								<optgroup label={group.label}>
-									{#each group.items as c (c.id)}
-										<option value={c.id} selected={r.suggestedCategoryId === c.id}>{c.name}</option>
-									{/each}
-								</optgroup>
-							{/each}
-						</select>
+							groups={data.categories}
+							value={r.suggestedCategoryId}
+							onpick={(id) => (chosen[r.id] = id)}
+						/>
 						<!-- Disabled until something is chosen: the placeholder posts an empty
 						     category, which the action rejects with a message that used to have
 						     nowhere to appear. The row read as an unresponsive button. -->

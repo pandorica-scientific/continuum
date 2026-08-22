@@ -6,6 +6,23 @@ import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { createLoan, updateLoan, type CreateLoanInput } from '$lib/server/loans/mutations';
 
+/**
+ * The "how it works" half of an edit, which every case here leaves alone.
+ *
+ * Spread into each input so a case states only what it is actually changing —
+ * and so adding another descriptive field means touching this once rather than
+ * every literal in the file.
+ */
+const HOW: Pick<
+	Parameters<typeof updateLoan>[1],
+	'regime' | 'accrualStyle' | 'dayCount' | 'interestDeductible'
+> = {
+	regime: 'fixed_period',
+	accrualStyle: 'payment',
+	dayCount: '30/360',
+	interestDeductible: false
+};
+
 let harness: Harness;
 let testDb: TestDb;
 
@@ -94,7 +111,8 @@ describe('updateLoan', () => {
 				secured: [
 					{ propertyId: FLAT_A, sharePct: '60' },
 					{ propertyId: FLAT_B, sharePct: '40' }
-				]
+				],
+				...HOW
 			},
 			testDb
 		);
@@ -116,7 +134,8 @@ describe('updateLoan', () => {
 				kind: 'mortgage',
 				paymentDay: 20,
 				endsOn: '2040-01-01',
-				secured: [{ propertyId: FLAT_B, sharePct: null }]
+				secured: [{ propertyId: FLAT_B, sharePct: null }],
+				...HOW
 			},
 			testDb
 		);
@@ -141,7 +160,8 @@ describe('updateLoan', () => {
 				// The fixation runs to 2029-08-15; ending the loan in 2027 would
 				// orphan the rest of it.
 				endsOn: '2027-01-01',
-				secured: []
+				secured: [],
+				...HOW
 			},
 			testDb
 		);
@@ -168,7 +188,8 @@ describe('updateLoan', () => {
 				secured: [
 					{ propertyId: FLAT_A, sharePct: '50' },
 					{ propertyId: FLAT_A, sharePct: '50' }
-				]
+				],
+				...HOW
 			},
 			testDb
 		);
@@ -190,7 +211,8 @@ describe('updateLoan', () => {
 				secured: [
 					{ propertyId: FLAT_A, sharePct: '70' },
 					{ propertyId: FLAT_B, sharePct: '70' }
-				]
+				],
+				...HOW
 			},
 			testDb
 		);
@@ -207,11 +229,104 @@ describe('updateLoan', () => {
 				kind: 'mortgage',
 				paymentDay: 15,
 				endsOn: null,
-				secured: []
+				secured: [],
+				...HOW
 			},
 			testDb
 		);
 
 		expect(result).toEqual({ ok: false, status: 404, message: 'Loan not found.' });
+	});
+});
+
+// Reported as fixed and uncorrectable: "cannot edit loan fully — things like
+// rate regime, interest change, interest accrual are fixed".
+//
+// These describe HOW a loan works rather than what it has done, so changing one
+// re-derives the schedule from the periods already recorded. The test that
+// matters is the second: none of them may touch that record.
+describe('how a loan works', () => {
+	it('can be corrected after the loan exists', async () => {
+		const id = await seedLoan();
+
+		const result = await updateLoan(
+			id,
+			{
+				name: 'Mortgage',
+				lender: 'ČS',
+				kind: 'mortgage',
+				paymentDay: 15,
+				endsOn: '2036-08-15',
+				secured: [],
+				regime: 'floating',
+				accrualStyle: 'calendar',
+				dayCount: 'act/360',
+				interestDeductible: true
+			},
+			testDb
+		);
+		expect(result).toEqual({ ok: true });
+
+		const [row] = await testDb.select().from(schema.loan).where(eq(schema.loan.id, id));
+		expect(row.regime).toBe('floating');
+		expect(row.accrualStyle).toBe('calendar');
+		expect(row.dayCount).toBe('act/360');
+		expect(row.interestDeductible).toBe(true);
+	});
+
+	it('leaves the fixation history exactly where it was', async () => {
+		const id = await seedLoan();
+		const before = await fixations(id);
+		expect(before.length).toBeGreaterThan(0);
+
+		await updateLoan(
+			id,
+			{
+				name: 'Mortgage',
+				lender: 'ČS',
+				kind: 'mortgage',
+				paymentDay: 15,
+				endsOn: '2036-08-15',
+				secured: [],
+				regime: 'floating',
+				accrualStyle: 'calendar',
+				dayCount: 'act/360',
+				interestDeductible: true
+			},
+			testDb
+		);
+
+		// The load-bearing guard, restated for the fields added here: an edit is a
+		// correction to a description, never permission to discard the record.
+		expect(await fixations(id)).toEqual(before);
+	});
+
+	it('falls back to what is stored rather than accepting an invented value', async () => {
+		const id = await seedLoan();
+		const [was] = await testDb.select().from(schema.loan).where(eq(schema.loan.id, id));
+
+		await updateLoan(
+			id,
+			{
+				name: 'Mortgage',
+				lender: 'ČS',
+				kind: 'mortgage',
+				paymentDay: 15,
+				endsOn: '2036-08-15',
+				secured: [],
+				regime: 'nonsense',
+				accrualStyle: 'nonsense',
+				dayCount: 'nonsense',
+				interestDeductible: false
+			},
+			testDb
+		);
+
+		// Narrowed at the boundary, so a hand-crafted form post cannot reach the
+		// CHECK constraint and turn a bad field into a failed transaction.
+		const [now] = await testDb.select().from(schema.loan).where(eq(schema.loan.id, id));
+		expect(now.regime).toBe(was.regime);
+		expect(now.accrualStyle).toBe(was.accrualStyle);
+		expect(now.dayCount).toBe(was.dayCount);
 	});
 });
