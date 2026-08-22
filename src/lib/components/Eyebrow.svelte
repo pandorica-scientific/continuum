@@ -12,7 +12,8 @@
 
 <div class="eyebrow-row">
 	<span class="eyebrow">
-		{#if emoji}<span style="font-size: 12px; margin-right: 7px;">{emoji}</span>{/if}{label}
+		{#if emoji}<span style="font-size: var(--text-sm); margin-right: 7px;">{emoji}</span
+			>{/if}{label}
 	</span>
 	{#if right}
 		{@render right()}

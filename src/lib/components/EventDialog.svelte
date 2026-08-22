@@ -174,7 +174,7 @@
 	.editor {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 
 	.grid {
@@ -191,14 +191,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
 	.recurrence {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		padding-top: 4px;
 		border-top: 1px solid var(--bd2);
 	}
@@ -208,12 +208,12 @@
 		flex-wrap: wrap;
 		gap: 8px 14px;
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 10px 12px;
 	}
 
 	legend {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		padding: 0 5px;
 	}
@@ -221,8 +221,8 @@
 	.tick {
 		flex-direction: row;
 		align-items: center;
-		gap: 6px;
-		font-size: 13px;
+		gap: var(--space-3);
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 
@@ -232,7 +232,7 @@
 
 	.actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	.danger {

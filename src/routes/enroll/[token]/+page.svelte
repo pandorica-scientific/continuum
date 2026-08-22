@@ -53,7 +53,7 @@
 		padding: 90px 20px;
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.brand {
 		display: flex;
@@ -61,7 +61,7 @@
 		gap: 9px;
 	}
 	.wordmark {
-		font-size: 15.5px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
@@ -69,18 +69,18 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 		padding: 18px;
 	}
 	.lead {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		margin: 0;
 	}
@@ -88,8 +88,8 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 9px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 </style>

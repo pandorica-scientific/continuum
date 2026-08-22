@@ -69,10 +69,19 @@ whether a finding is in scope:
   something that provides HTTPS — Tailscale, a reverse proxy, an internal
   certificate authority. Exposing it directly to the public internet, including
   via `tailscale funnel`, is a deployment choice the app cannot defend against.
-- **`ORIGIN` matches the address you browse to.** Form submissions are
-  origin-checked and refused otherwise, and the WebAuthn relying-party ID is
-  derived from the same value. A misconfigured `ORIGIN` breaks sign-in rather
-  than weakening it.
+- **Form submissions are checked against the address the browser used.** The
+  `Origin` header must match the `Host` the request was sent to, so a page on
+  another site cannot post to your ledger. Scheme is not compared: the app
+  speaks HTTP and learns about TLS only from a proxy header, so comparing it
+  would mean guessing. The residual gap is somebody who can already forge
+  `Host` or terminate TLS inside your network, who is past this fence anyway.
+
+- **`ORIGIN` is optional, and only about passkeys.** It no longer decides
+  whether a form submission is accepted. The WebAuthn relying-party ID is
+  derived from it, so it names the single address passkeys are bound to. Unset,
+  password sign-in works everywhere and no passkey controls appear; set, it must
+  match what you browse to exactly. Getting it wrong now costs passkeys rather
+  than sign-in.
 - **Passkeys need a secure context.** The passkey controls appear only when
   `ORIGIN` is `https://` (or loopback in development); on a plain-HTTP LAN
   address they are absent, and passwords remain the only door. That is a

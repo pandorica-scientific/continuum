@@ -37,8 +37,8 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 </style>

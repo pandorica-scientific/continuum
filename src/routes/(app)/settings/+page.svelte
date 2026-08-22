@@ -1,10 +1,18 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import {
+		messageFromActionResult,
+		shouldCloseAfterAction,
+		submitAction
+	} from '$lib/actions/result';
+	import { deserialize } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import InfoHint from '$lib/components/InfoHint.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { SETUP_GUIDES } from '$lib/calendar/setup-steps';
+	import Field from '$lib/components/Field.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import ActionError from '$lib/components/ActionError.svelte';
@@ -55,6 +63,184 @@
 	//
 	// So: how many fresh loads have landed since this page asked for a backup,
 	// or null if it has not asked for one.
+	/** Which category is showing its "move them to" picker, by id. */
+	/**
+	 * The category whose ✕ was pressed, once we know what depends on it.
+	 *
+	 * The count comes first and decides everything: nothing filed under it and
+	 * the delete simply happens, because there is no question to ask. Only when
+	 * something does depend on it is a dialog worth anybody's attention.
+	 */
+	let deletingLeaf = $state<{
+		id: string;
+		name: string;
+		transactions: number;
+		splits: number;
+		rules: number;
+	} | null>(null);
+	let deleteError = $state<string | null>(null);
+	let checkingLeaf = $state<string | null>(null);
+
+	/**
+	 * Reordering the categories inside a group.
+	 *
+	 * Two ways in, because one is not enough. Dragging is what was asked for and
+	 * is what a mouse expects; the arrow keys are what makes it reachable without
+	 * one, and they are not a lesser path — holding a chip and pressing ← or →
+	 * is faster than dragging for a single step.
+	 *
+	 * A catch-all is excluded from both: it is pinned last by its flag, so
+	 * letting it be picked up would promise a move the ordering will not honour.
+	 */
+	/**
+	 * Reordering the categories inside a group.
+	 *
+	 * POINTER events, not HTML5 drag-and-drop. The first version used `draggable`,
+	 * which does not fire on touch at all — so reordering worked on a desktop and
+	 * simply did nothing on a phone or tablet. Pointer events cover mouse, touch
+	 * and pen with one code path.
+	 *
+	 * The order also rearranges UNDER the finger rather than only on release. A
+	 * drag with no feedback until you let go is a guess, and the first version
+	 * made you take it.
+	 *
+	 * The arrow keys stay: they are how this is reachable without a pointer at
+	 * all, and for a single step they are quicker than dragging.
+	 */
+	let dragging = $state<{ group: string; id: string } | null>(null);
+	/** The order being shown while a drag is in flight, per group. */
+	let liveOrder = $state<Record<string, string[]>>({});
+
+	type Leaf = { id: string; name: string; isCatchAll?: boolean };
+	type Group = { key: string; items: Leaf[] };
+
+	function movableIds(group: Group): string[] {
+		return group.items.filter((item) => !item.isCatchAll).map((item) => item.id);
+	}
+
+	/** What to render: the live order during a drag, the server's otherwise. */
+	function shownItems(group: Group): Leaf[] {
+		const order = liveOrder[group.key];
+		if (!order) return group.items;
+		const byId = new Map(group.items.map((item) => [item.id, item]));
+		const moved = order.map((id) => byId.get(id)).filter((item): item is Leaf => !!item);
+		// The catch-all is never in the order — it is pinned last by its flag.
+		return [...moved, ...group.items.filter((item) => item.isCatchAll)];
+	}
+
+	async function commitOrder(groupKey: string, order: string[]) {
+		await submitAction('?/reorderLeaves', formOf({ groupKey, order: order.join(',') }));
+	}
+
+	/** One step left or right, for the keyboard. */
+	async function nudge(group: Group, id: string, delta: number) {
+		const ids = movableIds(group);
+		const from = ids.indexOf(id);
+		const to = from + delta;
+		if (from < 0 || to < 0 || to >= ids.length) return;
+		ids.splice(to, 0, ...ids.splice(from, 1));
+		await commitOrder(group.key, ids);
+	}
+
+	function startDrag(event: PointerEvent, group: Group, id: string) {
+		// Only a primary press, and never the delete button inside the chip.
+		if (!event.isPrimary) return;
+		event.preventDefault();
+		(event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+		dragging = { group: group.key, id };
+		liveOrder = { ...liveOrder, [group.key]: movableIds(group) };
+	}
+
+	/**
+	 * Rearrange under the finger.
+	 *
+	 * The chip beneath the pointer is found by hit-testing rather than by
+	 * listening on every chip: during a pointer capture every event goes to the
+	 * element that captured it, so the others never hear about it.
+	 */
+	function moveDrag(event: PointerEvent) {
+		if (!dragging) return;
+		const over = document
+			.elementFromPoint(event.clientX, event.clientY)
+			?.closest<HTMLElement>('[data-leaf]');
+		const targetId = over?.dataset.leaf;
+		if (!targetId || targetId === dragging.id) return;
+
+		const order = [...(liveOrder[dragging.group] ?? [])];
+		const from = order.indexOf(dragging.id);
+		const to = order.indexOf(targetId);
+		if (from < 0 || to < 0 || from === to) return;
+		order.splice(to, 0, ...order.splice(from, 1));
+		liveOrder = { ...liveOrder, [dragging.group]: order };
+	}
+
+	async function endDrag() {
+		if (!dragging) return;
+		const { group } = dragging;
+		const order = liveOrder[group];
+		dragging = null;
+		if (order) await commitOrder(group, order);
+		// Cleared after the save, so the chips do not jump back to the old order
+		// for the instant between letting go and the page reloading.
+		liveOrder = { ...liveOrder, [group]: undefined as unknown as string[] };
+		delete liveOrder[group];
+	}
+
+	async function askToDelete(leaf: { id: string; name: string }) {
+		checkingLeaf = leaf.id;
+		deleteError = null;
+		const body = new FormData();
+		body.set('categoryId', leaf.id);
+		const response = await fetch('?/countLeafDependants', {
+			method: 'POST',
+			body,
+			headers: { 'x-sveltekit-action': 'true' }
+		});
+		const counts = readDependants(await response.text());
+		checkingLeaf = null;
+		if (!counts) {
+			deleteError = 'Could not check what is filed under that category.';
+			return;
+		}
+		if (!counts.any) {
+			// Nothing points at it, so there is nothing to decide.
+			await submitAction('?/removeLeaf', formOf({ categoryId: leaf.id }));
+			return;
+		}
+		deletingLeaf = { id: leaf.id, name: leaf.name, ...counts };
+	}
+
+	function formOf(fields: Record<string, string>): FormData {
+		const body = new FormData();
+		for (const [key, value] of Object.entries(fields)) body.set(key, value);
+		return body;
+	}
+
+	/** The action result carries the counts; anything else means the check failed. */
+	function readDependants(
+		payload: string
+	): { transactions: number; splits: number; rules: number; any: boolean } | null {
+		try {
+			const result = deserialize(payload);
+			if (result.type !== 'success') return null;
+			const data = result.data as { dependants?: Record<string, number | boolean> } | undefined;
+			const d = data?.dependants;
+			if (!d) return null;
+			return {
+				transactions: Number(d.transactions ?? 0),
+				splits: Number(d.splits ?? 0),
+				rules: Number(d.rules ?? 0),
+				any: Boolean(d.any)
+			};
+		} catch {
+			return null;
+		}
+	}
+	const ROLE_LABELS: Record<string, string> = {
+		income: 'Money in',
+		expense: 'Money out',
+		savings: 'Money kept'
+	};
 	let looksSinceAsked = $state<number | null>(null);
 	const watchBackup = $derived(data.backupRunning || looksSinceAsked === 0);
 	$effect(() => {
@@ -67,6 +253,18 @@
 		return () => clearInterval(timer);
 	});
 </script>
+
+{#snippet chipBody(leaf: { id: string; name: string })}
+	<span>{leaf.name}</span>
+	<button
+		type="button"
+		aria-label="Delete {leaf.name}"
+		disabled={checkingLeaf === leaf.id}
+		onclick={() => askToDelete(leaf)}
+	>
+		✕
+	</button>
+{/snippet}
 
 <ScreenHeader
 	title="Settings"
@@ -119,14 +317,13 @@
 		/>
 		<div class="card">
 			<form method="POST" action="?/setBaseCurrency" use:enhance class="currency-form">
-				<label class="field">
-					<span>Base currency</span>
+				<Field label="Base currency">
 					<select name="baseCurrency" value={data.baseCurrency}>
 						{#each data.currencies as c (c)}
 							<option value={c}>{currencyLabel(c)}</option>
 						{/each}
 					</select>
-				</label>
+				</Field>
 				<button type="submit" class="btn">Save</button>
 			</form>
 		</div>
@@ -146,6 +343,8 @@
 		enrollmentLinkDays={data.enrollmentLinkDays}
 		passkeys={data.passkeys}
 		origin={data.origin}
+		reason={data.passkeyReason}
+		worksAt={data.passkeyWorksAt}
 		myPasskeys={data.myPasskeys}
 	/>
 
@@ -204,14 +403,13 @@
 						{/each}
 					</datalist>
 				</label>
-				<label class="field">
-					<span>How often</span>
+				<Field label="How often">
 					<select name="cadence" value={data.backup.cadence}>
 						<option value="off">Off</option>
 						<option value="weekly">Weekly</option>
 						<option value="monthly">Monthly</option>
 					</select>
-				</label>
+				</Field>
 				<button type="submit" class="btn">Save</button>
 			</form>
 			<div class="backup-status">
@@ -461,8 +659,7 @@
 					<!-- Rendered from the provider's own field list. Adding a provider
 					     never edits this screen. -->
 					{#each provider.fields as field (field.key)}
-						<label class="field">
-							<span>{field.label}</span>
+						<Field label={field.label}>
 							<input
 								name={field.key}
 								type={field.secret ? 'password' : field.kind === 'url' ? 'url' : 'text'}
@@ -470,7 +667,7 @@
 								required={field.required}
 								autocomplete="off"
 							/>
-						</label>
+						</Field>
 					{/each}
 				</div>
 				<div class="ca-row">
@@ -572,23 +769,377 @@
 	</section>
 {/if}
 
+{#if data.isAdmin}
+	<section class="section">
+		<Eyebrow
+			emoji="🗂️"
+			label="Categories"
+			caption="What your spending is filed under. Nothing here is fixed — a household that does not drive can delete Transport."
+		/>
+		<!-- Field names are prefixed (groupLabel, groupRole, categoryName) rather
+		     than the plain label/role/name they would otherwise be. This page is one
+		     document holding a dozen unrelated forms, so a generic name here becomes
+		     a second match for a selector aimed at the person form. -->
+		<div class="card taxonomy">
+			{#each data.taxonomy as group (group.key)}
+				<!-- The key identifies the row: its label lives in an input, so nothing
+				     in the markup otherwise says which group this is. -->
+				<div class="tx-group" data-group={group.key}>
+					<div class="tx-head">
+						<span class="tx-dot" style:background="var({group.colorToken})"></span>
+						<form method="POST" action="?/editGroup" use:enhance class="tx-edit">
+							<input type="hidden" name="groupKey" value={group.key} />
+							<input name="groupLabel" value={group.label} aria-label="Group name" />
+							<select name="colorToken" aria-label="Colour">
+								{#each data.paletteTokens as token (token)}
+									<option value={token} selected={token === group.colorToken}>
+										{token.replace('--series-', '')}
+									</option>
+								{/each}
+							</select>
+							<span class="tx-role">{ROLE_LABELS[group.role] ?? group.role}</span>
+							<button type="submit" class="btn">Save</button>
+						</form>
+						<form method="POST" action="?/removeGroup" use:enhance>
+							<input type="hidden" name="groupKey" value={group.key} />
+							<!-- Only when empty. The categories under it point at this key, and
+							     deleting it out from under them would strand them. -->
+							<button type="submit" class="btn" disabled={group.items.length > 0}>
+								Delete group
+							</button>
+						</form>
+					</div>
+
+					<div class="tx-leaves">
+						{#each shownItems(group) as leaf (leaf.id)}
+							{#if leaf.isCatchAll}
+								<!-- Pinned last by its flag, so it offers no grip and takes no
+								     focus: a chip that looks draggable and then refuses to move is
+								     worse than one that never offered. -->
+								<span class="tx-leaf pinned" title="Always last in this group">
+									{@render chipBody(leaf)}
+								</span>
+							{:else}
+								<span
+									class="tx-leaf"
+									class:dragging={dragging?.id === leaf.id}
+									data-leaf={leaf.id}
+									role="button"
+									tabindex="0"
+									aria-label="{leaf.name} — drag it, or use the arrow keys"
+									onkeydown={(e) => {
+										if (e.key === 'ArrowLeft') {
+											e.preventDefault();
+											nudge(group, leaf.id, -1);
+										} else if (e.key === 'ArrowRight') {
+											e.preventDefault();
+											nudge(group, leaf.id, 1);
+										}
+									}}
+								>
+									<!-- The grip is the handle, not the whole chip: pressing anywhere
+									     on it would make the delete button inside impossible to hit on
+									     a touch screen. touch-action:none stops the browser scrolling
+									     the page instead of giving us the move. -->
+									<span
+										class="grip"
+										aria-hidden="true"
+										onpointerdown={(e) => startDrag(e, group, leaf.id)}
+										onpointermove={moveDrag}
+										onpointerup={endDrag}
+										onpointercancel={endDrag}
+									>
+										⠿
+									</span>
+									{@render chipBody(leaf)}
+								</span>
+							{/if}
+						{/each}
+						<form method="POST" action="?/addLeaf" use:enhance class="tx-add-leaf">
+							<input type="hidden" name="groupKey" value={group.key} />
+							<input
+								name="categoryName"
+								placeholder="New category…"
+								aria-label="New category name"
+							/>
+							<!-- "Add category", not "Add": a bare verb next to a field says
+							     nothing about what it adds, and this page already has an Add
+							     button for people. -->
+							<button type="submit" class="btn">Add category</button>
+						</form>
+					</div>
+				</div>
+			{/each}
+
+			<form method="POST" action="?/addGroup" use:enhance class="tx-add-group">
+				<input name="groupLabel" placeholder="New group, e.g. Pets" aria-label="New group name" />
+				<select name="groupRole" aria-label="Kind">
+					{#each data.groupRoles as role (role)}
+						<option value={role}>{ROLE_LABELS[role] ?? role}</option>
+					{/each}
+				</select>
+				<button type="submit" class="btn">Add group</button>
+				<!-- Colour is not asked for here. The palette is ranked by how well each
+				     colour separates from the others, so the next one down is always the
+				     best remaining choice; it can be changed above afterwards. -->
+				<span class="note">It takes the next colour from the palette.</span>
+			</form>
+		</div>
+	</section>
+{/if}
+
+{#if data.isAdmin}
+	<section class="section">
+		<Eyebrow
+			emoji="🚪"
+			label="Open this instance"
+			caption="Sign in with no password and no passkey — for everyone, on every address."
+		/>
+		<div class="card open-mode" class:on={data.openMode}>
+			{#if data.openMode}
+				<p class="open-warning">
+					<strong>This instance is open.</strong> Anyone who can reach its address can sign in as anyone
+					— including you — and read every statement, salary figure, mortgage balance and tax statement,
+					use the API, and export the lot. On a plain-HTTP address that is everyone on the network.
+				</p>
+				<form method="POST" action="?/disableOpenMode" use:enhance>
+					<!-- No password asked for: the door is already open, so demanding a
+					     credential to close it would only stop the honest. -->
+					<button type="submit" class="btn btn-primary">Close it</button>
+				</form>
+			{:else}
+				<p class="note">
+					Everyone signs in with a password or a passkey. Turning this off means anyone who can
+					reach the address is anyone on this instance. Existing passwords are kept, so turning it
+					back on restores normal sign-in.
+				</p>
+				<form method="POST" action="?/enableOpenMode" use:enhance class="open-form">
+					<Field label="Your password, to confirm you mean it">
+						<input name="password" type="password" autocomplete="current-password" />
+					</Field>
+					<button type="submit" class="btn">Open the instance</button>
+				</form>
+			{/if}
+		</div>
+	</section>
+{/if}
+
+{#if deletingLeaf}
+	<!-- Asked in a dialog rather than in the list, because the list is where the
+	     other categories are and pushing them down to make room for a question
+	     loses the thing being asked about. Only reached when something actually
+	     depends on the category: an unused one is deleted without a word. -->
+	<Modal title="Delete “{deletingLeaf.name}”?" onclose={() => (deletingLeaf = null)}>
+		<form
+			method="POST"
+			action="?/removeLeaf"
+			use:enhance={() =>
+				async ({ update, result }) => {
+					deleteError = messageFromActionResult(result);
+					await update();
+					if (shouldCloseAfterAction(result.type)) deletingLeaf = null;
+				}}
+			class="tx-delete"
+		>
+			<input type="hidden" name="categoryId" value={deletingLeaf.id} />
+
+			<p class="tx-counts">
+				{#if deletingLeaf.transactions > 0}
+					<strong>{deletingLeaf.transactions}</strong>
+					{deletingLeaf.transactions === 1 ? 'transaction' : 'transactions'}
+				{/if}{#if deletingLeaf.splits > 0}{deletingLeaf.transactions > 0 ? ', ' : ''}<strong
+						>{deletingLeaf.splits}</strong
+					>
+					{deletingLeaf.splits === 1
+						? 'split line'
+						: 'split lines'}{/if}{#if deletingLeaf.rules > 0}{deletingLeaf.transactions +
+						deletingLeaf.splits >
+					0
+						? ' and '
+						: ''}<strong>{deletingLeaf.rules}</strong>
+					{deletingLeaf.rules === 1 ? 'rule' : 'rules'}{/if}
+				{deletingLeaf.transactions + deletingLeaf.splits + deletingLeaf.rules === 1 ? 'is' : 'are'} filed
+				under it.
+			</p>
+
+			<!-- A rule left pointing at a deleted category still matches and files
+			     nothing, so the categoriser quietly stops working. That is why they
+			     are named here rather than folded into the transaction count. -->
+			<label class="field">
+				<span>Move them all to</span>
+				<select name="reassignTo" required>
+					{#each data.allLeaves.filter((l) => l.id !== deletingLeaf?.id) as target (target.id)}
+						<option value={target.id}>{target.name}</option>
+					{/each}
+				</select>
+			</label>
+
+			{#if deleteError}<p class="error">{deleteError}</p>{/if}
+
+			<div class="tx-delete-actions">
+				<button type="button" class="btn" onclick={() => (deletingLeaf = null)}>Cancel</button>
+				<button type="submit" class="btn btn-primary">Move and delete</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
 <style>
+	.tx-leaf .grip {
+		color: var(--fg3);
+		cursor: grab;
+		font-size: var(--text-sm);
+		line-height: 1;
+		padding: 0 var(--space-1);
+		/* Without this the browser takes the gesture as a scroll and the chip never
+		   moves — which is exactly how the first version failed on a phone. */
+		touch-action: none;
+	}
+	.tx-leaf .grip:active {
+		cursor: grabbing;
+	}
+	.tx-leaf.dragging {
+		/* Lifted rather than faded: it is being carried, and the chips around it
+		   are already rearranging to show where it will land. */
+		background: var(--card2);
+		box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+	}
+	.tx-leaf:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+	}
+	/* A catch-all is pinned last by its flag, so it offers no grip: a chip that
+	   looks draggable and then refuses to move is worse than one that never
+	   offered. */
+	.tx-leaf.pinned {
+		opacity: 0.85;
+	}
+
+	.tx-delete {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+		padding: var(--space-6) 0 0;
+	}
+	.tx-counts {
+		margin: 0;
+		color: var(--fg2);
+		font-size: var(--text-md);
+	}
+	.tx-delete-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-4);
+	}
+
+	.open-mode {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+	}
+	.open-mode.on {
+		border-color: var(--yellow);
+		background: var(--yellow-wash);
+	}
+	.open-warning {
+		margin: 0;
+		font-size: var(--text-md);
+		color: var(--fg1);
+		line-height: 1.55;
+	}
+	.open-form {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-5);
+		flex-wrap: wrap;
+	}
+	.taxonomy {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-7);
+	}
+	.tx-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		padding-top: 12px;
+		border-top: 1px solid var(--bd);
+	}
+	.tx-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		flex-wrap: wrap;
+	}
+	.tx-dot {
+		width: 14px;
+		height: 14px;
+		border-radius: var(--radius-xs);
+		flex: none;
+	}
+	.tx-edit {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		flex-wrap: wrap;
+		flex: 1;
+	}
+	.tx-role {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		white-space: nowrap;
+	}
+	.tx-leaves {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		align-items: center;
+		padding-left: 24px;
+	}
+	.tx-leaf {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-pill);
+		padding: 3px 6px 3px 11px;
+		font-size: var(--text-sm);
+	}
+	.tx-leaf button {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-xs);
+		padding: 0 3px;
+	}
+	.tx-add-leaf,
+	.tx-add-group {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		flex-wrap: wrap;
+	}
+	.tx-add-group {
+		padding-top: 12px;
+		border-top: 1px solid var(--bd);
+	}
 	.calendar-notice {
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 
 	.cal-account,
 	.cal-connect {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	.ca-head {
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 
 	.ca-label {
@@ -596,7 +1147,7 @@
 	}
 
 	.ca-state {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
@@ -613,14 +1164,14 @@
 	}
 
 	.ca-cal {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 
 	.ca-row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 
@@ -628,7 +1179,7 @@
 		font-weight: 600;
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 
 	.warn {
@@ -660,22 +1211,22 @@
 	.marker-row {
 		display: flex;
 		align-items: flex-start;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 
 	.interval {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 		flex: 1;
 	}
 
 	.interval-input {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 
 	.interval-input input {
@@ -692,20 +1243,20 @@
 		border-color: var(--blue);
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tn-label {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.api-token-raw {
-		font-size: 13px;
+		font-size: var(--text-md);
 		word-break: break-all;
 		color: var(--fg1);
 	}
 	.token-add {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		align-items: flex-end;
 		flex-wrap: wrap;
 	}
@@ -713,36 +1264,28 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		flex: 1 1 220px;
-	}
-	.token-add input {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
 	}
 	.token-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.tr-main {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.tr-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.tr-meta {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.modules {
@@ -754,7 +1297,7 @@
 		display: grid;
 		grid-template-columns: 26px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 11px 0;
 		border-top: 1px solid var(--bd);
 	}
@@ -762,7 +1305,7 @@
 		border-top: 0;
 	}
 	.emoji {
-		font-size: 15px;
+		font-size: var(--text-xl);
 	}
 	.mod-label {
 		display: flex;
@@ -771,10 +1314,10 @@
 		min-width: 0;
 	}
 	.mod-label > span:first-child {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.switch {
@@ -793,7 +1336,7 @@
 		left: 2px;
 		width: 16px;
 		height: 16px;
-		border-radius: 16px;
+		border-radius: var(--radius-2xl);
 		background: var(--fg3);
 	}
 	.switch.on {
@@ -808,24 +1351,8 @@
 	.currency-form {
 		display: flex;
 		align-items: flex-end;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		font-size: 12.5px;
-		color: var(--fg3);
-	}
-	select,
-	input {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
 	}
 	/* Three equal password fields and a button. This used to borrow .add-form,
 	   whose second column is 90px wide for a birth year — which left the
@@ -834,30 +1361,30 @@
 	.password-form {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-		gap: 8px;
+		gap: var(--space-4);
 		padding-top: 11px;
 		border-top: 1px solid var(--bd);
 	}
 	.ok-note {
 		margin: 8px 0 0;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--green);
 	}
 	.prose {
 		margin: 0;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		line-height: 1.55;
 	}
 	.stack-card {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.backup-form {
 		display: flex;
 		align-items: flex-end;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.backup-form .dest {
@@ -866,30 +1393,30 @@
 	.backup-status {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.status-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.status {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.s-label {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.s-value {
-		font-size: 16px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.s-value.origin {
-		font-size: 13px;
+		font-size: var(--text-md);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -897,7 +1424,7 @@
 	.config-row {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.import-label input[type='file'] {

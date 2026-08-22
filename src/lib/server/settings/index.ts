@@ -91,10 +91,19 @@ export async function replaceRevisionedSetting<T>(
 	await setSetting(key, { value, version: current.version + 1, writerId: null, revision: 0 }, tx);
 }
 
-const WRITER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Any well-formed UUID, of any version. The writer id is an opaque per-tab
+// identity used only to tell "this tab again" from "somebody else"; the version
+// nibble carries no meaning here. Pinning it to 1-5 meant the page's own
+// uuidv7() — version 7 — was refused, so no retirement assumption ever saved,
+// and the suite missed it because the test hand-wrote a v4-shaped literal the
+// application never produces. The nil uuid is excluded on purpose: asRowId()
+// returns it for input that was not a uuid at all, and "no such row" is never
+// a writer.
+const WRITER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export function isRevisionWriterId(value: string): boolean {
-	return WRITER_ID.test(value);
+	return value !== NIL_UUID && WRITER_ID.test(value);
 }
 
 /** Read a writer-versioned setting. Unwrapped legacy values are upgraded on

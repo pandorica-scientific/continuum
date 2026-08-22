@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
 	AREAS,
+	SETTINGS_PATH,
 	MODULE_KEYS,
 	areaForPath,
 	pathDisabled,
@@ -89,11 +90,26 @@ describe('the area structure', () => {
 		const calendar = AREAS.find((a) => a.key === 'calendar');
 		expect(calendar?.label).toBe('Calendar & Contacts');
 		expect(calendar?.screens.map((s) => s.path)).toEqual(['/calendar', '/contacts']);
-		// It moved out of Admin; Admin keeps the documents archive and settings.
-		expect(AREAS.find((a) => a.key === 'admin')?.screens.map((s) => s.path)).toEqual([
-			'/documents',
-			'/settings'
+		// Contacts moved out of Admin, and then Admin itself went: Documents is its
+		// own row after Calendar, and Settings is the gear beside the wordmark.
+		// Sharing one row put paperwork somebody opens often behind the same click
+		// as configuration somebody opens rarely.
+		expect(AREAS.find((a) => a.key === 'admin')).toBeUndefined();
+		expect(AREAS.find((a) => a.key === 'documents')?.screens.map((s) => s.path)).toEqual([
+			'/documents'
 		]);
+		// Documents sits after Calendar, which is where it was asked for.
+		const keys = AREAS.map((a) => a.key);
+		expect(keys.indexOf('documents')).toBe(keys.indexOf('calendar') + 1);
+	});
+
+	it('puts Settings in no area at all', () => {
+		// It is reached from the gear, so nothing in the navigation owns it — and
+		// `areaForPath` returning undefined for it is the expected answer rather
+		// than a gap. It is also therefore not module-gated: switching everything
+		// off cannot hide the screen that switches things back on.
+		expect(AREAS.flatMap((a) => a.screens).some((s) => s.path === SETTINGS_PATH)).toBe(false);
+		expect(areaForPath(SETTINGS_PATH)).toBeUndefined();
 	});
 });
 
@@ -136,13 +152,18 @@ describe('visibleAreas', () => {
 		expect(areas.map((a) => a.key)).not.toContain('assets');
 	});
 
-	it('keeps Money and Admin whatever is switched off', () => {
+	it('keeps Money and Overview whatever is switched off', () => {
 		const areas = visibleAreas(
 			Object.fromEntries(MODULE_KEYS.map((key) => [key, false])) as ModuleToggles
 		);
 		expect(areas.map((a) => a.key)).toContain('money');
-		expect(areas.map((a) => a.key)).toContain('admin');
 		expect(areas.map((a) => a.key)).toContain('overview');
+
+		// Documents IS module-gated, so it goes with its module — where the old
+		// Admin row survived only because Settings shared it. Settings is reached
+		// from the gear now, so switching everything off can no longer hide the
+		// screen that switches things back on.
+		expect(areas.map((a) => a.key)).not.toContain('documents');
 	});
 });
 

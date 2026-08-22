@@ -12,7 +12,8 @@ export const SHELVES = [
 	{ key: 'property', label: 'Property' },
 	{ key: 'tenancy', label: 'Tenancy' },
 	{ key: 'loans', label: 'Loans' },
-	{ key: 'insurance', label: 'Insurance' }
+	{ key: 'insurance', label: 'Insurance' },
+	{ key: 'statements', label: 'Statements' }
 ] as const;
 
 export type ShelfKey = (typeof SHELVES)[number]['key'];

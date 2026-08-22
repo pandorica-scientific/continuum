@@ -4,13 +4,14 @@ import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { category, rule, ruleTag, tag } from '$lib/server/db/schema';
+import { loadCategories } from '$lib/server/categorize/leaves';
+import { rule, ruleTag, tag } from '$lib/server/db/schema';
 import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/ingest';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
 import { confidence } from '$lib/rules/confidence';
 import { DEFAULT_RULE_PRIOR, normalise, type Condition } from '$lib/rules/match';
-import { CATEGORY_GROUPS } from '$lib/categories';
+import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { Actions, PageServerLoad } from './$types';
@@ -42,7 +43,7 @@ function describe(condition: Condition, currency: string): string {
 export const load: PageServerLoad = async () => {
 	const [rows, categories, tags, threshold, base] = await Promise.all([
 		db.select().from(rule),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
+		loadCategories(),
 		db.select().from(tag).orderBy(tag.name),
 		autoThreshold(),
 		getBaseCurrency()
@@ -84,11 +85,13 @@ export const load: PageServerLoad = async () => {
 			// Most-corrected first: a rule that keeps being overridden is the one
 			// worth looking at.
 			.sort((a, b) => b.corrected - a.corrected || a.name.localeCompare(b.name)),
-		categories: CATEGORY_GROUPS.map((group) => ({
-			key: group.key,
-			label: group.label,
-			items: categories.filter((c) => c.groupKey === group.key)
-		})).filter((g) => g.items.length > 0),
+		categories: (await loadCategoryGroups())
+			.map((group) => ({
+				key: group.key,
+				label: group.label,
+				items: categories.filter((c) => c.groupKey === group.key)
+			}))
+			.filter((g) => g.items.length > 0),
 		knownTags: tags.map((t) => ({ id: t.id, name: t.name }))
 	};
 };

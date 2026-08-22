@@ -381,21 +381,21 @@
 
 	.e-time {
 		color: var(--fg3);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 
 	.conflicts {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 		border-color: var(--yellow);
 	}
 
 	.conflict {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		margin: 0;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 
@@ -408,23 +408,23 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 16px;
+		gap: var(--space-8);
 		flex-wrap: wrap;
 	}
 	.chips {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.chip {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		border: 1px solid var(--bd);
 		background: var(--card);
 		border-radius: 20px;
 		padding: 6px 13px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.chip.muted {
@@ -433,13 +433,13 @@
 	.dot {
 		width: 8px;
 		height: 8px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		flex: 0 0 auto;
 	}
 	.layout {
 		display: grid;
 		grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-		gap: 16px;
+		gap: var(--space-8);
 		align-items: start;
 	}
 	@media (max-width: 900px) {
@@ -450,20 +450,20 @@
 	.cal {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.cal-head {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.month {
-		font-size: 16px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.count {
 		margin-left: auto;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.grid {
@@ -472,7 +472,7 @@
 		gap: 5px;
 	}
 	.weekday {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -483,12 +483,12 @@
 		min-height: 58px;
 		border: 1px solid var(--bd);
 		background: transparent;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 6px 7px 7px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 6px;
+		gap: var(--space-3);
 		cursor: pointer;
 	}
 	.day:hover {
@@ -503,7 +503,7 @@
 		border-color: var(--bd2);
 	}
 	.num {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.day.today .num {
@@ -522,7 +522,7 @@
 	.agenda {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
 	}
@@ -540,27 +540,27 @@
 		align-self: center;
 	}
 	.e-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.e-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 	.e-source {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
 	}
 	.side {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.rule {
 		display: grid;
@@ -586,7 +586,7 @@
 		left: 2px;
 		width: 16px;
 		height: 16px;
-		border-radius: 16px;
+		border-radius: var(--radius-2xl);
 		background: var(--fg3);
 	}
 	.switch.on {
@@ -605,16 +605,16 @@
 		min-width: 0;
 	}
 	.r-label {
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.r-detail {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.feed {
 		display: grid;
 		grid-template-columns: 20px minmax(0, 1fr) auto;
-		gap: 10px;
+		gap: var(--space-5);
 		align-items: center;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
@@ -626,20 +626,29 @@
 		min-width: 0;
 	}
 	.f-name {
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.f-detail {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	/* The feed path is the exception: the paragraph below it tells you to
+	   subscribe with this path, and the token in it is the only key. Ellipsing it
+	   on a narrow screen leaves an instruction that cannot be followed, so this
+	   one wraps instead of truncating. */
+	.f-detail.mono {
+		overflow-wrap: anywhere;
+		white-space: normal;
+		overflow: visible;
+	}
 	.f-state {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.quiet {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.55;
 	}

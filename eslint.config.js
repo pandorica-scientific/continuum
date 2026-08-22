@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
+import noRawGeometry from './eslint-rules/no-raw-geometry.js';
 
 const LICENCE_HEADER = '// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0';
 
@@ -74,6 +75,15 @@ export default ts.config(
 		files: ['src/**/*.ts', 'src/**/*.svelte'],
 		plugins: { licence },
 		rules: { 'licence/header': 'error' }
+	},
+	{
+		// Enforced rather than remembered, like the licence header above it. The
+		// escape hatch is /* geometry-exempt: why */ — deliberate and greppable, so
+		// stepping outside the scale is a decision somebody can find later rather
+		// than a number that drifted in.
+		files: ['src/**/*.svelte'],
+		plugins: { design: { rules: { 'no-raw-geometry': noRawGeometry } } },
+		rules: { 'design/no-raw-geometry': 'error' }
 	},
 	{
 		ignores: [

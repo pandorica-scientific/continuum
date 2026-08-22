@@ -37,7 +37,7 @@ export async function ingestBrokerFile(
 	return { broker: adapter.label, ...(await ingestReport(adapter.parse(buffer), handle)) };
 }
 
-async function ingestReport(
+export async function ingestReport(
 	report: BrokerReport,
 	handle: Db
 ): Promise<Omit<BrokerIngestResult, 'broker'>> {
@@ -99,36 +99,16 @@ async function ingestReport(
 		const latestGeneratedAt = state?.latestGeneratedAt ?? inferredGeneratedAt;
 		const replaced = !latestGeneratedAt || latestGeneratedAt <= reportTime;
 
-		const existingOps = new Set(
-			(await tx.select({ id: brokerOperation.id }).from(brokerOperation)).map((row) => row.id)
-		);
-		let added = 0;
-		let known = 0;
-		for (const op of report.operations) {
-			if (existingOps.has(op.id)) known++;
-			else added++;
-			await tx
-				.insert(brokerOperation)
-				.values({
-					id: op.id,
-					type: op.type,
-					ticker: op.ticker,
-					happenedAt: new Date(op.happenedAt),
-					amountMinor: op.amountMinor,
-					currency: accountCurrency,
-					comment: op.comment,
-					positionId: op.positionId
-				})
-				// re-uploads backfill fields older ingests did not know about
-				.onConflictDoUpdate({
-					target: brokerOperation.id,
-					set: { positionId: op.positionId }
-				});
-		}
-
 		// Holding intervals. Closed rows are authoritative and may update an
 		// earlier open lot; an open lot must never erase a recorded close (a stale
 		// report re-uploaded after the position closed).
+		//
+		// These are written BEFORE the operations below, and the order is load-
+		// bearing: `broker_operation.position_id` is a real, non-deferrable foreign
+		// key into this table, so an operation naming a position this report also
+		// carries aborted the entire transaction when the operations went first.
+		// Positions reference only `currency`, so nothing here depends on the
+		// operations existing.
 		for (const position of report.positions) {
 			const values = {
 				id: position.id,
@@ -159,6 +139,48 @@ async function ingestReport(
 			} else {
 				await tx.insert(brokerPosition).values(values).onConflictDoNothing();
 			}
+		}
+
+		// An operation may name a position this report does not carry — a
+		// correction filed against a position opened and closed in a reporting
+		// window that was never uploaded. The cash movement is still real, so it is
+		// stored with a null link rather than aborting the whole report. Read after
+		// the positions above are written, so a position this very report supplies
+		// resolves.
+		const storedPositions = new Set(
+			(await tx.select({ id: brokerPosition.id }).from(brokerPosition)).map((row) => row.id)
+		);
+		const linkFor = (positionId: string | null) =>
+			positionId && storedPositions.has(positionId) ? positionId : null;
+
+		const existingOps = new Set(
+			(await tx.select({ id: brokerOperation.id }).from(brokerOperation)).map((row) => row.id)
+		);
+		let added = 0;
+		let known = 0;
+		for (const op of report.operations) {
+			if (existingOps.has(op.id)) known++;
+			else added++;
+			await tx
+				.insert(brokerOperation)
+				.values({
+					id: op.id,
+					type: op.type,
+					ticker: op.ticker,
+					happenedAt: new Date(op.happenedAt),
+					amountMinor: op.amountMinor,
+					currency: accountCurrency,
+					comment: op.comment,
+					positionId: linkFor(op.positionId)
+				})
+				// re-uploads backfill fields older ingests did not know about.
+				// Guarded like the insert: an unguarded backfill reintroduces the
+				// identical foreign-key failure on any re-upload that re-links an
+				// operation whose position is still unknown.
+				.onConflictDoUpdate({
+					target: brokerOperation.id,
+					set: { positionId: linkFor(op.positionId) }
+				});
 		}
 
 		// Holdings are a snapshot, but an empty snapshot has no holding row from

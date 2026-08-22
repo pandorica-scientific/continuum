@@ -103,12 +103,12 @@
 	.body {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.fields {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	/* Labels are grid items of equal height, so a caption that wraps to two
 	   lines pushed its own input down and out of line with its neighbours.
@@ -118,28 +118,20 @@
 		flex-direction: column;
 		justify-content: flex-end;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	label > input {
 		margin-top: auto;
 	}
-	input {
-		border: 1px solid var(--bd2);
-		background: var(--card2);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
-	}
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.hint {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.btn:disabled {

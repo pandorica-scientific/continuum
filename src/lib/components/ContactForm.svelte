@@ -165,7 +165,7 @@
 	.editor {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 
 	.grid {
@@ -182,18 +182,10 @@
 	   This form sits two clicks from that one and they should not look like two
 	   different products. */
 	label,
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-size: 12px;
-		color: var(--fg3);
-	}
-
 	.photo-current {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		margin-top: 5px;
 	}
 
@@ -224,8 +216,8 @@
 	.tick {
 		flex-direction: row;
 		align-items: center;
-		gap: 6px;
-		font-size: 13px;
+		gap: var(--space-3);
+		font-size: var(--text-md);
 		color: var(--fg1);
 	}
 
@@ -234,8 +226,9 @@
 	}
 
 	.tick-add {
+		min-height: auto;
 		padding: 5px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 
 	.nothing {
@@ -244,7 +237,7 @@
 
 	.actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	/* Destructive, but still a .btn: the app has exactly two button shapes and

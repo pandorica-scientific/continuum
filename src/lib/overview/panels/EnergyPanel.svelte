@@ -30,17 +30,17 @@
 	.wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		height: 100%;
 	}
 	.caption {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.bars {
 		display: flex;
 		align-items: flex-end;
-		gap: 4px;
+		gap: var(--space-2);
 		flex: 1;
 		min-height: 60px;
 	}
@@ -50,7 +50,7 @@
 		flex-direction: column;
 		justify-content: flex-end;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-2);
 		height: 100%;
 	}
 	.bar {
@@ -63,11 +63,11 @@
 		background: var(--orange);
 	}
 	.day {
-		font-size: 9.5px;
+		font-size: var(--text-2xs);
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

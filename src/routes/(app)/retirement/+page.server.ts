@@ -4,7 +4,7 @@ import { uuidv7 } from 'uuidv7';
 import { asc, eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { document, documentLink, person } from '$lib/server/db/schema';
+import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { formatMinor, parseAmountToMinor, toMajor } from '$lib/money';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/system/files';
@@ -128,6 +128,16 @@ export const load: PageServerLoad = async () => {
 		.from(documentLink)
 		.innerJoin(person, eq(person.id, documentLink.targetId));
 	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
+
+	// What the ledger already knows: salary credits recorded against a person,
+	// which until now the salary history could not see at all.
+	const entries = await db.select().from(salaryEntry);
+	const entriesByPerson = new Map<string, typeof entries>();
+	for (const entry of entries) {
+		const list = entriesByPerson.get(entry.personId) ?? [];
+		list.push(entry);
+		entriesByPerson.set(entry.personId, list);
+	}
 	const salary = people.map((p) => {
 		const own = slips
 			.filter((d) => ownerOf.get(d.id) === p.id)
@@ -141,11 +151,30 @@ export const load: PageServerLoad = async () => {
 				file: d.storedName
 			}))
 			.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1));
+		// A payslip states GROSS. Salary credits the ledger already holds are NET,
+		// and arrive as salary_entry rows — so a month can be evidenced twice, and
+		// the two are kept in their own columns rather than averaged together.
+		const recorded = entriesByPerson.get(p.id) ?? [];
+		const months = new Map<string, { grossMinor?: bigint; netMinor?: bigint }>();
+		for (const slip of own) {
+			months.set(slip.periodMonth, {
+				grossMinor: toBaseMinor(slip.amountMinor, slip.currency, `${slip.periodMonth}-01`)
+			});
+		}
+		for (const entry of recorded) {
+			const at = `${entry.periodMonth}-01`;
+			const merged = months.get(entry.periodMonth) ?? {};
+			if (entry.grossMinor !== null) {
+				merged.grossMinor = toBaseMinor(entry.grossMinor, entry.currency, at);
+			}
+			if (entry.netMinor !== null) {
+				merged.netMinor = toBaseMinor(entry.netMinor, entry.currency, at);
+			}
+			months.set(entry.periodMonth, merged);
+		}
+
 		const rows = salaryStats(
-			own.map((s) => ({
-				periodMonth: s.periodMonth,
-				amountMinor: toBaseMinor(s.amountMinor, s.currency, `${s.periodMonth}-01`)
-			})),
+			[...months.entries()].map(([periodMonth, figures]) => ({ periodMonth, ...figures })),
 			p.birthYear
 		);
 		return {

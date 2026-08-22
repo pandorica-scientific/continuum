@@ -104,6 +104,7 @@
 		<TaxStatementDialog
 			people={data.people}
 			taxDocs={data.taxDocs}
+			currencies={data.currencies}
 			prefillTotals={data.prefillTotals}
 			baseCurrency={data.baseCurrency}
 			existing={editing === 'new' ? null : editing}
@@ -117,9 +118,9 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
@@ -128,7 +129,7 @@
 		margin-top: 6px;
 	}
 	.g-name {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -143,12 +144,12 @@
 	.t-facts {
 		display: flex;
 		align-items: baseline;
-		gap: 14px;
+		gap: var(--space-7);
 		flex: 1 1 340px;
 		min-width: 0;
 	}
 	.t-year {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.t-mid {
@@ -158,7 +159,7 @@
 		min-width: 0;
 	}
 	.t-figures {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.t-rate {
 		color: var(--green);
@@ -166,22 +167,22 @@
 	.t-lines,
 	.t-doc,
 	.t-note {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		display: flex;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.t-diverges {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--yellow);
 	}
 	.t-actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.empty {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 </style>

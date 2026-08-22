@@ -10,6 +10,24 @@ the result.
 
 ---
 
+## Which export to download
+
+Most banks offer more than one, and only some of them are statements.
+
+**Fio** — choose **Výpis z účtu**, not _Pohyby na účtu_. The movement list prints
+no balances at all, so nothing in it can show whether every row is there;
+Continuum refuses it and says so rather than pretending. The statement export
+prints opening and closing balances and imports without trouble.
+
+**Revolut** — the account statement CSV. It contains every _pocket_ you hold,
+told apart by its `Product` column, and each keeps its own running balance.
+Continuum reads one statement per pocket, so a Savings pocket does not get
+checked against your current account's figures.
+
+**Anything else** — a CSV, a spreadsheet or a PDF. The layout is worked out from
+the file and checked against the statement's own balances, so no per-bank setup
+is needed. If a file cannot prove itself, it is refused: see below.
+
 ## The governing rule
 
 > **No preset may ever be the reason a statement is accepted. A preset can only make
@@ -190,6 +208,17 @@ The answer is saved as a profile keyed on the header **labels**, so the next
 statement from that bank arrives already understood. If the bank later adds a
 column, the wizard opens again with the columns it already knew filled in — matching
 by position would instead shift every role one to the right and read plausibly.
+
+---
+
+## The file itself
+
+Every accepted statement is **filed in Documents**, on its own Statements shelf,
+tagged with the bank, the account and the year, and linked to the import that read
+it. The original file was always kept on the data volume — a parser change
+re-reads history rather than asking for seven years of exports again — but until
+this release nothing surfaced it, so the only way to look at the PDF a figure came
+from was through the filesystem.
 
 ---
 

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
-import { desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { account, category, importFile, transaction, transferPair } from '$lib/server/db/schema';
+import { loadCategories } from '$lib/server/categorize/leaves';
+import { account, importFile, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
-import { enqueue, jobBytes, queueStatus, runQueue } from '$lib/server/import/queue';
+import { dismissJob, enqueue, jobBytes, queueStatus, runQueue } from '$lib/server/import/queue';
 import { previewLayout } from '$lib/server/import/detect';
 import { confirmMapping } from '$lib/server/import/wizard';
 import { loadProfiles } from '$lib/server/import/profiles';
@@ -15,9 +16,12 @@ import * as schema from '$lib/server/db/schema';
 import { PROOF_LABELS, sourceLabel } from '$lib/transactions/provenance';
 import {
 	confirmTransferProposal,
+	markOneSidedTransfer,
 	rejectTransferProposal
 } from '$lib/server/import/transfer-decisions';
-import { CATEGORY_GROUPS } from '$lib/categories';
+import { loadCategoryGroups } from '$lib/server/categorize/groups';
+import { createCategory, createCategoryGroup, taxonomyKey } from '$lib/server/categorize/taxonomy';
+import { asEnumValue, ENUMS } from '$lib/enums';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -43,7 +47,9 @@ export const load: PageServerLoad = async () => {
 		pairedAgg,
 		reviewRows,
 		categories,
-		accounts
+		accounts,
+		groups,
+		people
 	] = await Promise.all([
 		queueStatus(),
 		// What each recent import was checked against. The proof engine decided
@@ -62,6 +68,9 @@ export const load: PageServerLoad = async () => {
 				reconciliation: importFile.reconciliation
 			})
 			.from(importFile)
+			// Acknowledged imports leave this list and nothing else — the record,
+			// its transactions, its stored file and its document all stay.
+			.where(isNull(importFile.acknowledgedAt))
 			.orderBy(desc(importFile.uploadedAt))
 			.limit(8),
 		db
@@ -88,6 +97,10 @@ export const load: PageServerLoad = async () => {
 				reviewReason: transaction.reviewReason,
 				suggestedCategoryId: transaction.suggestedCategoryId,
 				transferPairId: transaction.transferPairId,
+				accountId: transaction.accountId,
+				// Whether the account has an owner. A joint one cannot answer "whose
+				// salary is this?" by itself, so the screen has to ask.
+				accountOwnerPersonId: account.ownerPersonId,
 				accountName: account.name
 			})
 			.from(transaction)
@@ -95,11 +108,18 @@ export const load: PageServerLoad = async () => {
 			.where(eq(transaction.reviewState, 'needs_review'))
 			.orderBy(desc(transaction.bookedOn))
 			.limit(50),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
+		loadCategories(),
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
-			.orderBy(account.createdAt, account.id)
+			.orderBy(account.createdAt, account.id),
+		loadCategoryGroups(),
+		// For the "whose salary is this?" sub-select on a joint account.
+		db
+			.select({ id: schema.person.id, name: schema.person.name })
+			.from(schema.person)
+			.where(isNull(schema.person.deactivatedAt))
+			.orderBy(schema.person.name)
 	]);
 
 	const total = readAgg[0].count;
@@ -147,16 +167,27 @@ export const load: PageServerLoad = async () => {
 			negative: r.amountMinor < 0n,
 			isTransfer: proposedLegIds.has(r.id),
 			account: r.accountName,
+			// So the "moved to my…" picker can leave out the account the money
+			// actually left, which is never the destination.
+			accountId: r.accountId,
+			accountIsJoint: r.accountOwnerPersonId === null,
 			// The engine's best guess, pre-selected below so a contested or
 			// unproven row arrives with a suggestion rather than nothing.
 			suggestedCategoryId: r.suggestedCategoryId
 		})),
 		accounts,
-		categories: CATEGORY_GROUPS.map((group) => ({
-			key: group.key,
-			label: group.label,
-			items: categories.filter((c) => c.groupKey === group.key)
-		})).filter((g) => g.items.length > 0)
+		// Every group, including the empty ones: the modal needs somewhere to put a
+		// new category, and a group with nothing in it yet is exactly the case.
+		groups: groups.map((group) => ({ key: group.key, label: group.label })),
+		groupRoles: ENUMS['category_group.role'],
+		people,
+		categories: groups
+			.map((group) => ({
+				key: group.key,
+				label: group.label,
+				items: categories.filter((c) => c.groupKey === group.key)
+			}))
+			.filter((g) => g.items.length > 0)
 	};
 };
 
@@ -197,6 +228,26 @@ export const actions: Actions = {
 	 * its own it is a dead end — the person knows what their bank's columns mean
 	 * and has no way to say so. This is what they get to point at.
 	 */
+	/** Take a file out of the queue: a cancellation while it waits, a tidy-up
+	 *  once it has settled. Refused while it is being read. */
+	dismissJob: async ({ request }) => {
+		const form = await request.formData();
+		const result = await dismissJob(String(form.get('jobId') ?? ''));
+		if (!result.ok) return fail(409, { message: result.message });
+		return { ok: true };
+	},
+
+	/** "I have looked at this one." Hides the row; deletes nothing. */
+	acknowledgeImport: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('fileId'));
+		await db
+			.update(schema.importFile)
+			.set({ acknowledgedAt: new Date() })
+			.where(eq(schema.importFile.id, id));
+		return { ok: true };
+	},
+
 	previewLayout: async ({ request }) => {
 		const form = await request.formData();
 		const jobId = String(form.get('jobId') ?? '');
@@ -265,11 +316,64 @@ export const actions: Actions = {
 
 	categorize: async ({ request }) => {
 		const form = await request.formData();
+		const id = asRowId(form.get('id'));
 		// Shared with the register, so a correction teaches the categoriser the
 		// same way wherever it is made.
+		// Whose salary it is, when the screen has just asked — only reached for a
+		// salary category on a joint account. An owned account answers it itself.
+		const salaryPersonId = asOptionalRowId(form.get('salaryPersonId'));
 		const result = await fileTransaction(
+			id,
+			String(form.get('categoryId') ?? ''),
+			undefined,
+			salaryPersonId
+				? { personId: salaryPersonId, remember: form.get('rememberWhose') === 'on' }
+				: undefined
+		);
+		// The id travels with the failure so the screen can render the message
+		// against the row that produced it rather than in a banner at the top.
+		if (!result.ok) return fail(result.status, { id, message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Add a category, and a group to hold it, without leaving the review queue.
+	 *
+	 * The need is felt here — a row in front of you that nothing fits — and
+	 * sending someone to a settings screen, then back to find their place in the
+	 * queue again, is how a correction stops being worth making.
+	 */
+	addCategory: async ({ request }) => {
+		const form = await request.formData();
+		const newGroupLabel = String(form.get('newGroupLabel') ?? '').trim();
+		let groupKey = String(form.get('groupKey') ?? '').trim();
+
+		if (newGroupLabel) {
+			const created = await createCategoryGroup({
+				label: newGroupLabel,
+				role: asEnumValue('category_group.role', form.get('newGroupRole'), 'expense')
+			});
+			if (!created.ok) return fail(created.status, { message: created.message });
+			groupKey = taxonomyKey(newGroupLabel);
+		}
+		if (!groupKey) return fail(400, { message: 'Choose a group, or name a new one.' });
+
+		const result = await createCategory({ groupKey, name: String(form.get('name') ?? '') });
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Say a row is a transfer to an account whose statements are not imported.
+	 *
+	 * The pairing machinery needs both legs; this is the case where only one
+	 * exists, which otherwise sits here looking like unexplained spending.
+	 */
+	markOneSided: async ({ request }) => {
+		const form = await request.formData();
+		const result = await markOneSidedTransfer(
 			asRowId(form.get('id')),
-			String(form.get('categoryId') ?? '')
+			asRowId(form.get('toAccountId'))
 		);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };

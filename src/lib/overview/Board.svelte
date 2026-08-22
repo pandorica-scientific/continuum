@@ -311,16 +311,16 @@
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 		margin-bottom: 16px;
 	}
 	.bar button {
 		background: var(--card2);
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 		padding: 6px 13px;
 		cursor: pointer;
 	}
@@ -332,7 +332,7 @@
 	}
 	.note,
 	.failed {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.45;
 	}
@@ -342,16 +342,16 @@
 	.tray {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		padding: 12px 14px;
 		margin-bottom: 16px;
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 	}
 	.tray-label {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -359,12 +359,12 @@
 	.tray button {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 		background: var(--card2);
 		border: 1px solid var(--bd);
 		border-radius: 20px;
 		color: var(--fg2);
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		padding: 5px 12px;
 		cursor: pointer;
 	}
@@ -394,21 +394,21 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 8px;
+		gap: var(--space-4);
 		height: 100%;
 		padding: 14px 16px;
 		border: 1px dashed var(--bd2);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		opacity: 0.7;
 	}
 	.eyebrow {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--fg3);
 	}
 	.reserved-note {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.45;
 	}
@@ -417,13 +417,13 @@
 		border: none;
 		padding: 0;
 		color: var(--fg3);
-		font-size: 12px;
+		font-size: var(--text-sm);
 		text-decoration: underline;
 		cursor: pointer;
 	}
 	.empty {
 		grid-column: 1 / -1;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 </style>

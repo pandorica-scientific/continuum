@@ -104,7 +104,7 @@
 		max-width: 340px;
 		padding: 10px 12px;
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		/* --bg2, not --card. In the dark theme --card is rgba(255,255,255,0.03) —
 		   a 3% tint meant to sit ON the page background, not to be a surface of its
 		   own. A floating bubble painted with it is effectively transparent and
@@ -112,7 +112,7 @@
 		   both themes, which is why Lightbox uses the same family. */
 		background: var(--bg2);
 		color: var(--fg1);
-		font-size: 12px;
+		font-size: var(--text-sm);
 		line-height: 1.5;
 		/* Heavier than a card's shadow: this floats above the page and needs to
 		   read as detached rather than as part of what is under it. */

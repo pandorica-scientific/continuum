@@ -22,7 +22,10 @@ services:
       - '${CONTINUUM_PORT:-80}:3000'
     environment:
       DATABASE_URL: postgres://continuum:${POSTGRES_PASSWORD:-continuum}@db:5432/continuum
-      ORIGIN: ${ORIGIN:-http://localhost}
+      # Optional, and only about passkeys — see .env.example. Form submissions
+      # are checked against the address the browser actually used, so the app is
+      # reachable at every address it answers on without configuring any of them.
+      ORIGIN: ${ORIGIN:-}
       # DEMO=1 seeds a fictional household on a pristine instance
       # (sign in as Jana Nováková / demo-demo-demo)
       DEMO: ${DEMO:-}

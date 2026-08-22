@@ -2,11 +2,24 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
 
 	let { data, form } = $props();
+
+	// Dismissal is keyed on the message itself rather than being a bare boolean:
+	// a new failure must reappear even when the previous one was dismissed, and
+	// a flag somebody has to remember to reset is how that stops happening.
+	let dismissed = $state<string | null>(null);
+	const errorMessage = $derived(form?.message && form.message !== dismissed ? form.message : null);
+
+	// The threshold field follows the checkbox as it is clicked, not as it was
+	// last saved. Reading `data` directly left the field disabled until a reload,
+	// and a disabled field is never posted — so switching the exemption on and
+	// typing a threshold in the same visit saved neither it nor the rate.
+	let exemptLongHeld = $derived(data.tax.exemptLongHeld);
 
 	async function upload(files: FileList) {
 		const file = files[0];
@@ -35,11 +48,27 @@
 				})
 				.filter(Boolean)
 				.join(' ');
-		// dots mark only hard market values from reports, not reconstruction
+		// Which points are hard market values from a report rather than
+		// reconstruction. This decides whether the actual line is drawn at all;
+		// it no longer draws a marker per point — a single snapshot rendered as
+		// one dot at the right-hand end, which read as a defect rather than data.
 		const actualPoints = data.series
 			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
-		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))];
+		// A rule where each year begins, so the labels beneath the plot have
+		// something to point at. Drawn at the FIRST month of each year rather than
+		// spaced evenly: the series can start mid-year, and an evenly spaced rule
+		// would sit wherever it liked and quietly mislead.
+		//
+		// The labels are positioned from the same index as the rules. They used to
+		// be laid out space-between, which put every one of them somewhere the
+		// rule was not.
+		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))].map((year) => {
+			const index = data.series.findIndex((p) => p.month.slice(0, 4) === year);
+			const left = (x(index) / CW) * 100;
+			return { year, left, end: left > 90 };
+		});
+		const yearLines = years.filter((y) => y.left > 0).map((y) => (y.left / 100) * CW);
 		// One unit for the whole axis: millions when the top gridline reaches
 		// them, thousands otherwise.
 		const inMillions = max >= 1e6;
@@ -56,6 +85,7 @@
 			actual: line((p) => p.actual),
 			actualPoints,
 			years,
+			yearLines,
 			axis
 		};
 	});
@@ -66,8 +96,18 @@
 	caption="Updated by uploading the XTB account statement. Duplicates are dropped by operation id."
 />
 
-{#if form?.message}
-	<div class="error">{form.message}</div>
+{#if errorMessage}
+	<div class="error" role="alert">
+		<span>{errorMessage}</span>
+		<button
+			type="button"
+			class="dismiss"
+			aria-label="Dismiss"
+			onclick={() => (dismissed = errorMessage)}
+		>
+			✕
+		</button>
+	</div>
 {/if}
 
 <section class="section">
@@ -102,7 +142,90 @@
 			value={data.metrics.annualised ?? '—'}
 			note="nominal, on money in"
 		/>
+		<!-- An estimate, and it says so. It knows nothing about losses carried
+		     forward from earlier years, other income, allowances, or anything held
+		     outside this instance. The rate is configured below rather than
+		     assumed: it differs by country. -->
+		<MetricTile
+			label="Tax on {data.tax.year} gains"
+			value={data.tax.configured ? data.tax.estimated : '—'}
+			unit={data.tax.configured ? data.accountUnit : undefined}
+			note={data.tax.configured
+				? `estimate · ${data.tax.ratePct}% of ${data.tax.taxable}`
+				: 'set a rate below'}
+		/>
 	</div>
+
+	{#if data.tax.configured && data.tax.disposals > 0}
+		<div class="card tax-detail">
+			<Eyebrow emoji="🧾" label="How that is worked out" />
+			<dl class="tax-lines">
+				<dt>Realised in {data.tax.year}</dt>
+				<dd class="mono" style:color={data.tax.realisedPositive ? 'var(--green)' : 'var(--red)'}>
+					{data.tax.realised}
+				</dd>
+				<dt>from {data.tax.disposals} {data.tax.disposals === 1 ? 'disposal' : 'disposals'}</dt>
+				<dd></dd>
+				{#if data.tax.exemptLongHeld}
+					<dt>
+						Exempt — held {data.tax.exemptAfterYears}+ years ({data.tax.exemptDisposals})
+					</dt>
+					<dd class="mono">−{data.tax.exempt}</dd>
+				{/if}
+				<dt class="total">Taxable</dt>
+				<dd class="mono total">{data.tax.taxable}</dd>
+				<dt class="total">At {data.tax.ratePct}%</dt>
+				<dd class="mono total">{data.tax.estimated}</dd>
+			</dl>
+			<p class="quiet">
+				An estimate from what your broker reported, nothing more. Losses carried forward from
+				earlier years, other income and allowances are not in it.
+			</p>
+		</div>
+	{/if}
+
+	<!-- reset: false. A successful submit otherwise resets the form, and a reset
+	     restores each field to its DOM default — which is empty, because Svelte
+	     sets a dynamic value as a property and never writes the attribute. The
+	     rate came back only because its value had changed and was re-applied;
+	     the threshold, unchanged at 3, was left blank the moment it saved. -->
+	<form
+		method="POST"
+		action="?/setTax"
+		use:enhance={() =>
+			async ({ update }) =>
+				update({ reset: false })}
+		class="card tax-form"
+	>
+		<Eyebrow emoji="⚖️" label="How gains are taxed here" />
+		<div class="tax-fields">
+			<label class="field">
+				<span>Rate on realised gains</span>
+				<input name="ratePct" inputmode="decimal" value={data.tax.ratePct || ''} placeholder="15" />
+			</label>
+			<label class="toggle">
+				<input type="checkbox" name="exemptLongHeld" bind:checked={exemptLongHeld} />
+				<span>Exempt what was held a long time</span>
+			</label>
+			<label class="field">
+				<span>Exempt after (years)</span>
+				<input
+					name="exemptAfterYears"
+					inputmode="numeric"
+					value={data.tax.exemptAfterYears}
+					disabled={!exemptLongHeld}
+				/>
+			</label>
+			<button type="submit" class="btn btn-primary">Save</button>
+		</div>
+		<!-- Off unless switched on, because a holding-period exemption is a fact
+		     about one country. The Czech time test is three years; somewhere else
+		     it is a different number, or nothing at all. -->
+		<p class="quiet">
+			Both are yours to set. The exemption matches the Czech three-year time test when you turn it
+			on, and is off by default because it applies nowhere else.
+		</p>
+	</form>
 </section>
 
 {#if chart}
@@ -119,9 +242,38 @@
 			{/each}
 			<svg viewBox="0 0 800 200" preserveAspectRatio="none">
 				{#each [0, 50, 100, 150] as gy (gy)}
-					<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+					<line
+						x1="0"
+						y1={gy}
+						x2="800"
+						y2={gy}
+						stroke="var(--bd)"
+						stroke-width="1"
+						vector-effect="non-scaling-stroke"
+					/>
 				{/each}
-				<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
+				<!-- Where each year begins. Structure rather than data, so it is drawn
+				     at the weight the horizontal gridlines already use. -->
+				{#each chart.yearLines as gx (gx)}
+					<line
+						x1={gx}
+						y1="0"
+						x2={gx}
+						y2="200"
+						stroke="var(--bd)"
+						stroke-width="1"
+						vector-effect="non-scaling-stroke"
+					/>
+				{/each}
+				<line
+					x1="0"
+					y1="200"
+					x2="800"
+					y2="200"
+					stroke="var(--bd2)"
+					stroke-width="1"
+					vector-effect="non-scaling-stroke"
+				/>
 				<polyline
 					points={chart.bench5}
 					fill="none"
@@ -156,13 +308,11 @@
 						vector-effect="non-scaling-stroke"
 					/>
 				{/if}
-				{#each chart.actualPoints as p (p.x)}
-					<circle cx={p.x} cy={p.y} r="4" fill="var(--teal)" />
-				{/each}
 			</svg>
 		</div>
 		<div class="years mono">
-			{#each chart.years as y (y)}<span>{y}</span>{/each}
+			{#each chart.years as y (y.year)}<span style:left="{y.left}%" class:end={y.end}>{y.year}</span
+				>{/each}
 		</div>
 		<div class="legend">
 			<span class="l"
@@ -194,7 +344,7 @@
 					<div class="hole"><span class="mono">{data.donut.length}</span></div>
 				</div>
 				<div class="legend-col">
-					{#each data.donut as s (s.label)}
+					{#each data.donut as s, i (i)}
 						<div class="legend-row">
 							<span class="dot" style:background={s.color}></span>
 							<span class="mono l-ticker">{s.label}</span>
@@ -238,6 +388,7 @@
 			accept=".xlsx"
 			idleText="📥 Drop the XTB account statement here, or click to browse"
 			busyText="Reading the report…"
+			reportErrors={false}
 			onfiles={upload}
 		/>
 		{#if form?.result}
@@ -250,23 +401,73 @@
 </div>
 
 <style>
+	.tax-detail {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.tax-lines {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: var(--space-3) var(--space-8);
+		margin: 0;
+		font-size: var(--text-md);
+	}
+	.tax-lines dt {
+		color: var(--fg3);
+	}
+	.tax-lines dd {
+		margin: 0;
+		text-align: right;
+	}
+	.tax-lines .total {
+		color: var(--fg1);
+		font-weight: 500;
+		border-top: 1px solid var(--bd);
+		padding-top: var(--space-3);
+	}
+	.tax-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.tax-fields {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-6);
+		flex-wrap: wrap;
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--space-6);
+	}
+	.dismiss {
+		background: none;
+		border: 0;
+		color: inherit;
+		cursor: pointer;
+		font-size: var(--text-lg);
+		line-height: 1;
+		padding: 2px 4px;
 	}
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.chart-card {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.chart {
 		position: relative;
@@ -278,7 +479,7 @@
 		width: 36px;
 		text-align: right;
 		transform: translateY(-50%);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	svg {
@@ -286,18 +487,31 @@
 		height: auto;
 		display: block;
 	}
+	/* Each label sits at its own year rule rather than being spread evenly. The
+	   last one is pulled back inside the plot so it cannot run off the edge. */
 	.years {
-		display: flex;
-		justify-content: space-between;
+		position: relative;
+		height: 1.2em;
 		margin-left: 46px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	.years span {
+		position: absolute;
+		top: 0;
+		padding-left: 4px;
+		white-space: nowrap;
+	}
+	.years span.end {
+		transform: translateX(-100%);
+		padding-left: 0;
+		padding-right: 4px;
 	}
 	.legend {
 		display: flex;
 		gap: 14px 18px;
 		flex-wrap: wrap;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
@@ -314,12 +528,12 @@
 	.l-note {
 		margin-left: auto;
 		color: var(--fg3);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.own-row {
 		display: grid;
 		grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
-		gap: 16px;
+		gap: var(--space-8);
 		align-items: start;
 	}
 	@media (max-width: 1100px) {
@@ -330,43 +544,49 @@
 	.own {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 	}
+	/* Chart on the left, legend on the right — the reported fault was a donut
+	   drawn at a fixed 148px in a card far wider than that, with its legend
+	   stacked underneath and most of the box empty. */
 	.donut-wrap {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		align-items: center;
-		gap: 18px;
+		gap: 22px;
+		flex-wrap: wrap;
 	}
 	.donut {
-		width: 148px;
-		height: 148px;
-		border-radius: 148px;
-		flex: 0 0 148px;
+		/* Sized from the box rather than pinned: it grows with the card and stops
+		   at a size beyond which a pie says nothing more. */
+		width: clamp(148px, 34%, 240px);
+		aspect-ratio: 1;
+		border-radius: 50%;
+		flex: 0 1 auto;
 		display: grid;
 		place-items: center;
 	}
 	.hole {
-		width: 88px;
-		height: 88px;
-		border-radius: 88px;
+		width: 58%;
+		aspect-ratio: 1;
+		border-radius: 50%;
 		background: var(--bg2);
 		display: grid;
 		place-items: center;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.legend-col {
 		flex: 1 1 240px;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.legend-row {
 		display: grid;
 		grid-template-columns: 11px 90px minmax(0, 1fr) auto;
 		gap: 9px;
 		align-items: center;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.dot {
 		width: 9px;
@@ -388,7 +608,7 @@
 	.holdings {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	.h-head,
 	.h-row {
@@ -399,7 +619,7 @@
 	}
 	.h-head {
 		padding: 0 0 8px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -416,31 +636,31 @@
 		min-width: 0;
 	}
 	.ticker {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.name {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.r {
 		text-align: right;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.muted {
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	:global(.dropzone) {
 		margin-top: 12px;
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 14px;
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 		cursor: pointer;
 		text-align: center;
 	}

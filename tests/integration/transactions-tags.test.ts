@@ -1,8 +1,9 @@
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { loadTagsFor, setTransactionTags, tagTotals } from '$lib/server/tags';
-import { PAGE_SIZE, registerPage } from '$lib/server/transactions';
+import { deleteTag, loadTagsFor, setTransactionTags, tagTotals, tagUsage } from '$lib/server/tags';
+import { registerPage } from '$lib/server/transactions';
+import { DEFAULT_PAGE_SIZE } from '$lib/transactions/filter';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 
 let harness: Harness;
@@ -23,6 +24,7 @@ const filter = (overrides: Partial<RegisterFilter> = {}): RegisterFilter => ({
 	includeTransfers: false,
 	sourceMethod: null,
 	page: 1,
+	pageSize: DEFAULT_PAGE_SIZE,
 	...overrides
 });
 
@@ -160,13 +162,18 @@ describe('register database aggregates', () => {
 			from generate_series(1, 55) as series(i);
 		`);
 
-		const first = await registerPage(filter({ categoryId: 'salary' }), testDb);
-		expect(first.rows).toHaveLength(PAGE_SIZE);
+		// Pinned to a size rather than the default: the fixture is 55 rows so that
+		// the second page is a short one, and that arithmetic is the point of the
+		// test. Reading the default here would make it change meaning whenever the
+		// register's default does.
+		const paged = { categoryId: 'salary', pageSize: 50 };
+		const first = await registerPage(filter(paged), testDb);
+		expect(first.rows).toHaveLength(50);
 		expect(first.total).toBe(55);
 		expect(first.pageCount).toBe(2);
 		expect(first.totals).toEqual([{ currency: 'CZK', sumMinor: 154000n }]);
 
-		const second = await registerPage(filter({ categoryId: 'salary', page: 2 }), testDb);
+		const second = await registerPage(filter({ ...paged, page: 2 }), testDb);
 		expect(second.rows).toHaveLength(5);
 		expect(second.total).toBe(55);
 		expect(second.totals).toEqual(first.totals);
@@ -250,5 +257,35 @@ describe('tag persistence', () => {
 		expect(await harness.sql.unsafe(`select 1 from tag where normalised_name = 'explode'`)).toEqual(
 			[]
 		);
+	});
+
+	/**
+	 * A tag could be created but never removed, so one typed once stayed on the
+	 * list forever. Deleting it has to untag everything it was on, and stop any
+	 * rule that applied it from applying it.
+	 */
+	it('untags everything it was on, and drops out of the rules that applied it', async () => {
+		await harness.sql.unsafe(`
+			insert into "transaction" (id, dedup_fingerprint, account_id, booked_on, amount_minor, currency)
+			values ('${rowId('t1')}', '${rowId('t1')}', '${rowId('a1')}', '2026-04-02', -100, 'CZK');
+			insert into tag (id, name, normalised_name) values ('${rowId('doomed')}', 'Doomed', 'doomed');
+			insert into tag_link (tag_id, target_id) values ('${rowId('doomed')}', '${rowId('t1')}');
+			insert into rule (id, name, conditions) values ('${rowId('r1')}', 'Doomed rule', '[]'::jsonb);
+			insert into rule_tag (rule_id, tag_id) values ('${rowId('r1')}', '${rowId('doomed')}');
+		`);
+
+		expect(await tagUsage(testDb)).toEqual(new Map([[rowId('doomed'), { tagged: 1, rules: 1 }]]));
+		expect(await deleteTag(rowId('doomed'), testDb)).toBe(true);
+
+		// Nothing had to be visited to unfile it: both link tables cascade.
+		expect((await loadTagsFor([rowId('t1')], testDb)).size).toBe(0);
+		expect(await harness.sql.unsafe(`select 1 from tag_link`)).toEqual([]);
+		expect(await harness.sql.unsafe(`select 1 from rule_tag`)).toEqual([]);
+		// The rule itself is untouched — it just stops contributing that tag.
+		expect(await harness.sql.unsafe(`select 1 from rule`)).toHaveLength(1);
+	});
+
+	it('says so when the tag is not there', async () => {
+		expect(await deleteTag(rowId('nope'), testDb)).toBe(false);
 	});
 });

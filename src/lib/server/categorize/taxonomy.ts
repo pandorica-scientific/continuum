@@ -1,0 +1,337 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+/**
+ * Creating, renaming and deleting the category tree a household owns.
+ *
+ * The tree used to be a constant: seven groups and seventeen leaves chosen by
+ * whoever wrote the file. A household with a pharmacy bill, or one that does
+ * not drive, had no way to say so.
+ */
+
+import { count, eq } from 'drizzle-orm';
+import { db, type Db } from '$lib/server/db';
+import {
+	category,
+	categoryGroup,
+	rule,
+	transaction,
+	transactionSplit
+} from '$lib/server/db/schema';
+import { isEnumValue, type EnumValue } from '$lib/enums';
+import { CATEGORY_GROUP_SEED, RESERVE_COLOR_TOKENS, nextFreeColorToken } from '$lib/categories';
+
+export type TaxonomyResult = { ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
+
+/**
+ * A stable key for a name somebody typed.
+ *
+ * Keys are what categories point at and what rules are stored against, so they
+ * are derived once at creation and never rewritten when a label is edited.
+ */
+export function taxonomyKey(label: string): string {
+	return label
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[̀-ͯ]/g, '')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+}
+
+/** Every colour token the palette defines: the nine named, then the reserve. */
+const PALETTE_TOKENS = [
+	...CATEGORY_GROUP_SEED.map((group) => group.colorToken),
+	...RESERVE_COLOR_TOKENS
+];
+
+interface CreateGroupInput {
+	label: string;
+	role: EnumValue<'category_group.role'>;
+}
+
+export async function createCategoryGroup(
+	input: CreateGroupInput,
+	handle: Db = db
+): Promise<TaxonomyResult> {
+	const label = input.label.trim();
+	if (!label) return { ok: false, status: 400, message: 'The group needs a name.' };
+	if (!isEnumValue('category_group.role', input.role)) {
+		return {
+			ok: false,
+			status: 400,
+			message: 'Choose whether this is income, spending or saving.'
+		};
+	}
+	const key = taxonomyKey(label);
+	if (!key) return { ok: false, status: 400, message: 'That name has no letters or digits in it.' };
+
+	return handle.transaction(async (tx) => {
+		const existing = await tx.select().from(categoryGroup);
+		if (existing.some((group) => group.key === key)) {
+			return { ok: false as const, status: 409, message: 'A group by that name already exists.' };
+		}
+
+		// Reserve colours are ranked by how well they separate from everything
+		// else, so handing them out in order means the first group a household
+		// adds gets the most legible one left rather than an arbitrary spare.
+		const colorToken = nextFreeColorToken(existing.map((group) => group.colorToken));
+		if (!colorToken) {
+			return {
+				ok: false as const,
+				status: 409,
+				// Honest about why, because the alternative — generating a colour —
+				// produces two series nobody can tell apart and looks like a bug.
+				message: 'Every distinct chart colour is in use. Rename or remove a group to free one.'
+			};
+		}
+
+		const sort = existing.reduce((highest, group) => Math.max(highest, group.sort), 0) + 1;
+		await tx.insert(categoryGroup).values({ key, label, colorToken, role: input.role, sort });
+		return { ok: true as const };
+	});
+}
+
+interface RenameGroupInput {
+	label: string;
+	colorToken: string;
+}
+
+/** Label and colour only. The key is what categories point at and never moves. */
+export async function renameCategoryGroup(
+	key: string,
+	input: RenameGroupInput,
+	handle: Db = db
+): Promise<TaxonomyResult> {
+	const label = input.label.trim();
+	if (!label) return { ok: false, status: 400, message: 'The group needs a name.' };
+	if (!PALETTE_TOKENS.includes(input.colorToken)) {
+		// Never a free hex: each token carries a value per theme and the set was
+		// validated for separation. An arbitrary colour is illegible in one theme
+		// or indistinguishable from its neighbour in both.
+		return { ok: false, status: 400, message: 'Choose a colour from the palette.' };
+	}
+
+	const [existing] = await handle.select().from(categoryGroup).where(eq(categoryGroup.key, key));
+	if (!existing) return { ok: false, status: 404, message: 'Group not found.' };
+
+	await handle
+		.update(categoryGroup)
+		.set({ label, colorToken: input.colorToken })
+		.where(eq(categoryGroup.key, key));
+	return { ok: true };
+}
+
+/**
+ * Delete a group, which must already be empty.
+ *
+ * Nothing is privileged: a seeded group goes the same way a household's own
+ * does, because a household that does not drive should be able to delete
+ * Transport.
+ */
+export async function deleteCategoryGroup(key: string, handle: Db = db): Promise<TaxonomyResult> {
+	return handle.transaction(async (tx) => {
+		const [existing] = await tx
+			.select()
+			.from(categoryGroup)
+			.where(eq(categoryGroup.key, key))
+			.for('update');
+		if (!existing) return { ok: false as const, status: 404, message: 'Group not found.' };
+
+		const [{ value }] = await tx
+			.select({ value: count() })
+			.from(category)
+			.where(eq(category.groupKey, key));
+		if (value > 0) {
+			return { ok: false as const, status: 409, message: 'Move or delete its categories first.' };
+		}
+
+		await tx.delete(categoryGroup).where(eq(categoryGroup.key, key));
+		return { ok: true as const };
+	});
+}
+
+interface CreateCategoryInput {
+	groupKey: string;
+	name: string;
+}
+
+export async function createCategory(
+	input: CreateCategoryInput,
+	handle: Db = db
+): Promise<TaxonomyResult> {
+	const name = input.name.trim();
+	if (!name) return { ok: false, status: 400, message: 'The category needs a name.' };
+	const id = taxonomyKey(name);
+	if (!id) return { ok: false, status: 400, message: 'That name has no letters or digits in it.' };
+
+	return handle.transaction(async (tx) => {
+		const [group] = await tx
+			.select()
+			.from(categoryGroup)
+			.where(eq(categoryGroup.key, input.groupKey));
+		if (!group) return { ok: false as const, status: 404, message: 'Group not found.' };
+
+		const siblings = await tx.select().from(category).where(eq(category.groupKey, input.groupKey));
+		const [clash] = await tx.select().from(category).where(eq(category.id, id));
+		if (clash) {
+			return {
+				ok: false as const,
+				status: 409,
+				message: 'A category by that name already exists.'
+			};
+		}
+
+		const sort = siblings.reduce((highest, row) => Math.max(highest, row.sort), -1) + 1;
+		await tx.insert(category).values({ id, groupKey: input.groupKey, name, sort });
+		return { ok: true as const };
+	});
+}
+
+/**
+ * Set the order of the categories inside one group.
+ *
+ * The whole group is rewritten in one transaction rather than the moved chip
+ * being nudged: a sequence of "swap these two" updates leaves a half-applied
+ * order visible if anything fails between them, and two people reordering at
+ * once would interleave into something neither of them asked for.
+ *
+ * Catch-alls are excluded from the sequence entirely. They are pinned last by
+ * `is_catch_all` in every ordering, so giving them a `sort` would be writing a
+ * number nothing reads — and a number nothing reads is one that eventually
+ * disagrees with the truth.
+ */
+export async function reorderCategories(
+	groupKey: string,
+	orderedIds: string[],
+	handle: Db = db
+): Promise<TaxonomyResult> {
+	return handle.transaction(async (tx) => {
+		const inGroup = await tx.select().from(category).where(eq(category.groupKey, groupKey));
+		if (inGroup.length === 0) {
+			return { ok: false as const, status: 404, message: 'That group has no categories.' };
+		}
+
+		const movable = new Set(inGroup.filter((row) => !row.isCatchAll).map((row) => row.id));
+		const wanted = orderedIds.filter((id) => movable.has(id));
+
+		// Every movable category must appear exactly once. A short list would
+		// silently leave the rest wherever they were, which reads as a reorder
+		// that half worked.
+		if (wanted.length !== movable.size || new Set(wanted).size !== wanted.length) {
+			return {
+				ok: false as const,
+				status: 400,
+				message: 'That order does not name every category in the group exactly once.'
+			};
+		}
+
+		for (const [index, id] of wanted.entries()) {
+			await tx.update(category).set({ sort: index }).where(eq(category.id, id));
+		}
+		return { ok: true as const };
+	});
+}
+
+/** What still points at a category, so nothing has to be guessed at. */
+export interface CategoryDependants {
+	/** Transactions filed under it, plus those merely suggested it. */
+	transactions: number;
+	/** Split lines, which carry their own category and are money too. */
+	splits: number;
+	/** Learned or hand-written rules that file into it. */
+	rules: number;
+	/** Whether anything at all points at it. */
+	any: boolean;
+}
+
+/**
+ * Count before asking.
+ *
+ * The delete control used to open a "move what is filed under this to…" form
+ * unconditionally, so removing a category nothing had ever used cost the same
+ * three decisions as removing a heavily used one.
+ *
+ * Rules are counted apart from money on purpose: they fail differently. A rule
+ * left pointing at a deleted category still matches and files nothing, so the
+ * categoriser quietly stops working — which is why deleteCategory repoints them
+ * rather than letting the foreign key null them out.
+ */
+export async function countCategoryDependants(
+	id: string,
+	handle: Db = db
+): Promise<CategoryDependants> {
+	const [[filed], [suggested], [splitLines], [ruleRows]] = await Promise.all([
+		handle.select({ n: count() }).from(transaction).where(eq(transaction.categoryId, id)),
+		handle.select({ n: count() }).from(transaction).where(eq(transaction.suggestedCategoryId, id)),
+		handle.select({ n: count() }).from(transactionSplit).where(eq(transactionSplit.categoryId, id)),
+		handle.select({ n: count() }).from(rule).where(eq(rule.categoryId, id))
+	]);
+	const transactions = (filed?.n ?? 0) + (suggested?.n ?? 0);
+	const splits = splitLines?.n ?? 0;
+	const rules = ruleRows?.n ?? 0;
+	return { transactions, splits, rules, any: transactions + splits + rules > 0 };
+}
+
+/**
+ * Delete a category, moving everything filed under it somewhere else.
+ *
+ * `reassignTo` is required rather than optional. Orphaning the rows would drop
+ * them out of every total that filters on a category, which reads as money
+ * vanishing — and the person deleting the category is the only one who knows
+ * where its history belongs.
+ */
+export async function deleteCategory(
+	id: string,
+	reassignTo: string | null,
+	handle: Db = db
+): Promise<TaxonomyResult> {
+	if (reassignTo !== null && id === reassignTo) {
+		return { ok: false, status: 400, message: 'Choose a different category to move them to.' };
+	}
+
+	// Nothing points at it, so there is nothing to move and nothing to ask.
+	if (reassignTo === null) {
+		const dependants = await countCategoryDependants(id, handle);
+		if (dependants.any) {
+			return {
+				ok: false,
+				status: 409,
+				message: 'Something is still filed under that category — say where it should go.'
+			};
+		}
+		const deleted = await handle.delete(category).where(eq(category.id, id)).returning();
+		if (deleted.length === 0) return { ok: false, status: 404, message: 'Category not found.' };
+		return { ok: true };
+	}
+
+	return handle.transaction(async (tx) => {
+		const [existing] = await tx.select().from(category).where(eq(category.id, id)).for('update');
+		if (!existing) return { ok: false as const, status: 404, message: 'Category not found.' };
+
+		const [target] = await tx.select().from(category).where(eq(category.id, reassignTo));
+		if (!target) {
+			return { ok: false as const, status: 404, message: 'That category is not there any more.' };
+		}
+
+		// Both places a category id is stored on money. A split line carries its
+		// own, so updating only the transaction would leave half the ledger
+		// pointing at a row that is about to disappear.
+		await tx
+			.update(transaction)
+			.set({ categoryId: reassignTo })
+			.where(eq(transaction.categoryId, id));
+		await tx
+			.update(transaction)
+			.set({ suggestedCategoryId: reassignTo })
+			.where(eq(transaction.suggestedCategoryId, id));
+		await tx
+			.update(transactionSplit)
+			.set({ categoryId: reassignTo })
+			.where(eq(transactionSplit.categoryId, id));
+		// Rules too. The foreign key sets them to null on delete, which leaves a
+		// learned rule that still matches and files nothing — the categoriser
+		// quietly stops working and nothing says why.
+		await tx.update(rule).set({ categoryId: reassignTo }).where(eq(rule.categoryId, id));
+
+		await tx.delete(category).where(eq(category.id, id));
+		return { ok: true as const };
+	});
+}

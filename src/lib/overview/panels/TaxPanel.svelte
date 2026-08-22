@@ -35,12 +35,12 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.row {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 		padding-bottom: 10px;
 		border-bottom: 1px solid var(--bd);
 	}
@@ -48,21 +48,21 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.who {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.when {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.figures {
 		display: flex;
 		justify-content: space-between;
-		gap: 10px;
-		font-size: 12.5px;
+		gap: var(--space-5);
+		font-size: var(--text-sm);
 		flex-wrap: wrap;
 	}
 	.paid {
@@ -72,7 +72,7 @@
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

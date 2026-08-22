@@ -7,7 +7,7 @@
 // for the visible keys and nothing else runs. The "Add a panel" tray needs only
 // titles, which come from the registry and cost nothing.
 
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	account,
@@ -34,6 +34,7 @@ import { annualisedReturn } from '$lib/server/invest/series';
 import { getRevisionedSetting } from '$lib/server/settings';
 import { RETIRE_DEFAULTS, retModel, type RetireConfig } from '$lib/retire';
 import { displayCurrency, formatMinor, toMajor } from '$lib/money';
+import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 /** Deterministic series colours, in the order V2 assigns them. */
 const SERIES = ['--blue', '--green', '--purple', '--orange', '--teal', '--yellow'];
@@ -372,7 +373,7 @@ const builders: Record<string, Builder> = {
 			.leftJoin(category, eq(transaction.categoryId, category.id))
 			// Transfers move money between the household's own accounts; showing
 			// them here would read as spending that never happened.
-			.where(and(isNull(transaction.transferPairId), sql`${transaction.amountMinor} <> 0`))
+			.where(and(notOwnTransfer(), sql`${transaction.amountMinor} <> 0`))
 			.orderBy(desc(transaction.bookedOn), desc(transaction.id))
 			.limit(8);
 
@@ -391,7 +392,7 @@ const builders: Record<string, Builder> = {
 	savings: async () => {
 		const history = await monthlyHistory();
 		const months = history.slice(-12);
-		if (months.length === 0) return { months: [], averagePct: null };
+		if (months.length === 0) return { months: [], peak: '0', averagePct: null };
 
 		const peak = Math.max(...months.map((m) => Math.abs(m.earned - m.spent)), 1);
 		const rows = months.map((m) => {
@@ -409,6 +410,9 @@ const builders: Record<string, Builder> = {
 
 		return {
 			months: rows,
+			// Labels the top of the Y axis. Bars are drawn as a percentage of this,
+			// so without it a tall bar carries no magnitude at all.
+			peak: Math.round(peak).toLocaleString('en'),
 			averagePct: earned > 0 ? Math.round((kept / earned) * 100) : null
 		};
 	}

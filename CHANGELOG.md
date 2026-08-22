@@ -2,6 +2,102 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.0 — 2026-08-22
+
+> A minor release rather than the eleventh patch of 0.3: three sessions of real use — real statements, a real XTB report, an iPad, a phone — turned into five things the product could not do before. Salary reads the ledger, a property's value is a series, realised gains carry tax, the category tree belongs to the household rather than to the source code, and an instance can be run with no credentials at all. Nothing here was added on a hunch.
+
+> The chart palette was measured rather than chosen — the one that shipped before was indistinguishable to a colour-blind reader in both themes — and the interface was given one vocabulary for size, spacing and shape, so a field, a button and the box beside them finally agree.
+
+### ✨ Added
+
+- 🗂️ Category groups are data, not code — add, rename, recolour and delete them, from the review queue where the need is felt or from Settings
+- ❤️ **Health & care** and **Subscriptions** groups; Pharmacy, Doctor & dentist and Reimbursements categories, and Internet and Phone split apart
+- 🎨 A chart palette generated in OKLCH and validated for separation under normal, protanopic and deuteranopic vision — nine group colours plus ten reserve, each with its own light and dark value
+- 🔁 One-sided transfers: money moved to an account whose statements you never import stops counting as spending
+- 🧾 Receipts on transactions — attach a file to the payment it evidences, filed in Documents under Receipts
+- 🏦 Add a bank the list does not have, instead of filing the account under "Other"
+- ✏️ Loans can be edited, including which properties secure a mortgage and in what share
+- 🏠 Estimated value and money-in are editable on a property; the figures derived from loans are not, and say where they come from
+- 📅 A lease can have no end date, and adding a tenant now files them in Contacts, reusing their record when the name matches
+- 🚪 Open mode — an administrator can drop credentials for the whole instance, confirmed with their own password; the setup wizard can start one that way too
+- 🔑 The setup wizard asks for the password twice; a typo in the only password on a fresh instance used to lock its owner out immediately
+- 📏 Narrow-viewport tests across fourteen screens, for overflow and clipped text — the widths where the reported truncation actually happened
+- 🧾 **Every accepted statement is filed in Documents**, on its own Statements shelf, tagged with the bank, the account and the year. The file was always kept; nothing ever surfaced it
+- 💼 **Salary history reads the ledger.** A salary credit you have already categorised becomes salary history — net from the bank, gross from a payslip, both on the same month rather than averaged into a figure that is neither
+- 📈 **A property's value is a series, not a number** — enter what it was worth in past years and see the line. Recording what it cost to buy computes money-in instead of asking you to reconstruct it
+- ⚖️ **Tax on realised investment gains**, at a rate you set. The holding-period exemption matches the Czech three-year time test and is off by default, because it applies nowhere else
+- 🖱️ **Categories can be dragged into the order you want**, or moved with the arrow keys. A catch-all — "Everything else", "Other income" — stays last whatever else is added
+- ✏️ **Accounts are editable**: name, bank, type, and the account numbers statements are matched against, which were recorded and learned but never shown
+- 👤 **An account can belong to someone.** Everything was joint by omission, because nothing ever set an owner
+- 🎛️ Loans gained rate regime, interest accrual, day count and deductibility to their edit — described the loan, so changing one re-derives the schedule without touching a recorded fixation period
+- ✕ The import queue and the recent-import list can be cleared, and a finished job leaves on its own after ten minutes
+- 📐 A geometry scale — radius, spacing and one control height — enforced by a lint rule, so a raw value beside a token cannot drift back in
+- 🗑️ **A tag can be deleted.** Everything carrying it is untagged by the delete itself, and any rule that applied it stops applying it — the confirmation says how much of each before it is taken
+- 🗑️ **A document can be deleted.** There was no way to unfile one at all: a mistyped name, a receipt attached to the wrong row, a duplicate scan — all of it stayed on the shelf forever. Removing one takes its links, its tags and the stored file with it
+- 🧾 **A tax statement can bring its own paperwork.** Attaching a document assumed one had already been filed elsewhere: the only control was a picker of Tax-shelf documents somebody had to go and create first, on another screen, before the statement could be recorded. The statement now takes the file itself, files it on the Tax shelf against the same person — under a name derived from the year and country, so the shelf and the statement cannot disagree — and points at it. The file and the row commit together, so neither can exist without the other
+
+### 🔧 Changed
+
+- 📏 **The pixel baseline is gone.** Fourteen full-page screenshots guarded the geometry sweep this release is built on — that sweep has shipped, and what was left was 2.6 MB of PNGs that had to be recaptured on every deliberate change, on macOS only, where CI could never run them. A guard that cannot fail in CI and is rewritten on every intentional change teaches you to rewrite it without looking. The narrow-viewport tests stay: they assert behaviour rather than appearance, run everywhere, and are what caught the two real defects above
+- 🌐 **`ORIGIN` no longer decides whether a form is accepted.** Sign-in works at every address the server answers on — `localhost`, a LAN IP, `continuum.local`, a tailnet name — because the check compares what the browser sent against the host it sent it to. `ORIGIN` is optional now and governs only passkeys
+- 🗂️ **Documents is its own sidebar row**, after Calendar, and Settings is the gear beside the wordmark. They shared an "Admin" row, which put paperwork you open often behind the same click as configuration you open rarely
+- 🚪 The open-instance warning moved from every screen to Settings and the sign-in page — where somebody who did not expect it actually meets it, before they are inside
+- 🗑️ Deleting a category counts what depends on it first: an unused one goes without a question, and one with history asks in a dialog naming how many transactions and rules are filed under it
+- 💧 One definition for form controls, replacing the recipe copied into twenty-seven stylesheets — where its padding had already drifted
+- 📆 The money screens show the newest month that holds data, and name it. Statements arrive after a month ends, so "this month" was routinely empty
+- 🔑 Passkeys are offered based on the address you are browsing, not the one in `ORIGIN` — and where they are absent, the screen names the address that works
+- 🔠 Twenty-two font sizes became a nine-step ramp. Half a pixel is not a size anyone chose, and 12 / 12.5 / 13 / 13.5px side by side is what "different fonts" looks like
+- 🖱️ Buttons show they were pressed, show when they are disabled, and show keyboard focus — none of which existed
+- 🧮 Every screen reads the category groups from the database, so a group a household adds appears in the charts and filters without a deploy
+- 📎 **Receipts moved behind one button per transaction.** A file input and its chips under every row cost a line each on a page that is nothing but rows; the paperclip carries the count, and the dialog behind it holds the attachments
+- 🔟 **The register shows 10, 25 or 50 rows a page** — ten by default — chosen beside the running total. It lives in the URL like every other part of the view, so a narrowed register stays shareable at the size it was read in
+- 🟥 **A negative amount is red.** It was the same near-white as the merchant beside it, so only the minus sign said which way the money went — and the sign is the first thing a scanning eye drops. Split lines take the colour of the share they are
+- 💰 **A transaction's amount sits under its date**, at the size of the line beside it. Weight and colour still carry the sign — at the old display size it was the loudest thing on a screen made of hundreds of them
+- 🗑️ **Removing a receipt deletes the document, not just the link.** Unlinking left the file on the Documents shelf with no route back to the row it came from. It asks twice, because a receipt filed against something else goes from there too
+- ✏️ **The pencil on an account sits beside its name.** The row is a three-column grid and held four children, so the button was pushed onto a second grid row — the bottom of the card
+- 📄 **A document's name wraps rather than truncating.** Half of "Fio · 1234567890/2010 · July 2026" identifies nothing
+- 🏷️ **A transaction's state is a pill, at the end of its row.** It reads in the palette every other state in Continuum uses — green for settled, amber for waiting on you, purple for a split — and sits under the paperclip, where the row's own facts belong. As plain grey text ahead of the controls it was both the quietest thing on the row and the first thing read
+- 🔗 **Category, Save, Split and the paperclip sit at one gap**, as the strip of controls they are, rather than spread at the gap between separate things
+- 💱 **A tax statement's currency is chosen, not typed.** The field was free text, so a display symbol, a misspelling or a currency nothing can convert all went in as if they were codes — "Kč" once did. It is now the same list every other money screen offers, derived from the rates actually quoted
+
+### 🐛 Fixed
+
+- 📏 **A name on the cash-flow diagram is never cut in half, on any machine.** The engine guessed each name's width from its character count, so where the guess was beaten the renderer cut the name to fit the box drawn for it — and the guess is beaten by any face wider than Inter, which is what every browser draws in for the moment before the webfont arrives, and what another operating system falls back to entirely. It showed as "Saved & invested" clipped on a phone-width Overview on Linux and not on macOS. The names are now measured in the faces they are actually drawn in, the diagram is laid out again when the real face arrives, and a name that still cannot be drawn whole is left out rather than cut — the breakdown strip under the chart lists every band with its figure, which is what a phone reads anyway
+- 📈 **XTB imports failed on any report containing a dividend, a withholding tax or a closed position.** Operations were written before the positions they reference, against a foreign key that is not deferrable
+- 🧾 An import failure was rendered twice; it is now shown once, and can be dismissed
+- 🏷️ "File" on a transaction did nothing visible — it meant _file under a category_, is now called Save, is disabled until one is chosen, and shows its refusal beside the row that caused it
+- 📊 "Saved each month" had no scale and no readout; hovering a bar now shows the month and the amount
+- 📊 "Every month on record" labelled years on a three-month history; it labels months until there are two years of it
+- 📱 Settings scrolled sideways on a phone, and the calendar feed token — which the text beside it tells you to copy — was cut off
+- 🔑 "Add a passkey" reads "Add another" once you have one; passkeys are per-device and the button stays on purpose
+- 🇨🇿 The Czech interest-deductibility claim is gone from Loans, where there is no jurisdiction concept and the tax statements carry the real figures
+- 💳 **A Revolut export could not be imported at all.** Revolut writes every pocket into one file and each keeps its own running balance, so a Savings pocket three rows long was being checked against a Current account's chain: the statement proved nothing and was refused. Read as one statement per pocket, the same 1 798-row file proves on every row
+- 🏦 **Fio's "Pohyby na účtu" export is refused by name.** It prints no balances at all, so nothing in it can show whether every row is there — it used to offer a mapping screen no answer could satisfy. It now says which export to download instead
+- 💾 **Retirement assumptions never saved.** The page issued a UUIDv7 and the check accepted only versions 1–5, so every autosave was refused with "The save writer is invalid". No assumption had ever been stored
+- ⬇️ **"Choose a category…" opened off the bottom of the page.** A native select's popup is placed by the browser; the replacement measures the room it has and opens upwards when there is more above
+- 🔀 **Ribbons crossed on the cash-flow diagram.** Its ordering pass read the positions of the previous column before anything had been placed there, so it always got nothing back and every column silently fell back to ordering by size alone. On a real household year — four income sources, seven groups, thirty-two ribbons — that drew 57 crossings. It now draws none
+- 🏷️ **Every name sits level with the middle of the band it names**, in every column. At a block's edge its outgoing ribbons cover its height exactly, so a name placed beside a middle band always landed on the diagram — putting it above the band instead only moved the fault, because it then named a band it was not level with. Each column now writes into a channel of its own that no ribbon is allowed into: a band leaves its block, clears the names, and only then starts to flow
+- 📎 **A name that cannot stay level with its band is joined to it by a leader line.** Four small incomes stacked at the foot of a column have bands thinner than their own names; they have to be spread apart to be read at all, and nothing used to say which was which
+- 🔠 **Nothing is left unnamed to save room.** A crowded column shrinks its own type until every name fits, instead of naming the largest few and leaving the rest to hover. The income side reads as figures, the spending side as names — every spending figure is already in the breakdown strip below
+- 〰️ Ribbons hold their line as they leave a block and turn once, rather than starting to curve immediately: a dozen parallel bands used to smear into one another
+- 🏷️ Cash flow showed a negative "Kept" in green
+- 📏 The salary-history row carried controls of five different heights; the setup wizard's repeat-password box fell onto a line of its own; the mapping wizard's columns did not line up; "0.0" on the retirement chart sat on top of the year beneath it
+- ➕ Adding a property or a loan immediately reopened the form for the next one
+- 🔵 The line on "Value against money in" ended in a dot that read as a defect
+- 📏 **Every field is one height, and the boxes in a row line up.** A text input, a select and a file field measured 34, 36 and 42 pixels at the same nominal size — the browser gives each of them a different line box, and a file field is as tall as the Choose File button inside it. Side by side that reads as fields sitting a few pixels too high or too low, which is what the tax dialog showed: the upload box stood half again as tall as the shelf picker beside it. One line box and one floor now apply to every input, select, textarea and button in the product, and the file field's button is styled to live inside that height rather than set it
+- 🧾 **The itemised lines on a tax statement line up with the fields under them.** The two boxes split 1.4 to 1 with their own gap while the section below them split evenly — so the seam between label and amount landed a hundred pixels away from the seam it sat above. They share the same two columns now, and the remove button rides in the amount's column rather than taking one of its own
+- ⚖️ **The tax rate on investment gains could not be saved.** The years field is disabled until the exemption is switched on, a disabled field is not posted at all, and the action refused the absence — so pressing Save reported "The exemption threshold must be a whole number of years" and stored neither the years nor the rate typed beside them. The field now follows the checkbox as it is clicked, and an unposted threshold keeps what was already stored
+- 🏷️ **A transaction filed before review had no state at all.** `filed` is one of the four states the schema allows, and the register named three of them — so those rows showed a blank state and the state filter offered an empty option. The names and colours now live beside the states themselves, where a fifth one cannot compile without them
+- 🔢 **The threshold went blank the moment it saved.** A successful submit reset the form, and a reset empties any field whose value the framework set as a property rather than an attribute. The figure was stored correctly; the box that should have shown it was empty
+- 📈 **The years under "Value against money in" did not line up with the rules they name.** They were spread evenly across the axis while the rules stand where each year actually begins; both now come from the same point in the series. The horizontal gridlines are drawn at the weight the vertical ones already used, so every rule on the chart is one hairline
+
+### ⬆️ Upgrading
+
+- **The version jumps from 0.3.10 to 0.4.0.** There is no 0.3.11; the work outgrew a patch number while it was being written. Nothing about the upgrade differs because of it
+- ⚠️ **Start 0.4.0 on an empty database.** The schema lives in one baseline file rather than a chain of migrations, and this release folds six new tables — `bank`, `category_group`, `property_valuation`, `property_opening`, `salary_entry`, `salary_attribution` — plus new columns and constraints into it. The migrator records that baseline as already applied, so an 0.3.10 database is left without any of them and the app fails against its own schema. Nothing was running 0.3.10 yet, which is what makes this affordable; the additive-only rule holds from this baseline on
+- **`ORIGIN` changed meaning and is now optional.** It no longer decides whether a form submission is accepted — that is checked against the address your browser actually used. Set it only to enable passkeys, at the one HTTPS address they bind to. `compose.yaml` no longer defaults it
+- The chart colours change. The palette that shipped before failed measurable separation in both themes — housing and living were indistinguishable to a deuteranopic reader, and in the light theme transport and bills were effectively one colour
+
 ## 0.3.10 — 2026-08-19
 
 > There is no 0.3.9. Its tag was cut against a commit whose CI could not run, tags are immutable here, and nothing had been published under it — so the number was left behind rather than moved.

@@ -18,5 +18,6 @@ export * from './property';
 export * from './loans';
 export * from './investments';
 export * from './calendar';
+export * from './salary';
 export * from './tax';
 export * from './jobs';

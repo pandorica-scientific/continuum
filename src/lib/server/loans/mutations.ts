@@ -256,6 +256,193 @@ export async function replaceFixation(
 }
 
 /** Insert the agreement, every secured-property link, and its first terms. */
+/**
+ * Validate a set of secured-property links: no repeats, and shares that are
+ * either all given and summing to at most the whole, or all blank.
+ *
+ * Shared by create and edit rather than restated: the two drifting apart would
+ * mean a loan that could be created but not saved again, or the reverse.
+ */
+function validateSecured(
+	secured: SecuredPropertyInput[]
+): LoanMutationResult | { explicitShares: number } {
+	const propertyIds = secured.map((link) => link.propertyId);
+	if (new Set(propertyIds).size !== propertyIds.length) {
+		return { ok: false, status: 400, message: 'A property can secure this loan only once.' };
+	}
+	// Validate with the same grammar the property page reads back, and sum the
+	// shares as exact rationals. `Number` accepted forms the reader rejects and
+	// spent float precision on money-adjacent input.
+	let explicitShareTotal: Ratio = { numerator: 0n, denominator: 1n };
+	let explicitShares = 0;
+	for (const link of secured) {
+		if (link.sharePct === null) continue;
+		explicitShares++;
+		const share = tryRatioFromPercent(link.sharePct);
+		if (!share) {
+			return { ok: false, status: 400, message: 'Secured-property shares must be percentages.' };
+		}
+		explicitShareTotal = addRatios(explicitShareTotal, share);
+	}
+	if (explicitShareTotal.numerator > explicitShareTotal.denominator) {
+		return { ok: false, status: 400, message: 'Secured-property shares cannot exceed 100%.' };
+	}
+	if (explicitShares > 0 && explicitShares < secured.length) {
+		return {
+			ok: false,
+			status: 400,
+			message: 'Enter a share for every secured property, or leave every share blank.'
+		};
+	}
+	return { explicitShares };
+}
+
+export interface UpdateLoanInput {
+	name: string;
+	lender: string;
+	kind: string;
+	paymentDay: number | null;
+	endsOn: string | null;
+	secured: SecuredPropertyInput[];
+	/** How the rate is set: a fixation period, a fixed term, or floating. */
+	regime: string;
+	/** Whether interest is charged on the payment date or over the calendar month. */
+	accrualStyle: string;
+	/** The convention interest is counted with — 30/360, act/365, act/360. */
+	dayCount: string;
+	/** Whether this loan's interest reduces taxable income. */
+	interestDeductible: boolean;
+}
+
+/**
+ * Edit what a loan IS, not what it costs.
+ *
+ * Name, lender, kind, payment day, end date and which properties secure it. A
+ * loan could be created but never corrected, so a mortgage entered without its
+ * second flat — the reported case, and the shape of a real household with one
+ * mortgage over two properties — meant starting again.
+ *
+ * Rate REGIME, accrual style, day count and deductibility are here too, and the
+ * distinction is worth stating because it is what keeps this safe. They describe
+ * HOW the loan works — how its rate is set, how interest is counted — and
+ * changing one re-derives the schedule from the periods already recorded. They
+ * do not rewrite a period, and they cannot remove one.
+ *
+ * Deliberately still does NOT touch rate, payment, principal, balance or
+ * currency. Those have their own operations (`replaceFixation`,
+ * `recordRepayment`) that understand the history they rewrite. Above all this
+ * never deletes a fixation period: that history is the loan's evidence, every
+ * interest figure is derived from it, and nothing else the app stores could
+ * reconstruct it. An edit is a correction to a description, not permission to
+ * discard the record.
+ */
+export async function updateLoan(
+	id: string,
+	input: UpdateLoanInput,
+	handle: Db = db
+): Promise<LoanMutationResult> {
+	const name = input.name.trim();
+	if (!name) return { ok: false, status: 400, message: 'The loan needs a name.' };
+
+	const endsOn = input.endsOn?.trim() || null;
+	if (endsOn !== null && !isIsoDay(endsOn)) {
+		return { ok: false, status: 400, message: 'Loan dates must be valid calendar dates.' };
+	}
+
+	const checked = validateSecured(input.secured);
+	if ('ok' in checked) return checked;
+
+	const paymentDay =
+		Number.isInteger(input.paymentDay) && input.paymentDay! >= 1 && input.paymentDay! <= 31
+			? input.paymentDay
+			: null;
+
+	return handle.transaction(async (tx) => {
+		const [existing] = await tx.select().from(loan).where(eq(loan.id, id)).for('update');
+		if (!existing) return { ok: false as const, status: 404, message: 'Loan not found.' };
+
+		// The guard, enforced rather than trusted: an end date inside the recorded
+		// history would leave fixation periods running past the end of the loan
+		// they belong to. Refusing is right — the alternative is truncating the
+		// history to fit the new date, which is the deletion this must never do.
+		if (endsOn !== null) {
+			const periods = await tx
+				.select()
+				.from(loanFixationPeriod)
+				.where(eq(loanFixationPeriod.loanId, id));
+			const latest = periods.reduce<string | null>(
+				(newest, period) =>
+					period.endsOn && (newest === null || period.endsOn > newest) ? period.endsOn : newest,
+				null
+			);
+			if (latest !== null && endsOn < latest) {
+				return {
+					ok: false as const,
+					status: 400,
+					message: 'The loan cannot end before its recorded fixation periods do.'
+				};
+			}
+		}
+
+		if (input.secured.length > 1 && checked.explicitShares === 0) {
+			const propertyIds = input.secured.map((link) => link.propertyId);
+			const securedProperties = await tx
+				.select({ id: property.id, valueMinor: property.valueMinor })
+				.from(property)
+				.where(inArray(property.id, propertyIds))
+				.orderBy(property.id)
+				.for('update');
+			if (
+				securedProperties.length !== propertyIds.length ||
+				securedProperties.every((candidate) => candidate.valueMinor <= 0n)
+			) {
+				return {
+					ok: false as const,
+					status: 400,
+					message: 'Enter secured-property shares until those properties have values.'
+				};
+			}
+		}
+
+		await tx
+			.update(loan)
+			.set({
+				name,
+				lender: input.lender.trim(),
+				kind: asEnumValue('loan.kind', input.kind, existing.kind),
+				paymentDay,
+				endsOn,
+				// How the loan works, as opposed to what it has done. Each of these
+				// re-derives the schedule from the periods already recorded; none of
+				// them rewrites or removes one. asEnumValue narrows at the boundary, so
+				// a hand-crafted form post falls back to what is stored rather than
+				// reaching the CHECK constraint.
+				regime: asEnumValue('loan.regime', input.regime, existing.regime),
+				accrualStyle: asEnumValue('loan.accrual_style', input.accrualStyle, existing.accrualStyle),
+				dayCount: asEnumValue('loan.day_count', input.dayCount, existing.dayCount),
+				interestDeductible: input.interestDeductible
+			})
+			.where(eq(loan.id, id));
+
+		// Delete-then-insert over the links only. They carry no history of their
+		// own — a share is a current fact about the loan, not a record of one —
+		// which is what makes replacing them safe where replacing a fixation
+		// period would not be.
+		await tx.delete(loanProperty).where(eq(loanProperty.loanId, id));
+		if (input.secured.length > 0) {
+			await tx.insert(loanProperty).values(
+				input.secured.map((link) => ({
+					id: uuidv7(),
+					loanId: id,
+					propertyId: link.propertyId,
+					sharePct: link.sharePct
+				}))
+			);
+		}
+		return { ok: true as const };
+	});
+}
+
 export async function createLoan(
 	input: CreateLoanInput,
 	handle: Db = db
@@ -336,33 +523,9 @@ export async function createLoan(
 		return { ok: false, status: 400, message: 'The fixation cannot outlast the loan.' };
 	}
 	const propertyIds = input.secured.map((link) => link.propertyId);
-	if (new Set(propertyIds).size !== propertyIds.length) {
-		return { ok: false, status: 400, message: 'A property can secure this loan only once.' };
-	}
-	// Validate with the same grammar the property page reads back, and sum the
-	// shares as exact rationals. `Number` accepted forms the reader rejects and
-	// spent float precision on money-adjacent input.
-	let explicitShareTotal: Ratio = { numerator: 0n, denominator: 1n };
-	let explicitShares = 0;
-	for (const link of input.secured) {
-		if (link.sharePct === null) continue;
-		explicitShares++;
-		const share = tryRatioFromPercent(link.sharePct);
-		if (!share) {
-			return { ok: false, status: 400, message: 'Secured-property shares must be percentages.' };
-		}
-		explicitShareTotal = addRatios(explicitShareTotal, share);
-	}
-	if (explicitShareTotal.numerator > explicitShareTotal.denominator) {
-		return { ok: false, status: 400, message: 'Secured-property shares cannot exceed 100%.' };
-	}
-	if (explicitShares > 0 && explicitShares < input.secured.length) {
-		return {
-			ok: false,
-			status: 400,
-			message: 'Enter a share for every secured property, or leave every share blank.'
-		};
-	}
+	const checked = validateSecured(input.secured);
+	if ('ok' in checked) return checked;
+	const explicitShares = checked.explicitShares;
 
 	const dayCount = asEnumValue('loan.day_count', input.dayCount, '30/360');
 	const accrualStyle = asEnumValue('loan.accrual_style', input.accrualStyle, 'payment');

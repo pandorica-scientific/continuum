@@ -58,24 +58,24 @@
 	.preview {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		background: var(--card2);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 13px 15px;
 	}
 	.p-head {
 		display: flex;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.p-title {
-		font-size: 13px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.p-note {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.p-note b {

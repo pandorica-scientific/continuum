@@ -8,6 +8,7 @@
 		idleText,
 		busyText = 'Uploading…',
 		description,
+		reportErrors = true,
 		onfiles
 	}: {
 		accept?: string;
@@ -15,6 +16,12 @@
 		idleText: string;
 		busyText?: string;
 		description?: string;
+		/**
+		 * Whether the dropzone shows the failure itself. False where the screen
+		 * already renders the same message somewhere more prominent — the same
+		 * error in two places reads as two separate failures.
+		 */
+		reportErrors?: boolean;
 		onfiles: (files: FileList) => Promise<ActionOutcome>;
 	} = $props();
 
@@ -67,12 +74,12 @@
 		onchange={() => input?.files?.length && void receive(input.files)}
 	/>
 </div>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
+{#if error && reportErrors}<p class="error" role="alert">{error}</p>{/if}
 
 <style>
 	.dropzone {
 		border: 1.5px dashed var(--bd2);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 24px;
 		cursor: pointer;
 	}
@@ -90,12 +97,12 @@
 	.description {
 		display: block;
 		margin-top: 7px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.error {
 		margin: 8px 0 0;
 		color: var(--red);
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 </style>

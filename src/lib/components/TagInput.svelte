@@ -34,9 +34,9 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		width: 130px;
 	}
 </style>

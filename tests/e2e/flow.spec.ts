@@ -1,6 +1,6 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { DEFAULT_PASSWORD_MIN_LENGTH, passwordHint } from '../../src/lib/password-policy';
 import { MODULE_KEYS, MODULES } from '../../src/lib/modules/registry';
 
@@ -16,6 +16,20 @@ const AUTH_STATE = 'test-results/e2e-auth.json';
 
 test.describe.configure({ mode: 'serial' });
 
+/**
+ * Choose a category from the picker that replaced the native select.
+ *
+ * The select's popup could not be steered and opened downwards off the bottom
+ * of the review queue, so it is a listbox now: a trigger, and options carrying
+ * their id in `data-value`. The hidden input still posts `categoryId`, so
+ * nothing about the server side changed.
+ */
+async function pickCategory(scope: import('@playwright/test').Locator, id: string) {
+	const picker = scope.locator('.picker').first();
+	await picker.locator('.trigger').click();
+	await picker.locator(`.option[data-value="${id}"]`).click();
+}
+
 test('first visit redirects to the setup wizard', async ({ page }) => {
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/setup/);
@@ -30,7 +44,10 @@ test('a rejected wizard submission names every module and keeps what was typed',
 	// Every module in the registry is named on screen. The wizard used to hold its
 	// own label map beside the registry, so a module present in one and not the
 	// other — Tax — rendered a checkbox with nothing next to it.
-	const toggles = page.locator('label.toggle');
+	// Scoped to the modules fieldset. `.toggle` is a shared style, and the wizard
+	// now carries another one — the no-password option — so counting every
+	// `.toggle` on the page would be counting two different questions.
+	const toggles = page.locator('fieldset').filter({ hasText: 'Modules' }).locator('label.toggle');
 	await expect(toggles).toHaveCount(MODULE_KEYS.length);
 	for (const key of MODULE_KEYS) {
 		await expect(toggles.filter({ hasText: MODULES[key].label })).toHaveCount(1);
@@ -53,11 +70,54 @@ test('a rejected wizard submission names every module and keeps what was typed',
 	await expect(page.getByPlaceholder(`Password (${HINT})`).first()).toHaveValue('');
 });
 
+test('the wizard refuses a mistyped password rather than storing it', async ({ page }) => {
+	await page.goto('/setup');
+	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');
+	await page.getByPlaceholder('Name').first().fill('Jana Nováková');
+	await page.getByPlaceholder(`Password (${HINT})`).first().fill('correct-horse-battery');
+	await page.getByPlaceholder('Repeat password').first().fill('correct-horse-bettery');
+	await page.getByRole('button', { name: 'Create household' }).click();
+
+	// The only password on a fresh instance: a typo here used to be stored and
+	// lock the owner out immediately, with nothing to fall back on.
+	await expect(page.locator('.error')).toContainText('do not match');
+	await expect(page).toHaveURL(/\/setup/);
+});
+
+// Four inputs per person — name, birth year, password, repeat — in a row that
+// declared three columns, so the repeat box wrapped onto a line of its own and
+// read as a field belonging to nobody. Placed above the test that creates the
+// household: after that, the wizard no longer exists.
+test('the four person fields share one row', async ({ page }) => {
+	await page.goto('/setup');
+
+	const name = page.locator('input[name="personName"]').first();
+	const password = page.locator('input[name="personPassword"]').first();
+	const confirm = page.locator('input[name="personPasswordConfirm"]').first();
+
+	const [nameBox, passwordBox, confirmBox] = await Promise.all([
+		name.boundingBox(),
+		password.boundingBox(),
+		confirm.boundingBox()
+	]);
+	expect(nameBox).not.toBeNull();
+	expect(passwordBox).not.toBeNull();
+	expect(confirmBox).not.toBeNull();
+
+	// One row means one top edge, within a pixel of rounding.
+	expect(Math.abs(confirmBox!.y - passwordBox!.y)).toBeLessThan(2);
+	expect(Math.abs(passwordBox!.y - nameBox!.y)).toBeLessThan(2);
+
+	// And beside the password box, not beneath it.
+	expect(confirmBox!.x).toBeGreaterThan(passwordBox!.x);
+});
+
 test('the wizard creates the household and signs in', async ({ page }) => {
 	await page.goto('/setup');
 	await page.getByPlaceholder('e.g. Robert & Tereza').fill('Jana & Jan');
 	await page.getByPlaceholder('Name').first().fill('Jana Nováková');
 	await page.getByPlaceholder(`Password (${HINT})`).first().fill('correct-horse-battery');
+	await page.getByPlaceholder('Repeat password').first().fill('correct-horse-battery');
 	await page.getByRole('button', { name: 'Create household' }).click();
 	await expect(page).toHaveURL(/\/overview/);
 	await expect(page.getByText('Jana & Jan')).toBeVisible();
@@ -85,8 +145,8 @@ test.describe('signed in', () => {
 		const firstRow = page.locator('.review-row').first();
 		await expect(firstRow).toBeVisible();
 		const merchant = await firstRow.locator('.r-merchant').innerText();
-		await firstRow.locator('select[name=categoryId]').selectOption('groceries');
-		await firstRow.getByRole('button', { name: 'File it' }).click();
+		await pickCategory(firstRow, 'groceries');
+		await firstRow.getByRole('button', { name: 'Save' }).click();
 		// The filed row leaves the queue (learned rules may clear more).
 		await expect(page.locator('.review-row', { hasText: merchant })).toHaveCount(0, {
 			timeout: 10000
@@ -98,6 +158,28 @@ test.describe('signed in', () => {
 		await expect(page.getByText('Money in', { exact: true })).toBeVisible();
 		await expect(page.locator('svg path').first()).toBeVisible();
 		await expect(page.getByText('Saved & invested').first()).toBeVisible();
+	});
+
+	// Written for the v0.3.11 report that the Accounts tab did nothing after an
+	// import. It did not reproduce, and the test stays: direct navigation was
+	// already covered above, but nothing covered CLICKING the sub-tab, which is
+	// the path that was reported. See
+	// docs/superpowers/notes/2026-08-20-accounts-hang.md.
+	test('clicking the Accounts tab after an import opens the screen', async ({ page }) => {
+		const consoleErrors: string[] = [];
+		page.on('console', (message) => {
+			if (message.type() === 'error') consoleErrors.push(message.text());
+		});
+		page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
+
+		await page.goto('/cashflow');
+		const tab = page.getByRole('link', { name: 'Accounts', exact: true });
+		await expect(tab).toBeVisible();
+		await tab.click();
+
+		await expect(page).toHaveURL(/\/accounts/, { timeout: 10000 });
+		await expect(page.getByText('Fio CZK').first()).toBeVisible({ timeout: 10000 });
+		expect(consoleErrors, `console errors:\n${consoleErrors.join('\n')}`).toEqual([]);
 	});
 
 	test('the register finds a transaction by text, direction and amount', async ({ page }) => {
@@ -128,7 +210,9 @@ test.describe('signed in', () => {
 		await page.goto('/transactions?review=needs_review');
 		const unfiled = page.locator('.txn-row').first();
 		await expect(unfiled).toBeVisible();
-		await expect(unfiled.locator('select[name=categoryId]')).toHaveValue('');
+		// The hidden input the picker posts through: empty means unfiled, which is
+		// what stops an unguessed row looking as though it were already filed.
+		await expect(unfiled.locator('input[name=categoryId]')).toHaveValue('');
 	});
 
 	test('the register totals the filtered set and recategorises a row', async ({ page }) => {
@@ -139,11 +223,11 @@ test.describe('signed in', () => {
 		// exactly as filing it from the review queue would.
 		await page.goto('/transactions?q=ACME');
 		const row = page.locator('.txn-row').first();
-		await row.locator('select[name=categoryId]').selectOption('groceries');
-		await row.getByRole('button', { name: 'File' }).click();
+		await pickCategory(row, 'groceries');
+		await row.getByRole('button', { name: 'Save' }).click();
 		// `use:enhance` submits asynchronously. Wait for the server result to be
 		// applied before navigating, otherwise the filtered GET can race the commit.
-		await expect(row.locator('.r-state')).toHaveText('confirmed');
+		await expect(row.locator('.r-file .pill')).toHaveText('confirmed');
 
 		await page.goto('/transactions?q=ACME&category=groceries');
 		await expect(page.locator('.txn-row')).toHaveCount(1);
@@ -192,6 +276,51 @@ test.describe('signed in', () => {
 		await expect(row).toContainText('32 892');
 	});
 
+	test('the register shows the number of rows the reader asked for', async ({ page }) => {
+		await page.goto('/transactions');
+		const rows = page.locator('.txn-row');
+		const total = Number((await page.locator('.filter-total').innerText()).split(' ')[0]);
+
+		// 10 is the default, so start from a size that is not.
+		await expect(page.locator('.per-page').getByRole('link', { name: '10' })).toHaveClass(/active/);
+		await page.locator('.per-page').getByRole('link', { name: '25', exact: true }).click();
+		await expect(page).toHaveURL(/per=25/);
+		await expect(rows).toHaveCount(Math.min(25, total));
+
+		// Every other part of this view lives in the URL, so a narrowed view stays
+		// shareable at the size it was read in — including through Apply, which as
+		// a GET form submits only its own fields.
+		await page.locator('input[name=q]').fill('ACME');
+		await page.getByRole('button', { name: 'Apply' }).click();
+		await expect(page).toHaveURL(/per=25/);
+
+		// Clear resets everything, page size included.
+		await page.getByRole('link', { name: 'Clear' }).click();
+		await expect(page).not.toHaveURL(/per=/);
+		await expect(page.locator('.per-page').getByRole('link', { name: '10' })).toHaveClass(/active/);
+	});
+
+	test('a tag can be removed, and what carried it is untagged', async ({ page }) => {
+		await page.goto('/transactions?q=ACME');
+		await page.locator('.txn-row .tag-input').first().fill('Mistake');
+		await page.locator('.txn-row .tag-input').first().press('Enter');
+		await expect(page.locator('.txn-row .tag-chip', { hasText: 'Mistake' })).toBeVisible({
+			timeout: 10000
+		});
+
+		await page.goto('/tags');
+		const row = page.locator('.tag-row', { hasText: 'Mistake' });
+		// Two taps, and the confirmation says what it reaches before it is taken.
+		await row.getByRole('button', { name: 'Remove Mistake' }).click();
+		await expect(row.locator('.t-reach')).toContainText('untags 1');
+		await row.getByRole('button', { name: 'Delete?' }).click();
+		await expect(page.locator('.tag-row', { hasText: 'Mistake' })).toHaveCount(0);
+
+		// The transaction is untagged by the delete itself — nothing had to visit it.
+		await page.goto('/transactions?q=ACME');
+		await expect(page.locator('.txn-row .tag-chip', { hasText: 'Mistake' })).toHaveCount(0);
+	});
+
 	test('the rules screen lists what filing taught it, and nothing else', async ({ page }) => {
 		await page.goto('/rules');
 		await expect(page.locator('.rule-row').first()).toBeVisible();
@@ -231,8 +360,8 @@ test.describe('signed in', () => {
 		await page.goto('/transactions');
 		const filed = page.locator('.txn-row', { hasText: 'filed by rule' }).first();
 		await expect(filed).toBeVisible();
-		await filed.locator('select[name=categoryId]').selectOption('eating-out');
-		await filed.getByRole('button', { name: 'File' }).click();
+		await pickCategory(filed, 'eating-out');
+		await filed.getByRole('button', { name: 'Save' }).click();
 		await page.waitForTimeout(800);
 
 		// The rule that filed it is the one now carrying the correction. Its
@@ -395,6 +524,39 @@ test.describe('signed in', () => {
 		await expect(page.locator('.tax-row', { hasText: '2026' })).toContainText('1 305 000');
 	});
 
+	test('a tax statement files its own paperwork on the Tax shelf', async ({ page }) => {
+		await page.goto('/tax');
+		await page.getByRole('button', { name: 'Add statement' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.locator('.tax-person').selectOption({ index: 0 });
+		await dialog.locator('.tax-year').fill('2024');
+		await dialog.locator('.tax-country').fill('CZ');
+		// The currency is picked, not typed: free text accepted display symbols and
+		// misspellings, and stored them as if they were currency codes.
+		await dialog.locator('.tax-currency').selectOption('CZK');
+		await dialog.locator('.tax-gross').fill('900000');
+		await dialog.locator('.tax-paid').fill('135000');
+
+		// The statement brings its own document. Before this, attaching anything
+		// meant leaving the screen to file it on the documents shelf first.
+		await dialog.locator('.tax-file').setInputFiles({
+			name: 'danove-priznani-2024.pdf',
+			mimeType: 'application/pdf',
+			buffer: Buffer.from('%PDF-1.4 tax statement')
+		});
+		await dialog.getByRole('button', { name: 'Save statement' }).click();
+
+		// The row names the document, which is the statement's end of the link.
+		const row = page.locator('.tax-row', { hasText: '2024' });
+		await expect(row).toBeVisible({ timeout: 10000 });
+		await expect(row.locator('.t-doc')).toContainText('2024 CZ tax statement');
+
+		// And the document's end: on the Tax shelf, filed against the person, so
+		// it is reachable from the household's files and not only from here.
+		await page.goto('/documents?shelf=tax');
+		await expect(page.getByText('2024 CZ tax statement').first()).toBeVisible();
+	});
+
 	test('switching a module off removes its sub-tab and 404s its routes', async ({ page }) => {
 		// The sidebar names areas, not screens. Property is a screen inside
 		// Assets, so switching it off takes away its sub-tab; the Assets row
@@ -405,7 +567,15 @@ test.describe('signed in', () => {
 		await expect(propertyTab).toBeVisible();
 
 		await page.goto('/settings');
-		await page.locator('.module-row', { hasText: 'Property' }).getByRole('switch').click();
+		const propertySwitch = page.locator('.module-row', { hasText: 'Property' }).getByRole('switch');
+		await propertySwitch.click();
+		// `click()` resolves when the click dispatches, not when the enhanced
+		// submission finishes. Navigating straight after it raced the POST and the
+		// route was still enabled — proven by holding the POST back: /property
+		// answered 200 where this expects 404. Waiting for the switch to reflect
+		// the new state waits for the whole round trip, which is the thing the
+		// next line actually depends on.
+		await expect(propertySwitch).toHaveAttribute('aria-checked', 'false');
 
 		const response = await page.goto('/property');
 		expect(response?.status()).toBe(404);
@@ -414,11 +584,132 @@ test.describe('signed in', () => {
 		await expect(propertyTab).toHaveCount(0, { timeout: 10000 });
 		await expect(page.locator('aside').getByRole('link', { name: /Assets/ })).toBeVisible();
 
-		// Switch it back on for later runs.
+		// Switch it back on for later runs, waiting the same way.
 		await page.goto('/settings');
-		await page.locator('.module-row', { hasText: 'Property' }).getByRole('switch').click();
+		const backOn = page.locator('.module-row', { hasText: 'Property' }).getByRole('switch');
+		await backOn.click();
+		await expect(backOn).toHaveAttribute('aria-checked', 'true');
 		await page.goto('/loans');
 		await expect(propertyTab).toBeVisible({ timeout: 10000 });
+	});
+
+	test('a household can add its own group and category, and file into them', async ({ page }) => {
+		await page.goto('/settings');
+		const addGroup = page.locator('.tx-add-group');
+		await addGroup.locator('input[name=groupLabel]').fill('Pets');
+		await addGroup.locator('select[name=groupRole]').selectOption('expense');
+		await addGroup.getByRole('button', { name: 'Add group' }).click();
+
+		const petsGroup = page.locator('.tx-group[data-group="pets"]');
+		await expect(petsGroup).toBeVisible();
+
+		await petsGroup.locator('.tx-add-leaf input[name=categoryName]').fill('Vet');
+		await petsGroup.locator('.tx-add-leaf').getByRole('button', { name: 'Add category' }).click();
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Vet' })).toBeVisible();
+
+		// The point of the whole exercise: a category a household invented is
+		// offered where transactions are filed, without a deploy.
+		await page.goto('/transactions');
+		const picker = page.locator('.txn-row').first().locator('.picker').first();
+		await picker.locator('.trigger').click();
+		await expect(picker.locator('.option', { hasText: 'Vet' })).toHaveCount(1);
+	});
+
+	// Renamed to what it actually exercises. It never filed anything into Vet —
+	// the test above only checks the category is OFFERED — so this was always the
+	// unused case, walked through a form that asked for a destination anyway.
+	// Now nothing is asked, because there is nothing to ask about.
+	//
+	// The reassignment path is covered where transactions really exist:
+	// tests/integration/category-delete.test.ts for the move itself, and
+	// tests/e2e/category-delete.spec.ts for the dialog.
+	test('an unused category is deleted without being asked anything', async ({ page }) => {
+		await page.goto('/settings');
+		const petsGroup = page.locator('.tx-group[data-group="pets"]');
+		await petsGroup.locator('.tx-add-leaf input[name=categoryName]').fill('Pet food');
+		await petsGroup.locator('.tx-add-leaf').getByRole('button', { name: 'Add category' }).click();
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Pet food' })).toBeVisible();
+
+		await petsGroup.getByRole('button', { name: 'Delete Vet' }).click();
+
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Vet' })).toHaveCount(0);
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(petsGroup.locator('.tx-leaf', { hasText: 'Pet food' })).toBeVisible();
+	});
+
+	test('a group holding categories cannot be deleted out from under them', async ({ page }) => {
+		await page.goto('/settings');
+		const petsGroup = page.locator('.tx-group[data-group="pets"]');
+		await expect(petsGroup.getByRole('button', { name: 'Delete group' })).toBeDisabled();
+	});
+
+	test('a receipt attaches to the transaction it evidences', async ({ page }) => {
+		await page.goto('/transactions?q=ACME');
+		const row = page.locator('.txn-row').first();
+		await expect(row).toBeVisible();
+
+		// Receipts live behind one button per row now — a file input under every
+		// transaction cost a line each on a page that is only transactions.
+		await row.getByRole('button', { name: /^Receipts for/ }).click();
+		const receipts = page.getByRole('dialog');
+		await receipts.locator('input[type=file]').setInputFiles({
+			name: 'acme-receipt.pdf',
+			mimeType: 'application/pdf',
+			buffer: Buffer.from('%PDF-1.4 receipt')
+		});
+		// exact: a file input has an implicit button role, and this one's label
+		// begins "Attach a receipt…", which the substring default also matches.
+		await receipts.getByRole('button', { name: 'Attach', exact: true }).click();
+
+		const chip = receipts.locator('.doc-chip', { hasText: 'acme-receipt.pdf' });
+		await expect(chip).toBeVisible();
+		// The count is on the face of the button, so a row with evidence filed
+		// against it says so without opening anything.
+		await receipts.getByRole('button', { name: 'Close' }).click();
+		await expect(row.locator('.doc-count')).toHaveText('1');
+
+		// It is a real document in the household's files, not a private blob on the
+		// row — filed under Receipts, because the documents screen builds its
+		// columns from people, properties, accounts and subjects, and a document
+		// linked only to a transaction would show in none of them.
+		await page.goto('/documents');
+		await expect(page.getByText('Receipts').first()).toBeVisible();
+		await expect(page.getByText('acme-receipt.pdf').first()).toBeVisible();
+
+		// Removing it deletes the document rather than unlinking it. Unlinking left
+		// the file on the shelf, unreachable from the row it came from, and the
+		// documents screen had no delete of its own — so it became litter.
+		await page.goto('/transactions?q=ACME');
+		await page
+			.locator('.txn-row')
+			.first()
+			.getByRole('button', { name: /^Receipts for/ })
+			.click();
+		const reopened = page.getByRole('dialog');
+		// Two taps: it deletes a stored file, from everywhere it was filed.
+		await reopened
+			.locator('.doc-chip')
+			.getByRole('button', { name: /^Remove/ })
+			.click();
+		await reopened.getByRole('button', { name: 'Delete?' }).click();
+		await expect(reopened.locator('.doc-chip')).toHaveCount(0);
+		await page.goto('/documents');
+		await expect(page.getByText('acme-receipt.pdf')).toHaveCount(0);
+	});
+
+	test('a document can be removed from the shelf it was filed on', async ({ page }) => {
+		await page.goto('/documents');
+		await page.getByRole('button', { name: '➕ Add document' }).click();
+		await page.getByPlaceholder('Passport · Robert').fill('Misfiled note');
+		await page.locator('select[name=shelf]').selectOption('family');
+		await page.locator('.tick', { hasText: 'Jana Nováková' }).locator('input').check();
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect(page.getByText('Misfiled note')).toBeVisible();
+
+		const card = page.locator('.doc', { hasText: 'Misfiled note' }).first();
+		await card.getByRole('button', { name: 'Remove Misfiled note' }).click();
+		await card.getByRole('button', { name: 'Delete?' }).click();
+		await expect(page.getByText('Misfiled note')).toHaveCount(0);
 	});
 
 	test('documents: adding one builds its shelf and person column', async ({ page }) => {
@@ -547,7 +838,15 @@ test.describe('signed in', () => {
 		await page.goto('/settings');
 		await page.locator('input[name=dir]').fill(dest);
 		await page.locator('select[name=cadence]').selectOption('weekly');
+		// The backup reads the destination this save stores, so it must not start
+		// until the save has landed. Pressing both in succession raced them, and
+		// the run failed with "No backup destination is set" — after which the
+		// text below never appears and the wait times out.
+		const saved = page.waitForResponse(
+			(r) => r.request().method() === 'POST' && r.url().includes('saveBackup')
+		);
 		await page.locator('.backup-form').getByRole('button', { name: 'Save' }).click();
+		await saved;
 		await page.getByRole('button', { name: 'Back up now' }).click();
 		// the dump itself can take a while
 		await expect(page.getByText(/Database dumped/)).toBeVisible({ timeout: 20000 });
@@ -718,13 +1017,35 @@ test.describe('signed in', () => {
 		expect(json.settings.backupLastRun).toBeUndefined();
 	});
 
+	/**
+	 * Choose a theme, and wait for the record to have it.
+	 *
+	 * The click paints the new theme at once and persists it behind that, so the
+	 * server's copy is a moment behind the screen. Anything that reads the SERVER
+	 * — a reload, a second browser — therefore has to wait for the write to be
+	 * acknowledged rather than race it. On a laptop the write always won, so this
+	 * was invisible until CI, where the database is a network hop from the app
+	 * and the reload arrived first: the layout mirrors the stored theme into the
+	 * cookie on every load, so a reload that overtakes the write is answered with
+	 * the theme the person still officially has.
+	 */
+	async function chooseTheme(page: Page, name: '☀️ Light' | '🌙 Dark') {
+		const stored = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === '/settings/theme' &&
+				response.request().method() === 'PUT'
+		);
+		await page.getByRole('button', { name }).click();
+		expect((await stored).ok()).toBe(true);
+	}
+
 	test('theme choice persists across reloads', async ({ page }) => {
 		await page.goto('/overview');
-		await page.getByRole('button', { name: '☀️ Light' }).click();
+		await chooseTheme(page, '☀️ Light');
 		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
 		await page.reload();
 		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
-		await page.getByRole('button', { name: '🌙 Dark' }).click();
+		await chooseTheme(page, '🌙 Dark');
 		await expect(page.locator('html')).not.toHaveAttribute('data-ledger-theme', 'light');
 	});
 
@@ -737,7 +1058,7 @@ test.describe('signed in', () => {
 		browser
 	}) => {
 		await page.goto('/overview');
-		await page.getByRole('button', { name: '☀️ Light' }).click();
+		await chooseTheme(page, '☀️ Light');
 		await expect(page.locator('html')).toHaveAttribute('data-ledger-theme', 'light');
 
 		// A second browser context: no localStorage, no cookies, nothing carried
@@ -751,7 +1072,7 @@ test.describe('signed in', () => {
 			await elsewhere.close();
 		}
 
-		await page.getByRole('button', { name: '🌙 Dark' }).click();
+		await chooseTheme(page, '🌙 Dark');
 		await expect(page.locator('html')).not.toHaveAttribute('data-ledger-theme', 'light');
 	});
 });

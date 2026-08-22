@@ -4,9 +4,17 @@
 // tax treatment belongs to the tax module, not here.
 
 import { uuidv7 } from 'uuidv7';
-import { eq, inArray } from 'drizzle-orm';
+import { count, eq, inArray } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { loan, property, tag, tagLink, transaction, transactionSplit } from '$lib/server/db/schema';
+import {
+	loan,
+	property,
+	ruleTag,
+	tag,
+	tagLink,
+	transaction,
+	transactionSplit
+} from '$lib/server/db/schema';
 import { effectiveLines, type LineSource, type SplitSource } from '$lib/transactions/lines';
 
 /** Uniqueness key: trimmed, lowercased, inner whitespace collapsed. */
@@ -117,6 +125,38 @@ export function rollUpTagTotals(
 		}
 		out.set(tagId, perCurrency);
 	}
+	return out;
+}
+
+/**
+ * Remove a tag from the household.
+ *
+ * Everything it was on is untagged by the delete itself: `tag_link.tag_id` and
+ * `rule_tag.tag_id` both carry ON DELETE CASCADE, so the links go with the row
+ * and no record has to be visited to unfile it. There was no way to do this at
+ * all — a tag typed once stayed on the list forever, and deleting the last
+ * thing it was on left it behind reading "nothing tagged yet".
+ *
+ * The rule links are the part worth saying out loud: a rule that applied this
+ * tag quietly stops applying it. Nothing else about the rule changes.
+ */
+export async function deleteTag(tagId: string, handle: Queryable = db): Promise<boolean> {
+	const [row] = await handle.delete(tag).where(eq(tag.id, tagId)).returning({ id: tag.id });
+	return row !== undefined;
+}
+
+/** What a tag is on, so a delete can say what it is about to untag. */
+export async function tagUsage(
+	handle: Queryable = db
+): Promise<Map<string, { tagged: number; rules: number }>> {
+	const [links, rules] = await Promise.all([
+		handle.select({ tagId: tagLink.tagId, n: count() }).from(tagLink).groupBy(tagLink.tagId),
+		handle.select({ tagId: ruleTag.tagId, n: count() }).from(ruleTag).groupBy(ruleTag.tagId)
+	]);
+	const out = new Map<string, { tagged: number; rules: number }>();
+	const at = (id: string) => out.get(id) ?? { tagged: 0, rules: 0 };
+	for (const row of links) out.set(row.tagId, { ...at(row.tagId), tagged: row.n });
+	for (const row of rules) out.set(row.tagId, { ...at(row.tagId), rules: row.n });
 	return out;
 }
 

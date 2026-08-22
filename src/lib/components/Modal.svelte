@@ -52,23 +52,23 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.title {
-		font-size: 15px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.close {
 		border: 0;
 		background: transparent;
 		color: var(--fg3);
-		font-size: 14px;
+		font-size: var(--text-lg);
 		cursor: pointer;
 		padding: 4px;
 	}

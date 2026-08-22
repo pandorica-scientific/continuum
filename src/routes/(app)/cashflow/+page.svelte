@@ -76,9 +76,9 @@
 					</div>
 				{/each}
 			</div>
-			<div class="years mono">
-				{#each data.history.years as y (y)}
-					<span>{y}</span>
+			<div class="ticks mono" class:monthly={data.history.ticks.unit === 'month'}>
+				{#each data.history.ticks.labels as label, i (i)}
+					<span>{label}</span>
 				{/each}
 			</div>
 			<div class="legend">
@@ -98,17 +98,17 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.history {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.bars {
 		display: flex;
 		align-items: flex-end;
-		gap: 2px;
+		gap: var(--space-1);
 		height: 168px;
 	}
 	.pair {
@@ -132,16 +132,22 @@
 		background: var(--red);
 		opacity: 0.8;
 	}
-	.years {
+	.ticks {
 		display: flex;
 		justify-content: space-between;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	/* One label per bar, so each sits under the bar it names rather than being
+	   spread across the axis the way a handful of year labels are. */
+	.ticks.monthly span {
+		flex: 1;
+		text-align: center;
 	}
 	.legend {
 		display: flex;
 		gap: 18px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 11px;

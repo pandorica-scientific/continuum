@@ -380,6 +380,7 @@ describe('domain replacement writes', () => {
 					personIds: [],
 					propertyIds: [],
 					accountIds: [],
+					transactionIds: [],
 					subjectIds: [],
 					newSubjectName: 'Vehicle',
 					tagNames: ['Safe', 'Explode']

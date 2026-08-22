@@ -26,7 +26,12 @@ import { availableCurrencies } from '$lib/server/fx/currencies';
 import { updateLoanTags } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace } from '$lib/server/fx';
-import { createLoan, recordRepayment, replaceFixation } from '$lib/server/loans/mutations';
+import {
+	createLoan,
+	recordRepayment,
+	replaceFixation,
+	updateLoan
+} from '$lib/server/loans/mutations';
 import { securedPropertiesFromForm } from '$lib/loans/form';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
@@ -72,7 +77,6 @@ export const load: PageServerLoad = async () => {
 	let totalOwedBase = 0n;
 	let totalPaymentBase = 0n;
 	let interestYearBase = 0n;
-	let deductibleYearBase = 0n;
 	let interestFromMonth: string | null = null;
 	let latestDebtFree: number | null = null;
 
@@ -126,7 +130,6 @@ export const load: PageServerLoad = async () => {
 		if (interest) {
 			const interestBase = await convertOrFace(interest.interestMinor, l.currency, baseCurrency);
 			interestYearBase += interestBase;
-			if (l.interestDeductible) deductibleYearBase += interestBase;
 			if (
 				interest.fromMonth !== `${year}-01` &&
 				(interestFromMonth === null || interest.fromMonth > interestFromMonth)
@@ -179,6 +182,25 @@ export const load: PageServerLoad = async () => {
 		cards.push({
 			id: l.id,
 			name: l.name,
+			// What the edit form starts from. A loan could be created but never
+			// corrected, so a mortgage entered without its second flat meant
+			// starting over.
+			edit: {
+				name: l.name,
+				lender: l.lender,
+				kind: l.kind,
+				paymentDay: l.paymentDay,
+				endsOn: l.endsOn,
+				// How the loan works, as opposed to what it has done. Reported as
+				// fixed and uncorrectable.
+				regime: l.regime,
+				accrualStyle: l.accrualStyle,
+				dayCount: l.dayCount,
+				interestDeductible: l.interestDeductible,
+				secured: links
+					.filter((link) => link.loanId === l.id)
+					.map((link) => ({ propertyId: link.propertyId, sharePct: link.sharePct }))
+			},
 			tags: loanTagRows
 				.filter((r) => r.loanId === l.id)
 				.map((r) => tagName.get(r.tagId) ?? '')
@@ -242,9 +264,11 @@ export const load: PageServerLoad = async () => {
 			interestThisYear: formatMinor(interestYearBase, baseCurrency),
 			// Honesty about the projection's blind spot: without booked history,
 			// interest is only visible from the balance anchor forward.
-			interestNote: interestFromMonth
-				? `deductible: ${formatMinor(deductibleYearBase, baseCurrency)} · projected from ${interestFromMonth}`
-				: `deductible: ${formatMinor(deductibleYearBase, baseCurrency)}`,
+			//
+			// This used to lead with a deductible total. Deductibility is Czech law
+			// stated as a general fact on a screen with no jurisdiction, and the tax
+			// statements carry the real figures from real documents.
+			interestNote: interestFromMonth ? `projected from ${interestFromMonth}` : undefined,
 			debtFree: latestDebtFree
 		},
 		loans: cards,
@@ -292,6 +316,39 @@ export const actions: Actions = {
 		return result.ok ? result : fail(result.status, { message: result.message });
 	},
 
+	/**
+	 * Correct a loan's description and which properties secure it.
+	 *
+	 * Rate, payment and balance are not here: those are what `addFixation` and
+	 * `addRepayment` are for, and they understand the history they rewrite.
+	 */
+	editLoan: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('id'));
+		const propertiesAll = await db.select({ id: property.id }).from(property);
+		const secured = securedPropertiesFromForm(
+			form,
+			propertiesAll.map((row) => row.id)
+		);
+		const paymentDayRaw = String(form.get('paymentDay') ?? '').trim();
+		const result = await updateLoan(id, {
+			name: String(form.get('name') ?? ''),
+			lender: String(form.get('lender') ?? ''),
+			kind: String(form.get('kind') ?? 'mortgage'),
+			paymentDay: paymentDayRaw ? Number(paymentDayRaw) : null,
+			endsOn: String(form.get('endsOn') ?? '').trim() || null,
+			secured,
+			// How the loan works. Reported as fixed and uncorrectable: a rate regime
+			// or accrual style entered wrongly meant starting the loan again.
+			regime: String(form.get('regime') ?? ''),
+			accrualStyle: String(form.get('accrualStyle') ?? ''),
+			dayCount: String(form.get('dayCount') ?? ''),
+			interestDeductible: form.get('interestDeductible') === 'on'
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
 	addLoan: async ({ request }) => {
 		const form = await request.formData();
 		const paymentDayRaw = Number(form.get('paymentDay'));
@@ -323,7 +380,10 @@ export const actions: Actions = {
 			fixedUntil: String(form.get('fixedUntil') ?? '') || null,
 			startsOn: String(form.get('startsOn') ?? '') || null,
 			endsOn: String(form.get('endsOn') ?? '') || null,
-			interestDeductible: form.get('deductible') === 'on',
+			// The screen no longer asks: deductibility is Czech-specific and the tax
+			// statements carry the real figures. The column stays — the schema is
+			// additive-only — and createLoan still requires the field.
+			interestDeductible: false,
 			secured
 		});
 		return result.ok ? result : fail(result.status, { message: result.message });

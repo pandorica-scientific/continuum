@@ -186,7 +186,7 @@
 		display: block;
 	}
 	.ph {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		padding: 8px;
 		text-align: center;
@@ -194,23 +194,23 @@
 	.error {
 		margin: 5px 0 0;
 		color: var(--red);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.slot-actions {
 		position: absolute;
 		top: 6px;
 		right: 6px;
 		display: flex;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	.slot-action {
 		min-width: 26px;
 		height: 26px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--bd2);
 		background: var(--plate);
 		color: var(--fg1);
-		font-size: 13px;
+		font-size: var(--text-md);
 		cursor: pointer;
 		display: grid;
 		place-items: center;
@@ -227,6 +227,6 @@
 		padding: 0 8px;
 		border-color: var(--red);
 		color: var(--red);
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 </style>

@@ -66,7 +66,7 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.comp {
 		display: grid;
@@ -74,14 +74,14 @@
 		gap: 4px 12px;
 	}
 	.c-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.c-numbers {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		text-align: right;
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		justify-content: flex-end;
 		flex-wrap: wrap;
 	}
@@ -89,13 +89,13 @@
 		grid-column: 1 / -1;
 		height: 6px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.c-bar {
 		position: relative;
 		height: 100%;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.c-net {
@@ -126,7 +126,7 @@
 	}
 	.c-detail {
 		grid-column: 1 / -1;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 </style>

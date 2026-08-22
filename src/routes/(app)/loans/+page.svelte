@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
@@ -9,15 +10,46 @@
 	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
 	import RepayDialog from '$lib/components/RepayDialog.svelte';
 	import RefixDialog from '$lib/components/RefixDialog.svelte';
+	import { ENUMS } from '$lib/enums';
 	import { DAY_COUNTS, DAY_COUNT_LABELS } from '$lib/loans';
 
 	let { data, form } = $props();
 
 	let adding = $state(false);
+	/** Close on success, stay open on a refusal so what was typed is still there
+	 *  to correct. Leaving it open on success is what made the wizard for the
+	 *  next one appear the moment one was added. */
+	const closeOnSuccess =
+		(close: () => void) =>
+		() =>
+		async ({
+			update,
+			result
+		}: {
+			update: () => Promise<void>;
+			result: import('@sveltejs/kit').ActionResult;
+		}) => {
+			await update();
+			if (shouldCloseAfterAction(result.type)) close();
+		};
+	/** The rate regimes, named once and used by both the add and the edit form —
+	 *  they were spelled out inline, so the two could disagree. */
+	const REGIMES = [
+		{ value: 'fixed_period', label: 'Fixed until a date, then re-fixed' },
+		{ value: 'fixed_term', label: 'Fixed for the whole term' },
+		{ value: 'floating', label: 'Floating' }
+	] as const;
+
 	let regime = $state('fixed_period');
 	let open = $state<string | null>(null);
 	let repayFor = $state<string | null>(null);
 	let refixFor = $state<string | null>(null);
+	let editFor = $state<string | null>(null);
+
+	// From the one list the CHECK constraint is also built from, so the add form
+	// and the edit form cannot drift apart from each other or from the database.
+	const LOAN_KINDS = ENUMS['loan.kind'];
+	const kindLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1);
 </script>
 
 <ScreenHeader
@@ -122,8 +154,110 @@
 						<button type="button" class="btn" onclick={() => (refixFor = l.id)}>
 							🔁 New fixation…
 						</button>
+						<button
+							type="button"
+							class="btn"
+							onclick={() => (editFor = editFor === l.id ? null : l.id)}
+						>
+							✏️ Edit details…
+						</button>
 						<span class="mini-note">both preview their effect on the chart before saving</span>
 					</div>
+
+					{#if editFor === l.id}
+						<!-- Description and security only. Rate, payment and balance are
+						     changed through the two controls above, which understand the
+						     history they rewrite; nothing here can touch a fixation period. -->
+						<form method="POST" action="?/editLoan" use:enhance class="edit-form">
+							<input type="hidden" name="id" value={l.id} />
+							<div class="grid">
+								<label><span>Name</span><input name="name" value={l.edit.name} /></label>
+								<label><span>Lender</span><input name="lender" value={l.edit.lender} /></label>
+								<label>
+									<span>Kind</span>
+									<select name="kind">
+										{#each LOAN_KINDS as kind (kind)}
+											<option value={kind} selected={l.edit.kind === kind}>{kindLabel(kind)}</option
+											>
+										{/each}
+									</select>
+								</label>
+								<label>
+									<span>Payment day</span>
+									<input name="paymentDay" inputmode="numeric" value={l.edit.paymentDay ?? ''} />
+								</label>
+								<!-- How the loan works. Changing one of these re-derives the
+								     schedule from the periods already recorded; none of them can
+								     rewrite or remove a period, which is what keeps them safe to
+								     put beside a name and a lender. -->
+								<label>
+									<span>Rate regime</span>
+									<select name="regime">
+										{#each REGIMES as option (option.value)}
+											<option value={option.value} selected={l.edit.regime === option.value}>
+												{option.label}
+											</option>
+										{/each}
+									</select>
+								</label>
+								<label>
+									<span>Interest accrual</span>
+									<select name="accrualStyle">
+										<option value="payment" selected={l.edit.accrualStyle === 'payment'}>
+											On the payment date
+										</option>
+										<option value="calendar" selected={l.edit.accrualStyle === 'calendar'}>
+											Over the calendar month
+										</option>
+									</select>
+								</label>
+								<label>
+									<span>Day count</span>
+									<select name="dayCount">
+										{#each DAY_COUNTS as count (count)}
+											<option value={count} selected={l.edit.dayCount === count}>
+												{DAY_COUNT_LABELS[count]}
+											</option>
+										{/each}
+									</select>
+								</label>
+								<label class="toggle">
+									<input
+										type="checkbox"
+										name="interestDeductible"
+										checked={l.edit.interestDeductible}
+									/>
+									<span>Interest reduces taxable income</span>
+								</label>
+								<label>
+									<span>Ends</span>
+									<input name="endsOn" type="date" value={l.edit.endsOn ?? ''} />
+								</label>
+							</div>
+							<fieldset class="secured">
+								<legend>Secured by</legend>
+								{#each data.properties as p (p.id)}
+									{@const link = l.edit.secured.find((s) => s.propertyId === p.id)}
+									<div class="sec-row">
+										<label class="sec-check">
+											<input type="checkbox" name={`secured_${p.id}`} checked={!!link} />
+											<span>{p.name}</span>
+										</label>
+										<input
+											name={`share_${p.id}`}
+											inputmode="decimal"
+											placeholder="share % (blank = by value)"
+											value={link?.sharePct ?? ''}
+										/>
+									</div>
+								{/each}
+							</fieldset>
+							<div class="row">
+								<button type="submit" class="btn btn-primary">Save changes</button>
+								<button type="button" class="btn" onclick={() => (editFor = null)}>Cancel</button>
+							</div>
+						</form>
+					{/if}
 					{#if l.events.length}
 						<div class="events">
 							<span class="mini-title">📜 What happened on this loan</span>
@@ -158,17 +292,21 @@
 	{/each}
 
 	{#if adding}
-		<form method="POST" action="?/addLoan" use:enhance class="card add-form">
+		<form
+			method="POST"
+			action="?/addLoan"
+			use:enhance={closeOnSuccess(() => (adding = false))}
+			class="card add-form"
+		>
 			<div class="grid">
 				<label><span>Name</span><input name="name" placeholder="Mortgage · Karlín" /></label>
 				<label><span>Lender</span><input name="lender" placeholder="Česká spořitelna" /></label>
 				<label
 					><span>Kind</span>
 					<select name="kind">
-						<option value="mortgage">Mortgage</option>
-						<option value="car">Car</option>
-						<option value="consumer">Consumer</option>
-						<option value="family">Family</option>
+						{#each LOAN_KINDS as kind (kind)}
+							<option value={kind}>{kindLabel(kind)}</option>
+						{/each}
 					</select></label
 				>
 				<label
@@ -208,9 +346,9 @@
 				<label
 					><span>Rate regime</span>
 					<select name="regime" bind:value={regime}>
-						<option value="fixed_period">Fixed until a date, then re-fixed</option>
-						<option value="fixed_term">Fixed for the whole term</option>
-						<option value="floating">Floating</option>
+						{#each REGIMES as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
 					</select></label
 				>
 				{#if regime === 'fixed_period'}
@@ -261,10 +399,6 @@
 					{/each}
 				</fieldset>
 			{/if}
-			<label class="toggle">
-				<input type="checkbox" name="deductible" />
-				<span>Interest is tax deductible (owner-occupied mortgage)</span>
-			</label>
 			<div class="row">
 				<button type="submit" class="btn btn-primary">Add loan</button>
 				<button type="button" class="btn" onclick={() => (adding = false)}>Cancel</button>
@@ -286,25 +420,25 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.loan {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.head {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		gap: 16px;
+		gap: var(--space-8);
 		flex-wrap: wrap;
 	}
 	.names {
@@ -313,17 +447,17 @@
 		gap: 3px;
 	}
 	.name {
-		font-size: 15px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 	}
 	.sub {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.facts {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.fact {
 		display: flex;
@@ -331,30 +465,30 @@
 		gap: 1px;
 	}
 	.f-label {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.f-value {
-		font-size: 14px;
+		font-size: var(--text-lg);
 	}
 	.progress {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.track {
 		height: 8px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.fill {
 		height: 100%;
 		background: var(--green);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 	}
 	.note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.detail-toggle {
@@ -362,65 +496,90 @@
 		border: 0;
 		background: transparent;
 		color: var(--blue);
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		padding: 0;
 	}
 	.detail {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 		border-top: 1px solid var(--bd);
 		padding-top: 14px;
+	}
+	.edit-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+		padding-top: 12px;
+		border-top: 1px solid var(--bd);
+	}
+	.edit-form .sec-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: var(--space-4);
+		align-items: center;
+	}
+	.edit-form .sec-check {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.edit-form .secured {
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 	.actions-row {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.mini-title {
-		font-size: 13px;
+		font-size: var(--text-md);
 		font-weight: 500;
 		color: var(--fg1);
 	}
 	.mini-note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.events {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.event {
 		display: grid;
 		grid-template-columns: 86px minmax(0, 1fr) auto;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		padding: 7px 0;
 		border-bottom: 1px solid var(--bd);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.e-date {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.e-label {
 		color: var(--fg2);
 	}
 	.e-amount {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.add-tile {
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 18px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 4px;
+		gap: var(--space-2);
 		cursor: pointer;
 		text-align: left;
 		color: var(--fg2);
@@ -429,44 +588,35 @@
 		border-color: var(--blue);
 	}
 	.a-title {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 	}
 	.a-note {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.add-form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	label {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
-	}
-	input,
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
 	}
 	.toggle {
 		flex-direction: row;
 		align-items: center;
-		gap: 10px;
-		font-size: 13px;
+		gap: var(--space-5);
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.secured {
@@ -475,37 +625,37 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.secured legend {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		padding-bottom: 4px;
 	}
 	.secured-row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 200px;
-		gap: 10px;
+		gap: var(--space-5);
 		align-items: center;
 	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.l-tags {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tag-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 5px 3px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.tag-chip button {
@@ -513,7 +663,7 @@
 		background: none;
 		color: var(--fg3);
 		cursor: pointer;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		padding: 0 3px;
 	}
 </style>

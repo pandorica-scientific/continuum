@@ -16,7 +16,8 @@ export default defineConfig({
 		{
 			name: 'desktop',
 			use: { viewport: { width: 1440, height: 900 } },
-			testIgnore: /accounts|passkey|board|errors/
+			testIgnore:
+				/accounts|passkey|board|errors|add-form-closes|retirement-chart|import-mapping-layout|import-typography|category-delete|category-picker|category-reorder|investments-tax/
 		},
 		// The error screens need a signed-in session, which the wizard in
 		// flow.spec.ts is what creates. Alphabetical order would put this file
@@ -46,8 +47,36 @@ export default defineConfig({
 			testMatch: /board/,
 			dependencies: ['accounts']
 		},
-		{ name: 'tablet', use: { viewport: { width: 900, height: 1200 } }, testMatch: /smoke/ },
-		{ name: 'mobile', use: { viewport: { width: 390, height: 844 } }, testMatch: /smoke/ }
+		// The v0.3.11 polish specs. Every one of them needs the household and the
+		// imported statement that flow.spec.ts creates, and three of their
+		// filenames sort BEFORE flow.spec.ts — so they say what they depend on
+		// rather than relying on the alphabet to be kind.
+		{
+			name: 'polish',
+			use: { viewport: { width: 1440, height: 900 } },
+			testMatch:
+				/add-form-closes|retirement-chart|import-mapping-layout|import-typography|category-delete|category-picker|category-reorder|investments-tax/,
+			dependencies: ['desktop']
+		},
+		// Narrow widths. These now cover the signed-in screens too, not just the
+		// login page: a field whose label was cut off before it finished on a small
+		// screen is exactly the kind of defect only a narrow viewport finds, and
+		// nothing was looking. They depend on `desktop` for the household the
+		// wizard creates and for the statement it imports, so the screens under
+		// test have real content in them rather than empty states that cannot
+		// overflow.
+		{
+			name: 'tablet',
+			use: { viewport: { width: 900, height: 1200 } },
+			testMatch: /smoke/,
+			dependencies: ['desktop']
+		},
+		{
+			name: 'mobile',
+			use: { viewport: { width: 390, height: 844 } },
+			testMatch: /smoke/,
+			dependencies: ['desktop']
+		}
 	],
 	webServer: {
 		// Build first: `node build` serves whatever was compiled last, so without

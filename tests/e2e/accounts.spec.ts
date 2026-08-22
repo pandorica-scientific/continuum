@@ -338,3 +338,73 @@ test('nobody who cannot sign in is offered in the picker', async ({ browser }) =
 	await expect(page.getByText('Pavel Ročeň')).toHaveCount(0);
 	await context.close();
 });
+
+// Open mode is instance-wide, so it runs last and closes itself again: leaving
+// it on would let every later test sign in without a credential and quietly
+// stop proving anything about authentication.
+test.describe('open mode', () => {
+	test.use({ storageState: AUTH_STATE });
+
+	test('an administrator opens the instance with their own password', async ({ page }) => {
+		await page.goto('/settings');
+		await page.locator('.open-form input[name=password]').fill('correct-horse-battery');
+		await page.getByRole('button', { name: 'Open the instance' }).click();
+
+		// Said in Settings, where it can be acted on — and NOT on every screen.
+		// A warning that never leaves is one nobody reads; the trade is that
+		// somebody who did not turn it on meets it on the sign-in page instead,
+		// before they are inside.
+		await expect(page.locator('.open-mode.on')).toBeVisible();
+		await page.goto('/overview');
+		await expect(page.locator('.open-mode')).toHaveCount(0);
+	});
+
+	test('the wrong password does not open it', async ({ page }) => {
+		await page.goto('/settings');
+		// Already open from the test above, so close it first to test the guard.
+		await page.getByRole('button', { name: 'Close it' }).click();
+		await expect(page.locator('.open-mode.on')).toHaveCount(0);
+
+		await page.locator('.open-form input[name=password]').fill('not-the-password');
+		await page.getByRole('button', { name: 'Open the instance' }).click();
+		await expect(page.locator('.open-mode.on')).toHaveCount(0);
+	});
+
+	test('with it on, signing in asks for nothing', async ({ browser }) => {
+		const admin = await browser.newContext({ storageState: AUTH_STATE });
+		const adminPage = await admin.newPage();
+		await adminPage.goto('/settings');
+		await adminPage.locator('.open-form input[name=password]').fill('correct-horse-battery');
+		await adminPage.getByRole('button', { name: 'Open the instance' }).click();
+		await expect(adminPage.locator('.open-mode.on')).toBeVisible();
+
+		// A browser that has never seen this instance.
+		// EMPTY storage state, explicitly. `browser.newContext()` inherits the
+		// describe's `test.use({ storageState })`, so a plain newContext() here
+		// carried the administrator's session cookie and "signed in without a
+		// password" was really "was already signed in".
+		const stranger = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+		const page = await stranger.newPage();
+		await page.goto('/login');
+		await expect(page.locator('input[name=password]')).toHaveCount(0);
+		await page.getByText('Jana Nováková').click();
+		// exact: the passkey button is also named "…Sign in with a passkey", and
+		// the name option matches by substring.
+		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+		await expect(page).toHaveURL(/\/overview/);
+		await stranger.close();
+
+		// Close it again, and the password field comes back with every credential
+		// intact — turning it off is a restoration, not a repair.
+		await adminPage.goto('/settings');
+		await adminPage.getByRole('button', { name: 'Close it' }).click();
+		await expect(adminPage.locator('.open-mode.on')).toHaveCount(0);
+
+		const after = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+		const afterPage = await after.newPage();
+		await afterPage.goto('/login');
+		await expect(afterPage.locator('input[name=password]')).toHaveCount(1);
+		await after.close();
+		await admin.close();
+	});
+});

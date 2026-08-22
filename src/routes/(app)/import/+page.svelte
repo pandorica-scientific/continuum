@@ -3,15 +3,36 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { submitAction } from '$lib/actions/result';
+	import CategoryPicker from '$lib/components/CategoryPicker.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
 	import MetricTile from '$lib/components/MetricTile.svelte';
+	import Field from '$lib/components/Field.svelte';
 
 	let { data, form } = $props();
 
 	let assignAccountId = $state('');
+
+	// Categories picked since the page rendered, so Save can be disabled while
+	// there is nothing to save. Deliberately NOT bind:value with a seeded record:
+	// binding overrides the `selected` attributes below, and the server-rendered
+	// markup then has nothing selected, so the browser falls back to the first
+	// enabled option and an unguessed row reads as already filed with Salary.
+	const ROLE_LABELS: Record<string, string> = {
+		income: 'Money in',
+		expense: 'Money out',
+		savings: 'Money kept'
+	};
+	let addingCategory = $state(false);
+	/** Blank means "put it in an existing group"; a name here creates one. */
+	let newGroupLabel = $state('');
+	let chosen = $state<Record<string, string>>({});
+	const picked = (r: { id: string; suggestedCategoryId: string | null }) =>
+		chosen[r.id] ?? r.suggestedCategoryId ?? '';
 
 	// The choice disambiguates the upload it was made for. Holding it across
 	// uploads forced every later batch into the same account, and resolveAccount
@@ -60,7 +81,9 @@
 	caption="Statements in, transactions filed. Only the ambiguous ones ask for you."
 />
 
-{#if form?.message}
+{#if form?.message && !form?.id}
+	<!-- Failures that name a row render beside that row instead; showing the same
+	     message here as well reads as two separate failures. -->
 	<div class="error">{form.message}</div>
 {/if}
 
@@ -124,6 +147,26 @@
 								.rowsPaired} paired
 						{/if}
 					</span>
+					<!-- A read under way cannot be stopped from here, so the control says
+					     so rather than pretending. Anything else can go: a cancellation
+					     while it waits, a tidy-up once it has settled. A settled row also
+					     leaves on its own after ten minutes. -->
+					<form method="POST" action="?/dismissJob" use:enhance class="inline-form">
+						<input type="hidden" name="jobId" value={job.id} />
+						<button
+							type="submit"
+							class="r-dismiss"
+							disabled={job.state === 'running'}
+							title={job.state === 'running'
+								? 'Being read right now — it can go once it finishes'
+								: job.state === 'queued'
+									? 'Cancel this file'
+									: 'Clear this from the queue'}
+							aria-label="Dismiss {job.filename}"
+						>
+							✕
+						</button>
+					</form>
 				</div>
 			{/each}
 		</div>
@@ -204,8 +247,7 @@
 			</div>
 
 			<div class="w-conventions">
-				<label class="field">
-					<span>Dates read as</span>
+				<Field label="Dates read as">
 					<select name="dateOrder">
 						{#each DATE_ORDER_CHOICES as choice (choice.value)}
 							<option value={choice.value} selected={form.preview.dateOrder === choice.value}>
@@ -213,9 +255,8 @@
 							</option>
 						{/each}
 					</select>
-				</label>
-				<label class="field">
-					<span>Decimal mark</span>
+				</Field>
+				<Field label="Decimal mark">
 					<select name="decimalMark">
 						{#each DECIMAL_CHOICES as choice (choice.value)}
 							<option value={choice.value} selected={form.preview.decimalMark === choice.value}>
@@ -223,16 +264,15 @@
 							</option>
 						{/each}
 					</select>
-				</label>
-				<label class="field">
-					<span>Name this layout</span>
+				</Field>
+				<Field label="Name this layout">
 					<input
 						name="name"
 						placeholder="e.g. Bank Mandiri current account"
 						value={form.preview.drift?.profileName ?? ''}
 						required
 					/>
-				</label>
+				</Field>
 			</div>
 
 			<button type="submit" class="btn primary">Read it this way</button>
@@ -259,6 +299,15 @@
 						<span class="i-meta mono">
 							{file.rowsAdded} filed{#if file.readAs}&nbsp;· {file.readAs}{/if}
 						</span>
+						<!-- Acknowledging hides the row. It deletes nothing: the import,
+						     its transactions, its stored file and its document all stay,
+						     and the content hash still makes a re-upload a duplicate. -->
+						<form method="POST" action="?/acknowledgeImport" use:enhance class="inline-form">
+							<input type="hidden" name="fileId" value={file.id} />
+							<button type="submit" class="r-dismiss" aria-label="Acknowledge {file.filename}">
+								✕
+							</button>
+						</form>
 					</summary>
 					<div class="i-body">
 						{#if file.proofLabel}
@@ -333,34 +382,167 @@
 				{:else}
 					<form method="POST" action="?/categorize" use:enhance class="cat-form">
 						<input type="hidden" name="id" value={r.id} />
-						<select name="categoryId">
-							<!-- Without a suggestion the prompt holds the selection, so an
-							     unguessed row never looks as though it were already filed. -->
-							<option value="" disabled selected={r.suggestedCategoryId === null}>File as…</option>
-							{#each data.categories as group (group.key)}
-								<optgroup label={group.label}>
-									{#each group.items as c (c.id)}
-										<option value={c.id} selected={r.suggestedCategoryId === c.id}>{c.name}</option>
-									{/each}
-								</optgroup>
-							{/each}
-						</select>
-						<button type="submit" class="btn">File it</button>
+						<!-- Not a native select. Its popup is placed by the browser, and on
+						     this screen — a long queue of rows, each with a chooser — opening
+						     one near the bottom expanded downwards past the fold, so the
+						     categories were off-screen until you scrolled to find them.
+						     CategoryPicker measures the room it has and opens upwards when
+						     there is more above. Without a suggestion the value starts empty,
+						     so an unguessed row never looks as though it were already filed. -->
+						<CategoryPicker
+							name="categoryId"
+							groups={data.categories}
+							value={r.suggestedCategoryId}
+							onpick={(id) => (chosen[r.id] = id)}
+						/>
+						<!-- The one category that needs a second answer, and only when the
+						     account cannot give it: money into a JOINT account filed as
+						     salary belongs to somebody, and nothing here knows who. An
+						     account with an owner is never asked. -->
+						{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
+							<label class="whose">
+								<span>Whose?</span>
+								<select name="salaryPersonId" required>
+									<option value="" disabled selected>Pick a person</option>
+									{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+								</select>
+							</label>
+							<label class="whose remember">
+								<input type="checkbox" name="rememberWhose" checked />
+								<span>Remember for “{r.merchant}”</span>
+							</label>
+						{/if}
+						<!-- Disabled until something is chosen: the placeholder posts an empty
+						     category, which the action rejects with a message that used to have
+						     nowhere to appear. The row read as an unresponsive button. -->
+						<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
+					</form>
+					<!-- Reachable from the row that prompted it. Nothing fitting is felt
+					     here, not on a settings screen. -->
+					<button type="button" class="btn" onclick={() => (addingCategory = true)}>
+						➕ New category…
+					</button>
+					<!-- The second answer to the same question, so it is marked as an
+					     alternative rather than lined up as a fourth control. This is the
+					     case pairing cannot reach: money moved to an account whose
+					     statements never arrive, so there is no second leg to match and
+					     the row looks like unexplained spending. -->
+					<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
+						<input type="hidden" name="id" value={r.id} />
+						<InfoHint label="What “not spending” means">
+							Money moved between your own accounts is neither income nor spending, so this row
+							stops counting in either.
+							<br /><br />
+							Both sides are normally matched automatically when you import both statements. Use this
+							when the other account's statements never arrive — a savings account you do not import —
+							so there is no second half to match against.
+						</InfoHint>
+						<label class="os-phrase">
+							<span>Moved to</span>
+							<select name="toAccountId" required aria-label="Which of your accounts">
+								<option value="" disabled selected>which account?</option>
+								{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
+									<option value={a.id}>{a.name}</option>
+								{/each}
+							</select>
+						</label>
+						<!-- Named for what it does to the figures, not for what it is
+						     called internally: "It is a transfer" said nothing about why
+						     you would press it. -->
+						<button type="submit" class="btn">Not spending</button>
 					</form>
 				{/if}
 			</div>
+
+			{#if form?.message && form?.id === r.id}
+				<p class="row-error" role="alert">{form.message}</p>
+			{/if}
 		</div>
 	{/each}
 </section>
 
+{#if addingCategory}
+	<Modal title="New category" onclose={() => (addingCategory = false)}>
+		<form
+			method="POST"
+			action="?/addCategory"
+			use:enhance={() => {
+				return async ({ result, update }) => {
+					// Stay open on a refusal so the message lands next to the field that
+					// caused it, rather than closing and losing what was typed.
+					if (result.type === 'success') {
+						addingCategory = false;
+						newGroupLabel = '';
+					}
+					await update();
+				};
+			}}
+			class="cat-modal"
+		>
+			<label>
+				<span>Name</span>
+				<input name="name" placeholder="Pharmacy" required />
+			</label>
+			<label>
+				<span>Group</span>
+				<select name="groupKey" disabled={newGroupLabel.trim() !== ''}>
+					{#each data.groups as g (g.key)}
+						<option value={g.key}>{g.label}</option>
+					{/each}
+				</select>
+			</label>
+			<div class="cat-newgroup">
+				<label>
+					<span>…or start a new group</span>
+					<input name="newGroupLabel" bind:value={newGroupLabel} placeholder="Pets" />
+				</label>
+				{#if newGroupLabel.trim()}
+					<label>
+						<span>Is it money in, money out, or money kept?</span>
+						<select name="newGroupRole">
+							{#each data.groupRoles as role (role)}
+								<option value={role}>{ROLE_LABELS[role] ?? role}</option>
+							{/each}
+						</select>
+					</label>
+					<!-- Colour is not asked for. The palette is ranked by how well each
+					     colour separates from the others under colour-vision deficiency,
+					     so the next one down is always the best remaining choice — and a
+					     free colour picker would produce two series nobody can tell
+					     apart. It can be changed afterwards from Settings. -->
+					<p class="cat-note">It takes the next colour from the palette.</p>
+				{/if}
+			</div>
+			{#if form?.message}
+				<p class="cat-error" role="alert">{form.message}</p>
+			{/if}
+			<div class="cat-actions">
+				<button type="submit" class="btn btn-primary">Add category</button>
+				<button type="button" class="btn" onclick={() => (addingCategory = false)}>Cancel</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
 <style>
+	.whose {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.whose.remember {
+		color: var(--fg3);
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	:global(.dropzone) {
 		padding: 34px 24px;
@@ -374,21 +556,21 @@
 	.assign {
 		display: flex;
 		align-items: baseline;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.assign select {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.assign-note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.wizard {
 		display: grid;
@@ -398,22 +580,29 @@
 	.w-columns {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		/* Three bands — header, role, sample — owned by this grid rather than by
+		   each column. Every .w-col opts into them with subgrid instead of
+		   starting a grid of its own, which is what let one two-line header push
+		   its own select down and nobody else's. */
+		grid-auto-rows: auto;
 		gap: 0.75rem;
 	}
 
 	.w-col {
 		display: grid;
+		grid-row: span 3;
+		grid-template-rows: subgrid;
 		gap: 0.25rem;
 	}
 
 	.w-head {
 		font-weight: 600;
-		font-size: 0.9rem;
+		font-size: var(--text-lg);
 		overflow-wrap: anywhere;
 	}
 
 	.w-sample {
-		font-size: 0.75rem;
+		font-size: var(--text-sm);
 		opacity: 0.7;
 		overflow-wrap: anywhere;
 	}
@@ -439,11 +628,15 @@
 		gap: 1rem;
 		cursor: pointer;
 		padding: 0.35rem 0;
+		/* The same token .result-row uses for the queue above. Without it this
+		   inherited body's --text-xl, so one filename was 16px in the recent list
+		   and 13px in the queue. */
+		font-size: var(--text-md);
 	}
 
 	.i-meta {
 		opacity: 0.75;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 	}
 
 	.i-body {
@@ -452,7 +645,7 @@
 
 	.i-proof {
 		margin: 0 0 0.4rem;
-		font-size: 0.9rem;
+		font-size: var(--text-lg);
 	}
 
 	.i-checks {
@@ -460,7 +653,7 @@
 		padding-left: 1rem;
 		display: grid;
 		gap: 0.2rem;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 	}
 
 	.i-checks .c-name {
@@ -473,7 +666,7 @@
 
 	.queue-depth {
 		margin: 0 0 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 		opacity: 0.75;
 	}
 
@@ -484,10 +677,13 @@
 	.result-row {
 		display: flex;
 		justify-content: space-between;
-		gap: 14px;
+		gap: var(--space-7);
+		/* A refused row carries a sentence and a button, not a word. Without this
+		   it stayed on one line and pushed the page 817px wide at 390px. */
+		flex-wrap: wrap;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.result-row:first-child {
 		border-top: 0;
@@ -498,67 +694,147 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.r-dismiss {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		padding: 0 var(--space-3);
+		font-size: var(--text-md);
+		line-height: 1;
+	}
+	.r-dismiss:hover:not(:disabled) {
+		color: var(--fg1);
+	}
+	.r-dismiss:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
 	.r-meta {
 		color: var(--fg3);
-		font-size: 12px;
-		white-space: nowrap;
+		font-size: var(--text-sm);
+		/* Was `white-space: nowrap`, which suits "waiting" and "12 added · 3 known
+		   · 1 paired" and is catastrophic for the other thing this holds: the
+		   reader's refusal sentence, followed by a "Map its columns" button. A
+		   flex item will not shrink below its content without min-width:0, so on
+		   a phone that single row became 1160px wide. */
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.review-row {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
+	}
+	.one-sided {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.os-phrase {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.cat-modal {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+	}
+	.cat-modal label {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.cat-newgroup {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		padding-top: 10px;
+		border-top: 1px solid var(--bd);
+	}
+	.cat-note {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.cat-error {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--red);
+	}
+	.cat-actions {
+		display: flex;
+		gap: var(--space-4);
+	}
+	.row-error {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--red);
 	}
 	.r-facts {
 		display: grid;
 		grid-template-columns: 76px minmax(0, 1fr) auto;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 	}
 	.r-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-mid {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.r-merchant {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.r-reason {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-amount {
-		font-size: 14px;
+		font-size: var(--text-lg);
 	}
 	.r-actions {
 		display: flex;
-		gap: 8px;
+		align-items: center;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		border-top: 1px solid var(--bd);
 		padding-top: 10px;
 	}
+	/* Filing sits left, the transfer answer sits right. They answer the same
+	   question, and opposite ends say they are alternatives far better than five
+	   controls in one queue did. */
+	.one-sided {
+		margin-left: auto;
+	}
 	.cat-form {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	select {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	@media (max-width: 640px) {
 		.r-facts {

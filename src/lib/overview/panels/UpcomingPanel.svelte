@@ -34,27 +34,27 @@
 		display: grid;
 		grid-template-columns: 52px minmax(0, 1fr) auto;
 		align-items: baseline;
-		gap: 12px;
+		gap: var(--space-6);
 		padding: 8px 0;
 		border-bottom: 1px solid var(--bd);
 	}
 	.up-date {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.up-label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.up-amount {
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.open-link {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		padding-top: 10px;
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

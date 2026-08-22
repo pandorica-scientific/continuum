@@ -317,19 +317,19 @@
 	.editor {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.modes {
 		display: flex;
 		align-items: center;
-		gap: 14px;
+		gap: var(--space-7);
 		flex-wrap: wrap;
 	}
 	.seg {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 3px;
 		background: var(--card);
 	}
@@ -337,9 +337,9 @@
 		border: 0;
 		background: transparent;
 		color: var(--fg3);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		padding: 6px 12px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	.seg button.active {
@@ -353,8 +353,8 @@
 	.scale {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		font-size: 12px;
+		gap: var(--space-4);
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.scale input {
@@ -362,28 +362,28 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 6px 9px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.hint {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		display: flex;
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: baseline;
 		flex-wrap: wrap;
 	}
 	.dims {
 		color: var(--fg1);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	svg {
 		width: 100%;
 		height: auto;
 		display: block;
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: var(--card);
 		touch-action: none;
 		cursor: crosshair;
@@ -407,7 +407,7 @@
 	}
 	.room-name {
 		fill: var(--fg1);
-		font-size: 22px;
+		font-size: var(--text-3xl);
 		font-family: var(--font-sans);
 		text-anchor: middle;
 		dominant-baseline: middle;
@@ -415,7 +415,7 @@
 	}
 	.room-area {
 		fill: var(--fg3);
-		font-size: 16px;
+		font-size: var(--text-xl);
 		text-anchor: middle;
 		dominant-baseline: middle;
 		pointer-events: none;
@@ -433,31 +433,31 @@
 	.toolbar {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.save-error {
 		margin: 0;
 		color: var(--red);
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.name-label {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		font-size: 12px;
+		gap: var(--space-4);
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.name-input {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.spacer {

@@ -20,7 +20,7 @@
  * forever in `running`.
  */
 import { uuidv7 } from 'uuidv7';
-import { and, asc, count, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { job } from '$lib/server/db/schema';
 import { ingestFile, type IngestResult } from './ingest';
@@ -35,6 +35,15 @@ type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
  * someone notices.
  */
 export const LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * How long a finished job stays in the list.
+ *
+ * Long enough to read what happened to a file you just dropped, short enough
+ * that the queue is not a growing pile of settled work nobody will look at
+ * again. The record itself is untouched — this governs one list on one screen.
+ */
+export const SETTLED_MS = 10 * 60 * 1000;
 
 interface QueuedJob {
 	id: string;
@@ -210,7 +219,17 @@ export async function queueStatus(
 				error: job.error
 			})
 			.from(job)
-			.where(eq(job.kind, 'import'))
+			.where(
+				and(
+					eq(job.kind, 'import'),
+					// A settled job stops being news after ten minutes. It leaves the
+					// list on its own rather than sitting there until somebody sweeps
+					// it, and there is no timer: `finished_at` is already recorded, so
+					// the query simply stops asking for old ones. Anything still queued
+					// or running is listed however long it has been waiting.
+					or(isNull(job.finishedAt), gt(job.finishedAt, new Date(Date.now() - SETTLED_MS)))
+				)
+			)
 			.orderBy(desc(job.queuedAt))
 			.limit(20)
 	]);
@@ -277,4 +296,33 @@ async function clearFinished(olderThanMs = KEEP_FINISHED_MS, handle: Handle = db
 		)
 		.returning({ id: job.id });
 	return removed.length;
+}
+
+/**
+ * Take a job out of the queue.
+ *
+ * Queued: it never ran, so removing it is a cancellation and the bytes go with
+ * it. Finished or failed: the reading is over and the row is a receipt, so
+ * removing it clears the list.
+ *
+ * Running: refused. The read is happening now, in another worker, and there is
+ * no way to stop it from here — deleting the row would leave that worker
+ * finishing into nothing and could leave a statement half ingested. Saying so
+ * is better than a control that pretends.
+ */
+export async function dismissJob(
+	id: string,
+	handle: Handle = db
+): Promise<{ ok: true } | { ok: false; message: string }> {
+	const [existing] = await handle.select().from(job).where(eq(job.id, id));
+	if (!existing) return { ok: true };
+	if (existing.kind !== 'import') return { ok: false, message: 'That is not an import job.' };
+	if (existing.state === 'running') {
+		return {
+			ok: false,
+			message: 'That file is being read right now — it can go once it finishes.'
+		};
+	}
+	await handle.delete(job).where(eq(job.id, id));
+	return { ok: true };
 }

@@ -36,7 +36,7 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.row {
 		display: grid;
@@ -44,13 +44,13 @@
 		gap: 4px 12px;
 	}
 	.label {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.figures {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.owned {
 		color: var(--fg3);
@@ -59,21 +59,21 @@
 		grid-column: 1 / -1;
 		height: 6px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.bar {
 		height: 100%;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		background: var(--green);
 	}
 	.detail {
 		grid-column: 1 / -1;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

@@ -6,6 +6,13 @@ import { brokerOperation, brokerPosition, holding, portfolioSnapshot } from '$li
 import { ingestBrokerFile } from '$lib/server/invest/ingest';
 import { annualisedReturn, buildSeries } from '$lib/server/invest/series';
 import { convertMinorSync, convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { getSetting, setSetting } from '$lib/server/settings';
+import {
+	DEFAULT_GAINS_POLICY,
+	parseGainsPolicy,
+	realisedGains,
+	type GainsPolicy
+} from '$lib/invest/gains';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
@@ -13,15 +20,26 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const [holdings, operations, snapshots, positions, rates] = await Promise.all([
+	const [holdings, operations, snapshots, positions, rates, taxPolicy] = await Promise.all([
 		db.select().from(holding).orderBy(desc(holding.valueMinor)),
 		db.select().from(brokerOperation).orderBy(asc(brokerOperation.happenedAt)),
 		db.select().from(portfolioSnapshot).orderBy(asc(portfolioSnapshot.day)),
 		db.select().from(brokerPosition),
-		loadRateTable()
+		loadRateTable(),
+		// How this household is taxed on what it sells. Configured rather than
+		// assumed: the rate differs by country, and the holding-period exemption
+		// below is a Czech rule that would produce wrong figures anywhere else.
+		getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY)
 	]);
 
 	const latestSnapshot = snapshots[snapshots.length - 1] ?? null;
+
+	// Realised this calendar year. Deliberately NOT converted: a disposal's gain
+	// is a fact in the currency it was realised in, and the tax on it is charged
+	// there too, so converting would produce a figure no tax office would
+	// recognise. Positions in another currency are counted separately below.
+	const thisYear = new Date().getUTCFullYear();
+	const gains = realisedGains(positions, thisYear, taxPolicy);
 	const accountCurrency =
 		latestSnapshot?.currency ?? holdings[0]?.currency ?? operations.at(-1)?.currency ?? 'EUR';
 	const operationValues = operations.map((operation) => {
@@ -167,6 +185,24 @@ export const load: PageServerLoad = async () => {
 			annualised:
 				annualised !== null ? `${annualised >= 0 ? '+' : ''}${annualised.toFixed(1)}%` : null
 		},
+		// The tax on what was sold this year. Shown beside the portfolio figures
+		// because that is where it is asked about, and marked an estimate on its
+		// face: it knows nothing about losses carried forward from earlier years,
+		// other income, allowances, or anything held outside this instance.
+		tax: {
+			year: thisYear,
+			configured: taxPolicy.ratePct > 0,
+			ratePct: taxPolicy.ratePct,
+			exemptLongHeld: taxPolicy.exemptLongHeld,
+			exemptAfterYears: taxPolicy.exemptAfterYears,
+			disposals: gains.disposals,
+			exemptDisposals: gains.exemptDisposals,
+			realised: formatMinor(gains.realisedMinor, accountCurrency),
+			realisedPositive: gains.realisedMinor >= 0n,
+			exempt: formatMinor(gains.exemptMinor, accountCurrency),
+			taxable: formatMinor(gains.taxableMinor, accountCurrency),
+			estimated: formatMinor(gains.estimatedTaxMinor, accountCurrency)
+		},
 		series,
 		donut,
 		holdings: rows
@@ -174,6 +210,24 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
+	/** How this household is taxed on what it sells. Configured, never assumed. */
+	setTax: async ({ request }) => {
+		const form = await request.formData();
+		const current = await getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY);
+		const text = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value : null);
+		const parsed = parseGainsPolicy(
+			{
+				ratePct: text(form.get('ratePct')),
+				exemptLongHeld: form.get('exemptLongHeld') === 'on',
+				exemptAfterYears: text(form.get('exemptAfterYears'))
+			},
+			current
+		);
+		if ('message' in parsed) return fail(400, { message: parsed.message });
+		await setSetting('investTax', parsed.policy);
+		return { ok: true };
+	},
+
 	upload: async ({ request }) => {
 		const form = await request.formData();
 		const file = form.get('report');

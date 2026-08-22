@@ -80,6 +80,25 @@ export function toMajor(amountMinor: bigint | number, currency: string): number 
 	return Number(amountMinor) / 10 ** minorDigits(currency);
 }
 
+/**
+ * Minor units as an exact decimal string in major units, for a form field.
+ *
+ * Not `toMajor`: that goes through Number and loses precision by construction,
+ * which is acceptable for a chart and not acceptable for a value someone is
+ * about to edit and save back. Plain digits and a dot, with no grouping, so
+ * `parseAmountToMinor` round-trips it whatever the locale.
+ */
+export function toMajorString(amountMinor: bigint, currency: string): string {
+	const digits = minorDigits(currency);
+	const negative = amountMinor < 0n;
+	const magnitude = negative ? -amountMinor : amountMinor;
+	if (digits === 0) return `${negative ? '-' : ''}${magnitude}`;
+	const scale = 10n ** BigInt(digits);
+	const whole = magnitude / scale;
+	const fraction = (magnitude % scale).toString().padStart(digits, '0');
+	return `${negative ? '-' : ''}${whole}.${fraction}`;
+}
+
 export function fromMajor(major: number, currency: string): bigint {
 	return BigInt(Math.round(major * 10 ** minorDigits(currency)));
 }

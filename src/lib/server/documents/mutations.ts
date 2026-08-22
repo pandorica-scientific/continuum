@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { uuidv7 } from 'uuidv7';
 import type { EnumValue } from '$lib/enums';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { document, documentLink, tagLink, subject } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
+import { removeUpload } from '$lib/server/system/files';
 
 interface CreateDocumentInput {
 	id: string;
@@ -18,6 +19,12 @@ interface CreateDocumentInput {
 	personIds: string[];
 	propertyIds: string[];
 	accountIds: string[];
+	/**
+	 * Transactions this document belongs to — a receipt against the payment it
+	 * evidences. Needs no table of its own: the far end of a document link is an
+	 * `entity`, and `transaction` is a registered kind.
+	 */
+	transactionIds: string[];
 	subjectIds: string[];
 	newSubjectName?: string;
 	tagNames: string[];
@@ -59,7 +66,13 @@ export async function insertDocumentAggregate(
 	// Four inserts became one. The far end of a document link is an `entity`, so
 	// what a target IS no longer decides which table the link goes in — which is
 	// what stops a new module needing a document_<thing> table of its own.
-	const targetIds = [...input.personIds, ...input.propertyIds, ...input.accountIds, ...subjectIds];
+	const targetIds = [
+		...input.personIds,
+		...input.propertyIds,
+		...input.accountIds,
+		...input.transactionIds,
+		...subjectIds
+	];
 	if (targetIds.length > 0) {
 		await handle
 			.insert(documentLink)
@@ -74,4 +87,30 @@ export async function insertDocumentAggregate(
 			.values({ tagId: resolved.id, targetId: input.id })
 			.onConflictDoNothing();
 	}
+}
+
+/**
+ * Remove a document from the household entirely: the record, everything it was
+ * linked to, and the uploaded file behind it.
+ *
+ * Only the `document` row is deleted here. The AFTER DELETE trigger on the
+ * table retires its `entity` row, and every link — document_link at both ends,
+ * tag_link — carries ON DELETE CASCADE from there, so the connectors go with
+ * it. Enumerating them in application code would be a second, quietly
+ * divergent copy of a rule the database already enforces.
+ *
+ * The file is unlinked after the row is gone, not before: a delete that fails
+ * must not leave a record pointing at a file that is no longer there.
+ */
+export async function deleteDocument(
+	documentId: string,
+	handle: Db = db
+): Promise<{ ok: boolean; removedFile: boolean }> {
+	const [row] = await handle
+		.delete(document)
+		.where(eq(document.id, documentId))
+		.returning({ storedName: document.storedName });
+	if (!row) return { ok: false, removedFile: false };
+	const removedFile = row.storedName ? await removeUpload(row.storedName) : false;
+	return { ok: true, removedFile };
 }

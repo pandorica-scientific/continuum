@@ -4,7 +4,12 @@
 	import { page } from '$app/state';
 	import BrandMark from './BrandMark.svelte';
 	import Icon from './Icon.svelte';
-	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
+	import {
+		areaForPath,
+		SETTINGS_PATH,
+		visibleAreas,
+		type ModuleToggles
+	} from '$lib/modules/registry';
 	import type { Theme } from '$lib/theme';
 
 	interface Props {
@@ -71,6 +76,12 @@
 
 	// The Import badge counts transactions awaiting review. Import is a screen
 	// inside Money now, so the count surfaces on the area that holds it.
+	// /settings belongs to no area now, so nothing in the nav lights up for it —
+	// the gear does instead.
+	const onSettings = $derived(
+		page.url.pathname === SETTINGS_PATH || page.url.pathname.startsWith(SETTINGS_PATH + '/')
+	);
+
 	const badgeArea = $derived(
 		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key
 	);
@@ -80,6 +91,20 @@
 	<div class="brand">
 		<BrandMark size={22} />
 		<span class="wordmark">Continuum</span>
+		<!-- Settings lives here rather than in the navigation. It used to share an
+		     "Admin" row with Documents, which put configuration somebody opens
+		     rarely behind the same click as paperwork somebody opens often. A gear
+		     beside the wordmark is where chrome belongs. -->
+		<a
+			class="settings"
+			href={SETTINGS_PATH}
+			aria-label="Settings"
+			aria-current={onSettings ? 'page' : undefined}
+			class:active={onSettings}
+			onclick={onNavigate}
+		>
+			<Icon name="gear" size={16} />
+		</a>
 	</div>
 
 	{#if netWorth !== null}
@@ -146,6 +171,21 @@
 </aside>
 
 <style>
+	.settings {
+		margin-left: auto;
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border-radius: var(--radius-sm);
+		color: var(--fg3);
+	}
+	.settings:hover,
+	.settings.active {
+		color: var(--fg1);
+		background: var(--card2);
+	}
+
 	aside {
 		background: var(--side);
 		border-right: 1px solid var(--bd);
@@ -171,47 +211,47 @@
 		padding: 0 8px;
 	}
 	.wordmark {
-		font-size: 15.5px;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
 	.networth {
 		padding: 10px 12px;
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		background: var(--card);
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
 	}
 	.amount {
-		font-size: 19px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
 	.ccy {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		margin-left: 5px;
 	}
 	.delta {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	/* One row per area, no group headings: the areas are the grouping now. */
 	nav {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.nav-item {
 		display: grid;
 		grid-template-columns: 20px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		padding: 8px 10px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--fg2);
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 400;
 	}
 	/* Tinted with the row's OWN colour rather than a neutral grey: the icon
@@ -246,7 +286,7 @@
 		white-space: nowrap;
 	}
 	.badge {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		color: var(--fg-inverse);
 		background: var(--yellow);
 		border-radius: 20px;
@@ -256,7 +296,7 @@
 		margin-top: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		border-top: 1px solid var(--bd);
 		padding-top: 14px;
 	}
@@ -264,7 +304,7 @@
 		display: flex;
 		align-items: baseline;
 		gap: 5px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		/* The dimmest foreground the palette has: present when looked for, never
 		   competing with a navigation row. */
 		color: var(--fg3);
@@ -279,16 +319,16 @@
 
 	.themes {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.themes button {
 		flex: 1 1 0;
 		border: 1px solid var(--bd);
 		background: transparent;
 		color: var(--fg3);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 4px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	.themes button.active {
@@ -299,14 +339,14 @@
 	.person {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		padding: 0 4px;
 	}
 	.sign-out {
 		border: 0;
 		background: transparent;
 		color: var(--fg2);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		cursor: pointer;
 		padding: 2px 0;
 	}
@@ -320,11 +360,11 @@
 		background: var(--card3);
 		display: grid;
 		place-items: center;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		flex: 0 0 auto;
 	}
 	.name {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		min-width: 0;
 		flex: 1;

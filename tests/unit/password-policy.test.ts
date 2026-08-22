@@ -1,38 +1,32 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
-import {
-	DEFAULT_ENROLLMENT_LINK_DAYS,
-	DEFAULT_PASSWORD_MIN_LENGTH,
-	daysPhrase,
-	passwordLengthError,
-	passwordHint
-} from '$lib/password-policy';
+import { passwordLengthError, passwordsMatchError } from '$lib/password-policy';
 
-describe('passwordHint', () => {
-	// The placeholder and the server guard are fed by the same number, so raising
-	// the minimum cannot leave an input advertising the old one.
-	it('states the configured minimum', () => {
-		expect(passwordHint(DEFAULT_PASSWORD_MIN_LENGTH)).toBe('8+ characters');
-		expect(passwordHint(12)).toBe('12+ characters');
+describe('passwordsMatchError', () => {
+	it('accepts two identical passwords', () => {
+		expect(passwordsMatchError('correct-horse', 'correct-horse')).toBeNull();
 	});
-});
 
-describe('passwordLengthError', () => {
-	it('centralizes the configurable minimum and caller-specific label', () => {
-		expect(passwordLengthError('short', 8, 'New password')).toBe(
-			'New password needs at least 8 characters.'
+	it('reports a mismatch', () => {
+		expect(passwordsMatchError('correct-horse', 'correct-hose')).toBe(
+			'The two passwords do not match.'
 		);
-		expect(passwordLengthError('long enough', 8, 'Password')).toBeNull();
-	});
-});
-
-describe('daysPhrase', () => {
-	it('spells small numbers, as the original prose did', () => {
-		expect(daysPhrase(DEFAULT_ENROLLMENT_LINK_DAYS)).toBe('seven days');
-		expect(daysPhrase(1)).toBe('one day');
 	});
 
-	it('falls back to digits past ten rather than inventing words', () => {
-		expect(daysPhrase(14)).toBe('14 days');
-		expect(daysPhrase(30)).toBe('30 days');
+	it('takes a label, so one message shape serves every screen', () => {
+		expect(passwordsMatchError('a', 'b', 'The two new passwords')).toBe(
+			'The two new passwords do not match.'
+		);
+	});
+
+	it('treats an empty confirmation as a mismatch rather than a match', () => {
+		// Otherwise a form that never rendered the second field would pass this
+		// check by accident, which is the failure it exists to catch.
+		expect(passwordsMatchError('correct-horse', '')).not.toBeNull();
+	});
+
+	it('does not care about length — that is the other rule', () => {
+		expect(passwordsMatchError('ab', 'ab')).toBeNull();
+		expect(passwordLengthError('ab', 8)).not.toBeNull();
 	});
 });

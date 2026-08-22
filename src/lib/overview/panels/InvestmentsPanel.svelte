@@ -43,34 +43,34 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.headline {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.value {
-		font-size: 19px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 	}
 	.caption {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.rows {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.row {
 		display: flex;
 		justify-content: space-between;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

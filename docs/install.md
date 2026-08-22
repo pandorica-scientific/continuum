@@ -34,7 +34,7 @@ Compose pulls a published image; nothing is built on your machine.
 
 Each release publishes its version tag and moves `latest` onto it, for
 `linux/amd64` and `linux/arm64`. `compose.yaml` uses `kerth92/continuum:latest`;
-edit that one `image:` line to pin a version (`kerth92/continuum:0.3.10`) or to
+edit that one `image:` line to pin a version (`kerth92/continuum:0.4.0`) or to
 pull from the mirror instead.
 
 To check what is actually running:
@@ -76,15 +76,34 @@ The named volumes are created on first use. The app runs its own migrations at
 boot, so there is no separate database step — open `http://localhost` and the
 setup wizard is there.
 
-`ORIGIN` must be the address you actually type, port included: map `-p
+> [!IMPORTANT]
+> `change-me` appears in both commands and the two must match. Postgres sets that
+> password when it initialises its volume; the app authenticates with it. Change
+> it in one place only and the app starts, fails to authenticate, and exits —
+> `docker logs continuum` shows `password authentication failed for user
+"continuum"`. Percent-encode `@`, `:`, `/` and `#` if your password contains
+> them, because `DATABASE_URL` is a URL.
+
+Postgres reads `POSTGRES_PASSWORD` only while its data directory is empty, so
+changing the password afterwards means `ALTER USER continuum PASSWORD …` inside
+the database container, not editing the variable.
+
+Keep `--restart unless-stopped` on the app container. It connects to the database
+at start rather than on the first request, so a database that is not up yet ends
+the process, and the restart policy is what brings it back.
+
+`ORIGIN` is optional and only governs passkeys. Sign-in works at whatever
+address you browse to, because form submissions are checked against that
+address rather than against a configured one. If you do set it — to turn
+passkeys on — it must be the address you actually type, port included: map `-p
 8080:3000` and it is `http://localhost:8080`, browse to a LAN name and it is
 `http://continuum.local`. Add `-e DEMO=1` to the app container to seed the demo
 household described below, and point the `/backups` mount at a host folder to
 have backups land somewhere cloud-synced.
 
-There is no Tailscale in this path, so the origin is plain HTTP and the passkey
-controls stay absent — `tailscale serve --bg 80` on the host adds HTTPS later
-without touching either container. See [Networking and passkeys](networking.md).
+Nothing above serves HTTPS, so the passkey controls stay absent until you add
+it — either `tailscale serve --bg 80` on the host, or the sidecar as a third
+container ([below](#tailscale)).
 
 Upgrading is a pull and a re-create; the volumes carry the data:
 
@@ -127,6 +146,42 @@ trusted certificate. It is tailnet-only, and until you authenticate it the sidec
 simply idles while the app stays reachable on the port above. See
 [Networking and passkeys](networking.md).
 
+Without Compose it is a third container on the same network. `tailscale/tailscale`
+is on Docker Hub like everything else here — nothing is built locally:
+
+```sh
+docker run -d --name continuum-ts --network continuum --restart unless-stopped \
+  --hostname continuum \
+  --cap-add NET_ADMIN --device /dev/net/tun \
+  -e TS_AUTHKEY='tskey-auth-…' \
+  -e TS_STATE_DIR=/var/lib/tailscale \
+  -v continuum-ts:/var/lib/tailscale \
+  tailscale/tailscale:latest
+
+docker exec continuum-ts tailscale serve --bg --https=443 http://continuum:3000
+```
+
+Run the `serve` line only once the container is actually on your tailnet: until
+then it answers `Logged out.` and does nothing. `docker exec continuum-ts
+tailscale status` tells you when it is up.
+
+`http://continuum:3000` is the app container by name on the `continuum` network —
+the Compose sidecar proxies to `http://app:3000` instead, because there the
+service is called `app`. The `serve` command stores its configuration in the state
+volume, which is why this path needs no `serve.json` on disk.
+
+Leave out `TS_AUTHKEY` if you would rather authenticate by hand: the container
+prints a login URL to `docker logs continuum-ts`.
+
+Finish by telling the app the name Tailscale issued — passkeys are verified
+against it exactly, so this is not optional:
+
+```sh
+docker rm -f continuum
+# re-run the app container with
+#   -e ORIGIN='https://continuum.<your-tailnet>.ts.net'
+```
+
 ## Environment variables
 
 All optional, all in `.env` next to `compose.yaml`.
@@ -135,7 +190,7 @@ All optional, all in `.env` next to `compose.yaml`.
 | ---------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_PASSWORD`    | `continuum`         | Database password. Set this.                                                                                                                        |
 | `CONTINUUM_PORT`       | `80`                | Host port, if something else already owns 80.                                                                                                       |
-| `ORIGIN`               | `http://localhost`  | The address you actually browse to. Form submissions are origin-checked.                                                                            |
+| `ORIGIN`               | unset               | Optional. The one `https://` address passkeys are bound to; sign-in works at every address without it.                                              |
 | `CONTINUUM_MAX_UPLOAD` | `32M`               | Largest accepted upload. A phone photo does not fit the server's own 512 KB default.                                                                |
 | `CONTINUUM_BACKUPS`    | `continuum-backups` | Host folder for backups — point it at a cloud-synced directory.                                                                                     |
 | `DEMO`                 | unset               | `1` seeds the demo household on a pristine instance.                                                                                                |

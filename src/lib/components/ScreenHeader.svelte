@@ -91,11 +91,11 @@
 	.titles {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	h1 {
 		margin: 0;
-		font-size: 28px;
+		font-size: var(--text-4xl);
 		font-weight: 600;
 		letter-spacing: -0.02em;
 		line-height: 1.2;
@@ -110,23 +110,23 @@
 		display: flex;
 	}
 	.caption {
-		font-size: 13.6px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 	.actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.synced {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		font-size: 12px;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		border: 1px solid var(--bd);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		background: var(--card);
 		white-space: nowrap;
@@ -136,7 +136,7 @@
 	   would shift every screen's content down by a variable amount. */
 	.subtabs {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		align-items: center;
 		border-bottom: 1px solid var(--bd);
 		padding-bottom: 10px;
@@ -148,7 +148,7 @@
 		display: none;
 	}
 	.tab {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		padding: 5px 12px;
 		border-radius: 20px;

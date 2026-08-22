@@ -53,11 +53,11 @@
 	.wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 		height: 100%;
 	}
 	.caption {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	svg {
@@ -66,7 +66,7 @@
 		width: 100%;
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

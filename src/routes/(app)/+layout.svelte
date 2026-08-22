@@ -112,6 +112,13 @@
 	{/if}
 
 	<main>
+		<!-- The open-instance banner used to live here, on every screen. It now
+		     appears in Settings, where it can be acted on, and on the SIGN-IN page,
+		     which is where somebody who did not expect an open instance actually
+		     meets it — before they are inside.
+		     The trade is deliberate and worth naming: somebody who did not turn it
+		     on will not be reminded unless they visit Settings. Against that, a
+		     warning on every screen forever is one nobody reads. -->
 		{#if showRateWarning}
 			<!-- The FACT stays on screen: a figure being approximate is exactly the
 			     kind of thing that must not hide behind an icon. Only the reason
@@ -251,7 +258,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 
 	.quick-menu {
@@ -260,7 +267,7 @@
 		/* Opaque: this floats over whatever is scrolling beneath it. */
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 4px;
 		box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
 		min-width: 190px;
@@ -269,11 +276,11 @@
 	.quick-item {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		padding: 8px 10px;
 		border-radius: 7px;
 		color: var(--fg1);
-		font-size: 13px;
+		font-size: var(--text-md);
 		text-decoration: none;
 		white-space: nowrap;
 	}
@@ -290,7 +297,7 @@
 		cursor: pointer;
 		width: 52px;
 		height: 52px;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background: var(--brand);
 		color: var(--fg-inverse);
 	}
@@ -301,15 +308,15 @@
 	.rate-warning {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 		margin: 0;
 		padding: 12px 14px;
 		border: 1px solid var(--bd2);
 		border-left: 3px solid var(--orange);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		background: var(--card3);
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 		line-height: 1.5;
 	}
 
@@ -318,7 +325,7 @@
 		border: none;
 		background: none;
 		color: var(--fg3);
-		font-size: 18px;
+		font-size: var(--text-2xl);
 		line-height: 1;
 		padding: 0 4px;
 		cursor: pointer;
@@ -383,7 +390,7 @@
 			z-index: 10;
 			width: 44px;
 			height: 44px;
-			border-radius: 12px;
+			border-radius: var(--radius-xl);
 			border: 1px solid var(--bd2);
 			/* Opaque, because this floats over content that scrolls under it.
 			   --card3 is rgba(255,255,255,0.09) in the dark theme — a tint meant to
@@ -391,7 +398,7 @@
 			   the icon lost its contrast against whatever passed beneath. */
 			background: var(--bg2);
 			color: var(--fg1);
-			font-size: 18px;
+			font-size: var(--text-2xl);
 			cursor: pointer;
 		}
 	}

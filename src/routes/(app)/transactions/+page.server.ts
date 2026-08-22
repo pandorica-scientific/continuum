@@ -2,9 +2,10 @@
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { account, category, tag } from '$lib/server/db/schema';
+import { loadCategories } from '$lib/server/categorize/leaves';
+import { account, tag } from '$lib/server/db/schema';
 import { getBaseCurrency } from '$lib/server/settings';
-import { fileTransaction, PAGE_SIZE, registerPage } from '$lib/server/transactions';
+import { fileTransaction, registerPage } from '$lib/server/transactions';
 import { deleteSplits, loadSplits, saveSplits } from '$lib/server/splits';
 import {
 	loadSplitTagsFor,
@@ -12,14 +13,28 @@ import {
 	setSplitTagSets,
 	updateTransactionTags
 } from '$lib/server/tags';
-import { parseFilter, REVIEW_STATES } from '$lib/transactions/filter';
+import {
+	DEFAULT_PAGE_SIZE,
+	PAGE_SIZES,
+	parseFilter,
+	REVIEW_STATES
+} from '$lib/transactions/filter';
 import {
 	INFERRED_SOURCES,
 	PROOF_LABELS,
 	SOURCE_LABELS,
 	sourceLabel
 } from '$lib/transactions/provenance';
-import { CATEGORY_GROUPS } from '$lib/categories';
+import { loadCategoryGroups } from '$lib/server/categorize/groups';
+import {
+	attachDocumentToTransaction,
+	detachDocumentFromTransaction,
+	loadTransactionDocuments
+} from '$lib/server/transactions/documents';
+import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
+import { saveUpload } from '$lib/server/system/files';
+import { uuidv7 } from 'uuidv7';
+import { extname } from 'node:path';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -29,7 +44,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const [page, categories, accounts] = await Promise.all([
 		registerPage(filter),
-		db.select().from(category).orderBy(category.groupKey, category.sort),
+		loadCategories(),
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
@@ -38,17 +53,32 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 	const rowIds = page.rows.map((r) => r.id);
-	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags] = await Promise.all([
+	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags, docsByTxn] = await Promise.all([
 		loadSplits(rowIds),
 		loadTagsFor(rowIds),
 		loadSplitTagsFor(rowIds),
-		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name)
+		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
+		loadTransactionDocuments(rowIds)
 	]);
 
 	/** A page link that carries every active filter forward. */
 	const pageHref = (n: number) => {
 		const params = new URLSearchParams(url.searchParams);
 		params.set('page', String(n));
+		return `?${params}`;
+	};
+
+	/**
+	 * Switching page size returns to page one.
+	 *
+	 * Staying put would be arithmetic nobody asked for: page 6 of 50 is page 26
+	 * of 10, and landing three hundred rows into the ledger is not what pressing
+	 * "10" means.
+	 */
+	const sizeHref = (size: number) => {
+		const params = new URLSearchParams(url.searchParams);
+		params.set('per', String(size));
+		params.delete('page');
 		return `?${params}`;
 	};
 
@@ -76,6 +106,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				reviewState: r.reviewState,
 				account: r.accountName,
 				isTransfer: r.isTransfer,
+				transferKind: r.transferKind,
 				// Only shown when the structure was worked out rather than declared:
 				// a row from a published format has nothing interesting to say here,
 				// and saying it on every row would be noise.
@@ -90,10 +121,15 @@ export const load: PageServerLoad = async ({ url }) => {
 				// from the parent transaction on save.
 				amountMajor: formatMinor(r.amount < 0n ? -r.amount : r.amount, r.currency),
 				tags: tagsByTxn.get(r.id) ?? [],
+				documents: docsByTxn.get(r.id) ?? [],
 				isSplit: splits.length > 0,
 				splits: splits.map((s) => ({
 					id: s.id,
 					amount: `${formatMinor(s.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
+					// Coloured like the transaction it divides: a split line reading in
+					// neutral grey under a red parent looks like a different kind of
+					// figure rather than a share of the same one.
+					negative: s.amountMinor < 0n,
 					amountMajor: formatMinor(s.amountMinor < 0n ? -s.amountMinor : s.amountMinor, r.currency),
 					categoryId: s.categoryId,
 					categoryLabel: s.categoryId ? (categoryName.get(s.categoryId) ?? null) : null,
@@ -108,7 +144,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		total: page.total,
 		pageCount: page.pageCount,
-		pageSize: PAGE_SIZE,
+		pageSize: filter.pageSize,
+		defaultPageSize: DEFAULT_PAGE_SIZE,
+		pageSizes: PAGE_SIZES.map((size) => ({
+			size,
+			href: sizeHref(size),
+			active: size === filter.pageSize
+		})),
 		knownTags,
 		reviewStates: REVIEW_STATES,
 		// Offered as a filter because these are the readings whose structure was
@@ -119,22 +161,108 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		proofLabels: PROOF_LABELS,
 		accounts,
-		categories: CATEGORY_GROUPS.map((group) => ({
-			key: group.key,
-			label: group.label,
-			items: categories.filter((c) => c.groupKey === group.key)
-		})).filter((g) => g.items.length > 0)
+		categories: (await loadCategoryGroups())
+			.map((group) => ({
+				key: group.key,
+				label: group.label,
+				items: categories.filter((c) => c.groupKey === group.key)
+			}))
+			.filter((g) => g.items.length > 0)
 	};
 };
 
 export const actions: Actions = {
 	file: async ({ request }) => {
 		const form = await request.formData();
-		const result = await fileTransaction(
-			asRowId(form.get('id')),
-			String(form.get('categoryId') ?? '')
-		);
-		if (!result.ok) return fail(result.status, { message: result.message });
+		const id = asRowId(form.get('id'));
+		const result = await fileTransaction(id, String(form.get('categoryId') ?? ''));
+		// The id travels with the failure so the screen can render the message
+		// against the row that produced it rather than in a banner at the top,
+		// where it read as unrelated to the button that was just pressed.
+		if (!result.ok) return fail(result.status, { id, message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Attach a receipt to a transaction.
+	 *
+	 * Either a file, which becomes a document on the receipts shelf and is then
+	 * linked, or a document already in the household's files. No schema work
+	 * behind it: `document_link` targets any entity and a transaction is one.
+	 */
+	attachDocument: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('id'));
+		const existingId = String(form.get('documentId') ?? '').trim();
+
+		if (existingId) {
+			const linked = await attachDocumentToTransaction(id, existingId);
+			if (!linked.ok) return fail(linked.status, { id, message: linked.message });
+			return { ok: true };
+		}
+
+		const file = form.get('file');
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { id, message: 'Choose a file, or a document you already have.' });
+		}
+		let storedName: string;
+		try {
+			storedName = await saveUpload(file);
+		} catch (err) {
+			return fail(400, { id, message: err instanceof Error ? err.message : 'Upload failed.' });
+		}
+
+		const documentId = uuidv7();
+		await createDocument({
+			id: documentId,
+			name: file.name || 'Receipt',
+			shelf: 'family',
+			storedName,
+			ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
+			addedOn: new Date().toISOString().slice(0, 10),
+			expiresOn: null,
+			expiryVerb: 'expires',
+			personIds: [],
+			propertyIds: [],
+			accountIds: [],
+			// Linked in the same aggregate the documents screen uses, so the file and
+			// its link commit together or not at all.
+			transactionIds: [id],
+			subjectIds: [],
+			// Also filed under a subject, and this is not decoration. The documents
+			// screen builds its columns from people, properties, accounts and
+			// subjects — a document linked only to a transaction would appear in no
+			// column at all, so a receipt you just attached would be missing from
+			// your own files. The subject is upserted by name, so they collect in
+			// one place.
+			newSubjectName: 'Receipts',
+			tagNames: ['receipt']
+		});
+		return { ok: true };
+	},
+
+	/**
+	 * Remove a receipt from a transaction.
+	 *
+	 * This deletes the document, not just the link. Unlinking only left the file
+	 * on the Documents shelf with no way to reach it from the row it came from
+	 * and — until now — no way to delete it there either, so every removed
+	 * receipt became litter nobody could clear.
+	 *
+	 * The control says "Delete" and asks twice, because this is not local to the
+	 * transaction: a receipt filed against something else as well goes from there
+	 * too.
+	 */
+	detachDocument: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('id'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { id, message: 'Which receipt?' });
+
+		// Unlink first: if the document is already gone, the row must still end up
+		// without a dangling reference to it.
+		await detachDocumentFromTransaction(id, documentId);
+		await deleteDocument(documentId);
 		return { ok: true };
 	},
 

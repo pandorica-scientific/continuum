@@ -73,7 +73,7 @@ npm run db:migrate     # applies it locally
 ```
 
 **The schema is additive-only.** `drizzle/0000_baseline.sql` is the whole schema
-as of 0.3.10; everything after it adds. Dropping or renaming a column means
+as of 0.4.0; everything after it adds. Dropping or renaming a column means
 writing the migration that carries the data across, because households are
 running the previous release.
 

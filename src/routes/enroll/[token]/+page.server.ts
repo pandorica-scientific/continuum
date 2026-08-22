@@ -4,9 +4,9 @@ import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { completeEnrollment, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
-import { passkeysAvailable } from '$lib/server/auth/webauthn/origin';
+import { currentOrigin, passkeysUsableFrom } from '$lib/server/auth/webauthn/origin';
 import { passwordMinLength } from '$lib/server/system/policy';
-import { passwordLengthError } from '$lib/password-policy';
+import { passwordLengthError, passwordsMatchError } from '$lib/password-policy';
 import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -46,13 +46,13 @@ async function enrollableePerson(token: string): Promise<{ id: string; name: str
 	return { id: row.id, name: row.name };
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
 	const target = await enrollableePerson(params.token);
 	if (!target) return INVALID;
 	return {
 		valid: true as const,
 		name: target.name,
-		passkeys: passkeysAvailable(),
+		passkeys: passkeysUsableFrom(url.origin, currentOrigin()).usable,
 		passwordMinLength: passwordMinLength()
 	};
 };
@@ -72,9 +72,8 @@ export const actions: Actions = {
 		const confirm = String(form.get('confirmPassword') ?? '');
 		const passwordError = passwordLengthError(password, passwordMinLength());
 		if (passwordError) return fail(400, { message: passwordError });
-		if (password !== confirm) {
-			return fail(400, { message: 'The two passwords do not match.' });
-		}
+		const mismatch = passwordsMatchError(password, confirm);
+		if (mismatch) return fail(400, { message: mismatch });
 
 		// completeEnrollment rechecks the token, active person and pending-password
 		// state in one transaction, so a closed account never burns its link.

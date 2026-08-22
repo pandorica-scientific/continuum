@@ -5,6 +5,7 @@ import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	account,
+	bank,
 	currencyRate,
 	importFile,
 	person,
@@ -17,7 +18,9 @@ import { convertMinorSync, type RateTable } from '$lib/server/fx/table';
 import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
+import { extname } from 'node:path';
 import { saveUpload } from '$lib/server/system/files';
+import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';
@@ -31,6 +34,7 @@ import {
 	type PairableTx
 } from './pairing';
 import type { ParsedRow, ParsedStatement } from './types';
+import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 interface LegacyRevolutIdentity {
 	bookedOn: string;
@@ -259,6 +263,16 @@ async function resolveAccount(
 	// account called `tabular EUR` and published it through /api/v1.
 	const id = uuidv7();
 	const label = statement.issuer ? (BANK_LABEL[statement.issuer] ?? statement.issuer) : 'Bank';
+	// An adapter that names an issuer the seed does not cover puts it in the
+	// picker, so the next account can be filed under a bank the household demonstrably
+	// uses. Only a real issuer — `statement.bank` is a format name for most
+	// readings, and a format is not a bank.
+	if (statement.issuer) {
+		await handle
+			.insert(bank)
+			.values({ key: statement.issuer, label, emoji: '🏦' })
+			.onConflictDoNothing();
+	}
 	// Suffix from the account number itself, not the bank code after the slash.
 	const numberPart = statement.accountNumber?.split('/')[0].replace(/\D/g, '') ?? '';
 	const suffix = numberPart ? ` ·${numberPart.slice(-4)}` : '';
@@ -595,6 +609,39 @@ function assertChainStartsWhereTheAccountLeftOff(
 	);
 }
 
+/**
+ * What a filed statement is called on the shelf.
+ *
+ * Built from what the statement proved about itself rather than from the file
+ * name, because bank exports are named things like
+ * `account-statement_2026-07-01_2026-07-31_en_38c41c.csv`. The file name is the
+ * fallback for a reading that could not say.
+ */
+function statementDocumentName(filename: string, statements: ParsedStatement[]): string {
+	const [first] = statements;
+	const period = first?.periodEnd ?? first?.periodStart;
+	const bank = BANK_LABEL[first?.bank ?? ''] ?? first?.bank;
+	if (!bank || !period) return filename;
+	const month = new Date(`${period}T00:00:00Z`).toLocaleString('en-GB', {
+		month: 'long',
+		year: 'numeric',
+		timeZone: 'UTC'
+	});
+	const account = first?.accountNumber;
+	return account ? `${bank} · ${account} · ${month}` : `${bank} · ${month}`;
+}
+
+/** Bank, account and year — the three things somebody looks a statement up by. */
+function statementDocumentTags(statements: ParsedStatement[]): string[] {
+	const [first] = statements;
+	const period = first?.periodEnd ?? first?.periodStart;
+	return [
+		BANK_LABEL[first?.bank ?? ''] ?? first?.bank,
+		first?.accountNumber,
+		period?.slice(0, 4)
+	].filter((tag): tag is string => Boolean(tag));
+}
+
 /** Ingest one uploaded statement file end to end. */
 export async function ingestFile(
 	filename: string,
@@ -819,6 +866,39 @@ export async function ingestFile(
 					reconciliation: only?.provenance?.checks ?? null
 				})
 				.where(eq(importFile.id, fileId));
+
+			// File the statement where it can be found again.
+			//
+			// The bytes were always kept — `storedName` above — but nothing ever
+			// surfaced them, so a statement you had imported was not a document you
+			// could open. This creates a row pointing at that same file; it does not
+			// copy anything.
+			//
+			// Only an ACCEPTED statement is filed. A refusal produced no ledger rows,
+			// and putting an unreadable file on a shelf with nothing to say about it
+			// is clutter rather than a record. A refusal never reaches this line: it
+			// throws out of the reader long before the transaction opens.
+			if (storedName) {
+				await insertDocumentAggregate(
+					{
+						id: uuidv7(),
+						name: statementDocumentName(filename, statements),
+						shelf: 'statements',
+						storedName,
+						ext: extname(filename).replace(/^\./, '').toLowerCase() || 'csv',
+						addedOn: new Date().toISOString().slice(0, 10),
+						expiresOn: null,
+						expiryVerb: 'expires',
+						personIds: [],
+						propertyIds: [],
+						accountIds: firstAccountId ? [firstAccountId] : [],
+						transactionIds: [],
+						subjectIds: [],
+						tagNames: statementDocumentTags(statements)
+					},
+					tx
+				);
+			}
 
 			const unresolved = outcomes.find((o) => o.needsAccount);
 			if (unresolved) {
@@ -1047,7 +1127,13 @@ async function pairAndCategoriseInTransaction(
 	const undecided = await handle
 		.select()
 		.from(transaction)
-		.where(and(isNull(transaction.categoryId), isNull(transaction.transferPairId)))
+		// `notOwnTransfer()` rather than a bare transferPairId check: a one-sided
+		// transfer has no category (a transfer is not spending) and no pair (there
+		// is no second leg), so it matches "undecided" exactly. It survived only
+		// because the loop below skips reviewState 'confirmed', which is a state
+		// this query has no business depending on. A transfer is never a candidate
+		// for categorisation, and now the query says so.
+		.where(and(isNull(transaction.categoryId), notOwnTransfer()))
 		.for('update');
 	// Read proposals after claiming the undecided rows. The global lock excludes
 	// another pairing pass, and waiting for ordinary row editors means their

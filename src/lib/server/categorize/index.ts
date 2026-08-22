@@ -2,8 +2,9 @@
 import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
-import { category, rule } from '$lib/server/db/schema';
-import { CATEGORY_SEED } from '$lib/categories';
+import { bank, category, categoryGroup, rule } from '$lib/server/db/schema';
+import { CATEGORY_GROUP_SEED, CATEGORY_SEED } from '$lib/categories';
+import { BANK_SEED } from '$lib/banks';
 import { DEFAULT_RULE_PRIOR, normalise, type RowLike, type ValueCondition } from '$lib/rules/match';
 
 // normalise lives in the pure rules module now, so matching has no server
@@ -85,7 +86,24 @@ export async function learnRule(
  * confidence score claims to measure.
  */
 export async function seedCategories(): Promise<void> {
+	// Groups first: category.group_key carries a foreign key into them.
+	for (const def of CATEGORY_GROUP_SEED) {
+		await db.insert(categoryGroup).values(def).onConflictDoNothing();
+	}
 	for (const def of CATEGORY_SEED) {
 		await db.insert(category).values(def).onConflictDoNothing();
+	}
+}
+
+/**
+ * Idempotent: seeds the banks a fresh instance starts with.
+ *
+ * onConflictDoNothing for the same reason the categories above use it — a label
+ * someone edited must not be reverted by the next restart. A bank a household
+ * added themselves is never touched here.
+ */
+export async function seedBanks(): Promise<void> {
+	for (const def of BANK_SEED) {
+		await db.insert(bank).values(def).onConflictDoNothing();
 	}
 }

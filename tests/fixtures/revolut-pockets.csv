@@ -1,0 +1,9 @@
+Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
+Topup,Current,2026-07-01 08:00:00,2026-07-01 08:00:04,Apple Pay top-up by *8000,5000.00,0.00,CZK,COMPLETED,5000.00
+Card Payment,Current,2026-07-03 06:44:16,2026-07-03 13:57:52,Streaming service,-339.00,0.00,CZK,COMPLETED,4661.00
+Transfer,Current,2026-07-12 14:30:34,2026-07-12 14:30:38,To A Person,-1000.00,7.00,CZK,COMPLETED,3654.00
+Card Payment,Current,2026-07-13 16:00:36,,A shop,-799.53,0.00,CZK,REVERTED,
+Card Payment,Current,2026-07-20 09:32:29,2026-07-20 10:51:53,A cafe,-54.00,0.00,CZK,COMPLETED,3600.00
+CASHBACK,Savings,2024-06-19 21:00:30,2024-06-20 07:01:53,Plan Cashback,0.17,0.00,CZK,COMPLETED,0.17
+Transfer,Savings,2024-06-20 11:10:43,2024-06-20 11:10:43,To CZK,-0.17,0.00,CZK,COMPLETED,0.00
+Transfer,Savings,2024-06-20 11:10:43,2024-06-20 11:10:43,Closing transaction,0.00,0.00,CZK,COMPLETED,0.00

@@ -2,12 +2,16 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import Sankey from './Sankey.svelte';
 	import { formatMinor, displayCurrency, fromMajor } from '$lib/money';
+	import { signTone } from './tone';
 	import type { FlowData } from '$lib/server/cashflow';
 
 	let { flow, currency }: { flow: FlowData; currency: string } = $props();
 
 	const fmt = (v: number) => formatMinor(fromMajor(v, currency), currency);
 	const unit = $derived(displayCurrency(currency));
+	// "In" is unsigned by construction. "Kept" is not: a month that spent more
+	// than it earned reported its shortfall in the colour of a gain.
+	const keptTone = $derived(signTone(flow.totals.kept));
 </script>
 
 <div class="card flow-card">
@@ -24,7 +28,7 @@
 		</div>
 		<div class="total">
 			<span class="eyebrow" style="letter-spacing: 0.07em;">Kept</span>
-			<span class="mono t-value" style="color: var(--green);"
+			<span class="mono t-value" style:color="var({keptTone})"
 				>{fmt(flow.totals.kept)}<span class="t-unit">{unit}</span></span
 			>
 		</div>
@@ -71,7 +75,7 @@
 		padding: 18px 20px 20px;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.totals {
 		display: flex;
@@ -82,15 +86,15 @@
 	.total {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.t-value {
-		font-size: 20px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		white-space: nowrap;
 	}
 	.t-unit {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		margin-left: 5px;
 	}
@@ -98,7 +102,7 @@
 		margin: 0;
 		padding: 40px 0;
 		text-align: center;
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg3);
 	}
 	.breakdown {
@@ -117,7 +121,7 @@
 	.b-head {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.b-dot {
 		width: 9px;
@@ -126,12 +130,12 @@
 		flex: 0 0 auto;
 	}
 	.b-label {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		color: var(--fg1);
 	}
 	.b-pct {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		margin-left: auto;
 	}
@@ -139,8 +143,8 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: 12px;
-		font-size: 12px;
+		gap: var(--space-6);
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

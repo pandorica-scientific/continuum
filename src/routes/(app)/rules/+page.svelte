@@ -233,17 +233,17 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 	}
 	.scope-note {
 		margin: 0;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.rule-row {
@@ -259,50 +259,50 @@
 	.r-main {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		flex: 1 1 320px;
 		min-width: 0;
 	}
 	.r-name {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.r-conditions,
 	.r-actions-taken {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-score {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.r-confidence {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		color: var(--fg2);
 	}
 	.r-confidence.trusted {
 		color: var(--green);
 	}
 	.r-counts {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.r-buttons {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.rule-form {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.rule-form label {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.rule-form input,
@@ -310,15 +310,15 @@
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.condition {
 		display: grid;
 		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	.add-condition {
@@ -327,13 +327,13 @@
 	.foot {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
 	}
 	.preview-count {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		margin-left: auto;
 	}
@@ -343,13 +343,13 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
-		font-size: 12px;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.empty {
 		color: var(--fg3);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	button[disabled] {
 		opacity: 0.45;

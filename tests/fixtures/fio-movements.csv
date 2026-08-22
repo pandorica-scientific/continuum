@@ -1,0 +1,4 @@
+﻿"Datum";"Objem";"Měna";"Protiúčet";"Kód banky";"Zpráva pro příjemce";"Poznámka";"Typ"
+"05.01.2026";"-30000";"CZK";"2500834780";"2010";"";"";"Platba převodem uvnitř banky"
+"31.01.2026";"90,72";"CZK";"";"";"";"";"Připsaný úrok"
+"31.01.2026";"-13,6";"CZK";"";"";"";"";"Odvod daně z úroků"

@@ -5,6 +5,7 @@
 // a database, in keeping with the src/lib split.
 
 import { ENUMS, isEnumValue, type EnumValue } from '$lib/enums';
+import type { Hue } from '$lib/ui/hue';
 
 import { parseAmountToMinor } from '$lib/money';
 
@@ -39,7 +40,21 @@ export interface RegisterFilter {
 	 */
 	sourceMethod: string | null;
 	page: number;
+	/** How many rows one page holds. One of PAGE_SIZES. */
+	pageSize: number;
 }
+
+/**
+ * The page sizes the register offers.
+ *
+ * A closed set, not a free number: the value reaches SQL as a LIMIT, and it is
+ * the URL — the one part of this filter anybody can hand-edit — that carries
+ * it. `?per=1000000` would otherwise be a request to render the whole ledger.
+ */
+export const PAGE_SIZES = [10, 25, 50] as const;
+
+/** Used when the URL says nothing. */
+export const DEFAULT_PAGE_SIZE = 10;
 
 /**
  * The review states the schema allows; anything else in the URL is noise.
@@ -50,6 +65,38 @@ export interface RegisterFilter {
  * the register, and the comment above claiming otherwise was simply false.
  */
 export const REVIEW_STATES = ENUMS['transaction.review_state'];
+
+type ReviewState = EnumValue<'transaction.review_state'>;
+
+/**
+ * What each review state is called on screen.
+ *
+ * A complete Record, so a state added to the enum stops the build here rather
+ * than showing up as a blank pill and an empty option in the filter — which is
+ * exactly what `filed` did while this map lived in the page and named three of
+ * the four.
+ */
+export const REVIEW_LABELS: Record<ReviewState, string> = {
+	auto: 'filed by rule',
+	needs_review: 'needs a look',
+	confirmed: 'confirmed',
+	filed: 'filed'
+};
+
+/**
+ * The hue each state is shown in.
+ *
+ * Green, amber and red mean state here as everywhere else, so only a verdict
+ * takes one: settled is green, waiting on somebody is amber. Filed by rule is
+ * the ordinary case — most of a register is in it, and a coloured pill on every
+ * line is noise rather than information.
+ */
+export const REVIEW_HUES: Record<ReviewState, Hue> = {
+	auto: 'grey',
+	needs_review: 'yellow',
+	confirmed: 'green',
+	filed: 'green'
+};
 
 const DIRECTIONS: Direction[] = ['any', 'in', 'out'];
 
@@ -83,7 +130,7 @@ function bound(params: URLSearchParams, key: string, baseCurrency: string): bigi
 	}
 }
 
-// Far beyond any real ledger, and small enough that page × PAGE_SIZE stays an
+// Far beyond any real ledger, and small enough that page × page size stays an
 // offset Postgres will accept. The server narrows this again once it knows the
 // real page count.
 const MAX_PAGE = 1_000_000;
@@ -92,6 +139,7 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 	const direction = params.get('dir') as Direction | null;
 	const review = text(params, 'review');
 	const page = Number(params.get('page'));
+	const per = Number(params.get('per'));
 
 	return {
 		search: text(params, 'q'),
@@ -110,6 +158,9 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		// Clamped, not merely checked for integerness: Number.isInteger(1e21) is
 		// true, so ?page=1e21 rendered as OFFSET 5e+22 and Postgres rejected the
 		// statement — a 500 from a hand-edited URL.
-		page: Number.isInteger(page) && page > 0 ? Math.min(page, MAX_PAGE) : 1
+		page: Number.isInteger(page) && page > 0 ? Math.min(page, MAX_PAGE) : 1,
+		// Membership, not a range check: anything else is a stale or hand-edited
+		// URL, and falling back is the only sound reading of it.
+		pageSize: (PAGE_SIZES as readonly number[]).includes(per) ? per : DEFAULT_PAGE_SIZE
 	};
 }

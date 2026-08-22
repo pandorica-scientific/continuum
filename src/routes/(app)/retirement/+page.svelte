@@ -386,16 +386,16 @@
 				vector-effect="non-scaling-stroke"
 			/>
 		</svg>
-		<div class="years mono">
-			{#each chart.years as year (year.label)}
-				<span class="year" style:left={year.left}>{year.label}</span>
-			{/each}
-			{#if chart.crossing}
-				<span class="year crossing" style:left={chart.crossing.left}>
-					{chart.crossing.label}
-				</span>
-			{/if}
-		</div>
+	</div>
+	<div class="years mono">
+		{#each chart.years as year (year.label)}
+			<span class="year" style:left={year.left}>{year.label}</span>
+		{/each}
+		{#if chart.crossing}
+			<span class="year crossing" style:left={chart.crossing.left}>
+				{chart.crossing.label}
+			</span>
+		{/if}
 	</div>
 	<div class="legend">
 		<span class="l"
@@ -518,15 +518,15 @@
 	.save-error {
 		margin: 0;
 		color: var(--red);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.salary-grid {
 		display: grid;
@@ -536,21 +536,21 @@
 	.person-block {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: var(--space-5);
 		min-width: 0;
 	}
 	.p-name {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		font-weight: 600;
 	}
 	.salary-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 	}
 	.salary-table th {
 		text-align: left;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		font-weight: 500;
 		color: var(--fg3);
 		padding: 4px 8px 6px 0;
@@ -569,69 +569,75 @@
 	.recent {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: var(--space-2);
 	}
 	.slip {
 		display: grid;
 		grid-template-columns: 64px minmax(0, 1fr) auto auto;
-		gap: 8px;
+		gap: var(--space-4);
 		align-items: center;
 	}
 	.slip-month {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.slip input {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 5px 9px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		font-family: var(--font-mono);
 	}
 	.slip-file {
 		text-decoration: none;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
+	/* Deliberately smaller than a form control: it rides inside a payslip row,
+	   not beside a field. */
 	.slip-save {
+		min-height: auto;
 		padding: 5px 10px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	.payslip-form {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 		align-items: end;
 	}
 	.payslip-form label {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
+		/* Lets a label — and the file input inside it, which reports the width of
+		   its button plus the filename — be narrower than its content and fit a
+		   1fr track. */
+		min-width: 0;
 	}
-	.payslip-form input,
-	.payslip-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
+	/* This row used to state its own control height, its own file-input padding
+	   and its own file-button styling — the fix for a file field that measured
+	   42px beside 36px selects and rode UP out of the row. That fix now lives in
+	   the base control layer and applies to every file field in the product, so
+	   what is left here is only what is particular to this row. */
+	.payslip-form input[type='file'] {
+		font-size: var(--text-sm);
 	}
 	.verdict {
 		background: var(--blue-tint);
 		border: 1px solid var(--blue);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 18px 22px;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.verdict p {
 		margin: 0;
-		font-size: 18px;
+		font-size: var(--text-2xl);
 		line-height: 1.6;
 		color: var(--fg1);
 	}
@@ -643,7 +649,7 @@
 		white-space: nowrap;
 	}
 	.verdict-line {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 11px;
@@ -651,7 +657,7 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.controls {
 		display: grid;
@@ -664,7 +670,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 7px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.control.wide {
@@ -677,9 +683,9 @@
 	}
 	input[type='number'] {
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 9px 11px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		background: var(--card);
 		width: 100%;
@@ -697,16 +703,16 @@
 	}
 	.seg {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.seg button {
 		flex: 1 1 0;
 		border: 1px solid var(--bd);
 		background: transparent;
 		color: var(--fg2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 8px 6px;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		white-space: nowrap;
 	}
@@ -716,7 +722,7 @@
 		color: var(--fg-inverse);
 	}
 	.quiet {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.table {
@@ -731,7 +737,7 @@
 		align-items: baseline;
 	}
 	.t-head {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
 		color: var(--fg3);
@@ -741,7 +747,7 @@
 	.t-row {
 		padding: 10px 0;
 		border-bottom: 1px solid var(--bd);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.t-row.now {
 		background: var(--card2);
@@ -759,18 +765,23 @@
 		width: 36px;
 		text-align: right;
 		transform: translateY(-50%);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.years {
 		position: relative;
 		height: 16px;
 		margin-top: 4px;
+		/* .chart's left padding used to provide this, while this row lived inside
+		   it. That containment is also what made the axis labels — positioned as
+		   a percentage of .chart — resolve 20px too low, dropping "0.0" onto the
+		   first year. The row is a sibling now, so it needs its own gutter. */
+		margin-left: 46px;
 	}
 	.year {
 		position: absolute;
 		transform: translateX(-50%);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
 	}
@@ -790,7 +801,7 @@
 		display: flex;
 		gap: 14px 18px;
 		flex-wrap: wrap;
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
@@ -807,7 +818,7 @@
 	.l-note {
 		margin-left: auto;
 		color: var(--fg3);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 	}
 	@media (max-width: 720px) {
 		.t-head,

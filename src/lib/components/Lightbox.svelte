@@ -35,7 +35,7 @@
 		max-width: 100%;
 		max-height: calc(100vh - 56px);
 		object-fit: contain;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 	}
 	.close {
 		position: fixed;
@@ -43,11 +43,11 @@
 		right: 16px;
 		width: 36px;
 		height: 36px;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		border: 1px solid var(--bd2);
 		background: var(--bg);
 		color: var(--fg1);
-		font-size: 15px;
+		font-size: var(--text-xl);
 		cursor: pointer;
 		display: grid;
 		place-items: center;

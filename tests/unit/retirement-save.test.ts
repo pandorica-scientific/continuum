@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { uuidv7 } from 'uuidv7';
 import { actions } from '../../src/routes/(app)/retirement/+page.server';
 
 function saveRequest(overrides: Record<string, string> = {}): Request {
 	const form = new FormData();
 	for (const [key, value] of Object.entries({
-		writerId: '99999999-9999-4999-8999-999999999999',
+		// The generator the page itself uses. A hand-written literal here is
+		// what let a pattern that rejects every real id pass the suite.
+		writerId: uuidv7(),
 		baseVersion: '0',
 		revision: '1',
 		spend: '60000',

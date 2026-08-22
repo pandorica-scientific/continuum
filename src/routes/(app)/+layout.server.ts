@@ -50,6 +50,8 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 
 	return {
 		modules,
+		// Carried on every screen, not just Settings: an instance anyone can walk
+		// into should say so wherever you are looking, or the state is a surprise.
 		householdLabel,
 		missingRates,
 		rateWarningDismissed,

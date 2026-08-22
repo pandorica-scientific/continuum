@@ -4,7 +4,7 @@
 // learned rule has to be replayed by `pairAndCategorise`, and ingest already
 // imports categorize — putting it there would close a cycle.
 
-import { and, asc, desc, eq, gte, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, or, sql, type SQL } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	account,
@@ -23,10 +23,10 @@ import {
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';
+import { attributeSalary, recordSalary, rememberAttribution } from '$lib/server/salary';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
-
-/** Rows per page. Enough that a month of a busy account fits in one or two. */
-export const PAGE_SIZE = 50;
+import type { EnumValue } from '$lib/enums';
+import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 /** Text the search box matches against — what a person actually remembers. */
 function searchable(term: string): SQL {
@@ -182,7 +182,7 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 
 	// Own-account transfers are noise in a ledger view, as they are in cash
 	// flow, so they stay out unless explicitly asked for.
-	if (!filter.includeTransfers) clauses.push(isNull(transaction.transferPairId));
+	if (!filter.includeTransfers) clauses.push(notOwnTransfer());
 	if (filter.sourceMethod) clauses.push(eq(transaction.sourceMethod, filter.sourceMethod));
 
 	return clauses.length > 0 ? and(...clauses) : undefined;
@@ -205,10 +205,13 @@ interface RegisterRow {
 	description: string | null;
 	categoryId: string | null;
 	categoryLabel: string | null;
-	reviewState: string;
+	/** The enum, not a bare string: the register colours and names each state. */
+	reviewState: EnumValue<'transaction.review_state'>;
 	accountId: string;
 	accountName: string;
 	isTransfer: boolean;
+	/** How it is known to be one: proved by two statements, or asserted. */
+	transferKind: 'paired' | 'one-sided' | null;
 	/** How this row was read, and how strongly it was proven. */
 	sourceMethod: string | null;
 	proofClass: string | null;
@@ -257,6 +260,7 @@ export async function registerPage(
 				accountId: transaction.accountId,
 				accountName: account.name,
 				transferPairId: transaction.transferPairId,
+				transferToAccountId: transaction.transferToAccountId,
 				sourceMethod: transaction.sourceMethod,
 				proofClass: transaction.proofClass
 			})
@@ -265,8 +269,8 @@ export async function registerPage(
 			.leftJoin(category, eq(transaction.categoryId, category.id))
 			.where(where)
 			.orderBy(desc(transaction.bookedOn), asc(transaction.id))
-			.limit(PAGE_SIZE)
-			.offset((filter.page - 1) * PAGE_SIZE),
+			.limit(filter.pageSize)
+			.offset((filter.page - 1) * filter.pageSize),
 		// Only one aggregate row per currency crosses the wire, regardless of
 		// ledger size. This replaces loading every matching transaction and split
 		// into Node merely to count and sum them.
@@ -302,11 +306,20 @@ export async function registerPage(
 			accountName: r.accountName,
 			sourceMethod: r.sourceMethod,
 			proofClass: r.proofClass,
-			isTransfer: r.transferPairId !== null
+			isTransfer: r.transferPairId !== null || r.transferToAccountId !== null,
+			// A matched pair is proved by two statements; a one-sided transfer is
+			// asserted by a person. The register says which, because only one of
+			// them is evidence.
+			transferKind:
+				r.transferPairId !== null
+					? ('paired' as const)
+					: r.transferToAccountId !== null
+						? ('one-sided' as const)
+						: null
 		})),
 		total,
 		totals,
-		pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE))
+		pageCount: Math.max(1, Math.ceil(total / filter.pageSize))
 	};
 }
 
@@ -317,10 +330,31 @@ type FileResult = { ok: true } | { ok: false; status: number; message: string };
  * correction made in the register carries the same weight as one made in the
  * review queue.
  */
+/**
+ * Whether filing into this category means "this is somebody's pay".
+ *
+ * Matched on the seeded id rather than the label, so renaming "Salary" to
+ * "Wages" keeps working — and on the id alone rather than the income ROLE,
+ * because rent received and dividends are income too and are nobody's salary.
+ */
+async function isSalaryCategory(categoryId: string, handle: Queryable): Promise<boolean> {
+	if (categoryId === 'salary') return true;
+	const [row] = await handle.select().from(category).where(eq(category.id, categoryId));
+	return row?.id === 'salary';
+}
+
 export async function fileTransaction(
 	id: string,
 	categoryId: string,
-	handle: Db = db
+	handle: Db = db,
+	/**
+	 * Whose salary this is, when the screen has just asked.
+	 *
+	 * Only read when the category is a salary one and the account is joint. An
+	 * account with an owner answers the question itself, and asking anyway would
+	 * be a question with one possible answer.
+	 */
+	salaryFor?: { personId: string; remember?: boolean }
 ): Promise<FileResult> {
 	if (!id || !categoryId)
 		return { ok: false, status: 400, message: 'Missing transaction or category.' };
@@ -376,6 +410,49 @@ export async function fileTransaction(
 		// own neighbourhood — and reading the whole unpaired ledger under row
 		// locks made one click of "File" wait on it.
 		await pairAndCategorise(tx, pairingWindowAround([row.bookedOn]));
+
+		// Money in, filed as salary, is salary history — the ledger already knew
+		// it and the salary screen could not see it. Recorded as NET, because a
+		// bank credit is what arrived after tax; a payslip fills the gross column
+		// of the same month.
+		if (row.amountMinor > 0n && (await isSalaryCategory(categoryId, tx))) {
+			const [acct] = await tx.select().from(account).where(eq(account.id, row.accountId));
+			const whose =
+				salaryFor?.personId ??
+				(
+					await attributeSalary(
+						{
+							accountOwnerPersonId: acct?.ownerPersonId ?? null,
+							counterparty: row.counterparty,
+							accountId: row.accountId
+						},
+						tx as unknown as Db
+					)
+				).personId;
+
+			if (whose) {
+				await recordSalary(
+					{
+						personId: whose,
+						periodMonth: row.bookedOn.slice(0, 7),
+						currency: row.currency,
+						netMinor: row.amountMinor,
+						source: 'statement',
+						transactionId: row.id
+					},
+					tx as unknown as Db
+				);
+				if (salaryFor?.remember && row.counterparty) {
+					await rememberAttribution(
+						{ matchKey: row.counterparty, personId: whose, accountId: row.accountId },
+						tx as unknown as Db
+					);
+				}
+			}
+			// Nobody to attribute it to leaves the money filed and the salary
+			// unrecorded, which is the honest outcome: guessing whose pay it is
+			// would corrupt two retirement projections rather than one.
+		}
 		return { ok: true };
 	});
 }

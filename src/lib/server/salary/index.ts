@@ -2,6 +2,10 @@
 // Server side of the salary tracker: pull the text out of an uploaded payslip
 // PDF, detect the pay amount and period, and remember which label the user's
 // corrections point at so the next slip for the same person reads itself.
+//
+// `./entries` is the other half: salary as it is RECORDED, from a payslip or
+// from a salary credit the ledger already holds.
+export * from './entries';
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';

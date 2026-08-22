@@ -34,12 +34,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-6);
 		flex-wrap: wrap;
 		margin-bottom: 12px;
 	}
 	.caption {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

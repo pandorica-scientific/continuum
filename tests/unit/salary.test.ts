@@ -135,17 +135,84 @@ describe('detectPeriod', () => {
 
 describe('salaryStats', () => {
 	it('averages per year and computes the year-on-year change and age', () => {
+		// A payslip states GROSS, so these arrive as gross months.
 		const slips = [
-			{ periodMonth: '2024-01', amountMinor: 40_000_00n },
-			{ periodMonth: '2024-07', amountMinor: 42_000_00n },
-			{ periodMonth: '2025-03', amountMinor: 45_100_00n }
+			{ periodMonth: '2024-01', grossMinor: 40_000_00n },
+			{ periodMonth: '2024-07', grossMinor: 42_000_00n },
+			{ periodMonth: '2025-03', grossMinor: 45_100_00n }
 		];
 		const rows = salaryStats(slips, 1990);
 		expect(rows).toHaveLength(2);
-		expect(rows[0]).toMatchObject({ year: 2024, age: 34, months: 2 });
+		expect(rows[0]).toMatchObject({ year: 2024, age: 34, months: 2, avgIsGross: true });
 		expect(rows[0].avgMonthlyMinor).toBe(41_000_00n);
 		expect(rows[0].deltaPct).toBeNull();
 		expect(rows[1].deltaPct).toBeCloseTo(10, 1); // 45 100 vs 41 000
 		expect(salaryStats([], null)).toHaveLength(0);
+	});
+
+	// The reason the two are kept apart. A payslip is gross, a bank credit is
+	// net; averaging them together produces a figure that is neither, and lower
+	// than the truth.
+	it('keeps gross and net apart, each over the months that have it', () => {
+		const rows = salaryStats(
+			[
+				{ periodMonth: '2026-01', grossMinor: 68_000_00n, netMinor: 52_000_00n },
+				{ periodMonth: '2026-02', netMinor: 52_400_00n },
+				{ periodMonth: '2026-03', netMinor: 53_000_00n }
+			],
+			null
+		);
+
+		expect(rows[0].grossAvgMinor).toBe(68_000_00n);
+		expect(rows[0].grossMonths).toBe(1);
+		expect(rows[0].netAvgMinor).toBe(52_466_66n);
+		expect(rows[0].netMonths).toBe(3);
+	});
+
+	it('reports the gross series when a year has one, and says so', () => {
+		const rows = salaryStats(
+			[{ periodMonth: '2026-01', grossMinor: 68_000_00n, netMinor: 52_000_00n }],
+			null
+		);
+		expect(rows[0].avgIsGross).toBe(true);
+		expect(rows[0].avgMonthlyMinor).toBe(68_000_00n);
+	});
+
+	it('falls back to net for a year that only came from the bank', () => {
+		const rows = salaryStats([{ periodMonth: '2026-01', netMinor: 52_000_00n }], null);
+		expect(rows[0].avgIsGross).toBe(false);
+		expect(rows[0].avgMonthlyMinor).toBe(52_000_00n);
+		expect(rows[0].grossAvgMinor).toBeNull();
+	});
+
+	// Otherwise the year somebody started uploading payslips reports a pay RISE
+	// of thirty percent, and the year they stopped reports a cut.
+	it('does not compare a gross year against a net one', () => {
+		const rows = salaryStats(
+			[
+				{ periodMonth: '2025-01', netMinor: 52_000_00n },
+				{ periodMonth: '2026-01', grossMinor: 68_000_00n }
+			],
+			null
+		);
+		expect(rows[0].avgIsGross).toBe(false);
+		expect(rows[1].avgIsGross).toBe(true);
+		expect(rows[1].deltaPct).toBeNull();
+	});
+
+	it('compares like against like across two gross years', () => {
+		const rows = salaryStats(
+			[
+				{ periodMonth: '2025-01', grossMinor: 60_000_00n },
+				{ periodMonth: '2026-01', grossMinor: 66_000_00n }
+			],
+			null
+		);
+		expect(rows[1].deltaPct).toBeCloseTo(10, 1);
+	});
+
+	it('ignores a month carrying neither figure', () => {
+		expect(salaryStats([{ periodMonth: '2026-01' }], null)).toHaveLength(0);
+		expect(salaryStats([{ periodMonth: '2026-01', grossMinor: null }], null)).toHaveLength(0);
 	});
 });

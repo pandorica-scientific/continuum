@@ -1,7 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { enhance } from '$app/forms';
+	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import TagInput from '$lib/components/TagInput.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
@@ -14,9 +16,59 @@
 	let { data, form } = $props();
 
 	let addingProperty = $state(false);
+	/** Close on success, stay open on a refusal so what was typed is still there
+	 *  to correct. Leaving it open on success is what made the wizard for the
+	 *  next one appear the moment one was added. */
+	const closeOnSuccess =
+		(close: () => void) =>
+		() =>
+		async ({
+			update,
+			result
+		}: {
+			update: () => Promise<void>;
+			result: import('@sveltejs/kit').ActionResult;
+		}) => {
+			await update();
+			if (shouldCloseAfterAction(result.type)) close();
+		};
 	let editingPlan = $state(false);
 	let addingTenancy = $state(false);
+	// A lease with no agreed end. The date input is disabled rather than hidden so
+	// the field it replaces stays where the eye expects it.
+	let openEnded = $state(false);
+	/** Which figure tile is open for editing, by its label. */
+	let editingFigure = $state<string | null>(null);
+	const figureSaved =
+		() =>
+		async ({ update }: { update: () => Promise<void> }) => {
+			editingFigure = null;
+			await update();
+		};
 	let addingBill = $state(false);
+
+	/**
+	 * The value line. Only drawn from two points up — one valuation is a dot, and
+	 * a dot pretending to be a trend is worse than no chart.
+	 */
+	const valueChart = $derived.by(() => {
+		const series = data.detail?.valueSeries ?? [];
+		if (series.length < 2) return null;
+		const values = series.map((v) => v.raw);
+		const max = Math.max(...values);
+		const min = Math.min(...values);
+		// A flat line still needs a denominator.
+		const span = max - min || Math.max(max, 1);
+		const x = (i: number) => (i / (series.length - 1)) * 800;
+		const y = (v: number) => 160 - ((v - min) / span) * 160;
+		return {
+			line: series.map((v, i) => `${x(i).toFixed(1)},${y(v.raw).toFixed(1)}`).join(' '),
+			axis: [0, 0.5, 1].map((f) => ({
+				top: `${f * 100}%`,
+				label: Math.round((min + (1 - f) * span) / 1000).toLocaleString('en-GB') + 'k'
+			}))
+		};
+	});
 	let lightbox = $state<string | null>(null);
 </script>
 
@@ -44,7 +96,12 @@
 </section>
 
 {#if addingProperty}
-	<form method="POST" action="?/addProperty" use:enhance class="card add-form">
+	<form
+		method="POST"
+		action="?/addProperty"
+		use:enhance={closeOnSuccess(() => (addingProperty = false))}
+		class="card add-form"
+	>
 		<div class="grid">
 			<label><span>Name</span><input name="name" placeholder="Karlín, Praha 8" /></label>
 			<label><span>Size line</span><input name="sizeLabel" placeholder="3+kk · 78 m²" /></label>
@@ -106,19 +163,165 @@
 				{/each}
 				<form method="POST" action="?/tags" use:enhance>
 					<input type="hidden" name="id" value={data.detail.id} />
-					<TagInput transactionId={data.detail.id} known={[]} placeholder="tag…" />
+					<TagInput transactionId={data.detail.id} known={[]} placeholder="Add a tag…" />
 				</form>
+				<!-- A bare box reading "tag…" beside no label explained nothing about
+				     what a tag is or why this flat would want one. -->
+				<InfoHint label="What a tag is for">
+					A tag groups spending that belongs to one project, across whatever categories it happens
+					to touch — a bathroom renovation is materials, a tradesman and a permit fee, filed under
+					three different categories.
+					<br /><br />
+					Tag them all “bathroom” and the Tags screen shows what the project has cost so far. The same
+					tag works on transactions, documents and loans, so everything about one project can be found
+					together.
+				</InfoHint>
 			</span>
 		</div>
 		<div class="tiles">
 			{#each data.detail.metrics as m (m.label)}
 				<div class="tile">
-					<span class="t-label">{m.label}</span>
-					<span class="mono t-value" style:color={m.color}>{m.value}</span>
+					<span class="t-label">
+						{m.label}
+						{#if m.edit}
+							<!-- Only on the two figures the property actually stores. The rest
+							     are computed from the loans and the tenancy, and a pencil on
+							     those would offer an edit the next recompute discards. -->
+							<button
+								type="button"
+								class="pencil"
+								aria-label="Edit {m.label}"
+								onclick={() => (editingFigure = editingFigure === m.label ? null : m.label)}
+							>
+								✏️
+							</button>
+						{/if}
+					</span>
+					{#if m.edit && editingFigure === m.label}
+						<form method="POST" action="?/setFigure" use:enhance={figureSaved} class="figure-form">
+							<input type="hidden" name="propertyId" value={data.detail.id} />
+							<input type="hidden" name="field" value={m.edit.field} />
+							<input name="amount" inputmode="decimal" value={m.edit.amount} />
+							{#if m.edit.field === 'value'}
+								<input name="valuedOn" type="date" value={m.edit.valuedOn ?? ''} />
+							{/if}
+							<div class="figure-actions">
+								<button type="submit" class="btn btn-primary">Save</button>
+								<button type="button" class="btn" onclick={() => (editingFigure = null)}>
+									Cancel
+								</button>
+							</div>
+						</form>
+					{:else}
+						<span class="mono t-value" style:color={m.color}>{m.value}</span>
+					{/if}
 					<span class="t-note">{m.note}</span>
 				</div>
 			{/each}
 		</div>
+	</section>
+
+	<section class="card stack">
+		<div class="eyebrow-row">
+			<Eyebrow emoji="📈" label="What it has been worth" />
+			<span class="eyebrow-caption">
+				{data.detail.valueSeries.length > 1
+					? `${data.detail.valueSeries.length} valuations`
+					: 'add a second valuation to see the line'}
+			</span>
+		</div>
+
+		{#if valueChart}
+			<div class="vchart">
+				{#each valueChart.axis as a (a.top)}
+					<span class="vaxis mono" style:top={a.top}>{a.label}</span>
+				{/each}
+				<svg viewBox="0 0 800 160" preserveAspectRatio="none">
+					{#each [0, 80, 160] as gy (gy)}
+						<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+					{/each}
+					<polyline
+						points={valueChart.line}
+						fill="none"
+						stroke="var(--purple)"
+						stroke-width="2.5"
+						stroke-linejoin="round"
+						vector-effect="non-scaling-stroke"
+					/>
+				</svg>
+			</div>
+			<div class="vyears mono">
+				<span>{data.detail.valueSeries[0].on}</span>
+				<span>{data.detail.valueSeries[data.detail.valueSeries.length - 1].on}</span>
+			</div>
+		{/if}
+
+		<ul class="vlist">
+			{#each [...data.detail.valueSeries].reverse() as v (v.on)}
+				<li>
+					<span class="mono">{v.on}</span>
+					<span class="vsource">{v.source}</span>
+					<span class="mono vvalue">{v.value}</span>
+				</li>
+			{:else}
+				<li class="quiet">No valuations yet — the first one starts the line.</li>
+			{/each}
+		</ul>
+
+		<form method="POST" action="?/addValuation" use:enhance class="vform">
+			<input type="hidden" name="propertyId" value={data.detail.id} />
+			<input type="hidden" name="currency" value={data.detail.currency} />
+			<label class="field"><span>On</span><input name="valuedOn" type="date" required /></label>
+			<label class="field"><span>Worth</span><input name="value" inputmode="decimal" /></label>
+			<label class="field">
+				<span>From</span>
+				<select name="source">
+					<option value="estimate">An estimate</option>
+					<option value="appraisal">An appraisal</option>
+					<option value="index">A price index</option>
+					<option value="purchase">What was paid</option>
+				</select>
+			</label>
+			<button type="submit" class="btn btn-primary">Add</button>
+		</form>
+		<!-- A past date leaves today's figure alone, which is what makes entering
+		     the history of a flat owned for years safe. -->
+		<span class="quiet">
+			Dating one in the past adds to the history without changing what the flat is worth today.
+		</span>
+	</section>
+
+	<section class="card stack">
+		<Eyebrow emoji="🧾" label="What it cost to buy" />
+		<!-- Money in is the household's OWN cash: the deposit plus the costs of
+		     buying. The price itself is mostly the bank's, and the part that becomes
+		     theirs arrives as the mortgage is repaid — which the loan already
+		     records. Counting the price here would double it. -->
+		<form method="POST" action="?/setOpening" use:enhance class="vform">
+			<input type="hidden" name="propertyId" value={data.detail.id} />
+			<input type="hidden" name="currency" value={data.detail.currency} />
+			<label class="field">
+				<span>Bought on</span>
+				<input name="purchasedOn" type="date" value={data.detail.opening?.purchasedOn ?? ''} />
+			</label>
+			<label class="field">
+				<span>Price</span>
+				<input name="price" inputmode="decimal" value={data.detail.opening?.price ?? ''} />
+			</label>
+			<label class="field">
+				<span>Fees &amp; tax</span>
+				<input name="costs" inputmode="decimal" value={data.detail.opening?.costs ?? ''} />
+			</label>
+			<label class="field">
+				<span>Deposit</span>
+				<input name="deposit" inputmode="decimal" value={data.detail.opening?.deposit ?? ''} />
+			</label>
+			<button type="submit" class="btn btn-primary">Save</button>
+		</form>
+		<span class="quiet">
+			Money in becomes the deposit plus the fees — your own cash. The rest of the price is the
+			bank's, and becomes yours as the mortgage is repaid.
+		</span>
 	</section>
 
 	<section class="two-col">
@@ -221,9 +424,16 @@
 					<form method="POST" action="?/addTenancy" use:enhance class="card add-form">
 						<input type="hidden" name="propertyId" value={data.detail.id} />
 						<div class="grid">
-							<label
-								><span>Tenant</span><input name="tenantName" placeholder="Martin Dvořák" /></label
-							>
+							<label>
+								<span>Tenant</span>
+								<!-- Suggests who is already in the address book, so the same person
+								     is not entered twice under two spellings. Adding a tenant files
+								     them in Contacts, reusing their record when the name matches. -->
+								<input name="tenantName" placeholder="Martin Dvořák" list="tenant-contacts" />
+								<datalist id="tenant-contacts">
+									{#each data.contactNames as name, i (i)}<option value={name}></option>{/each}
+								</datalist>
+							</label>
 							<!-- How to reach the tenant is a contact record now, not a string on
 						     the tenancy: it is attached from the Contacts screen once the
 						     tenancy exists, so a tenant with two numbers and an agent is
@@ -243,7 +453,22 @@
 								/></label
 							>
 							<label><span>Since</span><input name="startsOn" type="date" /></label>
-							<label><span>Lease ends</span><input name="endsOn" type="date" /></label>
+							<label>
+								<span>Lease ends</span>
+								<input
+									name="endsOn"
+									type="date"
+									disabled={openEnded}
+									value={openEnded ? '' : undefined}
+								/>
+							</label>
+							<label class="t-check">
+								<input type="checkbox" bind:checked={openEnded} />
+								<!-- A lease can run until somebody ends it. Requiring a date meant
+								     inventing one, and an invented end date drives the renewal
+								     reminder and the occupancy figures. -->
+								<span>No end date — runs until ended</span>
+							</label>
 							<label
 								><span>Renewal notice by</span><input name="renewalNoticeDate" type="date" /></label
 							>
@@ -404,17 +629,65 @@
 {/if}
 
 <style>
+	.vchart {
+		position: relative;
+		padding-left: 52px;
+	}
+	.vaxis {
+		position: absolute;
+		left: 0;
+		width: 44px;
+		text-align: right;
+		transform: translateY(-50%);
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.vyears {
+		display: flex;
+		justify-content: space-between;
+		margin-left: 52px;
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.vlist {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+	}
+	.vlist li {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		gap: var(--space-6);
+		align-items: baseline;
+	}
+	.vsource {
+		color: var(--fg3);
+	}
+	.vvalue {
+		color: var(--fg1);
+	}
+	.vform {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-6);
+		flex-wrap: wrap;
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.switcher {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 	.tab {
@@ -424,9 +697,9 @@
 		border: 1px solid var(--bd);
 		background: var(--card);
 		color: var(--fg2);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 10px 15px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		cursor: pointer;
 	}
 	.tab:hover {
@@ -438,7 +711,7 @@
 		border-color: var(--bd2);
 	}
 	.tab .tag {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.tab.add {
@@ -447,33 +720,54 @@
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.tile {
 		background: var(--card);
 		border: 1px solid var(--bd);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 12px 14px;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
+	}
+	.pencil {
+		background: none;
+		border: 0;
+		padding: 0 0 0 4px;
+		cursor: pointer;
+		font-size: var(--text-2xs);
+		opacity: 0.65;
+	}
+	.pencil:hover {
+		opacity: 1;
+	}
+	.figure-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		padding: 4px 0;
+	}
+	.figure-actions {
+		display: flex;
+		gap: var(--space-3);
 	}
 	.t-label {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.t-value {
-		font-size: 18px;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 	}
 	.t-note {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.two-col {
 		display: grid;
 		grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-		gap: 16px;
+		gap: var(--space-8);
 		align-items: start;
 	}
 	@media (max-width: 900px) {
@@ -484,11 +778,11 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.plan {
 		height: 300px;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1px solid var(--bd);
 	}
@@ -497,26 +791,27 @@
 		padding: 8px;
 	}
 	.plan-edit {
+		min-height: auto;
 		padding: 5px 11px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.photos {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		overflow-x: auto;
 		padding-bottom: 4px;
 	}
 	.photo {
 		flex: 0 0 200px;
 		height: 144px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		border: 1px solid var(--bd);
 	}
 	.tenant {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.avatar {
 		width: 40px;
@@ -525,7 +820,7 @@
 		background: var(--card3);
 		display: grid;
 		place-items: center;
-		font-size: 14px;
+		font-size: var(--text-lg);
 	}
 	.t-names {
 		display: flex;
@@ -534,17 +829,17 @@
 		min-width: 0;
 	}
 	.t-name {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 	}
 	.t-contact {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.facts {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.fact {
 		display: flex;
@@ -552,18 +847,18 @@
 		gap: 1px;
 	}
 	.f-label {
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.f-value {
-		font-size: 13.5px;
+		font-size: var(--text-md);
 	}
 	.bill {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: 12px;
-		font-size: 13px;
+		gap: var(--space-6);
+		font-size: var(--text-md);
 	}
 	.doc {
 		display: grid;
@@ -573,7 +868,7 @@
 		padding: 4px 0;
 	}
 	.ext {
-		font-size: 9.5px;
+		font-size: var(--text-2xs);
 		letter-spacing: 0.04em;
 		color: var(--fg3);
 		border: 1px solid var(--bd);
@@ -584,18 +879,18 @@
 	.doc-names {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
 	.doc-name {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.doc-meta {
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	.b-label {
 		color: var(--fg2);
@@ -603,24 +898,27 @@
 	.bill-form {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 110px auto;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.b-file {
 		text-decoration: none;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		margin-left: 4px;
 	}
 	.b-meter {
 		display: inline;
 	}
+	/* Sits inline inside a sentence, so it takes its height from the line it is
+	   part of rather than the form-control floor. */
 	.b-meter-btn {
+		min-height: auto;
 		margin-left: 6px;
 		padding: 1px 5px;
 		border: 1px solid transparent;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		background: none;
 		color: var(--fg3);
-		font-size: 11px;
+		font-size: var(--text-xs);
 		cursor: pointer;
 		opacity: 0.45;
 	}
@@ -639,34 +937,34 @@
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.55;
 	}
 	.track {
 		height: 8px;
 		background: var(--card3);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.fill {
 		height: 100%;
 		background: var(--green);
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 	}
 	.add-tile {
 		border: 1.5px dashed var(--bd2);
 		background: transparent;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 18px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 4px;
+		gap: var(--space-2);
 		cursor: pointer;
 		text-align: left;
 		color: var(--fg2);
@@ -675,57 +973,60 @@
 		border-color: var(--blue);
 	}
 	.a-title {
-		font-size: 14px;
+		font-size: var(--text-lg);
 		font-weight: 500;
 	}
 	.a-note {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.add-form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
+	}
+	/* A checkbox beside its own words, rather than under a label like the date
+	   and amount fields above it. */
+	.t-check {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-4);
+		align-self: end;
+		padding-bottom: 8px;
+	}
+	.t-check input {
+		width: auto;
 	}
 	label {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
-	}
-	input,
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
 	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.p-tags {
 		display: inline-flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.tag-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
 		border: 1px solid var(--bd2);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 3px 5px 3px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.tag-chip button {
@@ -733,7 +1034,7 @@
 		background: none;
 		color: var(--fg3);
 		cursor: pointer;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		padding: 0 3px;
 	}
 </style>

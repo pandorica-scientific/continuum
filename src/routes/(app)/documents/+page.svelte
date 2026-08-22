@@ -19,6 +19,17 @@
 		newSubjectOpen = false;
 	});
 
+	// Two taps rather than a browser confirm(): this deletes a stored file and
+	// every link to it, and a native dialog blocks the page while it is open.
+	// Keyed by document id, not by column — the same document appears in every
+	// column it belongs to, and arming one copy should arm the document.
+	let confirming = $state<string | null>(null);
+	$effect(() => {
+		// A delete reloads the page data; nothing should still be armed after it.
+		void data.columns;
+		confirming = null;
+	});
+
 	function navigate(shelf: string, q: string, tag = '') {
 		const parts: string[] = [];
 		if (shelf !== 'all') parts.push(`shelf=${encodeURIComponent(shelf)}`);
@@ -226,6 +237,21 @@
 									{d.meta}
 								</span>
 							</div>
+							{#if confirming === d.id}
+								<form method="POST" action="?/deleteDocument" use:enhance>
+									<input type="hidden" name="id" value={d.id} />
+									<button type="submit" class="del confirm">Delete?</button>
+								</form>
+							{:else}
+								<button
+									type="button"
+									class="del"
+									aria-label="Remove {d.name}"
+									onclick={() => (confirming = d.id)}
+								>
+									✕
+								</button>
+							{/if}
 						</div>
 					{/each}
 				</div>
@@ -243,21 +269,21 @@
 		border: 1px solid var(--red);
 		background: var(--red-tint);
 		color: var(--red);
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 9px 14px;
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.toolbar {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 	.toolbar input[type='text'] {
 		border: 1px solid var(--bd2);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 9px 12px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		color: var(--fg1);
 		background: var(--card);
 		flex: 1 1 260px;
@@ -280,27 +306,27 @@
 	.rail {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	.shelves {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.shelf {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 10px;
+		gap: var(--space-5);
 		width: 100%;
 		text-align: left;
 		border: 0;
 		cursor: pointer;
 		padding: 8px 10px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: transparent;
 		color: var(--fg2);
-		font-size: 13px;
+		font-size: var(--text-md);
 	}
 	.shelf:hover {
 		background: var(--card2);
@@ -316,18 +342,18 @@
 		white-space: nowrap;
 	}
 	.s-count {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.area {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-8);
 		min-width: 0;
 	}
 	.tag-chips {
 		display: flex;
-		gap: 6px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
 	.tag-chip {
@@ -336,7 +362,7 @@
 		color: var(--fg2);
 		border-radius: 20px;
 		padding: 5px 12px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 	.tag-chip:hover {
@@ -348,19 +374,19 @@
 		color: var(--blue);
 	}
 	.t-count {
-		font-size: 10.5px;
+		font-size: var(--text-2xs);
 		color: var(--fg3);
 		margin-left: 3px;
 	}
 	.columns {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
-		gap: 16px;
+		gap: var(--space-8);
 	}
 	.col {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 	}
 	.col-head {
 		display: flex;
@@ -370,23 +396,37 @@
 		border-bottom: 1px solid var(--bd);
 	}
 	.col-label {
-		font-size: 13px;
+		font-size: var(--text-md);
 		font-weight: 500;
 	}
 	.col-count {
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 	.doc {
 		display: grid;
-		grid-template-columns: 38px minmax(0, 1fr);
+		grid-template-columns: 38px minmax(0, 1fr) auto;
 		gap: 11px;
 		align-items: center;
 		padding: 10px 2px;
 		border-bottom: 1px solid var(--bd);
 	}
+	.del {
+		background: none;
+		border: 0;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-sm);
+		padding: 2px 4px;
+	}
+	.del:hover {
+		color: var(--red);
+	}
+	.del.confirm {
+		color: var(--red);
+	}
 	.ext {
-		font-size: 9.5px;
+		font-size: var(--text-2xs);
 		letter-spacing: 0.04em;
 		color: var(--fg3);
 		border: 1px solid var(--bd);
@@ -397,32 +437,34 @@
 	.names {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
+	/* Wraps rather than truncating. The remove button took the width the ellipsis
+	   was living on, and a document is found by its name — half of
+	   "Fio · 1234567890/2010 · July 2026" identifies nothing. */
 	.doc-name {
-		font-size: 13px;
+		font-size: var(--text-md);
 		color: var(--fg1);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
+		min-width: 0;
 	}
 	.meta {
-		font-size: 11px;
+		font-size: var(--text-xs);
 	}
 	.quiet {
-		font-size: 12.5px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	.add-form {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-		gap: 12px;
+		gap: var(--space-6);
 	}
 	label,
 	/* Checkboxes, not autocomplete: at household scale every possible owner
@@ -439,45 +481,31 @@
 	.tick {
 		flex-direction: row !important;
 		align-items: center;
-		gap: 6px;
-		font-size: 13px !important;
+		gap: var(--space-3);
+		font-size: var(--text-md) !important;
 		color: var(--fg1) !important;
 	}
 	.tick input {
 		width: auto;
 	}
 	.tick-add {
+		min-height: auto;
 		padding: 5px 10px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 	}
 	.new-subject {
 		border: 1px solid var(--bd2);
 		background: var(--card);
 		color: var(--fg1);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 7px 10px;
-		font-size: 13px;
+		font-size: var(--text-md);
 		width: 140px;
 	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-size: 12px;
-		color: var(--fg3);
-	}
 	.add-form input,
-	.add-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: 8px;
-		padding: 8px 11px;
-		font-size: 13.5px;
-	}
 	.expiry {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 		min-width: 0;
 	}
@@ -491,6 +519,6 @@
 	}
 	.row {
 		display: flex;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 </style>

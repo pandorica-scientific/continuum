@@ -27,6 +27,14 @@ afterAll(async () => {
 
 describe('the baseline migration', () => {
 	it('is the only migration', () => {
+		// Continuum has no users, so there is nothing to migrate FROM. `drizzle/`
+		// describes the schema as it is now, in one file, rather than describing
+		// how it got here — a chain of steps nobody will ever walk.
+		//
+		// Adding a second file is not forbidden by accident: fold the change into
+		// the baseline instead, and migrate any live instance by hand. The moment
+		// somebody other than us is running this, that stops being true and this
+		// test is the place the decision gets revisited.
 		expect(migrationFiles()).toEqual(['0000_baseline.sql']);
 	});
 

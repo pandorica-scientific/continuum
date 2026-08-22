@@ -196,39 +196,100 @@ interface SalaryYear {
 	year: number;
 	/** age that year, when the birth year is known */
 	age: number | null;
+	/**
+	 * Average monthly GROSS, over the months that have one.
+	 *
+	 * Gross and net are kept apart rather than averaged together, and this is the
+	 * whole point of the pair. A payslip states gross; a bank credit is net. A
+	 * year with payslips for four months and bank credits for twelve would
+	 * otherwise average four gross figures with eight net ones and call the
+	 * result a salary — a number that is neither, and lower than the truth.
+	 */
+	grossAvgMinor: bigint | null;
+	grossMonths: number;
+	/** Average monthly NET, over the months that have one. */
+	netAvgMinor: bigint | null;
+	netMonths: number;
+	/** Whichever of the two the year is best evidenced by, for the chart. */
 	avgMonthlyMinor: bigint;
+	/** How many months that figure came from. */
 	months: number;
-	/** average vs the previous listed year, in percent */
+	/** Whether `avgMonthlyMinor` is gross. Net is not comparable to it. */
+	avgIsGross: boolean;
+	/** average vs the previous listed year, in percent — like against like */
 	deltaPct: number | null;
 }
 
-/** Average monthly salary per year and the year-on-year change. */
-export function salaryStats(
-	slips: { periodMonth: string; amountMinor: bigint }[],
-	birthYear: number | null
-): SalaryYear[] {
-	const byYear = new Map<number, bigint[]>();
-	for (const slip of slips) {
-		const year = Number(slip.periodMonth.slice(0, 4));
+/** One month's salary, from a payslip, a bank credit, or both. */
+export interface SalaryMonth {
+	periodMonth: string;
+	grossMinor?: bigint | null;
+	netMinor?: bigint | null;
+}
+
+/**
+ * Average monthly salary per year, gross and net kept apart.
+ *
+ * Salary reaches this from two places now: a payslip, which states GROSS, and a
+ * salary credit on a bank statement, which is NET. They are not competing
+ * readings of one number and neither wins — a month can carry both, and a year
+ * reports each over the months that actually have it.
+ *
+ * `avgMonthlyMinor` is the series the chart draws, and it takes whichever half
+ * the year is better evidenced by, saying which via `avgIsGross`. The
+ * year-on-year change is only computed between years of the SAME kind: gross
+ * against net would report a pay cut where somebody simply started uploading
+ * payslips.
+ */
+export function salaryStats(months: SalaryMonth[], birthYear: number | null): SalaryYear[] {
+	const byYear = new Map<number, { gross: bigint[]; net: bigint[] }>();
+	for (const month of months) {
+		const year = Number(month.periodMonth.slice(0, 4));
 		if (!Number.isInteger(year)) continue;
-		if (!byYear.has(year)) byYear.set(year, []);
-		byYear.get(year)!.push(slip.amountMinor);
+		if (!byYear.has(year)) byYear.set(year, { gross: [], net: [] });
+		const bucket = byYear.get(year)!;
+		if (month.grossMinor !== null && month.grossMinor !== undefined) {
+			bucket.gross.push(month.grossMinor);
+		}
+		if (month.netMinor !== null && month.netMinor !== undefined) {
+			bucket.net.push(month.netMinor);
+		}
 	}
-	const years = [...byYear.keys()].sort();
+
+	const mean = (values: bigint[]): bigint | null =>
+		values.length ? values.reduce((sum, v) => sum + v, 0n) / BigInt(values.length) : null;
+
 	const rows: SalaryYear[] = [];
-	for (const year of years) {
-		const amounts = byYear.get(year)!;
-		const avg = amounts.reduce((s, a) => s + a, 0n) / BigInt(amounts.length);
+	for (const year of [...byYear.keys()].sort()) {
+		const { gross, net } = byYear.get(year)!;
+		if (gross.length === 0 && net.length === 0) continue;
+
+		const grossAvg = mean(gross);
+		const netAvg = mean(net);
+		// Gross when the year has any, because it is the figure a salary is
+		// normally quoted as — and the one comparable across employers.
+		const avgIsGross = grossAvg !== null;
+		const avg = (avgIsGross ? grossAvg : netAvg) as bigint;
+		const monthCount = avgIsGross ? gross.length : net.length;
+
+		// Like against like. The previous LISTED year may be of the other kind,
+		// which is exactly the case that would invent a pay cut.
 		const prev = rows[rows.length - 1];
+		const comparable = prev && prev.avgIsGross === avgIsGross && prev.avgMonthlyMinor > 0n;
+
 		rows.push({
 			year,
 			age: birthYear ? year - birthYear : null,
+			grossAvgMinor: grossAvg,
+			grossMonths: gross.length,
+			netAvgMinor: netAvg,
+			netMonths: net.length,
 			avgMonthlyMinor: avg,
-			months: amounts.length,
-			deltaPct:
-				prev && prev.avgMonthlyMinor > 0n
-					? Math.round((Number(avg) / Number(prev.avgMonthlyMinor) - 1) * 1000) / 10
-					: null
+			months: monthCount,
+			avgIsGross,
+			deltaPct: comparable
+				? Math.round((Number(avg) / Number(prev.avgMonthlyMinor) - 1) * 1000) / 10
+				: null
 		});
 	}
 	return rows;

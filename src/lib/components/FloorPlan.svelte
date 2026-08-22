@@ -68,14 +68,14 @@
 	}
 	.room-name {
 		fill: var(--fg1);
-		font-size: 26px;
+		font-size: var(--text-4xl);
 		font-family: var(--font-sans);
 		text-anchor: middle;
 		dominant-baseline: middle;
 	}
 	.room-area {
 		fill: var(--fg3);
-		font-size: 20px;
+		font-size: var(--text-2xl);
 		text-anchor: middle;
 		dominant-baseline: middle;
 	}
@@ -83,7 +83,7 @@
 		position: absolute;
 		right: 8px;
 		bottom: 6px;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		text-shadow:
 			0 0 8px var(--bg),

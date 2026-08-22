@@ -253,10 +253,10 @@
 		align-items: center;
 		gap: 9px;
 		border: 1px solid;
-		border-radius: 12px;
+		border-radius: var(--radius-xl);
 		padding: 4px 13px;
 		font-family: var(--font-mono);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		font-weight: 600;
 	}
 
@@ -285,14 +285,14 @@
 
 	.actions {
 		display: flex;
-		gap: 10px;
+		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
 
 	.actions a {
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 10px 18px;
-		font-size: 13.5px;
+		font-size: var(--text-md);
 		text-decoration: none;
 	}
 
@@ -330,7 +330,7 @@
 		flex-wrap: wrap;
 		gap: 6px 20px;
 		font-family: var(--font-mono);
-		font-size: 11.5px;
+		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
 
@@ -344,7 +344,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 12px;
+		gap: var(--space-6);
 		min-width: 0;
 	}
 
@@ -417,7 +417,7 @@
 		gap: 9px;
 		max-width: 34ch;
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: var(--text-sm);
 		line-height: 1.55;
 		text-align: left;
 	}

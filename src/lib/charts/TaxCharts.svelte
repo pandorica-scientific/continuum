@@ -133,15 +133,15 @@
 	.charts {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-		gap: 14px;
+		gap: var(--space-7);
 	}
 	.chart {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--space-4);
 	}
 	.c-title {
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	svg {
@@ -149,20 +149,20 @@
 		height: auto;
 	}
 	.axis {
-		font-size: 10px;
+		font-size: var(--text-2xs);
 		fill: var(--fg3);
 	}
 	.legend {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px 14px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
 	.l-item {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-3);
 	}
 	.dot {
 		width: 8px;
