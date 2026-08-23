@@ -117,9 +117,20 @@ async function boot(): Promise<void> {
 	setInterval(snapshotTick, 60 * 60 * 1000);
 }
 
+// A warm-up, not a gate: it moves the boot migrations off the first request
+// rather than deciding whether the server may run. So a failure here is logged
+// and swallowed — ensureReady() has already cleared its slot, and handle()
+// awaits it on every request, so the next one retries and the server recovers
+// on its own once the database is reachable. Letting the rejection escape
+// instead would kill the process: SvelteKit propagates it out of Server.init()
+// and adapter-node awaits that at module top level, so an unreachable database
+// at start became an unhandled rejection, an exit, and — under a restart
+// policy — an endless crash loop that no later recovery could interrupt.
 export const init: ServerInit = async () => {
 	if (building) return;
-	await ensureReady();
+	await ensureReady().catch((err) =>
+		console.warn('Boot deferred to first request:', err.message ?? err)
+	);
 };
 
 // /ics/<token> is public by design: calendar apps subscribe without a session,
