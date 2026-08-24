@@ -8,7 +8,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
+		"prepare": "svelte-kit sync || echo ''; git config core.hooksPath .githooks || true",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "eslint . && prettier --check .",
@@ -20,7 +20,9 @@
 		"db:studio": "drizzle-kit studio",
 		"test:unit": "vitest run",
 		"fetch:tessdata": "node scripts/fetch-tessdata.mjs",
-		"scan:unused": "node scripts/unused-exports.mjs"
+		"scan:unused": "node scripts/unused-exports.mjs",
+		"version:sync": "node scripts/sync-version.mjs",
+		"version:check": "node scripts/sync-version.mjs --check"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

@@ -44,6 +44,12 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
+      # Everything that names a version agrees with package.json. The same
+      # script the pre-commit hook runs, in its reporting mode — a check that
+      # reimplements what the fixer does is a check that eventually disagrees
+      # with it. package-lock had read 0.4.1 for three releases, because npm
+      # only rewrites it when a DEPENDENCY changes.
+      - run: npm run version:check
       - run: npm run lint
       - run: npm run check
       - run: npm test
