@@ -120,9 +120,11 @@ describe('the salary matrix pages', () => {
 		expect(body).toContain('1 / 2');
 	});
 
-	it('offers 5, 25 and 50 rows a page, five selected', () => {
+	it('offers 5, 25 and 50 rows a page, five selected, above the rows it sizes', () => {
 		const { body } = render(SalaryMatrix, { props: paged });
-		expect(body).toContain('Rows per page');
+		expect(body).toContain('years per page');
+		// How much to show is decided before reading; which page, after.
+		expect(body.indexOf('years per page')).toBeLessThan(body.indexOf('Previous page'));
 		expect(body).toContain('>50<');
 		expect(body).toContain('aria-current="true"');
 	});

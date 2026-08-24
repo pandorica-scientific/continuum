@@ -11,10 +11,11 @@
 	// column, and left-aligned numbers of differing lengths cannot be scanned.
 	import { compactMinor, displayCurrency, formatMinor } from '$lib/money';
 	import type { Snippet } from 'svelte';
-	import MatrixPager, {
-		DEFAULT_MATRIX_PAGE_SIZE,
-		MATRIX_PAGE_SIZES
-	} from '$lib/components/MatrixPager.svelte';
+	import ListPager from '$lib/components/ListPager.svelte';
+	import PageSize, {
+		DEFAULT_LIST_PAGE_SIZE,
+		LIST_PAGE_SIZES
+	} from '$lib/components/PageSize.svelte';
 
 	interface Country {
 		code: string;
@@ -53,7 +54,7 @@
 	/** Newest first: the year a person opens this screen for is the last one. */
 	const ordered = $derived([...years].sort((a, b) => b.year - a.year));
 
-	let size = $state<number>(DEFAULT_MATRIX_PAGE_SIZE);
+	let size = $state<number>(DEFAULT_LIST_PAGE_SIZE);
 	const pages = $derived(Math.max(1, Math.ceil(ordered.length / size)));
 	let page = $state(0);
 	// A record that shrank — a delete, a filter — must not strand the view on a
@@ -111,6 +112,14 @@
 </script>
 
 <div class="matrix">
+	{#if ordered.length > LIST_PAGE_SIZES[0]}
+		<!-- Above the rows it sizes: how much to show is a decision made before
+		     reading, while which page to read is one made after. -->
+		<div class="tools">
+			<PageSize bind:size onchange={() => (page = 0)} label="years" />
+		</div>
+	{/if}
+
 	<div class="scroll">
 		<div class="head" style:grid-template-columns={columns}>
 			<span class="h-cell">Year</span>
@@ -204,8 +213,8 @@
 	<!-- Shown whenever the record is longer than the smallest page size, even
 	     when the current size fits it all: the size switcher lives here, and
 	     hiding it would leave no way back to a smaller page. -->
-	{#if ordered.length > MATRIX_PAGE_SIZES[0]}
-		<MatrixPager bind:page bind:size {pages} range={pageRange} label="years" />
+	{#if ordered.length > LIST_PAGE_SIZES[0]}
+		<ListPager bind:page {pages} range={pageRange} />
 	{/if}
 </div>
 
@@ -221,6 +230,12 @@
 	.scroll {
 		overflow-x: auto;
 		min-width: 0;
+	}
+	.tools {
+		display: flex;
+		justify-content: flex-end;
+		padding: 8px var(--space-6);
+		border-bottom: 1px solid var(--bd2);
 	}
 	.head,
 	.row,

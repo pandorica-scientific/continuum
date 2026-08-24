@@ -34,6 +34,7 @@
 - 📋 **Adding a payslip is a dialog, like filing a tax statement** — it holds its own draft, so a refusal stays on screen with the figures still in the fields
 - 📈 **A bonus is drawn at the foot of a salary bar with the base above it** — the other way round, a bonus that changed size each year moved the base's boundary for a reason that had nothing to do with the base
 - 🔢 **Both money tables put their All row on top and page their years** — five to a page by default, switchable to 25 or 50, with the lifetime total and the bar's scale still taken over the whole record so neither changes as you page
+- 📜 **The Rules list pages too** — a household that has filed for a while grows dozens of them, and every one was on a single screen; the most-overridden stay on the first page, which are the ones worth looking at
 - 🧹 **A tax year's attachments keep detach and delete behind one ⋯ menu** — a bare ⇥ and a bare 🗑 sat beside a caption claiming delete had moved behind that menu
 
 ## 0.4.5 — 2026-08-24
