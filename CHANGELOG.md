@@ -2,6 +2,42 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.6 — 2026-08-24
+
+> A payslip states two figures, and the reader had only ever been told about one of them.
+
+### 🐛 Fixed
+
+- 💰 **A payslip's gross and net are read and stored as two separate figures** — the reader ranked net wordings and everything downstream filed what it found as gross, so the salary history and the tax prefill both reported net pay as gross
+- 📊 **The reader takes the amount printed next to a wording, not the last one on the line** — a real payslip is a table whose cells arrive joined, so every column to the right of "Hrubá mzda" kept a label containing it and the tax column was read as the gross
+- 🎁 **A bonus is no longer summed out of a whole table row** — the same joined-row problem made one 65 251 award read as 367 766, larger than the gross it was supposedly part of
+- 🧾 **The tax statement's gross-income prefill reads real gross** — it summed the same net-shaped figure, understating every year by the tax and insurance withheld and firing the divergence note on correctly-entered statements
+- 🔤 **A bonus assembled from more than one line on the slip can now be learned** — the learner required a single line to equal the stated total, so the promise to remember the wording silently failed on exactly the months worth correcting
+- 📄 **A bonus correction reads that month's payslip, not any document filed against that person** — with no shelf filter it could read a tax statement while hunting for a bonus line, or learn January's wording for August
+- 📐 **The charts' rotated axis titles sit on the band they name** — both were pinned at percentages that missed the money panel's centre and the rate strip's, and would have drifted further the moment a band moved
+- 🔇 **The startup backfill says which slips it refused and why** — it counted a slip as re-read and then dropped it in silence, so a run could report four read while filing two
+
+### ✨ Added
+
+- 🧮 **The Salary screen has the Tax screen's shape** — a summary band, a person filter, the chart, then a table of years that opens into the payslips it read them from, in place of one repeated block per person
+- 👥 **A household view** — "Both" adds every person's years together, merging the totals rather than averaging the averages, which would weight a person paid for two months the same as one paid for twelve
+- 🔍 **The upload dialog reads the slip as soon as you choose it** — gross, net, bonus and the month are filled in for checking before anything is written, and a prefilled figure is not mistaken for a decision you made
+- ➕ **Quick-add offers a payslip and a tax statement** — both open their form on arrival
+
+### 🔧 Changed
+
+- 🏦 **Every payslip figure lives on the salary entry, and the document is just the stored file** — the two-source merge that let a net figure be read as gross is gone rather than repaired
+- 🔁 **Payslips already uploaded are re-read from their stored files at first boot** — a slip whose file is gone is filed as net, which is what the old reader preferred, rather than guessed at
+- ✏️ **Every figure on the Salary screen is labelled and editable** — the amount had no caller in the interface at all, so a misread figure could never be corrected from the screen that owned it
+- 🗑️ **A payslip can be deleted or replaced from the Salary screen** — delete removes the month it evidenced and names what is going first; re-uploading a slip for a month updates it in place instead of leaving two
+- 🚫 **The reader no longer falls back to the largest amount on the slip** — pointed at gross it would reliably find total employment cost, and a figure the form asks about once beats a confident wrong one
+- 📋 **Adding a payslip is a dialog, like filing a tax statement** — it holds its own draft, so a refusal stays on screen with the figures still in the fields
+- 📈 **A bonus is drawn at the foot of a salary bar with the base above it** — the other way round, a bonus that changed size each year moved the base's boundary for a reason that had nothing to do with the base
+- 🔢 **Both money tables put their All row on top and page their years** — five to a page by default, switchable to 25 or 50, with the lifetime total and the bar's scale still taken over the whole record so neither changes as you page
+- 🔤 **A household with one rule is told it has one rule** — the count read "1 rules"
+- 📜 **The Rules list pages too** — a household that has filed for a while grows dozens of them, and every one was on a single screen; the most-overridden stay on the first page, which are the ones worth looking at
+- 🧹 **A tax year's attachments keep detach and delete behind one ⋯ menu** — a bare ⇥ and a bare 🗑 sat beside a caption claiming delete had moved behind that menu
+
 ## 0.4.5 — 2026-08-24
 
 > Bumping the version is now what cuts the release, because remembering to push a tag afterwards is not a plan.

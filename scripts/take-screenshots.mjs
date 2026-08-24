@@ -66,11 +66,18 @@ const THEMES = ['dark', 'light'];
 const SCREENS = [
 	{ name: 'overview', path: '/overview', settle: 900, phone: true },
 	{ name: 'cashflow', path: '/cashflow', settle: 900 },
+	{ name: 'accounts', path: '/accounts', settle: 600 },
 	{ name: 'transactions', path: '/transactions', phone: true },
+	{ name: 'import', path: '/import' },
+	{ name: 'rules', path: '/rules' },
+	{ name: 'tags', path: '/tags', settle: 600 },
 	{ name: 'property', path: '/property', settle: 600, phone: true },
 	{ name: 'loans', path: '/loans', settle: 600 },
 	{ name: 'investments', path: '/investments', settle: 900 },
 	{ name: 'retirement', path: '/retirement', settle: 900 },
+	// Its own screen since v0.4.4, and unphotographed until v0.4.6. The band and
+	// the chart both draw after their data arrives, hence the settle.
+	{ name: 'salary', path: '/salary', settle: 900 },
 	// Nine statements push the history charts past a 1150px viewport, and the
 	// charts are the point of the screen — scroll to them rather than trimming
 	// the demo data to fit the frame.
@@ -92,6 +99,32 @@ async function signIn(page) {
 	await page.locator('input[name="password"]').fill(PASSWORD);
 	await page.locator('button[type="submit"]:has-text("Sign in")').click();
 	await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 });
+}
+
+/**
+ * Put this person into the theme being photographed.
+ *
+ * The theme is stored against the PERSON and handed back in a cookie that
+ * `app.html` reads before first paint, so it can only be set once signed in —
+ * signing in rewrites the cookie from what the database holds.
+ *
+ * This used to seed a localStorage key instead, which nothing has read since
+ * the theme moved server-side. Every `-light-` capture was silently identical
+ * to its `-dark-` twin, named after a theme it was not in.
+ */
+async function setTheme(page, theme) {
+	const response = await page.evaluate(async (next) => {
+		const res = await fetch('/settings/theme', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ theme: next })
+		});
+		return res.status;
+	}, theme);
+	if (response !== 200) throw new Error(`Could not set the ${theme} theme (${response}).`);
+	// The choice is applied before paint from the cookie, so the page has to be
+	// loaded again for it to take.
+	await page.reload({ waitUntil: 'networkidle' });
 }
 
 /**
@@ -121,17 +154,10 @@ async function capture(browser, device, theme) {
 		colorScheme: theme
 	});
 
-	// The app reads its own theme from localStorage before first paint, so it
-	// has to be set on the origin before any app page loads — otherwise the
-	// first screenshot of each run catches the default theme instead.
-	await context.addInitScript(
-		([key, value]) => window.localStorage.setItem(key, value),
-		['ledger-theme', theme]
-	);
-
 	const page = await context.newPage();
 	await signIn(page);
 	await assertSignedIn(page, 'sign-in');
+	await setTheme(page, theme);
 
 	for (const screen of wanted.filter((s) => !device.mobile || s.phone)) {
 		await page.goto(`${BASE_URL}${screen.path}`, { waitUntil: 'networkidle' });

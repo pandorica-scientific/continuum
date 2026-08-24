@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveRatePct, payslipYearTotal, payslipYearTotalConverted, taxSeries } from '$lib/tax';
+import {
+	effectiveRatePct,
+	salaryYearGrossTotal,
+	salaryYearGrossTotalConverted,
+	taxSeries,
+	type SalaryGrossMonth
+} from '$lib/tax';
 import { saveStatement } from '$lib/server/tax';
 
 const stmt = (over: Partial<Parameters<typeof taxSeries>[0][number]> = {}) => ({
@@ -32,36 +38,51 @@ describe('effectiveRatePct', () => {
 	});
 });
 
-describe('payslipYearTotal', () => {
-	const slips = [
-		{ personId: 'p1', periodMonth: '2025-01', amountMinor: 5000000n },
-		{ personId: 'p1', periodMonth: '2025-02', amountMinor: 5000000n },
-		{ personId: 'p2', periodMonth: '2025-03', amountMinor: 9900000n },
-		{ personId: 'p1', periodMonth: '2024-11', amountMinor: 4000000n },
-		{ personId: 'p1', periodMonth: '2025-04', amountMinor: null }
+describe('salaryYearGrossTotal', () => {
+	const ROBERT = 'p1';
+	const months: SalaryGrossMonth[] = [
+		{ personId: ROBERT, periodMonth: '2025-01', grossMinor: 5000000n, currency: 'CZK' },
+		{ personId: ROBERT, periodMonth: '2025-02', grossMinor: 5000000n, currency: 'CZK' },
+		{ personId: 'p2', periodMonth: '2025-03', grossMinor: 9900000n, currency: 'CZK' },
+		{ personId: ROBERT, periodMonth: '2024-11', grossMinor: 4000000n, currency: 'CZK' },
+		// Evidenced only by a bank credit: net is known, gross is not.
+		{ personId: ROBERT, periodMonth: '2025-04', grossMinor: null, currency: 'CZK' }
 	];
 
-	it('sums one person one year, skipping slips without an amount', () => {
-		expect(payslipYearTotal(slips, 'p1', 2025)).toEqual({ totalMinor: 10000000n, months: 2 });
+	it('sums one person one year, skipping months with no gross', () => {
+		expect(salaryYearGrossTotal(months, ROBERT, 2025)).toEqual({
+			totalMinor: 10000000n,
+			months: 2
+		});
+	});
+
+	it('counts only months that actually have a gross figure', () => {
+		// A net-only month must not count toward "N months of payslips" — that
+		// count is what tells the Tax screen how completely a year is evidenced.
+		expect(salaryYearGrossTotal(months, ROBERT, 2025).months).toBe(2);
 	});
 
 	it('does not borrow another person or another year', () => {
-		expect(payslipYearTotal(slips, 'p2', 2025).totalMinor).toBe(9900000n);
-		expect(payslipYearTotal(slips, 'p1', 2024).totalMinor).toBe(4000000n);
+		expect(salaryYearGrossTotal(months, 'p2', 2025).totalMinor).toBe(9900000n);
+		expect(salaryYearGrossTotal(months, ROBERT, 2024).totalMinor).toBe(4000000n);
 	});
 
 	it('is zero when nothing matches', () => {
-		expect(payslipYearTotal(slips, 'nobody', 2025)).toEqual({ totalMinor: 0n, months: 0 });
+		expect(salaryYearGrossTotal(months, 'nobody', 2025)).toEqual({ totalMinor: 0n, months: 0 });
+	});
+
+	it('reports zero months for a year with no gross at all', () => {
+		expect(salaryYearGrossTotal(months, ROBERT, 2023)).toEqual({ totalMinor: 0n, months: 0 });
 	});
 });
 
-describe('payslipYearTotalConverted', () => {
-	it('converts each payslip at its own month before summing', () => {
+describe('salaryYearGrossTotalConverted', () => {
+	it('converts each month at its own date before summing', () => {
 		const seen: string[] = [];
-		const result = payslipYearTotalConverted(
+		const result = salaryYearGrossTotalConverted(
 			[
-				{ personId: 'p1', periodMonth: '2025-01', amountMinor: 100n, currency: 'EUR' },
-				{ personId: 'p1', periodMonth: '2025-02', amountMinor: 200n, currency: 'CZK' }
+				{ personId: 'p1', periodMonth: '2025-01', grossMinor: 100n, currency: 'EUR' },
+				{ personId: 'p1', periodMonth: '2025-02', grossMinor: 200n, currency: 'CZK' }
 			],
 			'p1',
 			2025,
@@ -74,6 +95,22 @@ describe('payslipYearTotalConverted', () => {
 
 		expect(result).toEqual({ totalMinor: 2700n, months: 2 });
 		expect(seen).toEqual(['EUR|CZK|2025-01-01', 'CZK|CZK|2025-02-01']);
+	});
+
+	it('never asks the converter about a month with no gross', () => {
+		const seen: string[] = [];
+		const result = salaryYearGrossTotalConverted(
+			[{ personId: 'p1', periodMonth: '2025-01', grossMinor: null, currency: 'EUR' }],
+			'p1',
+			2025,
+			'CZK',
+			(amount, from, to, day) => {
+				seen.push(`${from}|${to}|${day}`);
+				return amount;
+			}
+		);
+		expect(result).toEqual({ totalMinor: 0n, months: 0 });
+		expect(seen).toEqual([]);
 	});
 });
 

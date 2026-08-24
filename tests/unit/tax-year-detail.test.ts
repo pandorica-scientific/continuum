@@ -56,11 +56,24 @@ describe('the expanded year', () => {
 		expect(body).toContain('multiple');
 	});
 
-	it('posts detach to its own action, distinct from deletion', () => {
-		// Detaching keeps the paperwork; deleting destroys it. Conflating them
-		// would make an unlink silently remove a filed document.
+	it('gives every attachment a menu rather than bare icons', () => {
+		// A bare ⇥ and a bare 🗑 used to sit on each attachment row beneath a
+		// caption claiming delete lived behind the ⋯ menu. One pattern now.
 		const { body } = render(TaxYearDetail, { props });
-		expect(body).toContain('?/detach');
+		expect(body.match(/aria-label="More for [^"]+"/g)).toHaveLength(3);
+		expect(body).not.toContain('⇥');
+		expect(body).not.toContain('🗑');
+	});
+
+	it('keeps detach a distinct action from deletion', () => {
+		// Detaching keeps the paperwork; deleting destroys it. Conflating them
+		// would make an unlink silently remove a filed document. Both live in the
+		// attachment's menu, which SSR never opens — so the source is the only
+		// place to assert they are two actions.
+		const source = readFileSync(resolve('src/lib/components/TaxYearDetail.svelte'), 'utf8');
+		expect(source).toContain('?/detach');
+		expect(source).toContain('?/deleteAttachment');
+		expect(source).toContain('Detach — keeps the file');
 	});
 
 	it('does not expose delete unarmed — the first tap only arms it', () => {
@@ -92,9 +105,11 @@ describe('the expanded year', () => {
 		expect(body).toContain('Two filings in one year is a move, not a mistake');
 	});
 
-	it('points at the new home of delete when there is only one filing', () => {
+	it('says nothing about where delete lives, because there is nothing to explain', () => {
+		// The caption claimed "Delete lives behind the ⋯ menu now" while a bin sat
+		// two inches above it. With one gesture pattern the caption is noise.
 		const { body } = render(TaxYearDetail, { props });
-		expect(body).toContain('Delete lives behind');
+		expect(body).not.toContain('Delete lives behind');
 	});
 
 	it('shows a divergence from the payslips when there is one', () => {

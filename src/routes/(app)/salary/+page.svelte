@@ -1,27 +1,59 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-	// One person per block: the chart, then the years, then the payslips it read
-	// them from. Two people are two blocks rather than two overlaid series —
-	// salaries are not compared against each other, they are read one at a time.
+	// Band of filters, chart, table — the Tax screen's shape, applied to what was
+	// earned rather than what was paid on it.
+	//
+	// It used to be one repeated block per person: a chart, then a flat list of
+	// payslips, once per person, stacked. A second person grew a second
+	// everything and there was no way to see the household at all.
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
-	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import SalaryMatrix, { SALARY_COLUMNS } from '$lib/components/SalaryMatrix.svelte';
+	import SalarySummaryBand from '$lib/components/SalarySummaryBand.svelte';
+	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
 	import type { SalaryMode } from '$lib/charts/salary-chart-geometry';
 
-	let { data, form } = $props();
+	let { data } = $props();
 
-	let adding = $state(false);
 	let mode = $state<SalaryMode>('avg');
-	let editingBonus = $state<string | null>(null);
+	let personFilter = $state('both');
+	let openYear = $state<number | null>(null);
+	// Keyed `${documentId}|${field}` — one editor open at a time across the
+	// whole screen, so two half-typed corrections can never both be pending.
+	let editing = $state<string | null>(null);
+	let confirming = $state<string | null>(null);
+	// Its own toggle: the upload form's explainer and this one answer different
+	// questions, and opening one to read the other would be a small lie.
+	let showSlipHint = $state(false);
 
-	const anyHistory = $derived(data.history.some((p) => p.years.length > 0));
-	// A person with nothing recorded gets no block. An empty chart and an empty
-	// payslip list say only that the screen works, and a household where one
-	// person has never been paid through it would carry that noise forever.
-	const withHistory = $derived(
-		data.history.filter((p) => p.years.length > 0 || p.payslips.length > 0)
+	// The dialog holds its own draft and shows its own refusal, so the page no
+	// longer has to reopen a collapsed form and refill it. `?add=1` from the
+	// quick-add menu is the only thing that opens it from outside.
+	let adding = $state(data.openAdd);
+
+	const peopleOptions = $derived([
+		{ value: 'both', label: 'Both' },
+		...data.people.map((p) => ({ value: p.id, label: p.name }))
+	]);
+
+	const selected = $derived(
+		personFilter === 'both' ? null : (data.history.find((p) => p.id === personFilter) ?? null)
 	);
+	const years = $derived(selected ? selected.years : data.household);
+	// Payslips follow the filter; under "Both" every person's are listed, each
+	// one carrying whose it is so two Augusts are not mistaken for one.
+	const payslips = $derived(
+		(selected ? [selected] : data.history).flatMap((p) =>
+			p.payslips.map((s) => ({ ...s, personId: p.id, personName: p.name }))
+		)
+	);
+	const slipsFor = (year: number) =>
+		payslips.filter((s) => Number(s.periodMonth.slice(0, 4)) === year);
+
+	const anyHistory = $derived(years.length > 0 || payslips.length > 0);
 </script>
 
 <ScreenHeader
@@ -35,134 +67,221 @@
 	{/snippet}
 </ScreenHeader>
 
-{#if form?.message}
-	<div class="error">{form.message}</div>
-{/if}
-
 {#if adding}
-	<form
-		method="POST"
-		action="?/addPayslip"
-		use:enhance={() =>
-			async ({ update }) => {
-				await update();
-				adding = false;
-			}}
-		enctype="multipart/form-data"
-		class="card add-form"
-	>
-		<div class="grid">
-			<label>
-				<span>Whose</span>
-				<select name="personId">
-					{#each data.people as p (p.id)}
-						<option value={p.id}>{p.name}</option>
-					{/each}
-				</select>
-			</label>
-			<label>
-				<span>Payslip PDF</span>
-				<input type="file" name="file" accept=".pdf" />
-			</label>
-			<label>
-				<span>Month</span>
-				<input type="month" name="periodMonth" />
-			</label>
-			<label>
-				<span>Amount</span>
-				<input name="amount" placeholder="read from the slip if left blank" />
-			</label>
-		</div>
-		<p class="hint">
-			The slip is read for its amount, its month and any bonus line. Anything filled in here wins,
-			and a correction teaches the reader for next month.
-		</p>
-		<div class="row">
-			<button type="submit" class="btn btn-primary">Add</button>
-			<button type="button" class="btn" onclick={() => (adding = false)}>Cancel</button>
-		</div>
-	</form>
+	<PayslipDialog people={data.people} onclose={() => (adding = false)} />
 {/if}
 
-{#each withHistory as p (p.id)}
-	<section class="person">
-		<div class="eyebrow-row">
-			<Eyebrow emoji="💼" label={p.name} />
-			<span class="eyebrow-caption">
-				{p.years.length}
-				{p.years.length === 1 ? 'year' : 'years'} · {p.payslips.length}
-				{p.payslips.length === 1 ? 'payslip' : 'payslips'}
-			</span>
-		</div>
+<SalarySummaryBand {years} currency={data.baseCurrency} scope={selected ? 'person' : 'household'} />
 
-		<SalaryYearChart
-			years={p.years}
-			currency={data.baseCurrency}
-			bind:mode
-			onchange={(next) => (mode = next)}
-		/>
+{#if data.people.length > 1}
+	<div class="filter">
+		<Segmented options={peopleOptions} bind:value={personFilter} />
+	</div>
+{/if}
 
-		{#if p.payslips.length > 0}
-			<div class="card slips">
-				<span class="section-label">Payslips</span>
-				<div class="slip-list">
-					{#each p.payslips as s (s.id)}
-						<div class="slip">
-							<span class="mono month">{s.periodMonth}</span>
+<SalaryYearChart
+	{years}
+	currency={data.baseCurrency}
+	bind:mode
+	onchange={(next) => (mode = next)}
+/>
+
+<SalaryMatrix
+	{years}
+	currency={data.baseCurrency}
+	{openYear}
+	onToggle={(year) => (openYear = openYear === year ? null : year)}
+>
+	{#snippet detail(year)}
+		{@const slips = slipsFor(year)}
+		<div class="slips">
+			{#if slips.length > 0}
+				{#each slips as s (s.id)}
+					<!-- On the table's own grid, so a month's figures sit directly under
+					     the column each one belongs to. They used to be laid on a
+					     three-column grid with six children in it, which wrapped them
+					     onto two lines and stretched the bonus across a whole fraction. -->
+					<div class="slip" style:grid-template-columns={SALARY_COLUMNS}>
+						<span class="month">
+							<span class="mono">{s.periodMonth}</span>
 							{#if s.file}
-								<a href="/files/{s.file}" target="_blank" rel="noopener" class="s-name">
-									{s.amount}
-									{s.currency}
-								</a>
+								<a href="/files/{s.file}" target="_blank" rel="noopener" class="s-name">slip</a>
 							{:else}
-								<span class="s-name">{s.amount} {s.currency}</span>
+								<span class="s-name quiet">no file</span>
 							{/if}
+							{#if data.people.length > 1}<span class="whose">{s.personName}</span>{/if}
+						</span>
 
-							{#if editingBonus === s.id}
+						<!-- Base is not a control: it is gross with the award taken out, so
+						     editing it would have to write one of the other two. -->
+						<span class="f-slot">
+							{#if s.base !== null}
+								<span class="derived mono" title="gross less the bonus">{s.base}</span>
+							{:else}
+								<span class="quiet">—</span>
+							{/if}
+						</span>
+
+						{#each [{ key: 'bonus', value: s.bonus, action: '?/setBonus', field: 'bonus' }, { key: 'gross', value: s.gross, action: '?/setPayslipFigure', field: 'amount' }] as f (f.key)}
+							<span class="f-slot" class:gross={f.key === 'gross'}>
+								{#if editing === `${s.id}|${f.key}`}
+									<form
+										method="POST"
+										action={f.action}
+										use:enhance={() =>
+											async ({ update }) => {
+												await update();
+												editing = null;
+											}}
+										class="figure-form"
+									>
+										<input type="hidden" name="personId" value={s.personId} />
+										<input type="hidden" name="periodMonth" value={s.periodMonth} />
+										{#if f.key !== 'bonus'}
+											<input type="hidden" name="field" value={f.key} />
+										{/if}
+										<!-- svelte-ignore a11y_autofocus -->
+										<input
+											name={f.field}
+											value={f.value ?? ''}
+											autofocus
+											aria-label="{f.key} for {s.periodMonth}"
+										/>
+										<button type="submit" class="btn">Save</button>
+										<button type="button" class="btn" onclick={() => (editing = null)}>
+											Cancel
+										</button>
+									</form>
+								{:else if f.value === null}
+									<button
+										type="button"
+										class="figure none"
+										onclick={() => (editing = `${s.id}|${f.key}`)}
+									>
+										{f.key === 'bonus' ? 'not itemised' : '—'}
+									</button>
+								{:else}
+									<button
+										type="button"
+										class="figure"
+										class:strong={f.key === 'gross'}
+										onclick={() => (editing = `${s.id}|${f.key}`)}
+									>
+										{f.value}
+									</button>
+								{/if}
+							</span>
+						{/each}
+
+						<!-- A month has no monthly average of its own, so the column that
+						     holds one on a year row holds this month's actions instead —
+						     behind a ⋯, the same gesture the Tax screen uses. -->
+						<span class="f-slot">
+							<div class="menu-wrap">
+								<button
+									type="button"
+									class="figure dots"
+									aria-label="More for {s.periodMonth}"
+									aria-expanded={confirming === s.id}
+									onclick={() => (confirming = confirming === s.id ? null : s.id)}>···</button
+								>
+								{#if confirming === s.id}
+									<form
+										method="POST"
+										action="?/deletePayslip"
+										use:enhance={() =>
+											async ({ update }) => {
+												await update();
+												confirming = null;
+											}}
+										class="menu"
+									>
+										<input type="hidden" name="personId" value={s.personId} />
+										<input type="hidden" name="periodMonth" value={s.periodMonth} />
+										<!-- Names what is going. A month evidenced by a bank credit
+										     too loses that credit's net figure, and saying so is the
+										     difference between a decision and a surprise. -->
+										<button type="submit" class="menu-item danger">
+											Delete {s.periodMonth} — gross, net and bonus
+										</button>
+									</form>
+								{/if}
+							</div>
+						</span>
+
+						<span class="f-slot divide">
+							{#if editing === `${s.id}|net`}
 								<form
 									method="POST"
-									action="?/setBonus"
+									action="?/setPayslipFigure"
 									use:enhance={() =>
 										async ({ update }) => {
 											await update();
-											editingBonus = null;
+											editing = null;
 										}}
-									class="bonus-form"
+									class="figure-form"
 								>
-									<input type="hidden" name="personId" value={p.id} />
+									<input type="hidden" name="personId" value={s.personId} />
 									<input type="hidden" name="periodMonth" value={s.periodMonth} />
+									<input type="hidden" name="field" value="net" />
+									<!-- svelte-ignore a11y_autofocus -->
 									<input
-										name="bonus"
-										value={s.bonus ?? ''}
-										placeholder="bonus"
-										aria-label="Bonus for {s.periodMonth}"
+										name="amount"
+										value={s.net ?? ''}
+										autofocus
+										aria-label="net for {s.periodMonth}"
 									/>
 									<button type="submit" class="btn">Save</button>
-									<button type="button" class="btn" onclick={() => (editingBonus = null)}>
+									<button type="button" class="btn" onclick={() => (editing = null)}>
 										Cancel
 									</button>
 								</form>
 							{:else}
 								<button
 									type="button"
-									class="bonus"
-									class:none={s.bonus === null}
-									onclick={() => (editingBonus = s.id)}
+									class="figure"
+									class:none={s.net === null}
+									onclick={() => (editing = `${s.id}|net`)}
 								>
-									{s.bonus === null ? 'no bonus read' : `bonus ${s.bonus}`}
+									{s.net ?? '—'}
 								</button>
 							{/if}
-						</div>
-					{/each}
+						</span>
+					</div>
+				{/each}
+
+				<div class="slips-foot">
+					<!-- Behind an ⓘ, like the upload form's explainer: it is read once and
+					     skipped on every expand after, and a paragraph that repeats under
+					     each open year is noise the table has to be read around. -->
+					<button
+						type="button"
+						class="icon-btn"
+						aria-expanded={showSlipHint}
+						aria-label="How to correct a figure"
+						onclick={() => (showSlipHint = !showSlipHint)}
+					>
+						<Icon name="info" size={14} />
+					</button>
+					{#if showSlipHint}
+						<p class="hint">
+							Every figure is editable — click one. A correction teaches the reader the wording for
+							next month; clearing a bonus puts the month back to saying nothing, which is not the
+							same as saying zero.
+						</p>
+					{/if}
+					<span class="count mono"
+						>{slips.length} {slips.length === 1 ? 'payslip' : 'payslips'}</span
+					>
 				</div>
-				<p class="hint">
-					A bonus is read from the slip when it names one. Correcting it here remembers the wording
-					for next month, and clearing the field puts the month back to saying nothing.
-				</p>
-			</div>
-		{/if}
-	</section>
-{/each}
+			{:else}
+				<div class="slips-foot">
+					<p class="hint">No payslip filed for {year} — this year came from the ledger.</p>
+				</div>
+			{/if}
+		</div>
+	{/snippet}
+</SalaryMatrix>
 
 {#if !anyHistory}
 	<p class="empty">
@@ -172,89 +291,185 @@
 {/if}
 
 <style>
-	.error {
-		border: 1px solid var(--red);
-		background: var(--red-tint);
-		color: var(--red);
-		border-radius: var(--radius-xl);
-		padding: 9px 14px;
-		font-size: var(--text-md);
-	}
-	.person {
+	.filter {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
-	}
-	.add-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
-	}
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-		gap: var(--space-6);
-	}
-	.row {
-		display: flex;
-		gap: var(--space-4);
+		justify-content: center;
 	}
 	.hint {
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		margin: 0;
 	}
+	/* The expanded year's payslips, indented under its row the way the Tax
+	   matrix indents a year's statements. */
+	/* The expanded year's payslips, on the table's own grid rather than indented
+	   inside a card — so the columns line up with the year row above them. */
 	.slips {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
+		background: var(--card2);
+		border-bottom: 1px solid var(--bd2);
 	}
-	.section-label {
+	.slips-foot {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		padding: 8px var(--space-6) 12px;
+	}
+	.slips-foot .hint {
+		flex: 1;
+		min-width: 0;
+	}
+	/* Pushed right whether or not the hint is showing. */
+	.slips-foot .count {
+		margin-left: auto;
+	}
+	.count {
 		font-size: var(--text-xs);
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
 		color: var(--fg3);
+		white-space: nowrap;
 	}
-	.slip-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
+	/* Same grid as the table above, set inline from SALARY_COLUMNS so a month's
+	   figures land under the column each belongs to. */
 	.slip {
 		display: grid;
-		grid-template-columns: 84px minmax(0, 1fr) auto;
-		gap: var(--space-4);
 		align-items: center;
-		padding: 6px 0;
-		border-bottom: 1px solid var(--bd);
+		gap: var(--space-5);
+		padding: 6px var(--space-6);
+		min-width: 720px;
+		border-bottom: 1px solid var(--bd2);
 	}
-	.month {
+	.slip:last-of-type {
+		border-bottom: 0;
+	}
+	.f-slot {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--space-3);
+		min-width: 0;
+	}
+	/* The one rule down the table, kept in step with the matrix header above:
+	   centred in the gutter, not pulled to its far edge. */
+	.f-slot.divide {
+		border-left: 1px solid var(--bd2);
+		padding-left: calc(var(--space-5) / 2);
+		margin-left: calc(var(--space-5) / -2);
+	}
+	.menu-wrap {
+		position: relative;
+	}
+	.menu {
+		position: absolute;
+		right: 0;
+		top: 100%;
+		z-index: 2;
+		background: var(--bg2);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+		overflow: hidden;
+	}
+	.menu-item {
+		display: block;
+		width: 100%;
+		background: none;
+		border: 0;
+		cursor: pointer;
+		padding: 8px 14px;
 		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	.s-name {
-		font-size: var(--text-md);
+		text-align: left;
+		white-space: nowrap;
 		color: var(--fg1);
 	}
-	.bonus {
-		background: none;
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-md);
-		color: var(--fg2);
-		cursor: pointer;
-		padding: 4px 10px;
-		font-size: var(--text-xs);
+	.menu-item.danger {
+		color: var(--red);
 	}
-	.bonus.none {
+	.menu-item:hover {
+		background: var(--bd);
+	}
+	/* Not a control: base is gross with the award taken out, so it is derived
+	   rather than stored, and editing it would have to write one of the other
+	   two. Dimmed, and it carries the arithmetic in its title. */
+	.derived {
+		font-size: var(--text-sm);
 		color: var(--fg3);
-		border-style: dashed;
+		cursor: help;
+		padding-right: 9px;
 	}
-	.bonus-form {
+	/* Month over the file link, so the month reads as the row's identity and the
+	   link as what it was read from. */
+	.month {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		font-size: var(--text-sm);
+		color: var(--fg2);
+		min-width: 0;
+	}
+	/* A pill, not a dim caption. Under "Both" it is the only thing telling two
+	   Augusts apart, so it has to survive a glance down a column of figures. */
+	.whose {
+		align-self: flex-start;
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-pill);
+		padding: 1px 9px;
+		margin-top: 2px;
+		font-size: var(--text-xs);
+		font-family: var(--font-mono);
+		color: var(--fg2);
+		white-space: nowrap;
+	}
+	.quiet {
+		color: var(--fg3);
+		opacity: 0.7;
+	}
+	.s-name {
+		font-size: var(--text-sm);
+		color: var(--fg2);
+	}
+	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
+	   bordered label at --text-xs, so the hint's promise that "correcting it
+	   here remembers the wording" pointed at something that read as static. */
+	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
+	   bordered label at --text-xs, so the hint's promise that "correcting it
+	   here remembers the wording" pointed at something that read as static. */
+	.figure {
+		background: none;
+		border: 1px solid transparent;
+		border-radius: var(--radius-md);
+		color: var(--fg1);
+		cursor: pointer;
+		padding: 3px 8px;
+		font-size: var(--text-sm);
+		font-family: var(--font-mono);
+		white-space: nowrap;
+	}
+	.figure:hover,
+	.figure:focus-visible {
+		border-color: var(--blue);
+	}
+	/* The year total column, so it carries the same weight the row above does. */
+	.figure.strong {
+		color: var(--fg1);
+		font-size: var(--text-md);
+		font-weight: 600;
+	}
+	.figure.dots {
+		color: var(--fg3);
+		letter-spacing: 0.12em;
+		border-color: var(--bd2);
+	}
+	/* Dotted: the figure is absent, which is a different statement from zero. */
+	.figure.none {
+		border-color: var(--bd2);
+		border-style: dashed;
+		color: var(--fg3);
+	}
+	.figure-form {
 		display: flex;
 		gap: var(--space-3);
 		align-items: center;
 	}
-	.bonus-form input {
+	.figure-form input {
 		width: 120px;
 	}
 	.empty {

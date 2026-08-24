@@ -4,8 +4,11 @@ bank_data_examples_do_not_share/
 # Local scratch work
 scratch-workspace/
 
-# Local agent settings
+# Local agent settings and working artefacts. Plans and specs are how a change
+# was arrived at, not what it produced — the code, the tests and the reference
+# docs are that. They stay on disk and out of the repository.
 .claude/
+docs/superpowers/
 
 # Uploaded user files (statements, photos, documents) — live on the data volume
 data/
@@ -15,11 +18,16 @@ node_modules/
 .svelte-kit/
 build/
 dist/
+.output/
+.vercel/
+.netlify/
+.wrangler/
 
 # Environment and secrets
 .env
 .env.*
 !.env.example
+!.env.test
 
 # Test artifacts
 coverage/
@@ -27,31 +35,13 @@ test-results/
 
 # Editor and OS noise
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.log
 
 # Session tooling
 .remember/
-node_modules
-
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Env
-.env
-.env.*
-!.env.example
-!.env.test
 
 # Vite
 vite.config.js.timestamp-*

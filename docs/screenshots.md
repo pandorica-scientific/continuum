@@ -22,6 +22,16 @@ A board each person arranges for themselves, from thirteen panels.
   <img src="screenshots/overview-dark-web.png" alt="Overview — A board each person arranges for themselves, from thirteen panels">
 </picture>
 
+## Accounts
+
+Balances stay in their own currency. Only totals convert.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/accounts-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/accounts-light-web.png">
+  <img src="screenshots/accounts-dark-web.png" alt="Accounts — balances stay in their own currency. only totals convert">
+</picture>
+
 ## Transactions
 
 Search, split a receipt across categories, tag into projects.
@@ -30,6 +40,36 @@ Search, split a receipt across categories, tag into projects.
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/transactions-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/transactions-light-web.png">
   <img src="screenshots/transactions-dark-web.png" alt="Transactions — Search, split a receipt across categories, tag into projects">
+</picture>
+
+## Import
+
+Statements in, transactions filed. Only the ambiguous ones ask for you.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/import-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/import-light-web.png">
+  <img src="screenshots/import-dark-web.png" alt="Import — statements in, transactions filed. only the ambiguous ones ask for you">
+</picture>
+
+## Rules
+
+What files itself, and how much each rule has earned your trust.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/rules-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/rules-light-web.png">
+  <img src="screenshots/rules-dark-web.png" alt="Rules — what files itself, and how much each rule has earned your trust">
+</picture>
+
+## Tags
+
+What each project has cost so far, across every category it touches.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/tags-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/tags-light-web.png">
+  <img src="screenshots/tags-dark-web.png" alt="Tags — what each project has cost so far, across every category it touches">
 </picture>
 
 ## Cash flow
@@ -72,14 +112,24 @@ Portfolio fed by broker report uploads.
   <img src="screenshots/investments-dark-web.png" alt="Investments — Portfolio fed by broker report uploads">
 </picture>
 
+## Salary
+
+What was earned each month, read from payslips and from the ledger.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/salary-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/salary-light-web.png">
+  <img src="screenshots/salary-dark-web.png" alt="Salary — what was earned each month, read from payslips and from the ledger">
+</picture>
+
 ## Retirement
 
-Projection driven by a payslip-fed salary tracker.
+The projection model.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/retirement-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/retirement-light-web.png">
-  <img src="screenshots/retirement-dark-web.png" alt="Retirement — Projection driven by a payslip-fed salary tracker">
+  <img src="screenshots/retirement-dark-web.png" alt="Retirement — the projection model">
 </picture>
 
 ## Tax

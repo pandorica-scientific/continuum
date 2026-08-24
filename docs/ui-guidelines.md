@@ -2,11 +2,6 @@
 
 Read this before writing or changing any interface code in this repository.
 
-Building the v0.3.8 ingest UI? The elements to build — queue and progress, the
-single-question resolver, the mapping wizard, drift, arbitration review, provenance — are
-specified in [`v0.3.8-ui-spec.md`](./v0.3.8-ui-spec.md). This document covers _how_; that
-one covers _what_.
-
 ## Source of truth
 
 **The codebase is the design system.** `src/lib/styles/app.css` holds the tokens,
@@ -22,7 +17,7 @@ the way they are far better than the code does — but never as the authority on
 
 ## The handoff, and what it still owes
 
-`design_system/README.md` was refreshed for this branch: it gained the **Ingest — v0.3.8**
+`design_system/README.md` was refreshed for v0.3.8: it gained the **Ingest**
 section (eleven elements, the proof-hue vocabulary, the modal-vs-screen split, the mapping
 wizard's four bands) and an error/empty-states chapter. That part is current and
 authoritative for _design intent_ — build from it.

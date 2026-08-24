@@ -29,6 +29,7 @@ import {
 	property,
 	propertyBill,
 	rule,
+	salaryEntry,
 	taxStatement,
 	taxStatementLine,
 	tenancy,
@@ -494,19 +495,42 @@ export async function seedDemo(): Promise<void> {
 	// Payslips feed the salary tracker; a contract shows document linking.
 	const today = new Date().toISOString().slice(0, 10);
 	const payslips: (typeof document.$inferInsert)[] = [];
+	const salaryRows: (typeof salaryEntry.$inferInsert)[] = [];
 	for (let i = 11; i >= 0; i--) {
 		const m = monthShift(thisMonth, -i - 1);
 		const year = Number(m.slice(0, 4));
-		const base = 5800000n + BigInt(year - 2024) * 400000n;
+		// The figure the demo has always used is GROSS. Until v0.4.6 it lived on
+		// the document and was read as gross while the reader picked net, which
+		// is the defect this release fixes — so the demo now states both.
+		const gross = 5800000n + BigInt(year - 2024) * 400000n;
+		// A December thirteenth-salary, so the base-versus-bonus split has
+		// something to draw and the year-on-year comparison has a one-off in it
+		// to be immune to.
+		const bonus = m.endsWith('-12') ? gross / 2n : null;
+		const grossWithBonus = gross + (bonus ?? 0n);
+		// Czech withholding runs to roughly 29% of gross across tax and both
+		// insurances. Approximate on purpose: this is a demo, not a calculator.
+		const net = grossWithBonus - (grossWithBonus * 29n) / 100n;
+		const documentId = uuidv7();
 		payslips.push({
-			id: uuidv7(),
+			id: documentId,
 			name: `Payslip ${m} · Jana Nováková`,
 			shelf: 'payslips',
 			addedOn: today,
-			amountMinor: base,
 			currency: 'CZK',
 			// The month the payslip covers, pinned to its first day.
 			periodOn: `${m}-01`
+		});
+		salaryRows.push({
+			id: uuidv7(),
+			personId: jana,
+			periodMonth: m,
+			grossMinor: grossWithBonus,
+			netMinor: net,
+			bonusMinor: bonus,
+			currency: 'CZK',
+			source: 'payslip',
+			documentId
 		});
 	}
 	const contractId = uuidv7();
@@ -535,6 +559,9 @@ export async function seedDemo(): Promise<void> {
 		.insert(documentLink)
 		.values({ documentId: contractId, targetId: flatB })
 		.onConflictDoNothing();
+	// The figures live here, not on the document. A payslip document is the
+	// stored file, its month and whose it is — nothing more.
+	await db.insert(salaryEntry).values(salaryRows);
 
 	// Tax statements: two Czech years for Jana (the payslips diverge from the
 	// declared figure on purpose — bonuses exist), one Polish year for Petr so

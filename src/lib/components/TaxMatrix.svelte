@@ -11,6 +11,11 @@
 	// column, and left-aligned numbers of differing lengths cannot be scanned.
 	import { compactMinor, displayCurrency, formatMinor } from '$lib/money';
 	import type { Snippet } from 'svelte';
+	import ListPager from '$lib/components/ListPager.svelte';
+	import PageSize, {
+		DEFAULT_LIST_PAGE_SIZE,
+		LIST_PAGE_SIZES
+	} from '$lib/components/PageSize.svelte';
 
 	interface Country {
 		code: string;
@@ -47,8 +52,27 @@
 	const symbol = $derived(displayCurrency(currency));
 
 	/** Newest first: the year a person opens this screen for is the last one. */
-	const rows = $derived([...years].sort((a, b) => b.year - a.year));
+	const ordered = $derived([...years].sort((a, b) => b.year - a.year));
 
+	let size = $state<number>(DEFAULT_LIST_PAGE_SIZE);
+	const pages = $derived(Math.max(1, Math.ceil(ordered.length / size)));
+	let page = $state(0);
+	// A record that shrank — a delete, a filter — must not strand the view on a
+	// page that no longer exists.
+	$effect(() => {
+		if (page > pages - 1) page = 0;
+	});
+	const rows = $derived(ordered.slice(page * size, page * size + size));
+	const pageRange = $derived(
+		rows.length === 0
+			? ''
+			: rows.length === 1
+				? `${rows[0].year}`
+				: `${rows.at(-1)!.year}–${rows[0].year}`
+	);
+
+	// Over every year, never the visible page: a bar whose scale changed as you
+	// paged would mean something different on page two than on page one.
 	const ceiling = $derived(
 		years.reduce((most, y) => (BigInt(y.grossMinor) > most ? BigInt(y.grossMinor) : most), 0n)
 	);
@@ -63,8 +87,9 @@
 	 */
 	const flagged = (gross: string) => threshold > 0n && BigInt(gross) < threshold;
 
-	/** Lifetime total per jurisdiction, and how many years it filed. */
-	const footer = $derived(
+	/** Lifetime total per jurisdiction, and how many years it filed. Over the
+	 *  whole record — a total that counted only the page is not a lifetime one. */
+	const summary = $derived(
 		countries.map((c) => {
 			const filings = years.map((y) => cellFor(y, c.code)).filter((x) => x !== null);
 			return {
@@ -87,6 +112,14 @@
 </script>
 
 <div class="matrix">
+	{#if ordered.length > LIST_PAGE_SIZES[0]}
+		<!-- Above the rows it sizes: how much to show is a decision made before
+		     reading, while which page to read is one made after. -->
+		<div class="tools">
+			<PageSize bind:size onchange={() => (page = 0)} label="years" />
+		</div>
+	{/if}
+
 	<div class="scroll">
 		<div class="head" style:grid-template-columns={columns}>
 			<span class="h-cell">Year</span>
@@ -98,6 +131,22 @@
 			{/each}
 			<span class="h-cell right">Year total · {symbol}</span>
 		</div>
+
+		{#if ordered.length > 0}
+			<div class="summary" style:grid-template-columns={columns}>
+				<span class="f-cell">All</span>
+				{#each summary as f (f.code)}
+					<span class="f-cell right">
+						<span class="mono">{compactMinor(f.grossMinor, currency)}</span>
+						<span class="c-rate">{f.count} {f.count === 1 ? 'year' : 'years'}</span>
+					</span>
+				{/each}
+				<span class="f-cell right">
+					<span class="c-rate">{blended === null ? '—' : `${blended.toFixed(2)}%`}</span>
+					<span class="mono t-value">{formatMinor(totalGross, currency)}</span>
+				</span>
+			</div>
+		{/if}
 
 		{#each rows as row (row.year)}
 			{@const open = openYear === row.year}
@@ -159,23 +208,14 @@
 				{@render detail(row.year)}
 			{/if}
 		{/each}
-
-		{#if rows.length > 0}
-			<div class="foot" style:grid-template-columns={columns}>
-				<span class="f-cell">All</span>
-				{#each footer as f (f.code)}
-					<span class="f-cell right">
-						<span class="mono">{compactMinor(f.grossMinor, currency)}</span>
-						<span class="c-rate">{f.count} {f.count === 1 ? 'year' : 'years'}</span>
-					</span>
-				{/each}
-				<span class="f-cell right">
-					<span class="c-rate">{blended === null ? '—' : `${blended.toFixed(2)}%`}</span>
-					<span class="mono t-value">{formatMinor(totalGross, currency)}</span>
-				</span>
-			</div>
-		{/if}
 	</div>
+
+	<!-- Shown whenever the record is longer than the smallest page size, even
+	     when the current size fits it all: the size switcher lives here, and
+	     hiding it would leave no way back to a smaller page. -->
+	{#if ordered.length > LIST_PAGE_SIZES[0]}
+		<ListPager bind:page {pages} range={pageRange} />
+	{/if}
 </div>
 
 <style>
@@ -191,9 +231,15 @@
 		overflow-x: auto;
 		min-width: 0;
 	}
+	.tools {
+		display: flex;
+		justify-content: flex-end;
+		padding: 8px var(--space-6);
+		border-bottom: 1px solid var(--bd2);
+	}
 	.head,
 	.row,
-	.foot {
+	.summary {
 		display: grid;
 		align-items: center;
 		gap: var(--space-5);
@@ -291,9 +337,10 @@
 		height: 100%;
 		background: var(--teal);
 	}
-	.foot {
+	/* Above the years now, so its rule is beneath it rather than over it. */
+	.summary {
 		background: var(--card2);
-		border-top: 1px solid var(--bd2);
+		border-bottom: 1px solid var(--bd2);
 	}
 	.f-cell {
 		display: flex;

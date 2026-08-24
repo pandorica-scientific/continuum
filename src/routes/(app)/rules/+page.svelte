@@ -5,9 +5,32 @@
 	import ActionError from '$lib/components/ActionError.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import ListPager from '$lib/components/ListPager.svelte';
+	import PageSize, {
+		DEFAULT_LIST_PAGE_SIZE,
+		LIST_PAGE_SIZES
+	} from '$lib/components/PageSize.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
 	let { data, form } = $props();
+
+	// A household that has filed for a while grows dozens of these, and the list
+	// was every one of them on one screen. Ordered most-overridden first, so the
+	// rules worth looking at are on the first page.
+	let size = $state<number>(DEFAULT_LIST_PAGE_SIZE);
+	let page = $state(0);
+	const pages = $derived(Math.max(1, Math.ceil(data.rules.length / size)));
+	// A list that shrank — a delete, a rule disabled out of view — must not
+	// strand the view on a page that no longer exists.
+	$effect(() => {
+		if (page > pages - 1) page = 0;
+	});
+	const shown = $derived(data.rules.slice(page * size, page * size + size));
+	const range = $derived(
+		data.rules.length === 0
+			? ''
+			: `${page * size + 1}–${Math.min(data.rules.length, page * size + size)} of ${data.rules.length}`
+	);
 
 	interface DraftCondition {
 		field: string;
@@ -52,9 +75,18 @@
 <section class="section">
 	<div class="eyebrow-row">
 		<Eyebrow emoji="⚙️" label="Rules" />
-		<span class="eyebrow-caption">
-			{data.rules.length} rules · filing at {data.thresholdPct}% confidence and above
-		</span>
+		<div class="rules-right">
+			<span class="eyebrow-caption">
+				{data.rules.length}
+				{data.rules.length === 1 ? 'rule' : 'rules'} · filing at {data.thresholdPct}% confidence and
+				above
+			</span>
+			{#if data.rules.length > LIST_PAGE_SIZES[0]}
+				<!-- Above the rows it sizes, where the transactions screen puts its
+				     own: how much to show is decided before reading. -->
+				<PageSize bind:size onchange={() => (page = 0)} label="Rules" />
+			{/if}
+		</div>
 	</div>
 	<div class="toolbar">
 		<button type="button" class="btn btn-primary" onclick={openEditor}>New rule</button>
@@ -64,7 +96,7 @@
 		filings stay as filed.
 	</p>
 
-	{#each data.rules as r (r.id)}
+	{#each shown as r (r.id)}
 		<div class="card rule-row" class:off={!r.enabled}>
 			<div class="r-main">
 				<span class="r-name">{r.name}</span>
@@ -100,6 +132,15 @@
 
 	{#if data.rules.length === 0}
 		<p class="empty">No rules yet. Filing a transaction teaches one, or write one by hand.</p>
+	{/if}
+
+	<!-- Shown whenever the list is longer than the smallest page size, even when
+	     the current size fits it all: the size switcher lives here, and hiding it
+	     would leave no way back to a smaller page. -->
+	{#if data.rules.length > LIST_PAGE_SIZES[0]}
+		<div class="card pager-card">
+			<ListPager bind:page {pages} {range} bare />
+		</div>
 	{/if}
 </section>
 
@@ -229,6 +270,17 @@
 {/if}
 
 <style>
+	/* The pager brings its own padding; the card is only here to give it the
+	   same ground and edge the rule rows above it have. */
+	.pager-card {
+		padding: 0;
+	}
+	.rules-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		min-width: 0;
+	}
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);

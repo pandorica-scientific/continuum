@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
-import { detectBonus, extractCandidates, salaryStats } from '$lib/salary';
+import { bonusLabelSubset, detectBonus, extractCandidates, salaryStats } from '$lib/salary';
 
 const czech = [
 	'Hrubá mzda 62 000,00',
@@ -56,7 +56,7 @@ describe('detectBonus', () => {
 	it('prefers a learned label over the keywords', () => {
 		// The same mechanism the pay amount already uses: a correction teaches it.
 		const lines = ['Hrubá mzda 62 000,00', 'Pohyblivá složka 9 000,00'];
-		expect(detectBonus(extractCandidates(lines, 'CZK'), 'pohyblivá složka')).toBe(900000n);
+		expect(detectBonus(extractCandidates(lines, 'CZK'), ['pohyblivá složka'])).toBe(900000n);
 	});
 });
 
@@ -128,5 +128,70 @@ describe('salaryStats with bonuses', () => {
 		// than drawn upside down.
 		const rows = salaryStats([month('2025-01', 500000n, 400000n, 900000n)], null);
 		expect(rows[0].baseTotalMinor).toBe(0n);
+	});
+});
+
+describe('bonusLabelSubset', () => {
+	const twoLines = extractCandidates(
+		['Hrubá mzda 62 000,00', 'Prémie 8 000,00', 'Mimořádná odměna 12 000,00'],
+		'CZK'
+	);
+
+	it('finds the two labels behind a summed total', () => {
+		// 8 000 + 12 000 = 20 000. Before v0.4.6 this returned nothing, so the
+		// screen's promise to "remember the wording" silently did not happen.
+		expect(bonusLabelSubset(twoLines, 2000000n)?.sort()).toEqual(
+			['mimořádná odměna', 'prémie'].sort()
+		);
+	});
+
+	it('prefers a single line when one matches exactly', () => {
+		expect(bonusLabelSubset(twoLines, 800000n)).toEqual(['prémie']);
+	});
+
+	it('returns null when no subset of bonus lines sums to the total', () => {
+		expect(bonusLabelSubset(twoLines, 999n)).toBeNull();
+	});
+
+	it('never reaches outside the bonus lines to reach the total', () => {
+		// 62 000 is gross, not a bonus. A subset search over every candidate
+		// would happily use it.
+		expect(bonusLabelSubset(twoLines, 6200000n)).toBeNull();
+	});
+});
+
+describe('detectBonus with learned labels', () => {
+	it('sums every learned label present on the slip', () => {
+		const c = extractCandidates(['Roční odměna 5 000,00', 'Cílová složka 3 000,00'], 'CZK');
+		expect(detectBonus(c, ['roční odměna', 'cílová složka'])).toBe(800000n);
+	});
+
+	it('falls back to the keywords when no learned label is on this slip', () => {
+		const c = extractCandidates(['Prémie 8 000,00'], 'CZK');
+		expect(detectBonus(c, ['cílová složka'])).toBe(800000n);
+	});
+});
+
+describe('detectBonus on tabular slips', () => {
+	// One row, cells joined: the bonus, then the tax columns after it. Every
+	// amount to the right carries a label that still contains "bonus", so summing
+	// every match added the tax to the award — 65 251 + 65 251 + 202 441 + 34 823.
+	const row = 'AIP bonus 65 251 65 251 Calculated advance tax 202 441 34 823';
+
+	it('reports the award once, not the whole row', () => {
+		expect(detectBonus(extractCandidates([row], 'CZK'))).toBe(6525100n);
+	});
+
+	it('leaves the bonus at or below gross, which is what made the month recordable', () => {
+		const c = extractCandidates(
+			['(1) Empl. rel. 01.10.2025 Gross salary 201 019 AIP bonus 65 251', row],
+			'CZK'
+		);
+		expect(detectBonus(c)!).toBeLessThanOrEqual(20101900n);
+	});
+
+	it('still sums a genuine two-line bonus, where each label ends at its keyword', () => {
+		const lines = ['Prémie 8 000,00', 'Mimořádná odměna 12 000,00'];
+		expect(detectBonus(extractCandidates(lines, 'CZK'))).toBe(2000000n);
 	});
 });

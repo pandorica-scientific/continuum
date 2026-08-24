@@ -10,7 +10,7 @@
 import { and, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db } from '$lib/server/db';
-import { salaryAttribution, salaryEntry } from '$lib/server/db/schema';
+import { document, documentLink, salaryAttribution, salaryEntry } from '$lib/server/db/schema';
 
 export type SalaryResult = { ok: true } | { ok: false; status: 400 | 404; message: string };
 
@@ -25,6 +25,11 @@ export interface RecordSalaryInput {
 	currency: string;
 	grossMinor?: bigint | null;
 	netMinor?: bigint | null;
+	/**
+	 * What of gross was a bonus. Null means "not stated", which is not zero and
+	 * must never overwrite a stored figure.
+	 */
+	bonusMinor?: bigint | null;
 	source: 'payslip' | 'statement' | 'manual';
 	documentId?: string | null;
 	transactionId?: string | null;
@@ -47,7 +52,10 @@ export async function recordSalary(
 	if (!MONTH.test(input.periodMonth)) {
 		return { ok: false, status: 400, message: 'A salary entry needs a month like 2026-07.' };
 	}
-	if (input.grossMinor == null && input.netMinor == null) {
+	// A bonus counts as a figure. A correction that says "25 000 of this month's
+	// gross was an award" carries no gross of its own, and rejecting it would
+	// make the bonus uncorrectable on any month the reader had not already filled.
+	if (input.grossMinor == null && input.netMinor == null && input.bonusMinor == null) {
 		return { ok: false, status: 400, message: 'A salary entry needs a gross or a net figure.' };
 	}
 
@@ -62,6 +70,27 @@ export async function recordSalary(
 				)
 			);
 
+		// Validated against what the month will HOLD, not only what arrived: a
+		// bonus correction carries no gross of its own, so checking the input
+		// alone would let a bonus through that is larger than the stored gross.
+		const gross = input.grossMinor ?? existing?.grossMinor ?? null;
+		const net = input.netMinor ?? existing?.netMinor ?? null;
+		const bonus = input.bonusMinor ?? existing?.bonusMinor ?? null;
+		if (gross !== null && net !== null && net > gross) {
+			return {
+				ok: false as const,
+				status: 400 as const,
+				message: 'Net pay cannot be more than gross.'
+			};
+		}
+		if (gross !== null && bonus !== null && bonus > gross) {
+			return {
+				ok: false as const,
+				status: 400 as const,
+				message: 'A bonus cannot be more than the gross it is part of.'
+			};
+		}
+
 		if (!existing) {
 			await tx.insert(salaryEntry).values({
 				id: uuidv7(),
@@ -69,6 +98,7 @@ export async function recordSalary(
 				periodMonth: input.periodMonth,
 				grossMinor: input.grossMinor ?? null,
 				netMinor: input.netMinor ?? null,
+				bonusMinor: input.bonusMinor ?? null,
 				currency: input.currency,
 				source: input.source,
 				documentId: input.documentId ?? null,
@@ -90,6 +120,9 @@ export async function recordSalary(
 				netMinor: keep
 					? (existing.netMinor ?? input.netMinor ?? null)
 					: (input.netMinor ?? existing.netMinor ?? null),
+				bonusMinor: keep
+					? (existing.bonusMinor ?? input.bonusMinor ?? null)
+					: (input.bonusMinor ?? existing.bonusMinor ?? null),
 				documentId: input.documentId ?? existing.documentId,
 				transactionId: input.transactionId ?? existing.transactionId,
 				amountOverridden: existing.amountOverridden || (input.overridden ?? false)
@@ -97,6 +130,34 @@ export async function recordSalary(
 			.where(eq(salaryEntry.id, existing.id));
 		return { ok: true as const };
 	});
+}
+
+/**
+ * The payslip filed for one person for one month.
+ *
+ * Scoped by shelf AND by month. The v0.4.5 arrangement took the first document
+ * linked to the person that happened to have a file — so a tax statement could
+ * be read looking for a payslip's bonus line, and August's correction could
+ * learn January's wording.
+ */
+export async function payslipSlipFor(
+	personId: string,
+	periodMonth: string,
+	handle: Db = db
+): Promise<{ id: string; storedName: string | null } | null> {
+	const rows = await handle
+		.select({ id: document.id, storedName: document.storedName })
+		.from(document)
+		.innerJoin(documentLink, eq(documentLink.documentId, document.id))
+		.where(
+			and(
+				eq(documentLink.targetId, personId),
+				eq(document.shelf, 'payslips'),
+				eq(document.periodOn, `${periodMonth}-01`)
+			)
+		)
+		.limit(1);
+	return rows[0] ?? null;
 }
 
 /** Every month recorded for a person, for salaryStats(). */

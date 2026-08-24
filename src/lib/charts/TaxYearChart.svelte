@@ -21,9 +21,12 @@
 	import { compactAxis, displayCurrency, formatMinor } from '$lib/money';
 	import {
 		MONEY_BOTTOM,
+		MONEY_TITLE_PCT,
 		MONEY_TOP,
 		RATE_BOTTOM_Y,
+		RATE_TITLE_PCT,
 		RATE_TOP_PCT,
+		TALL_TITLE_PCT,
 		VIEW_H,
 		VIEW_W,
 		X_LEFT,
@@ -255,12 +258,14 @@
 
 			<!-- Axis labels as HTML. See the header comment. -->
 			{#if mode === 'stack'}
-				<span class="axis-title money">{axisUnit}</span>
+				<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
 				{#each moneyGrid as g (g.label)}
 					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.text}</span>
 				{/each}
 			{/if}
-			<span class="axis-title rate" class:tall={mode === 'rate'}>Rate</span>
+			<span class="axis-title" style:top="{mode === 'rate' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
+				>Rate</span
+			>
 			{#each rateGrid as g (g.pct)}
 				<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
 			{/each}
@@ -435,22 +440,16 @@
 	}
 	.axis-title {
 		position: absolute;
+		left: 0;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		transform-origin: left top;
-		transform: rotate(-90deg);
+		/* Rotated about its top-left, so the text runs UP from the anchor; the
+		   translate slides it back down by half its own length, centring it on
+		   the band `top` names. The anchors are derived in the geometry module —
+		   they used to be eyeballed percentages that missed both band centres. */
+		transform: rotate(-90deg) translateX(-50%);
 		white-space: nowrap;
-	}
-	.axis-title.money {
-		left: 0;
-		top: 62%;
-	}
-	.axis-title.rate {
-		left: 0;
-		top: 92%;
-	}
-	.axis-title.rate.tall {
-		top: 62%;
 	}
 	.axis-value {
 		position: absolute;

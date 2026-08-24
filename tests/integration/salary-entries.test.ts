@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { rowId } from '../row-id';
-import { account, person, salaryEntry } from '$lib/server/db/schema';
+import { account, document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	attributeSalary,
 	attributionKey,
+	payslipSlipFor,
 	recordSalary,
 	rememberAttribution,
 	salaryMonths
@@ -29,6 +30,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+	await harness.sql`delete from document_link`;
+	await harness.sql`delete from document`;
 	await harness.sql`delete from salary_attribution`;
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from account`;
@@ -250,5 +253,208 @@ describe('matching an employer across months', () => {
 		await rememberAttribution({ matchKey: 'ACME Corp Prague', personId: KSENIYA }, testDb);
 		expect(await whose('ACME Corp Prague 07/2026')).toEqual({ personId: KSENIYA });
 		expect(await whose('ACME Corp Brno 07/2026')).toEqual({ personId: ROBERT });
+	});
+});
+
+describe('recordSalary validation', () => {
+	it('rejects net above gross', async () => {
+		const out = await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				grossMinor: 10000000n,
+				netMinor: 12000000n,
+				source: 'manual'
+			},
+			testDb
+		);
+		expect(out).toEqual({ ok: false, status: 400, message: 'Net pay cannot be more than gross.' });
+	});
+
+	it('rejects a bonus larger than the gross it is part of', async () => {
+		const out = await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				grossMinor: 10000000n,
+				bonusMinor: 12000000n,
+				source: 'manual'
+			},
+			testDb
+		);
+		expect(out).toEqual({
+			ok: false,
+			status: 400,
+			message: 'A bonus cannot be more than the gross it is part of.'
+		});
+	});
+
+	it('stores a bonus alongside gross and net', async () => {
+		await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				grossMinor: 10000000n,
+				netMinor: 7140000n,
+				bonusMinor: 2500000n,
+				source: 'payslip'
+			},
+			testDb
+		);
+		const [row] = await salaryMonths(ROBERT, testDb);
+		expect(row.grossMinor).toBe(10000000n);
+		expect(row.netMinor).toBe(7140000n);
+		expect(row.bonusMinor).toBe(2500000n);
+	});
+
+	it('validates against the gross already stored, not only the gross passed in', async () => {
+		// A payslip lands first, a bonus correction arrives later with no gross of
+		// its own. Checking only the input would let it through.
+		await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				grossMinor: 10000000n,
+				source: 'payslip'
+			},
+			testDb
+		);
+		const out = await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				bonusMinor: 12000000n,
+				source: 'manual'
+			},
+			testDb
+		);
+		expect(out).toEqual({
+			ok: false,
+			status: 400,
+			message: 'A bonus cannot be more than the gross it is part of.'
+		});
+	});
+
+	it('accepts a bonus-only correction against a month that already has gross', async () => {
+		await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				grossMinor: 10000000n,
+				source: 'payslip'
+			},
+			testDb
+		);
+		const out = await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				bonusMinor: 2500000n,
+				source: 'manual',
+				overridden: true
+			},
+			testDb
+		);
+		expect(out).toEqual({ ok: true });
+		const [row] = await salaryMonths(ROBERT, testDb);
+		expect(row.grossMinor).toBe(10000000n);
+		expect(row.bonusMinor).toBe(2500000n);
+	});
+
+	it('still refuses an entry that states nothing at all', () => {
+		return expect(
+			recordSalary(
+				{ personId: ROBERT, periodMonth: '2026-08', currency: 'CZK', source: 'manual' },
+				testDb
+			)
+		).resolves.toEqual({
+			ok: false,
+			status: 400,
+			message: 'A salary entry needs a gross or a net figure.'
+		});
+	});
+
+	it('leaves a null bonus alone rather than clearing a stored one', async () => {
+		// Null is "said nothing", which must not overwrite "said 25 000".
+		await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				grossMinor: 10000000n,
+				bonusMinor: 2500000n,
+				source: 'payslip'
+			},
+			testDb
+		);
+		await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: '2026-08',
+				currency: 'CZK',
+				netMinor: 7140000n,
+				source: 'statement'
+			},
+			testDb
+		);
+		const [row] = await salaryMonths(ROBERT, testDb);
+		expect(row.bonusMinor).toBe(2500000n);
+	});
+});
+
+describe('payslipSlipFor', () => {
+	it('ignores a document on another shelf linked to the same person', async () => {
+		// setBonus used to take the first linked document with a file, whatever
+		// shelf it was on — so it could read a TAX statement hunting for a
+		// payslip's bonus line.
+		await testDb.insert(document).values([
+			{
+				id: rowId('doc-tax'),
+				name: 'Tax 2026',
+				shelf: 'tax',
+				storedName: 'tax.pdf',
+				ext: 'PDF',
+				addedOn: '2026-09-01',
+				periodOn: '2026-08-01'
+			},
+			{
+				id: rowId('doc-slip'),
+				name: 'Payslip 2026-08',
+				shelf: 'payslips',
+				storedName: 'slip.pdf',
+				ext: 'PDF',
+				addedOn: '2026-09-01',
+				periodOn: '2026-08-01'
+			}
+		]);
+		await testDb.insert(documentLink).values([
+			{ documentId: rowId('doc-tax'), targetId: ROBERT },
+			{ documentId: rowId('doc-slip'), targetId: ROBERT }
+		]);
+		const found = await payslipSlipFor(ROBERT, '2026-08', testDb);
+		expect(found?.storedName).toBe('slip.pdf');
+	});
+
+	it('ignores a payslip from another month', async () => {
+		// August's correction learning January's wording is the other half of the
+		// same defect.
+		await testDb.insert(document).values({
+			id: rowId('doc-jan'),
+			name: 'Payslip 2026-01',
+			shelf: 'payslips',
+			storedName: 'jan.pdf',
+			ext: 'PDF',
+			addedOn: '2026-02-01',
+			periodOn: '2026-01-01'
+		});
+		await testDb.insert(documentLink).values({ documentId: rowId('doc-jan'), targetId: ROBERT });
+		expect(await payslipSlipFor(ROBERT, '2026-08', testDb)).toBeNull();
 	});
 });

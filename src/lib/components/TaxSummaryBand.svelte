@@ -105,11 +105,25 @@
 		align-items: end;
 		background: var(--teal-wash);
 	}
+	/* Spread across the row rather than bunched at its left edge.
+	   `auto-fit` collapses the empty tracks, so the figures take equal shares —
+	   and left-aligning all of them left the last share looking empty. First
+	   reads from the left edge, last to the right edge, middles centred. */
 	.figure {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
 		min-width: 0;
+		align-items: center;
+		text-align: center;
+	}
+	.figure:first-child {
+		align-items: flex-start;
+		text-align: left;
+	}
+	.figure:last-child {
+		align-items: flex-end;
+		text-align: right;
 	}
 	.label {
 		font-size: var(--text-sm);

@@ -3,10 +3,16 @@
 	// What a year's row opens into: the statements filed that year, and the
 	// paperwork each of them brought.
 	//
-	// Delete for a statement sits behind a ⋯ menu rather than a permanent
-	// button. Twenty-six always-visible Edit and Delete buttons for records
-	// touched once a year was the old screen's worst density problem, and
-	// deleting a filed tax statement should not be one misclick away.
+	// Every secondary or destructive action sits behind a ⋯ menu — the
+	// statement's and each attachment's alike. Twenty-six always-visible Edit
+	// and Delete buttons for records touched once a year was the old screen's
+	// worst density problem, and deleting a filed statement should not be one
+	// misclick away.
+	//
+	// The attachment row used to carry a bare ⇥ and a bare 🗑 beside a caption
+	// claiming "Delete lives behind the ⋯ menu now", which was plainly untrue
+	// with a bin two inches above it. One pattern, so the caption is unnecessary
+	// and gone.
 	import { enhance } from '$app/forms';
 	import { ATTACHMENT_KINDS } from '$lib/tax';
 
@@ -50,13 +56,18 @@
 	// Two taps rather than a browser confirm(): this destroys a stored file, and
 	// a native dialog blocks the page while it is open. Keyed by document id.
 	let arming = $state<string | null>(null);
+
+	// One open menu at a time across the whole detail, statements and
+	// attachments together — keyed `statement:<id>` or `attachment:<id>` so the
+	// two cannot collide on a shared id.
+	let menuOpen = $state<string | null>(null);
+
 	$effect(() => {
-		// A delete reloads the page data; nothing should still be armed after it.
+		// A delete reloads the page data; nothing should still be open after it.
 		void statements;
 		arming = null;
+		menuOpen = null;
 	});
-
-	let menuOpen = $state<string | null>(null);
 </script>
 
 <div class="detail">
@@ -88,25 +99,47 @@
 							{:else}
 								<span class="a-name">{a.name}</span>
 							{/if}
-							<form method="POST" action="?/detach" use:enhance class="inline">
-								<input type="hidden" name="id" value={s.id} />
-								<input type="hidden" name="documentId" value={a.id} />
-								<button type="submit" class="icon" title="Detach — keeps the document">⇥</button>
-							</form>
-							{#if arming === a.id}
-								<form method="POST" action="?/deleteAttachment" use:enhance class="inline">
-									<input type="hidden" name="documentId" value={a.id} />
-									<button type="submit" class="icon danger">Delete?</button>
-								</form>
-							{:else}
+
+							<div class="menu-wrap">
 								<button
 									type="button"
 									class="icon"
-									title="Delete the document and its file"
-									onclick={() => (arming = a.id)}
-									aria-label="Delete {a.name}">🗑</button
+									aria-label="More for {a.name}"
+									aria-expanded={menuOpen === `attachment:${a.id}`}
+									onclick={() => {
+										arming = null;
+										menuOpen = menuOpen === `attachment:${a.id}` ? null : `attachment:${a.id}`;
+									}}>⋯</button
 								>
-							{/if}
+								{#if menuOpen === `attachment:${a.id}`}
+									<div class="menu">
+										<form method="POST" action="?/detach" use:enhance>
+											<input type="hidden" name="id" value={s.id} />
+											<input type="hidden" name="documentId" value={a.id} />
+											<button type="submit" class="menu-item">Detach — keeps the file</button>
+										</form>
+										{#if arming === a.id}
+											<form method="POST" action="?/deleteAttachment" use:enhance>
+												<input type="hidden" name="documentId" value={a.id} />
+												<button type="submit" class="menu-item danger">
+													Delete the document and its file?
+												</button>
+											</form>
+										{:else}
+											<!-- Armed in place rather than fired on the first click: this
+											     destroys a stored file, and a menu item is an easier
+											     misclick than a button was. -->
+											<button
+												type="button"
+												class="menu-item danger"
+												onclick={() => (arming = a.id)}
+											>
+												Delete document and file
+											</button>
+										{/if}
+									</div>
+								{/if}
+							</div>
 						</div>
 					{/each}
 
@@ -146,10 +179,13 @@
 						type="button"
 						class="icon"
 						aria-label="More for {s.year} {s.country}"
-						aria-expanded={menuOpen === s.id}
-						onclick={() => (menuOpen = menuOpen === s.id ? null : s.id)}>⋯</button
+						aria-expanded={menuOpen === `statement:${s.id}`}
+						onclick={() => {
+							arming = null;
+							menuOpen = menuOpen === `statement:${s.id}` ? null : `statement:${s.id}`;
+						}}>⋯</button
 					>
-					{#if menuOpen === s.id}
+					{#if menuOpen === `statement:${s.id}`}
 						<form method="POST" action="?/remove" use:enhance class="menu">
 							<input type="hidden" name="id" value={s.id} />
 							<button type="submit" class="menu-item danger">Delete statement</button>
@@ -160,11 +196,12 @@
 		</div>
 	{/each}
 
-	<span class="detail-note">
-		{statements.length > 1
-			? 'Two filings in one year is a move, not a mistake — the year total above is the only place they add up.'
-			: 'Delete lives behind the ⋯ menu now; ⇥ detaches a document without deleting it.'}
-	</span>
+	{#if statements.length > 1}
+		<span class="detail-note">
+			Two filings in one year is a move, not a mistake — the year total above is the only place they
+			add up.
+		</span>
+	{/if}
 </div>
 
 <style>
@@ -256,9 +293,6 @@
 		min-width: 0;
 		overflow-wrap: anywhere;
 	}
-	.inline {
-		display: contents;
-	}
 	.icon {
 		background: none;
 		border: 0;
@@ -270,7 +304,6 @@
 	.icon:hover {
 		color: var(--fg1);
 	}
-	.icon.danger,
 	.menu-item.danger {
 		color: var(--red);
 	}
@@ -297,19 +330,30 @@
 		position: absolute;
 		right: 0;
 		top: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+		overflow: hidden;
 		z-index: 2;
 	}
 	.menu-item {
+		display: block;
+		width: 100%;
 		background: none;
 		border: 0;
+		color: var(--fg1);
 		cursor: pointer;
 		padding: 8px 14px;
 		font-size: var(--text-sm);
+		text-align: left;
 		white-space: nowrap;
+	}
+	.menu-item:hover {
+		background: var(--bg3, var(--bd));
 	}
 	.detail-note {
 		font-size: var(--text-sm);

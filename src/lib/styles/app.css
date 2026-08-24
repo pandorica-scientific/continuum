@@ -558,6 +558,27 @@ textarea {
 	transform: translateY(1px);
 }
 
+/* A square control holding one glyph — the ⓘ that reveals an explainer, and
+   anything else that is an icon rather than a label. Here rather than in each
+   screen because it appeared in two files with the same rules copied, which is
+   how two of them end up different sizes. */
+.icon-btn {
+	background: none;
+	border: 1px solid var(--bd);
+	border-radius: var(--radius-md);
+	color: var(--fg3);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	padding: 5px 8px;
+}
+.icon-btn:hover,
+.icon-btn:focus-visible,
+.icon-btn[aria-expanded='true'] {
+	border-color: var(--blue);
+	color: var(--fg1);
+}
+
 /* Honour a stated preference for less motion: the colour change still reports
    the press, which is the part that carries the information. */
 @media (prefers-reduced-motion: reduce) {

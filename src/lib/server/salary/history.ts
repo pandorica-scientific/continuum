@@ -16,10 +16,13 @@ export interface SalaryPersonHistory {
 	years: SalaryYear[];
 	/** Payslip documents filed against this person, newest first. */
 	payslips: {
+		/** The document id — the stored file, not the figures. */
 		id: string;
 		periodMonth: string;
-		amountMinor: bigint;
+		grossMinor: bigint | null;
+		netMinor: bigint | null;
 		bonusMinor: bigint | null;
+		/** Always the base currency: the figures arrive already converted. */
 		currency: string;
 		file: string | null;
 	}[];
@@ -58,7 +61,6 @@ export async function loadSalaryHistory(
 	]);
 
 	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
-	const slips = slipDocs.filter((d) => d.amountMinor !== null && d.periodOn !== null);
 
 	const entriesByPerson = new Map<string, typeof entries>();
 	for (const entry of entries) {
@@ -68,59 +70,56 @@ export async function loadSalaryHistory(
 	}
 
 	return people.map((p) => {
-		const own = slips
-			.filter((d) => ownerOf.get(d.id) === p.id)
-			.map((d) => ({
-				id: d.id,
-				// period_on is a real date; the screens and the form work in months,
-				// which is what an <input type="month"> gives and takes.
-				periodMonth: d.periodOn!.slice(0, 7),
-				amountMinor: d.amountMinor!,
-				currency: d.currency ?? baseCurrency,
-				file: d.storedName
-			}))
-			.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1));
-
 		const recorded = entriesByPerson.get(p.id) ?? [];
-		const bonusOf = new Map(
-			recorded.filter((e) => e.bonusMinor !== null).map((e) => [e.periodMonth, e])
-		);
 
-		const months = new Map<
-			string,
-			{ grossMinor?: bigint; netMinor?: bigint; bonusMinor?: bigint | null }
-		>();
-		for (const slip of own) {
-			months.set(slip.periodMonth, {
-				grossMinor: convert(slip.amountMinor, slip.currency, baseCurrency, `${slip.periodMonth}-01`)
-			});
-		}
-		for (const entry of recorded) {
+		// Converted at the MONTH's own date, not today's rate: a 2019 payslip
+		// restated at this morning's rate is a different number every morning.
+		const months = recorded.map((entry) => {
 			const at = `${entry.periodMonth}-01`;
-			const merged = months.get(entry.periodMonth) ?? {};
-			if (entry.grossMinor !== null) {
-				merged.grossMinor = convert(entry.grossMinor, entry.currency, baseCurrency, at);
-			}
-			if (entry.netMinor !== null) {
-				merged.netMinor = convert(entry.netMinor, entry.currency, baseCurrency, at);
-			}
-			if (entry.bonusMinor !== null) {
-				merged.bonusMinor = convert(entry.bonusMinor, entry.currency, baseCurrency, at);
-			}
-			months.set(entry.periodMonth, merged);
-		}
+			const to = (amount: bigint | null) =>
+				amount === null ? null : convert(amount, entry.currency, baseCurrency, at);
+			return {
+				periodMonth: entry.periodMonth,
+				grossMinor: to(entry.grossMinor),
+				netMinor: to(entry.netMinor),
+				bonusMinor: to(entry.bonusMinor),
+				documentId: entry.documentId
+			};
+		});
+
+		// The document is the FILE, and nothing else. Its `amountMinor` is not
+		// read at all: reading it as gross while the reader picked net is the
+		// defect v0.4.6 exists to fix, and a second source is how that happened.
+		const fileOf = new Map(
+			slipDocs.filter((d) => ownerOf.get(d.id) === p.id).map((d) => [d.id, d.storedName] as const)
+		);
 
 		return {
 			id: p.id,
 			name: p.name,
 			years: salaryStats(
-				[...months.entries()].map(([periodMonth, figures]) => ({ periodMonth, ...figures })),
+				months.map(({ periodMonth, grossMinor, netMinor, bonusMinor }) => ({
+					periodMonth,
+					grossMinor,
+					netMinor,
+					bonusMinor
+				})),
 				p.birthYear
 			),
-			payslips: own.map((s) => ({
-				...s,
-				bonusMinor: bonusOf.get(s.periodMonth)?.bonusMinor ?? null
-			}))
+			payslips: months
+				.filter((m) => m.documentId !== null && fileOf.has(m.documentId))
+				.map((m) => ({
+					id: m.documentId!,
+					periodMonth: m.periodMonth,
+					grossMinor: m.grossMinor,
+					netMinor: m.netMinor,
+					bonusMinor: m.bonusMinor,
+					// Figures arrive already converted, so the unit they are IN is the
+					// base currency — not the currency the entry was stored in.
+					currency: baseCurrency,
+					file: fileOf.get(m.documentId!) ?? null
+				}))
+				.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1))
 		};
 	});
 }
