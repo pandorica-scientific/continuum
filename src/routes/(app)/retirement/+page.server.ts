@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asRowId } from '$lib/ids';
 import { uuidv7 } from 'uuidv7';
-import { asc, eq } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
-import { formatMinor, parseAmountToMinor, toMajor } from '$lib/money';
-import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { saveUpload } from '$lib/server/system/files';
-import { learnAmountLabel, readPayslip, readStoredPayslip } from '$lib/server/salary';
+import { person } from '$lib/server/db/schema';
 import { retirementInputs } from '$lib/server/retirement';
 import {
 	getBaseCurrency,
@@ -23,7 +19,6 @@ import {
 	RETIRE_LABELS,
 	type RetireConfig
 } from '$lib/retire';
-import { payslipEditCurrency, salaryStats } from '$lib/salary';
 import type { Actions, PageServerLoad } from './$types';
 
 const RETIRE_NUMBER_KEYS = [
@@ -103,101 +98,11 @@ function retireConfigFromForm(form: FormData): { config: RetireConfig } | { mess
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
 
-	const [inputs, people, stored, rates] = await Promise.all([
+	const [inputs, people, stored] = await Promise.all([
 		retirementInputs(baseCurrency),
 		db.select().from(person).orderBy(asc(person.createdAt), asc(person.id)),
-		getRevisionedSetting<Partial<RetireConfig>>('retirement', {}),
-		loadRateTable()
+		getRevisionedSetting<Partial<RetireConfig>>('retirement', {})
 	]);
-	const today = new Date().toISOString().slice(0, 10);
-	const toBaseMinor = (amount: bigint, currency: string, day = today) =>
-		convertOrFace(rates, amount, currency, baseCurrency, day);
-
-	// ---- Salary history from payslips ----
-	// A payslip is a document on the Payslips shelf carrying an amount and the
-	// month it covers; document_person says whose it is — a real link, so a
-	// rename cannot orphan it. Amounts come from the PDF (learned per person)
-	// or the user's own entry.
-	const slips = (await db.select().from(document).where(eq(document.shelf, 'payslips'))).filter(
-		(d) => d.amountMinor !== null && d.periodOn !== null
-	);
-	// Which payslip belongs to whom. Filtered to people, because document_link
-	// now also holds a document's properties, accounts and subjects.
-	const slipOwners = await db
-		.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
-		.from(documentLink)
-		.innerJoin(person, eq(person.id, documentLink.targetId));
-	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
-
-	// What the ledger already knows: salary credits recorded against a person,
-	// which until now the salary history could not see at all.
-	const entries = await db.select().from(salaryEntry);
-	const entriesByPerson = new Map<string, typeof entries>();
-	for (const entry of entries) {
-		const list = entriesByPerson.get(entry.personId) ?? [];
-		list.push(entry);
-		entriesByPerson.set(entry.personId, list);
-	}
-	const salary = people.map((p) => {
-		const own = slips
-			.filter((d) => ownerOf.get(d.id) === p.id)
-			.map((d) => ({
-				id: d.id,
-				// period_on is a real date since 0052; the screens and the form work in
-				// months, which is what an <input type="month"> gives and takes.
-				periodMonth: d.periodOn!.slice(0, 7),
-				amountMinor: d.amountMinor!,
-				currency: d.currency ?? baseCurrency,
-				file: d.storedName
-			}))
-			.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1));
-		// A payslip states GROSS. Salary credits the ledger already holds are NET,
-		// and arrive as salary_entry rows — so a month can be evidenced twice, and
-		// the two are kept in their own columns rather than averaged together.
-		const recorded = entriesByPerson.get(p.id) ?? [];
-		const months = new Map<string, { grossMinor?: bigint; netMinor?: bigint }>();
-		for (const slip of own) {
-			months.set(slip.periodMonth, {
-				grossMinor: toBaseMinor(slip.amountMinor, slip.currency, `${slip.periodMonth}-01`)
-			});
-		}
-		for (const entry of recorded) {
-			const at = `${entry.periodMonth}-01`;
-			const merged = months.get(entry.periodMonth) ?? {};
-			if (entry.grossMinor !== null) {
-				merged.grossMinor = toBaseMinor(entry.grossMinor, entry.currency, at);
-			}
-			if (entry.netMinor !== null) {
-				merged.netMinor = toBaseMinor(entry.netMinor, entry.currency, at);
-			}
-			months.set(entry.periodMonth, merged);
-		}
-
-		const rows = salaryStats(
-			[...months.entries()].map(([periodMonth, figures]) => ({ periodMonth, ...figures })),
-			p.birthYear
-		);
-		return {
-			name: p.name,
-			years: rows
-				.slice()
-				.reverse()
-				.map((r) => ({
-					year: r.year,
-					age: r.age,
-					avg: formatMinor(r.avgMonthlyMinor, baseCurrency),
-					avgMajor: toMajor(r.avgMonthlyMinor, baseCurrency),
-					months: r.months,
-					deltaPct: r.deltaPct
-				})),
-			recent: own.slice(0, 6).map((s) => ({
-				id: s.id,
-				periodMonth: s.periodMonth,
-				amount: formatMinor(s.amountMinor, s.currency),
-				file: s.file
-			}))
-		};
-	});
 
 	return {
 		inputs,
@@ -207,120 +112,11 @@ export const load: PageServerLoad = async () => {
 		personNames: [people[0]?.name ?? 'Person one', people[1]?.name ?? 'Person two'],
 		peopleOptions: people.map((p) => ({ id: p.id, name: p.name })),
 		peopleList: people.map((p) => p.name),
-		salary,
 		baseCurrency
 	};
 };
 
 export const actions: Actions = {
-	addPayslip: async ({ request }) => {
-		const form = await request.formData();
-		const personId = asRowId(form.get('personId')).trim();
-		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
-		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
-		// The reader's learned labels stay keyed by name; the link is by id.
-		const subject = owner.name;
-		const baseCurrency = await getBaseCurrency();
-
-		const file = form.get('file');
-		let storedName: string | null = null;
-		let reading = null;
-		if (file instanceof File && file.size > 0) {
-			const data = new Uint8Array(await file.arrayBuffer());
-			try {
-				storedName = await saveUpload(
-					new File([new Blob([data as BlobPart])], file.name, { type: file.type })
-				);
-			} catch (err) {
-				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
-			}
-			reading = await readPayslip(data, subject);
-		}
-
-		// the user's own entry wins; the PDF reading fills what is left blank
-		let amountMinor: bigint | null;
-		const amountRaw = String(form.get('amount') ?? '').trim();
-		if (amountRaw) {
-			try {
-				amountMinor = parseAmountToMinor(amountRaw, baseCurrency);
-			} catch {
-				return fail(400, { message: 'The amount must be a number.' });
-			}
-		} else {
-			amountMinor = reading?.amountMinor ?? null;
-		}
-		const periodMonth =
-			String(form.get('periodMonth') ?? '').trim() || reading?.periodMonth || null;
-		if (amountMinor === null || amountMinor <= 0n) {
-			return fail(400, {
-				message: 'Could not read the amount from the slip — please fill it in.'
-			});
-		}
-		if (!periodMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(periodMonth)) {
-			return fail(400, { message: 'Which month does this payslip cover?' });
-		}
-
-		// a stated amount that matches a line on the slip teaches the reader
-		if (amountRaw && reading) await learnAmountLabel(subject, amountMinor, reading.candidates);
-
-		const documentId = uuidv7();
-		await db.transaction(async (tx) => {
-			await tx.insert(document).values({
-				id: documentId,
-				name: `Payslip ${periodMonth} · ${subject}`,
-				shelf: 'payslips',
-				storedName,
-				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
-				addedOn: new Date().toISOString().slice(0, 10),
-				amountMinor,
-				currency: baseCurrency,
-				periodOn: `${periodMonth}-01`
-			});
-			await tx
-				.insert(documentLink)
-				.values({ documentId, targetId: personId })
-				.onConflictDoNothing();
-		});
-		return { ok: true };
-	},
-
-	setPayslipAmount: async ({ request }) => {
-		const form = await request.formData();
-		const id = asRowId(form.get('id'));
-		const rows = await db.select().from(document).where(eq(document.id, id));
-		const doc = rows[0];
-		if (!doc) return fail(404, { message: 'Payslip not found.' });
-		const currency = payslipEditCurrency(doc.currency, await getBaseCurrency());
-		let amountMinor: bigint;
-		try {
-			amountMinor = parseAmountToMinor(String(form.get('amount') ?? ''), currency);
-			if (amountMinor <= 0n) throw new Error('amount');
-		} catch {
-			return fail(400, { message: 'The amount must be a positive number.' });
-		}
-		// a correction against the stored file teaches the reader for next time
-		if (doc.storedName) {
-			// The PERSON this payslip is filed against. `document_link` also holds a
-			// document's properties, accounts and subjects, so this joins `person`
-			// rather than taking the first link and hoping — which is what the old
-			// per-pair table was doing for it implicitly.
-			const owner = (
-				await db
-					.select({ id: person.id, name: person.name })
-					.from(documentLink)
-					.innerJoin(person, eq(person.id, documentLink.targetId))
-					.where(eq(documentLink.documentId, doc.id))
-					.limit(1)
-			)[0];
-			if (owner) {
-				const reading = await readStoredPayslip(doc.storedName, owner.name);
-				await learnAmountLabel(owner.name, amountMinor, reading.candidates);
-			}
-		}
-		await db.update(document).set({ amountMinor, currency: currency }).where(eq(document.id, id));
-		return { ok: true };
-	},
-
 	save: async ({ request }) => {
 		const form = await request.formData();
 		const revision = Number(form.get('revision'));

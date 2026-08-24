@@ -63,6 +63,14 @@ export const ICONS = {
 		{ line: [2.5, 10, 21.5, 10] },
 		{ line: [6, 14.5, 10, 14.5] }
 	],
+	// A wallet, for Salary. Distinct from `card` (Loans) and `bank` (Accounts):
+	// the flap and the stud read as something money arrives INTO, which is what
+	// separates it from the two icons it sits nearest in the sidebar.
+	wallet: [
+		{ rect: [2.5, 6, 19, 13, 2.5] },
+		{ path: 'M2.5 9.5h12A1.5 1.5 0 0 1 16 11v3a1.5 1.5 0 0 1-1.5 1.5h-12' },
+		{ circle: [17.5, 12.5, 1.1] }
+	],
 	target: [{ circle: [12, 12, 9] }, { circle: [12, 12, 5] }, { circle: [12, 12, 1.4] }],
 	house: [{ path: 'M3 10.6 12 3.5l9 7.1' }, { path: 'M5.6 9.6V20.5h12.8V9.6' }],
 	calendar: [

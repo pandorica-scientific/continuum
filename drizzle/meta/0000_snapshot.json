@@ -5086,6 +5086,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "bonus_minor": {
+          "name": "bonus_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "currency": {
           "name": "currency",
           "type": "text",

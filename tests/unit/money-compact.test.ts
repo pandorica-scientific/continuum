@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
-import { compactMinor } from '$lib/money';
+import { compactAxis, compactMinor } from '$lib/money';
 
 describe('compactMinor', () => {
 	it('abbreviates millions to two decimals', () => {
@@ -36,5 +36,25 @@ describe('compactMinor', () => {
 
 	it('handles an amount too large for a Number without losing the magnitude', () => {
 		expect(compactMinor(1_000_000_000_000n, 'EUR')).toBe('10000.00M');
+	});
+});
+
+describe('compactAxis', () => {
+	it('raises precision until adjacent labels differ', () => {
+		// At this magnitude whole thousands collapse: 3396 and 2547 both round to
+		// "3k", and an axis whose ticks read 3k, 3k, 2k has stopped meaning
+		// anything.
+		const ticks = [0n, 84900n, 169800n, 254700n, 339600n];
+		const labels = compactAxis(ticks, 'EUR');
+		expect(new Set(labels).size).toBe(labels.length);
+	});
+
+	it('leaves already-distinct labels at their coarsest', () => {
+		const labels = compactAxis([0n, 100000000n, 200000000n], 'EUR');
+		expect(labels).toEqual(['0', '1M', '2M']);
+	});
+
+	it('gives up gracefully rather than looping on identical values', () => {
+		expect(compactAxis([500n, 500n], 'EUR')).toEqual(['5.00', '5.00']);
 	});
 });

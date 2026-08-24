@@ -181,3 +181,19 @@ export function compactMinor(amountMinor: bigint, currency: string, decimals?: n
 	if (magnitude >= 1_000) return `${sign}${(magnitude / 1_000).toFixed(decimals ?? 0)}k`;
 	return `${sign}${magnitude.toFixed(decimals ?? 0)}`;
 }
+
+/**
+ * A set of axis labels that are distinct from each other.
+ *
+ * A cell can round thousands to whole numbers because it stands alone; an axis
+ * cannot, because two adjacent gridlines then carry the same text and the scale
+ * silently stops meaning anything. This raises the precision until the labels
+ * differ, which is the least it can do and still be readable.
+ */
+export function compactAxis(values: bigint[], currency: string): string[] {
+	for (let decimals = 0; decimals <= 2; decimals++) {
+		const labels = values.map((v) => compactMinor(v, currency, decimals));
+		if (new Set(labels).size === labels.length) return labels;
+	}
+	return values.map((v) => compactMinor(v, currency, 2));
+}

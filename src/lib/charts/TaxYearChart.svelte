@@ -18,7 +18,7 @@
 	//     inherit the page's font stack, and need no fill of their own.
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
-	import { compactMinor, displayCurrency, formatMinor } from '$lib/money';
+	import { compactAxis, displayCurrency, formatMinor } from '$lib/money';
 	import {
 		MONEY_BOTTOM,
 		MONEY_TOP,
@@ -92,10 +92,18 @@
 
 	// Gridlines at quarters of the money panel, and at 5% steps of the rate
 	// strip. Both derived from the panel, so a changed viewBox moves them too.
-	const moneyGrid = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
-		y: MONEY_BOTTOM - f * (MONEY_BOTTOM - MONEY_TOP),
-		label: f
-	}));
+	// Labels come from compactAxis rather than per-tick formatting: at some
+	// magnitudes whole thousands collapse and two gridlines read the same.
+	const moneyGrid = $derived.by(() => {
+		const fractions = [0, 0.25, 0.5, 0.75, 1];
+		const values = fractions.map((f) => BigInt(Math.round(Number(ceiling) * f)));
+		const labels = compactAxis(values, currency);
+		return fractions.map((f, i) => ({
+			y: MONEY_BOTTOM - f * (MONEY_BOTTOM - MONEY_TOP),
+			label: f,
+			text: labels[i]
+		}));
+	});
 	const rateGrid = $derived(
 		(mode === 'rate' ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1]).map((f) => ({
 			y: band[1] - f * (band[1] - band[0]),
@@ -249,9 +257,7 @@
 			{#if mode === 'stack'}
 				<span class="axis-title money">{axisUnit}</span>
 				{#each moneyGrid as g (g.label)}
-					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">
-						{compactMinor(BigInt(Math.round(Number(ceiling) * g.label)), currency)}
-					</span>
+					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.text}</span>
 				{/each}
 			{/if}
 			<span class="axis-title rate" class:tall={mode === 'rate'}>Rate</span>

@@ -13,7 +13,8 @@ export const MODULES = {
 	property: { emoji: '🏢', label: 'Property', note: 'flats, tenancies and bills' },
 	investments: { emoji: '📈', label: 'Investments', note: 'holdings from broker reports' },
 	loans: { emoji: '💳', label: 'Loans', note: 'mortgages and fixation periods' },
-	retirement: { emoji: '🎯', label: 'Retirement', note: 'the projection model and salary history' },
+	retirement: { emoji: '🎯', label: 'Retirement', note: 'the projection model' },
+	salary: { emoji: '💼', label: 'Salary', note: 'monthly figures from payslips and the ledger' },
 	home: { emoji: '🏠', label: 'Home Assistant', note: 'devices and meter readings' },
 	calendar: { emoji: '📅', label: 'Calendar', note: 'generated events and the ics feed' },
 	tax: { emoji: '🧾', label: 'Tax', note: 'yearly statements per person and country' },
@@ -116,6 +117,9 @@ export const AREAS: Area[] = [
 			{ path: '/cashflow', label: 'Cash flow', icon: 'flow' },
 			{ path: '/accounts', label: 'Accounts', icon: 'bank' },
 			{ path: '/transactions', label: 'Transactions', icon: 'ledger' },
+			// Earned, then taxed on it: Salary sits before Tax for the same reason
+			// the waterfall opens with income.
+			{ path: '/salary', label: 'Salary', icon: 'wallet', module: 'salary' },
 			{ path: '/tax', label: 'Tax', icon: 'receipt', module: 'tax' },
 			{ path: '/import', label: 'Import', icon: 'inbox', module: 'import' },
 			{ path: '/rules', label: 'Rules', icon: 'sliders' },

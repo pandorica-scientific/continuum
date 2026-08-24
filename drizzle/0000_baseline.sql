@@ -1130,6 +1130,7 @@ CREATE TABLE "salary_entry" (
 	"period_month" text NOT NULL,
 	"gross_minor" bigint,
 	"net_minor" bigint,
+	"bonus_minor" bigint,
 	"currency" text NOT NULL,
 	"source" text DEFAULT 'manual' NOT NULL,
 	"document_id" uuid,

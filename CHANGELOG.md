@@ -2,6 +2,22 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.4 — 2026-08-24
+
+> Salary leaves the Retirement screen it never belonged on, and arrives beside the tax it is paid on.
+
+### ✨ Added
+
+- 💼 **Salary is its own screen under Money** — it sat inside Retirement beside a projection that never read it, and "what did I earn" is a question about money rather than about retiring
+- 📊 **One chart, three ways to read it** — the average month, the year added up, and the year-on-year change, sharing the Tax screen's geometry so moving between the two tabs teaches nothing new
+- 🎁 **A payslip's bonus is read off the slip and drawn apart from the base** — `prémie`, `odměna`, a thirteenth salary or an English performance bonus, summed when a slip lists several, and a correction teaches the wording for next month
+- 📉 **Change is drawn twice, base and total** — a one-off bonus moves the total up one year and down the next, which reads as a raise followed by a pay cut when neither happened
+
+### 🔧 Changed
+
+- ⚠️ **A year with fewer than twelve months is marked rather than annualised** — an annual total over three months is a partial year, not a small one, and beside a full year it reads as a collapse
+- 📏 **A chart axis no longer prints the same label on two gridlines** — thousands were rounded whole, which is right in a table cell and silently destroys a scale where the range is narrow
+
 ## 0.4.3 — 2026-08-23
 
 > A year's filing is several pieces of paper, not one — and the Tax screen is rebuilt around the year rather than around whoever filed.
