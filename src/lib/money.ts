@@ -160,3 +160,40 @@ export function parseAmountToMinor(raw: string, currency: string): bigint {
 	if (Number(padded[digits]) >= 5) minor += 1n;
 	return sign === '-' ? -minor : minor;
 }
+
+/**
+ * A figure short enough to scan down a column: `4.37M`, `41k`, `368`.
+ *
+ * No currency symbol — the column header carries it, and repeating it on every
+ * cell is noise in a grid whose whole purpose is comparing one number to the
+ * one below it.
+ *
+ * The thousand and million thresholds are decimal facts, not policy, and the
+ * exponent still comes from the currency: a zero-decimal currency's minor unit
+ * IS its major unit, so 4 370 000 minor JPY abbreviates to 4.37M like anything
+ * else of that size.
+ */
+export function compactMinor(amountMinor: bigint, currency: string, decimals?: number): string {
+	const major = toMajor(amountMinor, currency);
+	const magnitude = Math.abs(major);
+	const sign = major < 0 ? '-' : '';
+	if (magnitude >= 1_000_000) return `${sign}${(magnitude / 1_000_000).toFixed(decimals ?? 2)}M`;
+	if (magnitude >= 1_000) return `${sign}${(magnitude / 1_000).toFixed(decimals ?? 0)}k`;
+	return `${sign}${magnitude.toFixed(decimals ?? 0)}`;
+}
+
+/**
+ * A set of axis labels that are distinct from each other.
+ *
+ * A cell can round thousands to whole numbers because it stands alone; an axis
+ * cannot, because two adjacent gridlines then carry the same text and the scale
+ * silently stops meaning anything. This raises the precision until the labels
+ * differ, which is the least it can do and still be readable.
+ */
+export function compactAxis(values: bigint[], currency: string): string[] {
+	for (let decimals = 0; decimals <= 2; decimals++) {
+		const labels = values.map((v) => compactMinor(v, currency, decimals));
+		if (new Set(labels).size === labels.length) return labels;
+	}
+	return values.map((v) => compactMinor(v, currency, 2));
+}

@@ -841,8 +841,9 @@ describe('domain replacement writes', () => {
 			country: 'CZ',
 			currency: 'CZK',
 			taxPaidMinor: 2000n,
-			documentId: null,
-			note: null
+			note: null,
+			attachments: [],
+			linkDocumentIds: []
 		};
 		await saveStatement(
 			{ ...base, grossIncomeMinor: 10000n, lines: [{ label: 'Original', amountMinor: 500n }] },
@@ -873,6 +874,89 @@ describe('domain replacement writes', () => {
 		const lines = await testDb.select().from(schema.taxStatementLine);
 		expect(statements[0].grossIncomeMinor).toBe(10000n);
 		expect(lines).toMatchObject([{ label: 'Original', amountMinor: 500n }]);
+	});
+
+	it('files no document at all when a batch save is refused', async () => {
+		await testDb
+			.insert(schema.person)
+			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' })
+			.onConflictDoNothing();
+		// The dangerous case: the uploads are already on the volume, and a refusal
+		// after that point could leave documents filed against a statement that
+		// was never written. Validation returns before the transaction opens.
+		const result = await saveStatement(
+			{
+				personId: rowId('person-a'),
+				year: 2025,
+				country: '', // refused: "Name the country."
+				currency: 'CZK',
+				grossIncomeMinor: 100n,
+				taxPaidMinor: 10n,
+				note: null,
+				lines: [],
+				attachments: [
+					{ storedName: 'aaaa.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'statement' },
+					{ storedName: 'bbbb.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'broker' }
+				],
+				linkDocumentIds: []
+			},
+			testDb
+		);
+
+		expect(result.ok).toBe(false);
+		expect(
+			await testDb.select().from(schema.document).where(eq(schema.document.shelf, 'tax'))
+		).toEqual([]);
+	});
+
+	it('files none of a batch when one document in it fails', async () => {
+		await testDb
+			.insert(schema.person)
+			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' })
+			.onConflictDoNothing();
+		// Half a batch is worse than none: the statement would show two of the
+		// three papers it was given, with nothing saying the third went missing.
+		await harness.sql.unsafe(`
+			create function task_domain_fail_third_doc() returns trigger language plpgsql as $$
+			begin
+				if new.name like '%broker earnings report%' then
+					raise exception 'injected document failure';
+				end if;
+				return new;
+			end $$;
+			create trigger task_domain_fail_third_doc before insert on document
+			for each row execute function task_domain_fail_third_doc();
+		`);
+
+		await expect(
+			saveStatement(
+				{
+					personId: rowId('person-a'),
+					year: 2023,
+					country: 'CZ',
+					currency: 'CZK',
+					grossIncomeMinor: 100n,
+					taxPaidMinor: 10n,
+					note: null,
+					lines: [],
+					attachments: [
+						{ storedName: 'cccc.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'statement' },
+						{ storedName: 'dddd.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'broker' }
+					],
+					linkDocumentIds: []
+				},
+				testDb
+			)
+		).rejects.toThrow();
+
+		expect(
+			await testDb.select().from(schema.taxStatement).where(eq(schema.taxStatement.year, 2023))
+		).toEqual([]);
+
+		await harness.sql.unsafe(`
+			drop trigger task_domain_fail_third_doc on document;
+			drop function task_domain_fail_third_doc();
+		`);
 	});
 
 	it('rolls back the entire broker report when the new holdings snapshot fails', async () => {

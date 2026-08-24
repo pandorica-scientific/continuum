@@ -41,6 +41,15 @@ export const salaryEntry = pgTable(
 		 */
 		grossMinor: bigint('gross_minor', { mode: 'bigint' }),
 		netMinor: bigint('net_minor', { mode: 'bigint' }),
+		/**
+		 * The part of gross the payslip itemised as a bonus.
+		 *
+		 * Gross-side only: a slip itemises what makes up gross, while a bank
+		 * credit is one net transfer with no components, so there is no net
+		 * bonus to record. Null means the slip did not itemise one, which is a
+		 * different statement from a slip saying there was none.
+		 */
+		bonusMinor: bigint('bonus_minor', { mode: 'bigint' }),
 		currency: text('currency')
 			.notNull()
 			.references(() => currency.code),

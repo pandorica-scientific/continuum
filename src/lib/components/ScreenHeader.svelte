@@ -4,12 +4,14 @@
 	import Icon from './Icon.svelte';
 	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
 	import type { IconName } from '$lib/icons';
+	import type { Snippet } from 'svelte';
 
 	let {
 		title,
 		caption,
 		syncedAt,
-		icon
+		icon,
+		actions
 	}: {
 		title: string;
 		caption: string;
@@ -17,6 +19,9 @@
 		/** Only for screens outside the navigation; every listed screen names its
 		 *  own icon in the registry. */
 		icon?: IconName;
+		/** A screen's single primary action, beside the title rather than buried
+		 *  in a toolbar below it. Optional: most screens have none. */
+		actions?: Snippet;
 	} = $props();
 
 	// Taken from the page rather than passed in: every screen already renders
@@ -62,6 +67,7 @@
 		<!-- Importing lives on the floating quick-add button, which is on every
 		     screen that offers it. A second link in the header was the same
 		     destination twice. -->
+		{@render actions?.()}
 	</div>
 </header>
 

@@ -78,6 +78,25 @@
 	--series-housing: #006b98;
 	--series-savings: #00a6ad;
 
+	/* Jurisdiction fills for the tax chart. A softer step of four series hues,
+	 * deliberately not the traffic-light hues, which must keep meaning
+	 * good/watch/bad.
+	 *
+	 * Each holds its parent's hue angle, so a jurisdiction reads as the same
+	 * colour family as the series it borrows from. Lightness varies PER TOKEN,
+	 * not uniformly: the handoff proposed one shared lightness, and measured,
+	 * that put Germany against Spain at ΔE 1.8 where 8 is the floor — the same
+	 * amber/olive collapse noted above, which only lightness separation fixes.
+	 *
+	 * Dark clears the floor: worst pair 9.7, flattened at the 0.62 → 0.42
+	 * gradient the chart paints. Light does NOT and cannot — see the light
+	 * block. Measurements in scratch-workspace/v0.4.3/soft-token-contrast.md.
+	 */
+	--series-health-soft: #6279f1; /* Czechia */
+	--series-income-soft: #aee659; /* Germany */
+	--series-bills-soft: #c96900; /* Spain */
+	--series-taxes-soft: #ff7d80; /* Poland */
+
 	/* Reserve, for groups a household adds. Ranked by measured separation from
 	 * everything above and from each other: 1 stands on its own, 2–4 need the
 	 * series named beside them, 5–10 are carried by their label and the colour
@@ -228,6 +247,27 @@ html[data-ledger-theme='light'] {
 	--series-living: #de75b5;
 	--series-housing: #0074a4;
 	--series-savings: #00b4bb;
+
+	/* Jurisdiction fills, light. These top out at ΔE 2.6 against a floor of 8,
+	 * and no hex value clears it: four hues composited at 42–62% over white
+	 * converge under deuteranopia, with the ceiling at 3.8 even for colours
+	 * that abandon the palette entirely. The binding pair is always Germany
+	 * (green) against Poland (red) — the classic confusion.
+	 *
+	 * Shipped anyway, deliberately, because colour is not the only channel in
+	 * this chart: the legend names every jurisdiction, the hover readout
+	 * repeats the name in text beside its figures, and the matrix below
+	 * identifies jurisdictions by column position rather than by fill. The
+	 * floor of 8 was set for the category palette, where a swatch IS the
+	 * identifier and nothing else says which series it is.
+	 *
+	 * If a fifth jurisdiction ever lands here, revisit — the argument above
+	 * gets thinner with every hue added.
+	 */
+	--series-health-soft: #4556d9; /* Czechia */
+	--series-income-soft: #8cc700; /* Germany */
+	--series-bills-soft: #d16e00; /* Spain */
+	--series-taxes-soft: #c11435; /* Poland */
 
 	--series-r1: #009d81;
 	--series-r2: #008075;

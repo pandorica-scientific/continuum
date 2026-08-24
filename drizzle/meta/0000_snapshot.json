@@ -345,6 +345,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "tax_view": {
+          "name": "tax_view",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "theme": {
           "name": "theme",
           "type": "text",
@@ -5076,6 +5082,12 @@
         },
         "net_minor": {
           "name": "net_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bonus_minor": {
+          "name": "bonus_minor",
           "type": "bigint",
           "primaryKey": false,
           "notNull": false

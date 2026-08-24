@@ -63,6 +63,9 @@ describe('the area structure', () => {
 			'/cashflow',
 			'/accounts',
 			'/transactions',
+			// Earned, then taxed on it — Salary precedes Tax for the same reason
+			// the cash-flow waterfall opens with income.
+			'/salary',
 			'/tax',
 			'/import',
 			'/rules',
@@ -134,7 +137,7 @@ describe('visibleAreas', () => {
 	});
 
 	it('drops a screen whose module is off but keeps its area alive', () => {
-		const money = visibleAreas(modules({ tax: false, import: false })).find(
+		const money = visibleAreas(modules({ tax: false, import: false, salary: false })).find(
 			(a) => a.key === 'money'
 		);
 		expect(money?.screens.map((s) => s.path)).toEqual([

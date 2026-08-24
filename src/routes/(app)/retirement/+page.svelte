@@ -1,29 +1,15 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-	import { enhance } from '$app/forms';
 	import { onDestroy } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { createSerializedAutosave } from '$lib/actions/autosave';
 	import { sendActionForPageExit, submitAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
-	import SalaryCharts from '$lib/charts/SalaryCharts.svelte';
 	import { MAX_RETIREMENT_AGE, MIN_RETIREMENT_AGE, retModel, type RetireConfig } from '$lib/retire';
 	import { displayCurrency } from '$lib/money';
 
-	let { data, form } = $props();
-
-	const salaryColors = ['--teal', '--purple', '--yellow', '--blue'];
-	const salaryPeople = $derived(
-		data.salary.map((s, i) => ({
-			name: s.name,
-			colorVar: salaryColors[i % salaryColors.length],
-			points: s.years
-				.slice()
-				.reverse() // ascending by year for the lines
-				.map((y) => ({ year: y.year, age: y.age, avgMajor: y.avgMajor, deltaPct: y.deltaPct }))
-		}))
-	);
+	let { data } = $props();
 
 	// Local assumptions recompute the model instantly; saving is fire-and-forget.
 	// svelte-ignore state_referenced_locally
@@ -409,222 +395,11 @@
 	</div>
 </section>
 
-<section class="card stack">
-	<div class="eyebrow-row">
-		<Eyebrow emoji="💼" label="Salary history" />
-		<span class="eyebrow-caption">
-			from payslips — upload one and the amount reads itself, corrections teach it
-		</span>
-	</div>
-
-	{#if form?.message}
-		<div class="error">{form.message}</div>
-	{/if}
-
-	<SalaryCharts people={salaryPeople} {unit} />
-
-	<div class="salary-grid">
-		{#each data.salary as s (s.name)}
-			<div class="person-block">
-				<span class="p-name">{s.name}</span>
-				{#if s.years.length}
-					<table class="salary-table">
-						<thead>
-							<tr>
-								<th>Year</th>
-								<th>Age</th>
-								<th class="num">Avg monthly</th>
-								<th class="num">vs prev. year</th>
-								<th class="num">slips</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each s.years as y (y.year)}
-								<tr>
-									<td class="mono">{y.year}</td>
-									<td class="mono">{y.age ?? '—'}</td>
-									<td class="mono num">{y.avg}</td>
-									<td
-										class="mono num"
-										style:color={y.deltaPct === null
-											? 'var(--fg3)'
-											: y.deltaPct >= 0
-												? 'var(--green)'
-												: 'var(--red)'}
-									>
-										{y.deltaPct === null
-											? '—'
-											: `${y.deltaPct > 0 ? '+' : ''}${y.deltaPct.toFixed(1)}%`}
-									</td>
-									<td class="mono num quiet-cell">{y.months}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-					<div class="recent">
-						{#each s.recent as slip (slip.id)}
-							<form method="POST" action="?/setPayslipAmount" use:enhance class="slip">
-								<input type="hidden" name="id" value={slip.id} />
-								<span class="mono slip-month">{slip.periodMonth}</span>
-								<input name="amount" value={slip.amount} aria-label="Payslip amount" />
-								{#if slip.file}
-									<a href="/files/{slip.file}" target="_blank" rel="noopener" class="slip-file"
-										>📎</a
-									>
-								{/if}
-								<button type="submit" class="btn slip-save">Fix</button>
-							</form>
-						{/each}
-					</div>
-				{:else}
-					<span class="quiet">No payslips with amounts yet.</span>
-				{/if}
-			</div>
-		{/each}
-	</div>
-
-	<form
-		method="POST"
-		action="?/addPayslip"
-		use:enhance
-		enctype="multipart/form-data"
-		class="payslip-form"
-	>
-		<label
-			><span>Whose</span>
-			<select name="personId">
-				{#each data.peopleOptions as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-			</select></label
-		>
-		<label><span>Month</span><input name="periodMonth" type="month" /></label>
-		<label
-			><span>Amount (blank = read from the PDF)</span><input
-				name="amount"
-				inputmode="decimal"
-				placeholder="45 231"
-			/></label
-		>
-		<label><span>Payslip file (optional)</span><input name="file" type="file" /></label>
-		<button type="submit" class="btn btn-primary">Add payslip</button>
-	</form>
-	<span class="quiet">
-		Payslips land on the Documents → Payslips shelf. Month and amount read themselves from a PDF
-		when they can; whatever you type wins — and a typed amount that matches a line on the slip
-		teaches the reader which line to trust for {data.peopleList.join(' and ')}.
-	</span>
-</section>
-
 <style>
 	.save-error {
 		margin: 0;
 		color: var(--red);
 		font-size: var(--text-md);
-	}
-	.error {
-		border: 1px solid var(--red);
-		background: var(--red-tint);
-		color: var(--red);
-		border-radius: var(--radius-xl);
-		padding: 9px 14px;
-		font-size: var(--text-md);
-	}
-	.salary-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-		gap: 22px;
-	}
-	.person-block {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-5);
-		min-width: 0;
-	}
-	.p-name {
-		font-size: var(--text-md);
-		font-weight: 600;
-	}
-	.salary-table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: var(--text-sm);
-	}
-	.salary-table th {
-		text-align: left;
-		font-size: var(--text-xs);
-		font-weight: 500;
-		color: var(--fg3);
-		padding: 4px 8px 6px 0;
-		border-bottom: 1px solid var(--bd);
-	}
-	.salary-table td {
-		padding: 6px 8px 6px 0;
-		border-bottom: 1px solid var(--bd);
-	}
-	.salary-table .num {
-		text-align: right;
-	}
-	.quiet-cell {
-		color: var(--fg3);
-	}
-	.recent {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-	.slip {
-		display: grid;
-		grid-template-columns: 64px minmax(0, 1fr) auto auto;
-		gap: var(--space-4);
-		align-items: center;
-	}
-	.slip-month {
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	.slip input {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 5px 9px;
-		font-size: var(--text-sm);
-		font-family: var(--font-mono);
-	}
-	.slip-file {
-		text-decoration: none;
-		font-size: var(--text-sm);
-	}
-	/* Deliberately smaller than a form control: it rides inside a payslip row,
-	   not beside a field. */
-	.slip-save {
-		min-height: auto;
-		padding: 5px 10px;
-		font-size: var(--text-xs);
-	}
-	.payslip-form {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: var(--space-6);
-		align-items: end;
-	}
-	.payslip-form label {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-		/* Lets a label — and the file input inside it, which reports the width of
-		   its button plus the filename — be narrower than its content and fit a
-		   1fr track. */
-		min-width: 0;
-	}
-	/* This row used to state its own control height, its own file-input padding
-	   and its own file-button styling — the fix for a file field that measured
-	   42px beside 36px selects and rode UP out of the row. That fix now lives in
-	   the base control layer and applies to every file field in the product, so
-	   what is left here is only what is particular to this row. */
-	.payslip-form input[type='file'] {
-		font-size: var(--text-sm);
 	}
 	.verdict {
 		background: var(--blue-tint);

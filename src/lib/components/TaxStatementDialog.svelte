@@ -5,6 +5,7 @@
 	import ActionError from '$lib/components/ActionError.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { currencyLabel } from '$lib/currencies';
+	import { ATTACHMENT_KINDS } from '$lib/tax';
 
 	interface Existing {
 		id: string;
@@ -15,7 +16,6 @@
 		gross: string;
 		taxPaid: string;
 		lines: { label: string; amount: string }[];
-		documentId: string | null;
 		note: string | null;
 	}
 
@@ -44,14 +44,14 @@
 	let gross = $state(existing?.gross ?? '');
 	let taxPaid = $state(existing?.taxPaid ?? '');
 	let note = $state(existing?.note ?? '');
-	let documentId = $state(existing?.documentId ?? '');
 	let lines = $state(
 		existing?.lines.map((l) => ({ label: l.label, amount: l.amount })) ?? [
 			{ label: '', amount: '' }
 		]
 	);
 	let actionError = $state<string | null>(null);
-	let fileName = $state<string | null>(null);
+	let fileNames = $state<string[]>([]);
+	let fileKind = $state<string>('statement');
 
 	// A statement saved in a currency the rate source no longer quotes must still
 	// show its own currency selected, rather than silently becoming another one.
@@ -160,24 +160,35 @@
 			＋ Add line
 		</button>
 
-		<span class="section-label">The statement itself</span>
+		<span class="section-label">The paperwork</span>
 		<div class="grid">
 			<label>
-				<!-- Uploading files it on the Tax shelf against this person, so the
-				     document exists because the statement does — no separate trip to
-				     the documents screen first. -->
-				<span>Upload the statement</span>
+				<!-- Uploading files these on the Tax shelf against this person, so the
+				     documents exist because the statement does — no separate trip to
+				     the documents screen first. A year's filing is several pieces of
+				     paper, so several files at once; one kind per batch, and a mixed
+				     batch is two saves. -->
+				<span>Upload the paperwork</span>
 				<input
 					class="tax-file"
 					type="file"
 					name="file"
+					multiple
 					accept=".pdf,.png,.jpg,.jpeg,.webp"
-					onchange={(e) => (fileName = e.currentTarget.files?.[0]?.name ?? null)}
+					onchange={(e) => (fileNames = [...(e.currentTarget.files ?? [])].map((f) => f.name))}
 				/>
 			</label>
 			<label>
+				<span>What these are</span>
+				<select name="fileKind" bind:value={fileKind} disabled={fileNames.length === 0}>
+					{#each ATTACHMENT_KINDS as k (k.key)}
+						<option value={k.key}>{k.label}</option>
+					{/each}
+				</select>
+			</label>
+			<label>
 				<span>…or one already on the Tax shelf</span>
-				<select name="documentId" bind:value={documentId} disabled={fileName !== null}>
+				<select name="documentId" disabled={fileNames.length > 0}>
 					<option value="">None attached</option>
 					{#each taxDocs as d (d.id)}
 						<option value={d.id}>{d.name}</option>
@@ -185,10 +196,12 @@
 				</select>
 			</label>
 		</div>
-		{#if fileName}
+		{#if fileNames.length > 0}
 			<span class="attach-note">
-				{fileName} will be filed on the Tax shelf as “{year}
-				{country.trim().toUpperCase() || '—'} tax statement”.
+				{fileNames.length}
+				{fileNames.length === 1 ? 'file' : 'files'} will be filed on the Tax shelf as “{year}
+				{country.trim().toUpperCase() || '—'}
+				{ATTACHMENT_KINDS.find((k) => k.key === fileKind)?.noun}”.
 			</span>
 		{/if}
 

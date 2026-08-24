@@ -137,9 +137,10 @@ describe('tax statement currency validation', () => {
 				currency: 'Kč',
 				grossIncomeMinor: 100n,
 				taxPaidMinor: 10n,
-				documentId: null,
 				note: null,
-				lines: []
+				lines: [],
+				attachments: [],
+				linkDocumentIds: []
 			})
 		).toEqual({ ok: false, status: 400, message: 'Use a three-letter currency code.' });
 	});

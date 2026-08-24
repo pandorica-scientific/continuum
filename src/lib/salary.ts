@@ -170,6 +170,77 @@ const MONTHS: Record<string, number> = {
 };
 
 /** The month a payslip covers: "08/2026", "2026-08" or "srpen 2026". */
+/**
+ * Bonus wordings payslips actually print.
+ *
+ * Gross-side only, and deliberately short. A payslip itemises what makes up
+ * gross; a bank credit is one net transfer with no components at all, so there
+ * is no such thing as a net bonus to detect. Anything not matched here stays
+ * part of the base rather than being guessed at.
+ */
+const BONUS_KEYWORDS = [
+	'mimořádná odměna',
+	'mimoradna odmena',
+	'prémie',
+	'premie',
+	'odměna',
+	'odmena',
+	'13. plat',
+	'13 plat',
+	'performance bonus',
+	'annual bonus',
+	'bonus'
+];
+
+/**
+ * What of this slip's gross was a bonus, or null when it says nothing.
+ *
+ * Null and zero are different answers: null is "the slip did not itemise one",
+ * zero would be "it stated there was none". Only the first is honest about a
+ * plain slip.
+ *
+ * Several lines are summed — a month can carry a standing premium and a one-off
+ * award separately, and reporting the first alone understates it.
+ *
+ * `learnedLabel` wins over the keywords, the same way the pay amount's learned
+ * label does: a correction teaches the reader rather than being re-entered
+ * every month.
+ */
+export function detectBonus(
+	candidates: AmountCandidate[],
+	learnedLabel: string | null = null
+): bigint | null {
+	const matches = (label: string, needle: string): boolean => {
+		const haystack = fold(label);
+		const target = fold(needle);
+		const at = haystack.indexOf(target);
+		if (at === -1) return false;
+		// Whole word only: "bonusový program poplatek" is a fee, not a bonus.
+		const after = haystack[at + target.length];
+		return after === undefined || !/[\p{L}\p{N}]/u.test(after);
+	};
+
+	if (learnedLabel) {
+		const learned = candidates.filter((c) => matches(c.label, learnedLabel));
+		if (learned.length > 0) return learned.reduce((sum, c) => sum + c.amountMinor, 0n);
+	}
+
+	const hits = candidates.filter((c) => BONUS_KEYWORDS.some((k) => matches(c.label, k)));
+	if (hits.length === 0) return null;
+
+	// One line can match two keywords ("mimořádná odměna" also contains
+	// "odměna"); dedupe by the label it was found on so it is not counted twice.
+	const seen = new Set<string>();
+	let total = 0n;
+	for (const hit of hits) {
+		const key = `${hit.label}|${hit.amountMinor}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		total += hit.amountMinor;
+	}
+	return total;
+}
+
 export function detectPeriod(lines: string[]): string | null {
 	for (const line of lines) {
 		const numeric = line.match(/\b(0?[1-9]|1[0-2])\s*[/.]\s*(20\d{2})\b/);
@@ -192,7 +263,7 @@ export function detectPeriod(lines: string[]): string | null {
 	return null;
 }
 
-interface SalaryYear {
+export interface SalaryYear {
 	year: number;
 	/** age that year, when the birth year is known */
 	age: number | null;
@@ -210,6 +281,28 @@ interface SalaryYear {
 	/** Average monthly NET, over the months that have one. */
 	netAvgMinor: bigint | null;
 	netMonths: number;
+	/** The year's gross months added up, and the same split base against bonus. */
+	grossTotalMinor: bigint;
+	bonusTotalMinor: bigint;
+	baseTotalMinor: bigint;
+	/** The year's net months added up — what actually landed in the account. */
+	netTotalMinor: bigint;
+	/**
+	 * Whether the net total covers a whole year.
+	 *
+	 * An annual total over three months is not a small year, it is a partial
+	 * one, and beside a complete year it reads as a collapse. The screen marks
+	 * it rather than hiding it or quietly annualising it.
+	 */
+	netComplete: boolean;
+	/**
+	 * Year-on-year change in the BASE, apart from the change in the total.
+	 *
+	 * A one-off bonus moves the total up one year and down the next, which reads
+	 * as a raise followed by a pay cut when neither happened. The base answers
+	 * what the salary did.
+	 */
+	baseDeltaPct: number | null;
 	/** Whichever of the two the year is best evidenced by, for the chart. */
 	avgMonthlyMinor: bigint;
 	/** How many months that figure came from. */
@@ -225,6 +318,8 @@ export interface SalaryMonth {
 	periodMonth: string;
 	grossMinor?: bigint | null;
 	netMinor?: bigint | null;
+	/** The part of gross the payslip itemised as a bonus. Gross-side only. */
+	bonusMinor?: bigint | null;
 }
 
 /**
@@ -242,11 +337,11 @@ export interface SalaryMonth {
  * payslips.
  */
 export function salaryStats(months: SalaryMonth[], birthYear: number | null): SalaryYear[] {
-	const byYear = new Map<number, { gross: bigint[]; net: bigint[] }>();
+	const byYear = new Map<number, { gross: bigint[]; net: bigint[]; bonus: bigint }>();
 	for (const month of months) {
 		const year = Number(month.periodMonth.slice(0, 4));
 		if (!Number.isInteger(year)) continue;
-		if (!byYear.has(year)) byYear.set(year, { gross: [], net: [] });
+		if (!byYear.has(year)) byYear.set(year, { gross: [], net: [], bonus: 0n });
 		const bucket = byYear.get(year)!;
 		if (month.grossMinor !== null && month.grossMinor !== undefined) {
 			bucket.gross.push(month.grossMinor);
@@ -254,6 +349,10 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		if (month.netMinor !== null && month.netMinor !== undefined) {
 			bucket.net.push(month.netMinor);
 		}
+		// Null is "the slip did not itemise one", which contributes nothing —
+		// distinct from a slip that stated zero, which also contributes nothing
+		// but means something different to the reader looking at the month.
+		if (month.bonusMinor) bucket.bonus += month.bonusMinor;
 	}
 
 	const mean = (values: bigint[]): bigint | null =>
@@ -261,8 +360,14 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 
 	const rows: SalaryYear[] = [];
 	for (const year of [...byYear.keys()].sort()) {
-		const { gross, net } = byYear.get(year)!;
+		const { gross, net, bonus } = byYear.get(year)!;
 		if (gross.length === 0 && net.length === 0) continue;
+
+		const grossTotal = gross.reduce((sum, v) => sum + v, 0n);
+		const netTotal = net.reduce((sum, v) => sum + v, 0n);
+		// Clamped: a misread bonus line, or a slip whose gross excludes the
+		// award, must not draw a negative base.
+		const baseTotal = grossTotal > bonus ? grossTotal - bonus : 0n;
 
 		const grossAvg = mean(gross);
 		const netAvg = mean(net);
@@ -276,6 +381,11 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		// which is exactly the case that would invent a pay cut.
 		const prev = rows[rows.length - 1];
 		const comparable = prev && prev.avgIsGross === avgIsGross && prev.avgMonthlyMinor > 0n;
+		// Base against base, over the same number of months, so the comparison is
+		// of monthly pay rather than of how many months were recorded.
+		const baseAvg = gross.length > 0 ? baseTotal / BigInt(gross.length) : null;
+		const prevBaseAvg =
+			prev && prev.grossMonths > 0 ? prev.baseTotalMinor / BigInt(prev.grossMonths) : null;
 
 		rows.push({
 			year,
@@ -284,6 +394,15 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 			grossMonths: gross.length,
 			netAvgMinor: netAvg,
 			netMonths: net.length,
+			grossTotalMinor: grossTotal,
+			bonusTotalMinor: bonus,
+			baseTotalMinor: baseTotal,
+			netTotalMinor: netTotal,
+			netComplete: net.length >= 12,
+			baseDeltaPct:
+				baseAvg !== null && prevBaseAvg !== null && prevBaseAvg > 0n
+					? Math.round((Number(baseAvg) / Number(prevBaseAvg) - 1) * 1000) / 10
+					: null,
 			avgMonthlyMinor: avg,
 			months: monthCount,
 			avgIsGross,
