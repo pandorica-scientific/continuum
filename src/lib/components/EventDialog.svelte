@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import RecurrenceEditor from '$lib/components/RecurrenceEditor.svelte';
 
 	interface Category {
@@ -52,7 +53,7 @@
 		return new Date(iso).toLocaleDateString('en-CA', { timeZone: tz });
 	}
 
-	let allDay = $state(occurrence?.allDay ?? false);
+	let allDay = $state(untrack(() => occurrence?.allDay ?? false));
 
 	// Only asked when the event actually recurs; a single event has nothing to
 	// choose between and the question would be noise.

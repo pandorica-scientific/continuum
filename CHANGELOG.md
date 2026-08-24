@@ -2,6 +2,19 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.5.0 — 2026-08-24
+
+> Nothing here changes what the product does — it changes what the build says, which had grown long enough that nobody was reading it.
+
+### 🐛 Fixed
+
+- ♿ **A panel's drag surface is a group rather than a bare div** — a div carrying a pointer handler is nothing at all to a screen reader, and the board's panels are moved by dragging their body
+
+### 🔧 Changed
+
+- ⬆️ **CI runs its actions on the Node 24 runtime** — every action in the workflow still ran on the Node 20 one GitHub has deprecated, so each run ended in a notice nobody was going to act on
+- 🔇 **A prop read once to seed a form now says so** — twenty-seven `state_referenced_locally` warnings crossed every image build, each one a deliberate snapshot the compiler had no way to tell from an oversight, and `untrack` states the intent where the build used to guess at it
+
 ## 0.4.6 — 2026-08-24
 
 > A payslip states two figures, and the reader had only ever been told about one of them.

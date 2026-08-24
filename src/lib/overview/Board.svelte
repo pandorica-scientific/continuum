@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import Panel from './Panel.svelte';
 	import PanelContent from './PanelContent.svelte';
@@ -37,7 +38,7 @@
 	// The board owns the arrangement once it is mounted; the loader's copy is
 	// only the starting point, and re-reading it on every save would fight the
 	// drag in progress.
-	let working = $state<OverviewPlacement[]>(structuredClone(layout));
+	let working = $state<OverviewPlacement[]>(untrack(() => structuredClone(layout)));
 	let customising = $state(false);
 	let narrow = $state(false);
 	let failed = $state(false);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -9,8 +10,10 @@
 
 	let { data, form } = $props();
 
-	let query = $state(data.query);
-	let adding = $state(data.prefill.open);
+	// Read once here; the effect below is what carries a navigation into them,
+	// and it decides for itself what a fresh load should reopen.
+	let query = $state(untrack(() => data.query));
+	let adding = $state(untrack(() => data.prefill.open));
 	let newSubjectOpen = $state(false);
 	$effect(() => {
 		const state = syncedDocumentState({ query: data.query, prefillOpen: data.prefill.open });

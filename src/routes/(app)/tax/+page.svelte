@@ -9,6 +9,7 @@
 	// the chart and the matrix, so it has to precede them; the band stays
 	// household-wide, because a figure labelled "overall" that answered to a
 	// control beneath it would read backwards.
+	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
@@ -25,11 +26,15 @@
 	// The most recent year is the one a person opening this screen most likely
 	// wants, and defaulting it open makes the expansion discoverable without a
 	// hint that would otherwise have to be written somewhere.
-	let openYear = $state<number | null>(data.years.at(-1)?.year ?? null);
-	let mode = $state<'stack' | 'rate'>(data.prefs.mode);
-	let personFilter = $state(data.prefs.person);
+	//
+	// All four read the load once and belong to the screen afterwards, which is
+	// what untrack says: `savePrefs` reloads the page data, and a re-read would
+	// snap an expanded year shut while it was being read.
+	let openYear = $state<number | null>(untrack(() => data.years.at(-1)?.year ?? null));
+	let mode = $state<'stack' | 'rate'>(untrack(() => data.prefs.mode));
+	let personFilter = $state(untrack(() => data.prefs.person));
 	// ?add=1 from the quick-add menu opens the dialog on arrival.
-	let editing = $state<Row | null | 'new'>(data.openAdd ? 'new' : null);
+	let editing = $state<Row | null | 'new'>(untrack(() => (data.openAdd ? 'new' : null)));
 
 	// The server recomputes the year rows when the currency or filer changes —
 	// conversion happens at year-end rates, which the client has no table for.

@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import { submitAction } from '$lib/actions/result';
 	import {
 		DEFAULT_CELL_CM,
@@ -21,15 +22,20 @@
 
 	const CELL = 10;
 
-	let cellCm = $state(initial?.cellCm ?? DEFAULT_CELL_CM);
-	let rooms: PlanRoom[] = $state(
-		initial
+	// The editor owns the drawing from the moment it opens; `initial` is only
+	// where it starts, and re-reading it would discard rooms drawn since.
+	const start = untrack(() => ({
+		cellCm: initial?.cellCm ?? DEFAULT_CELL_CM,
+		rooms: initial
 			? initial.rooms.map((r) => ({
 					name: r.name,
 					cells: r.cells.map((c) => [...c] as [number, number])
 				}))
 			: []
-	);
+	}));
+
+	let cellCm = $state(start.cellCm);
+	let rooms: PlanRoom[] = $state(start.rooms);
 	let mode: 'new' | 'extend' | 'erase' = $state('new');
 	let selected: number | null = $state(null);
 	let draft: { x: number; y: number; w: number; h: number } | null = $state(null);

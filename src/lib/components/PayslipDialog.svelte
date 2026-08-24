@@ -6,6 +6,7 @@
 	// refusal had to be plumbed back through the page's `form` prop to reopen it
 	// with what it refused. A modal holds its own draft, so a refusal simply
 	// stays on screen with the figures still in the fields.
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import ActionError from '$lib/components/ActionError.svelte';
@@ -20,7 +21,7 @@
 		onclose: () => void;
 	} = $props();
 
-	let personId = $state(people[0]?.id ?? '');
+	let personId = $state(untrack(() => people[0]?.id ?? ''));
 	let periodMonth = $state('');
 	let gross = $state('');
 	let net = $state('');

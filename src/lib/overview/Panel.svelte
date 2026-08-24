@@ -66,10 +66,15 @@
 		Panel content is inert while customising. Panels hold links and scrollable
 		rows, so without this a drag that starts on a row inside Recent activity
 		opens that transaction instead of moving the panel.
+
+		role="group" rather than a bare div, because a div carrying a pointer
+		handler is nothing at all to a screen reader. Moving a panel is a drag on
+		the wide board; the header's arrows are the route in the narrow one.
 	-->
 	<div
 		class="body"
 		class:inert={customising}
+		role="group"
 		onpointerdown={customising && !narrow ? onpointerdown : undefined}
 	>
 		{@render children()}

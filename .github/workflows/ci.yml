@@ -38,8 +38,8 @@ jobs:
     # up on it. Nothing here takes five minutes when it is working.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: npm
@@ -75,7 +75,7 @@ jobs:
       cut: ${{ steps.cut.outputs.cut }}
       tag: ${{ steps.cut.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Tags are needed to answer "is this version new" and "is it newer".
           fetch-depth: 0
@@ -169,12 +169,12 @@ jobs:
       # as — a Docker Hub organisation, say. Defaults to the sign-in account.
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
       # The job itself now runs only for a release, so neither login needs to
       # ask which event brought it here.
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -184,7 +184,7 @@ jobs:
       # DOCKERHUB_TOKEN (an access token, not the password); the tag step below
       # refuses the release outright when they are missing, rather than
       # publishing to GHCR alone and calling that a release.
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         if: env.DOCKERHUB_USERNAME != ''
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -244,7 +244,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "Publishing: $TAGS"
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile

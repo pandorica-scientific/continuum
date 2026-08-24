@@ -1,11 +1,14 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import PasskeyButton from '$lib/components/PasskeyButton.svelte';
 
 	let { data, form } = $props();
 
-	let personId = $state(data.people[0]?.id ?? '');
+	// The first person is only where the field starts. Read once: a re-render
+	// must not pull the choice back after someone has picked the other one.
+	let personId = $state(untrack(() => data.people[0]?.id ?? ''));
 </script>
 
 <svelte:head><title>Continuum — sign in</title></svelte:head>

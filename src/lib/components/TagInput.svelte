@@ -12,7 +12,7 @@
 		placeholder?: string;
 	} = $props();
 
-	const listId = `tags-${transactionId}`;
+	const listId = $derived(`tags-${transactionId}`);
 </script>
 
 <input

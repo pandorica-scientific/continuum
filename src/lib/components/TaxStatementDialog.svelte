@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import ActionError from '$lib/components/ActionError.svelte';
@@ -37,18 +38,31 @@
 		onclose: () => void;
 	} = $props();
 
-	let personId = $state(existing?.personId ?? (people[0]?.id || ''));
-	let year = $state(String(existing?.year ?? new Date().getFullYear() - 1));
-	let country = $state(existing?.country ?? '');
-	let currency = $state(existing?.currencyCode ?? baseCurrency);
-	let gross = $state(existing?.gross ?? '');
-	let taxPaid = $state(existing?.taxPaid ?? '');
-	let note = $state(existing?.note ?? '');
-	let lines = $state(
-		existing?.lines.map((l) => ({ label: l.label, amount: l.amount })) ?? [
+	// The draft is seeded from the props once and is the dialog's own after
+	// that: it is mounted fresh for each statement, and re-reading `existing`
+	// while someone is typing would overwrite what they had typed. Reading it
+	// inside untrack states that, rather than leaving it to look accidental.
+	const start = untrack(() => ({
+		personId: existing?.personId ?? (people[0]?.id || ''),
+		year: String(existing?.year ?? new Date().getFullYear() - 1),
+		country: existing?.country ?? '',
+		currency: existing?.currencyCode ?? baseCurrency,
+		gross: existing?.gross ?? '',
+		taxPaid: existing?.taxPaid ?? '',
+		note: existing?.note ?? '',
+		lines: existing?.lines.map((l) => ({ label: l.label, amount: l.amount })) ?? [
 			{ label: '', amount: '' }
 		]
-	);
+	}));
+
+	let personId = $state(start.personId);
+	let year = $state(start.year);
+	let country = $state(start.country);
+	let currency = $state(start.currency);
+	let gross = $state(start.gross);
+	let taxPaid = $state(start.taxPaid);
+	let note = $state(start.note);
+	let lines = $state(start.lines);
 	let actionError = $state<string | null>(null);
 	let fileNames = $state<string[]>([]);
 	let fileKind = $state<string>('statement');
@@ -62,7 +76,7 @@
 	// Prefill applies while creating, and stops the moment the gross field is
 	// touched. Editing an existing statement never prefills: a saved figure is
 	// never re-derived. That rule is what the E2E reload test pins.
-	let grossTouched = $state(existing !== null);
+	let grossTouched = $state(untrack(() => existing !== null));
 	const suggestion = $derived(prefillTotals[`${personId}|${Number(year)}`] ?? null);
 	$effect(() => {
 		if (!grossTouched) gross = suggestion?.amount ?? '';

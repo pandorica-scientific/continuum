@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import { formatRrule, parseRrule } from '$lib/calendar/rrule';
 	import Field from '$lib/components/Field.svelte';
 
@@ -28,7 +29,9 @@
 	// do not offer to build one.
 	type Pattern = 'none' | 'daily' | 'weekly' | 'monthlyDate' | 'monthlyWeekday' | 'yearly';
 
-	const parsed = parseRrule(value ?? '');
+	// Parsed once: the controls below are seeded from it and own the rule from
+	// then on, so a re-read would undo a pattern half-chosen.
+	const parsed = untrack(() => parseRrule(value ?? ''));
 
 	/** The ordinal of a BYDAY token — 2 in `2TU`, -1 in `-1FR`, 0 for a bare code. */
 	function ordinalOf(token: string): number {

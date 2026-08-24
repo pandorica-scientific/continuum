@@ -6,6 +6,7 @@
 	// It used to be one repeated block per person: a chart, then a flat list of
 	// payslips, once per person, stacked. A second person grew a second
 	// everything and there was no way to see the household at all.
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
@@ -32,7 +33,7 @@
 	// The dialog holds its own draft and shows its own refusal, so the page no
 	// longer has to reopen a collapsed form and refill it. `?add=1` from the
 	// quick-add menu is the only thing that opens it from outside.
-	let adding = $state(data.openAdd);
+	let adding = $state(untrack(() => data.openAdd));
 
 	const peopleOptions = $derived([
 		{ value: 'both', label: 'Both' },
