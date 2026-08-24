@@ -1,0 +1,27 @@
+#!/bin/sh
+# Keep the files that name a version in step with package.json.
+#
+# Convenience, not enforcement: a hook only exists in a clone where someone ran
+# `npm install`, so CI checks the same rule with the same script. This just
+# means you rarely see CI catch it.
+#
+# Anything the sync rewrites is re-staged, so the commit contains the corrected
+# file rather than leaving it dirty in the working tree — a hook that fixes a
+# file and then commits the unfixed version is worse than no hook.
+#
+# `git commit --no-verify` skips it.
+set -e
+
+CHANGED=$(node scripts/sync-version.mjs)
+if [ -n "$CHANGED" ]; then
+  printf '%s\n' "$CHANGED"
+  # Only re-stage what was ALREADY part of this commit. Sweeping in a file the
+  # author deliberately left unstaged would be the hook deciding what the
+  # commit contains.
+  for f in package-lock.json docs/install.md; do
+    if ! git diff --quiet -- "$f" && ! git diff --cached --quiet -- "$f"; then
+      git add "$f"
+      echo "pre-commit: re-staged $f"
+    fi
+  done
+fi

@@ -3,13 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
-    # A release is a pushed tag: `git tag v0.3.10 && git push origin v0.3.10`, or
-    # a GitHub release published against one. Nothing is published from main:
-    # `latest` names the newest RELEASE, because that is the tag `compose.yaml`
-    # pulls and people run at home. Publishing it from every merge meant a
-    # `docker compose pull` picked up whatever landed an hour ago. The tag must
-    # match the version in package.json — see the image job, which refuses the
-    # build otherwise.
+    # A release is a version bump landing on main: the `release` job below cuts
+    # the tag and the GitHub release, and `image` publishes in the SAME run.
+    # Merges that do not change the version publish nothing, which is what
+    # keeps `latest` naming a release rather than whatever landed an hour ago —
+    # the property this workflow has always protected. What changed is only
+    # WHERE the decision is made: bumping package.json in the pull request,
+    # rather than remembering to push a tag afterwards.
+    #
+    # A hand-pushed tag still works and still publishes, for cutting a release
+    # from a commit that is not main's head, or re-cutting one whose run failed.
+    # Either way the tag must match package.json — the image job refuses
+    # otherwise.
     tags: ['v*']
   pull_request:
   # A release published against an existing tag builds too, so a version whose
@@ -39,23 +44,115 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
+      # Everything that names a version agrees with package.json. The same
+      # script the pre-commit hook runs, in its reporting mode — a check that
+      # reimplements what the fixer does is a check that eventually disagrees
+      # with it. package-lock had read 0.4.1 for three releases, because npm
+      # only rewrites it when a DEPENDENCY changes.
+      - run: npm run version:check
       - run: npm run lint
       - run: npm run check
       - run: npm test
 
+  # Cut the release when — and only when — package.json names a version that
+  # has no tag yet.
+  #
+  # This job creates the tag itself rather than leaving it to a person, and it
+  # therefore CANNOT rely on that tag starting another workflow run: a ref
+  # pushed with GITHUB_TOKEN is deliberately inert, or every release would loop.
+  # So it hands the version to `image` through an output and the publish happens
+  # in this same run. Using a PAT to get around that was the alternative, and it
+  # costs a second full pass over the suite plus a credential to keep.
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [checks]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    outputs:
+      # 'true' only when this run created the tag. `image` keys off it.
+      cut: ${{ steps.cut.outputs.cut }}
+      tag: ${{ steps.cut.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags are needed to answer "is this version new" and "is it newer".
+          fetch-depth: 0
+      - id: cut
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v$VERSION"
+
+          # Most merges are not releases. Say so and stop, rather than failing
+          # a green build over a version nobody intended to change.
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists — nothing to release"
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Refuse to go backwards. A revert that restores an older
+          # package.json would otherwise cut a tag whose image then takes
+          # `latest`, silently downgrading everyone who pulls it. sort -V puts
+          # the highest last; if that is not the version we are holding, this
+          # is a step down and wants a human.
+          NEWEST="$(git tag --list 'v*' | sed 's/^v//' | sort -V | tail -1)"
+          if [ -n "$NEWEST" ] && [ "$NEWEST" != "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" ]; then
+            : # $VERSION is the higher of the two — carry on.
+          elif [ -n "$NEWEST" ]; then
+            echo "::error::package.json says $VERSION but $NEWEST is already released — refusing to move latest backwards"
+            exit 1
+          fi
+
+          # The release notes are the changelog section for this version. Kept
+          # in one place rather than written twice and left to disagree.
+          NOTES="$(awk -v v="## $VERSION " '
+            index($0, v) == 1 { inside = 1; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' CHANGELOG.md)"
+          if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
+            echo "::error::CHANGELOG.md has no section for $VERSION — a release without notes is not a release"
+            exit 1
+          fi
+
+          # Annotated and pointed at this commit, so the tag and the
+          # package.json it was cut from can never drift apart.
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+
+          printf '%s\n' "$NOTES" > /tmp/notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md
+
+          echo "cut=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Released $TAG"
+
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [checks]
-    # Releases only. A `release` event carries the tag in `github.ref` exactly
-    # as a tag push does, so one test covers both — but the event is named as
-    # well, so this still reads as what it means rather than as a coincidence
-    # of how GitHub populates the ref.
+    needs: [checks, release]
+    # Releases only, by either route: a tag pushed by hand, or one the
+    # `release` job above just cut.
     #
-    # Every other trigger stops at `checks`. Building an image nobody
-    # will pull cost roughly ten minutes of QEMU on each pull request, twice
-    # over for two architectures.
-    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
+    # `always()` is needed because `release` is SKIPPED on a tag push, and a
+    # skipped dependency would otherwise skip this job too — which would mean
+    # hand-pushed tags silently stopped publishing. `checks` is then asserted
+    # explicitly, because always() also runs after a failure.
+    #
+    # Every other trigger stops at `checks`. Building an image nobody will pull
+    # cost roughly ten minutes of QEMU on each pull request, twice over for two
+    # architectures.
+    if: >-
+      always() && needs.checks.result == 'success' &&
+      (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') ||
+       needs.release.outputs.cut == 'true')
     permissions:
       contents: read
       packages: write
@@ -97,20 +194,27 @@ jobs:
         env:
           OWNER: ${{ github.repository_owner }}
           REF: ${{ github.ref }}
+          # Set when the release job cut the tag in this same run, empty when a
+          # tag was pushed by hand.
+          CUT_TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           NAMESPACE="${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}"
 
-          # The job's `if:` should have kept every other ref out. Checked again
-          # rather than assumed, because the failure it prevents is publishing
-          # `latest` off an arbitrary commit — which is the whole reason this
-          # job stopped running on main.
-          if [[ "$REF" != refs/tags/* ]]; then
-            echo "::error::$REF is not a tag — only a release publishes an image"
+          # Two ways to be here, and the ref only names the tag in one of them:
+          # a run triggered by the tag push carries it, a run that CUT the tag
+          # is still on refs/heads/main. Checked rather than assumed, because
+          # the failure it prevents is publishing `latest` off an arbitrary
+          # commit — which is why this job does not run on main by itself.
+          if [ -n "${CUT_TAG}" ]; then
+            TAG="$CUT_TAG"
+          elif [[ "$REF" == refs/tags/* ]]; then
+            TAG="${REF#refs/tags/}"
+          else
+            echo "::error::$REF is not a tag and no release was cut — only a release publishes an image"
             exit 1
           fi
-          TAG="${REF#refs/tags/}"
 
           # The tag and package.json disagreeing means one of them is a
           # mistake, and publishing either would be wrong. Releases have been
