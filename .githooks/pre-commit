@@ -12,6 +12,36 @@
 # `git commit --no-verify` skips it.
 set -e
 
+# A GUI git client does not run a login shell, so it inherits a bare PATH with
+# no Homebrew, nvm or fnm on it. The hook used to die on `node: command not
+# found` and take the commit with it — enforcement, from a hook that says two
+# lines up that it is not one.
+if ! command -v node >/dev/null 2>&1; then
+  # Fixed locations first. The version managers are globbed rather than read
+  # from .nvmrc: that file holds "20" while the directory is "v20.11.0", so
+  # composing a path out of it finds nothing.
+  for candidate in \
+    /opt/homebrew/bin/node \
+    /usr/local/bin/node \
+    "$HOME/.volta/bin/node" \
+    "$HOME/.local/share/fnm/aliases/default/bin/node" \
+    "$HOME"/.nvm/versions/node/*/bin/node; do
+    if [ -x "$candidate" ]; then
+      PATH="$(dirname "$candidate"):$PATH"
+      export PATH
+      break
+    fi
+  done
+fi
+
+# nvm and fnm install per-version with no stable path, so a lookup can still
+# come up empty. Say so and stand aside: CI runs `version:check` on the same
+# script, which is where this rule is actually enforced.
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: no node on PATH, skipping the version sync — CI still checks it." >&2
+  exit 0
+fi
+
 CHANGED=$(node scripts/sync-version.mjs)
 if [ -n "$CHANGED" ]; then
   printf '%s\n' "$CHANGED"

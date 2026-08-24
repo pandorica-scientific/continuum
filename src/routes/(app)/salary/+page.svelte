@@ -13,7 +13,10 @@
 
 	let adding = $state(false);
 	let mode = $state<SalaryMode>('avg');
-	let editingBonus = $state<string | null>(null);
+	// Keyed `${documentId}|${field}` — one editor open at a time across the
+	// whole screen, so two half-typed corrections can never both be pending.
+	let editing = $state<string | null>(null);
+	let confirming = $state<string | null>(null);
 
 	const anyHistory = $derived(data.history.some((p) => p.years.length > 0));
 	// A person with nothing recorded gets no block. An empty chart and an empty
@@ -69,13 +72,22 @@
 				<input type="month" name="periodMonth" />
 			</label>
 			<label>
-				<span>Amount</span>
-				<input name="amount" placeholder="read from the slip if left blank" />
+				<span>Gross</span>
+				<input name="gross" placeholder="read from the slip if left blank" />
+			</label>
+			<label>
+				<span>Net</span>
+				<input name="net" placeholder="read from the slip if left blank" />
+			</label>
+			<label>
+				<span>Bonus</span>
+				<input name="bonus" placeholder="part of gross, if the slip names one" />
 			</label>
 		</div>
 		<p class="hint">
-			The slip is read for its amount, its month and any bonus line. Anything filled in here wins,
-			and a correction teaches the reader for next month.
+			A payslip states gross and net; the bonus is part of gross, so gross 100 000 with a 25 000
+			bonus means a base of 75 000. The slip is read for all three and for its month. Anything
+			filled in here wins, and a correction teaches the reader for next month.
 		</p>
 		<div class="row">
 			<button type="submit" class="btn btn-primary">Add</button>
@@ -110,54 +122,122 @@
 						<div class="slip">
 							<span class="mono month">{s.periodMonth}</span>
 							{#if s.file}
-								<a href="/files/{s.file}" target="_blank" rel="noopener" class="s-name">
-									{s.amount}
-									{s.currency}
-								</a>
+								<a href="/files/{s.file}" target="_blank" rel="noopener" class="s-name">slip</a>
 							{:else}
-								<span class="s-name">{s.amount} {s.currency}</span>
+								<span class="s-name muted">no file</span>
 							{/if}
 
-							{#if editingBonus === s.id}
+							{#each [{ key: 'gross', value: s.gross }, { key: 'net', value: s.net }] as f (f.key)}
+								{#if editing === `${s.id}|${f.key}`}
+									<form
+										method="POST"
+										action="?/setPayslipFigure"
+										use:enhance={() =>
+											async ({ update }) => {
+												await update();
+												editing = null;
+											}}
+										class="figure-form"
+									>
+										<input type="hidden" name="personId" value={p.id} />
+										<input type="hidden" name="periodMonth" value={s.periodMonth} />
+										<input type="hidden" name="field" value={f.key} />
+										<!-- svelte-ignore a11y_autofocus -->
+										<input
+											name="amount"
+											value={f.value ?? ''}
+											autofocus
+											aria-label="{f.key} for {s.periodMonth}"
+										/>
+										<button type="submit" class="btn">Save</button>
+										<button type="button" class="btn" onclick={() => (editing = null)}>
+											Cancel
+										</button>
+									</form>
+								{:else}
+									<button
+										type="button"
+										class="figure"
+										class:none={f.value === null}
+										onclick={() => (editing = `${s.id}|${f.key}`)}
+									>
+										<span class="f-label">{f.key}</span>
+										<span class="mono">{f.value ?? '—'}</span>
+									</button>
+								{/if}
+							{/each}
+
+							{#if editing === `${s.id}|bonus`}
 								<form
 									method="POST"
 									action="?/setBonus"
 									use:enhance={() =>
 										async ({ update }) => {
 											await update();
-											editingBonus = null;
+											editing = null;
 										}}
-									class="bonus-form"
+									class="figure-form"
 								>
 									<input type="hidden" name="personId" value={p.id} />
 									<input type="hidden" name="periodMonth" value={s.periodMonth} />
+									<!-- svelte-ignore a11y_autofocus -->
 									<input
 										name="bonus"
 										value={s.bonus ?? ''}
-										placeholder="bonus"
+										autofocus
 										aria-label="Bonus for {s.periodMonth}"
 									/>
 									<button type="submit" class="btn">Save</button>
-									<button type="button" class="btn" onclick={() => (editingBonus = null)}>
+									<button type="button" class="btn" onclick={() => (editing = null)}>
 										Cancel
 									</button>
 								</form>
 							{:else}
 								<button
 									type="button"
-									class="bonus"
+									class="figure"
 									class:none={s.bonus === null}
-									onclick={() => (editingBonus = s.id)}
+									onclick={() => (editing = `${s.id}|bonus`)}
 								>
-									{s.bonus === null ? 'no bonus read' : `bonus ${s.bonus}`}
+									<span class="f-label">bonus</span>
+									<span class="mono">{s.bonus ?? 'none read'}</span>
+								</button>
+							{/if}
+
+							{#if confirming === s.id}
+								<form
+									method="POST"
+									action="?/deletePayslip"
+									use:enhance={() =>
+										async ({ update }) => {
+											await update();
+											confirming = null;
+										}}
+									class="figure-form"
+								>
+									<input type="hidden" name="personId" value={p.id} />
+									<input type="hidden" name="periodMonth" value={s.periodMonth} />
+									<!-- Names what is going. A month evidenced by a bank credit too
+									     loses that credit's net figure, and saying so is the
+									     difference between a decision and a surprise. -->
+									<span class="warn">Delete {s.periodMonth} — gross, net and bonus?</span>
+									<button type="submit" class="btn btn-danger">Delete</button>
+									<button type="button" class="btn" onclick={() => (confirming = null)}>
+										Cancel
+									</button>
+								</form>
+							{:else}
+								<button type="button" class="del" onclick={() => (confirming = s.id)}>
+									Delete
 								</button>
 							{/if}
 						</div>
 					{/each}
 				</div>
 				<p class="hint">
-					A bonus is read from the slip when it names one. Correcting it here remembers the wording
-					for next month, and clearing the field puts the month back to saying nothing.
+					Every figure here is editable — click one. A correction teaches the reader the wording for
+					next month, and clearing the bonus puts the month back to saying nothing, which is not the
+					same as saying zero.
 				</p>
 			</div>
 		{/if}
@@ -236,26 +316,61 @@
 		font-size: var(--text-md);
 		color: var(--fg1);
 	}
-	.bonus {
+	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
+	   bordered label at --text-xs, so the hint's promise that "correcting it
+	   here remembers the wording" pointed at something that read as static. */
+	.figure {
+		display: inline-flex;
+		align-items: baseline;
+		gap: var(--space-2);
 		background: none;
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-md);
 		color: var(--fg2);
 		cursor: pointer;
 		padding: 4px 10px;
+		font-size: var(--text-sm);
+	}
+	.figure:hover,
+	.figure:focus-visible {
+		border-color: var(--blue);
+		color: var(--fg1);
+	}
+	.figure .f-label {
 		font-size: var(--text-xs);
-	}
-	.bonus.none {
 		color: var(--fg3);
-		border-style: dashed;
 	}
-	.bonus-form {
+	/* Dashed: the figure is absent, which is a different statement from zero. */
+	.figure.none {
+		border-style: dashed;
+		color: var(--fg3);
+	}
+	.figure-form {
 		display: flex;
 		gap: var(--space-3);
 		align-items: center;
 	}
-	.bonus-form input {
+	.figure-form input {
 		width: 120px;
+	}
+	.del {
+		background: none;
+		border: none;
+		color: var(--fg3);
+		cursor: pointer;
+		font-size: var(--text-xs);
+		padding: 4px 6px;
+	}
+	.del:hover,
+	.del:focus-visible {
+		color: var(--red);
+	}
+	.warn {
+		font-size: var(--text-sm);
+		color: var(--fg2);
+	}
+	.muted {
+		color: var(--fg3);
 	}
 	.empty {
 		font-size: var(--text-sm);

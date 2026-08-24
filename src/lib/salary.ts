@@ -109,25 +109,88 @@ function fold(text: string): string {
 }
 
 /**
- * Pick the payslip's pay amount: a learned label wins, then the net-pay
- * keywords in order, then the largest amount on the slip as a last resort.
- * All label matching is diacritics-insensitive.
+ * Gross wordings payslips actually print.
+ *
+ * A slip states gross AND net; they are two facts, not two readings of one
+ * number, which is why `salary_entry` carries a column for each. Until v0.4.6
+ * only the net list existed and whatever it found was filed as gross.
+ *
+ * Longer wordings come first: `pickBy` returns on the first keyword with any
+ * hit, and "hrubá mzda" is a substring of "hrubá mzda celkem".
  */
-export function pickAmount(
+const GROSS_PAY_KEYWORDS = [
+	'hrubá mzda celkem',
+	'hrubá měsíční mzda',
+	'hrubá mzda',
+	'hrubý příjem',
+	'total gross',
+	'gross earnings',
+	'gross salary',
+	'gross pay'
+];
+
+/**
+ * Never gross, however much it looks like it.
+ *
+ * Czech slips print superhrubá mzda — total employment cost — above the gross
+ * line, and it is larger. Excluded rather than merely ranked below gross,
+ * because a slip can print the cost line and no gross line at all, and the old
+ * largest-amount fallback would then have handed it over as the salary.
+ */
+const COST_KEYWORDS = [
+	'superhrubá mzda',
+	'cena práce',
+	'cost of employment',
+	'employer cost',
+	'total cost'
+];
+
+/**
+ * The candidate a list of wordings points at, or null.
+ *
+ * A learned label wins, then the keywords in their listed order. The LAST match
+ * on a repeated label is taken: a slip prints its components before its total,
+ * so the total is the later one. Excluded labels can never be returned, whatever
+ * matched them.
+ *
+ * There is deliberately no "largest amount on the slip" fallback. It is what
+ * filed net pay as gross for every slip with no matching wording, and pointed at
+ * gross it would find total employment cost instead. Null is a question the form
+ * can ask once and learn from; a wrong number is silent.
+ */
+export function pickBy(
 	candidates: AmountCandidate[],
-	learnedLabel: string | null
+	keywords: readonly string[],
+	learnedLabel: string | null,
+	exclude: readonly string[] = []
 ): AmountCandidate | null {
-	if (candidates.length === 0) return null;
+	const allowed = candidates.filter((c) => !exclude.some((k) => fold(c.label).includes(fold(k))));
+	if (allowed.length === 0) return null;
+
 	if (learnedLabel) {
-		const learned = candidates.filter((c) => fold(c.label) === fold(learnedLabel));
+		const learned = allowed.filter((c) => fold(c.label) === fold(learnedLabel));
 		// the same label can appear more than once; the last is the total line
 		if (learned.length > 0) return learned[learned.length - 1];
 	}
-	for (const keyword of NET_PAY_KEYWORDS) {
-		const hits = candidates.filter((c) => fold(c.label).includes(fold(keyword)));
+	for (const keyword of keywords) {
+		const hits = allowed.filter((c) => fold(c.label).includes(fold(keyword)));
 		if (hits.length > 0) return hits[hits.length - 1];
 	}
-	return candidates.reduce((max, c) => (c.amountMinor > max.amountMinor ? c : max));
+	return null;
+}
+
+export function pickGross(
+	candidates: AmountCandidate[],
+	learnedLabel: string | null
+): AmountCandidate | null {
+	return pickBy(candidates, GROSS_PAY_KEYWORDS, learnedLabel, COST_KEYWORDS);
+}
+
+export function pickNet(
+	candidates: AmountCandidate[],
+	learnedLabel: string | null
+): AmountCandidate | null {
+	return pickBy(candidates, NET_PAY_KEYWORDS, learnedLabel);
 }
 
 const MONTHS: Record<string, number> = {
@@ -208,7 +271,7 @@ const BONUS_KEYWORDS = [
  */
 export function detectBonus(
 	candidates: AmountCandidate[],
-	learnedLabel: string | null = null
+	learnedLabels: string[] | null = null
 ): bigint | null {
 	const matches = (label: string, needle: string): boolean => {
 		const haystack = fold(label);
@@ -220,25 +283,71 @@ export function detectBonus(
 		return after === undefined || !/[\p{L}\p{N}]/u.test(after);
 	};
 
-	if (learnedLabel) {
-		const learned = candidates.filter((c) => matches(c.label, learnedLabel));
-		if (learned.length > 0) return learned.reduce((sum, c) => sum + c.amountMinor, 0n);
+	// One line can match two keywords ("mimořádná odměna" also contains
+	// "odměna"); dedupe by the label it was found on so it is not counted twice.
+	const sum = (hits: AmountCandidate[]): bigint => {
+		const seen = new Set<string>();
+		let total = 0n;
+		for (const hit of hits) {
+			const key = `${hit.label}|${hit.amountMinor}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			total += hit.amountMinor;
+		}
+		return total;
+	};
+
+	if (learnedLabels && learnedLabels.length > 0) {
+		const learned = candidates.filter((c) => learnedLabels.some((l) => matches(c.label, l)));
+		if (learned.length > 0) return sum(learned);
 	}
 
 	const hits = candidates.filter((c) => BONUS_KEYWORDS.some((k) => matches(c.label, k)));
 	if (hits.length === 0) return null;
+	return sum(hits);
+}
 
-	// One line can match two keywords ("mimořádná odměna" also contains
-	// "odměna"); dedupe by the label it was found on so it is not counted twice.
-	const seen = new Set<string>();
-	let total = 0n;
-	for (const hit of hits) {
-		const key = `${hit.label}|${hit.amountMinor}`;
-		if (seen.has(key)) continue;
-		seen.add(key);
-		total += hit.amountMinor;
+/**
+ * The backstop for a slip that itemises an implausible number of awards. The
+ * search below is exponential in the pool size, and the pool is normally two
+ * or three lines.
+ */
+const SUBSET_CAP = 12;
+
+/**
+ * Which bonus lines add up to the total somebody typed.
+ *
+ * A correction states one number; the slip may have reached it from two lines,
+ * and learning has to name both or it learns nothing. Matching a single
+ * candidate on equality was the v0.4.5 contract, which meant a two-line bonus
+ * could never be learned — silently, on exactly the months worth correcting.
+ *
+ * The search is over the BONUS-KEYWORD lines only, never every amount on the
+ * slip, so a total that happens to equal gross cannot be "explained" by the
+ * gross line. The smallest matching set wins: fewer labels learned means fewer
+ * wrong lines swept up next month.
+ */
+export function bonusLabelSubset(candidates: AmountCandidate[], total: bigint): string[] | null {
+	const pool = candidates
+		.filter((c) => c.label.length > 0)
+		.filter((c) => BONUS_KEYWORDS.some((k) => fold(c.label).includes(fold(k))))
+		.slice(0, SUBSET_CAP);
+	if (pool.length === 0) return null;
+
+	let best: string[] | null = null;
+	for (let mask = 1; mask < 1 << pool.length; mask++) {
+		let sum = 0n;
+		const labels: string[] = [];
+		for (let i = 0; i < pool.length; i++) {
+			if (mask & (1 << i)) {
+				sum += pool[i].amountMinor;
+				labels.push(pool[i].label);
+			}
+		}
+		if (sum !== total) continue;
+		if (best === null || labels.length < best.length) best = labels;
 	}
-	return total;
+	return best ? [...new Set(best)] : null;
 }
 
 export function detectPeriod(lines: string[]): string | null {

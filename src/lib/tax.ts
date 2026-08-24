@@ -148,49 +148,56 @@ export function effectiveRatePct(grossMinor: bigint, taxMinor: bigint): number |
 	return Number((taxMinor * 10000n) / grossMinor) / 100;
 }
 
+/** One month's gross, as `salary_entry` records it. */
+export interface SalaryGrossMonth {
+	personId: string;
+	periodMonth: string;
+	grossMinor: bigint | null;
+	currency: string;
+}
+
 /**
- * What the payslips say a person earned in a year. Ownership comes from the
- * document_person join (resolved by the caller), never from a matched name.
+ * What a person's salary record says they earned GROSS in a year.
+ *
+ * Gross, explicitly. Until v0.4.6 this summed `document.amountMinor` for the
+ * payslips shelf, which the reader had filled from the slip's NET line — so the
+ * prefill understated a tax statement's gross income by everything withheld,
+ * and the divergence note fired on every correctly-entered statement.
+ *
+ * A month evidenced only by a bank credit has a net figure and no gross. It
+ * contributes neither an amount nor a month: the count is what tells the screen
+ * how completely a year is evidenced, and counting a net-only month would
+ * overstate that.
  */
-export function payslipYearTotal(
-	slips: { personId: string; periodMonth: string; amountMinor: bigint | null }[],
+export function salaryYearGrossTotal(
+	months: SalaryGrossMonth[],
 	personId: string,
 	year: number
 ): { totalMinor: bigint; months: number } {
-	const own = slips.filter(
-		(s) =>
-			s.personId === personId &&
-			s.amountMinor !== null &&
-			Number(s.periodMonth.slice(0, 4)) === year
+	const own = months.filter(
+		(m) =>
+			m.personId === personId && m.grossMinor !== null && Number(m.periodMonth.slice(0, 4)) === year
 	);
 	return {
-		totalMinor: own.reduce((sum, s) => sum + (s.amountMinor ?? 0n), 0n),
+		totalMinor: own.reduce((sum, m) => sum + (m.grossMinor ?? 0n), 0n),
 		months: own.length
 	};
 }
 
-export function payslipYearTotalConverted(
-	slips: {
-		personId: string;
-		periodMonth: string;
-		amountMinor: bigint | null;
-		currency: string;
-	}[],
+export function salaryYearGrossTotalConverted(
+	months: SalaryGrossMonth[],
 	personId: string,
 	year: number,
 	targetCurrency: string,
 	convert: (amount: bigint, from: string, to: string, day: string) => bigint
 ): { totalMinor: bigint; months: number } {
-	const own = slips.filter(
-		(s) =>
-			s.personId === personId &&
-			s.amountMinor !== null &&
-			Number(s.periodMonth.slice(0, 4)) === year
+	const own = months.filter(
+		(m) =>
+			m.personId === personId && m.grossMinor !== null && Number(m.periodMonth.slice(0, 4)) === year
 	);
 	return {
 		totalMinor: own.reduce(
-			(sum, slip) =>
-				sum + convert(slip.amountMinor!, slip.currency, targetCurrency, `${slip.periodMonth}-01`),
+			(sum, m) => sum + convert(m.grossMinor!, m.currency, targetCurrency, `${m.periodMonth}-01`),
 			0n
 		),
 		months: own.length

@@ -37,15 +37,18 @@ const data = {
 				{
 					id: 'd1',
 					periodMonth: '2025-06',
-					amount: '70 000',
+					gross: '100 000',
+					net: '71 400',
 					bonus: '8 000',
 					currency: 'CZK',
 					file: 'a.pdf'
 				},
 				{
+					// Evidenced only by a bank credit: net is known, gross is not.
 					id: 'd2',
 					periodMonth: '2025-05',
-					amount: '62 000',
+					gross: null,
+					net: '62 000',
 					bonus: null,
 					currency: 'CZK',
 					file: null
@@ -78,8 +81,32 @@ describe('the salary screen', () => {
 	it('says plainly when no bonus was read, rather than showing nothing', () => {
 		// A blank would read as "no bonus"; the slip simply did not name one.
 		const { body } = render(Page, { props: props as never });
-		expect(body).toContain('no bonus read');
-		expect(body).toContain('bonus 8 000');
+		expect(body).toContain('none read');
+		expect(body).toContain('8 000');
+	});
+
+	it('names every figure it shows, so none of them is of an unstated kind', () => {
+		// The whole point of v0.4.6: a number on this screen used to be printed
+		// with no indication whether it was gross or net, and it was net filed
+		// as gross.
+		const { body } = render(Page, { props: props as never });
+		expect(body).toContain('>gross<');
+		expect(body).toContain('>net<');
+		expect(body).toContain('100 000');
+		expect(body).toContain('71 400');
+	});
+
+	it('shows a dash for a figure the month does not have', () => {
+		// A month evidenced only by a bank credit has a net and no gross. A zero
+		// there would claim it was unpaid.
+		const { body } = render(Page, { props: props as never });
+		expect(body).toContain('—');
+	});
+
+	it('offers a delete on every payslip', () => {
+		// There was no way to remove a payslip from this screen at all.
+		const { body } = render(Page, { props: props as never });
+		expect(body.match(/>Delete</g)).toHaveLength(2);
 	});
 
 	it('says so when nothing has been recorded at all', () => {

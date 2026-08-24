@@ -2,6 +2,25 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.6 — 2026-08-24
+
+> A payslip states two figures, and the reader had only ever been told about one of them.
+
+### 🐛 Fixed
+
+- 💰 **A payslip's gross and net are read and stored as two separate figures** — the reader ranked net wordings and everything downstream filed what it found as gross, so the salary history and the tax prefill both reported net pay as gross
+- 🧾 **The tax statement's gross-income prefill reads real gross** — it summed the same net-shaped figure, understating every year by the tax and insurance withheld and firing the divergence note on correctly-entered statements
+- 🎁 **A bonus assembled from more than one line on the slip can now be learned** — the learner required a single line to equal the stated total, so the promise to remember the wording silently failed on exactly the months worth correcting
+- 📄 **A bonus correction reads that month's payslip, not any document filed against that person** — with no shelf filter it could read a tax statement while hunting for a bonus line, or learn January's wording for August
+
+### 🔧 Changed
+
+- 🏦 **Every payslip figure lives on the salary entry, and the document is just the stored file** — the two-source merge that let a net figure be read as gross is gone rather than repaired
+- 🔁 **Payslips already uploaded are re-read from their stored files at first boot** — a slip whose file is gone is filed as net, which is what the old reader preferred, rather than guessed at
+- ✏️ **Every figure on the Salary screen is labelled and editable** — the amount had no caller in the interface at all, so a misread figure could never be corrected from the screen that owned it
+- 🗑️ **A payslip can be deleted or replaced from the Salary screen** — delete removes the month it evidenced and names what is going first; re-uploading a slip for a month updates it in place instead of leaving two
+- 🚫 **The reader no longer falls back to the largest amount on the slip** — pointed at gross it would reliably find total employment cost, and a figure the form asks about once beats a confident wrong one
+
 ## 0.4.5 — 2026-08-24
 
 > Bumping the version is now what cuts the release, because remembering to push a tag afterwards is not a plan.

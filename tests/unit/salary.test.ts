@@ -4,7 +4,8 @@ import {
 	extractCandidates,
 	parsePrintedAmount,
 	payslipEditCurrency,
-	pickAmount,
+	pickGross,
+	pickNet,
 	salaryStats
 } from '$lib/salary';
 
@@ -31,7 +32,7 @@ describe('parsePrintedAmount', () => {
 	});
 });
 
-describe('extractCandidates and pickAmount', () => {
+describe('extractCandidates', () => {
 	const lines = [
 		'Hrubá mzda 62 000,00',
 		'Zdravotní pojištění 2 790,00',
@@ -47,27 +48,6 @@ describe('extractCandidates and pickAmount', () => {
 		);
 	});
 
-	it('prefers the net-pay keyword over the largest amount', () => {
-		const picked = pickAmount(extractCandidates(lines, 'CZK'), null);
-		expect(picked?.amountMinor).toBe(4523100n); // not the 62 000 gross
-	});
-
-	it('a learned label beats the keywords', () => {
-		const withCustom = [...lines, 'Převedeno celkem 44 000,00'];
-		const picked = pickAmount(extractCandidates(withCustom, 'CZK'), 'převedeno celkem');
-		expect(picked?.amountMinor).toBe(4400000n);
-	});
-
-	it('falls back to the largest amount when nothing matches', () => {
-		const picked = pickAmount(extractCandidates(['Alpha 100,00', 'Beta 900,00'], 'CZK'), null);
-		expect(picked?.amountMinor).toBe(90000n);
-	});
-
-	it('matches keywords with or without diacritics', () => {
-		const noDiacritics = ['Hruba mzda 62 000,00', 'K vyplate 45 231,00'];
-		expect(pickAmount(extractCandidates(noDiacritics, 'CZK'), null)?.amountMinor).toBe(4523100n);
-	});
-
 	it('reads an English payslip at full magnitude, not its first four digits', () => {
 		// Without a comma-grouped alternative the amount pattern fell through to
 		// `\d{1,3}[.,]\d{2}` and matched "45,23" out of "45,231.00", so the slip
@@ -75,10 +55,81 @@ describe('extractCandidates and pickAmount', () => {
 		const english = ['Gross pay 62,000.00', 'Tax withheld 16,769.00', 'Net pay 45,231.00'];
 		const candidates = extractCandidates(english, 'CZK');
 		expect(candidates.some((c) => c.label === 'net pay' && c.amountMinor === 4523100n)).toBe(true);
-		expect(pickAmount(candidates, null)?.amountMinor).toBe(4523100n);
-		expect(
-			pickAmount(extractCandidates(['Take home 1,234,567.89'], 'CZK'), null)?.amountMinor
-		).toBe(123456789n);
+		expect(extractCandidates(['Take home 1,234,567.89'], 'CZK').at(-1)?.amountMinor).toBe(
+			123456789n
+		);
+	});
+});
+
+describe('pickGross and pickNet', () => {
+	const slip = [
+		'Hrubá mzda 62 000,00',
+		'Prémie 8 000,00',
+		'Zdravotní pojištění 2 790,00',
+		'Sociální pojištění 4 340,00',
+		'Záloha na daň 6 150,00',
+		'K výplatě 45 231,00'
+	];
+
+	it('reads both figures off one Czech slip', () => {
+		const c = extractCandidates(slip, 'CZK');
+		expect(pickGross(c, null)?.amountMinor).toBe(6200000n);
+		expect(pickNet(c, null)?.amountMinor).toBe(4523100n);
+	});
+
+	it('reads both figures off an English slip', () => {
+		const c = extractCandidates(
+			['Gross pay 4,200.00', 'Income tax 812.00', 'Net pay 3,538.00'],
+			'EUR'
+		);
+		expect(pickGross(c, null)?.amountMinor).toBe(420000n);
+		expect(pickNet(c, null)?.amountMinor).toBe(353800n);
+	});
+
+	it('returns null for the half the slip does not state', () => {
+		const netOnly = extractCandidates(['K výplatě 45 231,00'], 'CZK');
+		expect(pickGross(netOnly, null)).toBeNull();
+		expect(pickNet(netOnly, null)?.amountMinor).toBe(4523100n);
+
+		const grossOnly = extractCandidates(['Hrubá mzda 62 000,00'], 'CZK');
+		expect(pickGross(grossOnly, null)?.amountMinor).toBe(6200000n);
+		expect(pickNet(grossOnly, null)).toBeNull();
+	});
+
+	it('never picks total employment cost as gross', () => {
+		// Czech slips print superhrubá mzda ABOVE gross. With the old
+		// largest-amount fallback this was the single most likely wrong answer.
+		const c = extractCandidates(['Superhrubá mzda 83 080,00', 'K výplatě 45 231,00'], 'CZK');
+		expect(pickGross(c, null)).toBeNull();
+	});
+
+	it('does not guess when the slip names no pay line at all', () => {
+		// No fallback to the largest amount. A null the form can ask about beats
+		// a confident wrong number filed silently.
+		const c = extractCandidates(['Doprava 1 200,00', 'Stravenky 900,00'], 'CZK');
+		expect(pickGross(c, null)).toBeNull();
+		expect(pickNet(c, null)).toBeNull();
+	});
+
+	it('lets a learned label win over the keywords', () => {
+		const c = extractCandidates(['Celkem k úhradě 51 000,00', 'K výplatě 45 231,00'], 'CZK');
+		expect(pickNet(c, 'celkem k úhradě')?.amountMinor).toBe(5100000n);
+	});
+
+	it('matches a learned label without diacritics', () => {
+		const c = extractCandidates(['Celkem k úhradě 51 000,00'], 'CZK');
+		expect(pickNet(c, 'celkem k uhrade')?.amountMinor).toBe(5100000n);
+	});
+
+	it('matches keywords with or without diacritics', () => {
+		const noDiacritics = extractCandidates(['Hruba mzda 62 000,00', 'K vyplate 45 231,00'], 'CZK');
+		expect(pickGross(noDiacritics, null)?.amountMinor).toBe(6200000n);
+		expect(pickNet(noDiacritics, null)?.amountMinor).toBe(4523100n);
+	});
+
+	it('takes the last match when a label repeats, which is the total line', () => {
+		const c = extractCandidates(['Hrubá mzda 30 000,00', 'Hrubá mzda 62 000,00'], 'CZK');
+		expect(pickGross(c, null)?.amountMinor).toBe(6200000n);
 	});
 });
 

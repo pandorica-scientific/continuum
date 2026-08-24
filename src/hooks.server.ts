@@ -10,6 +10,7 @@ import { seedBanks, seedCategories } from '$lib/server/categorize';
 import { db } from '$lib/server/db';
 import { refreshCurrencies } from '$lib/server/db/currency-refresh';
 import { runMigrations } from '$lib/server/db/migrate';
+import { backfillPayslips } from '$lib/server/salary';
 import { runQueue } from '$lib/server/import/queue';
 import { refreshRates } from '$lib/server/fx';
 import { isSetUp } from '$lib/server/settings';
@@ -38,6 +39,10 @@ async function boot(): Promise<void> {
 	await seedCategories();
 	// Before any account is written: account.bank carries a foreign key here.
 	await seedBanks();
+
+	// Payslips uploaded before v0.4.6 hold one untyped figure that was read as
+	// gross while the reader picked net. Re-read from the files on disk, once.
+	await backfillPayslips();
 
 	// DEMO=1 fills a pristine instance with the fictional Novák household so
 	// screenshots and first impressions need no real data. Never touches an

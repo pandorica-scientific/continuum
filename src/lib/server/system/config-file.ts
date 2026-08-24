@@ -22,7 +22,14 @@ export const EXPORTABLE_KEYS = [
 	'modules',
 	'retirement',
 	'backup',
-	'payslipLabels'
+	// Three keys where there was one. `payslipLabels` is still read for
+	// migration but never written, so it is not exported: a config file naming
+	// it would resurrect a net label under a name that now means nothing.
+	'payslipGrossLabels',
+	'payslipNetLabels',
+	// Bonus labels were never exportable at all, which meant a config restore
+	// silently dropped everything the bonus reader had learned.
+	'payslipBonusLabels'
 ] as const;
 
 interface ConfigFile {

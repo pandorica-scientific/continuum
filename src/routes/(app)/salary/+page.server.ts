@@ -7,17 +7,20 @@
 import { uuidv7 } from 'uuidv7';
 import { asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import {
-	learnAmountLabel,
 	learnBonusLabel,
+	learnGrossLabel,
+	learnNetLabel,
 	loadSalaryHistory,
+	payslipSlipFor,
 	readPayslip,
-	readStoredPayslip
+	readStoredPayslip,
+	recordSalary
 } from '$lib/server/salary';
-import { payslipEditCurrency } from '$lib/salary';
+import { deleteDocument } from '$lib/server/documents/mutations';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/system/files';
@@ -57,7 +60,10 @@ export const load: PageServerLoad = async () => {
 			payslips: p.payslips.map((s) => ({
 				id: s.id,
 				periodMonth: s.periodMonth,
-				amount: formatMinor(s.amountMinor, s.currency),
+				// Each figure names itself. A number on this screen with no stated
+				// kind is the whole defect v0.4.6 exists to remove.
+				gross: s.grossMinor === null ? null : formatMinor(s.grossMinor, s.currency),
+				net: s.netMinor === null ? null : formatMinor(s.netMinor, s.currency),
 				bonus: s.bonusMinor === null ? null : formatMinor(s.bonusMinor, s.currency),
 				currency: s.currency,
 				file: s.file
@@ -65,6 +71,25 @@ export const load: PageServerLoad = async () => {
 		}))
 	};
 };
+
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** One optional money field off the form. Blank is null, not zero. */
+function optionalAmount(
+	form: FormData,
+	field: string,
+	currency: string
+): { ok: true; value: bigint | null } | { ok: false; message: string } {
+	const raw = String(form.get(field) ?? '').trim();
+	if (!raw) return { ok: true, value: null };
+	try {
+		const value = parseAmountToMinor(raw, currency);
+		if (value < 0n) return { ok: false, message: `The ${field} cannot be negative.` };
+		return { ok: true, value };
+	} catch {
+		return { ok: false, message: `The ${field} must be a number.` };
+	}
+}
 
 export const actions: Actions = {
 	addPayslip: async ({ request }) => {
@@ -91,31 +116,47 @@ export const actions: Actions = {
 			reading = await readPayslip(data, subject);
 		}
 
-		// the user's own entry wins; the PDF reading fills what is left blank
-		let amountMinor: bigint | null;
-		const amountRaw = String(form.get('amount') ?? '').trim();
-		if (amountRaw) {
-			try {
-				amountMinor = parseAmountToMinor(amountRaw, baseCurrency);
-			} catch {
-				return fail(400, { message: 'The amount must be a number.' });
-			}
-		} else {
-			amountMinor = reading?.amountMinor ?? null;
-		}
+		// Anything typed wins; the reading fills what was left blank.
+		const typedGross = optionalAmount(form, 'gross', baseCurrency);
+		if (!typedGross.ok) return fail(400, { message: typedGross.message });
+		const typedNet = optionalAmount(form, 'net', baseCurrency);
+		if (!typedNet.ok) return fail(400, { message: typedNet.message });
+		const typedBonus = optionalAmount(form, 'bonus', baseCurrency);
+		if (!typedBonus.ok) return fail(400, { message: typedBonus.message });
+
+		const grossMinor = typedGross.value ?? reading?.grossMinor ?? null;
+		const netMinor = typedNet.value ?? reading?.netMinor ?? null;
+		const bonusMinor = typedBonus.value ?? reading?.bonusMinor ?? null;
 		const periodMonth =
 			String(form.get('periodMonth') ?? '').trim() || reading?.periodMonth || null;
-		if (amountMinor === null || amountMinor <= 0n) {
+
+		if (grossMinor === null && netMinor === null) {
 			return fail(400, {
-				message: 'Could not read the amount from the slip — please fill it in.'
+				message: 'Could not read a gross or net figure from the slip — please fill one in.'
 			});
 		}
-		if (!periodMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(periodMonth)) {
+		if (!periodMonth || !MONTH.test(periodMonth)) {
 			return fail(400, { message: 'Which month does this payslip cover?' });
 		}
 
-		// a stated amount that matches a line on the slip teaches the reader
-		if (amountRaw && reading) await learnAmountLabel(subject, amountMinor, reading.candidates);
+		// A stated figure that matches a line on the slip teaches the reader.
+		if (reading) {
+			if (typedGross.value !== null) {
+				await learnGrossLabel(subject, typedGross.value, reading.candidates);
+			}
+			if (typedNet.value !== null) {
+				await learnNetLabel(subject, typedNet.value, reading.candidates);
+			}
+			if (typedBonus.value !== null) {
+				await learnBonusLabel(subject, typedBonus.value, reading.candidates);
+			}
+		}
+
+		// A month uniquely identifies an entry, so a re-upload REPLACES rather
+		// than accumulating. The previous document goes after the new one is
+		// written: a failure between the two leaves two slips for the month,
+		// which is visible and fixable, rather than none.
+		const previous = await payslipSlipFor(personId, periodMonth);
 
 		const documentId = uuidv7();
 		await db.transaction(async (tx) => {
@@ -126,7 +167,6 @@ export const actions: Actions = {
 				storedName,
 				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
 				addedOn: new Date().toISOString().slice(0, 10),
-				amountMinor,
 				currency: baseCurrency,
 				periodOn: `${periodMonth}-01`
 			});
@@ -135,43 +175,72 @@ export const actions: Actions = {
 				.values({ documentId, targetId: personId })
 				.onConflictDoNothing();
 		});
+
+		const recorded = await recordSalary({
+			personId,
+			periodMonth,
+			currency: baseCurrency,
+			grossMinor,
+			netMinor,
+			bonusMinor,
+			source: 'payslip',
+			documentId,
+			// A figure somebody typed is a decision; a reading is not.
+			overridden: typedGross.value !== null || typedNet.value !== null || typedBonus.value !== null
+		});
+		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
+
+		if (previous && previous.id !== documentId) await deleteDocument(previous.id);
 		return { ok: true };
 	},
 
-	setPayslipAmount: async ({ request }) => {
+	/**
+	 * Correct one figure of one month.
+	 *
+	 * Replaces `setPayslipAmount`, which wrote to the document and — having no
+	 * caller in the UI — was never reachable at all.
+	 */
+	setPayslipFigure: async ({ request }) => {
 		const form = await request.formData();
-		const id = asRowId(form.get('id'));
-		const rows = await db.select().from(document).where(eq(document.id, id));
-		const doc = rows[0];
-		if (!doc) return fail(404, { message: 'Payslip not found.' });
-		const currency = payslipEditCurrency(doc.currency, await getBaseCurrency());
-		let amountMinor: bigint;
-		try {
-			amountMinor = parseAmountToMinor(String(form.get('amount') ?? ''), currency);
-			if (amountMinor <= 0n) throw new Error('amount');
-		} catch {
+		const personId = asRowId(form.get('personId'));
+		const periodMonth = String(form.get('periodMonth') ?? '').trim();
+		const field = String(form.get('field') ?? '');
+		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
+		if (field !== 'gross' && field !== 'net') {
+			return fail(400, { message: 'That is not a figure this can set.' });
+		}
+
+		const [owner] = await db
+			.select({ name: person.name })
+			.from(person)
+			.where(eq(person.id, personId));
+		if (!owner) return fail(404, { message: 'That person is no longer here.' });
+
+		const baseCurrency = await getBaseCurrency();
+		const parsed = optionalAmount(form, 'amount', baseCurrency);
+		if (!parsed.ok) return fail(400, { message: parsed.message });
+		if (parsed.value === null || parsed.value <= 0n) {
 			return fail(400, { message: 'The amount must be a positive number.' });
 		}
-		// a correction against the stored file teaches the reader for next time
-		if (doc.storedName) {
-			// The PERSON this payslip is filed against. `document_link` also holds a
-			// document's properties, accounts and subjects, so this joins `person`
-			// rather than taking the first link and hoping — which is what the old
-			// per-pair table was doing for it implicitly.
-			const owner = (
-				await db
-					.select({ id: person.id, name: person.name })
-					.from(documentLink)
-					.innerJoin(person, eq(person.id, documentLink.targetId))
-					.where(eq(documentLink.documentId, doc.id))
-					.limit(1)
-			)[0];
-			if (owner) {
-				const reading = await readStoredPayslip(doc.storedName, owner.name);
-				await learnAmountLabel(owner.name, amountMinor, reading.candidates);
-			}
+
+		const recorded = await recordSalary({
+			personId,
+			periodMonth,
+			currency: baseCurrency,
+			grossMinor: field === 'gross' ? parsed.value : null,
+			netMinor: field === 'net' ? parsed.value : null,
+			source: 'manual',
+			overridden: true
+		});
+		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
+
+		// A correction against THIS month's stored slip teaches the reader.
+		const slip = await payslipSlipFor(personId, periodMonth);
+		if (slip?.storedName) {
+			const reading = await readStoredPayslip(slip.storedName, owner.name);
+			if (field === 'gross') await learnGrossLabel(owner.name, parsed.value, reading.candidates);
+			else await learnNetLabel(owner.name, parsed.value, reading.candidates);
 		}
-		await db.update(document).set({ amountMinor, currency: currency }).where(eq(document.id, id));
 		return { ok: true };
 	},
 
@@ -187,21 +256,7 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const personId = asRowId(form.get('personId'));
 		const periodMonth = String(form.get('periodMonth') ?? '').trim();
-		if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodMonth)) {
-			return fail(400, { message: 'Which month is this?' });
-		}
-
-		const baseCurrency = await getBaseCurrency();
-		const raw = String(form.get('bonus') ?? '').trim();
-		let bonusMinor: bigint | null = null;
-		if (raw) {
-			try {
-				bonusMinor = parseAmountToMinor(raw, baseCurrency);
-			} catch {
-				return fail(400, { message: 'The bonus must be a number.' });
-			}
-			if (bonusMinor < 0n) return fail(400, { message: 'A bonus cannot be negative.' });
-		}
+		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
 
 		const [owner] = await db
 			.select({ name: person.name })
@@ -209,36 +264,51 @@ export const actions: Actions = {
 			.where(eq(person.id, personId));
 		if (!owner) return fail(404, { message: 'That person is no longer here.' });
 
-		const existing = await db.select().from(salaryEntry).where(eq(salaryEntry.personId, personId));
-		const row = existing.find((e) => e.periodMonth === periodMonth);
+		const baseCurrency = await getBaseCurrency();
+		const parsed = optionalAmount(form, 'bonus', baseCurrency);
+		if (!parsed.ok) return fail(400, { message: parsed.message });
 
-		if (row) {
-			await db.update(salaryEntry).set({ bonusMinor }).where(eq(salaryEntry.id, row.id));
-		} else {
-			await db.insert(salaryEntry).values({
-				id: uuidv7(),
-				personId,
-				periodMonth,
-				grossMinor: null,
-				netMinor: null,
-				bonusMinor,
-				currency: baseCurrency,
-				source: 'manual'
-			});
-		}
+		const recorded = await recordSalary({
+			personId,
+			periodMonth,
+			currency: baseCurrency,
+			bonusMinor: parsed.value,
+			source: 'manual',
+			overridden: true
+		});
+		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
 
-		// A stated bonus that matches a line on the slip teaches the reader, under
-		// its own key so it cannot overwrite the net-pay label.
-		const slip = await db
-			.select({ storedName: document.storedName })
-			.from(document)
-			.innerJoin(documentLink, eq(documentLink.documentId, document.id))
-			.where(eq(documentLink.targetId, personId));
-		const withFile = slip.find((s) => s.storedName !== null);
-		if (bonusMinor !== null && withFile?.storedName) {
-			const reading = await readStoredPayslip(withFile.storedName, owner.name);
-			await learnBonusLabel(owner.name, bonusMinor, reading.candidates);
+		// THIS month's slip, on the payslips shelf. Not "any document linked to
+		// this person that happens to have a file", which is what it used to be.
+		if (parsed.value !== null) {
+			const slip = await payslipSlipFor(personId, periodMonth);
+			if (slip?.storedName) {
+				const reading = await readStoredPayslip(slip.storedName, owner.name);
+				await learnBonusLabel(owner.name, parsed.value, reading.candidates);
+			}
 		}
+		return { ok: true };
+	},
+
+	/**
+	 * Remove a payslip and the month it evidenced.
+	 *
+	 * The whole entry goes, not just the payslip-side fields. A month also
+	 * evidenced by a bank credit loses that credit's net figure too — the
+	 * confirmation on the screen names what is going, and re-filing the salary
+	 * transaction rebuilds it.
+	 */
+	deletePayslip: async ({ request }) => {
+		const form = await request.formData();
+		const personId = asRowId(form.get('personId'));
+		const periodMonth = String(form.get('periodMonth') ?? '').trim();
+		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
+
+		const slip = await payslipSlipFor(personId, periodMonth);
+		await db
+			.delete(salaryEntry)
+			.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
+		if (slip) await deleteDocument(slip.id);
 		return { ok: true };
 	}
 };

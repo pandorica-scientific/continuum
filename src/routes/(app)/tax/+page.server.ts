@@ -4,7 +4,7 @@ import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, documentLink, person, taxStatement } from '$lib/server/db/schema';
+import { document, person, salaryEntry, taxStatement } from '$lib/server/db/schema';
 import {
 	attachDocumentsToStatement,
 	deleteStatement,
@@ -20,7 +20,7 @@ import {
 	effectiveRatePct,
 	flaggedThresholdMinor,
 	normaliseTaxView,
-	payslipYearTotalConverted,
+	salaryYearGrossTotalConverted,
 	taxByYear
 } from '$lib/tax';
 import { countryName, hueTokens } from '$lib/tax-hues';
@@ -32,18 +32,23 @@ import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const [statements, people, payslipDocs, slipOwners, taxDocs, base, rates, currencies, prefRows] =
+	const [statements, people, salaryRows, taxDocs, base, rates, currencies, prefRows] =
 		await Promise.all([
 			loadStatements(),
 			db
 				.select({ id: person.id, name: person.name })
 				.from(person)
 				.orderBy(person.createdAt, person.id),
-			db.select().from(document).where(eq(document.shelf, 'payslips')),
+			// Salary entries, not payslip documents. A document's `amountMinor` is
+			// the net-shaped figure this screen was reading as gross.
 			db
-				.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
-				.from(documentLink)
-				.innerJoin(person, eq(person.id, documentLink.targetId)),
+				.select({
+					personId: salaryEntry.personId,
+					periodMonth: salaryEntry.periodMonth,
+					grossMinor: salaryEntry.grossMinor,
+					currency: salaryEntry.currency
+				})
+				.from(salaryEntry),
 			db
 				.select({ id: document.id, name: document.name })
 				.from(document)
@@ -61,25 +66,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
-	// Whose payslip is whose comes from document_person — a real link, exactly
-	// as the retirement screen reads it, so the two screens cannot disagree.
-	const ownerOf = new Map(slipOwners.map((r) => [r.documentId, r.personId]));
-	const slips = payslipDocs
-		.filter((d) => d.periodOn !== null)
-		.map((d) => ({
-			personId: ownerOf.get(d.id) ?? '',
-			periodMonth: d.periodOn!.slice(0, 7),
-			amountMinor: d.amountMinor,
-			currency: d.currency ?? base
-		}));
-
-	// Prefill totals for every person × payslip-year, as editable major-unit
+	// Prefill totals for every person × salary-year, as editable major-unit
 	// text. Computed at display time, never stored — so it cannot go stale.
-	const payslipYears = [...new Set(slips.map((s) => Number(s.periodMonth.slice(0, 4))))];
+	//
+	// Only years with a GROSS figure: a year evidenced solely by bank credits
+	// knows what arrived after tax, which is not what a tax statement declares.
+	const payslipYears = [
+		...new Set(
+			salaryRows.filter((r) => r.grossMinor !== null).map((r) => Number(r.periodMonth.slice(0, 4)))
+		)
+	];
 	const prefillTotals: Record<string, { amount: string; months: number }> = {};
 	for (const p of people) {
 		for (const year of payslipYears) {
-			const t = payslipYearTotalConverted(slips, p.id, year, base, convert);
+			const t = salaryYearGrossTotalConverted(salaryRows, p.id, year, base, convert);
 			if (t.months > 0)
 				prefillTotals[`${p.id}|${year}`] = {
 					amount: formatMinor(t.totalMinor, base),
@@ -131,7 +131,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 				// The divergence note is recomputed here, every load. A statement's
 				// declared figure legitimately differs from the payslip sum (bonuses,
 				// corrections) — that is information, not an error.
-				const payslips = payslipYearTotalConverted(slips, s.personId, s.year, s.currency, convert);
+				const payslips = salaryYearGrossTotalConverted(
+					salaryRows,
+					s.personId,
+					s.year,
+					s.currency,
+					convert
+				);
 				const diverges =
 					payslips.months > 0 && payslips.totalMinor !== s.grossIncomeMinor
 						? `payslips total ${formatMinor(payslips.totalMinor, s.currency)} — this statement says ${formatMinor(s.grossIncomeMinor, s.currency)}`
