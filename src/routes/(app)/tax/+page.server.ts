@@ -31,7 +31,7 @@ import { removeUpload, saveUpload } from '$lib/server/system/files';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const [statements, people, salaryRows, taxDocs, base, rates, currencies, prefRows] =
 		await Promise.all([
 			loadStatements(),
@@ -113,6 +113,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	);
 
 	return {
+		// ?add=1 opens the statement dialog on arrival — the same convention the
+		// quick-add menu uses for /documents and /salary.
+		openAdd: url.searchParams.get('add') === '1',
 		// Form values carry the ISO code. Display symbols belong only in labels;
 		// sending "Kč" back through the currency input stored a non-currency.
 		baseCurrency: base,

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'svelte/server';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import Page from '../../src/routes/(app)/salary/+page.svelte';
 import Chart from '$lib/charts/SalaryYearChart.svelte';
 
@@ -25,18 +27,23 @@ const year = (over: Record<string, unknown> = {}) => ({
 	...over
 });
 
+const years = [year({ year: 2024, deltaPct: null, baseDeltaPct: null }), year()];
+
 const data = {
+	openAdd: false,
 	baseCurrency: 'CZK',
 	people: [{ id: 'p1', name: 'Robert' }],
+	household: years,
 	history: [
 		{
 			id: 'p1',
 			name: 'Robert',
-			years: [year({ year: 2024, deltaPct: null, baseDeltaPct: null }), year()],
+			years,
 			payslips: [
 				{
 					id: 'd1',
 					periodMonth: '2025-06',
+					base: '92 000',
 					gross: '100 000',
 					net: '71 400',
 					bonus: '8 000',
@@ -47,6 +54,7 @@ const data = {
 					// Evidenced only by a bank credit: net is known, gross is not.
 					id: 'd2',
 					periodMonth: '2025-05',
+					base: null,
 					gross: null,
 					net: '62 000',
 					bonus: null,
@@ -58,84 +66,122 @@ const data = {
 	]
 };
 
-const props = { data, form: null } as unknown as Record<string, unknown>;
+const props = { data } as unknown as Record<string, unknown>;
 
 describe('the salary screen', () => {
-	it('names the person and counts what it has', () => {
-		const { body } = render(Page, { props: props as never });
-		expect(body).toContain('Robert');
-		expect(body.replace(/\s+/g, ' ')).toContain('2 years · 2 payslips');
-	});
-
-	it('lists the payslips with their months', () => {
-		const { body } = render(Page, { props: props as never });
-		expect(body).toContain('2025-06');
-		expect(body).toContain('2025-05');
-	});
-
-	it('links a payslip that has a file and not one that does not', () => {
-		const { body } = render(Page, { props: props as never });
-		expect(body.match(/\/files\//g)).toHaveLength(1);
-	});
-
-	it('says plainly when no bonus was read, rather than showing nothing', () => {
-		// A blank would read as "no bonus"; the slip simply did not name one.
-		const { body } = render(Page, { props: props as never });
-		expect(body).toContain('none read');
-		expect(body).toContain('8 000');
-	});
-
-	it('names every figure it shows, so none of them is of an unstated kind', () => {
-		// The whole point of v0.4.6: a number on this screen used to be printed
-		// with no indication whether it was gross or net, and it was net filed
-		// as gross.
-		const { body } = render(Page, { props: props as never });
-		expect(body).toContain('>gross<');
-		expect(body).toContain('>net<');
-		expect(body).toContain('100 000');
-		expect(body).toContain('71 400');
-	});
-
-	it('shows a dash for a figure the month does not have', () => {
-		// A month evidenced only by a bank credit has a net and no gross. A zero
-		// there would claim it was unpaid.
-		const { body } = render(Page, { props: props as never });
-		expect(body).toContain('—');
-	});
-
-	it('offers a delete on every payslip', () => {
-		// There was no way to remove a payslip from this screen at all.
-		const { body } = render(Page, { props: props as never });
-		expect(body.match(/>Delete</g)).toHaveLength(2);
-	});
-
-	it('says so when nothing has been recorded at all', () => {
-		const empty = { ...data, history: [{ id: 'p1', name: 'Robert', years: [], payslips: [] }] };
-		const { body } = render(Page, { props: { ...props, data: empty } as never });
-		expect(body).toContain('Nothing recorded yet');
-	});
-
-	it('gives a person with nothing recorded no block at all', () => {
-		// An empty chart and an empty payslip list say only that the screen
-		// works. A household where one person has never been paid through it
-		// would carry that noise on every visit.
-		const one = {
-			...data,
-			history: [...data.history, { id: 'p2', name: 'Kseniya', years: [], payslips: [] }]
-		};
-		const { body } = render(Page, { props: { ...props, data: one } as never });
-		expect(body).not.toContain('Kseniya');
-	});
-
 	it('puts Add payslip in the header', () => {
 		const { body } = render(Page, { props: props as never });
 		expect(body).toContain('Add payslip');
+	});
+
+	it('lays the years out as a table, not as one block per person', () => {
+		// Two people used to mean two of everything, stacked, with no way to see
+		// the household at all.
+		const { body } = render(Page, { props: props as never });
+		expect(body).toContain('After tax');
+		expect(body).toContain('Avg month');
+		expect(body).toContain('2025');
+		expect(body).toContain('2024');
+	});
+
+	it('offers no person filter for a household of one', () => {
+		const { body } = render(Page, { props: props as never });
+		expect(body).not.toContain('>Both<');
+	});
+
+	it('offers Both and each person when there are two', () => {
+		const two = {
+			...data,
+			people: [
+				{ id: 'p1', name: 'Robert' },
+				{ id: 'p2', name: 'Kseniya' }
+			]
+		};
+		const { body } = render(Page, { props: { ...props, data: two } as never });
+		expect(body).toContain('Both');
+		expect(body).toContain('Kseniya');
+	});
+
+	it('keeps the payslips folded into their year rather than listing them all', () => {
+		// They are a year's evidence, so they open with the year. A flat list of
+		// every slip ever filed is what this replaced.
+		const { body } = render(Page, { props: props as never });
+		expect(body).not.toContain('2025-06');
+	});
+
+	it('keeps the upload form shut until it is asked for', () => {
+		const { body } = render(Page, { props: props as never });
+		expect(body).not.toContain('Payslip PDF');
+	});
+
+	it('opens the upload form when the quick-add menu asked for it', () => {
+		const { body } = render(Page, {
+			props: { ...props, data: { ...data, openAdd: true } } as never
+		});
+		expect(body).toContain('Payslip PDF');
+		expect(body).toContain('role="dialog"');
+	});
+
+	it('opens with a summary band above the filter, the way Tax does', () => {
+		const { body } = render(Page, { props: props as never });
+		expect(body).toContain('Earned since');
+		expect(body.indexOf('Earned since')).toBeLessThan(body.indexOf('After tax'));
+	});
+
+	it('shows household figures under Both and a person’s under their name', () => {
+		// Unlike the Tax band this one answers to the filter: "what has Robert
+		// earned" and "what has the household earned" are different questions.
+		const two = {
+			...data,
+			people: [
+				{ id: 'p1', name: 'Robert' },
+				{ id: 'p2', name: 'Kseniya' }
+			]
+		};
+		const { body } = render(Page, { props: { ...props, data: two } as never });
+		// Default filter is Both, so the household figures show.
+		expect(body).toContain('Average year');
+		expect(body).not.toContain('Last increase');
+	});
+
+	it('lays an expanded month on the table’s own grid, not a grid of its own', () => {
+		// Six children on a three-column grid wrapped every payslip onto two lines
+		// and stretched the bonus across a whole fraction. The detail takes its
+		// columns from the matrix so a figure sits under the column it belongs to.
+		const source = readFileSync(resolve('src/routes/(app)/salary/+page.svelte'), 'utf8');
+		expect(source).toContain('style:grid-template-columns={SALARY_COLUMNS}');
+		const matrix = readFileSync(resolve('src/lib/components/SalaryMatrix.svelte'), 'utf8');
+		expect(matrix).toContain('export const SALARY_COLUMNS');
+		// One definition, so the header, the rows and the detail cannot drift:
+		// the page states no column template of its own.
+		expect(source).not.toMatch(/grid-template-columns:\s*\d+px/);
+	});
+
+	it('keeps the correction explainer behind an ⓘ too, not under every open year', () => {
+		const source = readFileSync(resolve('src/routes/(app)/salary/+page.svelte'), 'utf8');
+		expect(source).toContain('How to correct a figure');
+		// Its own toggle, and its own component: the upload dialog's explainer
+		// answers a different question, and opening one to read the other would
+		// be a small lie.
+		expect(source).toContain('showSlipHint');
+		const dialog = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
+		expect(dialog).toContain('showHint');
+	});
+
+	it('says so when nothing has been recorded at all', () => {
+		const empty = {
+			...data,
+			household: [],
+			history: [{ id: 'p1', name: 'Robert', years: [], payslips: [] }]
+		};
+		const { body } = render(Page, { props: { ...props, data: empty } as never });
+		expect(body).toContain('Nothing recorded yet');
 	});
 });
 
 describe('the salary chart', () => {
 	const chartProps = {
-		years: data.history[0].years,
+		years,
 		currency: 'CZK',
 		mode: 'avg' as const,
 		onchange: () => {}

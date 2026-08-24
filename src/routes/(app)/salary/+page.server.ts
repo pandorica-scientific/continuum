@@ -21,47 +21,69 @@ import {
 	recordSalary
 } from '$lib/server/salary';
 import { deleteDocument } from '$lib/server/documents/mutations';
+import { mergeSalaryYears, type SalaryYear } from '$lib/salary';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/system/files';
 import { formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+/** bigint does not survive serialisation; every figure crosses as a string and
+ *  the screen formats it, the same contract the Tax screen uses. */
+function serialiseYear(y: SalaryYear) {
+	return {
+		year: y.year,
+		age: y.age,
+		grossAvgMinor: y.grossAvgMinor?.toString() ?? null,
+		netAvgMinor: y.netAvgMinor?.toString() ?? null,
+		grossTotalMinor: y.grossTotalMinor.toString(),
+		baseTotalMinor: y.baseTotalMinor.toString(),
+		bonusTotalMinor: y.bonusTotalMinor.toString(),
+		netTotalMinor: y.netTotalMinor.toString(),
+		grossMonths: y.grossMonths,
+		netMonths: y.netMonths,
+		netComplete: y.netComplete,
+		deltaPct: y.deltaPct,
+		baseDeltaPct: y.baseDeltaPct
+	};
+}
+
+export const load: PageServerLoad = async ({ url }) => {
 	const [baseCurrency, rates] = await Promise.all([getBaseCurrency(), loadRateTable()]);
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
 	const history = await loadSalaryHistory(baseCurrency, convert);
 
+	// The household series, computed here rather than in the screen: merging
+	// TOTALS is the only honest way to it, and doing that in markup invites the
+	// shortcut of averaging the per-person averages.
+	const household = mergeSalaryYears(history.map((p) => p.years));
+
 	return {
+		// ?add=1 opens the upload form on arrival — the convention the quick-add
+		// menu already uses for /documents. A shortcut that lands you on a screen
+		// you then have to find a button on is half a shortcut.
+		openAdd: url.searchParams.get('add') === '1',
 		baseCurrency,
 		people: history.map((p) => ({ id: p.id, name: p.name })),
-		// bigint does not survive serialisation; every figure crosses as a string
-		// and the screen formats it, the same contract the Tax screen uses.
+		household: household.map(serialiseYear),
 		history: history.map((p) => ({
 			id: p.id,
 			name: p.name,
-			years: p.years.map((y) => ({
-				year: y.year,
-				age: y.age,
-				grossAvgMinor: y.grossAvgMinor?.toString() ?? null,
-				netAvgMinor: y.netAvgMinor?.toString() ?? null,
-				grossTotalMinor: y.grossTotalMinor.toString(),
-				baseTotalMinor: y.baseTotalMinor.toString(),
-				bonusTotalMinor: y.bonusTotalMinor.toString(),
-				netTotalMinor: y.netTotalMinor.toString(),
-				grossMonths: y.grossMonths,
-				netMonths: y.netMonths,
-				netComplete: y.netComplete,
-				deltaPct: y.deltaPct,
-				baseDeltaPct: y.baseDeltaPct
-			})),
+			years: p.years.map(serialiseYear),
 			payslips: p.payslips.map((s) => ({
 				id: s.id,
 				periodMonth: s.periodMonth,
 				// Each figure names itself. A number on this screen with no stated
 				// kind is the whole defect v0.4.6 exists to remove.
+				// Base is gross with the award taken out, the same split the year rows
+				// draw. Computed here rather than in markup so the screen never has
+				// to subtract two formatted strings.
+				base:
+					s.grossMinor === null
+						? null
+						: formatMinor(s.grossMinor - (s.bonusMinor ?? 0n), s.currency),
 				gross: s.grossMinor === null ? null : formatMinor(s.grossMinor, s.currency),
 				net: s.netMinor === null ? null : formatMinor(s.netMinor, s.currency),
 				bonus: s.bonusMinor === null ? null : formatMinor(s.bonusMinor, s.currency),
@@ -116,6 +138,20 @@ export const actions: Actions = {
 			reading = await readPayslip(data, subject);
 		}
 
+		// Which fields the person actually EDITED.
+		//
+		// The dialog prefills gross, net and bonus from a read of the same file so
+		// they can be checked before anything is written — but a figure that
+		// arrived that way is still a reading, not a decision. Without this every
+		// prefill would be stored as a hand-correction, immune to later re-reads,
+		// and would teach the reader a label nobody chose.
+		const touched = new Set(
+			String(form.get('touched') ?? '')
+				.split(',')
+				.map((f) => f.trim())
+				.filter(Boolean)
+		);
+
 		// Anything typed wins; the reading fills what was left blank.
 		const typedGross = optionalAmount(form, 'gross', baseCurrency);
 		if (!typedGross.ok) return fail(400, { message: typedGross.message });
@@ -130,24 +166,36 @@ export const actions: Actions = {
 		const periodMonth =
 			String(form.get('periodMonth') ?? '').trim() || reading?.periodMonth || null;
 
+		// Whatever was typed goes back with the failure, so a rejected upload is
+		// corrected rather than retyped. The file cannot be handed back — a
+		// browser will not let a file input be repopulated — so the form says so.
+		const typedBack = {
+			personId,
+			gross: String(form.get('gross') ?? ''),
+			net: String(form.get('net') ?? ''),
+			bonus: String(form.get('bonus') ?? ''),
+			periodMonth: String(form.get('periodMonth') ?? '')
+		};
+		const reject = (message: string) => fail(400, { message, values: typedBack, reopen: true });
+
 		if (grossMinor === null && netMinor === null) {
-			return fail(400, {
-				message: 'Could not read a gross or net figure from the slip — please fill one in.'
-			});
+			return reject('Could not read a gross or net figure from the slip — please fill one in.');
 		}
 		if (!periodMonth || !MONTH.test(periodMonth)) {
-			return fail(400, { message: 'Which month does this payslip cover?' });
+			return reject('Which month does this payslip cover?');
 		}
 
-		// A stated figure that matches a line on the slip teaches the reader.
+		// A figure the person STATED, that matches a line on the slip, teaches the
+		// reader. A prefill the reader produced teaches it nothing — it would only
+		// be learning its own answer back.
 		if (reading) {
-			if (typedGross.value !== null) {
+			if (touched.has('gross') && typedGross.value !== null) {
 				await learnGrossLabel(subject, typedGross.value, reading.candidates);
 			}
-			if (typedNet.value !== null) {
+			if (touched.has('net') && typedNet.value !== null) {
 				await learnNetLabel(subject, typedNet.value, reading.candidates);
 			}
-			if (typedBonus.value !== null) {
+			if (touched.has('bonus') && typedBonus.value !== null) {
 				await learnBonusLabel(subject, typedBonus.value, reading.candidates);
 			}
 		}
@@ -185,10 +233,26 @@ export const actions: Actions = {
 			bonusMinor,
 			source: 'payslip',
 			documentId,
-			// A figure somebody typed is a decision; a reading is not.
-			overridden: typedGross.value !== null || typedNet.value !== null || typedBonus.value !== null
+			// A figure somebody typed is a decision; a reading is not — including a
+			// reading this dialog put in the field for them to look at.
+			overridden: touched.size > 0
 		});
-		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
+		if (!recorded.ok) {
+			// The figures the entry refused come back in the form, READ ones
+			// included: "net cannot be more than gross" is unanswerable without
+			// seeing which two numbers it meant.
+			return fail(recorded.status, {
+				message: recorded.message,
+				reopen: true,
+				values: {
+					...typedBack,
+					periodMonth,
+					gross: grossMinor === null ? '' : formatMinor(grossMinor, baseCurrency),
+					net: netMinor === null ? '' : formatMinor(netMinor, baseCurrency),
+					bonus: bonusMinor === null ? '' : formatMinor(bonusMinor, baseCurrency)
+				}
+			});
+		}
 
 		if (previous && previous.id !== documentId) await deleteDocument(previous.id);
 		return { ok: true };

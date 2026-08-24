@@ -3,8 +3,19 @@
 	import type { Snippet } from 'svelte';
 	import { overlayFocus } from '$lib/actions/overlay';
 
-	let { title, onclose, children }: { title: string; onclose: () => void; children: Snippet } =
-		$props();
+	let {
+		title,
+		onclose,
+		children,
+		titleAside
+	}: {
+		title: string;
+		onclose: () => void;
+		children: Snippet;
+		/** Optional control beside the title — an ⓘ, a badge. Nothing by default,
+		 *  so every existing dialog renders exactly as it did. */
+		titleAside?: Snippet;
+	} = $props();
 </script>
 
 <div
@@ -24,6 +35,7 @@
 	>
 		<div class="head">
 			<span class="title">{title}</span>
+			{#if titleAside}{@render titleAside()}{/if}
 			<button type="button" class="close" onclick={onclose} aria-label="Close">✕</button>
 		</div>
 		{@render children()}
@@ -57,8 +69,12 @@
 	.head {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-6);
+		gap: var(--space-4);
+	}
+	/* Pushes the close button to the far edge whether or not a titleAside is
+	   rendered, so the two cases do not lay out differently. */
+	.head :global(> :last-child) {
+		margin-left: auto;
 	}
 	.title {
 		font-size: var(--text-xl);

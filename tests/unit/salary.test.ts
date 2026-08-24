@@ -3,18 +3,13 @@ import {
 	detectPeriod,
 	extractCandidates,
 	parsePrintedAmount,
-	payslipEditCurrency,
+	lastBaseIncrease,
+	mergeSalaryYears,
 	pickGross,
 	pickNet,
-	salaryStats
+	salaryStats,
+	type SalaryYear
 } from '$lib/salary';
-
-describe('payslipEditCurrency', () => {
-	it('retains the stored currency after the household base changes', () => {
-		expect(payslipEditCurrency('EUR', 'CZK')).toBe('EUR');
-		expect(payslipEditCurrency(null, 'CZK')).toBe('CZK');
-	});
-});
 
 describe('parsePrintedAmount', () => {
 	it('reads Czech and English printed amounts', () => {
@@ -129,6 +124,68 @@ describe('pickGross and pickNet', () => {
 
 	it('takes the last match when a label repeats, which is the total line', () => {
 		const c = extractCandidates(['Hrubá mzda 30 000,00', 'Hrubá mzda 62 000,00'], 'CZK');
+		expect(pickGross(c, null)?.amountMinor).toBe(6200000n);
+	});
+});
+
+// Real payslips are TABLES. extractPdfLines joins a row's cells with spaces, so
+// one physical row arrives as one long line carrying several amounts, and every
+// amount after the keyword gets a label that still contains it. Taking the last
+// match then returns the rightmost COLUMN rather than a total — which read a
+// Czech slip's tax column as its gross.
+describe('pickGross and pickNet on tabular slips', () => {
+	// A real row, cells joined: label, gross, hours header, hours, the employee's
+	// social insurance, then the tax.
+	const czechRow = 'Hrubá mzda 70 135 hod.vč.přesč. 176 SP zaměstnanec 4 980 Daň 10 530';
+
+	it('takes the amount next to the keyword, not the last one on the row', () => {
+		const c = extractCandidates([czechRow], 'CZK');
+		expect(pickGross(c, null)?.amountMinor).toBe(7013500n);
+	});
+
+	it('reads gross and net off a slip whose every figure shares one row', () => {
+		const c = extractCandidates(
+			[
+				czechRow,
+				'Příjmy celkem 70 135 Základ ZP 70 135 ZP firma 6 312 Daň. sleva 2 570 Čistá mzda 54 038'
+			],
+			'CZK'
+		);
+		expect(pickGross(c, null)?.amountMinor).toBe(7013500n);
+		expect(pickNet(c, null)?.amountMinor).toBe(5403800n);
+	});
+
+	it('leaves net at or below gross, which is what made the month recordable', () => {
+		// Before this rule the pair came out as gross 10 530 / net 54 038, which
+		// recordSalary correctly refused — and the month was dropped in silence.
+		const c = extractCandidates(
+			[
+				czechRow,
+				'Příjmy celkem 70 135 Základ ZP 70 135 ZP firma 6 312 Daň. sleva 2 570 Čistá mzda 54 038'
+			],
+			'CZK'
+		);
+		const gross = pickGross(c, null)!.amountMinor;
+		const net = pickNet(c, null)!.amountMinor;
+		expect(net).toBeLessThanOrEqual(gross);
+	});
+
+	it('reads an English tabular slip the same way', () => {
+		const c = extractCandidates(
+			[
+				'(1) Empl. rel. 01.10.2025 Gross salary 201 019 AIP bonus 65 251',
+				'Time work: full-time job 40:00 Net salary 145 282 Total to pay 145 282'
+			],
+			'CZK'
+		);
+		expect(pickGross(c, null)?.amountMinor).toBe(20101900n);
+		expect(pickNet(c, null)?.amountMinor).toBe(14528200n);
+	});
+
+	it('still falls back to a containing label when nothing sits next to the keyword', () => {
+		// Some exporters put the amount a column further along. Better a looser
+		// match than no figure at all.
+		const c = extractCandidates(['Hrubá mzda za období 62 000,00'], 'CZK');
 		expect(pickGross(c, null)?.amountMinor).toBe(6200000n);
 	});
 });
@@ -265,5 +322,132 @@ describe('salaryStats', () => {
 	it('ignores a month carrying neither figure', () => {
 		expect(salaryStats([{ periodMonth: '2026-01' }], null)).toHaveLength(0);
 		expect(salaryStats([{ periodMonth: '2026-01', grossMinor: null }], null)).toHaveLength(0);
+	});
+});
+
+describe('mergeSalaryYears', () => {
+	const y = (over: Partial<SalaryYear> = {}): SalaryYear => ({
+		year: 2025,
+		age: null,
+		grossAvgMinor: 10000000n,
+		netAvgMinor: 7000000n,
+		grossTotalMinor: 120000000n,
+		bonusTotalMinor: 20000000n,
+		baseTotalMinor: 100000000n,
+		netTotalMinor: 84000000n,
+		grossMonths: 12,
+		netMonths: 12,
+		netComplete: true,
+		baseDeltaPct: null,
+		avgMonthlyMinor: 10000000n,
+		months: 12,
+		avgIsGross: true,
+		deltaPct: null,
+		...over
+	});
+
+	it('adds the household up year by year', () => {
+		const merged = mergeSalaryYears([
+			[y()],
+			[
+				y({
+					grossTotalMinor: 60000000n,
+					baseTotalMinor: 50000000n,
+					bonusTotalMinor: 10000000n,
+					netTotalMinor: 42000000n
+				})
+			]
+		]);
+		expect(merged).toHaveLength(1);
+		expect(merged[0].grossTotalMinor).toBe(180000000n);
+		expect(merged[0].baseTotalMinor).toBe(150000000n);
+		expect(merged[0].bonusTotalMinor).toBe(30000000n);
+		expect(merged[0].netTotalMinor).toBe(126000000n);
+	});
+
+	it('recomputes the monthly average over the merged months, not by averaging averages', () => {
+		// Two people paid very differently for different numbers of months: the
+		// mean of their averages is not the household's average month.
+		const merged = mergeSalaryYears([
+			[y({ grossTotalMinor: 120000000n, grossMonths: 12 })],
+			[y({ grossTotalMinor: 20000000n, grossMonths: 2 })]
+		]);
+		expect(merged[0].grossMonths).toBe(14);
+		expect(merged[0].grossAvgMinor).toBe(140000000n / 14n);
+	});
+
+	it('keeps a year only one person has', () => {
+		const merged = mergeSalaryYears([[y({ year: 2024 })], [y({ year: 2025 })]]);
+		expect(merged.map((m) => m.year)).toEqual([2024, 2025]);
+	});
+
+	it('calls a year incomplete unless every contributor covered twelve months', () => {
+		const merged = mergeSalaryYears([[y()], [y({ netMonths: 3, netComplete: false })]]);
+		expect(merged[0].netComplete).toBe(false);
+	});
+
+	it('compares base against base across merged years', () => {
+		const merged = mergeSalaryYears([
+			[y({ year: 2024, baseTotalMinor: 100000000n, grossMonths: 12 })],
+			[y({ year: 2025, baseTotalMinor: 110000000n, grossMonths: 12 })]
+		]);
+		expect(merged[1].baseDeltaPct).toBeCloseTo(10, 1);
+	});
+
+	it('returns nothing for a household with nothing recorded', () => {
+		expect(mergeSalaryYears([[], []])).toEqual([]);
+	});
+});
+
+describe('lastBaseIncrease', () => {
+	const y = (year: number, baseDeltaPct: number | null): SalaryYear => ({
+		year,
+		age: null,
+		grossAvgMinor: 10000000n,
+		netAvgMinor: 7000000n,
+		grossTotalMinor: 120000000n,
+		bonusTotalMinor: 0n,
+		baseTotalMinor: 120000000n,
+		netTotalMinor: 84000000n,
+		grossMonths: 12,
+		netMonths: 12,
+		netComplete: true,
+		baseDeltaPct,
+		avgMonthlyMinor: 10000000n,
+		months: 12,
+		avgIsGross: true,
+		deltaPct: baseDeltaPct
+	});
+
+	it('reports the most recent year the base actually rose', () => {
+		expect(lastBaseIncrease([y(2023, null), y(2024, 8.2), y(2025, 0)])).toEqual({
+			year: 2024,
+			pct: 8.2
+		});
+	});
+
+	it('prefers the newest rise when there are several', () => {
+		expect(lastBaseIncrease([y(2023, 5), y(2024, 3), y(2025, 1.5)])).toEqual({
+			year: 2025,
+			pct: 1.5
+		});
+	});
+
+	it('ignores a fall', () => {
+		// A pay cut is not an increase, and calling the last change an increase
+		// would put a red figure under a green label.
+		expect(lastBaseIncrease([y(2024, 6), y(2025, -4)])).toEqual({ year: 2024, pct: 6 });
+	});
+
+	it('is null when the base has never risen', () => {
+		expect(lastBaseIncrease([y(2024, null), y(2025, -2)])).toBeNull();
+	});
+
+	it('is null for an empty record', () => {
+		expect(lastBaseIncrease([])).toBeNull();
+	});
+
+	it('does not read a zero change as a rise', () => {
+		expect(lastBaseIncrease([y(2025, 0)])).toBeNull();
 	});
 });

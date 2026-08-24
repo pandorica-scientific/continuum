@@ -8,7 +8,10 @@
 
 import {
 	MONEY_BOTTOM,
+	MONEY_TITLE_PCT,
 	MONEY_TOP,
+	RATE_TITLE_PCT,
+	TALL_TITLE_PCT,
 	RATE_BOTTOM_Y,
 	RATE_TOP_Y,
 	X_LEFT,
@@ -17,7 +20,19 @@ import {
 	slotFor
 } from './tax-chart-geometry';
 
-export { MONEY_BOTTOM, MONEY_TOP, RATE_BOTTOM_Y, RATE_TOP_Y, X_LEFT, X_RIGHT, barWidth, slotFor };
+export {
+	MONEY_BOTTOM,
+	MONEY_TITLE_PCT,
+	MONEY_TOP,
+	RATE_BOTTOM_Y,
+	RATE_TITLE_PCT,
+	RATE_TOP_Y,
+	TALL_TITLE_PCT,
+	X_LEFT,
+	X_RIGHT,
+	barWidth,
+	slotFor
+};
 
 export const VIEW_W = 1000;
 export const VIEW_H = 322;
@@ -90,11 +105,11 @@ export function ceilingFor(rows: SerialisedSalaryYear[], mode: SalaryMode): bigi
 }
 
 /**
- * One bar's segments, from the baseline up: base first, then the bonus on top.
+ * One bar's segments, from the baseline up: bonus first, then the base above it.
  *
- * Bonus above base rather than below, because a bonus is what was added to a
- * salary — putting it at the foot would draw the base as the thing sitting on
- * top of it, which is backwards from how the money is described.
+ * The whole bar is GROSS — base plus bonus and nothing else. Net is not a
+ * segment; it crosses the bar as a tick, because it is what was left of that
+ * same gross rather than a further amount stacked on it.
  *
  * The two protections the tax chart uses apply unchanged: every segment gets at
  * least a hairline so a small bonus is present rather than rounded away, and a
@@ -119,8 +134,13 @@ export function bars(
 		out.push({ kind, y: cursor, height, stroked: raw >= STROKE_FLOOR });
 	};
 
-	place('base', scale(base));
+	// Bonus at the foot, base above it. The other way round, the base's top edge
+	// was the top of the bar minus the bonus — so a bonus that changed size every
+	// year moved the base's boundary for a reason that had nothing to do with the
+	// base. Seated on the baseline the bonus is read directly, and gross is still
+	// the whole bar.
 	place('bonus', scale(bonus));
+	place('base', scale(base));
 	return out;
 }
 

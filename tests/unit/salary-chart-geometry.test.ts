@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
 import {
+	MONEY_TITLE_PCT,
+	RATE_TITLE_PCT,
+	TALL_TITLE_PCT,
 	MONEY_BOTTOM,
 	MONEY_TOP,
 	barValues,
@@ -58,14 +61,29 @@ describe('barValues', () => {
 });
 
 describe('bars', () => {
-	it('puts the bonus on top of the base, not beneath it', () => {
-		// A bonus is what was added to a salary; drawing it at the foot makes the
-		// base look like the thing sitting on top of it.
+	it('puts the bonus at the foot of the bar and the base above it', () => {
+		// Base sits on top so its height can be read straight off the bar against
+		// other years. Under a bonus that changes size every year, the base's top
+		// edge moves for a reason that has nothing to do with the base.
 		const out = bars(year(), 'total', 84000000n);
 		const base = out.find((s) => s.kind === 'base')!;
 		const bonus = out.find((s) => s.kind === 'bonus')!;
-		// SVG y grows downward, so "on top" means a smaller y.
-		expect(bonus.y).toBeLessThan(base.y);
+		// SVG y grows downward, so "above" means a smaller y.
+		expect(base.y).toBeLessThan(bonus.y);
+	});
+
+	it('seats the bonus on the baseline', () => {
+		const out = bars(year(), 'total', 84000000n);
+		const bonus = out.find((s) => s.kind === 'bonus')!;
+		expect(bonus.y + bonus.height).toBeCloseTo(MONEY_BOTTOM, 5);
+	});
+
+	it('stacks base and bonus to the year total, whichever order they sit in', () => {
+		// The two segments are gross: base + bonus, and nothing else is drawn in
+		// the bar. Net crosses it as a tick rather than stacking into it.
+		const out = bars(year(), 'total', 84000000n);
+		const stacked = out.reduce((sum, s) => sum + s.height, 0);
+		expect(stacked).toBeCloseTo(MONEY_BOTTOM - MONEY_TOP, 5);
 	});
 
 	it('fills the panel for the tallest year', () => {
@@ -180,5 +198,27 @@ describe('changeRuns', () => {
 	it('carries the percentage through for the readout', () => {
 		const runs = changeRuns(rows, (r) => r.deltaPct, 10, [0, 100]);
 		expect(runs[0][0].pct).toBe(6);
+	});
+});
+
+describe('axis title anchors', () => {
+	it('sits at the centre of the band it names', () => {
+		// The money panel spans 26..222 of a 322 viewBox; its centre is 124.
+		expect(MONEY_TITLE_PCT).toBeCloseTo((124 * 100) / 322, 4);
+		// The change strip spans 242..292; its centre is 267.
+		expect(RATE_TITLE_PCT).toBeCloseTo((267 * 100) / 322, 4);
+		// In change mode the strip takes 26..292; its centre is 159.
+		expect(TALL_TITLE_PCT).toBeCloseTo((159 * 100) / 322, 4);
+	});
+
+	it('does not repeat the old eyeballed percentages', () => {
+		// 62% and 92% were the hard-coded values, and neither is a band centre.
+		expect(MONEY_TITLE_PCT).not.toBeCloseTo(62, 0);
+		expect(RATE_TITLE_PCT).not.toBeCloseTo(92, 0);
+	});
+
+	it('orders the three anchors the way the bands are stacked', () => {
+		expect(MONEY_TITLE_PCT).toBeLessThan(TALL_TITLE_PCT);
+		expect(TALL_TITLE_PCT).toBeLessThan(RATE_TITLE_PCT);
 	});
 });

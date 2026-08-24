@@ -120,7 +120,7 @@ Continuum is for you if you…
 </tr>
 </table>
 
-<sub>Retirement, calendar, contacts, documents and the phone layouts are in the
+<sub>Salary, retirement, calendar, contacts, documents and the phone layouts are in the
 <a href="docs/screenshots.md">full gallery</a>. Every shot is generated from the
 demo household, so none of them can drift from the app.</sub>
 

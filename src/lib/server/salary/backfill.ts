@@ -29,11 +29,13 @@ export interface BackfillOutcome {
 	written: number;
 	reread: number;
 	unreadable: number;
+	/** Slips whose figures the entry refused, with the reason it gave. */
+	rejected: { periodMonth: string; person: string; message: string }[];
 }
 
 export async function backfillPayslips(handle: Db = db): Promise<BackfillOutcome> {
 	if (await getSetting<boolean>(GUARD, false, handle)) {
-		return { ran: false, written: 0, reread: 0, unreadable: 0 };
+		return { ran: false, written: 0, reread: 0, unreadable: 0, rejected: [] };
 	}
 
 	// Joined to `person` rather than taking any link: document_link also holds a
@@ -60,6 +62,7 @@ export async function backfillPayslips(handle: Db = db): Promise<BackfillOutcome
 	let written = 0;
 	let reread = 0;
 	let unreadable = 0;
+	const rejected: BackfillOutcome['rejected'] = [];
 
 	for (const slip of slips) {
 		// A slip with no month cannot be filed. Inventing one from `addedOn` would
@@ -109,12 +112,20 @@ export async function backfillPayslips(handle: Db = db): Promise<BackfillOutcome
 			},
 			handle
 		);
+		// A refusal is the interesting outcome, not a rounding error. Counting a
+		// slip as re-read and then dropping it in silence is how a run could
+		// report "4 slips re-read" while filing two of them — which is exactly
+		// what a mis-read gross looked like from the outside.
 		if (outcome.ok) written++;
+		else rejected.push({ periodMonth, person: slip.personName, message: outcome.message });
 	}
 
 	await setSetting(GUARD, true, handle);
 	console.log(
-		`[salary] backfill: ${written} entries written, ${reread} slips re-read, ${unreadable} unreadable`
+		`[salary] backfill: ${written} entries written, ${reread} slips re-read, ${unreadable} unreadable, ${rejected.length} refused`
 	);
-	return { ran: true, written, reread, unreadable };
+	for (const r of rejected) {
+		console.warn(`[salary] backfill refused ${r.person} ${r.periodMonth}: ${r.message}`);
+	}
+	return { ran: true, written, reread, unreadable, rejected };
 }

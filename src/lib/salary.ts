@@ -7,15 +7,6 @@
 
 import { minorDigits } from '$lib/money';
 
-/** Corrections keep the unit the payslip was stored in. The household base
- * may change later, but that must never redenominate historical salary. */
-export function payslipEditCurrency(
-	storedCurrency: string | null,
-	currentBaseCurrency: string
-): string {
-	return storedCurrency ?? currentBaseCurrency;
-}
-
 export interface AmountCandidate {
 	/** the text on the line before the amount, lowercased — the amount's label */
 	label: string;
@@ -146,19 +137,44 @@ const COST_KEYWORDS = [
 ];
 
 /**
+ * Does this label END at the keyword — is the amount the one printed next to it?
+ *
+ * The distinction that matters on a real payslip. `extractPdfLines` joins a
+ * table row's cells with spaces, so one physical row arrives as one long line
+ * carrying several amounts, and `extractCandidates` labels each amount with
+ * everything before it on that line. Every column to the RIGHT of "Hrubá mzda"
+ * therefore gets a label that still contains it:
+ *
+ *   "hrubá mzda"                                          =  70 135  ← gross
+ *   "hrubá mzda 70 135 hod.vč.přesč. 176 sp zaměstnanec"   =   4 980  ← insurance
+ *   "hrubá mzda 70 135 ... sp zaměstnanec 4 980 daň"       =  10 530  ← tax
+ *
+ * Only the first ends at the keyword.
+ */
+function endsAt(label: string, keyword: string): boolean {
+	return fold(label).endsWith(fold(keyword));
+}
+
+/**
  * The candidate a list of wordings points at, or null.
  *
- * A learned label wins, then the keywords in their listed order. The LAST match
- * on a repeated label is taken: a slip prints its components before its total,
- * so the total is the later one. Excluded labels can never be returned, whatever
- * matched them.
+ * A learned label wins, then the amount printed NEXT TO a keyword, and only
+ * then a looser match anywhere in the label. Excluded labels can never be
+ * returned, whatever matched them.
+ *
+ * Tightness beats keyword rank: an exact hit on a later wording is a better
+ * answer than a trailing-column hit on an earlier one, so both passes run over
+ * the whole keyword list rather than resolving each keyword in turn.
+ *
+ * Within one pass the LAST match wins, because a slip that prints its
+ * components before its total puts the total later.
  *
  * There is deliberately no "largest amount on the slip" fallback. It is what
  * filed net pay as gross for every slip with no matching wording, and pointed at
  * gross it would find total employment cost instead. Null is a question the form
  * can ask once and learn from; a wrong number is silent.
  */
-export function pickBy(
+function pickBy(
 	candidates: AmountCandidate[],
 	keywords: readonly string[],
 	learnedLabel: string | null,
@@ -172,9 +188,12 @@ export function pickBy(
 		// the same label can appear more than once; the last is the total line
 		if (learned.length > 0) return learned[learned.length - 1];
 	}
-	for (const keyword of keywords) {
-		const hits = allowed.filter((c) => fold(c.label).includes(fold(keyword)));
-		if (hits.length > 0) return hits[hits.length - 1];
+
+	for (const match of [endsAt, (l: string, k: string) => fold(l).includes(fold(k))]) {
+		for (const keyword of keywords) {
+			const hits = allowed.filter((c) => match(c.label, keyword));
+			if (hits.length > 0) return hits[hits.length - 1];
+		}
 	}
 	return null;
 }
@@ -298,9 +317,18 @@ export function detectBonus(
 	};
 
 	if (learnedLabels && learnedLabels.length > 0) {
+		const exact = candidates.filter((c) => learnedLabels.some((l) => endsAt(c.label, l)));
+		if (exact.length > 0) return sum(exact);
 		const learned = candidates.filter((c) => learnedLabels.some((l) => matches(c.label, l)));
 		if (learned.length > 0) return sum(learned);
 	}
+
+	// Tight first, for the same reason pickBy does it: on a joined table row every
+	// column right of "AIP bonus" keeps a label containing it, so summing every
+	// match added the tax columns to the award — 65 251 became 367 766, larger
+	// than the gross it was supposedly part of.
+	const tight = candidates.filter((c) => BONUS_KEYWORDS.some((k) => endsAt(c.label, k)));
+	if (tight.length > 0) return sum(tight);
 
 	const hits = candidates.filter((c) => BONUS_KEYWORDS.some((k) => matches(c.label, k)));
 	if (hits.length === 0) return null;
@@ -328,10 +356,12 @@ const SUBSET_CAP = 12;
  * wrong lines swept up next month.
  */
 export function bonusLabelSubset(candidates: AmountCandidate[], total: bigint): string[] | null {
-	const pool = candidates
-		.filter((c) => c.label.length > 0)
-		.filter((c) => BONUS_KEYWORDS.some((k) => fold(c.label).includes(fold(k))))
-		.slice(0, SUBSET_CAP);
+	const named = candidates.filter((c) => c.label.length > 0);
+	// Same tight-first rule as detectBonus. A pool holding a row's tax columns
+	// lets the subset search "explain" a stated total out of the wrong lines.
+	const tight = named.filter((c) => BONUS_KEYWORDS.some((k) => endsAt(c.label, k)));
+	const loose = named.filter((c) => BONUS_KEYWORDS.some((k) => fold(c.label).includes(fold(k))));
+	const pool = (tight.length > 0 ? tight : loose).slice(0, SUBSET_CAP);
 	if (pool.length === 0) return null;
 
 	let best: string[] | null = null;
@@ -521,4 +551,100 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		});
 	}
 	return rows;
+}
+
+/**
+ * Every person's years added into one household series.
+ *
+ * The Salary screen offers a "Both" view the way the Tax screen does, and the
+ * arithmetic has to be done on the TOTALS rather than on the per-person
+ * averages. Averaging two averages weights a person paid for two months the
+ * same as one paid for twelve, and reports a household monthly figure neither
+ * of them earned.
+ *
+ * The two comparisons are recomputed from the merged series for the same
+ * reason: a delta carried over from one person's row would describe that
+ * person, under a label saying it described the household.
+ */
+export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
+	const byYear = new Map<number, SalaryYear[]>();
+	for (const person of perPerson) {
+		for (const row of person) {
+			byYear.set(row.year, [...(byYear.get(row.year) ?? []), row]);
+		}
+	}
+
+	const rows: SalaryYear[] = [];
+	for (const year of [...byYear.keys()].sort((a, b) => a - b)) {
+		const parts = byYear.get(year)!;
+		const total = (pick: (r: SalaryYear) => bigint) => parts.reduce((sum, r) => sum + pick(r), 0n);
+
+		const grossTotal = total((r) => r.grossTotalMinor);
+		const netTotal = total((r) => r.netTotalMinor);
+		const bonusTotal = total((r) => r.bonusTotalMinor);
+		const baseTotal = total((r) => r.baseTotalMinor);
+		const grossMonths = parts.reduce((n, r) => n + r.grossMonths, 0);
+		const netMonths = parts.reduce((n, r) => n + r.netMonths, 0);
+
+		const grossAvg = grossMonths > 0 ? grossTotal / BigInt(grossMonths) : null;
+		const netAvg = netMonths > 0 ? netTotal / BigInt(netMonths) : null;
+		const avgIsGross = grossAvg !== null;
+		const avg = (avgIsGross ? grossAvg : netAvg) ?? 0n;
+
+		// Like against like, exactly as salaryStats does it: the previous listed
+		// year may be of the other kind, which is the case that invents a pay cut.
+		const prev = rows[rows.length - 1];
+		const comparable = prev && prev.avgIsGross === avgIsGross && prev.avgMonthlyMinor > 0n;
+		const baseAvg = grossMonths > 0 ? baseTotal / BigInt(grossMonths) : null;
+		const prevBaseAvg =
+			prev && prev.grossMonths > 0 ? prev.baseTotalMinor / BigInt(prev.grossMonths) : null;
+
+		rows.push({
+			year,
+			// A household has no single age. The chart's age axis is a per-person
+			// reading and stays absent here rather than picking somebody's.
+			age: null,
+			grossAvgMinor: grossAvg,
+			grossMonths,
+			netAvgMinor: netAvg,
+			netMonths,
+			grossTotalMinor: grossTotal,
+			bonusTotalMinor: bonusTotal,
+			baseTotalMinor: baseTotal,
+			netTotalMinor: netTotal,
+			// Complete only when EVERY contributor's year was: one person's partial
+			// year makes the household total partial too, however many months the
+			// other one covered.
+			netComplete: parts.length > 0 && parts.every((r) => r.netComplete),
+			baseDeltaPct:
+				baseAvg !== null && prevBaseAvg !== null && prevBaseAvg > 0n
+					? Math.round((Number(baseAvg) / Number(prevBaseAvg) - 1) * 1000) / 10
+					: null,
+			avgMonthlyMinor: avg,
+			months: avgIsGross ? grossMonths : netMonths,
+			avgIsGross,
+			deltaPct: comparable
+				? Math.round((Number(avg) / Number(prev.avgMonthlyMinor) - 1) * 1000) / 10
+				: null
+		});
+	}
+	return rows;
+}
+
+/**
+ * The most recent year the BASE actually rose, or null.
+ *
+ * Base rather than total, because a one-off bonus lifts the total one year and
+ * drops it the next — which reads as a raise followed by a pay cut when neither
+ * happened. `baseDeltaPct` already has the bonus taken out.
+ *
+ * A fall is not an increase and neither is standing still: both return the last
+ * real rise, or null. Calling the latest CHANGE an increase would put a red
+ * figure under a green label.
+ */
+export function lastBaseIncrease(years: SalaryYear[]): { year: number; pct: number } | null {
+	const risen = years.filter((y) => y.baseDeltaPct !== null && y.baseDeltaPct > 0);
+	if (risen.length === 0) return null;
+	const latest = risen.reduce((newest, y) => (y.year > newest.year ? y : newest));
+	return { year: latest.year, pct: latest.baseDeltaPct! };
 }

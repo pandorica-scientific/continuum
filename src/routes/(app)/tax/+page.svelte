@@ -28,7 +28,8 @@
 	let openYear = $state<number | null>(data.years.at(-1)?.year ?? null);
 	let mode = $state<'stack' | 'rate'>(data.prefs.mode);
 	let personFilter = $state(data.prefs.person);
-	let editing = $state<Row | null | 'new'>(null);
+	// ?add=1 from the quick-add menu opens the dialog on arrival.
+	let editing = $state<Row | null | 'new'>(data.openAdd ? 'new' : null);
 
 	// The server recomputes the year rows when the currency or filer changes —
 	// conversion happens at year-end rates, which the client has no table for.

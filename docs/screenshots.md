@@ -72,14 +72,24 @@ Portfolio fed by broker report uploads.
   <img src="screenshots/investments-dark-web.png" alt="Investments — Portfolio fed by broker report uploads">
 </picture>
 
+## Salary
+
+What was earned each month, read from payslips and from the ledger.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/salary-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/salary-light-web.png">
+  <img src="screenshots/salary-dark-web.png" alt="Salary — what was earned each month, read from payslips and from the ledger">
+</picture>
+
 ## Retirement
 
-Projection driven by a payslip-fed salary tracker.
+The projection model.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/retirement-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/retirement-light-web.png">
-  <img src="screenshots/retirement-dark-web.png" alt="Retirement — Projection driven by a payslip-fed salary tracker">
+  <img src="screenshots/retirement-dark-web.png" alt="Retirement — the projection model">
 </picture>
 
 ## Tax

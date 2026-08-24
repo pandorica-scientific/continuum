@@ -16,8 +16,11 @@
 	import { compactAxis, displayCurrency, formatMinor } from '$lib/money';
 	import {
 		MONEY_BOTTOM,
+		MONEY_TITLE_PCT,
 		MONEY_TOP,
 		RATE_BOTTOM_Y,
+		RATE_TITLE_PCT,
+		TALL_TITLE_PCT,
 		VIEW_H,
 		VIEW_W,
 		X_LEFT,
@@ -136,17 +139,13 @@
 						patternUnits="userSpaceOnUse"
 						patternTransform="rotate(45)"
 					>
-						<rect
-							width="7"
-							height="7"
-							style="fill: var(--series-income-soft); fill-opacity: 0.12"
-						/>
+						<rect width="7" height="7" style="fill: var(--orange); fill-opacity: 0.12" />
 						<line
 							x1="0"
 							y1="0"
 							x2="0"
 							y2="7"
-							style="stroke: var(--series-income-soft); stroke-opacity: 0.5; stroke-width: 2.6"
+							style="stroke: var(--orange); stroke-opacity: 0.5; stroke-width: 2.6"
 						/>
 					</pattern>
 				</defs>
@@ -177,7 +176,7 @@
 								rx="2"
 								filter="url(#salary-shadow)"
 								style="fill: url(#salary-{seg.kind}); {seg.stroked
-									? `stroke: var(${seg.kind === 'bonus' ? '--series-income-soft' : '--series-health-soft'}); stroke-width: 1`
+									? `stroke: var(${seg.kind === 'bonus' ? '--orange' : '--series-health-soft'}); stroke-width: 1`
 									: 'stroke: none'}"
 							/>
 						{/each}
@@ -223,12 +222,14 @@
 			</svg>
 
 			{#if mode !== 'change'}
-				<span class="axis-title money">{axisUnit}</span>
+				<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
 				{#each moneyGrid as g (g.fraction)}
 					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.label}</span>
 				{/each}
 			{/if}
-			<span class="axis-title change" class:tall={mode === 'change'}>Change</span>
+			<span class="axis-title" style:top="{mode === 'change' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
+				>Change</span
+			>
 			{#each changeGrid as g (g.pct)}
 				<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
 			{/each}
@@ -277,6 +278,15 @@
 							<strong class="mono">{formatMinor(v.bonus, currency)}</strong>
 						</div>
 					{/if}
+					<!-- The sum the bar actually draws. base + bonus IS gross, and with
+					     the two stacked it is worth stating rather than leaving to be
+					     added up by eye — especially beside net, which is what was left
+					     of this same figure rather than a further amount. -->
+					<div class="r-row total">
+						<span class="swatch gross"></span>
+						<span>gross</span>
+						<strong class="mono">{formatMinor(v.base + v.bonus, currency)}</strong>
+					</div>
 					{#if v.net !== null}
 						<div class="r-row">
 							<span class="swatch net"></span>
@@ -394,22 +404,16 @@
 	}
 	.axis-title {
 		position: absolute;
+		left: 0;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		transform-origin: left top;
-		transform: rotate(-90deg);
+		/* Rotated about its top-left, so the text runs UP from the anchor; the
+		   translate slides it back down by half its own length, centring it on
+		   the band `top` names. The anchors are derived in the geometry module —
+		   they used to be eyeballed percentages that missed both band centres. */
+		transform: rotate(-90deg) translateX(-50%);
 		white-space: nowrap;
-	}
-	.axis-title.money {
-		left: 0;
-		top: 62%;
-	}
-	.axis-title.change {
-		left: 0;
-		top: 95%;
-	}
-	.axis-title.change.tall {
-		top: 66%;
 	}
 	.axis-value {
 		position: absolute;
@@ -515,7 +519,15 @@
 		background: var(--series-health-soft);
 	}
 	.swatch.bonus {
-		background: var(--series-income-soft);
+		background: var(--orange);
+	}
+	.swatch.gross {
+		background: linear-gradient(to bottom, var(--series-health-soft) 0 50%, var(--orange) 50% 100%);
+	}
+	.r-row.total {
+		border-top: 1px solid var(--bd2);
+		padding-top: 4px;
+		margin-top: 2px;
 	}
 	.swatch.net {
 		background: var(--fg1);

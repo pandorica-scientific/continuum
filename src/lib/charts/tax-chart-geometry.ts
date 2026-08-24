@@ -25,6 +25,20 @@ export const X_RIGHT = 992;
 /** The rate strip's ceiling, as a percentage. */
 export const RATE_TOP_PCT = 25;
 
+/**
+ * Where a rotated axis title sits, as a percentage of the viewBox height.
+ *
+ * The centre of the band the title names, DERIVED from that band rather than
+ * eyeballed. Both charts used to pin these at `top: 62%` and `top: 92%`, which
+ * missed the money panel's centre (38.5%) and the rate strip's (82.9%) by
+ * enough to read as misaligned — and would have drifted further the moment a
+ * band moved.
+ */
+export const MONEY_TITLE_PCT = (((MONEY_TOP + MONEY_BOTTOM) / 2) * 100) / VIEW_H;
+export const RATE_TITLE_PCT = (((RATE_TOP_Y + RATE_BOTTOM_Y) / 2) * 100) / VIEW_H;
+/** The same, for the mode where the strip takes the whole height. */
+export const TALL_TITLE_PCT = (((MONEY_TOP + RATE_BOTTOM_Y) / 2) * 100) / VIEW_H;
+
 /** Below this height a segment gets no stroke. See `segments`. */
 const STROKE_FLOOR = 2.5;
 /** No segment is thinner than this, so a real filing is never invisible. */

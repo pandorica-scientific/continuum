@@ -140,4 +140,18 @@ describe('backfillPayslips', () => {
 		expect(out.written).toBe(0);
 		expect(await salaryMonths(ROBERT, testDb)).toHaveLength(0);
 	});
+
+	it('reports what it refused as data, not only as a count', async () => {
+		// A mis-read gross produced net > gross, recordSalary refused, and the run
+		// still reported "4 slips re-read" while filing two — the counts said
+		// nothing was wrong. The outcome now carries the refusals themselves.
+		//
+		// Driving a refusal needs a readable PDF whose figures disagree, which
+		// this harness has no way to produce; what is asserted here is that the
+		// channel exists and stays empty when nothing is refused.
+		await legacySlip(rowId('doc-aug'), '2026-08', 7140000n);
+		const out = await backfillPayslips(testDb);
+		expect(out.written).toBe(1);
+		expect(out.rejected).toEqual([]);
+	});
 });

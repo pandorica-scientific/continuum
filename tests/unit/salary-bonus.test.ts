@@ -171,3 +171,27 @@ describe('detectBonus with learned labels', () => {
 		expect(detectBonus(c, ['cílová složka'])).toBe(800000n);
 	});
 });
+
+describe('detectBonus on tabular slips', () => {
+	// One row, cells joined: the bonus, then the tax columns after it. Every
+	// amount to the right carries a label that still contains "bonus", so summing
+	// every match added the tax to the award — 65 251 + 65 251 + 202 441 + 34 823.
+	const row = 'AIP bonus 65 251 65 251 Calculated advance tax 202 441 34 823';
+
+	it('reports the award once, not the whole row', () => {
+		expect(detectBonus(extractCandidates([row], 'CZK'))).toBe(6525100n);
+	});
+
+	it('leaves the bonus at or below gross, which is what made the month recordable', () => {
+		const c = extractCandidates(
+			['(1) Empl. rel. 01.10.2025 Gross salary 201 019 AIP bonus 65 251', row],
+			'CZK'
+		);
+		expect(detectBonus(c)!).toBeLessThanOrEqual(20101900n);
+	});
+
+	it('still sums a genuine two-line bonus, where each label ends at its keyword', () => {
+		const lines = ['Prémie 8 000,00', 'Mimořádná odměna 12 000,00'];
+		expect(detectBonus(extractCandidates(lines, 'CZK'))).toBe(2000000n);
+	});
+});

@@ -74,6 +74,16 @@
 				: null,
 			data.modules.documents
 				? { href: '/documents?add=1', label: 'Document', icon: 'folders' as IconName }
+				: null,
+			// The two Money screens that are FILED rather than imported. Both open
+			// their form on arrival, the way /documents?add=1 already does — a menu
+			// item that lands you on a screen you then have to find a button on is
+			// half a shortcut.
+			data.modules.salary
+				? { href: '/salary?add=1', label: 'Payslip', icon: 'wallet' as IconName }
+				: null,
+			data.modules.tax
+				? { href: '/tax?add=1', label: 'Tax statement', icon: 'receipt' as IconName }
 				: null
 		].filter((item) => item !== null)
 	);
