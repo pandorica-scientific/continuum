@@ -77,7 +77,9 @@
 		<Eyebrow emoji="⚙️" label="Rules" />
 		<div class="rules-right">
 			<span class="eyebrow-caption">
-				{data.rules.length} rules · filing at {data.thresholdPct}% confidence and above
+				{data.rules.length}
+				{data.rules.length === 1 ? 'rule' : 'rules'} · filing at {data.thresholdPct}% confidence and
+				above
 			</span>
 			{#if data.rules.length > LIST_PAGE_SIZES[0]}
 				<!-- Above the rows it sizes, where the transactions screen puts its

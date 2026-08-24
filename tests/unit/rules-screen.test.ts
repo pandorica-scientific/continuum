@@ -79,6 +79,11 @@ describe('the rules screen', () => {
 		expect(body).not.toContain('Rule 6<');
 	});
 
+	it('counts one rule as a rule', () => {
+		const { body } = render(Page, { props: propsFor(1) as never });
+		expect(body.replace(/\s+/g, ' ')).toContain('1 rule ·');
+	});
+
 	it('still says so when there are no rules at all', () => {
 		const { body } = render(Page, { props: propsFor(0) as never });
 		expect(body).toContain('No rules yet');

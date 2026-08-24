@@ -66,7 +66,11 @@ const THEMES = ['dark', 'light'];
 const SCREENS = [
 	{ name: 'overview', path: '/overview', settle: 900, phone: true },
 	{ name: 'cashflow', path: '/cashflow', settle: 900 },
+	{ name: 'accounts', path: '/accounts', settle: 600 },
 	{ name: 'transactions', path: '/transactions', phone: true },
+	{ name: 'import', path: '/import' },
+	{ name: 'rules', path: '/rules' },
+	{ name: 'tags', path: '/tags', settle: 600 },
 	{ name: 'property', path: '/property', settle: 600, phone: true },
 	{ name: 'loans', path: '/loans', settle: 600 },
 	{ name: 'investments', path: '/investments', settle: 900 },

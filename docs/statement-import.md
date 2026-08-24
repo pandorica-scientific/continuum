@@ -4,10 +4,6 @@ Reference for the reading engine: what it does, in what order, and — at the en
 what it still cannot do and why, so that work can be picked up later without
 re-deriving the diagnosis.
 
-Companion documents: [`v0.3.8-implementation-plan.md`](./v0.3.8-implementation-plan.md)
-is the release narrative and records how each part came to be; this one describes
-the result.
-
 ---
 
 ## Which export to download

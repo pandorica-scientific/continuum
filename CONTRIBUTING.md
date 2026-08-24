@@ -16,6 +16,11 @@ straight to a pull request.
 
 Security problems do **not** go in issues. Follow [SECURITY.md](SECURITY.md).
 
+Touching the interface? Read [Building UI in
+Continuum](docs/ui-guidelines.md) first. It says which file owns a token, which
+values are derived rather than chosen, and why the codebase — not the design
+handoff — is the authority when the two disagree.
+
 ## Never commit real financial data
 
 This is the one rule with no exceptions.
