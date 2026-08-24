@@ -2,6 +2,16 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.5 — 2026-08-24
+
+> Bumping the version is now what cuts the release, because remembering to push a tag afterwards is not a plan.
+
+### 🔧 Changed
+
+- 🏷️ **A version bump landing on main cuts its own tag, release and image** — 0.4.3 and 0.4.4 both shipped without one, because the image job only ever ran on a tag somebody had to remember to push
+- 📝 **The release notes are the changelog section for that version** — written once, and a version that has no section is refused rather than released blank
+- ⛔ **A version that goes backwards is refused** — a revert restoring an older `package.json` would otherwise cut a tag whose image takes `latest`, downgrading everyone who pulls it
+
 ## 0.4.4 — 2026-08-24
 
 > Salary leaves the Retirement screen it never belonged on, and arrives beside the tax it is paid on.
