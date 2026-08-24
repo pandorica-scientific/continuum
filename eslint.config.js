@@ -96,7 +96,10 @@ export default ts.config(
 			'design_system_V3/',
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
-			'.remember/'
+			'.remember/',
+			// Design handoffs are references, not source: their prototype runtimes
+			// are scaffolding the README says outright is nothing to port.
+			'docs/superpowers/specs/**/*.js'
 		]
 	}
 );

@@ -1,0 +1,2307 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script src="./support.js"></script>
+	</head>
+	<body>
+		<x-dc>
+			<helmet>
+				<meta name="design_doc_mode" content="canvas" />
+				<link rel="preconnect" href="https://fonts.googleapis.com" />
+				<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin" />
+				<link
+					href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&amp;family=Source+Code+Pro:wght@400;500;600&amp;display=swap"
+					rel="stylesheet"
+				/>
+				<style>
+					:root {
+						--bg: #0e1117;
+						--bg2: #11161f;
+						--side: #0a0d13;
+						--card: rgba(255, 255, 255, 0.03);
+						--card2: rgba(255, 255, 255, 0.06);
+						--card3: rgba(255, 255, 255, 0.09);
+						--bd: rgba(255, 255, 255, 0.08);
+						--bd2: rgba(255, 255, 255, 0.18);
+						--fg1: #e6e9ef;
+						--fg2: #c5ccd6;
+						--fg3: #99a4b3;
+						--fg-inverse: #0e1117;
+						--green: #2ecc71;
+						--red: #ef6a5c;
+						--yellow: #f1c40f;
+						--blue: #5aaee4;
+						--purple: #bd85d3;
+						--orange: #e67e22;
+						--teal: #1abc9c;
+						--indigo: #7b8ce8;
+						--brand: #4a86c8;
+						--green-tint: rgba(46, 204, 113, 0.18);
+						--yellow-tint: rgba(241, 196, 15, 0.18);
+						--red-tint: rgba(239, 106, 92, 0.18);
+						--blue-tint: rgba(90, 174, 228, 0.18);
+						--teal-tint: rgba(26, 188, 156, 0.18);
+						--purple-tint: rgba(189, 133, 211, 0.18);
+						--orange-tint: rgba(230, 126, 34, 0.18);
+						--indigo-tint: rgba(123, 140, 232, 0.18);
+						--brand-tint: rgba(74, 134, 200, 0.18);
+						--grey-tint: rgba(138, 150, 166, 0.16);
+						--green-wash: rgba(46, 204, 113, 0.07);
+						--yellow-wash: rgba(241, 196, 15, 0.07);
+						--red-wash: rgba(239, 106, 92, 0.07);
+						--blue-wash: rgba(90, 174, 228, 0.07);
+						--teal-wash: rgba(26, 188, 156, 0.07);
+						--purple-wash: rgba(189, 133, 211, 0.07);
+						--orange-wash: rgba(230, 126, 34, 0.07);
+						--indigo-wash: rgba(123, 140, 232, 0.07);
+						--brand-wash: rgba(74, 134, 200, 0.07);
+						--plate: rgba(14, 17, 23, 0.86);
+						--series-income: #75a322;
+						--series-taxes: #ac2f3b;
+						--series-bills: #da7306;
+						--series-housing: #006b98;
+						--series-savings: #00a6ad;
+						--series-health: #7189f3;
+						/* Pastel steps of four series hues. These are NEW tokens — they do not exist
+       in app.css yet and must be added there beside the --series-* set, exactly
+       as the light-theme steps are: same hue angle, higher lightness, lower
+       chroma. Nothing here paints a raw hex. */
+						--series-health-soft: #a8b5f7;
+						--series-income-soft: #b3cc7d;
+						--series-bills-soft: #f0b27a;
+						--series-taxes-soft: #d99098;
+						--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+						--font-mono: 'Source Code Pro', ui-monospace, monospace;
+					}
+					html,
+					body {
+						margin: 0;
+						padding: 0;
+					}
+					body {
+						background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+						background-attachment: fixed;
+						color: var(--fg1);
+						font-family: var(--font-sans);
+						font-size: 16px;
+						line-height: 1.55;
+						-webkit-font-smoothing: antialiased;
+					}
+					* {
+						box-sizing: border-box;
+					}
+					a {
+						color: var(--blue);
+						text-decoration: none;
+					}
+					a:hover {
+						color: var(--blue);
+						text-decoration: underline;
+					}
+					button,
+					input,
+					select {
+						font-family: inherit;
+					}
+				</style>
+			</helmet>
+
+			<section style="padding: 40px 44px 80px; display: flex; flex-direction: column; gap: 30px">
+				<!-- ───────── diagnosis ───────── -->
+				<div style="max-width: 1240px; display: flex; flex-direction: column; gap: 16px">
+					<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+						<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em">
+							Tax, rethought
+						</h1>
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 11px;
+								color: var(--fg3);
+								border: 1px solid var(--bd);
+								border-radius: 999px;
+								padding: 2px 9px;
+							"
+							>turn 1 · one direction</span
+						>
+					</div>
+					<p
+						style="
+							margin: 0;
+							font-size: 14px;
+							color: var(--fg2);
+							max-width: 92ch;
+							text-wrap: pretty;
+						"
+					>
+						The page is grouped by the wrong thing.
+						<strong style="font-weight: 600"
+							>Person · country is how the rows were entered; year is how you think about
+							them.</strong
+						>
+						2024 currently appears in three separate places on this page, so &ldquo;what did 2024
+						cost me&rdquo; is a question the layout cannot answer — and it gets worse every year,
+						because a new statement adds a card rather than filling a cell.
+					</p>
+
+					<div
+						style="
+							display: grid;
+							grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
+							gap: 12px;
+						"
+					>
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 14px 16px;
+								background: var(--red-wash);
+								display: flex;
+								flex-direction: column;
+								gap: 7px;
+							"
+						>
+							<span
+								style="
+									font-family: var(--font-mono);
+									font-size: 11px;
+									font-weight: 600;
+									line-height: 1.2;
+									align-self: flex-start;
+									border: 1px solid var(--red);
+									color: var(--red);
+									background: var(--red-tint);
+									border-radius: 12px;
+									padding: 2px 10px;
+								"
+								>the list is a matrix</span
+							>
+							<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+								>Thirteen statements, four group headings, ~1 400px of scroll. It is really
+								<strong style="font-weight: 600">8 years × 4 jurisdictions</strong> — eight rows.
+								Ten more years of filing adds ten rows instead of forty cards.</span
+							>
+						</div>
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 14px 16px;
+								background: var(--red-wash);
+								display: flex;
+								flex-direction: column;
+								gap: 7px;
+							"
+						>
+							<span
+								style="
+									font-family: var(--font-mono);
+									font-size: 11px;
+									font-weight: 600;
+									line-height: 1.2;
+									align-self: flex-start;
+									border: 1px solid var(--red);
+									color: var(--red);
+									background: var(--red-tint);
+									border-radius: 12px;
+									padding: 2px 10px;
+								"
+								>six charts, one question</span
+							>
+							<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+								>Gross and tax are drawn once per currency, so
+								<strong style="font-weight: 600">no chart shows a year's total</strong> and none can
+								be compared to another. Six panels, and the one that answers something — effective
+								rate — is the smallest.</span
+							>
+						</div>
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 14px 16px;
+								background: var(--yellow-wash);
+								display: flex;
+								flex-direction: column;
+								gap: 7px;
+							"
+						>
+							<span
+								style="
+									font-family: var(--font-mono);
+									font-size: 11px;
+									font-weight: 600;
+									line-height: 1.2;
+									align-self: flex-start;
+									border: 1px solid var(--yellow);
+									color: var(--yellow);
+									background: var(--yellow-tint);
+									border-radius: 12px;
+									padding: 2px 10px;
+								"
+								>the conversion already exists</span
+							>
+							<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+								>Nothing was missing:
+								<span style="font-family: var(--font-mono)">convertOrFace</span> is already imported
+								on this route for the payslip prefill.
+								<span style="font-family: var(--font-mono)">taxSeries</span> is pure and keys on
+								<span style="font-family: var(--font-mono)">person|country|currency</span>, so this
+								is a <em style="font-style: normal; font-weight: 600">new</em> function beside it
+								that takes the same
+								<span style="font-family: var(--font-mono)">convert</span> callback
+								<span style="font-family: var(--font-mono)">payslipYearTotalConverted</span> already
+								receives, and keys on year.</span
+							>
+						</div>
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 14px 16px;
+								background: var(--yellow-wash);
+								display: flex;
+								flex-direction: column;
+								gap: 7px;
+							"
+						>
+							<span
+								style="
+									font-family: var(--font-mono);
+									font-size: 11px;
+									font-weight: 600;
+									line-height: 1.2;
+									align-self: flex-start;
+									border: 1px solid var(--yellow);
+									color: var(--yellow);
+									background: var(--yellow-tint);
+									border-radius: 12px;
+									padding: 2px 10px;
+								"
+								>moves read as pay cuts</span
+							>
+							<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+								>Every jurisdiction's line stops when you left the country, so the charts show four
+								short falling lines and no career. Stacked in one currency, the same data shows
+								<strong style="font-weight: 600">income rising 4.7× since 2018</strong>.</span
+							>
+						</div>
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 14px 16px;
+								background: var(--card);
+								display: flex;
+								flex-direction: column;
+								gap: 7px;
+							"
+						>
+							<span
+								style="
+									font-family: var(--font-mono);
+									font-size: 11px;
+									font-weight: 600;
+									line-height: 1.2;
+									align-self: flex-start;
+									border: 1px solid var(--fg3);
+									color: var(--fg3);
+									background: var(--grey-tint);
+									border-radius: 12px;
+									padding: 2px 10px;
+								"
+								>two buttons per row</span
+							>
+							<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+								>Twenty-six Edit and Delete buttons, permanently, for a record touched
+								<strong style="font-weight: 600">once a year</strong>. Delete especially: a filed
+								tax statement is not something to put one misclick away.</span
+							>
+						</div>
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 14px 16px;
+								background: var(--card);
+								display: flex;
+								flex-direction: column;
+								gap: 7px;
+							"
+						>
+							<span
+								style="
+									font-family: var(--font-mono);
+									font-size: 11px;
+									font-weight: 600;
+									line-height: 1.2;
+									align-self: flex-start;
+									border: 1px solid var(--fg3);
+									color: var(--fg3);
+									background: var(--grey-tint);
+									border-radius: 12px;
+									padding: 2px 10px;
+								"
+								>a real data bug, visible</span
+							>
+							<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+								>PL 2025 says <span style="font-family: var(--font-mono)">gross 368 PLN</span> and
+								2024 <span style="font-family: var(--font-mono)">155.07 PLN</span> — annual salaries
+								of €86 and €36. The old layout has nowhere to say that; a matrix makes it the one
+								flagged cell in the grid.</span
+							>
+						</div>
+					</div>
+				</div>
+
+				<!-- ───────── the redesign ───────── -->
+				<div id="1a" style="width: 1240px; display: flex; flex-direction: column; gap: 12px">
+					<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 12px;
+								font-weight: 600;
+								color: var(--teal);
+								background: var(--teal-tint);
+								border: 1px solid var(--teal);
+								border-radius: 12px;
+								padding: 2px 11px;
+							"
+							>1a</span
+						>
+						<span style="font-size: 19px; font-weight: 600; letter-spacing: -0.01em"
+							>One currency, one chart, one row per year</span
+						>
+					</div>
+
+					<div
+						style="
+							border: 1px solid var(--bd);
+							border-radius: 12px;
+							background: var(--bg);
+							padding: 24px 26px;
+							display: flex;
+							flex-direction: column;
+							gap: 20px;
+						"
+					>
+						<!-- screen header -->
+						<div style="display: flex; flex-direction: column; gap: 10px">
+							<div
+								style="
+									display: flex;
+									align-items: flex-start;
+									justify-content: space-between;
+									gap: 20px;
+									flex-wrap: wrap;
+								"
+							>
+								<div style="display: flex; flex-direction: column; gap: 3px">
+									<h2
+										style="
+											margin: 0;
+											font-size: 28px;
+											font-weight: 600;
+											letter-spacing: -0.02em;
+											line-height: 1.2;
+											display: flex;
+											align-items: center;
+											gap: 11px;
+										"
+									>
+										<span style="display: flex; color: var(--teal)"
+											><svg
+												viewBox="0 0 24 24"
+												style="width: 26px; height: 26px; display: block"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="1.7"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+											>
+												<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"></path>
+												<line x1="9" y1="8" x2="15" y2="8"></line>
+												<line x1="9" y1="12" x2="15" y2="12"></line></svg
+										></span>
+										Tax
+									</h2>
+									<span style="font-size: 13px; color: var(--fg3)"
+										>What each yearly statement said — recorded, never computed.</span
+									>
+								</div>
+								<button
+									style="
+										border: 1px solid var(--blue);
+										background: var(--blue);
+										color: var(--fg-inverse);
+										border-radius: 8px;
+										padding: 8px 15px;
+										font-size: 13px;
+										font-weight: 500;
+										cursor: pointer;
+										white-space: nowrap;
+									"
+								>
+									Add statement
+								</button>
+							</div>
+							<div
+								style="
+									display: flex;
+									gap: 6px;
+									align-items: center;
+									border-bottom: 1px solid var(--bd);
+									padding-bottom: 10px;
+									overflow-x: auto;
+								"
+							>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										color: var(--fg2);
+										white-space: nowrap;
+									"
+									>Cash flow</span
+								>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										color: var(--fg2);
+										white-space: nowrap;
+									"
+									>Accounts</span
+								>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										color: var(--fg2);
+										white-space: nowrap;
+									"
+									>Transactions</span
+								>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										background: var(--card3);
+										color: var(--fg1);
+										font-weight: 500;
+										white-space: nowrap;
+									"
+									>Tax</span
+								>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										color: var(--fg2);
+										white-space: nowrap;
+									"
+									>Import</span
+								>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										color: var(--fg2);
+										white-space: nowrap;
+									"
+									>Rules</span
+								>
+								<span
+									style="
+										font-size: 13px;
+										padding: 5px 12px;
+										border-radius: 20px;
+										color: var(--fg2);
+										white-space: nowrap;
+									"
+									>Tags</span
+								>
+							</div>
+						</div>
+
+						<!-- THE BAND: what the whole record adds up to -->
+						<div
+							style="
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								background: var(--teal-wash);
+								padding: 16px 18px;
+								display: grid;
+								grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+								gap: 18px;
+								align-items: end;
+							"
+						>
+							<div style="display: flex; flex-direction: column; gap: 2px">
+								<span style="font-size: 12px; color: var(--fg3)">Earned since 2018</span>
+								<span
+									style="
+										font-family: var(--font-mono);
+										font-size: 28px;
+										font-weight: 600;
+										letter-spacing: -0.02em;
+									"
+									>{{ band.gross }}<span
+										style="font-size: 13px; color: var(--fg3); margin-left: 6px"
+										>{{ cur }}</span
+									></span
+								>
+								<span style="font-size: 11px; color: var(--fg3)">across four jurisdictions</span>
+							</div>
+							<div style="display: flex; flex-direction: column; gap: 2px">
+								<span style="font-size: 12px; color: var(--fg3)">Tax paid</span>
+								<span
+									style="
+										font-family: var(--font-mono);
+										font-size: 28px;
+										font-weight: 600;
+										letter-spacing: -0.02em;
+										color: var(--red);
+									"
+									>{{ band.tax }}<span style="font-size: 13px; color: var(--fg3); margin-left: 6px"
+										>{{ cur }}</span
+									></span
+								>
+								<span style="font-size: 11px; color: var(--fg3)">declared, not estimated</span>
+							</div>
+							<div style="display: flex; flex-direction: column; gap: 2px">
+								<span style="font-size: 12px; color: var(--fg3)">Blended rate</span>
+								<span
+									style="
+										font-family: var(--font-mono);
+										font-size: 28px;
+										font-weight: 600;
+										letter-spacing: -0.02em;
+										color: var(--yellow);
+									"
+									>{{ band.rate }}<span style="font-size: 13px; color: var(--fg3); margin-left: 6px"
+										>%</span
+									></span
+								>
+								<span style="font-size: 11px; color: var(--fg3)">lifetime, weighted by income</span>
+							</div>
+							<div style="display: flex; flex-direction: column; gap: 2px">
+								<span style="font-size: 12px; color: var(--fg3)">Latest year · 2025</span>
+								<span
+									style="
+										font-family: var(--font-mono);
+										font-size: 28px;
+										font-weight: 600;
+										letter-spacing: -0.02em;
+									"
+									>{{ band.last }}<span style="font-size: 13px; color: var(--fg3); margin-left: 6px"
+										>{{ cur }}</span
+									></span
+								>
+								<span style="font-size: 11px; color: var(--green)">{{ band.lastDelta }}</span>
+							</div>
+						</div>
+
+						<!-- ONE chart -->
+						<div
+							style="
+								background: var(--card);
+								border: 1px solid var(--bd);
+								border-radius: 10px;
+								padding: 16px 18px;
+								display: flex;
+								flex-direction: column;
+								gap: 14px;
+							"
+						>
+							<div
+								style="
+									display: flex;
+									align-items: baseline;
+									justify-content: space-between;
+									gap: 16px;
+									flex-wrap: wrap;
+								"
+							>
+								<span
+									style="
+										font-size: 11px;
+										letter-spacing: 0.1em;
+										text-transform: uppercase;
+										color: var(--fg3);
+										display: inline-flex;
+										align-items: center;
+										gap: 7px;
+									"
+									><span style="font-size: 12px">📈</span>{{ chart.eyebrow }}</span
+								>
+								<div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+									<span
+										style="
+											display: flex;
+											gap: 6px;
+											border: 1px solid var(--bd);
+											border-radius: 8px;
+											padding: 3px;
+											background: var(--card);
+										"
+									>
+										<sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
+											<button
+												onClick="{{ m.pick }}"
+												style="border: 0; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; background: {{ m.bg }}; color: {{ m.fg }};"
+											>
+												{{ m.label }}
+											</button>
+										</sc-for>
+									</span>
+									<span
+										style="
+											display: flex;
+											gap: 6px;
+											border: 1px solid var(--bd);
+											border-radius: 8px;
+											padding: 3px;
+											background: var(--card);
+										"
+									>
+										<sc-for list="{{ currencies }}" as="c" hint-placeholder-count="2">
+											<button
+												onClick="{{ c.pick }}"
+												style="border: 0; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-family: var(--font-mono); cursor: pointer; background: {{ c.bg }}; color: {{ c.fg }};"
+											>
+												{{ c.label }}
+											</button>
+										</sc-for>
+									</span>
+								</div>
+							</div>
+
+							<!-- earned & paid -->
+							<sc-if value="{{ isStack }}" hint-placeholder-val="{{ true }}">
+								<div style="position: relative; width: 100%; aspect-ratio: 1000 / 322">
+									<svg
+										viewBox="0 0 1000 322"
+										style="width: 100%; height: 100%; display: block; overflow: visible"
+									>
+										<defs>
+											<!-- The bars speak the same language as every pill and tile on the
+                   page: a 1px border at the hue's full strength, a fill of the same
+                   hue held well back. At full saturation they were the loudest thing
+                   on screen next to washes at 0.07 and tints at 0.18. -->
+											<sc-for list="{{ chart.grads }}" as="gr" hint-placeholder-count="4">
+												<!-- stop-color / fill / stroke are set through `style`, not as
+                     attributes: an SVG *attribute* does not resolve var(), so a
+                     token in `stopColor=` would paint nothing. As CSS properties
+                     they resolve normally. -->
+												<linearGradient id="{{ gr.id }}" x1="0" y1="0" x2="0" y2="1">
+													<stop
+														offset="0"
+														style="stop-color: {{ gr.base }}; stop-opacity: 0.62;"
+													></stop>
+													<stop
+														offset="1"
+														style="stop-color: {{ gr.base }}; stop-opacity: 0.42;"
+													></stop>
+												</linearGradient>
+											</sc-for>
+											<sc-for list="{{ chart.grads }}" as="gr" hint-placeholder-count="4">
+												<pattern
+													id="{{ gr.hatchId }}"
+													width="7"
+													height="7"
+													patternUnits="userSpaceOnUse"
+													patternTransform="rotate(45)"
+												>
+													<rect
+														width="7"
+														height="7"
+														style="fill: {{ gr.base }}; fill-opacity: 0.12;"
+													></rect>
+													<line
+														x1="0"
+														y1="0"
+														x2="0"
+														y2="7"
+														strokeWidth="2.6"
+														style="stroke: {{ gr.base }}; stroke-opacity: 0.5;"
+													></line>
+												</pattern>
+											</sc-for>
+											<filter id="barLift" x="-40%" y="-20%" width="180%" height="150%">
+												<feDropShadow
+													dx="0"
+													dy="1"
+													stdDeviation="2"
+													floodColor="#000"
+													floodOpacity="0.3"
+												></feDropShadow>
+											</filter>
+										</defs>
+
+										<!-- money panel -->
+										<sc-for list="{{ chart.gridY }}" as="g" hint-placeholder-count="5">
+											<line
+												x1="56"
+												y1="{{ g.y }}"
+												x2="992"
+												y2="{{ g.y }}"
+												stroke="var(--bd)"
+												strokeWidth="1"
+											></line>
+											<line
+												x1="51"
+												y1="{{ g.y }}"
+												x2="56"
+												y2="{{ g.y }}"
+												stroke="var(--bd2)"
+												strokeWidth="1"
+											></line>
+										</sc-for>
+										<sc-for list="{{ chart.bars }}" as="b" hint-placeholder-count="8">
+											<g filter="url(#barLift)">
+												<sc-for list="{{ b.tax }}" as="sg" hint-placeholder-count="2">
+													<rect
+														x="{{ sg.x }}"
+														y="{{ sg.y }}"
+														width="{{ sg.w }}"
+														height="{{ sg.h }}"
+														fill="{{ sg.fill }}"
+														strokeWidth="1"
+														rx="2"
+														style="stroke: {{ sg.line }};"
+													></rect>
+												</sc-for>
+												<sc-for list="{{ b.kept }}" as="sg" hint-placeholder-count="2">
+													<rect
+														x="{{ sg.x }}"
+														y="{{ sg.y }}"
+														width="{{ sg.w }}"
+														height="{{ sg.h }}"
+														fill="{{ sg.grad }}"
+														strokeWidth="1"
+														rx="2"
+														style="stroke: {{ sg.line }};"
+													></rect>
+												</sc-for>
+											</g>
+										</sc-for>
+										<line
+											x1="56"
+											y1="26"
+											x2="56"
+											y2="222"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<line
+											x1="56"
+											y1="222"
+											x2="992"
+											y2="222"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<sc-for list="{{ chart.xLabels }}" as="x" hint-placeholder-count="8">
+											<line
+												x1="{{ x.x }}"
+												y1="222"
+												x2="{{ x.x }}"
+												y2="226"
+												stroke="var(--bd2)"
+												strokeWidth="1"
+											></line>
+										</sc-for>
+
+										<!-- rate strip: same x axis, its own scale -->
+										<line
+											x1="56"
+											y1="242"
+											x2="992"
+											y2="242"
+											stroke="var(--bd)"
+											strokeWidth="1"
+										></line>
+										<line
+											x1="51"
+											y1="242"
+											x2="56"
+											y2="242"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<line
+											x1="51"
+											y1="292"
+											x2="56"
+											y2="292"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<polyline
+											points="{{ chart.ratePoints }}"
+											fill="none"
+											stroke="var(--yellow)"
+											strokeWidth="2"
+											strokeLinejoin="round"
+											vectorEffect="non-scaling-stroke"
+										></polyline>
+										<sc-for list="{{ chart.rateDots }}" as="d" hint-placeholder-count="8">
+											<circle
+												cx="{{ d.x }}"
+												cy="{{ d.y }}"
+												r="3.5"
+												fill="var(--yellow)"
+												stroke="var(--bg)"
+												strokeWidth="1.5"
+											></circle>
+										</sc-for>
+										<line
+											x1="56"
+											y1="242"
+											x2="56"
+											y2="292"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<line
+											x1="56"
+											y1="292"
+											x2="992"
+											y2="292"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+
+										<sc-for list="{{ chart.xLabels }}" as="x" hint-placeholder-count="8">
+											<line
+												x1="{{ x.x }}"
+												y1="292"
+												x2="{{ x.x }}"
+												y2="296"
+												stroke="var(--bd2)"
+												strokeWidth="1"
+											></line>
+										</sc-for>
+									</svg>
+
+									<!-- labels, as HTML over the plot -->
+									<span
+										style="
+											position: absolute;
+											left: 12px;
+											top: 38.509%;
+											transform: translate(-50%, -50%) rotate(-90deg);
+											font-size: 10px;
+											letter-spacing: 0.08em;
+											text-transform: uppercase;
+											color: var(--fg3);
+											white-space: nowrap;
+										"
+										>{{ chart.yTitle }}</span
+									>
+									<span
+										style="
+											position: absolute;
+											left: 12px;
+											top: 83.23%;
+											transform: translate(-50%, -50%) rotate(-90deg);
+											font-size: 10px;
+											letter-spacing: 0.08em;
+											text-transform: uppercase;
+											color: var(--fg3);
+											white-space: nowrap;
+										"
+										>Rate</span
+									>
+									<sc-for list="{{ chart.gridY }}" as="g" hint-placeholder-count="5">
+										<span
+											style="position: absolute; left: {{ chart.axisLeft }}; top: {{ g.topPct }}; transform: translate(-100%, -50%); font-family: var(--font-mono); font-size: 10px; color: var(--fg3); white-space: nowrap;"
+											>{{ g.label }}</span
+										>
+									</sc-for>
+									<span
+										style="
+											position: absolute;
+											left: 4.5%;
+											top: 75.155%;
+											transform: translate(-100%, -50%);
+											font-family: var(--font-mono);
+											font-size: 10px;
+											color: var(--fg3);
+										"
+										>25%</span
+									>
+									<span
+										style="
+											position: absolute;
+											left: 4.5%;
+											top: 90.683%;
+											transform: translate(-100%, -50%);
+											font-family: var(--font-mono);
+											font-size: 10px;
+											color: var(--fg3);
+										"
+										>0%</span
+									>
+									<sc-for list="{{ chart.xLabels }}" as="x" hint-placeholder-count="8">
+										<span
+											style="position: absolute; left: {{ x.leftPct }}; top: 93.168%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; color: {{ x.fill }}; font-weight: {{ x.weight }};"
+											>{{ x.label }}</span
+										>
+									</sc-for>
+									<span
+										style="
+											position: absolute;
+											left: 52.4%;
+											top: 97.516%;
+											transform: translateX(-50%);
+											font-size: 10px;
+											letter-spacing: 0.08em;
+											text-transform: uppercase;
+											color: var(--fg3);
+										"
+										>Tax year</span
+									>
+									<sc-if value="{{ chart.hasTip }}" hint-placeholder-val="{{ false }}">
+										<span
+											style="position: absolute; left: {{ chart.tip.leftPct }}; top: 6%; width: 1px; height: 86%; background: var(--bd2); display: block;"
+										></span>
+										<div
+											style="position: absolute; left: {{ chart.tip.cardLeft }}; top: 8%; transform: {{ chart.tip.shift }}; min-width: 250px; background: var(--bg2); border: 1px solid var(--bd2); border-radius: 8px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 8px; pointer-events: none;"
+										>
+											<span
+												style="
+													font-family: var(--font-mono);
+													font-size: 13px;
+													font-weight: 600;
+													color: var(--fg1);
+												"
+												>{{ chart.tip.year }}</span
+											>
+											<sc-for list="{{ chart.tip.rows }}" as="t" hint-placeholder-count="2">
+												<span style="display: flex; flex-direction: column; gap: 2px">
+													<span
+														style="
+															display: flex;
+															align-items: center;
+															gap: 7px;
+															font-size: 12px;
+															color: var(--fg1);
+														"
+														><span
+															style="width: 9px; height: 9px; border-radius: 2px; background: {{ t.hue }};"
+														></span
+														>{{ t.label }}<span
+															style="
+																margin-left: auto;
+																font-family: var(--font-mono);
+																color: var(--fg3);
+															"
+															>{{ t.rate }}</span
+														></span
+													>
+													<span
+														style="
+															display: flex;
+															gap: 10px;
+															padding-left: 16px;
+															font-family: var(--font-mono);
+															font-size: 11px;
+															color: var(--fg2);
+														"
+														><span>earned {{ t.earned }}</span
+														><span style="color: var(--fg3)">tax {{ t.tax }}</span></span
+													>
+													<span
+														style="
+															padding-left: 16px;
+															font-family: var(--font-mono);
+															font-size: 11px;
+															color: var(--fg3);
+														"
+														>filed {{ t.native }}</span
+													>
+												</span>
+											</sc-for>
+											<sc-if value="{{ chart.tip.multi }}" hint-placeholder-val="{{ false }}">
+												<span
+													style="
+														display: flex;
+														align-items: baseline;
+														gap: 10px;
+														border-top: 1px solid var(--bd);
+														padding-top: 7px;
+														font-size: 12px;
+													"
+													><span style="color: var(--fg3)">Year</span
+													><span style="font-family: var(--font-mono); color: var(--fg1)"
+														>{{ chart.tip.total }}</span
+													><span
+														style="
+															margin-left: auto;
+															font-family: var(--font-mono);
+															color: var(--yellow);
+														"
+														>{{ chart.tip.totalRate }}</span
+													></span
+												>
+											</sc-if>
+										</div>
+									</sc-if>
+									<sc-for list="{{ chart.hits }}" as="h" hint-placeholder-count="8">
+										<span
+											onMouseEnter="{{ h.enter }}"
+											onMouseLeave="{{ h.leave }}"
+											style="position: absolute; left: {{ h.leftPct }}; top: 8.075%; width: {{ h.widthPct }}; height: 82.609%; display: block;"
+											style-hover="background: rgba(255,255,255,0.03);"
+										></span>
+									</sc-for>
+								</div>
+							</sc-if>
+
+							<!-- effective rate -->
+							<sc-if value="{{ isRate }}" hint-placeholder-val="{{ false }}">
+								<div style="position: relative; width: 100%; aspect-ratio: 1000 / 322">
+									<svg
+										viewBox="0 0 1000 322"
+										style="width: 100%; height: 100%; display: block; overflow: visible"
+									>
+										<sc-for list="{{ rateChart.gridY }}" as="g" hint-placeholder-count="6">
+											<line
+												x1="56"
+												y1="{{ g.y }}"
+												x2="992"
+												y2="{{ g.y }}"
+												stroke="var(--bd)"
+												strokeWidth="1"
+											></line>
+											<line
+												x1="51"
+												y1="{{ g.y }}"
+												x2="56"
+												y2="{{ g.y }}"
+												stroke="var(--bd2)"
+												strokeWidth="1"
+											></line>
+										</sc-for>
+										<sc-for list="{{ rateChart.segs }}" as="s" hint-placeholder-count="4">
+											<polyline
+												points="{{ s.points }}"
+												fill="none"
+												strokeWidth="{{ s.width }}"
+												strokeLinejoin="round"
+												strokeLinecap="round"
+												vectorEffect="non-scaling-stroke"
+												style="stroke: {{ s.stroke }};"
+											></polyline>
+										</sc-for>
+										<sc-for list="{{ rateChart.dots }}" as="dt" hint-placeholder-count="13">
+											<circle
+												cx="{{ dt.x }}"
+												cy="{{ dt.y }}"
+												r="{{ dt.r }}"
+												stroke="var(--bg)"
+												strokeWidth="1.5"
+												style="fill: {{ dt.fill }};"
+											></circle>
+										</sc-for>
+										<line
+											x1="56"
+											y1="26"
+											x2="56"
+											y2="292"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<line
+											x1="56"
+											y1="292"
+											x2="992"
+											y2="292"
+											stroke="var(--bd2)"
+											strokeWidth="1"
+										></line>
+										<sc-for list="{{ rateChart.years }}" as="y" hint-placeholder-count="8">
+											<line
+												x1="{{ y.x }}"
+												y1="292"
+												x2="{{ y.x }}"
+												y2="296"
+												stroke="var(--bd2)"
+												strokeWidth="1"
+											></line>
+										</sc-for>
+									</svg>
+
+									<span
+										style="
+											position: absolute;
+											left: 12px;
+											top: 49.068%;
+											transform: translate(-50%, -50%) rotate(-90deg);
+											font-size: 10px;
+											letter-spacing: 0.08em;
+											text-transform: uppercase;
+											color: var(--fg3);
+											white-space: nowrap;
+										"
+										>Effective rate</span
+									>
+									<sc-for list="{{ rateChart.gridY }}" as="g" hint-placeholder-count="6">
+										<span
+											style="position: absolute; left: {{ rateChart.axisLeft }}; top: {{ g.topPct }}; transform: translate(-100%, -50%); font-family: var(--font-mono); font-size: 10px; color: var(--fg3); white-space: nowrap;"
+											>{{ g.label }}</span
+										>
+									</sc-for>
+									<sc-for list="{{ rateChart.years }}" as="y" hint-placeholder-count="8">
+										<span
+											style="position: absolute; left: {{ y.leftPct }}; top: 93.168%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; color: var(--fg3);"
+											>{{ y.label }}</span
+										>
+									</sc-for>
+									<span
+										style="
+											position: absolute;
+											left: 52.4%;
+											top: 97.516%;
+											transform: translateX(-50%);
+											font-size: 10px;
+											letter-spacing: 0.08em;
+											text-transform: uppercase;
+											color: var(--fg3);
+										"
+										>Tax year</span
+									>
+									<sc-if value="{{ rateChart.hasTip }}" hint-placeholder-val="{{ false }}">
+										<span
+											style="position: absolute; left: {{ rateChart.tip.leftPct }}; top: 6%; width: 1px; height: 86%; background: var(--bd2); display: block;"
+										></span>
+										<div
+											style="position: absolute; left: {{ rateChart.tip.cardLeft }}; top: 8%; transform: {{ rateChart.tip.shift }}; min-width: 226px; background: var(--bg2); border: 1px solid var(--bd2); border-radius: 8px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 7px; pointer-events: none;"
+										>
+											<span
+												style="
+													font-family: var(--font-mono);
+													font-size: 13px;
+													font-weight: 600;
+													color: var(--fg1);
+												"
+												>{{ rateChart.tip.year }}</span
+											>
+											<sc-for list="{{ rateChart.tip.rows }}" as="t" hint-placeholder-count="2">
+												<span
+													style="
+														display: flex;
+														align-items: center;
+														gap: 7px;
+														font-size: 12px;
+														color: var(--fg1);
+													"
+													><span
+														style="width: 9px; height: 9px; border-radius: 2px; background: {{ t.hue }};"
+													></span
+													>{{ t.label }}<span
+														style="
+															margin-left: auto;
+															font-family: var(--font-mono);
+															color: var(--fg2);
+														"
+														>{{ t.rate }}</span
+													></span
+												>
+											</sc-for>
+											<span
+												style="
+													display: flex;
+													align-items: baseline;
+													gap: 10px;
+													border-top: 1px solid var(--bd);
+													padding-top: 7px;
+													font-size: 12px;
+												"
+												><span style="color: var(--fg3)">Blended</span
+												><span
+													style="
+														margin-left: auto;
+														font-family: var(--font-mono);
+														color: var(--yellow);
+													"
+													>{{ rateChart.tip.totalRate }}</span
+												></span
+											>
+										</div>
+									</sc-if>
+									<sc-for list="{{ rateChart.hits }}" as="h" hint-placeholder-count="8">
+										<span
+											onMouseEnter="{{ h.enter }}"
+											onMouseLeave="{{ h.leave }}"
+											style="position: absolute; left: {{ h.leftPct }}; top: 8.075%; width: {{ h.widthPct }}; height: 82.609%; display: block;"
+											style-hover="background: rgba(255,255,255,0.03);"
+										></span>
+									</sc-for>
+								</div>
+							</sc-if>
+
+							<div
+								style="
+									display: flex;
+									gap: 16px;
+									flex-wrap: wrap;
+									align-items: center;
+									border-top: 1px solid var(--bd);
+									padding-top: 12px;
+								"
+							>
+								<sc-for list="{{ legend }}" as="l" hint-placeholder-count="4">
+									<span
+										style="
+											display: inline-flex;
+											align-items: center;
+											gap: 7px;
+											font-size: 11px;
+											color: var(--fg3);
+										"
+										><span
+											style="width: 9px; height: 9px; border-radius: 3px; background: {{ l.swatch }}; border: {{ l.border }};"
+										></span
+										>{{ l.label }}</span
+									>
+								</sc-for>
+								<span style="margin-left: auto; font-size: 12px; color: var(--fg3)"
+									>{{ chart.footnote }}</span
+								>
+							</div>
+						</div>
+
+						<!-- THE MATRIX -->
+						<div style="display: flex; flex-direction: column; gap: 12px">
+							<div
+								style="
+									display: flex;
+									align-items: baseline;
+									justify-content: space-between;
+									gap: 16px;
+									flex-wrap: wrap;
+								"
+							>
+								<span
+									style="
+										font-size: 11px;
+										letter-spacing: 0.1em;
+										text-transform: uppercase;
+										color: var(--fg3);
+										display: inline-flex;
+										align-items: center;
+										gap: 7px;
+									"
+									><span style="font-size: 12px">🧾</span>Statements</span
+								>
+								<span style="font-size: 13px; color: var(--fg3)"
+									>13 statements · 8 years · amounts as filed, in the currency they were filed
+									in</span
+								>
+							</div>
+
+							<div
+								style="
+									border: 1px solid var(--bd);
+									border-radius: 10px;
+									overflow: hidden;
+									background: var(--card);
+								"
+							>
+								<div
+									style="
+										display: grid;
+										grid-template-columns: 92px repeat(4, minmax(0, 1fr)) 196px;
+										background: var(--card2);
+										border-bottom: 1px solid var(--bd2);
+									"
+								>
+									<span
+										style="
+											padding: 11px 14px;
+											font-size: 11px;
+											letter-spacing: 0.1em;
+											text-transform: uppercase;
+											color: var(--fg3);
+										"
+										>Year</span
+									>
+									<sc-for list="{{ cols }}" as="c" hint-placeholder-count="4">
+										<span
+											style="
+												padding: 11px 14px;
+												border-left: 1px solid var(--bd);
+												display: flex;
+												align-items: center;
+												justify-content: flex-end;
+												gap: 7px;
+												font-size: 11px;
+												letter-spacing: 0.1em;
+												text-transform: uppercase;
+												color: var(--fg3);
+											"
+											><span
+												style="width: 8px; height: 8px; border-radius: 2px; background: {{ c.hue }};"
+											></span
+											>{{ c.label }}</span
+										>
+									</sc-for>
+									<span
+										style="
+											padding: 11px 16px 11px 14px;
+											border-left: 1px solid var(--bd);
+											font-size: 11px;
+											letter-spacing: 0.1em;
+											text-transform: uppercase;
+											color: var(--fg3);
+											text-align: right;
+										"
+										>Year total · {{ cur }}</span
+									>
+								</div>
+
+								<sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+									<div>
+										<div
+											onClick="{{ r.toggle }}"
+											style="position: relative; display: grid; grid-template-columns: 92px repeat(4, minmax(0, 1fr)) 196px; cursor: pointer; background: {{ r.bg }}; border-bottom: 1px solid var(--bd); box-shadow: inset 3px 0 0 {{ r.accent }};"
+											style-hover="background: var(--card2);"
+										>
+											<span
+												style="
+													padding: 13px 14px;
+													font-family: var(--font-mono);
+													font-size: 14px;
+													color: var(--fg1);
+													display: flex;
+													align-items: center;
+													gap: 8px;
+												"
+												><span
+													style="color: {{ r.caretFg }}; font-size: 9px; width: 8px; display: inline-block;"
+													>{{ r.caret }}</span
+												>{{ r.year }}</span
+											>
+											<sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4">
+												<span
+													style="
+														padding: 13px 14px;
+														border-left: 1px solid var(--bd);
+														display: flex;
+														flex-direction: column;
+														gap: 2px;
+														align-items: flex-end;
+														min-width: 0;
+													"
+												>
+													<span
+														style="font-family: var(--font-mono); font-size: 13px; color: {{ c.fg }}; white-space: nowrap;"
+														>{{ c.gross }}</span
+													>
+													<span style="font-size: 11px; color: {{ c.rateFg }}; white-space: nowrap;"
+														>{{ c.rate }}</span
+													>
+												</span>
+											</sc-for>
+											<span
+												style="
+													padding: 13px 16px 13px 14px;
+													border-left: 1px solid var(--bd);
+													display: flex;
+													flex-direction: column;
+													gap: 4px;
+													align-items: flex-end;
+												"
+											>
+												<span style="display: flex; align-items: baseline; gap: 8px">
+													<span style="font-size: 11px; color: var(--fg3); white-space: nowrap"
+														>{{ r.totalRate }}</span
+													>
+													<span
+														style="
+															font-family: var(--font-mono);
+															font-size: 15px;
+															font-weight: 600;
+															white-space: nowrap;
+														"
+														>{{ r.total }}</span
+													>
+												</span>
+												<!-- The one column where every year is in the same currency, so the
+                       only column a magnitude bar can honestly be drawn in. -->
+												<span
+													style="
+														width: 100%;
+														height: 3px;
+														border-radius: 3px;
+														background: var(--card3);
+														display: block;
+														position: relative;
+														overflow: hidden;
+													"
+												>
+													<span
+														style="position: absolute; inset: 0 auto 0 0; width: {{ r.share }}; background: var(--teal); display: block;"
+													></span>
+												</span>
+											</span>
+										</div>
+
+										<sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+											<div
+												style="
+													background: var(--bg2);
+													border-bottom: 1px solid var(--bd);
+													box-shadow: inset 3px 0 0 var(--teal);
+													padding: 14px 18px 16px 106px;
+													display: flex;
+													flex-direction: column;
+													gap: 10px;
+												"
+											>
+												<sc-for list="{{ r.detail }}" as="d" hint-placeholder-count="2">
+													<div
+														style="
+															display: grid;
+															grid-template-columns: 96px minmax(0, 1fr) auto;
+															align-items: center;
+															gap: 16px;
+															background: var(--card);
+															border: 1px solid var(--bd);
+															border-radius: 8px;
+															padding: 11px 14px;
+														"
+													>
+														<span
+															style="
+																display: inline-flex;
+																align-items: center;
+																gap: 7px;
+																font-size: 13px;
+																color: var(--fg1);
+															"
+															><span
+																style="width: 9px; height: 9px; border-radius: 3px; background: {{ d.hue }};"
+															></span
+															>{{ d.country }}</span
+														>
+														<span
+															style="display: flex; flex-direction: column; gap: 2px; min-width: 0"
+														>
+															<span style="font-size: 13px; color: var(--fg2)"
+																>gross
+																<strong
+																	style="
+																		font-family: var(--font-mono);
+																		font-weight: 600;
+																		color: var(--fg1);
+																	"
+																	>{{ d.gross }}</strong
+																>
+																· tax
+																<strong
+																	style="
+																		font-family: var(--font-mono);
+																		font-weight: 600;
+																		color: var(--fg1);
+																	"
+																	>{{ d.tax }}</strong
+																>
+																·
+																<span style="font-family: var(--font-mono); color: var(--green)"
+																	>{{ d.rate }}</span
+																>
+																effective</span
+															>
+															<span
+																style="
+																	display: flex;
+																	gap: 12px;
+																	flex-wrap: wrap;
+																	font-size: 12px;
+																	color: var(--fg3);
+																"
+															>
+																<span>{{ d.eur }}</span>
+																<sc-if value="{{ d.hasDoc }}" hint-placeholder-val="{{ true }}"
+																	><a href="#1a">🗂️ {{ d.doc }}</a></sc-if
+																>
+															</span>
+															<sc-if value="{{ d.hasFlag }}" hint-placeholder-val="{{ false }}">
+																<span
+																	style="font-size: 12px; color: var(--yellow); text-wrap: pretty"
+																	>{{ d.flag }}</span
+																>
+															</sc-if>
+														</span>
+														<span style="display: flex; gap: 8px">
+															<button
+																style="
+																	border: 1px solid var(--bd2);
+																	background: var(--card);
+																	color: var(--fg1);
+																	border-radius: 8px;
+																	padding: 5px 12px;
+																	font-size: 12px;
+																	cursor: pointer;
+																"
+															>
+																Edit
+															</button>
+															<button
+																style="
+																	border: 1px solid var(--bd);
+																	background: transparent;
+																	color: var(--fg3);
+																	border-radius: 8px;
+																	padding: 5px 10px;
+																	font-size: 12px;
+																	cursor: pointer;
+																"
+																title="Delete this statement"
+															>
+																⋯
+															</button>
+														</span>
+													</div>
+												</sc-for>
+												<span style="font-size: 12px; color: var(--fg3); text-wrap: pretty"
+													>{{ r.detailNote }}</span
+												>
+											</div>
+										</sc-if>
+									</div>
+								</sc-for>
+
+								<!-- Eight years is few enough that the column sums are worth having in
+               the grid rather than only in the band above it. -->
+								<div
+									style="
+										display: grid;
+										grid-template-columns: 92px repeat(4, minmax(0, 1fr)) 196px;
+										background: var(--card2);
+										border-top: 1px solid var(--bd2);
+									"
+								>
+									<span
+										style="
+											padding: 12px 14px;
+											font-size: 11px;
+											letter-spacing: 0.1em;
+											text-transform: uppercase;
+											color: var(--fg3);
+										"
+										>All</span
+									>
+									<sc-for list="{{ footer.cells }}" as="c" hint-placeholder-count="4">
+										<span
+											style="
+												padding: 12px 14px;
+												border-left: 1px solid var(--bd);
+												display: flex;
+												flex-direction: column;
+												gap: 2px;
+												align-items: flex-end;
+											"
+										>
+											<span
+												style="
+													font-family: var(--font-mono);
+													font-size: 13px;
+													color: var(--fg2);
+													white-space: nowrap;
+												"
+												>{{ c.gross }}</span
+											>
+											<span style="font-size: 11px; color: var(--fg3); white-space: nowrap"
+												>{{ c.years }}</span
+											>
+										</span>
+									</sc-for>
+									<span
+										style="
+											padding: 12px 16px 12px 14px;
+											border-left: 1px solid var(--bd);
+											display: flex;
+											align-items: baseline;
+											justify-content: flex-end;
+											gap: 8px;
+										"
+									>
+										<span style="font-size: 11px; color: var(--fg3); white-space: nowrap"
+											>{{ footer.rate }}</span
+										>
+										<span
+											style="
+												font-family: var(--font-mono);
+												font-size: 15px;
+												font-weight: 600;
+												white-space: nowrap;
+											"
+											>{{ footer.total }}</span
+										>
+									</span>
+								</div>
+							</div>
+
+							<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+								<span
+									style="
+										display: inline-flex;
+										align-items: center;
+										gap: 7px;
+										font-family: var(--font-mono);
+										font-size: 11px;
+										font-weight: 600;
+										line-height: 1.2;
+										border: 1px solid var(--yellow);
+										color: var(--yellow);
+										background: var(--yellow-tint);
+										border-radius: 12px;
+										padding: 2px 10px;
+									"
+									>{{ flagged }}</span
+								>
+								<span style="font-size: 12px; color: var(--fg3); text-wrap: pretty"
+									>PL 2024 and 2025 are two orders of magnitude below every other filing. The flag
+									is on the cell, where the number is — not in a note at the bottom of a card you
+									have to scroll to.</span
+								>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- ───────── what changed ───────── -->
+				<div
+					style="
+						max-width: 1240px;
+						display: grid;
+						grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+						gap: 12px;
+					"
+				>
+					<div
+						style="
+							border: 1px solid var(--bd);
+							border-radius: 10px;
+							padding: 14px 16px;
+							background: var(--green-wash);
+							display: flex;
+							flex-direction: column;
+							gap: 7px;
+						"
+					>
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 11px;
+								font-weight: 600;
+								line-height: 1.2;
+								align-self: flex-start;
+								border: 1px solid var(--green);
+								color: var(--green);
+								background: var(--green-tint);
+								border-radius: 12px;
+								padding: 2px 10px;
+							"
+							>year is the row</span
+						>
+						<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+							>Eight rows instead of thirteen cards, and it stays eight-ish forever. A year with one
+							filing is one line; a year with three is still one line. The statement cards still
+							exist — they are what a row opens into.</span
+						>
+					</div>
+					<div
+						style="
+							border: 1px solid var(--bd);
+							border-radius: 10px;
+							padding: 14px 16px;
+							background: var(--green-wash);
+							display: flex;
+							flex-direction: column;
+							gap: 7px;
+						"
+					>
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 11px;
+								font-weight: 600;
+								line-height: 1.2;
+								align-self: flex-start;
+								border: 1px solid var(--green);
+								color: var(--green);
+								background: var(--green-tint);
+								border-radius: 12px;
+								padding: 2px 10px;
+							"
+							>converted to compare, native to record</span
+						>
+						<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+							>Cells and the expanded statement show
+							<strong style="font-weight: 600">exactly what was filed</strong>, in its own currency
+							— that is the legal record and must not be rounded through a rate. Totals and the
+							chart convert. The rule the handoff already states, applied here.</span
+						>
+					</div>
+					<div
+						style="
+							border: 1px solid var(--bd);
+							border-radius: 10px;
+							padding: 14px 16px;
+							background: var(--green-wash);
+							display: flex;
+							flex-direction: column;
+							gap: 7px;
+						"
+					>
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 11px;
+								font-weight: 600;
+								line-height: 1.2;
+								align-self: flex-start;
+								border: 1px solid var(--green);
+								color: var(--green);
+								background: var(--green-tint);
+								border-radius: 12px;
+								padding: 2px 10px;
+							"
+							>the Excel questions, answered</span
+						>
+						<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+							>Your <span style="font-family: var(--font-mono)">Income/Taxs</span> and
+							<span style="font-family: var(--font-mono)">Total tax percentage</span> sheets are the
+							two chart modes. <strong style="font-weight: 600">Delta per annum</strong> is the
+							green figure in the band rather than a chart — a single year-on-year number does not
+							need 300px.</span
+						>
+					</div>
+					<div
+						style="
+							border: 1px solid var(--bd);
+							border-radius: 10px;
+							padding: 14px 16px;
+							background: var(--card);
+							display: flex;
+							flex-direction: column;
+							gap: 7px;
+						"
+					>
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 11px;
+								font-weight: 600;
+								line-height: 1.2;
+								align-self: flex-start;
+								border: 1px solid var(--fg3);
+								color: var(--fg3);
+								background: var(--grey-tint);
+								border-radius: 12px;
+								padding: 2px 10px;
+							"
+							>jurisdiction colours</span
+						>
+						<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+							>Four pastel steps of
+							<span style="font-family: var(--font-mono)">--series-*</span> hues — periwinkle, sage,
+							apricot, dusty rose — and deliberately out of the traffic-light hues, which have to
+							keep meaning good/watch/bad. Three jurisdictions keep the family you already read: DE
+							stays on <span style="font-family: var(--font-mono)">--series-income</span>, ES on
+							<span style="font-family: var(--font-mono)">-bills</span>, PL on
+							<span style="font-family: var(--font-mono)">-taxes</span>.
+							<strong style="font-weight: 600">CZ is the one that changes</strong> — off
+							<span style="font-family: var(--font-mono)">--series-housing</span>, whose deep
+							teal-blue has no warm pastel, onto
+							<span style="font-family: var(--font-mono)">--series-health</span>. It is still the
+							set's cool anchor, so the blue/green/warm reading survives; it is a different blue.
+							See the card below for the tokens and the one thing about them still unmeasured.</span
+						>
+					</div>
+					<div
+						style="
+							border: 1px solid var(--bd);
+							border-radius: 10px;
+							padding: 14px 16px;
+							background: var(--card);
+							display: flex;
+							flex-direction: column;
+							gap: 7px;
+						"
+					>
+						<span
+							style="
+								font-family: var(--font-mono);
+								font-size: 11px;
+								font-weight: 600;
+								line-height: 1.2;
+								align-self: flex-start;
+								border: 1px solid var(--fg3);
+								color: var(--fg3);
+								background: var(--grey-tint);
+								border-radius: 12px;
+								padding: 2px 10px;
+							"
+							>the chart is house style</span
+						>
+						<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+							>Taken from <span style="font-family: var(--font-mono)">LoanSchedule.svelte</span> and
+							<span style="font-family: var(--font-mono)">TaxCharts.svelte</span>: one
+							<span style="font-family: var(--font-mono)">rx 2</span> stacked bar per slot at
+							<span style="font-family: var(--font-mono)">min(58, slot × 0.5)</span>, axis ink in
+							<span style="font-family: var(--font-mono)">--fg3</span>, baseline
+							<span style="font-family: var(--font-mono)">--bd2</span>, gridlines
+							<span style="font-family: var(--font-mono)">--bd</span>, 2px strokes, r 3.5
+							dots.</span
+						>
+						<span style="font-size: 13px; color: var(--fg2); text-wrap: pretty"
+							>Five departures, stated. <strong style="font-weight: 600">The fill:</strong>
+							<span style="font-family: var(--font-mono)">LoanSchedule</span> uses opaque
+							<span style="font-family: var(--font-mono)">var(--orange)</span> and
+							<span style="font-family: var(--font-mono)">var(--green)</span> with no stroke; these
+							bars are a gradient of one hue at
+							<span style="font-family: var(--font-mono)">stop-opacity 0.62 → 0.42</span> behind a
+							1px border of the same hue at full strength — the pill and tile treatment, because at
+							full saturation the bars were the loudest thing on a page whose washes sit at 0.07.
+							<strong style="font-weight: 600">The pastel step:</strong> four new tokens —
+							<span style="font-family: var(--font-mono)">--series-health-soft</span>,
+							<span style="font-family: var(--font-mono)">-income-soft</span>,
+							<span style="font-family: var(--font-mono)">-bills-soft</span>,
+							<span style="font-family: var(--font-mono)">-taxes-soft</span> — each a lighter, less
+							saturated step of its parent hue, the same relationship the palette already has
+							between its dark and light values. Periwinkle, sage, apricot, dusty rose. They must be
+							added to <span style="font-family: var(--font-mono)">app.css</span>; nothing here
+							paints a raw hex. Czechia takes
+							<span style="font-family: var(--font-mono)">--series-health</span> rather than
+							<span style="font-family: var(--font-mono)">--series-housing</span> because a deep
+							cold teal-blue has no warm pastel — it lightens to ice. Each soft step holds its
+							parent's hue angle, so hue separation carries over; the lightness separation does not,
+							and
+							<strong style="font-weight: 600"
+								>has not been re-measured for colour-vision deficiency</strong
+							>
+							— that is open, not done. <strong style="font-weight: 600">The hatch:</strong> that
+							leaves two <em style="font-style: normal; font-weight: 600">kinds</em> of money in one
+							hue, so a per-jurisdiction
+							<span style="font-family: var(--font-mono)">&lt;pattern&gt;</span> separates tax from
+							kept without spending a second colour on it.
+							<strong style="font-weight: 600">The labels:</strong> 10px HTML spans over the plot,
+							not SVG <span style="font-family: var(--font-mono)">&lt;text&gt;</span> at
+							<span style="font-family: var(--font-mono)">--text-2xs</span>, because an interpolated
+							value inside SVG text renders nothing.
+							<strong style="font-weight: 600">The readout:</strong> per column rather than a
+							<span style="font-family: var(--font-mono)">&lt;title&gt;</span> per mark — Plotly's
+							<span style="font-family: var(--font-mono)">hovermode: x unified</span>, which names
+							every jurisdiction in the year beside its own swatch instead of only the one under the
+							cursor. <strong style="font-weight: 600">The strip:</strong> the rate sits under a
+							shared x axis rather than on a second y axis, because a dual axis is a chart asking to
+							be misread.</span
+						>
+					</div>
+				</div>
+			</section>
+		</x-dc>
+		<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1340}}'>
+			// Every figure is from the two screenshots, as filed. Nothing computed that the
+			// statement did not say — the effective rate is the one derived number, and the
+			// codebase already derives it the same way (effectiveRatePct).
+			const FX = { EUR: 1, CZK: 25.1, PLN: 4.31 };
+
+			// Every jurisdiction draws a *-soft token: a pastel step of a --series-* hue,
+			// declared in this file's :root and listed in the handoff as a token to add to
+			// app.css. Periwinkle, sage, apricot, dusty rose.
+			//
+			// --series-housing (#006b98, a deep cold teal-blue) has no warm pastel step; it
+			// lightens to an ice blue that reads against the other three rather than with
+			// them. Czechia takes --series-health instead, a periwinkle, which stays the
+			// cool anchor the set needs for separation while belonging to a warm family.
+			//
+			// Each soft step holds its parent's hue angle, so the hue separation the series
+			// palette was measured for carries over; the lightness separation does not, and
+			// has NOT been re-measured for colour-vision deficiency. Treat that as open.
+			const COUNTRY = {
+			  CZ: { label: 'Czechia', raw: 'var(--series-health-soft)' },
+			  DE: { label: 'Germany', raw: 'var(--series-income-soft)' },
+			  ES: { label: 'Spain', raw: 'var(--series-bills-soft)' },
+			  PL: { label: 'Poland', raw: 'var(--series-taxes-soft)' }
+			};
+			const ORDER = ['CZ', 'DE', 'ES', 'PL'];
+
+			const S = [
+			  { y: 2025, c: 'CZ', cur: 'CZK', gross: 4374218, tax: 810741.27, doc: '2025 CZ tax statement' },
+			  { y: 2025, c: 'PL', cur: 'PLN', gross: 368, tax: 70, doc: null,
+			    flag: 'An annual gross of 368 PLN is €85. Either the figure is in thousands or this is a part-year filing — the statement does not say which.' },
+			  { y: 2024, c: 'CZ', cur: 'CZK', gross: 1324128, tax: 212781, doc: '2024 CZ tax statement' },
+			  { y: 2024, c: 'ES', cur: 'EUR', gross: 41010.21, tax: 7476.65, doc: null },
+			  { y: 2024, c: 'PL', cur: 'PLN', gross: 155.07, tax: 32.5, doc: null,
+			    flag: 'Same shape as 2025: 155.07 PLN is €36 for a year.' },
+			  { y: 2023, c: 'ES', cur: 'EUR', gross: 60475.53, tax: 8972.32, doc: '2023 ES tax statement' },
+			  { y: 2022, c: 'ES', cur: 'EUR', gross: 44876.28, tax: 5848.82, doc: '2022 ES tax statement' },
+			  { y: 2021, c: 'DE', cur: 'EUR', gross: 17107, tax: 3315, doc: '2021 DE tax statement' },
+			  { y: 2021, c: 'ES', cur: 'EUR', gross: 4526.68, tax: 326.71, doc: '2021 ES tax statement' },
+			  { y: 2020, c: 'DE', cur: 'EUR', gross: 27871, tax: 4742, doc: '2020 DE tax statement' },
+			  { y: 2019, c: 'DE', cur: 'EUR', gross: 34347, tax: 5718, doc: '2019 DE tax statement' },
+			  { y: 2018, c: 'DE', cur: 'EUR', gross: 36834, tax: 5283, doc: '2018 DE tax statement' },
+			  { y: 2018, c: 'PL', cur: 'PLN', gross: 924.37, tax: 175.56, doc: '2018 PL tax statement' }
+			];
+
+			const YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
+			const SYM = { EUR: '€', CZK: 'Kč', PLN: 'zł' };
+
+			function groups(n) {
+			  return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+			}
+			// Compact enough that a 4-million-koruna filing does not set the column width.
+			function compact(n, cur) {
+			  const s = SYM[cur] || cur;
+			  if (n >= 1e6) return (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M ' + s;
+			  if (n >= 1e4) return Math.round(n / 1e3) + 'k ' + s;
+			  return groups(n) + ' ' + s;
+			}
+
+			class Component extends DCLogic {
+			  state = { mode: 'stack', cur: 'EUR', open: 2025, hover: null };
+
+			  conv(v, from) {
+			    const to = this.state.cur;
+			    return (v / FX[from]) * FX[to];
+			  }
+
+			  byYear() {
+			    return YEARS.map((y) => {
+			      const rows = S.filter((s) => s.y === y);
+			      const gross = rows.reduce((a, s) => a + this.conv(s.gross, s.cur), 0);
+			      const tax = rows.reduce((a, s) => a + this.conv(s.tax, s.cur), 0);
+			      return { year: y, rows, gross, tax, rate: gross ? (tax / gross) * 100 : 0 };
+			    });
+			  }
+
+			  /** The readout for one year: every jurisdiction in it, then the year's total. */
+			  tipFor(yr, x, pct, cur, i) {
+			    const sym = SYM[cur];
+			    return {
+			      leftPct: pct(x),
+			      // Past the midpoint the card would run off the right edge, so it flips to
+			      // the other side of its own guide line. The offset is folded into `left`
+			      // rather than written as calc() inside the transform — a calc() in a style
+			      // hole does not survive the parser, and the card silently stopped flipping.
+			      cardLeft: i > 4 ? pct(x - 14) : pct(x + 14),
+			      shift: i > 4 ? 'translateX(-100%)' : 'none',
+			      year: String(yr.year),
+			      rows: ORDER.filter((c) => yr.rows.some((s) => s.c === c)).map((c) => {
+			        const rows = yr.rows.filter((s) => s.c === c);
+			        const g = rows.reduce((a, s) => a + this.conv(s.gross, s.cur), 0);
+			        const t = rows.reduce((a, s) => a + this.conv(s.tax, s.cur), 0);
+			        return {
+			          label: COUNTRY[c].label,
+			          hue: COUNTRY[c].raw,
+			          earned: groups(g) + ' ' + sym,
+			          tax: groups(t) + ' ' + sym,
+			          rate: ((t / g) * 100).toFixed(2) + '%',
+			          native: rows.map((s) => groups(s.gross) + ' ' + SYM[s.cur]).join(' + ')
+			        };
+			      }),
+			      total: groups(yr.gross) + ' ' + sym,
+			      totalTax: groups(yr.tax) + ' ' + sym,
+			      totalRate: yr.rate.toFixed(2) + '%',
+			      multi: yr.rows.length > 1
+			    };
+			  }
+
+			  renderVals() {
+			    const { mode, cur, open, hover } = this.state;
+			    const years = this.byYear();
+			    const totalGross = years.reduce((a, y) => a + y.gross, 0);
+			    const totalTax = years.reduce((a, y) => a + y.tax, 0);
+			    const last = years[years.length - 1];
+			    const prev = years[years.length - 2];
+
+			    // ── geometry ──
+			    // Conventions are LoanSchedule.svelte's and TaxCharts.svelte's: rx 2 bars,
+			    // axis labels at --text-2xs in --fg3, baseline --bd2, 2px strokes, r 3.5
+			    // dots, a <title> on every mark. Departures, stated: a gridline ladder in
+			    // --bd, because the house single-max-label cannot be read against a stacked
+			    // bar at this height; and the rate on its OWN strip under a shared x axis
+			    // rather than a second y axis on the same panel — a dual axis is a chart
+			    // asking to be misread, and the strip costs 60px to remove the ambiguity.
+			    const X0 = 56, X1 = 992;
+			    const Y0 = 26, Y1 = 222;          // money panel
+			    const R0 = 242, R1 = 292;         // rate strip
+			    const slot = (X1 - X0) / YEARS.length;
+			    const barW = Math.min(58, slot * 0.5);
+			    const cx = (i) => X0 + slot * i + slot / 2;
+
+			    const maxGross = Math.max(...years.map((y) => y.gross));
+			    const step = cur === 'EUR' ? 50000 : 1000000;
+			    const top = Math.ceil(maxGross / step) * step;
+			    const yOf = (v) => Y1 - (v / top) * (Y1 - Y0);
+
+			    const RATE_TOP = 25;
+			    const yRate = (p) => R1 - (p / RATE_TOP) * (R1 - R0);
+			    // The rate-only mode gets the whole panel, so it has its own scale.
+			    const yRateFull = (p) => R1 - (p / RATE_TOP) * (R1 - Y0);
+
+			    // Axis labels are HTML positioned over the SVG, not SVG <text>: an
+			    // interpolated value inside <text> is wrapped in a <span>, and an HTML span
+			    // inside SVG text paints nothing — every dynamic tick was silently invisible.
+			    // As HTML they are also selectable and directly editable, which SVG text is not.
+			    // Both axes in percent of the viewBox, because the wrapper is pinned to the
+			    // viewBox's aspect ratio. A fixed pixel height instead makes the SVG letterbox
+			    // its own content — it scales to fit and centres, and every percentage-placed
+			    // label drifts off the mark it belongs to.
+			    const pct = (v) => ((v / 1000) * 100).toFixed(3) + '%';
+			    const vpct = (v) => ((v / 322) * 100).toFixed(3) + '%';
+			    const pctOf = pct, vpctOf = vpct;
+
+			    const gridY = [];
+			    for (let v = 0; v <= top; v += step) {
+			      gridY.push({
+			        y: yOf(v), ty: yOf(v) + 4, topPct: vpct(yOf(v)),
+			        label: v === 0 ? '0' : cur === 'EUR' ? v / 1000 + 'k' : v / 1e6 + 'M'
+			      });
+			    }
+
+			    // One bar per year whose full height IS the year's gross. The foot of it is
+			    // the tax, hatched, stacked by jurisdiction; what stands above is what was
+			    // kept, solid, in the same order. Two bars side by side made the reader
+			    // measure one against the other to see the share; here the share is the
+			    // proportion of a single bar, which needs no measuring.
+			    const perCountry = (yr) =>
+			      ORDER.filter((c) => yr.rows.some((s) => s.c === c)).map((c) => {
+			        const rows = yr.rows.filter((s) => s.c === c);
+			        const g = rows.reduce((a, s) => a + this.conv(s.gross, s.cur), 0);
+			        const t = rows.reduce((a, s) => a + this.conv(s.tax, s.cur), 0);
+			        return { c, g, t, kept: g - t };
+			      });
+
+			    const bars = years.map((yr, i) => {
+			      const x = cx(i) - barW / 2;
+			      const per = perCountry(yr);
+			      let cursor = Y1;
+			      // A segment thinner than its own border gets no border. With one, a 1px rect
+			      // and a 1px stroke centred on its edges paint a ~2px band at full strength —
+			      // so Poland's €174 of kept income capped the 2018 bar in solid red, making
+			      // the loudest pixels in the chart its least significant number. Below the
+			      // threshold the segment stays as a hairline of translucent fill: present,
+			      // findable in the column readout, and not shouting.
+			      const tax = per.map((p) => {
+			        const raw = (p.t / top) * (Y1 - Y0);
+			        const h = Math.max(0.8, raw);
+			        cursor -= h;
+			        return { x, y: cursor, w: barW, h, fill: 'url(#hatch-' + p.c + ')', line: raw >= 2.5 ? COUNTRY[p.c].raw : 'none' };
+			      });
+			      const kept = per.map((p) => {
+			        const raw = (p.kept / top) * (Y1 - Y0);
+			        const h = Math.max(0.8, raw);
+			        cursor -= h;
+			        return { x, y: cursor, w: barW, h, grad: 'url(#bar-' + p.c + ')', line: raw >= 2.5 ? COUNTRY[p.c].raw : 'none' };
+			      });
+			      return { year: yr.year, tax, kept };
+			    });
+
+			    // ── effective rate, per jurisdiction, with honest gaps ──
+			    const segsFor = (c) => {
+			      const runs = [];
+			      let run = [];
+			      YEARS.forEach((y, i) => {
+			        const rows = S.filter((s) => s.y === y && s.c === c);
+			        if (!rows.length) { if (run.length) runs.push(run); run = []; return; }
+			        const g = rows.reduce((a, s) => a + s.gross, 0);
+			        const t = rows.reduce((a, s) => a + s.tax, 0);
+			        const pct = (t / g) * 100;
+			        run.push({
+			          x: cx(i), y: yRateFull(pct),
+			          leftPct: pctOf(cx(i) - 8), topPct: vpctOf(yRateFull(pct) - 8),
+			          title: COUNTRY[c].label + ' · ' + y + ' · ' + pct.toFixed(2) + '% effective'
+			        });
+			      });
+			      if (run.length) runs.push(run);
+			      return runs;
+			    };
+
+			    const rateSegs = [];
+			    const rateDots = [];
+			    ORDER.forEach((c) => {
+			      segsFor(c).forEach((run) => {
+			        // A one-year run has no line to draw; the dot is the whole statement.
+			        if (run.length > 1) rateSegs.push({ points: run.map((p) => p.x + ',' + p.y).join(' '), stroke: COUNTRY[c].raw, width: 2 });
+			        run.forEach((p) => rateDots.push({
+			          x: p.x, y: p.y, r: 3.5, fill: COUNTRY[c].raw,
+			          leftPct: p.leftPct, topPct: p.topPct, widthPct: pct(16), heightPct: vpct(16), title: p.title
+			        }));
+			      });
+			    });
+			    // The blended line is the subject, so it is the one mark allowed to be
+			    // heavier than the house 2px / r 3.5.
+			    rateSegs.push({ points: years.map((y, i) => cx(i) + ',' + yRateFull(y.rate)).join(' '), stroke: 'var(--yellow)', width: 3 });
+			    years.forEach((y, i) => rateDots.push({
+			      x: cx(i), y: yRateFull(y.rate), r: 4.5, fill: 'var(--yellow)',
+			      leftPct: pct(cx(i) - 8), topPct: vpct(yRateFull(y.rate) - 8),
+			      widthPct: pct(16), heightPct: vpct(16),
+			      title: 'Household blended · ' + y.year + ' · ' + y.rate.toFixed(2) + '% effective'
+			    }));
+
+			    const rateGrid = [];
+			    for (let p = 0; p <= RATE_TOP; p += 5) {
+			      rateGrid.push({ y: yRateFull(p), ty: yRateFull(p) + 4, topPct: vpct(yRateFull(p)), label: p + '%' });
+			    }
+
+			    return {
+			      cur,
+			      band: {
+			        gross: groups(totalGross),
+			        tax: groups(totalTax),
+			        rate: ((totalTax / totalGross) * 100).toFixed(1),
+			        last: groups(last.gross),
+			        lastDelta: '+' + Math.round(((last.gross - prev.gross) / prev.gross) * 100) + '% on 2024 · 4.7× since 2018'
+			      },
+			      modes: [
+			        { label: 'Earned & paid', key: 'stack' },
+			        { label: 'Effective rate', key: 'rate' }
+			      ].map((m) => ({
+			        label: m.label,
+			        pick: () => this.setState({ mode: m.key }),
+			        bg: mode === m.key ? 'var(--card3)' : 'transparent',
+			        fg: mode === m.key ? 'var(--fg1)' : 'var(--fg3)'
+			      })),
+			      currencies: ['EUR', 'CZK'].map((c) => ({
+			        label: c,
+			        pick: () => this.setState({ cur: c }),
+			        bg: cur === c ? 'var(--card3)' : 'transparent',
+			        fg: cur === c ? 'var(--fg1)' : 'var(--fg3)'
+			      })),
+			      isStack: mode === 'stack',
+			      isRate: mode === 'rate',
+			      chart: {
+			        eyebrow: mode === 'stack' ? 'Earned and paid, by year — all jurisdictions, one axis' : 'Effective rate by year — the one figure that compares across borders',
+			        gridY, bars,
+			        grads: ORDER.map((c) => ({ id: 'bar-' + c, hatchId: 'hatch-' + c, base: COUNTRY[c].raw })),
+			        yTitle: cur === 'EUR' ? 'Thousands €' : 'Millions Kč',
+			        axisLeft: pct(45),
+			        xLabels: YEARS.map((y, i) => ({
+			          x: cx(i), leftPct: pct(cx(i)), label: y,
+			          fill: y === open ? 'var(--fg1)' : 'var(--fg3)',
+			          weight: y === open ? '600' : '400'
+			        })),
+			        // Pointing at a column reads out everything in it, jurisdiction by
+			        // jurisdiction with its own swatch — the "x unified" behaviour the rest of
+			        // the product's charts have, and better than a per-mark tooltip: it says
+			        // which country a segment is AND what the others were in the same breath.
+			        hits: years.map((yr, i) => ({
+			          leftPct: pct(cx(i) - slot / 2), widthPct: pct(slot),
+			          enter: () => this.setState({ hover: i }),
+			          leave: () => this.setState({ hover: null })
+			        })),
+			        hasTip: hover !== null,
+			        tip: hover === null ? {} : this.tipFor(years[hover], cx(hover), pct, cur, hover),
+			        ratePoints: years.map((y, i) => cx(i) + ',' + yRate(y.rate)).join(' '),
+			        // No title here: the column readout above covers the whole strip, and an
+			        // SVG <title> under it would be an unreachable second tooltip.
+			        rateDots: years.map((y, i) => ({ x: cx(i), y: yRate(y.rate) })),
+			        footnote: mode === 'stack'
+			          ? 'Converted at today’s rate — comparison, not a filed figure'
+			          : 'Rates need no conversion, which is why this line was always the honest one'
+			      },
+			      rateChart: {
+			        gridY: rateGrid, segs: rateSegs, dots: rateDots,
+			        axisLeft: pct(45),
+			        years: YEARS.map((y, i) => ({ x: cx(i), leftPct: pct(cx(i)), label: y })),
+			        hits: years.map((yr, i) => ({
+			          leftPct: pct(cx(i) - slot / 2), widthPct: pct(slot),
+			          enter: () => this.setState({ hover: i }),
+			          leave: () => this.setState({ hover: null })
+			        })),
+			        hasTip: hover !== null,
+			        tip: hover === null ? {} : this.tipFor(years[hover], cx(hover), pct, cur, hover)
+			      },
+			      legend: mode === 'stack'
+			        ? ORDER.map((c) => ({ label: COUNTRY[c].label, swatch: COUNTRY[c].raw, border: 'none' }))
+			            .concat([{ label: 'bar = earned · hatched foot = tax paid', swatch: 'transparent', border: '1px dashed var(--fg3)' },
+			                     { label: 'effective rate', swatch: 'var(--yellow)', border: 'none' }])
+			        : ORDER.map((c) => ({ label: COUNTRY[c].label, swatch: COUNTRY[c].raw, border: 'none' }))
+			            .concat([{ label: 'household blended', swatch: 'var(--yellow)', border: 'none' }]),
+			      cols: ORDER.map((c) => ({ label: COUNTRY[c].label, hue: COUNTRY[c].raw })),
+			      // Counted, not typed: the badge and the sentence beside it read the same
+			      // source, so they cannot drift apart.
+			      flagged: (() => {
+			        const n = new Set(S.filter((s) => s.flag).map((s) => s.y + '|' + s.c)).size;
+			        return n + (n === 1 ? ' cell needs you' : ' cells need you');
+			      })(),
+			      footer: {
+			        total: groups(totalGross) + ' ' + SYM[cur],
+			        rate: ((totalTax / totalGross) * 100).toFixed(2) + '%',
+			        cells: ORDER.map((c) => {
+			          const rows = S.filter((s) => s.c === c);
+			          const yrs = [...new Set(rows.map((s) => s.y))];
+			          return {
+			            gross: compact(rows.reduce((a, s) => a + s.gross, 0), rows[0].cur),
+			            years: yrs.length + (yrs.length === 1 ? ' year' : ' years')
+			          };
+			        })
+			      },
+			      rows: [...years].reverse().map((yr) => ({
+			        year: yr.year,
+			        open: open === yr.year,
+			        caret: open === yr.year ? '▼' : '▶',
+			        caretFg: open === yr.year ? 'var(--teal)' : 'var(--fg3)',
+			        bg: open === yr.year ? 'var(--card2)' : 'transparent',
+			        accent: open === yr.year ? 'var(--teal)' : 'transparent',
+			        share: Math.max(2, (yr.gross / maxGross) * 100).toFixed(1) + '%',
+			        toggle: () => this.setState({ open: open === yr.year ? null : yr.year }),
+			        total: groups(yr.gross) + ' ' + SYM[cur],
+			        totalRate: yr.rate.toFixed(2) + '%',
+			        cells: ORDER.map((c) => {
+			          const rows = yr.rows.filter((s) => s.c === c);
+			          // No filing is not zero income — it is a year in another country. A dim
+			          // dot says "nothing here" without inviting it to be read as a figure.
+			          if (!rows.length) return { gross: '·', rate: '', fg: 'var(--bd2)', rateFg: 'var(--fg3)' };
+			          const g = rows.reduce((a, s) => a + s.gross, 0);
+			          const t = rows.reduce((a, s) => a + s.tax, 0);
+			          const flagged = rows.some((s) => s.flag);
+			          return {
+			            gross: compact(g, rows[0].cur),
+			            rate: flagged ? '⚠ ' + ((t / g) * 100).toFixed(2) + '%' : ((t / g) * 100).toFixed(2) + '%',
+			            fg: flagged ? 'var(--yellow)' : 'var(--fg1)',
+			            rateFg: flagged ? 'var(--yellow)' : 'var(--fg3)'
+			          };
+			        }),
+			        detail: yr.rows.map((s) => ({
+			          country: COUNTRY[s.c].label,
+			          hue: COUNTRY[s.c].raw,
+			          gross: groups(s.gross) + ' ' + SYM[s.cur],
+			          tax: groups(s.tax) + ' ' + SYM[s.cur],
+			          rate: ((s.tax / s.gross) * 100).toFixed(2) + '%',
+			          eur: s.cur === cur ? 'filed in ' + cur : '≈ ' + groups(this.conv(s.gross, s.cur)) + ' ' + SYM[cur] + ' at today’s rate',
+			          hasDoc: !!s.doc,
+			          doc: s.doc || '',
+			          hasFlag: !!s.flag,
+			          flag: s.flag || ''
+			        })),
+			        detailNote: yr.rows.length > 1
+			          ? 'Two filings in one year is a move, not a mistake — the year total above is the only place they add up.'
+			          : 'One filing this year. Delete is behind the ⋯ menu: a filed statement should not be one misclick from gone.'
+			      }))
+			    };
+			  }
+			}
+		</script>
+	</body>
+</html>

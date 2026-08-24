@@ -1,102 +1,116 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-	import { enhance } from '$app/forms';
+	// Four stacked sections, each more specific than the one above it: the band
+	// answers "how much, overall", the chart answers "what is the shape", the
+	// matrix answers "which year, which country", and the expanded row answers
+	// "what exactly did that statement say".
+	//
+	// The person control sits between the band and the chart. It governs both
+	// the chart and the matrix, so it has to precede them; the band stays
+	// household-wide, because a figure labelled "overall" that answered to a
+	// control beneath it would read backwards.
+	import { invalidateAll } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
-	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
 	import TaxStatementDialog from '$lib/components/TaxStatementDialog.svelte';
-	import TaxCharts from '$lib/charts/TaxCharts.svelte';
+	import TaxSummaryBand from '$lib/components/TaxSummaryBand.svelte';
+	import TaxMatrix from '$lib/components/TaxMatrix.svelte';
+	import TaxYearDetail from '$lib/components/TaxYearDetail.svelte';
+	import TaxYearChart from '$lib/charts/TaxYearChart.svelte';
 
 	let { data, form } = $props();
 
 	type Row = (typeof data.statements)[number];
+
+	// The most recent year is the one a person opening this screen most likely
+	// wants, and defaulting it open makes the expansion discoverable without a
+	// hint that would otherwise have to be written somewhere.
+	let openYear = $state<number | null>(data.years.at(-1)?.year ?? null);
+	let mode = $state<'stack' | 'rate'>(data.prefs.mode);
+	let personFilter = $state(data.prefs.person);
 	let editing = $state<Row | null | 'new'>(null);
 
-	// Person → country → statements, newest year first (already sorted).
-	const grouped = $derived(
-		[...new Set(data.statements.map((s) => s.personName))].map((personName) => ({
-			personName,
-			countries: [
-				...new Set(data.statements.filter((s) => s.personName === personName).map((s) => s.country))
-			].map((country) => ({
-				country,
-				rows: data.statements.filter((s) => s.personName === personName && s.country === country)
-			}))
-		}))
-	);
+	// The server recomputes the year rows when the currency or filer changes —
+	// conversion happens at year-end rates, which the client has no table for.
+	async function savePrefs(next: { mode?: 'stack' | 'rate'; currency?: string; person?: string }) {
+		const body = {
+			mode: next.mode ?? mode,
+			currency: next.currency ?? data.prefs.currency,
+			person: next.person ?? personFilter
+		};
+		await fetch('/tax/prefs', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		await invalidateAll();
+	}
+
+	const statementsFor = (year: number) =>
+		data.statements.filter(
+			(s) => s.year === year && (personFilter === 'both' || s.personId === personFilter)
+		);
+
+	const peopleOptions = $derived([
+		{ value: 'both', label: 'Both' },
+		...data.people.map((p) => ({ value: p.id, label: p.name }))
+	]);
 </script>
 
-<ScreenHeader title="Tax" caption="What each yearly statement said — recorded, never computed." />
+<ScreenHeader title="Tax" caption="What each yearly statement said — recorded, never computed.">
+	{#snippet actions()}
+		<button type="button" class="btn btn-primary" onclick={() => (editing = 'new')}>
+			Add statement
+		</button>
+	{/snippet}
+</ScreenHeader>
 
 {#if form?.message}
 	<div class="error">{form.message}</div>
 {/if}
 
-<section class="section">
-	<div class="eyebrow-row">
-		<Eyebrow emoji="🧾" label="Statements" />
-		<span class="eyebrow-caption">
-			{data.statements.length}
-			{data.statements.length === 1 ? 'statement' : 'statements'}
-		</span>
+<TaxSummaryBand years={data.years} currency={data.prefs.currency} />
+
+{#if data.people.length > 1}
+	<div class="filter">
+		<Segmented
+			options={peopleOptions}
+			bind:value={personFilter}
+			onchange={(next) => savePrefs({ person: next })}
+		/>
 	</div>
-	<div class="toolbar">
-		<button type="button" class="btn btn-primary" onclick={() => (editing = 'new')}>
-			Add statement
-		</button>
-	</div>
+{/if}
 
-	{#each grouped as g (g.personName)}
-		{#each g.countries as c (c.country)}
-			<div class="group-head">
-				<span class="g-name">{g.personName} · {c.country}</span>
-			</div>
-			{#each c.rows as s (s.id)}
-				<div class="card tax-row">
-					<div class="t-facts">
-						<span class="mono t-year">{s.year}</span>
-						<div class="t-mid">
-							<span class="t-figures">
-								gross <strong class="mono">{s.gross} {s.currency}</strong>
-								· tax <strong class="mono">{s.taxPaid} {s.currency}</strong>
-								{#if s.ratePct !== null}
-									· <span class="t-rate mono">{s.ratePct}%</span> effective
-								{/if}
-							</span>
-							{#if s.lines.length > 0}
-								<span class="t-lines">
-									{#each s.lines as l, i (i)}
-										<span>{l.label} {l.amount}</span>
-									{/each}
-								</span>
-							{/if}
-							{#if s.documentName}
-								<span class="t-doc">🗂️ {s.documentName}</span>
-							{/if}
-							{#if s.note}<span class="t-note">{s.note}</span>{/if}
-							{#if s.diverges}<span class="t-diverges">{s.diverges}</span>{/if}
-						</div>
-					</div>
-					<div class="t-actions">
-						<button type="button" class="btn" onclick={() => (editing = s)}>Edit</button>
-						<form method="POST" action="?/remove" use:enhance>
-							<input type="hidden" name="id" value={s.id} />
-							<button type="submit" class="btn">Delete</button>
-						</form>
-					</div>
-				</div>
-			{/each}
-		{/each}
-	{/each}
+<TaxYearChart
+	years={data.years}
+	countries={data.countries}
+	currency={data.prefs.currency}
+	currencies={data.displayCurrencies}
+	bind:mode
+	onchange={(next) => savePrefs(next)}
+/>
 
-	{#if data.statements.length === 0}
-		<p class="empty">
-			No statements yet. Add the yearly statement each person received and the history draws itself.
-		</p>
-	{/if}
-</section>
+<TaxMatrix
+	years={data.years}
+	countries={data.countries}
+	currency={data.prefs.currency}
+	flaggedThreshold={data.flaggedThreshold}
+	{openYear}
+	onToggle={(year) => (openYear = openYear === year ? null : year)}
+>
+	{#snippet detail(year)}
+		<TaxYearDetail
+			statements={statementsFor(year)}
+			countries={data.countries}
+			onedit={(s) => (editing = s)}
+		/>
+	{/snippet}
+</TaxMatrix>
 
-{#if data.series.length > 0}
-	<TaxCharts series={data.series} />
+{#if data.statements.length === 0}
+	<p class="empty">
+		No statements yet. Add the yearly statement each person received and the history draws itself.
+	</p>
 {/if}
 
 {#if editing !== null}
@@ -122,67 +136,12 @@
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
-	.toolbar {
+	.filter {
 		display: flex;
-	}
-	.group-head {
-		margin-top: 6px;
-	}
-	.g-name {
-		font-size: var(--text-sm);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--fg3);
-	}
-	.tax-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px 16px;
-	}
-	.t-facts {
-		display: flex;
-		align-items: baseline;
-		gap: var(--space-7);
-		flex: 1 1 340px;
-		min-width: 0;
-	}
-	.t-year {
-		font-size: var(--text-md);
-		color: var(--fg2);
-	}
-	.t-mid {
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		min-width: 0;
-	}
-	.t-figures {
-		font-size: var(--text-md);
-	}
-	.t-rate {
-		color: var(--green);
-	}
-	.t-lines,
-	.t-doc,
-	.t-note {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-		display: flex;
-		gap: var(--space-6);
-		flex-wrap: wrap;
-	}
-	.t-diverges {
-		font-size: var(--text-sm);
-		color: var(--yellow);
-	}
-	.t-actions {
-		display: flex;
-		gap: var(--space-4);
+		justify-content: flex-end;
 	}
 	.empty {
+		font-size: var(--text-sm);
 		color: var(--fg3);
-		font-size: var(--text-md);
 	}
 </style>

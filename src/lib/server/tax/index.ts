@@ -3,14 +3,26 @@
 // in the pure module; nothing here computes what is owed.
 
 import { uuidv7 } from 'uuidv7';
-import { eq } from 'drizzle-orm';
-import { db, type Db } from '$lib/server/db';
-import { person, taxStatement, taxStatementLine } from '$lib/server/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
+import { db, type Db, type Queryable } from '$lib/server/db';
+import {
+	document,
+	documentLink,
+	person,
+	taxStatement,
+	taxStatementLine
+} from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+// Naming a filed document needs no database, and the screen renders the same
+// kinds this module files under — so both live in the pure module. Re-exported
+// because callers have always reached for it here.
+import { attachmentKind, statementDocumentName, type AttachmentKind } from '$lib/tax';
+
+export { statementDocumentName };
 
 /**
- * A file uploaded with the statement itself, to be filed on the Tax shelf and
- * pointed at by the statement in one commit.
+ * A file uploaded with a statement, to be filed on the Tax shelf and linked to
+ * the statement in one commit.
  *
  * The screen used to assume the paperwork had already been filed elsewhere: the
  * only way to attach it was to pick from a list of tax documents that someone
@@ -18,11 +30,18 @@ import { insertDocumentAggregate } from '$lib/server/documents/mutations';
  * recorded. Recording the statement and filing the paper it came from are one
  * act, so they are one save.
  */
-interface StatementAttachment {
+export interface StatementAttachment {
 	/** The stored upload's name on the data volume, from `saveUpload`. */
 	storedName: string;
 	ext: string;
 	addedOn: string;
+	kind: AttachmentKind;
+	/**
+	 * The name the browser sent. Used only to break a collision between two
+	 * attachments of one kind in one year — never as the document's own name,
+	 * because a scan called `scan_0043.pdf` identifies nothing.
+	 */
+	original?: string;
 }
 
 interface StatementInput {
@@ -32,41 +51,135 @@ interface StatementInput {
 	currency: string;
 	grossIncomeMinor: bigint;
 	taxPaidMinor: bigint;
-	documentId: string | null;
 	note: string | null;
 	lines: { label: string; amountMinor: bigint }[];
-	/** Overrides `documentId`: a new document is filed and linked instead. */
-	attachment?: StatementAttachment | null;
-}
-
-/**
- * What the filed statement is called on the Tax shelf.
- *
- * Derived from the statement, not typed again: the name a document is found by
- * should say the same thing the statement says, and a second free-text field
- * would be free to disagree with it.
- */
-export function statementDocumentName(year: number, country: string): string {
-	return `${year} ${country.trim().toUpperCase()} tax statement`;
+	/** Uploads to file on the Tax shelf and link, in this same commit. */
+	attachments: StatementAttachment[];
+	/** Documents already on the shelf, to link without filing anything new. */
+	linkDocumentIds: string[];
 }
 
 type TaxResult = { ok: true } | { ok: false; status: number; message: string };
 
-export async function loadStatements() {
+export async function loadStatements(handle: Db = db) {
 	const [rows, lines, people] = await Promise.all([
-		db.select().from(taxStatement),
-		db.select().from(taxStatementLine),
-		db.select({ id: person.id, name: person.name }).from(person)
+		handle.select().from(taxStatement),
+		handle.select().from(taxStatementLine),
+		handle.select({ id: person.id, name: person.name }).from(person)
 	]);
+
+	// Constrained to these statements specifically, and queried after them for
+	// that reason. The far end of a document_link is ANY entity, so a bare join
+	// would also sweep in every document filed against a person, a flat or a
+	// transaction — none of which is a statement's attachment.
+	const statementIds = rows.map((r) => r.id);
+	const attachments = statementIds.length
+		? await handle
+				.select({
+					statementId: documentLink.targetId,
+					id: document.id,
+					name: document.name,
+					ext: document.ext,
+					file: document.storedName
+				})
+				.from(documentLink)
+				.innerJoin(document, eq(document.id, documentLink.documentId))
+				.where(inArray(documentLink.targetId, statementIds))
+				.orderBy(document.addedOn)
+		: [];
+
 	const personName = new Map(people.map((p) => [p.id, p.name]));
 	return rows.map((r) => ({
 		...r,
 		personName: personName.get(r.personId) ?? '—',
+		attachments: attachments
+			.filter((a) => a.statementId === r.id)
+			.map((a) => ({ id: a.id, name: a.name, ext: a.ext, file: a.file })),
 		lines: lines
 			.filter((l) => l.statementId === r.id)
 			.sort((a, b) => a.sort - b.sort)
 			.map((l) => ({ label: l.label, amountMinor: l.amountMinor }))
 	}));
+}
+
+/**
+ * File a batch of uploads against a statement and link each one to it.
+ *
+ * Names collide when two files of one kind land in one year, so a name already
+ * linked to this statement forces the newcomer to carry the file it came from.
+ * Checked against what is STORED, not just within the batch: the second broker
+ * report might arrive a week after the first.
+ */
+export async function attachDocumentsToStatement(
+	statementId: string,
+	personId: string,
+	year: number,
+	country: string,
+	attachments: StatementAttachment[],
+	handle: Queryable
+): Promise<void> {
+	if (attachments.length === 0) return;
+
+	const linked = await handle
+		.select({ name: document.name })
+		.from(documentLink)
+		.innerJoin(document, eq(document.id, documentLink.documentId))
+		.where(eq(documentLink.targetId, statementId));
+	const taken = new Set(linked.map((row) => row.name));
+
+	for (const attachment of attachments) {
+		const plain = statementDocumentName(year, country, attachment.kind);
+		const name = taken.has(plain)
+			? statementDocumentName(year, country, attachment.kind, attachment.original)
+			: plain;
+		taken.add(name);
+
+		const documentId = uuidv7();
+		await insertDocumentAggregate(
+			{
+				id: documentId,
+				name,
+				shelf: 'tax',
+				storedName: attachment.storedName,
+				ext: attachment.ext,
+				addedOn: attachment.addedOn,
+				expiresOn: null,
+				expiryVerb: 'expires',
+				// Filed against whose statement it is. Without this link the
+				// documents screen builds no column for it, so a document filed
+				// here would be missing from the household's own files.
+				personIds: [personId],
+				propertyIds: [],
+				accountIds: [],
+				transactionIds: [],
+				subjectIds: [],
+				tagNames: [attachmentKind(attachment.kind).tag]
+			},
+			handle
+		);
+		await handle
+			.insert(documentLink)
+			.values({ documentId, targetId: statementId })
+			.onConflictDoNothing();
+	}
+}
+
+/**
+ * Unlink one document from one statement.
+ *
+ * The document stays on the Tax shelf, still filed against the person. Deleting
+ * filed paperwork is the documents screen's job, and it asks twice first.
+ */
+export async function detachDocument(
+	statementId: string,
+	documentId: string,
+	handle: Db = db
+): Promise<{ ok: boolean }> {
+	const removed = await handle
+		.delete(documentLink)
+		.where(and(eq(documentLink.targetId, statementId), eq(documentLink.documentId, documentId)))
+		.returning({ documentId: documentLink.documentId });
+	return { ok: removed.length > 0 };
 }
 
 /**
@@ -85,8 +198,6 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 		return { ok: false, status: 400, message: 'Figures on a statement cannot be negative.' };
 
 	const country = input.country.trim().toUpperCase();
-	const attachment = input.attachment ?? null;
-	const attachmentId = attachment ? uuidv7() : null;
 	const values = {
 		personId: input.personId,
 		year: input.year,
@@ -94,44 +205,19 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 		currency,
 		grossIncomeMinor: input.grossIncomeMinor,
 		taxPaidMinor: input.taxPaidMinor,
-		// An upload wins over the picker: choosing a file is the more specific
-		// intent, and the two controls are mutually exclusive on screen. A document
-		// this statement pointed at before stays on the shelf — filing a newer copy
-		// is not a reason to destroy the older one.
-		documentId: attachmentId ?? input.documentId,
 		note: input.note
 	};
+
 	await handle.transaction(async (tx) => {
-		// The document goes in first — the statement's foreign key needs the row
-		// to exist — and in this same transaction, so a statement that fails to
-		// save cannot leave its paperwork filed on the shelf on its own.
-		if (attachment && attachmentId) {
-			await insertDocumentAggregate(
-				{
-					id: attachmentId,
-					name: statementDocumentName(input.year, country),
-					shelf: 'tax',
-					storedName: attachment.storedName,
-					ext: attachment.ext,
-					addedOn: attachment.addedOn,
-					expiresOn: null,
-					expiryVerb: 'expires',
-					// Filed against whose statement it is. Without a link the documents
-					// screen builds no column for it, so a document filed here would be
-					// missing from the household's own files.
-					personIds: [input.personId],
-					propertyIds: [],
-					accountIds: [],
-					transactionIds: [],
-					subjectIds: [],
-					tagNames: []
-				},
-				tx
-			);
-		}
+		// The statement goes in FIRST, which reverses what this did before
+		// v0.4.3. A document is no longer pointed at by a column on the statement
+		// — it is linked to the statement's `entity` row, and that row does not
+		// exist until the statement is inserted. Same transaction either way, so
+		// a statement that fails to save still cannot leave its paperwork filed
+		// on the shelf on its own.
+		//
 		// The unique key resolves concurrent saves of the same statement and
-		// RETURNING gives us the winning row id. Replacing its lines in this same
-		// transaction means a failed insert can never leave an empty statement.
+		// RETURNING gives us the winning row id.
 		const saved = await tx
 			.insert(taxStatement)
 			.values({ id: uuidv7(), ...values })
@@ -142,6 +228,27 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 			.returning({ id: taxStatement.id });
 		const id = saved[0].id;
 
+		await attachDocumentsToStatement(
+			id,
+			input.personId,
+			input.year,
+			country,
+			input.attachments,
+			tx
+		);
+
+		// A document already on the shelf is linked, never re-filed. Filing a
+		// second copy of paper the household already has is how a shelf fills
+		// with duplicates nobody can tell apart.
+		if (input.linkDocumentIds.length > 0) {
+			await tx
+				.insert(documentLink)
+				.values(input.linkDocumentIds.map((documentId) => ({ documentId, targetId: id })))
+				.onConflictDoNothing();
+		}
+
+		// Replacing the lines in this same transaction means a failed insert can
+		// never leave an empty statement.
 		await tx.delete(taxStatementLine).where(eq(taxStatementLine.statementId, id));
 		if (input.lines.length > 0) {
 			await tx.insert(taxStatementLine).values(

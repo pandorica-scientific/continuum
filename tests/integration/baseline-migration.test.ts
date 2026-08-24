@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ENUM_COLUMNS } from '$lib/enums';
+import { ENTITY_KINDS, ENUM_COLUMNS } from '$lib/enums';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
 
 /**
@@ -87,9 +87,12 @@ describe('the baseline migration', () => {
 	});
 
 	it('carries the triggers, CHECKs and expression index drizzle cannot generate', async () => {
+		// Derived from the kind list, not a literal: a kind added to ENTITY_KINDS
+		// without its trigger is exactly the drift this assertion exists to catch,
+		// and a hard-coded count turns that into a chore of bumping a number.
 		const [{ n: entityTriggers }] = await harness.sql<{ n: number }[]>`
 			select count(*)::int as n from pg_trigger where tgname like '%_retire_entity_trg'`;
-		expect(entityTriggers).toBe(11);
+		expect(entityTriggers).toBe(ENTITY_KINDS.length);
 
 		const [{ n: legTrigger }] = await harness.sql<{ n: number }[]>`
 			select count(*)::int as n from pg_trigger where tgname = 'transfer_pair_leg_claims'`;

@@ -48,6 +48,7 @@ CREATE TABLE "person" (
 	"auth_generation" integer DEFAULT 0 NOT NULL,
 	"deactivated_at" timestamp with time zone,
 	"overview_layout" jsonb,
+	"tax_view" jsonb,
 	"theme" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -865,7 +866,7 @@ ALTER TABLE document ADD CONSTRAINT document_period_first_of_month
 --    record, and the resulting row would read as perfectly valid.
 --
 -- 2. Registration is a BEFORE INSERT trigger, not something callers remember.
---    That is what makes this safe across eleven tables at once: no insert path
+--    That is what makes this safe across twelve tables at once: no insert path
 --    above the database changes, and an insert that "forgot" to register cannot
 --    exist. A helper would have been one more thing to omit, and the composite
 --    foreign key would then have turned the omission into a failed write at some
@@ -882,10 +883,11 @@ ALTER TABLE document ADD CONSTRAINT document_period_first_of_month
 -- tests/integration/schema-invariants.test.ts.
 ALTER TABLE entity ADD CONSTRAINT entity_kind_check CHECK (kind in (
 	'person', 'account', 'transaction', 'transaction_split', 'property',
-	'tenancy', 'loan', 'document', 'contact', 'tag', 'subject'));--> statement-breakpoint
+	'tenancy', 'loan', 'document', 'contact', 'tag', 'subject',
+	'tax_statement'));--> statement-breakpoint
 
 -- One generated column, one composite foreign key and two triggers per kind.
--- Written as a loop because eleven copies of the same four statements is eleven
+-- Written as a loop because twelve copies of the same four statements is twelve
 -- chances for one of them to differ by accident.
 DO $outer$
 DECLARE
@@ -894,7 +896,8 @@ DECLARE
 BEGIN
 	FOREACH t IN ARRAY ARRAY[
 		'person', 'account', 'transaction', 'transaction_split', 'property',
-		'tenancy', 'loan', 'document', 'contact', 'tag', 'subject'
+		'tenancy', 'loan', 'document', 'contact', 'tag', 'subject',
+		'tax_statement'
 	]
 	LOOP
 		EXECUTE format(

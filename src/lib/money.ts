@@ -160,3 +160,24 @@ export function parseAmountToMinor(raw: string, currency: string): bigint {
 	if (Number(padded[digits]) >= 5) minor += 1n;
 	return sign === '-' ? -minor : minor;
 }
+
+/**
+ * A figure short enough to scan down a column: `4.37M`, `41k`, `368`.
+ *
+ * No currency symbol — the column header carries it, and repeating it on every
+ * cell is noise in a grid whose whole purpose is comparing one number to the
+ * one below it.
+ *
+ * The thousand and million thresholds are decimal facts, not policy, and the
+ * exponent still comes from the currency: a zero-decimal currency's minor unit
+ * IS its major unit, so 4 370 000 minor JPY abbreviates to 4.37M like anything
+ * else of that size.
+ */
+export function compactMinor(amountMinor: bigint, currency: string, decimals?: number): string {
+	const major = toMajor(amountMinor, currency);
+	const magnitude = Math.abs(major);
+	const sign = major < 0 ? '-' : '';
+	if (magnitude >= 1_000_000) return `${sign}${(magnitude / 1_000_000).toFixed(decimals ?? 2)}M`;
+	if (magnitude >= 1_000) return `${sign}${(magnitude / 1_000).toFixed(decimals ?? 0)}k`;
+	return `${sign}${magnitude.toFixed(decimals ?? 0)}`;
+}

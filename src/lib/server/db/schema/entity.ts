@@ -30,7 +30,7 @@ import { document, tag } from './documents';
  * and a new module cost three more before it held a column of its own.
  *
  * Registration is NOT done here, and must not be attempted in application code.
- * Migration 0049 puts a BEFORE INSERT trigger on each of the eleven tables, so
+ * The baseline puts a BEFORE INSERT trigger on each of the twelve tables, so
  * inserting a record registers it; the concrete tables also carry a generated
  * `entity_kind` column and a composite foreign key into `(id, kind)`, which is
  * what makes a mismatched kind unrepresentable rather than merely discouraged.

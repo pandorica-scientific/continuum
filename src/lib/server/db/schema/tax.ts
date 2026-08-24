@@ -37,6 +37,16 @@ export const taxStatement = pgTable(
 			.references(() => currency.code),
 		grossIncomeMinor: bigint('gross_income_minor', { mode: 'bigint' }).notNull(),
 		taxPaidMinor: bigint('tax_paid_minor', { mode: 'bigint' }).notNull(),
+		/**
+		 * Superseded by `document_link` in v0.4.3, and no longer read or written.
+		 *
+		 * A statement holds many documents now — the statement itself, the
+		 * employer's income confirmation, the broker's report — and they are
+		 * linked to the statement's `entity` row like every other filing. Keeping
+		 * this as a "primary" attachment alongside those links would be two
+		 * sources of truth for one fact. The column stays only because the schema
+		 * is additive-only.
+		 */
 		documentId: uuid('document_id').references(() => document.id, { onDelete: 'set null' }),
 		note: text('note'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()

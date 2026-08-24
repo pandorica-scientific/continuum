@@ -12,7 +12,7 @@ import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
  * without a table of its own.
  *
  * Registration is a BEFORE INSERT trigger rather than something callers
- * remember. That is the whole reason this is safe to add to eleven tables at
+ * remember. That is the whole reason this is safe to add to twelve tables at
  * once: nothing above the database changes, and an insert that forgot to
  * register cannot exist.
  */

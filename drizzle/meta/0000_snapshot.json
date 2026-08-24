@@ -345,6 +345,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "tax_view": {
+          "name": "tax_view",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "theme": {
           "name": "theme",
           "type": "text",

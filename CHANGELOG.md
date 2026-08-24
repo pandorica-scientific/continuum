@@ -2,6 +2,31 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.4.3 — 2026-08-23
+
+> A year's filing is several pieces of paper, not one — and the Tax screen is rebuilt around the year rather than around whoever filed.
+
+### 🐛 Fixed
+
+- 💾 **Backups restore now, and every backup taken before this one never could** — the dump named each table's generated `entity_kind` column in its `COPY` headers while `COPY … TO STDOUT` leaves it out of the rows, so every header was one column wider than the data beneath it and PostgreSQL refused the load outright
+
+### ✨ Added
+
+- 📎 **A tax statement holds as many documents as the year actually produced** — the statement itself, the employer's annual income confirmation and the broker's earnings report are three files, and the screen took one
+- 🏷️ **Each attachment says what it is** — a kind picked when it is uploaded names the document on the Tax shelf and tags it, so every broker report across every year is one filter away
+- 🗂️ **A document can be detached from a statement without being destroyed** — `⇥` removes the connection and leaves the paperwork filed against the person, while the bin deletes the document and its file behind a second tap
+
+### 🔧 Changed
+
+- 📅 **The Tax screen groups by year instead of by person and country** — a household that has filed in four jurisdictions over eight years saw one year in three separate places, so "what did 2024 cost me" was a question the layout could not answer
+- 📈 **One chart replaces six** — each bar's full height is that year's gross with the tax hatched at its foot, a second mode draws the effective rate per jurisdiction, and both convert at each year's closing rate rather than at today's
+- ⚠️ **A filing far smaller than the rest of the record is flagged rather than left to pass unremarked** — under five per cent of the median, which catches a part-year filing or a units error without naming a currency or an amount
+- 🎨 **Four measured pastel fills carry the jurisdictions** — dark clears the palette's colour-vision floor at 9.7, and light cannot at any value, which is recorded beside the tokens along with what was tried
+
+### ⬆️ Upgrading
+
+- 🗄️ **The schema change is folded into the baseline, so a fresh install needs nothing** — a running instance is rebuilt instead: take a backup on this version, drop the database, boot, restore, then register the tax statements as entities and carry their old single `document_id` into `document_link`
+
 ## 0.4.2 — 2026-08-23
 
 > A server that gave up on a database it was designed to wait for.

@@ -60,7 +60,12 @@ export const ENTITY_KINDS = [
 	'document',
 	'contact',
 	'tag',
-	'subject'
+	'subject',
+	// A year's filing arrives as several pieces of paper — the statement, the
+	// employer's income confirmation, the broker's report — so a statement has
+	// to be linkable. Its attachments live in document_link like every other
+	// filing rather than in a table of their own.
+	'tax_statement'
 ] as const;
 
 export type EntityKind = (typeof ENTITY_KINDS)[number];
