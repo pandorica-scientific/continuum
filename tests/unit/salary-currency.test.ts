@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectCurrency } from '$lib/salary';
+import { detectCurrency, payslipCurrency } from '$lib/salary';
 
 // What the app can convert. Everything the detector may answer comes from here.
 const AVAILABLE = ['CZK', 'EUR', 'USD', 'PLN', 'GBP', 'CHF'];
@@ -61,5 +61,27 @@ describe('reading a payslip’s currency', () => {
 
 	it('reads nothing out of an empty slip', () => {
 		expect(detectCurrency([], AVAILABLE)).toBeNull();
+	});
+});
+
+describe('whose answer the currency field takes', () => {
+	it('takes the slip when the slip says', () => {
+		expect(payslipCurrency('CZK', null)).toEqual({ currency: 'CZK', from: 'slip' });
+	});
+
+	// A job can change. What is printed on this month's paper is a fact; what was
+	// stated for last month's is a guess about an employer that has not changed.
+	it('lets the slip overrule what was remembered', () => {
+		expect(payslipCurrency('EUR', 'CZK')).toEqual({ currency: 'EUR', from: 'slip' });
+	});
+
+	// The reason this exists: plenty of payslips print no currency anywhere.
+	it('falls back to what was stated last time, and says so', () => {
+		expect(payslipCurrency(null, 'CZK')).toEqual({ currency: 'CZK', from: 'learned' });
+	});
+
+	// Not the household's base. Null is the form's cue to ask.
+	it('answers nothing when neither knows', () => {
+		expect(payslipCurrency(null, null)).toEqual({ currency: null, from: null });
 	});
 });

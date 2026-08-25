@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { payslipSlipFor, recordSalary, salaryMonths } from '$lib/server/salary';
+import { recordSalary, salaryMonths, slipDocument } from '$lib/server/salary';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -65,7 +65,7 @@ describe('deleting a payslip', () => {
 			testDb
 		);
 
-		const slip = await payslipSlipFor(ROBERT, '2026-08', testDb);
+		const slip = await slipDocument(DOC, testDb);
 		expect(slip?.id).toBe(DOC);
 
 		await testDb

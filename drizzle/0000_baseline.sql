@@ -106,7 +106,10 @@ CREATE TABLE "document" (
 	"expiry_verb" text DEFAULT 'expires' NOT NULL,
 	"amount_minor" bigint,
 	"currency" text,
-	"period_on" date
+	"period_on" date,
+	-- SHA-256 of the stored file, so the same file uploaded twice is recognised
+	-- as the same file rather than filed as a second one.
+	"content_hash" text
 );
 --> statement-breakpoint
 CREATE TABLE "subject" (
@@ -605,6 +608,7 @@ CREATE INDEX "webauthn_challenge_address_created_idx" ON "webauthn_challenge" US
 CREATE INDEX "webauthn_challenge_person_idx" ON "webauthn_challenge" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "document_currency_idx" ON "document" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "document_shelf_idx" ON "document" USING btree ("shelf");--> statement-breakpoint
+CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "subject_name_ci_idx" ON "subject" USING btree (lower("name"));--> statement-breakpoint
 CREATE INDEX "contact_link_target_idx" ON "contact_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "document_link_target_idx" ON "document_link" USING btree ("target_id");--> statement-breakpoint
@@ -1152,7 +1156,8 @@ CREATE INDEX "salary_entry_transaction_idx" ON "salary_entry" USING btree ("tran
 
 -- One entry per person per month. A payslip and a bank credit for the same
 -- month fill their own column of the SAME row rather than racing each other.
-CREATE UNIQUE INDEX "salary_entry_person_month_key" ON "salary_entry" USING btree ("person_id","period_month");--> statement-breakpoint
+CREATE UNIQUE INDEX "salary_entry_person_month_doc_key" ON "salary_entry" USING btree ("person_id","period_month","document_id") WHERE document_id is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "salary_entry_person_month_key" ON "salary_entry" USING btree ("person_id","period_month") WHERE document_id is null;--> statement-breakpoint
 
 -- Whose salary a payment into a JOINT account is. Deliberately not the `rule`
 -- table, whose payload is a category: letting the categoriser assign people

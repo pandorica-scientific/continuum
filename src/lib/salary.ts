@@ -24,7 +24,57 @@ const NET_PAY_KEYWORDS = [
 	'net pay',
 	'net salary',
 	'take home',
-	'amount paid'
+	'amount paid',
+	// Spanish: what is actually transferred, printed as a heading over its figure.
+	'líquido total a percibir',
+	'liquido total a percibir',
+	'líquido a percibir',
+	'liquido a percibir',
+	// German. "Auszahlungsbetrag" is the amount transferred and beats every
+	// "netto" wording, which can name a subtotal.
+	'auszahlungsbetrag',
+	'überweisungsbetrag',
+	'uberweisungsbetrag',
+	'gesamt-netto',
+	'gesamtnetto',
+	'nettoverdienst',
+	'nettoentgelt',
+	'nettogehalt',
+	'nettolohn',
+	'netto-bezug',
+	'auszahlung',
+	// French. NOT "net imposable" — that is the taxable base, not what is paid.
+	'net à payer avant impôt sur le revenu',
+	'net a payer avant impot sur le revenu',
+	'net à payer',
+	'net a payer',
+	'salaire net',
+	'net payé',
+	'net paye',
+	// Italian
+	'netto in busta',
+	'retribuzione netta',
+	'netto a pagare',
+	// Polish
+	'kwota do wypłaty',
+	'kwota do wyplaty',
+	'wynagrodzenie netto',
+	'do wypłaty',
+	'do wyplaty',
+	// Dutch
+	'netto uitbetaald',
+	'uit te betalen',
+	'nettoloon',
+	'netto loon',
+	// Portuguese
+	'líquido a receber',
+	'liquido a receber',
+	'total líquido',
+	'total liquido',
+	'vencimento líquido',
+	'vencimento liquido',
+	// Bare, and last, for the same reason "brutto" is.
+	'netto'
 ];
 
 // Two printing conventions, both of which real payslips use. The comma-grouped
@@ -73,6 +123,150 @@ export function parsePrintedAmount(raw: string, currency: string): bigint | null
 	return toMinor(m[1].replace(/\./g, ''), m[2]);
 }
 
+/**
+ * A label as it is stored and compared.
+ *
+ * Trailing punctuation goes, dot leaders included. A payslip that rules its
+ * page with dots prints "LÍQUIDO A PERCIBIR ......................." — the
+ * words are the label and the dots are the ruler, and leaving them on meant the
+ * wording never matched at its end, so the tight test could not fire and a
+ * digit sequence out of an IBAN answered instead.
+ */
+function cleanLabel(text: string): string {
+	return text
+		.trim()
+		.toLowerCase()
+		.replace(/[.:\s\u00A0\u202F]+$/, '')
+		.slice(-60);
+}
+
+/**
+ * A line of a PDF, as the extractor hands it over: the cells it found and where
+ * each one starts. Structurally `PdfLine` from the import reader, restated here
+ * so this file stays free of server imports.
+ */
+export interface LabelledLine {
+	cells: string[];
+	/** Left edge of each cell. Without it a line has no columns to speak of. */
+	xs?: number[];
+}
+
+/**
+ * Is this cell a figure rather than a name for one?
+ *
+ * `parsed` is the cell's amount where the caller already has it — the value
+ * side of `columnCandidates` parses each cell to decide whether to look at it
+ * at all, and parsing the same cell again here doubled that work over every
+ * numeric cell of every slip.
+ */
+function isAmountCell(cell: string, currency: string, parsed?: bigint | null): boolean {
+	const trimmed = cell.trim();
+	if (!trimmed) return true;
+	if (!/\d/.test(trimmed)) return false;
+	const matched = trimmed.match(AMOUNT_RE);
+	if (!matched) return false;
+	const amount = parsed === undefined ? parsePrintedAmount(trimmed, currency) : parsed;
+	// A cell that is ONLY a figure. "184:00" and "4,82%" carry digits but are a
+	// duration and a rate; a cell like "Base salary 135 000" is a label with a
+	// figure in it and must not count as a heading either.
+	return (
+		matched.join('').length >= trimmed.replace(/[\s\u00A0\u202F]/g, '').length && amount !== null
+	);
+}
+
+/** The index of the column heading standing over a value at `x`. */
+function headingIndexFor(xs: readonly number[], x: number): number {
+	let found = -1;
+	for (let i = 0; i < xs.length; i++) {
+		if (xs[i] <= x && (found === -1 || xs[i] >= xs[found])) found = i;
+	}
+	return found;
+}
+
+/** How far from a value its column heading may sit, in either direction. */
+const HEADING_LOOKBACK = 3;
+
+/**
+ * Which rows to look at for a heading, in the order they are tried: nearest
+ * above first, then nearest below. Built once — it was two arrays materialised
+ * for every amount cell of every line.
+ */
+const HEADING_ROWS = [
+	...Array.from({ length: HEADING_LOOKBACK }, (_, i) => -(i + 1)),
+	...Array.from({ length: HEADING_LOOKBACK }, (_, i) => i + 1)
+];
+
+/**
+ * Amounts labelled by the column heading ABOVE them rather than the text beside
+ * them.
+ *
+ * Some payrolls print a payslip as a real table: a row of headings, and the
+ * figures on the line underneath. `extractCandidates` reads a line at a time and
+ * sees only "40:00 405 750 279 091" — three numbers labelled by other numbers —
+ * so a whole layout was unreadable, and the same employer's older slips had to
+ * be typed in by hand while its newer ones read themselves.
+ *
+ * A value's label is every heading cell standing over its COLUMN BAND: from
+ * just after the heading belonging to the value on its left, to just before the
+ * one belonging to the value on its right. That is what keeps "Gross salary"
+ * and "Net salary" apart when they head neighbouring columns, while still
+ * gathering "LIQUIDO TOTAL A PERCIBIR" — one phrase the extractor split into
+ * three cells — into a single label.
+ *
+ * Heading rows made entirely of figures are skipped rather than used: a row of
+ * amounts is another value row, not a name for one.
+ */
+export function columnCandidates(
+	lines: readonly LabelledLine[],
+	currency: string
+): AmountCandidate[] {
+	const out: AmountCandidate[] = [];
+
+	// From the first line, not the second: a heading may sit below its figure, so
+	// the very first line of a slip can carry a value with its name underneath.
+	for (let i = 0; i < lines.length; i++) {
+		const value = lines[i];
+		const valueXs = value.xs;
+		if (!valueXs || valueXs.length !== value.cells.length) continue;
+
+		for (let j = 0; j < value.cells.length; j++) {
+			const amountMinor = parsePrintedAmount(value.cells[j].trim(), currency);
+			if (amountMinor === null || amountMinor <= 0n) continue;
+			if (!isAmountCell(value.cells[j], currency, amountMinor)) continue;
+
+			// The nearest line above whose own cell over this column is a name —
+			// and failing that, the nearest below. Some payrolls rule the figure
+			// first and name it underneath, which is the same table read upside
+			// down, not a different kind of evidence.
+			let heading: LabelledLine | null = null;
+			let headingXs: number[] = [];
+			for (const offset of HEADING_ROWS) {
+				const at = i + offset;
+				if (at < 0 || at >= lines.length) continue;
+				const other = lines[at];
+				const xs = other.xs;
+				if (!xs || xs.length !== other.cells.length || xs.length === 0) continue;
+				const cell = headingIndexFor(xs, valueXs[j]);
+				if (cell === -1 || isAmountCell(other.cells[cell], currency)) continue;
+				heading = other;
+				headingXs = xs;
+				break;
+			}
+			if (!heading) continue;
+
+			// The band this value owns, bounded by its neighbours' headings.
+			const leftNeighbour = j > 0 ? headingIndexFor(headingXs, valueXs[j - 1]) : -1;
+			const rightNeighbour =
+				j + 1 < valueXs.length ? headingIndexFor(headingXs, valueXs[j + 1]) : headingXs.length;
+			const from = leftNeighbour + 1;
+			const to = rightNeighbour === -1 ? headingXs.length : rightNeighbour;
+			const label = cleanLabel(heading.cells.slice(from, Math.max(from + 1, to)).join(' '));
+			if (label) out.push({ label, amountMinor });
+		}
+	}
+	return out;
+}
+
 /** Every amount on every line, labelled by the text before it. */
 export function extractCandidates(lines: string[], currency: string): AmountCandidate[] {
 	const out: AmountCandidate[] = [];
@@ -81,12 +275,7 @@ export function extractCandidates(lines: string[], currency: string): AmountCand
 			const amountMinor = parsePrintedAmount(match[0], currency);
 			if (amountMinor === null || amountMinor <= 0n) continue;
 			out.push({
-				label: line
-					.slice(0, match.index)
-					.trim()
-					.toLowerCase()
-					.replace(/[:\s]+$/, '')
-					.slice(-60),
+				label: cleanLabel(line.slice(0, match.index)),
 				amountMinor
 			});
 		}
@@ -117,7 +306,53 @@ const GROSS_PAY_KEYWORDS = [
 	'total gross',
 	'gross earnings',
 	'gross salary',
-	'gross pay'
+	'gross pay',
+	// Spanish. "Total devengo" is what the slip adds up as earned, and the IRPF
+	// withholding base is the same figure stated again — a Spanish payslip names
+	// no "gross", so one of these two is the only way in.
+	'base sujeta a retención del irpf',
+	'base sujeta a retencion del irpf',
+	'total devengo',
+	'total devengado',
+	// German. Compound words, so the longest first: "gesamtbrutto" contains
+	// "brutto", and a bare "brutto" at the end of a label is the last resort.
+	'gesamtbrutto',
+	'gesamt-brutto',
+	'steuerbrutto',
+	'bruttoentgelt',
+	'bruttobezug',
+	'bruttogehalt',
+	'bruttolohn',
+	'brutto-bezug',
+	// French
+	'rémunération brute',
+	'remuneration brute',
+	'salaire brut mensuel',
+	'salaire brut',
+	'total brut',
+	'brut total',
+	// Italian
+	'totale competenze',
+	'retribuzione lorda',
+	'totale lordo',
+	// Polish
+	'wynagrodzenie brutto',
+	'płaca brutto',
+	'placa brutto',
+	'razem brutto',
+	// Dutch
+	'totaal bruto',
+	'brutoloon',
+	'bruto salaris',
+	// Portuguese
+	'remuneração bruta',
+	'remuneracao bruta',
+	'vencimento bruto',
+	'total bruto',
+	// Bare, and last. On its own "brutto" names a base as often as a total, so
+	// it only ever answers where nothing more specific did.
+	'brutto',
+	'lordo'
 ];
 
 /**
@@ -133,8 +368,48 @@ const COST_KEYWORDS = [
 	'cena práce',
 	'cost of employment',
 	'employer cost',
-	'total cost'
+	'total cost',
+	// Total employment cost sits ABOVE gross on the page and is larger than it,
+	// so every language's word for it has to be excluded or it answers instead.
+	'arbeitgeberbrutto',
+	'arbeitgeberkosten',
+	'gesamtaufwand arbeitgeber',
+	'gesamtkosten',
+	'coût total employeur',
+	'cout total employeur',
+	'coût employeur',
+	'cout employeur',
+	'charges patronales',
+	'coste empresa',
+	'coste total empresa',
+	'aportación empresa',
+	'aportacion empresa',
+	'costo azienda',
+	'totale costo aziendale',
+	'koszt pracodawcy',
+	'werkgeverslasten',
+	'custo do empregador'
 ];
+
+/**
+ * A learned label with the amounts taken out of it.
+ *
+ * `extractPdfLines` joins a table row's cells, so a label routinely carries the
+ * COLUMNS to its left — and those are figures that change every month. Learning
+ * "social security of employer 46 944,93 net salary" in January produced a
+ * label that read "…46 760,18 net salary" in February and could never match
+ * again: every wording learned before v0.5.2 was dead the moment it was stored,
+ * which is why a year of hand corrections taught the reader nothing.
+ *
+ * Stripping the digits leaves the words, which are what identify the line.
+ * Applied to both sides of the comparison, so labels stored under the old shape
+ * start matching without a migration.
+ */
+const AMOUNT_IN_LABEL = /\d[\d\s\u00A0\u202F.,]*\d|\d/g;
+
+export function labelKey(label: string): string {
+	return fold(label).replace(AMOUNT_IN_LABEL, ' ').replace(/\s+/g, ' ').trim();
+}
 
 /**
  * Does this label END at the keyword — is the amount the one printed next to it?
@@ -177,39 +452,104 @@ function endsAt(label: string, keyword: string): boolean {
 function pickBy(
 	candidates: AmountCandidate[],
 	keywords: readonly string[],
-	learnedLabel: string | null,
+	learnedLabels: readonly string[],
 	exclude: readonly string[] = []
 ): AmountCandidate | null {
-	const allowed = candidates.filter((c) => !exclude.some((k) => fold(c.label).includes(fold(k))));
+	// Folded ONCE per candidate and once per wording, rather than once per pair
+	// of them. The wording lists run to fifty entries apiece across seven
+	// languages and a slip offers hundreds of candidates, so folding inside the
+	// match loops normalised the same strings tens of thousands of times for one
+	// payslip — and the column pass roughly doubled the candidate count.
+	const excluded = exclude.map(fold);
+	const allowed = candidates
+		.map((candidate) => ({ candidate, label: fold(candidate.label) }))
+		.filter((c) => !excluded.some((k) => c.label.includes(k)));
 	if (allowed.length === 0) return null;
 
-	if (learnedLabel) {
-		const learned = allowed.filter((c) => fold(c.label) === fold(learnedLabel));
-		// the same label can appear more than once; the last is the total line
-		if (learned.length > 0) return learned[learned.length - 1];
+	// Every wording learned for this person, newest first — not just the last
+	// one. A person with two jobs in a year has two payroll systems printing two
+	// different wordings, and one slot per person meant each correction wiped the
+	// other employer's: alternating between them relearned the same two labels
+	// forever, and neither was ever there when its own slip arrived.
+	//
+	// Keeping several is safe because a learned label only matches a label that
+	// is literally on the slip — the wrong employer's simply never matches.
+	if (learnedLabels.length > 0) {
+		// Keyed once too — up to six learned wordings each rescanned every
+		// candidate and recomputed the same key for it.
+		const keys = allowed.map((c) => labelKey(c.candidate.label));
+		for (const learnedLabel of learnedLabels) {
+			const key = labelKey(learnedLabel);
+			if (!key) continue;
+			// Compared with the amounts stripped from both sides: a label that
+			// carries a neighbouring column has a different number in it every
+			// month. The same label can appear more than once; the last is the
+			// total line.
+			let learned: AmountCandidate | null = null;
+			for (let i = 0; i < allowed.length; i++) {
+				if (keys[i] === key) learned = allowed[i].candidate;
+			}
+			if (learned) return learned;
+		}
 	}
 
-	for (const match of [endsAt, (l: string, k: string) => fold(l).includes(fold(k))]) {
-		for (const keyword of keywords) {
+	const wanted = keywords.map(fold);
+	// `endsAt` and a loose contains, over already-folded strings — see `endsAt`
+	// for why ending at the keyword is the distinction that matters.
+	for (const match of [
+		(label: string, keyword: string) => label.endsWith(keyword),
+		(label: string, keyword: string) => label.includes(keyword)
+	]) {
+		for (const keyword of wanted) {
 			const hits = allowed.filter((c) => match(c.label, keyword));
-			if (hits.length > 0) return hits[hits.length - 1];
+			if (hits.length > 0) return hits[hits.length - 1].candidate;
 		}
 	}
 	return null;
 }
 
+/**
+ * Which line to learn a stated figure from: the one labelled most tightly.
+ *
+ * A joined table row offers the same amount under several labels — "gross
+ * salary" and "gross salary 189 294 income tax base" are the same 189 294 read
+ * from two columns. The short one names the figure; the long one names it plus
+ * whatever sits to its right, and is a worse thing to remember even with the
+ * amounts stripped, because it points at the wrong column the month the two
+ * figures differ.
+ *
+ * Ties go to the earliest, which on a left-to-right row is the leftmost cell.
+ */
+export function tightestLabelFor(
+	candidates: readonly AmountCandidate[],
+	amountMinor: bigint
+): AmountCandidate | null {
+	let best: AmountCandidate | null = null;
+	for (const candidate of candidates) {
+		if (candidate.amountMinor !== amountMinor || !candidate.label) continue;
+		if (!best || candidate.label.length < best.label.length) best = candidate;
+	}
+	return best;
+}
+
+/** A stored setting's value: one wording, several, or none yet. */
+export function learnedList(stored: string | string[] | null | undefined): string[] {
+	if (!stored) return [];
+	return (Array.isArray(stored) ? stored : [stored]).filter(Boolean);
+}
+
 export function pickGross(
 	candidates: AmountCandidate[],
-	learnedLabel: string | null
+	learned: string | string[] | null
 ): AmountCandidate | null {
-	return pickBy(candidates, GROSS_PAY_KEYWORDS, learnedLabel, COST_KEYWORDS);
+	return pickBy(candidates, GROSS_PAY_KEYWORDS, learnedList(learned), COST_KEYWORDS);
 }
 
 export function pickNet(
 	candidates: AmountCandidate[],
-	learnedLabel: string | null
+	learned: string | string[] | null
 ): AmountCandidate | null {
-	return pickBy(candidates, NET_PAY_KEYWORDS, learnedLabel);
+	return pickBy(candidates, NET_PAY_KEYWORDS, learnedList(learned));
 }
 
 const MONTHS: Record<string, number> = {
@@ -248,7 +588,94 @@ const MONTHS: Record<string, number> = {
 	september: 9,
 	october: 10,
 	november: 11,
-	december: 12
+	december: 12,
+	// German. Both spellings where an exporter may drop the umlaut.
+	januar: 1,
+	februar: 2,
+	märz: 3,
+	marz: 3,
+	mai: 5,
+	juni: 6,
+	juli: 7,
+	oktober: 10,
+	dezember: 12,
+	// French
+	janvier: 1,
+	février: 2,
+	fevrier: 2,
+	mars: 3,
+	avril: 4,
+	juin: 6,
+	juillet: 7,
+	août: 8,
+	aout: 8,
+	septembre: 9,
+	octobre: 10,
+	novembre: 11,
+	décembre: 12,
+	decembre: 12,
+	// Spanish
+	enero: 1,
+	febrero: 2,
+	marzo: 3,
+	abril: 4,
+	mayo: 5,
+	junio: 6,
+	julio: 7,
+	agosto: 8,
+	septiembre: 9,
+	setiembre: 9,
+	octubre: 10,
+	noviembre: 11,
+	diciembre: 12,
+	// Italian
+	gennaio: 1,
+	febbraio: 2,
+	maggio: 5,
+	giugno: 6,
+	luglio: 7,
+	settembre: 9,
+	ottobre: 10,
+	dicembre: 12,
+	// Polish, nominative and the genitive a date is written in
+	styczeń: 1,
+	stycznia: 1,
+	luty: 2,
+	lutego: 2,
+	marzec: 3,
+	marca: 3,
+	kwiecień: 4,
+	kwietnia: 4,
+	maj: 5,
+	maja: 5,
+	czerwiec: 6,
+	czerwca: 6,
+	lipiec: 7,
+	lipca: 7,
+	sierpień: 8,
+	sierpnia: 8,
+	wrzesień: 9,
+	września: 9,
+	październik: 10,
+	października: 10,
+	grudzień: 12,
+	grudnia: 12,
+	// Dutch
+	maart: 3,
+	mei: 5,
+	augustus: 8,
+	// Portuguese
+	janeiro: 1,
+	fevereiro: 2,
+	março: 3,
+	marco: 3,
+	maio: 5,
+	junho: 6,
+	julho: 7,
+	setembro: 9,
+	outubro: 10,
+	novembro: 11,
+	dezembro: 12
 };
 
 /** The month a payslip covers: "08/2026", "2026-08" or "srpen 2026". */
@@ -271,8 +698,41 @@ const BONUS_KEYWORDS = [
 	'13 plat',
 	'performance bonus',
 	'annual bonus',
+	// German
+	'sonderzahlung',
+	'weihnachtsgeld',
+	'urlaubsgeld',
+	'gratifikation',
+	'prämie',
+	'pramie',
+	// French
+	'prime exceptionnelle',
+	'prime annuelle',
+	'13ème mois',
+	'13eme mois',
+	// Italian
+	'tredicesima',
+	'premio di risultato',
+	// Polish. NOT "premia" alone as a lone word here — it is listed, but after
+	// the specific wordings, the same way every other bare term is.
+	'nagroda',
+	'premia',
+	// Spanish and Portuguese
+	'paga extraordinaria',
+	// Last, because it is the loosest and matches inside the specific ones above.
 	'bonus'
 ];
+
+/**
+ * Is this learned bonus wording present on the slip in front of us?
+ *
+ * The same test `detectBonus` uses to decide a learned label applies, exported
+ * so the learner can tell "this employer's wording, which the correction has
+ * just restated" from "some other employer's, which it says nothing about".
+ */
+export function bonusLabelOnSlip(candidateLabel: string, learnedLabel: string): boolean {
+	return endsAt(candidateLabel, learnedLabel);
+}
 
 /**
  * What of this slip's gross was a bonus, or null when it says nothing.
@@ -380,23 +840,107 @@ export function bonusLabelSubset(candidates: AmountCandidate[], total: bigint): 
 	return best ? [...new Set(best)] : null;
 }
 
+/**
+ * Words a payslip puts in front of the period it covers.
+ *
+ * Ranked ahead of everything else because a slip carries several dates and only
+ * one of them is the month being paid: "Period:October 2025 Processed:
+ * 07.11.2025" was read as November, so three months of pay were filed against
+ * the month they happened to be processed in.
+ */
+const PERIOD_MARKERS = ['period', 'perioda', 'období', 'obdobi', 'month', 'měsíc', 'mesic'];
+
+/** Folded once: pass 1 compares every marker against every line of the slip. */
+const FOLDED_MARKERS = PERIOD_MARKERS.map((marker) => ({ marker, folded: fold(marker) }));
+
+/**
+ * Day, month, two-digit year — "01/01/23", "26.01.23", "26-01-23".
+ *
+ * Day first, which is what every layout this has been measured against prints.
+ * A middle field above 12 is not a month in any ordering, so the pattern simply
+ * cannot read one; the risk it carries is the genuinely ambiguous "03/05/23",
+ * and against that it is ranked below every form that states its year in full.
+ */
+const SHORT_YEAR_DATE = /\b(?:0?[1-9]|[12]\d|3[01])[/.-](0[1-9]|1[0-2])[/.-](\d{2})\b/;
+
+/**
+ * The month names, compiled once.
+ *
+ * `monthByName` runs over every line of a slip and the table is a hundred-odd
+ * names across seven languages, so building the patterns inside the loop
+ * compiled some seventeen thousand regexes to read one payslip.
+ *
+ * An ordered list rather than one alternation: first-name-in-the-table wins is
+ * not the same answer as leftmost-match-in-the-text wins, and "maj" against
+ * "maja", "marzec" against "marca" are exactly where the two differ.
+ */
+const MONTH_PATTERNS: readonly (readonly [RegExp, number])[] = Object.entries(MONTHS).map(
+	([name, month]) => [new RegExp(`(?<!\\p{L})${name}(?!\\p{L})\\s*(20\\d{2})`, 'u'), month] as const
+);
+
+/** A month named in words, followed by a four-digit year. */
+function monthByName(text: string): string | null {
+	const lower = text.toLowerCase();
+	for (const [pattern, month] of MONTH_PATTERNS) {
+		const named = lower.match(pattern);
+		if (named) return `${named[1]}-${String(month).padStart(2, '0')}`;
+	}
+	return null;
+}
+
+/** A date that states its year in full. */
+function monthByFullYear(text: string): string | null {
+	const iso = text.match(/\b(20\d{2})-(0[1-9]|1[0-2])\b/);
+	if (iso) return `${iso[1]}-${iso[2]}`;
+	const dmy = text.match(/\b(?:0?[1-9]|[12]\d|3[01])-(0[1-9]|1[0-2])-(20\d{2})\b/);
+	if (dmy) return `${dmy[2]}-${dmy[1]}`;
+	const numeric = text.match(/\b(0?[1-9]|1[0-2])\s*[/.]\s*(20\d{2})\b/);
+	if (numeric) return `${numeric[2]}-${numeric[1].padStart(2, '0')}`;
+	return null;
+}
+
+/** A date with a two-digit year. */
+function monthByShortYear(text: string): string | null {
+	const short = text.match(SHORT_YEAR_DATE);
+	return short ? `20${short[2]}-${short[1]}` : null;
+}
+
+/**
+ * The month a payslip covers: "08/2026", "2026-08", "srpen 2026", "01/01/23".
+ *
+ * Ranked passes over the WHOLE slip, not pattern-by-pattern down each line. A
+ * payslip carries several dates — when it was processed, when the job started,
+ * when the money moves — and only one of them is the month being paid, so the
+ * order these are tried in IS the accuracy of the result.
+ *
+ * Each pass runs over every line before the next begins. Interleaving them cost
+ * five months of pay: a per-line loop reached a two-digit employment start date
+ * near the top of the page and answered with it, while the four-digit period the
+ * same slip printed further down never got looked at.
+ */
 export function detectPeriod(lines: string[]): string | null {
+	// 1. What the slip itself calls the period. Any date form will do here —
+	//    being named as the period is stronger evidence than any format.
 	for (const line of lines) {
-		const numeric = line.match(/\b(0?[1-9]|1[0-2])\s*[/.]\s*(20\d{2})\b/);
-		if (numeric) return `${numeric[2]}-${numeric[1].padStart(2, '0')}`;
-		const iso = line.match(/\b(20\d{2})-(0[1-9]|1[0-2])\b/);
-		if (iso) return `${iso[1]}-${iso[2]}`;
-		const lower = line.toLowerCase();
-		for (const [name, month] of Object.entries(MONTHS)) {
-			// Unicode letter boundaries, not \b. JavaScript defines \b over
-			// [A-Za-z0-9_] only, so between a space and "ú" there is no boundary
-			// at all and `\búnor\b` could never match: 9 of the 23 names here —
-			// únor, února, červen, června, červenec, července, září, říjen, října
-			// — silently failed, so February, June, July, September and October
-			// payslips stored periodMonth null and dropped out of both the salary
-			// chart and the tax gross prefill.
-			const named = lower.match(new RegExp(`(?<!\\p{L})${name}(?!\\p{L})\\s*(20\\d{2})`, 'u'));
-			if (named) return `${named[1]}-${String(month).padStart(2, '0')}`;
+		const lower = fold(line.toLowerCase());
+		for (const { marker, folded } of FOLDED_MARKERS) {
+			const at = lower.indexOf(folded);
+			if (at === -1) continue;
+			const rest = line.slice(at + marker.length);
+			const found = monthByName(rest) ?? monthByFullYear(rest) ?? monthByShortYear(rest);
+			if (found) return found;
+		}
+	}
+	// 2. Then the date forms, in order of how easily each is confused with some
+	//    other date on the page: a month spelled out (a slip prints its own month
+	//    in words far more often than an unrelated one), then a year stated in
+	//    full, and only then a two-digit year. THIS LIST IS THE RANKING — the
+	//    reason it is a list is that a fourth format must join it in the right
+	//    place rather than be written as a fourth identical loop.
+	for (const read of [monthByName, monthByFullYear, monthByShortYear]) {
+		for (const line of lines) {
+			const found = read(line);
+			if (found) return found;
 		}
 	}
 	return null;
@@ -461,6 +1005,29 @@ export function detectCurrency(
 	// Two currencies named equally often is a slip that has not said which it is.
 	if (counts.length > 1 && counts[1].hits === counts[0].hits) return null;
 	return counts[0].code;
+}
+
+/** Where a payslip's currency came from, so a form can say which. */
+export type CurrencySource = 'slip' | 'learned' | null;
+
+/**
+ * Which currency a payslip is filed in, and on whose authority.
+ *
+ * What the slip PRINTS beats what this person's last slip was stated to be,
+ * which beats nothing at all. The order is the point: a remembered currency is
+ * a good guess about a job that has not changed, and a job can change — so it
+ * must never overrule a currency actually on the page.
+ *
+ * Null is not the household's base currency. It is the form's cue to ask, and
+ * asking is what stops a guess nobody was shown from being filed as a fact.
+ */
+export function payslipCurrency(
+	detected: string | null,
+	learned: string | null
+): { currency: string | null; from: CurrencySource } {
+	if (detected) return { currency: detected, from: 'slip' };
+	if (learned) return { currency: learned, from: 'learned' };
+	return { currency: null, from: null };
 }
 
 export interface SalaryYear {

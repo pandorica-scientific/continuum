@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { env } from '$env/dynamic/private';
@@ -35,12 +35,56 @@ function isUploadName(name: string): boolean {
 }
 
 export async function saveUpload(file: File): Promise<string> {
-	const ext = extname(file.name).toLowerCase();
+	return saveUploadBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+}
+
+/**
+ * The same, for a caller that already holds the bytes.
+ *
+ * Every upload path that has to look INSIDE a file — reading a payslip,
+ * fingerprinting it — has already materialised the bytes. Wrapping them back
+ * into a `File` only for `saveUpload` to unwrap them again copied a whole PDF
+ * twice per upload, and once per file across a bulk drop.
+ */
+export async function saveUploadBytes(bytes: Uint8Array, fileName: string): Promise<string> {
+	const ext = extname(fileName).toLowerCase();
 	if (!ALLOWED_EXT.has(ext)) throw new Error(`File type ${ext || 'unknown'} is not allowed.`);
 	await mkdir(uploadDir(), { recursive: true });
 	const name = `${randomUUID()}${ext}`;
-	await writeFile(join(uploadDir(), name), new Uint8Array(await file.arrayBuffer()));
+	await writeFile(join(uploadDir(), name), bytes);
 	return name;
+}
+
+/**
+ * The fingerprint of an upload's CONTENTS, not of its name.
+ *
+ * A payslip re-uploaded is the same bytes under whatever name the browser
+ * happened to hand over, and since a month may hold more than one slip there is
+ * no longer a unique key that catches it: a second upload mints a second
+ * document id, which is a second row by definition. The bytes are the only
+ * thing that says "this is the file already filed" without guessing from
+ * figures — two jobs paying the same amount in the same month are a real
+ * arrangement, and must not be merged on the strength of matching numbers.
+ */
+export function hashBytes(bytes: Uint8Array): string {
+	return createHash('sha256').update(bytes).digest('hex');
+}
+
+/**
+ * The same fingerprint for a file already on the volume.
+ *
+ * Documents filed before there was a hash column carry none, so the first
+ * upload that has to compare against one computes it and stores it. Null when
+ * the file is gone — a document whose upload has been lost cannot be matched
+ * against, and must not stop the ones that can.
+ */
+export async function hashStoredUpload(name: string): Promise<string | null> {
+	if (!isUploadName(name)) return null;
+	try {
+		return hashBytes(new Uint8Array(await readFile(join(uploadDir(), name))));
+	} catch {
+		return null;
+	}
 }
 
 /** Remove a just-saved orphan after a later database mutation fails. */

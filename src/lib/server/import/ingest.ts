@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { uuidv7 } from 'uuidv7';
-import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
@@ -19,7 +18,7 @@ import { decideWithRules } from '$lib/rules/match';
 import { autoThreshold, loadRules } from '$lib/server/rules';
 import { addTagsToTransaction } from '$lib/server/tags';
 import { extname } from 'node:path';
-import { saveUpload } from '$lib/server/system/files';
+import { hashBytes, saveUpload } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
@@ -656,7 +655,7 @@ export async function ingestFile(
 	 */
 	options: { ocr?: boolean } = {}
 ): Promise<IngestResult> {
-	const contentHash = createHash('sha256').update(buffer).digest('hex');
+	const contentHash = hashBytes(buffer);
 
 	const existing = await handle
 		.select()

@@ -14,6 +14,7 @@
 	import SalaryMatrix, { SALARY_COLUMNS } from '$lib/components/SalaryMatrix.svelte';
 	import SalarySummaryBand from '$lib/components/SalarySummaryBand.svelte';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
+	import BulkPayslipDialog from '$lib/components/BulkPayslipDialog.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
 	import type { SalaryMode } from '$lib/charts/salary-chart-geometry';
@@ -35,6 +36,7 @@
 	// longer has to reopen a collapsed form and refill it. `?add=1` from the
 	// quick-add menu is the only thing that opens it from outside.
 	let adding = $state(untrack(() => data.openAdd));
+	let addingMany = $state(false);
 
 	const peopleOptions = $derived([
 		{ value: 'both', label: 'Both' },
@@ -55,6 +57,37 @@
 	const slipsFor = (year: number) =>
 		payslips.filter((s) => Number(s.periodMonth.slice(0, 4)) === year);
 
+	/**
+	 * How many payslips a month holds, so a month holding two can say so.
+	 *
+	 * Two rows carrying the same month are what two jobs look like, and also what
+	 * a mistaken re-upload looks like. Unmarked they read as a duplicate, which is
+	 * the wrong conclusion in the first case and an invisible one in the second.
+	 *
+	 * Counted over EVERY person's slips, not the filtered view, so the count does
+	 * not change when the person filter does.
+	 */
+	const slipsPerMonth = $derived(
+		data.history.reduce((held, p) => {
+			for (const slip of p.payslips) {
+				const key = `${p.id}|${slip.periodMonth}`;
+				held.set(key, [...(held.get(key) ?? []), slip.id]);
+			}
+			return held;
+		}, new Map<string, string[]>())
+	);
+	/**
+	 * Which of its month's payslips a row is, and how many there are.
+	 *
+	 * Both fall out of the one pass above. Re-deriving the position by scanning
+	 * `data.history` per rendered row gave the count and the ordinal two ways of
+	 * answering the same question, which is two ways of disagreeing.
+	 */
+	const slipPlace = (personId: string, periodMonth: string, entryId: string) => {
+		const held = slipsPerMonth.get(`${personId}|${periodMonth}`) ?? [];
+		return { n: held.indexOf(entryId) + 1, of: Math.max(held.length, 1) };
+	};
+
 	const anyHistory = $derived(years.length > 0 || payslips.length > 0);
 
 	// The household's colours, not this screen's — see PersonTag.
@@ -66,11 +99,22 @@
 	caption="What was earned each month — read from payslips and from the ledger."
 >
 	{#snippet actions()}
+		<button type="button" class="btn" onclick={() => (addingMany = !addingMany)}>
+			Add several
+		</button>
 		<button type="button" class="btn btn-primary" onclick={() => (adding = !adding)}>
 			Add payslip
 		</button>
 	{/snippet}
 </ScreenHeader>
+
+{#if addingMany}
+	<BulkPayslipDialog
+		people={data.people}
+		currencies={data.currencies}
+		onclose={() => (addingMany = false)}
+	/>
+{/if}
 
 {#if adding}
 	<PayslipDialog
@@ -107,6 +151,7 @@
 		<div class="slips">
 			{#if slips.length > 0}
 				{#each slips as s (s.id)}
+					{@const place = slipPlace(s.personId, s.periodMonth, s.id)}
 					<!-- On the table's own grid, so a month's figures sit directly under
 					     the column each one belongs to. They used to be laid on a
 					     three-column grid with six children in it, which wrapped them
@@ -132,6 +177,15 @@
 							{#if data.people.length > 1}
 								<PersonTag name={s.personName} hue={hueFor(s.personId)} />
 							{/if}
+							{#if place.of > 1}
+								<!-- Named rather than left to be inferred from a repeated month. -->
+								<span
+									class="s-many"
+									title="{s.periodMonth} has {place.of} payslips — one per job. The year row adds them together."
+								>
+									{place.n} of {place.of}
+								</span>
+							{/if}
 						</span>
 
 						<!-- Base is gross with the award taken out. It was read-only for
@@ -151,8 +205,7 @@
 										}}
 									class="figure-form"
 								>
-									<input type="hidden" name="personId" value={s.personId} />
-									<input type="hidden" name="periodMonth" value={s.periodMonth} />
+									<input type="hidden" name="entryId" value={s.id} />
 									<input type="hidden" name="field" value="base" />
 									<!-- svelte-ignore a11y_autofocus -->
 									<input
@@ -190,8 +243,7 @@
 											}}
 										class="figure-form"
 									>
-										<input type="hidden" name="personId" value={s.personId} />
-										<input type="hidden" name="periodMonth" value={s.periodMonth} />
+										<input type="hidden" name="entryId" value={s.id} />
 										{#if f.key !== 'bonus'}
 											<input type="hidden" name="field" value={f.key} />
 										{/if}
@@ -258,8 +310,7 @@
 												}}
 											class="menu-form"
 										>
-											<input type="hidden" name="personId" value={s.personId} />
-											<input type="hidden" name="periodMonth" value={s.periodMonth} />
+											<input type="hidden" name="entryId" value={s.id} />
 											<span class="menu-label">Paid in</span>
 											<select
 												name="currency"
@@ -283,8 +334,7 @@
 											}}
 										class="menu menu-lower"
 									>
-										<input type="hidden" name="personId" value={s.personId} />
-										<input type="hidden" name="periodMonth" value={s.periodMonth} />
+										<input type="hidden" name="entryId" value={s.id} />
 										<!-- Names what is going. A month evidenced by a bank credit
 										     too loses that credit's net figure, and saying so is the
 										     difference between a decision and a surprise. -->
@@ -308,8 +358,7 @@
 										}}
 									class="figure-form"
 								>
-									<input type="hidden" name="personId" value={s.personId} />
-									<input type="hidden" name="periodMonth" value={s.periodMonth} />
+									<input type="hidden" name="entryId" value={s.id} />
 									<input type="hidden" name="field" value="net" />
 									<!-- svelte-ignore a11y_autofocus -->
 									<input
@@ -507,6 +556,17 @@
 	.quiet {
 		color: var(--fg3);
 		opacity: 0.7;
+	}
+	/* A month evidenced more than once. Neutral, not a warning: two jobs is an
+	   ordinary thing for a month to be, and the row is only saying which. */
+	.s-many {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-xl);
+		padding: 1px 7px;
+		line-height: 1.4;
+		white-space: nowrap;
 	}
 	.s-file {
 		font-size: var(--text-sm);

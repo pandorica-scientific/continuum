@@ -6,7 +6,7 @@ import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harn
 import {
 	attributeSalary,
 	attributionKey,
-	payslipSlipFor,
+	slipDocument,
 	recordSalary,
 	rememberAttribution,
 	salaryMonths
@@ -409,11 +409,14 @@ describe('recordSalary validation', () => {
 	});
 });
 
-describe('payslipSlipFor', () => {
-	it('ignores a document on another shelf linked to the same person', async () => {
+describe('slipDocument', () => {
+	it("answers with the statement's OWN file, never another the person is linked to", async () => {
 		// setBonus used to take the first linked document with a file, whatever
 		// shelf it was on — so it could read a TAX statement hunting for a
-		// payslip's bonus line.
+		// payslip's bonus line, and August's correction could learn January's
+		// wording. Naming the document removes the question rather than guarding
+		// against it: a statement's documentId IS its slip, which is also the
+		// only key that still answers once a month can hold two payslips.
 		await testDb.insert(document).values([
 			{
 				id: rowId('doc-tax'),
@@ -432,29 +435,25 @@ describe('payslipSlipFor', () => {
 				ext: 'PDF',
 				addedOn: '2026-09-01',
 				periodOn: '2026-08-01'
+			},
+			{
+				id: rowId('doc-jan'),
+				name: 'Payslip 2026-01',
+				shelf: 'payslips',
+				storedName: 'jan.pdf',
+				ext: 'PDF',
+				addedOn: '2026-02-01',
+				periodOn: '2026-01-01'
 			}
 		]);
 		await testDb.insert(documentLink).values([
 			{ documentId: rowId('doc-tax'), targetId: ROBERT },
-			{ documentId: rowId('doc-slip'), targetId: ROBERT }
+			{ documentId: rowId('doc-slip'), targetId: ROBERT },
+			{ documentId: rowId('doc-jan'), targetId: ROBERT }
 		]);
-		const found = await payslipSlipFor(ROBERT, '2026-08', testDb);
-		expect(found?.storedName).toBe('slip.pdf');
-	});
 
-	it('ignores a payslip from another month', async () => {
-		// August's correction learning January's wording is the other half of the
-		// same defect.
-		await testDb.insert(document).values({
-			id: rowId('doc-jan'),
-			name: 'Payslip 2026-01',
-			shelf: 'payslips',
-			storedName: 'jan.pdf',
-			ext: 'PDF',
-			addedOn: '2026-02-01',
-			periodOn: '2026-01-01'
-		});
-		await testDb.insert(documentLink).values({ documentId: rowId('doc-jan'), targetId: ROBERT });
-		expect(await payslipSlipFor(ROBERT, '2026-08', testDb)).toBeNull();
+		expect((await slipDocument(rowId('doc-slip'), testDb))?.storedName).toBe('slip.pdf');
+		expect((await slipDocument(rowId('doc-jan'), testDb))?.storedName).toBe('jan.pdf');
+		expect(await slipDocument(rowId('doc-gone'), testDb)).toBeNull();
 	});
 });

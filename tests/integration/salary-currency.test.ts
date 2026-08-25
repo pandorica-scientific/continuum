@@ -11,7 +11,8 @@ import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { loadSalaryHistory, recordSalary } from '$lib/server/salary';
+import { learnPayslipCurrency, loadSalaryHistory, recordSalary } from '$lib/server/salary';
+import { getSetting } from '$lib/server/settings';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -28,6 +29,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+	await harness.sql`delete from settings`;
 	await harness.sql`delete from document_link`;
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from document`;
@@ -175,5 +177,36 @@ describe('which currency a slip row is read in', () => {
 		await czechSlip('2026-02', rowId('doc-feb'));
 		const [robert] = await loadSalaryHistory('EUR', convert, testDb);
 		expect(robert.years[0].grossTotalMinor).toBe(13588700n / 25n);
+	});
+});
+
+describe('remembering a person\u2019s payslip currency', () => {
+	const stored = () => getSetting<Record<string, string>>('payslipCurrencies', {}, testDb);
+
+	// Plenty of payslips print no currency anywhere on the page. Without this the
+	// field has to be answered by hand every month for a job that has not changed.
+	it('keeps what was stated, keyed by the person it was stated for', async () => {
+		await learnPayslipCurrency('Robert', 'CZK', testDb);
+		expect(await stored()).toEqual({ robert: 'CZK' });
+	});
+
+	// The reader is given a name, and matches it case-insensitively — the same
+	// key the gross, net and bonus labels are learned under.
+	it('is case-insensitive about the name', async () => {
+		await learnPayslipCurrency('ROBERT', 'CZK', testDb);
+		expect((await stored())['robert']).toBe('CZK');
+	});
+
+	it('holds a different answer for each person', async () => {
+		await learnPayslipCurrency('Robert', 'CZK', testDb);
+		await learnPayslipCurrency('Kseniya', 'EUR', testDb);
+		expect(await stored()).toEqual({ robert: 'CZK', kseniya: 'EUR' });
+	});
+
+	// A job can change, and the newest statement is the one that counts.
+	it('replaces the old answer rather than keeping both', async () => {
+		await learnPayslipCurrency('Robert', 'CZK', testDb);
+		await learnPayslipCurrency('Robert', 'EUR', testDb);
+		expect(await stored()).toEqual({ robert: 'EUR' });
 	});
 });

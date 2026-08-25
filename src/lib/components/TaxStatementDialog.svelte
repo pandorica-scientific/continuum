@@ -242,6 +242,13 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: 10px 12px;
+		/* Controls line up along their BOTTOM edge, not their top.
+		   "Gross income · from 12 payslips" wraps to two lines where "Whose" and
+		   "Year" take one, and with the fields stretched from the top that pushed
+		   the last input a whole line below the four beside it — a row of controls
+		   that no longer read as a row. Aligning at the end lets a label be as
+		   tall as it needs to be while every input still sits on one line. */
+		align-items: end;
 	}
 	label {
 		display: flex;

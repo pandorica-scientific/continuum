@@ -43,6 +43,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	return json({
 		periodMonth: reading.periodMonth,
 		currency: reading.currency,
+		currencyFrom: reading.currencyFrom,
 		gross: reading.grossMinor === null ? '' : formatMinor(reading.grossMinor, currency),
 		net: reading.netMinor === null ? '' : formatMinor(reading.netMinor, currency),
 		bonus: reading.bonusMinor === null ? '' : formatMinor(reading.bonusMinor, currency)

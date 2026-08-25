@@ -76,6 +76,29 @@ describe('the payslip dialog', () => {
 		expect(source).toContain('actionError && fileWasChosen');
 	});
 
+	it('replaces the form with the news once a slip has been filed', () => {
+		// Held open so the news is read — but held open AS A FORM it said nothing
+		// about whether the slip had landed: the fields were still full and Add
+		// was still there, so the only way to find out was to press Add again, on
+		// a screen where a second press files a second payslip.
+		const source = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
+		expect(source).toContain('const settled = $derived(alsoFiled !== null || sameSlip !== null)');
+		expect(source).toContain('{#if settled}');
+		expect(source).toContain('if (shouldCloseAfterAction(result.type) && !settled) onclose();');
+		// Nothing left to submit, and a way to file the next slip without leaving.
+		expect(source).toContain('>Done</button>');
+		expect(source).toContain('onclick={addAnother}');
+	});
+
+	it('says when an upload corrected a slip rather than adding one', () => {
+		// The opposite news from "this month now has two", and just as invisible
+		// without saying it: an upload that changed nothing on the table looks
+		// exactly like an upload that failed.
+		const source = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
+		expect(source).toContain('result.data?.sameSlip');
+		expect(source).toContain('Nothing was added.');
+	});
+
 	it('reads the chosen file so the figures can be checked before anything is written', () => {
 		// Filing blind and correcting afterwards is what this replaces — and a
 		// correction teaches the reader a label, so a wrong one taught it the
@@ -143,5 +166,15 @@ describe('which currency the slip was paid in', () => {
 		const source = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
 		expect(source).toContain('currency = read.currency');
 		expect(source).toContain('currency = values.currency');
+	});
+
+	// A remembered currency is a good guess about a job that has not changed,
+	// not a fact printed on the paper. Saying the second in the words of the
+	// first is the same quiet assumption this field exists to remove.
+	it('does not call a remembered currency something the slip said', () => {
+		const source = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
+		expect(source).toContain("currencyFrom === 'slip'");
+		expect(source).toContain("currencyFrom === 'learned'");
+		expect(source).toContain('what was stated last time');
 	});
 });

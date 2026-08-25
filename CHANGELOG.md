@@ -2,6 +2,90 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.5.7 — 2026-08-25
+
+> Two payslips in a month is what 0.5.5 was for; the same payslip twice never was.
+
+### 🐛 Fixed
+
+- 🧬 **The same payslip file uploaded again is recognised rather than filed a second time** — a month may hold two slips since 0.5.5, which removed the only key that had been catching a re-upload, so the same file made a second document, a second statement and a month reporting double pay; the file's own bytes identify it, never its figures, because two jobs paying alike in one month are a real arrangement and must not be merged
+- 📥 **Filing a run of payslips lists back the ones already on the shelf** — dropping the same folder in twice filed every slip again without a word, and the same file chosen twice in one go became two statements before it ever reached the shelf
+- ✅ **A filed payslip says so with the form gone, not still standing** — the dialog stayed open with its fields full and Add still under them, so the only way to learn whether the slip had landed was to press Add again, on the one screen where a second press files a second payslip; what is left is the news, Done, and Add another
+
+## 0.5.6 — 2026-08-25
+
+> A month can hold two payslips as of 0.5.5, and nothing on screen said so.
+
+### 🐛 Fixed
+
+- 📐 **The tax statement's controls line up along one row again** — "Gross income · from 12 payslips" wraps to two lines where "Whose" and "Year" take one, which pushed the last field a whole line below the four beside it
+
+### 🔧 Changed
+
+- 🔢 **A month holding more than one payslip says which row is which** — "1 of 2" on each, because two rows carrying the same month are what two jobs look like AND what a mistaken re-upload looks like, and unmarked they read as a duplicate
+- 💬 **Filing a slip against a month that already had one says so, and stays open to be read** — an upload stopped replacing what was there in 0.5.5, which is right and was invisible
+
+## 0.5.5 — 2026-08-25
+
+> A month can be worked at two jobs, a year of payslips can be filed in one go, and the wordings now cover the languages a household is likely to be paid in.
+
+### ✨ Added
+
+- 👔 **A month can hold more than one payslip** — it held exactly one, so a second employer's slip for the same month replaced the first and a month worked twice reported half its pay; the year rows add a month's statements together, and each slip keeps its own figures, its own currency and its own file
+- 📚 **A run of payslips can be filed at once** — "Add several" reads each slip for its month, its figures and its currency and files them one by one, listing back by name every file it could not read with confidence, because nobody checks twelve slips in a dialog
+- 🌍 **German, French, Italian, Polish, Dutch and Portuguese wordings** — for gross, for net, for a bonus, for the employer-cost lines that must never be read as gross, and for month names, so the first slip from a new employer reads itself rather than waiting to be taught
+
+### 🔧 Changed
+
+- 🗑️ **Uploading a payslip never deletes one already filed** — a re-upload replaced the month's slip, which cannot survive a month having two; an upload only ever adds, and removing a slip is the ⋯ menu's job
+- 🔑 **A correction names the statement it is correcting** — "the entry for August" stopped being a question with an answer once August could hold two
+
+## 0.5.4 — 2026-08-25
+
+> Measured again over a longer run of payslips: five payroll layouts across four years, 33 of 35 months read without a correction.
+
+### 🐛 Fixed
+
+- 🗓️ **A two-digit year is a date** — "Periódo de liquidación 01/01/23" matched no pattern at all, so a whole layout filed no month; it is ranked below every form that states its year in full, because a slip carries the date the job started as well as the month being paid
+- 📆 **Each way of writing a date is tried across the whole slip before the next is** — trying them line by line reached an employment start date near the top of the page and answered with it, while the period the same slip printed further down went unread
+- 🔻 **A figure named by the wording UNDERNEATH it is read** — some payrolls rule the page and print the heading below its own figure, which is the same table read upside down
+- 🔢 **An exact wording beats a loose one whichever pass found it** — the column pass sat behind the line-at-a-time one, and a loose match on a line of IBAN digits is still a match, so five payslips were read as 1,00 while the heading printed directly under the real figure went unlooked at
+- ⋯ **Dot leaders are not part of a wording** — a payslip that rules its page with dots left every label unable to end at its keyword, so the tight test could never fire on it
+
+## 0.5.3 — 2026-08-25
+
+> Measured against a real run of payslips: three payroll layouts over three years, of which the reader could read two.
+
+### 🐛 Fixed
+
+- 📊 **A payslip printed as a table is read** — some payrolls put the headings on one row and the figures on the next, where a line-at-a-time reading sees only "40:00 405 750 279 091", three numbers labelled by other numbers; a figure is now labelled by the heading standing over its column, which is what made a whole layout unreadable
+- 📅 **The month is the one the slip calls its period, not the one it was processed in** — "Period:October 2025 Processed: 07.11.2025" was read as November, filing three months of pay against the wrong month; an explicit period wins, then a month named in words, then a bare date
+- 🇪🇸 **Spanish payslips are read** — they name no "gross" and no "net", so the withholding base and the amount actually transferred are what the reader looks for, and a day-month-year pay date is now a date it recognises
+
+### 🔧 Changed
+
+- 🔎 **A heading over a column is consulted only where the label beside the figure found nothing** — the text on the same line is the tighter evidence, and a column heading must not be able to outrank it
+
+## 0.5.2 — 2026-08-25
+
+> The reader already learned which line was gross — except it never really did, because what it remembered could not match the next month's slip.
+
+### 🐛 Fixed
+
+- 🧠 **A corrected wording is remembered in a form that can match next month** — a joined table row carries the neighbouring column into the label, so what was learned in January read "…189 294 income tax base" and February's slip never printed it again; every wording learned before this release was dead the moment it was stored, which is why a year of hand corrections taught the reader nothing
+- 🎯 **The wording learned is the one that names the figure, not that one plus the column beside it** — learning took the last label on the row, which pointed at the wrong column the moment the two figures differed
+- 👔 **Two employers in one year no longer wipe each other's wordings** — one slot per person meant each correction erased the other payroll's, so alternating between them relearned the same two labels forever and neither was ever there when its own slip arrived
+
+### ✨ Added
+
+- 💱 **The reader remembers which currency a person's payslips are in** — plenty of slips print no currency anywhere on the page, so the field had to be answered by hand every month for a job that had not changed; a currency you state, on an upload or as a correction, is remembered for the next one
+- 🗣️ **A remembered currency says it is remembered** — "read from the slip" is a fact printed on the paper and "what was stated last time" is a guess about an employer, and the dialog no longer says the second in the words of the first
+
+### 🔧 Changed
+
+- 📄 **A currency printed on the slip always beats the remembered one** — a job can change, and what is on this month's paper is the better authority
+- 🗂️ **A person carries up to six learned wordings per figure, newest first** — a payslip layout is a property of the employer, not of the person, and a household member holds more than one job over a working life
+
 ## 0.5.1 — 2026-08-25
 
 > A payslip has a currency of its own, and the app had been reading it off the household's settings instead.

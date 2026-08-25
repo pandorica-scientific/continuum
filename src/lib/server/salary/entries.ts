@@ -7,10 +7,17 @@
  * rather than two competing ones.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, type SQL } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db } from '$lib/server/db';
-import { document, documentLink, salaryAttribution, salaryEntry } from '$lib/server/db/schema';
+import {
+	document,
+	documentLink,
+	person,
+	salaryAttribution,
+	salaryEntry
+} from '$lib/server/db/schema';
+import { hashStoredUpload } from '$lib/server/system/files';
 
 export type SalaryResult = { ok: true } | { ok: false; status: 400 | 404; message: string };
 
@@ -33,6 +40,14 @@ export interface RecordSalaryInput {
 	source: 'payslip' | 'statement' | 'manual';
 	documentId?: string | null;
 	transactionId?: string | null;
+	/**
+	 * The statement being corrected, when the caller knows which.
+	 *
+	 * A month can hold several — one per payslip, plus the one the bank credit
+	 * and hand-typed figures share — so a correction made on screen has to name
+	 * the row it means rather than leaving it to be worked out from the month.
+	 */
+	entryId?: string;
 	/** A figure somebody typed. Protects itself from later automatic readings. */
 	overridden?: boolean;
 	/**
@@ -71,7 +86,7 @@ export async function recordSalary(
 	}
 
 	return handle.transaction(async (tx) => {
-		const [existing] = await tx
+		const forMonth = await tx
 			.select()
 			.from(salaryEntry)
 			.where(
@@ -80,6 +95,31 @@ export async function recordSalary(
 					eq(salaryEntry.periodMonth, input.periodMonth)
 				)
 			);
+
+		/**
+		 * Which statement of this month this recording is about.
+		 *
+		 * A month held exactly one row until v0.5.5, so a second employer's slip
+		 * simply overwrote the first and a month worked twice reported half its
+		 * pay. The evidence is what tells two statements apart:
+		 *
+		 * - a payslip finds ITS OWN document's row, so re-uploading the same slip
+		 *   still corrects rather than duplicates;
+		 * - failing that, it takes the row no payslip has claimed yet, which is
+		 *   how a bank credit already recorded gets its gross filled in;
+		 * - a bank credit or a hand-typed figure takes the unclaimed row, and
+		 *   there is only ever one of those per month.
+		 *
+		 * `entryId` overrides all of it: a correction made on screen names the row
+		 * it is correcting, which is the only unambiguous answer once a month can
+		 * hold several.
+		 */
+		const unclaimed = forMonth.find((row) => row.documentId === null);
+		const existing = input.entryId
+			? forMonth.find((row) => row.id === input.entryId)
+			: input.documentId
+				? (forMonth.find((row) => row.documentId === input.documentId) ?? unclaimed)
+				: unclaimed;
 
 		// Validated against what the month will HOLD, not only what arrived: a
 		// bonus correction carries no gross of its own, so checking the input
@@ -145,31 +185,193 @@ export async function recordSalary(
 }
 
 /**
- * The payslip filed for one person for one month.
+ * The stored document one statement was read from.
  *
- * Scoped by shelf AND by month. The v0.4.5 arrangement took the first document
- * linked to the person that happened to have a file — so a tax statement could
- * be read looking for a payslip's bonus line, and August's correction could
- * learn January's wording.
+ * By document id, which is the only unambiguous key since v0.5.5: the old
+ * by-month lookup took the first payslip of the month with `.limit(1)`, and a
+ * month may now hold two. The id always comes from `salaryEntry.documentId`, so
+ * it is already the payslip of that statement and needs no shelf guard.
  */
-export async function payslipSlipFor(
-	personId: string,
-	periodMonth: string,
+export async function slipDocument(
+	documentId: string,
 	handle: Db = db
 ): Promise<{ id: string; storedName: string | null } | null> {
-	const rows = await handle
+	const [row] = await handle
 		.select({ id: document.id, storedName: document.storedName })
 		.from(document)
-		.innerJoin(documentLink, eq(documentLink.documentId, document.id))
+		.where(eq(document.id, documentId));
+	return row ?? null;
+}
+
+/** The statements of one person's month that came from a payslip. */
+export function payslipStatementsFor(personId: string, periodMonth: string, handle: Db = db) {
+	return handle
+		.select({ id: salaryEntry.id })
+		.from(salaryEntry)
 		.where(
 			and(
-				eq(documentLink.targetId, personId),
-				eq(document.shelf, 'payslips'),
-				eq(document.periodOn, `${periodMonth}-01`)
+				eq(salaryEntry.personId, personId),
+				eq(salaryEntry.periodMonth, periodMonth),
+				isNotNull(salaryEntry.documentId)
 			)
-		)
-		.limit(1);
-	return rows[0] ?? null;
+		);
+}
+
+/**
+ * One statement and whose it is.
+ *
+ * Every correction names an ENTRY rather than a month, because a month can hold
+ * more than one — two jobs are two payslips — and "the entry for August" stopped
+ * being a question with an answer. The person is read from the row rather than
+ * trusted from the form: an id in a POST body is whatever the sender put there.
+ */
+export async function entryWithOwner(entryId: string, handle: Db = db) {
+	const [entry] = await handle.select().from(salaryEntry).where(eq(salaryEntry.id, entryId));
+	if (!entry) return null;
+	const [owner] = await handle
+		.select({ name: person.name })
+		.from(person)
+		.where(eq(person.id, entry.personId));
+	return owner ? { entry, owner } : null;
+}
+
+/** The month a document covers, from the first-of-month date it is filed under. */
+const monthOf = (periodOn: string | null) => (periodOn ? periodOn.slice(0, 7) : null);
+
+/**
+ * The payslip already on this person's shelf that IS this file.
+ *
+ * A month has held more than one payslip since v0.5.5 — two jobs are two slips
+ * — and an upload only ever adds. That is right for two employers and wrong for
+ * the same slip dropped in twice: a second upload mints a second document id,
+ * which is a second row by definition, and the month then reports double pay.
+ *
+ * The bytes decide, not the figures. Two jobs paying the same amount in the
+ * same month are a real arrangement and must never be merged into one, while
+ * the same file is the same file whatever the browser called it.
+ *
+ * Scoped to this person's payslips shelf: the same PDF filed for two people is
+ * two statements, and a tax attachment is not a payslip.
+ */
+export async function payslipMatchingContent(
+	personId: string,
+	contentHash: string,
+	handle: Db = db
+): Promise<{ id: string; periodMonth: string | null } | null> {
+	const onShelf = (...where: (SQL | undefined)[]) =>
+		handle
+			.select({
+				id: document.id,
+				storedName: document.storedName,
+				periodOn: document.periodOn
+			})
+			.from(document)
+			.innerJoin(documentLink, eq(documentLink.documentId, document.id))
+			.where(and(eq(documentLink.targetId, personId), eq(document.shelf, 'payslips'), ...where));
+
+	// The steady-state answer, and the reason `content_hash` carries an index.
+	const [known] = await onShelf(eq(document.contentHash, contentHash)).limit(1);
+	if (known) return { id: known.id, periodMonth: monthOf(known.periodOn) };
+
+	// Only then the slips filed before there was a column to hold a hash. They
+	// are fingerprinted here rather than by a migration nobody upgrading would
+	// have run — a shrinking set, read together and written back together, so
+	// the shelf converges after one upload and this pass then finds nothing.
+	const unhashed = await onShelf(isNull(document.contentHash), isNotNull(document.storedName));
+	if (unhashed.length === 0) return null;
+
+	const hashed = await Promise.all(
+		unhashed.map(async (row) => ({ row, hash: await hashStoredUpload(row.storedName ?? '') }))
+	);
+	// A file that has gone missing cannot be matched against, and is left
+	// unhashed rather than marked — a restored volume is picked up next time.
+	await Promise.all(
+		hashed
+			.filter((h) => h.hash !== null)
+			.map((h) =>
+				handle.update(document).set({ contentHash: h.hash }).where(eq(document.id, h.row.id))
+			)
+	);
+	const match = hashed.find((h) => h.hash === contentHash);
+	return match ? { id: match.row.id, periodMonth: monthOf(match.row.periodOn) } : null;
+}
+
+/**
+ * Move the statement a re-uploaded slip produced to the month this upload says.
+ *
+ * The same file cannot be two statements, so a re-upload that names a different
+ * month RESTATES the row rather than adding one beside it. Without this the
+ * entry keeps the month it was first filed under and the correction lands as a
+ * second row — the very thing recognising the file was supposed to prevent.
+ */
+export async function restateSlipMonth(
+	personId: string,
+	documentId: string,
+	periodMonth: string,
+	handle: Db = db
+): Promise<void> {
+	await handle
+		.update(salaryEntry)
+		.set({ periodMonth })
+		.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.documentId, documentId)));
+}
+
+/**
+ * File the DOCUMENT side of a payslip: a new one, or the one already there.
+ *
+ * Both upload actions wrote this by hand and had already drifted — the name
+ * format, the shelf, how `ext` is derived and the first-of-month `periodOn`
+ * convention lived in two places, and `content_hash` had to be remembered in
+ * both. A third spelling sat in the re-file path. One function, so the next
+ * column on a payslip document is a one-site edit.
+ *
+ * `existingId` is the slip this upload was recognised as: its document is
+ * restated in place, statement included, rather than a second one being made.
+ */
+export async function filePayslipDocument(
+	input: {
+		personId: string;
+		subject: string;
+		periodMonth: string;
+		currency: string;
+		storedName: string | null;
+		contentHash: string | null;
+		existingId?: string;
+	},
+	handle: Db = db
+): Promise<string> {
+	const { personId, subject, periodMonth, currency, storedName, contentHash } = input;
+	const name = `Payslip ${periodMonth} · ${subject}`;
+	const periodOn = `${periodMonth}-01`;
+
+	if (input.existingId) {
+		const existingId = input.existingId;
+		await handle.transaction(async (tx) => {
+			await restateSlipMonth(personId, existingId, periodMonth, tx);
+			await tx
+				.update(document)
+				.set({ name, currency, periodOn })
+				.where(eq(document.id, existingId));
+		});
+		return existingId;
+	}
+
+	const documentId = uuidv7();
+	await handle.transaction(async (tx) => {
+		await tx.insert(document).values({
+			id: documentId,
+			name,
+			shelf: 'payslips',
+			storedName,
+			ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
+			addedOn: new Date().toISOString().slice(0, 10),
+			currency,
+			periodOn,
+			contentHash
+		});
+		await tx.insert(documentLink).values({ documentId, targetId: personId }).onConflictDoNothing();
+	});
+	return documentId;
 }
 
 /** Every month recorded for a person, for salaryStats(). */

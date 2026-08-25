@@ -4,28 +4,32 @@
 // Moved out of Retirement in v0.4.4. It sat beside a projection that never read
 // it, and "what did I earn" is a Money question — it now lives one tab from the
 // Tax screen that asks what was paid on it.
-import { uuidv7 } from 'uuidv7';
 import { asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { document, person, salaryEntry } from '$lib/server/db/schema';
 import {
 	learnBonusLabel,
 	learnGrossLabel,
 	learnNetLabel,
+	learnPayslipCurrency,
+	entryWithOwner,
+	filePayslipDocument,
 	loadSalaryHistory,
-	payslipSlipFor,
+	payslipMatchingContent,
+	payslipStatementsFor,
 	readPayslip,
 	readStoredPayslip,
-	recordSalary
+	recordSalary,
+	slipDocument
 } from '$lib/server/salary';
 import { deleteDocument } from '$lib/server/documents/mutations';
 import { mergeSalaryYears, type SalaryYear } from '$lib/salary';
 import { getBaseCurrency } from '$lib/server/settings';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { saveUpload } from '$lib/server/system/files';
+import { hashBytes, removeUpload, saveUploadBytes } from '$lib/server/system/files';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -127,24 +131,6 @@ function optionalAmount(
 	}
 }
 
-/**
- * The currency a month is already recorded in.
- *
- * Every correction to a month has to be read in the currency that month was
- * filed in, not the household's base. Parsing "102 202" as euro on a koruna
- * month stores a euro figure, and the screen then prints it beside koruna.
- *
- * The base currency is the fallback only for a month that does not exist yet,
- * which is the one case where there is nothing truer to use.
- */
-async function currencyForMonth(personId: string, periodMonth: string): Promise<string> {
-	const [entry] = await db
-		.select({ currency: salaryEntry.currency })
-		.from(salaryEntry)
-		.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
-	return entry?.currency ?? (await getBaseCurrency());
-}
-
 export const actions: Actions = {
 	addPayslip: async ({ request }) => {
 		const form = await request.formData();
@@ -156,17 +142,38 @@ export const actions: Actions = {
 
 		const file = form.get('file');
 		let storedName: string | null = null;
+		let contentHash: string | null = null;
 		let reading = null;
+		/**
+		 * The slip already filed that IS this file.
+		 *
+		 * A month may hold more than one payslip since v0.5.5, so nothing keyed on
+		 * the month catches a re-upload any more — the same file dropped in twice
+		 * made two documents, two entries and a month reporting double pay. The
+		 * bytes are what recognise it; two jobs paying alike are still two slips.
+		 */
+		let sameSlip: { id: string; periodMonth: string | null } | null = null;
 		if (file instanceof File && file.size > 0) {
 			const data = new Uint8Array(await file.arrayBuffer());
-			try {
-				storedName = await saveUpload(
-					new File([new Blob([data as BlobPart])], file.name, { type: file.type })
-				);
-			} catch (err) {
-				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
+			contentHash = hashBytes(data);
+			// Reading the PDF is the long pole of this request and it shares no
+			// data with the shelf lookup, so neither waits for the other. Only the
+			// save below depends on the answer.
+			[sameSlip, reading] = await Promise.all([
+				payslipMatchingContent(personId, contentHash),
+				readPayslip(data, subject)
+			]);
+			// A recognised slip keeps the copy already on the volume. Saving a
+			// second identical file would leave the first orphaned by whichever
+			// document lost the race, and there is nothing in it that the stored
+			// one does not already have.
+			if (!sameSlip) {
+				try {
+					storedName = await saveUploadBytes(data, file.name);
+				} catch (err) {
+					return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
+				}
 			}
-			reading = await readPayslip(data, subject);
 		}
 
 		// Which fields the person actually EDITED.
@@ -239,6 +246,19 @@ export const actions: Actions = {
 			return reject('Which month does this payslip cover?');
 		}
 
+		// A currency the person CHOSE teaches the reader, so the next slip for the
+		// same job arrives with the field already right. Plenty of payslips print
+		// no currency anywhere on the page, and without this the question has to
+		// be answered by hand every month for an employer that has not changed.
+		//
+		// Outside the `if (reading)` below on purpose: a month filed with no file
+		// at all still states a currency, and that statement is worth just as
+		// much. `touched` is what separates a decision from the reader's own
+		// prefill — learning a prefill back would teach it nothing.
+		if (touched.has('currency')) {
+			await learnPayslipCurrency(subject, currency);
+		}
+
 		// A figure the person STATED, that matches a line on the slip, teaches the
 		// reader. A prefill the reader produced teaches it nothing — it would only
 		// be learning its own answer back.
@@ -254,28 +274,35 @@ export const actions: Actions = {
 			}
 		}
 
-		// A month uniquely identifies an entry, so a re-upload REPLACES rather
-		// than accumulating. The previous document goes after the new one is
-		// written: a failure between the two leaves two slips for the month,
-		// which is visible and fixable, rather than none.
-		const previous = await payslipSlipFor(personId, periodMonth);
+		/**
+		 * A month used to identify an entry, so a re-upload REPLACED the slip
+		 * already filed for it. It cannot any more: a month worked twice has two
+		 * payslips, and "replace August's" would throw away the other job.
+		 *
+		 * So an upload only ever ADDS, and nothing deletes a stored file behind
+		 * the person's back. Filing the same slip twice leaves two rows, which is
+		 * visible on the screen and removed from its ⋯ menu — where a silently
+		 * destroyed payslip was neither.
+		 */
+		const alreadyFiled = sameSlip ? [] : await payslipStatementsFor(personId, periodMonth);
 
-		const documentId = uuidv7();
-		await db.transaction(async (tx) => {
-			await tx.insert(document).values({
-				id: documentId,
-				name: `Payslip ${periodMonth} · ${subject}`,
-				shelf: 'payslips',
-				storedName,
-				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
-				addedOn: new Date().toISOString().slice(0, 10),
-				currency,
-				periodOn: `${periodMonth}-01`
-			});
-			await tx
-				.insert(documentLink)
-				.values({ documentId, targetId: personId })
-				.onConflictDoNothing();
+		/**
+		 * A recognised slip corrects the statement it already produced.
+		 *
+		 * Its document is reused rather than replaced, so `recordSalary` finds ITS
+		 * OWN row by document id and writes over it — figures, currency and the
+		 * month alike. `filePayslipDocument` restates the month as part of that:
+		 * the same file cannot be two statements, so filing it again with a
+		 * corrected month moves the row rather than leaving the old one behind.
+		 */
+		const documentId = await filePayslipDocument({
+			personId,
+			subject,
+			periodMonth,
+			currency,
+			storedName,
+			contentHash,
+			existingId: sameSlip?.id
 		});
 
 		const recorded = await recordSalary({
@@ -313,8 +340,152 @@ export const actions: Actions = {
 			});
 		}
 
-		if (previous && previous.id !== documentId) await deleteDocument(previous.id);
-		return { ok: true };
+		// Said out loud rather than acted on: a second slip for a month is exactly
+		// what two jobs look like, and also what a mistaken re-upload looks like.
+		return {
+			ok: true,
+			alsoFiled: alreadyFiled.length > 0 ? { periodMonth, count: alreadyFiled.length } : null,
+			// Said out loud too, and the opposite news: nothing was added, the
+			// statement this file already made was corrected. Silence here would
+			// look exactly like a second upload that did nothing.
+			sameSlip: sameSlip
+				? {
+						periodMonth,
+						moved: sameSlip.periodMonth !== null && sameSlip.periodMonth !== periodMonth
+					}
+				: null
+		};
+	},
+
+	/**
+	 * File a year of payslips in one go.
+	 *
+	 * Deliberately NOT the same action as `addPayslip`. That one exists so a
+	 * single slip can be checked before it is written — the figures are read,
+	 * shown, and corrected, and a correction teaches the reader. Nobody checks
+	 * twelve slips in a dialog, so this one files only what it can read with
+	 * confidence and hands back, by name, every file it could not.
+	 *
+	 * Nothing here is stored as a decision: every figure lands as a reading, so a
+	 * later re-read may still correct it and no label is learned from a number
+	 * nobody looked at.
+	 */
+	addPayslips: async ({ request }) => {
+		const form = await request.formData();
+		const personId = asRowId(form.get('personId')).trim();
+		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
+		if (!owner) return fail(400, { message: 'Pick whose payslips these are.' });
+		const subject = owner.name;
+
+		const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
+		if (files.length === 0) return fail(400, { message: 'Choose at least one payslip file.' });
+
+		// A currency for the slips that do not name one. Optional: most do, or the
+		// reader has learned this person's from an earlier upload. Where neither is
+		// true the file is refused by name rather than filed under a guess.
+		const currencies = await availableCurrencies();
+		const fallback = String(form.get('currency') ?? '')
+			.trim()
+			.toUpperCase();
+		if (fallback && !currencies.includes(fallback)) {
+			return fail(400, { message: `${fallback} is not a currency this instance can convert.` });
+		}
+
+		const filed: { name: string; periodMonth: string }[] = [];
+		const skipped: { name: string; reason: string }[] = [];
+		/**
+		 * Files that were already on the shelf, listed back rather than filed again.
+		 *
+		 * Its own bucket, not `skipped`. Skipped means "this one needs you" — a
+		 * slip nothing could be read from. A file already filed needs nothing;
+		 * saying so is only so that eleven of twelve landing does not read as a
+		 * failure. Nothing is re-read either: unlike the single-slip dialog, no
+		 * figure here was checked by anybody, so there is no correction to carry
+		 * back into the statement the file already made.
+		 */
+		const already: { name: string; periodMonth: string | null }[] = [];
+		/** Fingerprints filed by THIS run, so one drop of the same file twice is
+		 *  caught as well as a second drop weeks later. */
+		const seen = new Map<string, string>();
+
+		for (const file of files) {
+			const data = new Uint8Array(await file.arrayBuffer());
+			const contentHash = hashBytes(data);
+			const inThisRun = seen.get(contentHash);
+			if (inThisRun !== undefined) {
+				already.push({ name: file.name, periodMonth: inThisRun });
+				continue;
+			}
+			const onTheShelf = await payslipMatchingContent(personId, contentHash);
+			if (onTheShelf) {
+				already.push({ name: file.name, periodMonth: onTheShelf.periodMonth });
+				continue;
+			}
+			let storedName: string;
+			try {
+				storedName = await saveUploadBytes(data, file.name);
+			} catch (err) {
+				skipped.push({
+					name: file.name,
+					reason: err instanceof Error ? err.message : 'could not be stored'
+				});
+				continue;
+			}
+
+			// Every refusal from here on removes the file it just stored. An upload
+			// nothing points at is invisible and stays on the disk for ever.
+			const refuse = async (reason: string) => {
+				await removeUpload(storedName);
+				skipped.push({ name: file.name, reason });
+			};
+
+			const reading = await readPayslip(data, subject);
+			const currency = reading.currency ?? fallback;
+			if (!currency) {
+				await refuse('names no currency, and none has been stated for this person yet');
+				continue;
+			}
+			if (!reading.periodMonth || !MONTH.test(reading.periodMonth)) {
+				await refuse('no month could be read from it');
+				continue;
+			}
+			if (reading.grossMinor === null && reading.netMinor === null) {
+				await refuse('no gross or net figure could be read from it');
+				continue;
+			}
+
+			const periodMonth = reading.periodMonth;
+			const documentId = await filePayslipDocument({
+				personId,
+				subject,
+				periodMonth,
+				currency,
+				storedName,
+				contentHash
+			});
+
+			const recorded = await recordSalary({
+				personId,
+				periodMonth,
+				currency,
+				restateCurrency: true,
+				grossMinor: reading.grossMinor,
+				netMinor: reading.netMinor,
+				bonusMinor: reading.bonusMinor,
+				source: 'payslip',
+				documentId
+				// `overridden` stays false: nobody looked at these figures.
+			});
+			if (!recorded.ok) {
+				await deleteDocument(documentId);
+				skipped.push({ name: file.name, reason: recorded.message.toLowerCase() });
+				continue;
+			}
+			filed.push({ name: file.name, periodMonth });
+			seen.set(contentHash, periodMonth);
+		}
+
+		return { ok: true, filed, skipped, already };
 	},
 
 	/**
@@ -325,21 +496,16 @@ export const actions: Actions = {
 	 */
 	setPayslipFigure: async ({ request }) => {
 		const form = await request.formData();
-		const personId = asRowId(form.get('personId'));
-		const periodMonth = String(form.get('periodMonth') ?? '').trim();
 		const field = String(form.get('field') ?? '');
-		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
 		if (field !== 'gross' && field !== 'net' && field !== 'base') {
 			return fail(400, { message: 'That is not a figure this can set.' });
 		}
 
-		const [owner] = await db
-			.select({ name: person.name })
-			.from(person)
-			.where(eq(person.id, personId));
-		if (!owner) return fail(404, { message: 'That person is no longer here.' });
+		const found = await entryWithOwner(asRowId(form.get('entryId')));
+		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
+		const { entry, owner } = found;
+		const { personId, periodMonth, currency } = entry;
 
-		const currency = await currencyForMonth(personId, periodMonth);
 		const parsed = optionalAmount(form, 'amount', currency);
 		if (!parsed.ok) return fail(400, { message: parsed.message });
 		if (parsed.value === null || parsed.value <= 0n) {
@@ -357,17 +523,12 @@ export const actions: Actions = {
 		 */
 		let grossMinor: bigint | null = null;
 		if (field === 'gross') grossMinor = parsed.value;
-		if (field === 'base') {
-			const [entry] = await db
-				.select({ bonusMinor: salaryEntry.bonusMinor })
-				.from(salaryEntry)
-				.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
-			grossMinor = parsed.value + (entry?.bonusMinor ?? 0n);
-		}
+		if (field === 'base') grossMinor = parsed.value + (entry.bonusMinor ?? 0n);
 
 		const recorded = await recordSalary({
 			personId,
 			periodMonth,
+			entryId: entry.id,
 			currency,
 			grossMinor,
 			netMinor: field === 'net' ? parsed.value : null,
@@ -381,7 +542,7 @@ export const actions: Actions = {
 		// Base is excluded on purpose: what a person typed there is gross minus an
 		// award, and no line on the slip prints that sum. Teaching the reader to
 		// look for it would point the gross label at a number the slip never had.
-		const slip = await payslipSlipFor(personId, periodMonth);
+		const slip = entry.documentId ? await slipDocument(entry.documentId) : null;
 		if (slip?.storedName && field !== 'base') {
 			const reading = await readStoredPayslip(slip.storedName, owner.name);
 			if (field === 'gross') await learnGrossLabel(owner.name, parsed.value, reading.candidates);
@@ -405,22 +566,17 @@ export const actions: Actions = {
 	 */
 	setPayslipCurrency: async ({ request }) => {
 		const form = await request.formData();
-		const personId = asRowId(form.get('personId'));
-		const periodMonth = String(form.get('periodMonth') ?? '').trim();
 		const currency = String(form.get('currency') ?? '')
 			.trim()
 			.toUpperCase();
-		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
 		if (!currency) return fail(400, { message: 'Pick a currency.' });
 		if (!(await availableCurrencies()).includes(currency)) {
 			return fail(400, { message: `${currency} is not a currency this instance can convert.` });
 		}
 
-		const [entry] = await db
-			.select({ id: salaryEntry.id, documentId: salaryEntry.documentId })
-			.from(salaryEntry)
-			.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
-		if (!entry) return fail(404, { message: 'That month is not recorded.' });
+		const found = await entryWithOwner(asRowId(form.get('entryId')));
+		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
+		const { entry, owner } = found;
 
 		await db.transaction(async (tx) => {
 			await tx.update(salaryEntry).set({ currency }).where(eq(salaryEntry.id, entry.id));
@@ -431,6 +587,11 @@ export const actions: Actions = {
 				await tx.update(document).set({ currency }).where(eq(document.id, entry.documentId));
 			}
 		});
+
+		// A correction is the strongest statement there is about this person's
+		// pay, so it teaches the reader too — fixing one month should not leave
+		// the next upload asking the same question again.
+		await learnPayslipCurrency(owner.name, currency);
 		return { ok: true };
 	},
 
@@ -444,34 +605,29 @@ export const actions: Actions = {
 	 */
 	setBonus: async ({ request }) => {
 		const form = await request.formData();
-		const personId = asRowId(form.get('personId'));
-		const periodMonth = String(form.get('periodMonth') ?? '').trim();
-		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
+		const found = await entryWithOwner(asRowId(form.get('entryId')));
+		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
+		const { entry, owner } = found;
 
-		const [owner] = await db
-			.select({ name: person.name })
-			.from(person)
-			.where(eq(person.id, personId));
-		if (!owner) return fail(404, { message: 'That person is no longer here.' });
-
-		const currency = await currencyForMonth(personId, periodMonth);
-		const parsed = optionalAmount(form, 'bonus', currency);
+		const parsed = optionalAmount(form, 'bonus', entry.currency);
 		if (!parsed.ok) return fail(400, { message: parsed.message });
 
 		const recorded = await recordSalary({
-			personId,
-			periodMonth,
-			currency,
+			personId: entry.personId,
+			periodMonth: entry.periodMonth,
+			entryId: entry.id,
+			currency: entry.currency,
 			bonusMinor: parsed.value,
 			source: 'manual',
 			overridden: true
 		});
 		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
 
-		// THIS month's slip, on the payslips shelf. Not "any document linked to
-		// this person that happens to have a file", which is what it used to be.
+		// THIS statement's own slip. Not "any document linked to this person that
+		// happens to have a file", and — now that a month can hold two — not
+		// whichever of the month's slips came back first either.
 		if (parsed.value !== null) {
-			const slip = await payslipSlipFor(personId, periodMonth);
+			const slip = entry.documentId ? await slipDocument(entry.documentId) : null;
 			if (slip?.storedName) {
 				const reading = await readStoredPayslip(slip.storedName, owner.name);
 				await learnBonusLabel(owner.name, parsed.value, reading.candidates);
@@ -490,15 +646,15 @@ export const actions: Actions = {
 	 */
 	deletePayslip: async ({ request }) => {
 		const form = await request.formData();
-		const personId = asRowId(form.get('personId'));
-		const periodMonth = String(form.get('periodMonth') ?? '').trim();
-		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
+		const found = await entryWithOwner(asRowId(form.get('entryId')));
+		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
+		const { entry } = found;
 
-		const slip = await payslipSlipFor(personId, periodMonth);
-		await db
-			.delete(salaryEntry)
-			.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
-		if (slip) await deleteDocument(slip.id);
+		// This ONE statement of the month, and the file it was read from. A month
+		// worked twice keeps its other job: deleting by month took both, which was
+		// harmless while a month could only hold one and is not any more.
+		await db.delete(salaryEntry).where(eq(salaryEntry.id, entry.id));
+		if (entry.documentId) await deleteDocument(entry.documentId);
 		return { ok: true };
 	}
 };

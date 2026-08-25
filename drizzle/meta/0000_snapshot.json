@@ -787,6 +787,12 @@
           "type": "date",
           "primaryKey": false,
           "notNull": false
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -810,6 +816,21 @@
           "columns": [
             {
               "expression": "shelf",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "document_content_hash_idx": {
+          "name": "document_content_hash_idx",
+          "columns": [
+            {
+              "expression": "content_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5126,6 +5147,34 @@
         }
       },
       "indexes": {
+        "salary_entry_person_month_doc_key": {
+          "name": "salary_entry_person_month_doc_key",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_month",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "document_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "document_id is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "salary_entry_person_month_key": {
           "name": "salary_entry_person_month_key",
           "columns": [
@@ -5143,6 +5192,7 @@
             }
           ],
           "isUnique": true,
+          "where": "document_id is null",
           "concurrently": false,
           "method": "btree",
           "with": {}

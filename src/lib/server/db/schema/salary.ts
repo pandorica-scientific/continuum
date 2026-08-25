@@ -18,6 +18,7 @@ import {
 	uniqueIndex,
 	uuid
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { account } from './accounts';
 import { person } from './auth';
 import { currency } from './money';
@@ -31,7 +32,15 @@ export const salaryEntry = pgTable(
 		personId: uuid('person_id')
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
-		/** YYYY-MM. One entry per person per month. */
+		/**
+		 * YYYY-MM. One entry per person per month PER PAYSLIP.
+		 *
+		 * It was one entry per person per month full stop, which is right for one
+		 * job and wrong for two: a second employer's slip for the same month
+		 * replaced the first rather than joining it, so a month worked twice
+		 * reported half its pay. See the indexes below for what now keeps two
+		 * statements of the same month apart.
+		 */
 		periodMonth: text('period_month').notNull(),
 		/**
 		 * Gross and net are two FIELDS, not two rows.
@@ -63,9 +72,26 @@ export const salaryEntry = pgTable(
 		amountOverridden: boolean('amount_overridden').notNull().default(false)
 	},
 	(table) => [
-		// One entry per person per month: a payslip and a bank credit for the same
-		// month fill their own column of the SAME row rather than racing.
-		uniqueIndex('salary_entry_person_month_key').on(table.personId, table.periodMonth),
+		/**
+		 * A month may be evidenced more than once, and the evidence is what tells
+		 * the statements apart.
+		 *
+		 * One row per payslip DOCUMENT, so two jobs in a month are two rows and
+		 * neither overwrites the other — while re-uploading the same slip still
+		 * finds its own row and corrects it.
+		 */
+		uniqueIndex('salary_entry_person_month_doc_key')
+			.on(table.personId, table.periodMonth, table.documentId)
+			.where(sql`document_id is not null`),
+		/**
+		 * And exactly one row per month that came from no payslip at all — the
+		 * bank credit, or a figure typed by hand. That is the old invariant,
+		 * kept: a credit and a slip for one month still fill their own column of
+		 * the same row rather than racing, as long as there is only one slip.
+		 */
+		uniqueIndex('salary_entry_person_month_key')
+			.on(table.personId, table.periodMonth)
+			.where(sql`document_id is null`),
 		index('salary_entry_person_month_idx').on(table.personId, table.periodMonth),
 		index('salary_entry_currency_idx').on(table.currency),
 		index('salary_entry_document_idx').on(table.documentId),

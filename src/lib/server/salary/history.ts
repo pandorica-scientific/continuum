@@ -16,8 +16,16 @@ export interface SalaryPersonHistory {
 	years: SalaryYear[];
 	/** Payslip documents filed against this person, newest first. */
 	payslips: {
-		/** The document id — the stored file, not the figures. */
+		/**
+		 * The salary ENTRY's id.
+		 *
+		 * It was the document's, which stopped being an identity the moment a
+		 * month could hold two payslips: every correction the screen makes names
+		 * the row it corrects, and two rows for one month need two names.
+		 */
 		id: string;
+		/** The stored file this statement was read from. */
+		documentId: string;
 		periodMonth: string;
 		grossMinor: bigint | null;
 		netMinor: bigint | null;
@@ -83,16 +91,44 @@ export async function loadSalaryHistory(
 
 		// Converted at the MONTH's own date, not today's rate: a 2019 payslip
 		// restated at this morning's rate is a different number every morning.
-		const months = recorded.map((entry) => {
+		const converted = recorded.map((entry) => {
 			const at = `${entry.periodMonth}-01`;
 			const to = (amount: bigint | null) =>
 				amount === null ? null : convert(amount, entry.currency, baseCurrency, at);
 			return {
+				id: entry.id,
 				periodMonth: entry.periodMonth,
 				grossMinor: to(entry.grossMinor),
 				netMinor: to(entry.netMinor),
 				bonusMinor: to(entry.bonusMinor),
 				documentId: entry.documentId
+			};
+		});
+
+		/**
+		 * A month's statements ADDED UP, for the year rows above.
+		 *
+		 * A month can now hold more than one — two jobs are two payslips — and
+		 * what a person earned that month is the sum of them. Taking any single
+		 * row would report one employer and silently drop the other, which is the
+		 * defect that made this worth changing.
+		 *
+		 * Summed only after each row is converted, because two jobs can pay in two
+		 * currencies and there is no adding those together beforehand.
+		 */
+		const months = [...new Set(converted.map((e) => e.periodMonth))].sort().map((periodMonth) => {
+			const rows = converted.filter((e) => e.periodMonth === periodMonth);
+			// Null is "nobody said", and stays null. Summing it as zero would turn
+			// a month with no net stated into a month that earned nothing net.
+			const total = (pick: (row: (typeof rows)[number]) => bigint | null) => {
+				const stated = rows.map(pick).filter((v) => v !== null);
+				return stated.length === 0 ? null : stated.reduce((a, b) => a + b, 0n);
+			};
+			return {
+				periodMonth,
+				grossMinor: total((r) => r.grossMinor),
+				netMinor: total((r) => r.netMinor),
+				bonusMinor: total((r) => r.bonusMinor)
 			};
 		});
 
@@ -103,38 +139,30 @@ export async function loadSalaryHistory(
 			slipDocs.filter((d) => ownerOf.get(d.id) === p.id).map((d) => [d.id, d.storedName] as const)
 		);
 
-		// Slip rows are the entries as STORED — not the converted `months` above.
-		const rawOf = new Map(recorded.filter((e) => e.documentId).map((e) => [e.documentId!, e]));
-
 		return {
 			id: p.id,
 			name: p.name,
-			years: salaryStats(
-				months.map(({ periodMonth, grossMinor, netMinor, bonusMinor }) => ({
-					periodMonth,
-					grossMinor,
-					netMinor,
-					bonusMinor
-				})),
-				p.birthYear
-			),
-			payslips: months
-				.filter((m) => m.documentId !== null && fileOf.has(m.documentId))
-				.map((m) => {
-					const raw = rawOf.get(m.documentId!);
-					return {
-						id: m.documentId!,
-						periodMonth: m.periodMonth,
-						// As recorded, in the currency it was recorded in. Converting here
-						// put every row in the base currency, so a household reporting in
-						// euro read its Czech payslips as euro amounts.
-						grossMinor: raw?.grossMinor ?? null,
-						netMinor: raw?.netMinor ?? null,
-						bonusMinor: raw?.bonusMinor ?? null,
-						currency: raw?.currency ?? baseCurrency,
-						file: fileOf.get(m.documentId!) ?? null
-					};
-				})
+			years: salaryStats(months, p.birthYear),
+			// Slip rows are the entries as STORED, so they are built from `recorded`
+			// rather than from `converted`: every figure below is the raw one, and
+			// walking the converted list only to look each row back up meant
+			// converting three amounts per slip and discarding all of them.
+			payslips: recorded
+				.filter((e) => e.documentId !== null && fileOf.has(e.documentId))
+				.map((e) => ({
+					/** The ENTRY, not the document: a correction has to name a row. */
+					id: e.id,
+					documentId: e.documentId!,
+					periodMonth: e.periodMonth,
+					// In the currency it was recorded in. Converting here put every row
+					// in the base currency, so a household reporting in euro read its
+					// Czech payslips as euro amounts.
+					grossMinor: e.grossMinor,
+					netMinor: e.netMinor,
+					bonusMinor: e.bonusMinor,
+					currency: e.currency ?? baseCurrency,
+					file: fileOf.get(e.documentId!) ?? null
+				}))
 				.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1))
 		};
 	});

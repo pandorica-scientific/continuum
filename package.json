@@ -1,7 +1,7 @@
 {
 	"name": "continuum",
 	"private": true,
-	"version": "0.5.1",
+	"version": "0.5.7",
 	"license": "PolyForm-Noncommercial-1.0.0",
 	"type": "module",
 	"scripts": {

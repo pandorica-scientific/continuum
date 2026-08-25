@@ -42,11 +42,19 @@ export const document = pgTable(
 		// and the month they cover — the salary tracker derives from these
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
 		currency: text('currency').references(() => currency.code),
-		periodOn: date('period_on')
+		periodOn: date('period_on'),
+		// SHA-256 of the stored file's bytes, so the same file uploaded twice is
+		// recognised as the same file. A month may hold more than one payslip
+		// since v0.5.5, which removed the only key that used to catch a
+		// re-upload — see `payslipMatchingContent`. Null on a document filed
+		// before this column existed, and on a metadata-only one; filled in the
+		// first time something has to compare against it.
+		contentHash: text('content_hash')
 	},
 	(table) => [
 		index('document_currency_idx').on(table.currency),
-		index('document_shelf_idx').on(table.shelf)
+		index('document_shelf_idx').on(table.shelf),
+		index('document_content_hash_idx').on(table.contentHash)
 	]
 );
 
