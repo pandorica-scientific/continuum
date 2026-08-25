@@ -22,7 +22,8 @@
 		"fetch:tessdata": "node scripts/fetch-tessdata.mjs",
 		"scan:unused": "node scripts/unused-exports.mjs",
 		"version:sync": "node scripts/sync-version.mjs",
-		"version:check": "node scripts/sync-version.mjs --check"
+		"version:check": "node scripts/sync-version.mjs --check",
+		"changelog:section": "node scripts/changelog-section.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

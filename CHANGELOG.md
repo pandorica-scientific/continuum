@@ -14,6 +14,8 @@
 
 - ⬆️ **CI runs its actions on the Node 24 runtime** — every action in the workflow still ran on the Node 20 one GitHub has deprecated, so each run ended in a notice nobody was going to act on
 - 🔇 **A prop read once to seed a form now says so** — twenty-seven `state_referenced_locally` warnings crossed every image build, each one a deliberate snapshot the compiler had no way to tell from an oversight, and `untrack` states the intent where the build used to guess at it
+- 🐳 **Every release names the image that carries it and how to update a running server** — the notes stopped at what changed and left the reader to work out which tag to pull, so both registries and the two-line `docker compose pull` upgrade are now rendered from a template and appended to the changelog section
+- 🏷️ **The tag and the GitHub release are cut only once the image is published** — the old order created both first, so a build that failed afterwards left a tag and a release standing in front of an image nobody could pull, and a pushed tag is not something to take back
 
 ## 0.4.6 — 2026-08-24
 

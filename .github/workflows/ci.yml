@@ -3,18 +3,22 @@ name: CI
 on:
   push:
     branches: [main]
-    # A release is a version bump landing on main: the `release` job below cuts
-    # the tag and the GitHub release, and `image` publishes in the SAME run.
-    # Merges that do not change the version publish nothing, which is what
-    # keeps `latest` naming a release rather than whatever landed an hour ago —
-    # the property this workflow has always protected. What changed is only
-    # WHERE the decision is made: bumping package.json in the pull request,
-    # rather than remembering to push a tag afterwards.
+    # A release is a version bump landing on main, and it happens in ONE run,
+    # in this order: `gate` decides whether the version is new, `image` builds
+    # and pushes it to both registries, and only then does `release` cut the
+    # tag and publish the notes. Merges that do not change the version publish
+    # nothing, which is what keeps `latest` naming a release rather than
+    # whatever landed an hour ago.
     #
-    # A hand-pushed tag still works and still publishes, for cutting a release
-    # from a commit that is not main's head, or re-cutting one whose run failed.
-    # Either way the tag must match package.json — the image job refuses
-    # otherwise.
+    # Publishing last is the point. Cut the tag first and a build that fails
+    # afterwards leaves a tag and a GitHub release standing in front of an
+    # image nobody can pull — and a tag, once pushed, is not something to take
+    # back. Nothing is written down until there is something to write about.
+    #
+    # A hand-pushed tag still works and still publishes an image, for cutting a
+    # release from a commit that is not main's head, or re-cutting one whose
+    # run failed. Either way the tag must match package.json — the image job
+    # refuses otherwise.
     tags: ['v*']
   pull_request:
   # A release published against an existing tag builds too, so a version whose
@@ -54,44 +58,46 @@ jobs:
       - run: npm run check
       - run: npm test
 
-  # Cut the release when — and only when — package.json names a version that
-  # has no tag yet.
+  # Is this push a release? Decided here and NOTHING acted on: this job cuts no
+  # tag and creates no release, so a build that fails after it leaves main
+  # exactly as it found it. The two things that cannot be taken back — a pushed
+  # tag and a published release — happen in the `release` job at the very end.
   #
-  # This job creates the tag itself rather than leaving it to a person, and it
-  # therefore CANNOT rely on that tag starting another workflow run: a ref
-  # pushed with GITHUB_TOKEN is deliberately inert, or every release would loop.
-  # So it hands the version to `image` through an output and the publish happens
-  # in this same run. Using a PAT to get around that was the alternative, and it
-  # costs a second full pass over the suite plus a credential to keep.
-  release:
+  # It also refuses a release with no changelog section here, before the image
+  # build rather than after it — five minutes of QEMU, but five minutes spent
+  # on a release that was never going to be published.
+  gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [checks]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
-      contents: write
+      contents: read
     outputs:
-      # 'true' only when this run created the tag. `image` keys off it.
-      cut: ${{ steps.cut.outputs.cut }}
-      tag: ${{ steps.cut.outputs.tag }}
+      # 'true' only when package.json names a version that has no tag yet.
+      # `image` and `release` both key off it.
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
           # Tags are needed to answer "is this version new" and "is it newer".
           fetch-depth: 0
-      - id: cut
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: decide
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           TAG="v$VERSION"
 
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
           # Most merges are not releases. Say so and stop, rather than failing
           # a green build over a version nobody intended to change.
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             echo "$TAG already exists — nothing to release"
-            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -108,54 +114,46 @@ jobs:
             exit 1
           fi
 
-          # The release notes are the changelog section for this version. Kept
-          # in one place rather than written twice and left to disagree.
-          NOTES="$(awk -v v="## $VERSION " '
-            index($0, v) == 1 { inside = 1; next }
-            inside && /^## / { exit }
-            inside { print }
-          ' CHANGELOG.md)"
-          if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
-            echo "::error::CHANGELOG.md has no section for $VERSION — a release without notes is not a release"
+          # The notes are the changelog section for this version, and the
+          # script that reads them is the same one `release` uses to write
+          # them. Its output is discarded here; only its exit code matters.
+          if ! npm run --silent changelog:section >/dev/null; then
+            echo "::error::CHANGELOG.md has no usable section for $VERSION — a release without notes is not a release"
             exit 1
           fi
 
-          # Annotated and pointed at this commit, so the tag and the
-          # package.json it was cut from can never drift apart.
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
-          git push origin "$TAG"
-
-          printf '%s\n' "$NOTES" > /tmp/notes.md
-          gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md
-
-          echo "cut=true" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Released $TAG"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "$TAG is new — building its image before anything is published"
 
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [checks, release]
-    # Releases only, by either route: a tag pushed by hand, or one the
-    # `release` job above just cut.
+    needs: [checks, gate]
+    # Releases only, by either route: a tag pushed by hand, or a version bump
+    # `gate` has just accepted.
     #
-    # `always()` is needed because `release` is SKIPPED on a tag push, and a
+    # `always()` is needed because `gate` is SKIPPED on a tag push, and a
     # skipped dependency would otherwise skip this job too — which would mean
     # hand-pushed tags silently stopped publishing. `checks` is then asserted
     # explicitly, because always() also runs after a failure.
     #
     # Every other trigger stops at `checks`. Building an image nobody will pull
-    # cost roughly ten minutes of QEMU on each pull request, twice over for two
-    # architectures.
+    # cost roughly five minutes of QEMU on every pull request — both
+    # architectures together, measured across the 0.4.6 and 0.5.0 releases.
     if: >-
       always() && needs.checks.result == 'success' &&
       (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') ||
-       needs.release.outputs.cut == 'true')
+       needs.gate.outputs.release == 'true')
     permissions:
+      # read: this job publishes images, and no longer writes anything to the
+      # repository. Cutting the tag belongs to `release`, after this succeeds.
       contents: read
       packages: write
+    outputs:
+      # What `release` needs to tell people which image carries this version.
+      version: ${{ steps.tags.outputs.version }}
+      ghcr_repo: ${{ steps.tags.outputs.ghcr_repo }}
+      hub_repo: ${{ steps.tags.outputs.hub_repo }}
     # Both credentials are secrets. The `secrets` context is not available in a
     # step's `if:`, so a bare `secrets.DOCKERHUB_USERNAME != ''` never matches
     # and the Docker Hub push is skipped without saying why — lifting the value
@@ -194,31 +192,37 @@ jobs:
         env:
           OWNER: ${{ github.repository_owner }}
           REF: ${{ github.ref }}
-          # Set when the release job cut the tag in this same run, empty when a
-          # tag was pushed by hand.
-          CUT_TAG: ${{ needs.release.outputs.tag }}
+          # The version `gate` accepted, empty when a tag was pushed by hand.
+          # Note this names a tag that does not EXIST yet — it is cut after
+          # this job succeeds — which is exactly why the check below compares
+          # it against package.json rather than against the repository.
+          GATE_TAG: ${{ needs.gate.outputs.tag }}
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
+          # Named after the package, so the repository the release notes send
+          # people to and the one this job pushes cannot come apart.
+          IMAGE_NAME="$(node -p "require('./package.json').name")"
           NAMESPACE="${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}"
 
           # Two ways to be here, and the ref only names the tag in one of them:
-          # a run triggered by the tag push carries it, a run that CUT the tag
-          # is still on refs/heads/main. Checked rather than assumed, because
-          # the failure it prevents is publishing `latest` off an arbitrary
-          # commit — which is why this job does not run on main by itself.
-          if [ -n "${CUT_TAG}" ]; then
-            TAG="$CUT_TAG"
+          # a run triggered by the tag push carries it, a run releasing a bump
+          # on main is still on refs/heads/main. Checked rather than assumed,
+          # because the failure it prevents is publishing `latest` off an
+          # arbitrary commit — which is why this job does not run on main by
+          # itself.
+          if [ -n "${GATE_TAG}" ]; then
+            TAG="$GATE_TAG"
           elif [[ "$REF" == refs/tags/* ]]; then
             TAG="${REF#refs/tags/}"
           else
-            echo "::error::$REF is not a tag and no release was cut — only a release publishes an image"
+            echo "::error::$REF is not a tag and no release was gated — only a release publishes an image"
             exit 1
           fi
 
           # The tag and package.json disagreeing means one of them is a
-          # mistake, and publishing either would be wrong. Releases have been
-          # cut by hand until now, which is exactly how that drift happens.
+          # mistake, and publishing either would be wrong. Hand-pushed tags are
+          # exactly how that drift happens.
           if [ "${TAG#v}" != "$VERSION" ]; then
             echo "::error::tag $TAG does not match package.json version $VERSION"
             exit 1
@@ -235,14 +239,18 @@ jobs:
 
           TAGS=""
           for label in $LABELS; do
-            TAGS="${TAGS:+$TAGS,}ghcr.io/${OWNER}/continuum:${label}"
+            TAGS="${TAGS:+$TAGS,}ghcr.io/${OWNER}/${IMAGE_NAME}:${label}"
             if [ -n "${NAMESPACE}" ]; then
-              TAGS="$TAGS,${NAMESPACE}/continuum:${label}"
+              TAGS="$TAGS,${NAMESPACE}/${IMAGE_NAME}:${label}"
             fi
           done
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          # For the release notes, which name the images this run published
+          # rather than describing them from memory.
+          echo "ghcr_repo=ghcr.io/${OWNER}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "hub_repo=${NAMESPACE}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
           echo "Publishing: $TAGS"
       - uses: docker/build-push-action@v7
         with:
@@ -261,3 +269,86 @@ jobs:
             org.opencontainers.image.version=${{ steps.tags.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+  # Cut the tag and publish the notes — last, and only once the image is in
+  # both registries. Everything before this point is reversible; nothing here
+  # is, which is why it goes at the end.
+  #
+  # No `always()`, deliberately, and no `if` on the image result: a failed or
+  # skipped `image` job skips this one through `needs` alone. That is the whole
+  # ordering. A failed build therefore leaves no tag and no release, and the
+  # fix is to fix the build and merge again — not to delete a published tag.
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [gate, image]
+    if: needs.gate.outputs.release == 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          GHCR_REPO: ${{ needs.image.outputs.ghcr_repo }}
+          HUB_REPO: ${{ needs.image.outputs.hub_repo }}
+        run: |
+          set -euo pipefail
+
+          # Annotated and pointed at this commit, so the tag and the
+          # package.json it was cut from can never drift apart.
+          #
+          # Guarded because GitHub can re-run this job alone: after a publish
+          # that tagged and then failed to create the release, a re-run should
+          # finish the job rather than fall over on its own leftovers.
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG is already tagged — carrying on to the release"
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email 'github-actions[bot]@users.noreply.github.com'
+            git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::$TAG already has a release — leaving its notes alone"
+            exit 0
+          fi
+
+          # The notes are the changelog section, read by the same script `gate`
+          # used to insist there was one.
+          npm run --silent changelog:section > /tmp/notes.md
+
+          # Then which image carries it and what to do with a server already
+          # running — the two questions a changelog does not answer. The
+          # wording lives in .github/release-notes-footer.md, so editing it is
+          # not editing the workflow.
+          #
+          # None of these values can contain a pipe, which is why it is the
+          # delimiter: every one of them contains slashes.
+          sed \
+            -e "s|\${VERSION}|$VERSION|g" \
+            -e "s|\${TAG}|$TAG|g" \
+            -e "s|\${HUB_REPO}|$HUB_REPO|g" \
+            -e "s|\${GHCR_REPO}|$GHCR_REPO|g" \
+            -e "s|\${REPO_URL}|$REPO_URL|g" \
+            .github/release-notes-footer.md > /tmp/footer.md
+
+          # An unfilled placeholder would ship as literal text in the notes.
+          # Checked against the FOOTER alone: a changelog entry is free to
+          # mention `${POSTGRES_PASSWORD}` in a code span, and several do.
+          if grep -q '\${' /tmp/footer.md; then
+            echo "::error::.github/release-notes-footer.md has a placeholder this job does not fill"
+            exit 1
+          fi
+
+          # The blank line matters: without it the footer's first line is read
+          # as a continuation of the changelog's last bullet.
+          { echo; cat /tmp/footer.md; } >> /tmp/notes.md
+
+          gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md
+          echo "Released $TAG"
