@@ -9,9 +9,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { person, salaryEntry } from '$lib/server/db/schema';
+import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { recordSalary } from '$lib/server/salary';
+import { loadSalaryHistory, recordSalary } from '$lib/server/salary';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -28,7 +28,9 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+	await harness.sql`delete from document_link`;
 	await harness.sql`delete from salary_entry`;
+	await harness.sql`delete from document`;
 	await harness.sql`delete from person`;
 	await testDb
 		.insert(person)
@@ -115,5 +117,63 @@ describe('the currency an entry holds', () => {
 		expect(row.currency).toBe('CZK');
 		// A relabel, never a conversion: the digits are what the slip printed.
 		expect(row.grossMinor).toBe(20101900n);
+	});
+});
+
+describe('which currency a slip row is read in', () => {
+	// 1 EUR = 25 CZK, flat. Enough to tell a converted figure from a stored one.
+	const convert = (amount: bigint, from: string, to: string) => {
+		if (from === to) return amount;
+		if (from === 'CZK' && to === 'EUR') return amount / 25n;
+		if (from === 'EUR' && to === 'CZK') return amount * 25n;
+		return amount;
+	};
+
+	async function czechSlip(month: string, id: string) {
+		await testDb.insert(document).values({
+			id,
+			name: `Payslip ${month} · Robert`,
+			shelf: 'payslips',
+			storedName: `${month}.pdf`,
+			ext: 'PDF',
+			addedOn: '2026-08-25',
+			currency: 'CZK',
+			periodOn: `${month}-01`
+		});
+		await testDb.insert(documentLink).values({ documentId: id, targetId: ROBERT });
+		await recordSalary(
+			{
+				personId: ROBERT,
+				periodMonth: month,
+				currency: 'CZK',
+				grossMinor: 13588700n,
+				netMinor: 10220200n,
+				source: 'payslip',
+				documentId: id
+			},
+			testDb
+		);
+	}
+
+	/**
+	 * The row is the EVIDENCE, and the evidence says 135 887 Kč. Restating it in
+	 * the household's currency shows a number that appears nowhere on the piece
+	 * of paper the row links to — which is what the screen did until v0.5.1.
+	 */
+	it('reports a slip as it was recorded, not converted to the base', async () => {
+		await czechSlip('2026-01', rowId('doc-jan'));
+		const [robert] = await loadSalaryHistory('EUR', convert, testDb);
+		expect(robert.payslips).toHaveLength(1);
+		expect(robert.payslips[0].currency).toBe('CZK');
+		expect(robert.payslips[0].grossMinor).toBe(13588700n);
+		expect(robert.payslips[0].netMinor).toBe(10220200n);
+	});
+
+	// The year rows are the opposite question: comparing years cannot be asked
+	// across currencies, so those stay converted.
+	it('still converts the year rows to the base currency', async () => {
+		await czechSlip('2026-02', rowId('doc-feb'));
+		const [robert] = await loadSalaryHistory('EUR', convert, testDb);
+		expect(robert.years[0].grossTotalMinor).toBe(13588700n / 25n);
 	});
 });

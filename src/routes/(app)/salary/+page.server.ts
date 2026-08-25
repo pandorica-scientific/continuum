@@ -26,7 +26,7 @@ import { getBaseCurrency } from '$lib/server/settings';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/system/files';
-import { formatMinor, parseAmountToMinor } from '$lib/money';
+import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
 /** bigint does not survive serialisation; every figure crosses as a string and
@@ -96,7 +96,12 @@ export const load: PageServerLoad = async ({ url }) => {
 				gross: s.grossMinor === null ? null : formatMinor(s.grossMinor, s.currency),
 				net: s.netMinor === null ? null : formatMinor(s.netMinor, s.currency),
 				bonus: s.bonusMinor === null ? null : formatMinor(s.bonusMinor, s.currency),
-				currency: s.currency,
+				// The symbol goes beside every figure on the row, the way the Tax
+				// screen prints a statement's. The code travels alongside it because
+				// the ⋯ menu's currency select has to send back a currency, and "Kč"
+				// is not one.
+				currency: displayCurrency(s.currency),
+				currencyCode: s.currency,
 				file: s.file
 			}))
 		}))

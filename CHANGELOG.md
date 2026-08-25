@@ -11,6 +11,7 @@
 - 💱 **A payslip is filed in the currency it is printed in, not the household's base** — the two are different questions, and on a household reporting in euro every Czech payslip was stored as 135 887 EUR, which every conversion downstream then multiplied by the euro rate
 - ✏️ **A month's figures are corrected in that month's own currency** — a correction was parsed as the base currency whatever the month was filed in, so fixing one koruna figure stored a euro one
 - 📐 **Base pay can be corrected** — it is gross with the award taken out and was read-only for that reason, which left the one figure a person actually knows as the one they could not touch; saving it writes gross and leaves the award alone
+- 🧾 **A payslip row shows the figures the slip printed, in the currency it printed them in** — every row was restated into the household's currency, so a Czech slip's 135 887 Kč was read back as a euro amount that appears nowhere on the paper the row links to; the year rows and the summary band stay converted, because comparing years cannot be asked across currencies
 
 ### ✨ Added
 
@@ -21,7 +22,7 @@
 
 ### 🔧 Changed
 
-- 🏷️ **The payslip row shows whose month it is instead of the word "slip"** — every row in that table is a slip, so the word said nothing the paperclip does not, and a row in a currency other than the household's now says which
+- 🏷️ **The payslip row shows whose month it is instead of the word "slip"** — every row in that table is a slip, so the word said nothing the paperclip does not, and each figure now carries its own currency symbol the way a tax statement's does
 
 ## 0.5.0 — 2026-08-24
 

@@ -15,7 +15,6 @@
 	import SalarySummaryBand from '$lib/components/SalarySummaryBand.svelte';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
-	import { currencyLabel } from '$lib/currencies';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
 	import type { SalaryMode } from '$lib/charts/salary-chart-geometry';
 
@@ -133,15 +132,6 @@
 							{#if data.people.length > 1}
 								<PersonTag name={s.personName} hue={hueFor(s.personId)} />
 							{/if}
-							{#if s.currency !== data.baseCurrency}
-								<!-- Only when it differs from what the household reports in. On a
-								     screen whose every other figure is already converted, an
-								     unmarked koruna row beside a euro one is the defect this
-								     names. -->
-								<span class="s-cur mono" title="Paid in {currencyLabel(s.currency)}">
-									{s.currency}
-								</span>
-							{/if}
 						</span>
 
 						<!-- Base is gross with the award taken out. It was read-only for
@@ -182,7 +172,7 @@
 									title="gross less the bonus — saving this sets gross"
 									onclick={() => (editing = `${s.id}|base`)}
 								>
-									{s.base ?? '—'}
+									{s.base ?? '—'}{#if s.base !== null}<span class="cur">{s.currency}</span>{/if}
 								</button>
 							{/if}
 						</span>
@@ -232,7 +222,7 @@
 										class:strong={f.key === 'gross'}
 										onclick={() => (editing = `${s.id}|${f.key}`)}
 									>
-										{f.value}
+										{f.value}<span class="cur">{s.currency}</span>
 									</button>
 								{/if}
 							</span>
@@ -273,7 +263,7 @@
 											<span class="menu-label">Paid in</span>
 											<select
 												name="currency"
-												value={s.currency}
+												value={s.currencyCode}
 												aria-label="Currency for {s.periodMonth}"
 											>
 												{#each data.currencies as code (code)}
@@ -340,7 +330,7 @@
 									class:none={s.net === null}
 									onclick={() => (editing = `${s.id}|net`)}
 								>
-									{s.net ?? '—'}
+									{s.net ?? '—'}{#if s.net !== null}<span class="cur">{s.currency}</span>{/if}
 								</button>
 							{/if}
 						</span>
@@ -527,18 +517,15 @@
 	.s-file:hover {
 		color: var(--fg1);
 	}
-	/* The row's own currency, shown only when it is not the household's. It is
-	   an amber note rather than a neutral one: a month in another currency is
-	   converted everywhere else on this screen, and the row is the one place
-	   that says so. */
-	.s-cur {
+	/* The unit beside every figure on a slip row, the way the Tax screen prints
+	   a statement's. Dimmer and smaller than the number it belongs to: it is the
+	   same on all four figures in the row, so it must not compete with the one
+	   thing that differs between them. */
+	.cur {
+		margin-left: 4px;
 		font-size: var(--text-xs);
-		font-weight: 600;
-		color: var(--yellow);
-		border: 1px solid color-mix(in srgb, var(--yellow) 40%, transparent);
-		border-radius: var(--radius-xl);
-		padding: 1px 6px;
-		line-height: 1.4;
+		font-weight: 400;
+		color: var(--fg3);
 	}
 	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
 	   bordered label at --text-xs, so the hint's promise that "correcting it

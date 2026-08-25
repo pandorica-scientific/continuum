@@ -22,7 +22,16 @@ export interface SalaryPersonHistory {
 		grossMinor: bigint | null;
 		netMinor: bigint | null;
 		bonusMinor: bigint | null;
-		/** Always the base currency: the figures arrive already converted. */
+		/**
+		 * The currency the month was RECORDED in, and the unit these figures are
+		 * in — not the base currency.
+		 *
+		 * The year rows above are converted, because comparing years is the
+		 * question they answer and it cannot be asked across currencies. A slip
+		 * row is the opposite question: it is the evidence, and the evidence says
+		 * 135 887 Kč. Restating it as €5 415 shows a number that appears nowhere
+		 * on the piece of paper the row links to.
+		 */
 		currency: string;
 		file: string | null;
 	}[];
@@ -94,6 +103,9 @@ export async function loadSalaryHistory(
 			slipDocs.filter((d) => ownerOf.get(d.id) === p.id).map((d) => [d.id, d.storedName] as const)
 		);
 
+		// Slip rows are the entries as STORED — not the converted `months` above.
+		const rawOf = new Map(recorded.filter((e) => e.documentId).map((e) => [e.documentId!, e]));
+
 		return {
 			id: p.id,
 			name: p.name,
@@ -108,17 +120,21 @@ export async function loadSalaryHistory(
 			),
 			payslips: months
 				.filter((m) => m.documentId !== null && fileOf.has(m.documentId))
-				.map((m) => ({
-					id: m.documentId!,
-					periodMonth: m.periodMonth,
-					grossMinor: m.grossMinor,
-					netMinor: m.netMinor,
-					bonusMinor: m.bonusMinor,
-					// Figures arrive already converted, so the unit they are IN is the
-					// base currency — not the currency the entry was stored in.
-					currency: baseCurrency,
-					file: fileOf.get(m.documentId!) ?? null
-				}))
+				.map((m) => {
+					const raw = rawOf.get(m.documentId!);
+					return {
+						id: m.documentId!,
+						periodMonth: m.periodMonth,
+						// As recorded, in the currency it was recorded in. Converting here
+						// put every row in the base currency, so a household reporting in
+						// euro read its Czech payslips as euro amounts.
+						grossMinor: raw?.grossMinor ?? null,
+						netMinor: raw?.netMinor ?? null,
+						bonusMinor: raw?.bonusMinor ?? null,
+						currency: raw?.currency ?? baseCurrency,
+						file: fileOf.get(m.documentId!) ?? null
+					};
+				})
 				.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1))
 		};
 	});
