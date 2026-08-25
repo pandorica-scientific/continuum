@@ -21,7 +21,8 @@
 	// typing a threshold in the same visit saved neither it nor the rate.
 	let exemptLongHeld = $derived(data.tax.exemptLongHeld);
 
-	async function upload(files: FileList) {
+	// FileList from a browse or a drop, File[] from the scan engine.
+	async function upload(files: FileList | File[]) {
 		const file = files[0];
 		if (!file) return { type: 'error' as const, message: 'Choose a report first.' };
 		const body = new FormData();

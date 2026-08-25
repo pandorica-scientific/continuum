@@ -8,6 +8,7 @@
 	import TagInput from '$lib/components/TagInput.svelte';
 	import Field from '$lib/components/Field.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	// Beside the states themselves, so a state added to the enum cannot reach the
 	// screen without a name and a colour. Split is not a review state at all, so
@@ -384,7 +385,14 @@
 				class="attach-form"
 			>
 				<input type="hidden" name="id" value={attaching.id} />
-				<input type="file" name="file" aria-label="Attach a receipt to this transaction" />
+				<div class="attach-zone">
+					<UploadDropzone
+						name="file"
+						accept="application/pdf,image/*"
+						idleText="Drop a receipt here, or click to browse"
+						description="PDF, PNG or JPEG"
+					/>
+				</div>
 				<button type="submit" class="btn btn-primary">Attach</button>
 			</form>
 		</Modal>
@@ -546,7 +554,7 @@
 	}
 	/* A file input's default width is far wider than its box and does not shrink,
 	   which pushed the whole register into horizontal scroll at phone width. */
-	.attach-form input[type='file'] {
+	.attach-zone {
 		max-width: 100%;
 		min-width: 0;
 		flex: 1 1 12rem;

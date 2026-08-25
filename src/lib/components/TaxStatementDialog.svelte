@@ -5,6 +5,7 @@
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import ActionError from '$lib/components/ActionError.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { currencyLabel } from '$lib/currencies';
 	import { ATTACHMENT_KINDS } from '$lib/tax';
 
@@ -88,6 +89,13 @@
 		method="POST"
 		action="?/save"
 		enctype="multipart/form-data"
+		onchange={(event) => {
+			// The change event bubbles up from the dropzone's own input.
+			// fileNames is not merely a display: it gates the kind select and
+			// the document picker below, so it has to keep being written.
+			const target = event.target as HTMLInputElement;
+			if (target?.type === 'file') fileNames = [...(target.files ?? [])].map((f) => f.name);
+		}}
 		use:enhance={() =>
 			async ({ update, result }) => {
 				actionError = messageFromActionResult(result);
@@ -183,13 +191,12 @@
 				     paper, so several files at once; one kind per batch, and a mixed
 				     batch is two saves. -->
 				<span>Upload the paperwork</span>
-				<input
-					class="tax-file"
-					type="file"
+				<UploadDropzone
 					name="file"
 					multiple
 					accept=".pdf,.png,.jpg,.jpeg,.webp"
-					onchange={(e) => (fileNames = [...(e.currentTarget.files ?? [])].map((f) => f.name))}
+					idleText="Drop the paperwork here, or click to browse"
+					description="PDF, PNG, JPEG or WebP"
 				/>
 			</label>
 			<label>

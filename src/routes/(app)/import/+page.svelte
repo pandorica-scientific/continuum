@@ -68,7 +68,9 @@
 		return () => clearInterval(timer);
 	});
 
-	async function uploadFiles(files: FileList) {
+	// FileList from a browse or a drop, File[] from the scan engine, which
+	// builds its PDF in memory and has no FileList to hand over.
+	async function uploadFiles(files: FileList | File[]) {
 		const body = new FormData();
 		for (const f of files) body.append('statements', f);
 		if (assignAccountId) body.set('accountId', assignAccountId);

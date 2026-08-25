@@ -12,6 +12,7 @@
 	import ActionError from '$lib/components/ActionError.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { currencyLabel } from '$lib/currencies';
 
 	let {
@@ -176,6 +177,17 @@
 		method="POST"
 		action="?/addPayslip"
 		enctype="multipart/form-data"
+		onchange={(event) => {
+			// Bubbles up from the dropzone's own input. This handler is not a
+			// filename display: it starts reading the slip, which is what fills
+			// the three figures in.
+			const target = event.target as HTMLInputElement;
+			if (target?.type !== 'file') return;
+			const picked = target.files?.[0] ?? null;
+			fileName = picked?.name ?? null;
+			fileWasChosen = picked !== null;
+			if (picked) void readChosen(picked);
+		}}
 		use:enhance={() =>
 			async ({ result, update }) => {
 				actionError = messageFromActionResult(result);
@@ -321,16 +333,11 @@
 				</label>
 				<label class="wide">
 					<span>Payslip PDF</span>
-					<input
-						type="file"
+					<UploadDropzone
 						name="file"
 						accept=".pdf"
-						onchange={(e) => {
-							const picked = e.currentTarget.files?.[0] ?? null;
-							fileName = picked?.name ?? null;
-							fileWasChosen = picked !== null;
-							if (picked) void readChosen(picked);
-						}}
+						idleText="Drop the payslip here, or click to browse"
+						description="PDF"
 					/>
 				</label>
 				<label>

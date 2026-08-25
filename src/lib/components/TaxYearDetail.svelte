@@ -15,6 +15,7 @@
 	// and gone.
 	import { enhance } from '$app/forms';
 	import PersonTag from '$lib/components/PersonTag.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { ATTACHMENT_KINDS } from '$lib/tax';
 
 	interface Attachment {
@@ -160,7 +161,13 @@
 						class="adder"
 					>
 						<input type="hidden" name="id" value={s.id} />
-						<input type="file" name="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp" />
+						<UploadDropzone
+							name="file"
+							multiple
+							accept=".pdf,.png,.jpg,.jpeg,.webp"
+							idleText="Drop files here, or click to browse"
+							description="PDF, PNG, JPEG or WebP"
+						/>
 						<select name="fileKind" aria-label="What these files are">
 							{#each ATTACHMENT_KINDS as k (k.key)}
 								<option value={k.key}>{k.label}</option>
@@ -319,9 +326,9 @@
 		flex-wrap: wrap;
 		margin-top: var(--space-2);
 	}
-	.adder input[type='file'] {
-		font-size: var(--text-xs);
-		max-width: 210px;
+	.adder :global(.dropzone) {
+		flex: 1 1 210px;
+		min-width: 0;
 	}
 	.actions {
 		display: flex;

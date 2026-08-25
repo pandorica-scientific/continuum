@@ -10,6 +10,7 @@
 	import Pill from '$lib/components/Pill.svelte';
 	import ImageSlot from '$lib/components/ImageSlot.svelte';
 	import Lightbox from '$lib/components/Lightbox.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import FloorPlan from '$lib/components/FloorPlan.svelte';
 	import FloorPlanEditor from '$lib/components/FloorPlanEditor.svelte';
 
@@ -547,10 +548,15 @@
 						<input name="label" placeholder="SVJ fee & repair fund" />
 						<input name="amount" inputmode="decimal" placeholder="4 850" />
 						<button type="submit" class="btn">Add</button>
-						<label class="bill-file">
+						<div class="bill-file">
 							<span>Bill file (optional) — it is filed in Documents about this flat</span>
-							<input name="file" type="file" />
-						</label>
+							<UploadDropzone
+								name="file"
+								accept="application/pdf,image/*"
+								idleText="Drop a bill here, or click to browse"
+								description="PDF, PNG or JPEG"
+							/>
+						</div>
 					</form>
 				{:else}
 					<button
