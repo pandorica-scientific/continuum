@@ -28,7 +28,7 @@ const statements = [
 ];
 
 const countries = [{ code: 'CZ', name: 'Czechia', token: '--series-health-soft' }];
-const props = { statements, countries, onedit: () => {} };
+const props = { statements, countries, personHue: () => '--series-r10', onedit: () => {} };
 
 describe('the expanded year', () => {
 	it('lists every attachment the statement holds', () => {

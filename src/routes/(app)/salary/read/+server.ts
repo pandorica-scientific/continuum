@@ -33,11 +33,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		: [];
 	if (!owner) error(400, 'Pick whose payslip this is.');
 
-	const currency = await getBaseCurrency();
 	const reading = await readPayslip(new Uint8Array(await file.arrayBuffer()), owner.name);
+	// The slip's own currency decides how its figures print — a koruna amount
+	// formatted as euro is a different number. Only the formatting falls back to
+	// the base currency when the slip did not say; `currency` still crosses as
+	// null so the dialog asks for it rather than filling one in.
+	const currency = reading.currency ?? (await getBaseCurrency());
 
 	return json({
 		periodMonth: reading.periodMonth,
+		currency: reading.currency,
 		gross: reading.grossMinor === null ? '' : formatMinor(reading.grossMinor, currency),
 		net: reading.netMinor === null ? '' : formatMinor(reading.netMinor, currency),
 		bonus: reading.bonusMinor === null ? '' : formatMinor(reading.bonusMinor, currency)

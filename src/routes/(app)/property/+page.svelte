@@ -506,7 +506,14 @@
 						<span class="b-label">
 							{bill.label}
 							{#if bill.file}
-								<a href="/files/{bill.file}" target="_blank" rel="noopener" class="b-file">📎</a>
+								<a
+									href="/files/{bill.file}"
+									target="_blank"
+									rel="noopener"
+									class="b-file"
+									data-file-name={bill.label}
+									aria-label="Open the bill for {bill.label}">📎</a
+								>
 							{/if}
 							<form method="POST" action="?/setBillSource" use:enhance class="b-meter">
 								<input type="hidden" name="billId" value={bill.id} />

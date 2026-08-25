@@ -2,11 +2,12 @@
 import { error } from '@sveltejs/kit';
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { transaction } from '$lib/server/db/schema';
+import { person, transaction } from '$lib/server/db/schema';
 import { computeNetWorth } from '$lib/server/networth';
 import { missingRateCurrencies } from '$lib/server/fx';
 import { getHouseholdName, getModules } from '$lib/server/settings';
 import { pathDisabled } from '$lib/modules/registry';
+import { personHues } from '$lib/people';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { THEME_COOKIE, themeCookieOptions, themeOrDefault } from '$lib/theme';
 import { installFacts } from '$lib/server/system/status';
@@ -19,7 +20,7 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		error(404, 'This module is switched off');
 	}
 
-	const [householdLabel, badgeRows, netWorth, install] = await Promise.all([
+	const [householdLabel, badgeRows, netWorth, install, household] = await Promise.all([
 		getHouseholdName(),
 		db
 			.select({ count: sql<number>`count(*)::int` })
@@ -27,8 +28,15 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 			.where(sql`${transaction.reviewState} = 'needs_review'`),
 		computeNetWorth(),
 		// Cached after the first call: neither fact can change without a restart.
-		installFacts()
+		installFacts(),
+		db.select({ id: person.id, name: person.name }).from(person)
 	]);
+
+	// Loaded on the LAYOUT rather than per screen, because a person's colour has
+	// to be assigned over the whole household to be the same everywhere. A screen
+	// computing it from the people it happens to show would give a household of
+	// two different colours on a page where only one of them appears.
+	const hues = personHues(household.map((p) => p.id));
 
 	// Every converted total falls back to face value when a rate is unknown,
 	// which is the least-bad arithmetic but silently understates the figure by
@@ -53,6 +61,14 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		// Carried on every screen, not just Settings: an instance anyone can walk
 		// into should say so wherever you are looking, or the state is a surprise.
 		householdLabel,
+		// `householdPeople`, not `people`: several screens load a `people` of their
+		// own and SvelteKit merges page data over layout data, so the shared list
+		// needs a name a page cannot shadow.
+		householdPeople: household.map((p) => ({
+			id: p.id,
+			name: p.name,
+			hue: hues.get(p.id) ?? '--fg3'
+		})),
 		missingRates,
 		rateWarningDismissed,
 		netWorth:

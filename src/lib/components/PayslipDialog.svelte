@@ -12,12 +12,19 @@
 	import ActionError from '$lib/components/ActionError.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import { currencyLabel } from '$lib/currencies';
 
 	let {
 		people,
+		currencies,
+		baseCurrency,
 		onclose
 	}: {
 		people: { id: string; name: string }[];
+		/** Every currency this instance can convert. */
+		currencies: string[];
+		/** Only to say which one is the household's — never to preselect it. */
+		baseCurrency: string;
 		onclose: () => void;
 	} = $props();
 
@@ -26,6 +33,16 @@
 	let gross = $state('');
 	let net = $state('');
 	let bonus = $state('');
+	/**
+	 * The currency the slip is PRINTED in.
+	 *
+	 * Starts empty and stays required. Until v0.5.1 it was silently the
+	 * household's base currency, which filed Czech payslips as euro — so the one
+	 * thing this field must never do is offer a default nobody looked at. The
+	 * slip fills it in when the slip says which currency it is.
+	 */
+	let currency = $state('');
+	let currencyRead = $state(false);
 	let fileName = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
 	// A browser will not let a file input be repopulated, so a refusal after one
@@ -72,6 +89,10 @@
 			if (!touched.includes('net')) net = read.net ?? '';
 			if (!touched.includes('bonus')) bonus = read.bonus ?? '';
 			if (!touched.includes('periodMonth') && read.periodMonth) periodMonth = read.periodMonth;
+			if (!touched.includes('currency') && read.currency) {
+				currency = read.currency;
+				currencyRead = true;
+			}
 			readNote =
 				read.gross || read.net
 					? 'Read from the slip — check the figures before adding.'
@@ -118,6 +139,7 @@
 						gross = values.gross ?? gross;
 						net = values.net ?? net;
 						bonus = values.bonus ?? bonus;
+						currency = values.currency || currency;
 					}
 					fileName = null;
 				}
@@ -147,6 +169,18 @@
 			<p class="reading">{readNote}</p>
 		{/if}
 
+		{#if currencyRead}
+			<p class="reading">Currency read from the slip as {currency} — change it if that is wrong.</p>
+		{:else if fileWasChosen && !currency}
+			<!-- Said out loud rather than filled in quietly. The base currency is
+			     where this household REPORTS; it is not evidence of what anybody
+			     was paid. -->
+			<p class="refile">
+				The slip does not name a currency. Pick the one it was paid in — this household reports in
+				{baseCurrency}, which is not the same question.
+			</p>
+		{/if}
+
 		{#if actionError && fileWasChosen}
 			<p class="refile">Choose the file again — a browser will not let one be put back.</p>
 		{/if}
@@ -168,6 +202,26 @@
 					bind:value={periodMonth}
 					oninput={() => touch('periodMonth')}
 				/>
+			</label>
+			<label>
+				<span>Currency</span>
+				<select
+					name="currency"
+					required
+					bind:value={currency}
+					onchange={() => {
+						touch('currency');
+						currencyRead = false;
+					}}
+				>
+					<!-- No preselected currency. An empty option a browser refuses to
+					     submit is the whole point: the household's base sitting here by
+					     default is exactly how six koruna payslips became euro. -->
+					<option value="" disabled>Which currency?</option>
+					{#each currencies as code (code)}
+						<option value={code}>{currencyLabel(code)}</option>
+					{/each}
+				</select>
 			</label>
 			<label class="wide">
 				<span>Payslip PDF</span>

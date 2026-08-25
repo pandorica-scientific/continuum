@@ -14,6 +14,8 @@
 	import SalaryMatrix, { SALARY_COLUMNS } from '$lib/components/SalaryMatrix.svelte';
 	import SalarySummaryBand from '$lib/components/SalarySummaryBand.svelte';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
+	import PersonTag from '$lib/components/PersonTag.svelte';
+	import { currencyLabel } from '$lib/currencies';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
 	import type { SalaryMode } from '$lib/charts/salary-chart-geometry';
 
@@ -55,6 +57,9 @@
 		payslips.filter((s) => Number(s.periodMonth.slice(0, 4)) === year);
 
 	const anyHistory = $derived(years.length > 0 || payslips.length > 0);
+
+	// The household's colours, not this screen's — see PersonTag.
+	const hueFor = (id: string) => data.householdPeople.find((p) => p.id === id)?.hue ?? '--fg3';
 </script>
 
 <ScreenHeader
@@ -69,7 +74,12 @@
 </ScreenHeader>
 
 {#if adding}
-	<PayslipDialog people={data.people} onclose={() => (adding = false)} />
+	<PayslipDialog
+		people={data.people}
+		currencies={data.currencies}
+		baseCurrency={data.baseCurrency}
+		onclose={() => (adding = false)}
+	/>
 {/if}
 
 <SalarySummaryBand {years} currency={data.baseCurrency} scope={selected ? 'person' : 'household'} />
@@ -105,21 +115,75 @@
 					<div class="slip" style:grid-template-columns={SALARY_COLUMNS}>
 						<span class="month">
 							<span class="mono">{s.periodMonth}</span>
+							<!-- The word "slip" said nothing the paperclip does not: every row
+							     in this table IS a slip. The icon is the link, and whose month
+							     it is takes the space the word had. -->
 							{#if s.file}
-								<a href="/files/{s.file}" target="_blank" rel="noopener" class="s-name">slip</a>
+								<a
+									href="/files/{s.file}"
+									target="_blank"
+									rel="noopener"
+									class="s-file"
+									data-file-name="Payslip {s.periodMonth} · {s.personName}"
+									aria-label="Open the payslip for {s.periodMonth}">📎</a
+								>
 							{:else}
-								<span class="s-name quiet">no file</span>
+								<span class="s-file quiet" title="No file was uploaded for this month">—</span>
 							{/if}
-							{#if data.people.length > 1}<span class="whose">{s.personName}</span>{/if}
+							{#if data.people.length > 1}
+								<PersonTag name={s.personName} hue={hueFor(s.personId)} />
+							{/if}
+							{#if s.currency !== data.baseCurrency}
+								<!-- Only when it differs from what the household reports in. On a
+								     screen whose every other figure is already converted, an
+								     unmarked koruna row beside a euro one is the defect this
+								     names. -->
+								<span class="s-cur mono" title="Paid in {currencyLabel(s.currency)}">
+									{s.currency}
+								</span>
+							{/if}
 						</span>
 
-						<!-- Base is not a control: it is gross with the award taken out, so
-						     editing it would have to write one of the other two. -->
+						<!-- Base is gross with the award taken out. It was read-only for
+						     that reason — a derived figure has to decide which input it
+						     writes — and being unable to correct the one figure a person
+						     actually knows was worse than deciding. It writes gross and
+						     leaves the award alone. -->
 						<span class="f-slot">
-							{#if s.base !== null}
-								<span class="derived mono" title="gross less the bonus">{s.base}</span>
+							{#if editing === `${s.id}|base`}
+								<form
+									method="POST"
+									action="?/setPayslipFigure"
+									use:enhance={() =>
+										async ({ update }) => {
+											await update();
+											editing = null;
+										}}
+									class="figure-form"
+								>
+									<input type="hidden" name="personId" value={s.personId} />
+									<input type="hidden" name="periodMonth" value={s.periodMonth} />
+									<input type="hidden" name="field" value="base" />
+									<!-- svelte-ignore a11y_autofocus -->
+									<input
+										name="amount"
+										value={s.base ?? ''}
+										autofocus
+										aria-label="base for {s.periodMonth}"
+									/>
+									<button type="submit" class="btn">Save</button>
+									<button type="button" class="btn" onclick={() => (editing = null)}>Cancel</button>
+								</form>
 							{:else}
-								<span class="quiet">—</span>
+								<button
+									type="button"
+									class="figure"
+									class:none={s.base === null}
+									title="gross less the bonus — saving this sets gross"
+									onclick={() => (editing = `${s.id}|base`)}
+								>
+									{s.base ?? '—'}
+								</button>
 							{/if}
 						</span>
 
@@ -187,6 +251,38 @@
 									onclick={() => (confirming = confirming === s.id ? null : s.id)}>···</button
 								>
 								{#if confirming === s.id}
+									<div class="menu">
+										<!-- Correcting the currency, not converting it: the figures
+										     are the digits printed on the slip and only the name
+										     attached to them was wrong. Every month filed before
+										     v0.5.1 carries the household's base currency rather than
+										     what the slip said, and the file it was read from may be
+										     long gone — so this has to be fixable without one. -->
+										<form
+											method="POST"
+											action="?/setPayslipCurrency"
+											use:enhance={() =>
+												async ({ update }) => {
+													await update();
+													confirming = null;
+												}}
+											class="menu-form"
+										>
+											<input type="hidden" name="personId" value={s.personId} />
+											<input type="hidden" name="periodMonth" value={s.periodMonth} />
+											<span class="menu-label">Paid in</span>
+											<select
+												name="currency"
+												value={s.currency}
+												aria-label="Currency for {s.periodMonth}"
+											>
+												{#each data.currencies as code (code)}
+													<option value={code}>{code}</option>
+												{/each}
+											</select>
+											<button type="submit" class="btn">Set</button>
+										</form>
+									</div>
 									<form
 										method="POST"
 										action="?/deletePayslip"
@@ -195,7 +291,7 @@
 												await update();
 												confirming = null;
 											}}
-										class="menu"
+										class="menu menu-lower"
 									>
 										<input type="hidden" name="personId" value={s.personId} />
 										<input type="hidden" name="periodMonth" value={s.periodMonth} />
@@ -387,45 +483,62 @@
 	.menu-item:hover {
 		background: var(--bd);
 	}
-	/* Not a control: base is gross with the award taken out, so it is derived
-	   rather than stored, and editing it would have to write one of the other
-	   two. Dimmed, and it carries the arithmetic in its title. */
-	.derived {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-		cursor: help;
-		padding-right: 9px;
+	/* The delete form sits under the currency one rather than on top of it —
+	   both are absolutely positioned off the same ⋯. */
+	.menu-lower {
+		top: calc(100% + 44px);
 	}
-	/* Month over the file link, so the month reads as the row's identity and the
-	   link as what it was read from. */
+	.menu-form {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: 6px 8px;
+	}
+	.menu-label {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		white-space: nowrap;
+	}
+	.menu-form select {
+		min-width: 0;
+	}
+	/* The month, then what it was read from and whose it is. Wrapping rather
+	   than stacking: the tag is a chip on the same line as the paperclip when
+	   there is room for it, and drops under the month when there is not. */
 	.month {
 		display: flex;
-		flex-direction: column;
-		gap: 1px;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 4px 6px;
 		font-size: var(--text-sm);
 		color: var(--fg2);
 		min-width: 0;
-	}
-	/* A pill, not a dim caption. Under "Both" it is the only thing telling two
-	   Augusts apart, so it has to survive a glance down a column of figures. */
-	.whose {
-		align-self: flex-start;
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-pill);
-		padding: 1px 9px;
-		margin-top: 2px;
-		font-size: var(--text-xs);
-		font-family: var(--font-mono);
-		color: var(--fg2);
-		white-space: nowrap;
 	}
 	.quiet {
 		color: var(--fg3);
 		opacity: 0.7;
 	}
-	.s-name {
+	.s-file {
 		font-size: var(--text-sm);
+		line-height: 1;
+		text-decoration: none;
 		color: var(--fg2);
+	}
+	.s-file:hover {
+		color: var(--fg1);
+	}
+	/* The row's own currency, shown only when it is not the household's. It is
+	   an amber note rather than a neutral one: a month in another currency is
+	   converted everywhere else on this screen, and the row is the one place
+	   that says so. */
+	.s-cur {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--yellow);
+		border: 1px solid color-mix(in srgb, var(--yellow) 40%, transparent);
+		border-radius: var(--radius-xl);
+		padding: 1px 6px;
+		line-height: 1.4;
 	}
 	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
 	   bordered label at --text-xs, so the hint's promise that "correcting it

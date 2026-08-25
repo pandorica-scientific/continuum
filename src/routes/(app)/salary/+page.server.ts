@@ -23,6 +23,7 @@ import {
 import { deleteDocument } from '$lib/server/documents/mutations';
 import { mergeSalaryYears, type SalaryYear } from '$lib/salary';
 import { getBaseCurrency } from '$lib/server/settings';
+import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { saveUpload } from '$lib/server/system/files';
 import { formatMinor, parseAmountToMinor } from '$lib/money';
@@ -49,7 +50,11 @@ function serialiseYear(y: SalaryYear) {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	const [baseCurrency, rates] = await Promise.all([getBaseCurrency(), loadRateTable()]);
+	const [baseCurrency, rates, currencies] = await Promise.all([
+		getBaseCurrency(),
+		loadRateTable(),
+		availableCurrencies()
+	]);
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
@@ -66,6 +71,10 @@ export const load: PageServerLoad = async ({ url }) => {
 		// you then have to find a button on is half a shortcut.
 		openAdd: url.searchParams.get('add') === '1',
 		baseCurrency,
+		// Every currency the app can convert. A payslip states its own currency —
+		// the household's base is where it is REPORTED, not what it was paid in —
+		// so the dialog has to be able to offer any of them.
+		currencies,
 		people: history.map((p) => ({ id: p.id, name: p.name })),
 		household: household.map(serialiseYear),
 		history: history.map((p) => ({
@@ -113,6 +122,24 @@ function optionalAmount(
 	}
 }
 
+/**
+ * The currency a month is already recorded in.
+ *
+ * Every correction to a month has to be read in the currency that month was
+ * filed in, not the household's base. Parsing "102 202" as euro on a koruna
+ * month stores a euro figure, and the screen then prints it beside koruna.
+ *
+ * The base currency is the fallback only for a month that does not exist yet,
+ * which is the one case where there is nothing truer to use.
+ */
+async function currencyForMonth(personId: string, periodMonth: string): Promise<string> {
+	const [entry] = await db
+		.select({ currency: salaryEntry.currency })
+		.from(salaryEntry)
+		.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
+	return entry?.currency ?? (await getBaseCurrency());
+}
+
 export const actions: Actions = {
 	addPayslip: async ({ request }) => {
 		const form = await request.formData();
@@ -121,7 +148,6 @@ export const actions: Actions = {
 		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
 		// The reader's learned labels stay keyed by name; the link is by id.
 		const subject = owner.name;
-		const baseCurrency = await getBaseCurrency();
 
 		const file = form.get('file');
 		let storedName: string | null = null;
@@ -152,19 +178,9 @@ export const actions: Actions = {
 				.filter(Boolean)
 		);
 
-		// Anything typed wins; the reading fills what was left blank.
-		const typedGross = optionalAmount(form, 'gross', baseCurrency);
-		if (!typedGross.ok) return fail(400, { message: typedGross.message });
-		const typedNet = optionalAmount(form, 'net', baseCurrency);
-		if (!typedNet.ok) return fail(400, { message: typedNet.message });
-		const typedBonus = optionalAmount(form, 'bonus', baseCurrency);
-		if (!typedBonus.ok) return fail(400, { message: typedBonus.message });
-
-		const grossMinor = typedGross.value ?? reading?.grossMinor ?? null;
-		const netMinor = typedNet.value ?? reading?.netMinor ?? null;
-		const bonusMinor = typedBonus.value ?? reading?.bonusMinor ?? null;
-		const periodMonth =
-			String(form.get('periodMonth') ?? '').trim() || reading?.periodMonth || null;
+		const stated = String(form.get('currency') ?? '')
+			.trim()
+			.toUpperCase();
 
 		// Whatever was typed goes back with the failure, so a rejected upload is
 		// corrected rather than retyped. The file cannot be handed back — a
@@ -174,9 +190,42 @@ export const actions: Actions = {
 			gross: String(form.get('gross') ?? ''),
 			net: String(form.get('net') ?? ''),
 			bonus: String(form.get('bonus') ?? ''),
-			periodMonth: String(form.get('periodMonth') ?? '')
+			periodMonth: String(form.get('periodMonth') ?? ''),
+			currency: stated
 		};
 		const reject = (message: string) => fail(400, { message, values: typedBack, reopen: true });
+
+		// The currency the slip is PRINTED in, which is not the currency the
+		// household reports in. Taking the base currency for it is the v0.4.4
+		// defect this replaces: six Czech payslips were filed as 135 887 EUR, and
+		// every conversion downstream then multiplied koruna by the euro rate.
+		//
+		// Mandatory, with no fallback. The dialog fills it in from the slip when
+		// the slip says, and asks when it does not — and what a person states
+		// there is an answer, where a default is only ever a guess that nobody is
+		// shown.
+		const currencies = await availableCurrencies();
+		const currency = stated || reading?.currency || '';
+		if (!currency) {
+			return reject('Which currency is this payslip in?');
+		}
+		if (!currencies.includes(currency)) {
+			return reject(`${currency} is not a currency this instance can convert.`);
+		}
+
+		// Anything typed wins; the reading fills what was left blank.
+		const typedGross = optionalAmount(form, 'gross', currency);
+		if (!typedGross.ok) return fail(400, { message: typedGross.message });
+		const typedNet = optionalAmount(form, 'net', currency);
+		if (!typedNet.ok) return fail(400, { message: typedNet.message });
+		const typedBonus = optionalAmount(form, 'bonus', currency);
+		if (!typedBonus.ok) return fail(400, { message: typedBonus.message });
+
+		const grossMinor = typedGross.value ?? reading?.grossMinor ?? null;
+		const netMinor = typedNet.value ?? reading?.netMinor ?? null;
+		const bonusMinor = typedBonus.value ?? reading?.bonusMinor ?? null;
+		const periodMonth =
+			String(form.get('periodMonth') ?? '').trim() || reading?.periodMonth || null;
 
 		if (grossMinor === null && netMinor === null) {
 			return reject('Could not read a gross or net figure from the slip — please fill one in.');
@@ -215,7 +264,7 @@ export const actions: Actions = {
 				storedName,
 				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
 				addedOn: new Date().toISOString().slice(0, 10),
-				currency: baseCurrency,
+				currency,
 				periodOn: `${periodMonth}-01`
 			});
 			await tx
@@ -227,7 +276,11 @@ export const actions: Actions = {
 		const recorded = await recordSalary({
 			personId,
 			periodMonth,
-			currency: baseCurrency,
+			currency,
+			// A re-upload restates the month, its currency included: filing the
+			// same month again with a corrected currency has to move the label as
+			// well as the figures, or the koruna digits stay under a euro sign.
+			restateCurrency: true,
 			grossMinor,
 			netMinor,
 			bonusMinor,
@@ -247,9 +300,10 @@ export const actions: Actions = {
 				values: {
 					...typedBack,
 					periodMonth,
-					gross: grossMinor === null ? '' : formatMinor(grossMinor, baseCurrency),
-					net: netMinor === null ? '' : formatMinor(netMinor, baseCurrency),
-					bonus: bonusMinor === null ? '' : formatMinor(bonusMinor, baseCurrency)
+					currency,
+					gross: grossMinor === null ? '' : formatMinor(grossMinor, currency),
+					net: netMinor === null ? '' : formatMinor(netMinor, currency),
+					bonus: bonusMinor === null ? '' : formatMinor(bonusMinor, currency)
 				}
 			});
 		}
@@ -270,7 +324,7 @@ export const actions: Actions = {
 		const periodMonth = String(form.get('periodMonth') ?? '').trim();
 		const field = String(form.get('field') ?? '');
 		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
-		if (field !== 'gross' && field !== 'net') {
+		if (field !== 'gross' && field !== 'net' && field !== 'base') {
 			return fail(400, { message: 'That is not a figure this can set.' });
 		}
 
@@ -280,18 +334,37 @@ export const actions: Actions = {
 			.where(eq(person.id, personId));
 		if (!owner) return fail(404, { message: 'That person is no longer here.' });
 
-		const baseCurrency = await getBaseCurrency();
-		const parsed = optionalAmount(form, 'amount', baseCurrency);
+		const currency = await currencyForMonth(personId, periodMonth);
+		const parsed = optionalAmount(form, 'amount', currency);
 		if (!parsed.ok) return fail(400, { message: parsed.message });
 		if (parsed.value === null || parsed.value <= 0n) {
 			return fail(400, { message: 'The amount must be a positive number.' });
 		}
 
+		/**
+		 * Base is gross with the award taken out, so setting it sets gross.
+		 *
+		 * It used to be read-only for exactly that reason — an editable derived
+		 * figure has to decide which of its inputs it writes. It writes gross and
+		 * leaves the bonus alone, because that is what correcting a base means:
+		 * "the award was right, the pay under it was not". Correcting the award
+		 * itself is the bonus field, one column over.
+		 */
+		let grossMinor: bigint | null = null;
+		if (field === 'gross') grossMinor = parsed.value;
+		if (field === 'base') {
+			const [entry] = await db
+				.select({ bonusMinor: salaryEntry.bonusMinor })
+				.from(salaryEntry)
+				.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
+			grossMinor = parsed.value + (entry?.bonusMinor ?? 0n);
+		}
+
 		const recorded = await recordSalary({
 			personId,
 			periodMonth,
-			currency: baseCurrency,
-			grossMinor: field === 'gross' ? parsed.value : null,
+			currency,
+			grossMinor,
 			netMinor: field === 'net' ? parsed.value : null,
 			source: 'manual',
 			overridden: true
@@ -299,12 +372,60 @@ export const actions: Actions = {
 		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
 
 		// A correction against THIS month's stored slip teaches the reader.
+		//
+		// Base is excluded on purpose: what a person typed there is gross minus an
+		// award, and no line on the slip prints that sum. Teaching the reader to
+		// look for it would point the gross label at a number the slip never had.
 		const slip = await payslipSlipFor(personId, periodMonth);
-		if (slip?.storedName) {
+		if (slip?.storedName && field !== 'base') {
 			const reading = await readStoredPayslip(slip.storedName, owner.name);
 			if (field === 'gross') await learnGrossLabel(owner.name, parsed.value, reading.candidates);
 			else await learnNetLabel(owner.name, parsed.value, reading.candidates);
 		}
+		return { ok: true };
+	},
+
+	/**
+	 * Correct which currency a month was paid in.
+	 *
+	 * A RELABEL, never a conversion. The figures are the digits printed on the
+	 * slip; what was wrong is the name attached to them, and multiplying them by
+	 * a rate would destroy the only true thing on the row. Reporting into the
+	 * base currency happens on the way out, from this currency, so fixing the
+	 * label is the whole fix.
+	 *
+	 * It exists because the currency used to be taken from the household's base:
+	 * every month filed before v0.5.1 carries that base rather than what the
+	 * slip said, and a re-upload is not always possible — the file may be gone.
+	 */
+	setPayslipCurrency: async ({ request }) => {
+		const form = await request.formData();
+		const personId = asRowId(form.get('personId'));
+		const periodMonth = String(form.get('periodMonth') ?? '').trim();
+		const currency = String(form.get('currency') ?? '')
+			.trim()
+			.toUpperCase();
+		if (!MONTH.test(periodMonth)) return fail(400, { message: 'Which month is this?' });
+		if (!currency) return fail(400, { message: 'Pick a currency.' });
+		if (!(await availableCurrencies()).includes(currency)) {
+			return fail(400, { message: `${currency} is not a currency this instance can convert.` });
+		}
+
+		const [entry] = await db
+			.select({ id: salaryEntry.id, documentId: salaryEntry.documentId })
+			.from(salaryEntry)
+			.where(and(eq(salaryEntry.personId, personId), eq(salaryEntry.periodMonth, periodMonth)));
+		if (!entry) return fail(404, { message: 'That month is not recorded.' });
+
+		await db.transaction(async (tx) => {
+			await tx.update(salaryEntry).set({ currency }).where(eq(salaryEntry.id, entry.id));
+			// The stored slip carries a currency of its own, written from the same
+			// wrong source. Left behind it would put the old currency back the next
+			// time anything read the document rather than the entry.
+			if (entry.documentId) {
+				await tx.update(document).set({ currency }).where(eq(document.id, entry.documentId));
+			}
+		});
 		return { ok: true };
 	},
 
@@ -328,14 +449,14 @@ export const actions: Actions = {
 			.where(eq(person.id, personId));
 		if (!owner) return fail(404, { message: 'That person is no longer here.' });
 
-		const baseCurrency = await getBaseCurrency();
-		const parsed = optionalAmount(form, 'bonus', baseCurrency);
+		const currency = await currencyForMonth(personId, periodMonth);
+		const parsed = optionalAmount(form, 'bonus', currency);
 		if (!parsed.ok) return fail(400, { message: parsed.message });
 
 		const recorded = await recordSalary({
 			personId,
 			periodMonth,
-			currency: baseCurrency,
+			currency,
 			bonusMinor: parsed.value,
 			source: 'manual',
 			overridden: true

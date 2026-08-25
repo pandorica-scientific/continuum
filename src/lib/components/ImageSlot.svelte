@@ -93,6 +93,7 @@
 				href="/files/{image}"
 				target="_blank"
 				rel="noopener"
+				data-file-name={placeholder}
 				aria-label="Open {placeholder} full size"
 			>
 				<img src="/files/{image}" alt={placeholder} style:object-fit={fit} />

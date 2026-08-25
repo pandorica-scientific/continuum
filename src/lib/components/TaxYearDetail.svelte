@@ -14,6 +14,7 @@
 	// with a bin two inches above it. One pattern, so the caption is unnecessary
 	// and gone.
 	import { enhance } from '$app/forms';
+	import PersonTag from '$lib/components/PersonTag.svelte';
 	import { ATTACHMENT_KINDS } from '$lib/tax';
 
 	interface Attachment {
@@ -43,10 +44,18 @@
 	let {
 		statements,
 		countries,
+		personHue,
 		onedit
 	}: {
 		statements: Statement[];
 		countries: { code: string; name: string; token: string }[];
+		/**
+		 * The filer's colour, assigned over the whole household rather than over
+		 * the statements on screen — see `personHues` in $lib/people. A colour
+		 * that meant one person here and another on Salary would be worse than
+		 * no colour.
+		 */
+		personHue: (personId: string) => string;
 		onedit: (statement: Statement) => void;
 	} = $props();
 
@@ -77,7 +86,7 @@
 				<span class="swatch" style="background: var({tokenOf.get(s.country) ?? '--series-r1'})"
 				></span>
 				<span class="country">{nameOf.get(s.country) ?? s.country}</span>
-				<span class="person">{s.personName}</span>
+				<PersonTag name={s.personName} hue={personHue(s.personId)} />
 			</div>
 
 			<div class="figures">
@@ -233,10 +242,6 @@
 	.country {
 		font-size: var(--text-md);
 		color: var(--fg1);
-	}
-	.person {
-		font-size: var(--text-xs);
-		color: var(--fg3);
 	}
 	.figures {
 		display: flex;

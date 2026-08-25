@@ -16,7 +16,7 @@
 import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
-import { getSetting, setSetting } from '$lib/server/settings';
+import { getBaseCurrency, getSetting, setSetting } from '$lib/server/settings';
 import { readStoredPayslip } from './reader';
 import { recordSalary } from './entries';
 
@@ -76,17 +76,23 @@ export async function backfillPayslips(handle: Db = db): Promise<BackfillOutcome
 		if (already?.amountOverridden) continue;
 		if (already && (already.grossMinor !== null || already.netMinor !== null)) continue;
 
-		const currency = slip.currency ?? 'CZK';
 		let grossMinor: bigint | null = null;
 		let netMinor: bigint | null = null;
 		let bonusMinor: bigint | null = null;
+		// What the SLIP says, ahead of what the document row says. The document's
+		// currency was itself written from the household's base, so trusting it
+		// here would carry that assumption forward into the entry.
+		let read: string | null = null;
 
 		if (slip.storedName) {
 			const reading = await readStoredPayslip(slip.storedName, slip.personName);
 			grossMinor = reading.grossMinor;
 			netMinor = reading.netMinor;
 			bonusMinor = reading.bonusMinor;
+			read = reading.currency;
 		}
+
+		const currency = read ?? slip.currency ?? (await getBaseCurrency(handle));
 
 		if (grossMinor === null && netMinor === null) {
 			// The file is gone, or the reader found no pay line in it.

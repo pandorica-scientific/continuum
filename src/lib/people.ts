@@ -32,3 +32,35 @@ export function parseBirthYear(raw: string, now: Date): number | null | 'invalid
 }
 
 export const BIRTH_YEAR_ERROR = `Birth year must be a whole year between ${EARLIEST_BIRTH_YEAR} and now.`;
+
+/**
+ * The colours a person is drawn in, wherever the app names one.
+ *
+ * The tail of the ranked reserve rather than its head: `hueTokens` in
+ * $lib/tax-hues hands out the four soft steps and then r1 upward for
+ * jurisdictions, and a person tag sitting beside a country pill in the same
+ * colour would say the two were related. Eight jurisdictions would have to be
+ * filed before the two sets meet at all.
+ */
+const PERSON_HUES = [
+	'--series-r10',
+	'--series-r9',
+	'--series-r8',
+	'--series-r7',
+	'--series-r6',
+	'--series-r5'
+] as const;
+
+/**
+ * Which colour each person is, for the whole app.
+ *
+ * Assigned over the WHOLE household in a stable order, not over whoever happens
+ * to appear on the screen being drawn — a person who is teal on Salary and
+ * purple on Tax is not a tag, it is decoration. The ids are uuidv7, so sorting
+ * them is oldest-first: the person who was added first keeps their colour when
+ * a second is added later.
+ */
+export function personHues(ids: readonly string[]): Map<string, string> {
+	const sorted = [...new Set(ids)].sort();
+	return new Map(sorted.map((id, i) => [id, PERSON_HUES[i % PERSON_HUES.length]]));
+}

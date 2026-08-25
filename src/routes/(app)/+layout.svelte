@@ -3,12 +3,19 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
+	import FileViewer from '$lib/components/FileViewer.svelte';
 	import type { IconName } from '$lib/icons';
 	import { overlayFocus } from '$lib/actions/overlay';
+	import { filePreview } from '$lib/actions/file-preview';
 
 	let { data, children } = $props();
 
 	let drawerOpen = $state(false);
+
+	// Every `/files/…` link in the app opens here instead of in a browser tab —
+	// wired once, on the shell, rather than screen by screen. See
+	// $lib/actions/file-preview for why it is delegated.
+	let openFile = $state<{ file: string; title: string } | null>(null);
 
 	// Pinned and hovered are separate states, exactly as InfoHint keeps them.
 	// One shared flag looks fine until a pointer arrives: hovering opens the
@@ -89,7 +96,7 @@
 	);
 </script>
 
-<div class="shell">
+<div class="shell" use:filePreview={{ open: (file, title) => (openFile = { file, title }) }}>
 	<div
 		class="side"
 		class:open={drawerOpen}
@@ -224,6 +231,10 @@
 				<Icon name="plus" size={24} />
 			</button>
 		</div>
+	{/if}
+
+	{#if openFile}
+		<FileViewer file={openFile.file} title={openFile.title} onclose={() => (openFile = null)} />
 	{/if}
 </div>
 

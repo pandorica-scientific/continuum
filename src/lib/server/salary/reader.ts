@@ -12,9 +12,11 @@ import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import { extractPdfLines } from '$lib/server/import/pdftext';
 import { getBaseCurrency, getSetting, setSetting } from '$lib/server/settings';
+import { availableCurrencies } from '$lib/server/fx/currencies';
 import {
 	bonusLabelSubset,
 	detectBonus,
+	detectCurrency,
 	detectPeriod,
 	extractCandidates,
 	pickGross,
@@ -30,6 +32,14 @@ export interface PayslipReading {
 	/** What of gross the slip itemised as a bonus, or null if it said nothing. */
 	bonusMinor: bigint | null;
 	periodMonth: string | null;
+	/**
+	 * The currency the slip is printed in, or null when it does not say.
+	 *
+	 * Null is not "the base currency". It is the form's cue to ask, and the
+	 * asking is the point: taking the household's base currency for the answer
+	 * is what filed six Czech payslips as euro.
+	 */
+	currency: string | null;
 	candidates: AmountCandidate[];
 }
 
@@ -38,6 +48,7 @@ const EMPTY: PayslipReading = {
 	netMinor: null,
 	bonusMinor: null,
 	periodMonth: null,
+	currency: null,
 	candidates: []
 };
 
@@ -93,7 +104,13 @@ export async function readPayslip(data: Uint8Array, subject: string): Promise<Pa
 	} catch {
 		return EMPTY;
 	}
-	const candidates = extractCandidates(lines, await getBaseCurrency());
+	// The currency comes first: `extractCandidates` scales printed amounts by the
+	// currency's own minor units, so parsing before knowing which currency it is
+	// would be reading the digits under the wrong rule.
+	const currency = detectCurrency(lines, await availableCurrencies());
+	// Only for parsing, and only when the slip did not say. The reading still
+	// reports `currency: null` so the form asks rather than assuming.
+	const candidates = extractCandidates(lines, currency ?? (await getBaseCurrency()));
 	const [gross, net, bonus] = await Promise.all([
 		learnedGrossLabels(),
 		learnedNetLabels(),
@@ -105,6 +122,7 @@ export async function readPayslip(data: Uint8Array, subject: string): Promise<Pa
 		netMinor: pickNet(candidates, net[key] ?? null)?.amountMinor ?? null,
 		bonusMinor: detectBonus(candidates, bonus[key] ?? null),
 		periodMonth: detectPeriod(lines),
+		currency,
 		candidates
 	};
 }

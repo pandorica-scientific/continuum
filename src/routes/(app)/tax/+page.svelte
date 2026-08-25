@@ -108,6 +108,7 @@
 		<TaxYearDetail
 			statements={statementsFor(year)}
 			countries={data.countries}
+			personHue={(id) => data.householdPeople.find((p) => p.id === id)?.hue ?? '--fg3'}
 			onedit={(s) => (editing = s)}
 		/>
 	{/snippet}

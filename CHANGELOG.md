@@ -2,6 +2,27 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.5.1 — 2026-08-25
+
+> A payslip has a currency of its own, and the app had been reading it off the household's settings instead.
+
+### 🐛 Fixed
+
+- 💱 **A payslip is filed in the currency it is printed in, not the household's base** — the two are different questions, and on a household reporting in euro every Czech payslip was stored as 135 887 EUR, which every conversion downstream then multiplied by the euro rate
+- ✏️ **A month's figures are corrected in that month's own currency** — a correction was parsed as the base currency whatever the month was filed in, so fixing one koruna figure stored a euro one
+- 📐 **Base pay can be corrected** — it is gross with the award taken out and was read-only for that reason, which left the one figure a person actually knows as the one they could not touch; saving it writes gross and leaves the award alone
+
+### ✨ Added
+
+- 🪟 **An uploaded file opens over the screen that linked to it** — a new browser tab took the whole app away to show one PDF, and coming back was a tab switch rather than the Escape key; cmd-click, right-click and the Download and Open-in-tab buttons all still open a tab for anyone who wants one
+- 🔎 **The upload dialog reads the slip's currency and asks when the slip does not say** — the field is required and starts empty, because a default nobody looked at is how this went wrong in the first place
+- 🔄 **A month already filed can have its currency corrected from its ⋯ menu** — a relabel and never a conversion, for the months filed before this release and for slips whose file is gone
+- 🎨 **Each person has one colour across the whole app** — assigned over the household rather than per screen, so the same tag means the same person on Salary and on Tax
+
+### 🔧 Changed
+
+- 🏷️ **The payslip row shows whose month it is instead of the word "slip"** — every row in that table is a slip, so the word said nothing the paperclip does not, and a row in a currency other than the household's now says which
+
 ## 0.5.0 — 2026-08-24
 
 > Nothing here changes what the product does — it changes what the build says, which had grown long enough that nobody was reading it.

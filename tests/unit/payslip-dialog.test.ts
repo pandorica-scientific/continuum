@@ -10,6 +10,8 @@ const props = {
 		{ id: 'p1', name: 'Robert' },
 		{ id: 'p2', name: 'Kseniya' }
 	],
+	currencies: ['CZK', 'EUR', 'USD'],
+	baseCurrency: 'EUR',
 	onclose: () => {}
 };
 
@@ -107,5 +109,39 @@ describe('the payslip dialog', () => {
 		// out inline, so "Whose" sat beside its select while "Month" sat above.
 		const source = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
 		expect(source).toMatch(/\tlabel \{\n\t\tdisplay: flex;\n\t\tflex-direction: column;/);
+	});
+});
+
+describe('which currency the slip was paid in', () => {
+	// The v0.4.4 defect: the currency was silently the household's base, so six
+	// Czech payslips were filed as 135 887 EUR.
+	it('asks, rather than assuming the household reports in what it was paid in', () => {
+		const { body } = render(PayslipDialog, { props });
+		expect(body).toContain('Currency');
+		expect(body).toContain('Which currency?');
+	});
+
+	it('offers every currency the instance can convert', () => {
+		const { body } = render(PayslipDialog, { props });
+		expect(body).toContain('CZK');
+		expect(body).toContain('USD');
+	});
+
+	// A select that opens on the base currency is one nobody reads.
+	it('starts on no currency at all, not on the base currency', () => {
+		const { body } = render(PayslipDialog, { props });
+		expect(body).not.toMatch(/<option[^>]*value="EUR"[^>]*selected/);
+		expect(body).toMatch(/<option[^>]*value=""[^>]*(disabled|selected)/);
+	});
+
+	it('will not submit without one', () => {
+		const { body } = render(PayslipDialog, { props });
+		expect(body).toMatch(/<select[^>]*name="currency"[^>]*required|required[^>]*name="currency"/);
+	});
+
+	it('adopts the currency the slip named, and the one a refusal hands back', () => {
+		const source = readFileSync(resolve('src/lib/components/PayslipDialog.svelte'), 'utf8');
+		expect(source).toContain('currency = read.currency');
+		expect(source).toContain('currency = values.currency');
 	});
 });

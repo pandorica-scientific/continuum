@@ -35,6 +35,17 @@ export interface RecordSalaryInput {
 	transactionId?: string | null;
 	/** A figure somebody typed. Protects itself from later automatic readings. */
 	overridden?: boolean;
+	/**
+	 * Write `currency` over an entry that already exists.
+	 *
+	 * Off by default, and deliberately explicit rather than always-on. An entry
+	 * holds one currency for a month that can be evidenced twice — a payslip
+	 * stating gross and a bank credit stating net — so a statement in the
+	 * account's currency landing on a payslip month must not silently relabel the
+	 * gross beside it. Only a caller restating what the month IS says yes: a
+	 * re-uploaded payslip, or somebody correcting the currency by hand.
+	 */
+	restateCurrency?: boolean;
 }
 
 /**
@@ -123,6 +134,7 @@ export async function recordSalary(
 				bonusMinor: keep
 					? (existing.bonusMinor ?? input.bonusMinor ?? null)
 					: (input.bonusMinor ?? existing.bonusMinor ?? null),
+				currency: input.restateCurrency ? input.currency : existing.currency,
 				documentId: input.documentId ?? existing.documentId,
 				transactionId: input.transactionId ?? existing.transactionId,
 				amountOverridden: existing.amountOverridden || (input.overridden ?? false)

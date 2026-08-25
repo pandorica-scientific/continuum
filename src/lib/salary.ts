@@ -402,6 +402,67 @@ export function detectPeriod(lines: string[]): string | null {
 	return null;
 }
 
+/**
+ * Symbols payslips print instead of an ISO code.
+ *
+ * A format fact of real slips, exactly like the month names above: a Czech slip
+ * prints "Kč" and never "CZK", and an exporter that strips diacritics prints
+ * "Kc". Deliberately short — a mark that names more than one currency ("kr" is
+ * Swedish, Norwegian and Danish) teaches nothing, and a wrong currency is worse
+ * than asking.
+ */
+const CURRENCY_MARKS: Record<string, readonly string[]> = {
+	CZK: ['kč', 'kc'],
+	EUR: ['€'],
+	USD: ['$'],
+	GBP: ['£'],
+	PLN: ['zł', 'zl'],
+	CHF: ['chf']
+};
+
+function escapeRe(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** How often a mark appears, as a whole word where the mark is made of letters. */
+function markHits(text: string, mark: string): number {
+	const letters = /\p{L}/u.test(mark);
+	const pattern = letters ? `(?<!\\p{L})${escapeRe(mark)}(?!\\p{L})` : escapeRe(mark);
+	return text.match(new RegExp(pattern, 'gu'))?.length ?? 0;
+}
+
+/**
+ * Which currency a payslip is printed in, or null when it does not say plainly.
+ *
+ * The currency of a payslip is a fact about the slip. It was taken from the
+ * household's base currency until v0.5.1, which is right only when the two
+ * happen to agree: a Czech slip filed by a household keeping its books in euro
+ * was stored as 135 887 EUR, and every conversion downstream then multiplied a
+ * koruna figure by the euro rate.
+ *
+ * Restricted to `allowed` — the currencies the app can actually convert — so a
+ * mark for a currency with no rate never becomes an answer. A tie returns null
+ * rather than a guess: the form asks, and what a person states is a decision.
+ */
+export function detectCurrency(
+	lines: readonly string[],
+	allowed: readonly string[]
+): string | null {
+	const text = lines.join('\n').toLowerCase();
+	const counts: { code: string; hits: number }[] = [];
+	for (const code of allowed) {
+		if (!/^[A-Za-z]{3}$/.test(code)) continue;
+		let hits = markHits(text, code.toLowerCase());
+		for (const mark of CURRENCY_MARKS[code.toUpperCase()] ?? []) hits += markHits(text, mark);
+		if (hits > 0) counts.push({ code, hits });
+	}
+	if (counts.length === 0) return null;
+	counts.sort((a, b) => b.hits - a.hits);
+	// Two currencies named equally often is a slip that has not said which it is.
+	if (counts.length > 1 && counts[1].hits === counts[0].hits) return null;
+	return counts[0].code;
+}
+
 export interface SalaryYear {
 	year: number;
 	/** age that year, when the birth year is known */
