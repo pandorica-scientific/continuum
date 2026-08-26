@@ -20,6 +20,7 @@
 
 - 🔍 **Uploading a file is one control rather than a browser default** — drag, click and camera in a single line the height of every other control on the form, with the accepted formats on hover
 - 📦 **Installing is one file and one command** — the Tailscale sidecar's configuration now travels inside `compose.yaml` instead of beside it
+- 🏗️ **The image is compiled once and installed twice** — the arm64 build no longer runs the bundler under emulation, where the scan engine had made it heavy enough to crash QEMU outright
 
 ### 🔒 Security
 
