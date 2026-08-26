@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
 import { PDFDocument } from 'pdf-lib';
 import { deflate, isBilevel, packBilevel } from '$lib/scan/core/bilevel';
-import { assemblePdf, type RenderedPage } from '$lib/scan/core/pdf';
+import { assemblePdf, type PageProvider } from '$lib/scan/core/pdf';
 import type { Frame } from '$lib/scan/core/types';
 
 /** Build a frame from a grid of 0/1, where 1 is white. */
@@ -98,28 +98,34 @@ describe('deflate', () => {
 
 describe('assemblePdf', () => {
 	it('makes one page per scan page, in the order given', async () => {
-		const pages: RenderedPage[] = [
-			{ frame: bilevelPage(200, 283), mode: 'bw' },
-			{ frame: bilevelPage(200, 283), mode: 'bw' },
-			{ frame: bilevelPage(283, 200), mode: 'bw' }
+		const pages: PageProvider[] = [
+			async () => ({ frame: bilevelPage(200, 283), mode: 'bw' as const }),
+			async () => ({ frame: bilevelPage(200, 283), mode: 'bw' as const }),
+			async () => ({ frame: bilevelPage(283, 200), mode: 'bw' as const })
 		];
 		const bytes = await assemblePdf(pages, { title: 'Nájemní smlouva', encodeJpeg });
 		expect((await PDFDocument.load(bytes)).getPageCount()).toBe(3);
 	});
 
 	it('titles the document with the name the user typed', async () => {
-		const bytes = await assemblePdf([{ frame: bilevelPage(200, 283), mode: 'bw' }], {
-			title: 'Nájemní smlouva',
-			encodeJpeg
-		});
+		const bytes = await assemblePdf(
+			[async () => ({ frame: bilevelPage(200, 283), mode: 'bw' as const })],
+			{
+				title: 'Nájemní smlouva',
+				encodeJpeg
+			}
+		);
 		expect((await PDFDocument.load(bytes)).getTitle()).toBe('Nájemní smlouva');
 	});
 
 	it('turns the sheet to match the image, rather than rotating the page', async () => {
-		const bytes = await assemblePdf([{ frame: bilevelPage(283, 200), mode: 'bw' }], {
-			title: 'Wide',
-			encodeJpeg
-		});
+		const bytes = await assemblePdf(
+			[async () => ({ frame: bilevelPage(283, 200), mode: 'bw' as const })],
+			{
+				title: 'Wide',
+				encodeJpeg
+			}
+		);
 		const [page] = (await PDFDocument.load(bytes)).getPages();
 		expect(page.getWidth()).toBeGreaterThan(page.getHeight());
 		// Still A4, just landscape.
@@ -136,10 +142,13 @@ describe('assemblePdf', () => {
 			[1240, 1754],
 			[800, 1131]
 		]) {
-			const bytes = await assemblePdf([{ frame: bilevelPage(w, h), mode: 'bw' }], {
-				title: 'A4',
-				encodeJpeg
-			});
+			const bytes = await assemblePdf(
+				[async () => ({ frame: bilevelPage(w, h), mode: 'bw' as const })],
+				{
+					title: 'A4',
+					encodeJpeg
+				}
+			);
 			const [page] = (await PDFDocument.load(bytes)).getPages();
 			expect(Math.round(page.getWidth())).toBe(595);
 			expect(Math.round(page.getHeight())).toBe(842);
@@ -149,10 +158,13 @@ describe('assemblePdf', () => {
 	it('keeps a binarized A4 page well under 150 KB', async () => {
 		// The acceptance criterion, and the thing that silently breaks if anyone
 		// swaps the raw 1-bit stream for pdf-lib's embedPng.
-		const bytes = await assemblePdf([{ frame: bilevelPage(2480, 3508), mode: 'bw' }], {
-			title: 'Big',
-			encodeJpeg
-		});
+		const bytes = await assemblePdf(
+			[async () => ({ frame: bilevelPage(2480, 3508), mode: 'bw' as const })],
+			{
+				title: 'Big',
+				encodeJpeg
+			}
+		);
 		expect(bytes.length).toBeLessThan(150 * 1024);
 	}, 30_000);
 

@@ -18,9 +18,17 @@
 		type PageSource
 	} from '../core/index.ts';
 	import { loadCv } from './opencv-load.ts';
-	import { encodeJpeg, frameFromBitmapSource, frameFromFile, frameToBlob } from './frame.ts';
+	import {
+		encodeJpeg,
+		frameFromBitmap,
+		frameFromBitmapSource,
+		frameFromFile,
+		frameToBlob
+	} from './frame.ts';
 	import ScanCapture from './ScanCapture.svelte';
 	import ScanPagePreview from './ScanPagePreview.svelte';
+	import ScanReview from './ScanReview.svelte';
+	import { createSession } from './session.svelte.ts';
 
 	let {
 		incoming = [],
@@ -42,7 +50,10 @@
 	// deliberate: were this to start on 'capture', the viewfinder would mount for
 	// a frame and ask for camera permission — for a photograph already in hand.
 	// svelte-ignore state_referenced_locally
-	let screen = $state<'capture' | 'preview' | 'reading'>(incoming.length ? 'reading' : 'capture');
+	let screen = $state<'capture' | 'preview' | 'review' | 'reading'>(
+		incoming.length ? 'reading' : 'capture'
+	);
+	const session = createSession();
 	let busy = $state(false);
 	let failure = $state<string | null>(null);
 
@@ -62,6 +73,8 @@
 
 	/** The full-resolution capture, kept only while the preview is open. */
 	let source = $state<{ frame: Frame; corners: Corners | null; from: PageSource } | null>(null);
+	/** Remembered past `discard()`, which clears the source it came from. */
+	let fromUpload = $state(false);
 	/** The same, scaled down, for everything the preview needs. */
 	let draft = $state<{ frame: Frame; corners: Corners | null } | null>(null);
 	let mode = $state<PageMode>('bw');
@@ -109,6 +122,10 @@
 		}
 	}
 
+	/**
+	 * Render the chosen mode at full resolution, encode it, and add it to the
+	 * document. Only the encoded page is kept — see session.svelte.ts.
+	 */
 	async function keep() {
 		if (!source) return;
 		busy = true;
@@ -116,15 +133,45 @@
 			// The one full-resolution render, of the mode actually chosen. Every
 			// other pass has been on the draft.
 			const cv = await loadCv();
-			const rendered = renderPage(cv, source.frame, source.corners, mode);
-			// A scan is a PDF. That is the whole distinction from the photo button
-			// beside it, and why a bw page is embedded at one bit per pixel.
-			const bytes = await assemblePdf([{ frame: rendered, mode }], {
-				title: filename(),
-				encodeJpeg
-			});
-			await ondone(new File([bytes], `${filename()}.pdf`, { type: 'application/pdf' }));
+			const page = renderPage(cv, source.frame, source.corners, mode);
+			// PNG for a binarized page: lossless, and JPEG ringing around black
+			// text on white is the one artefact that costs legibility.
+			const blob = await frameToBlob(page, mode === 'bw' ? 'image/png' : 'image/jpeg');
+			session.add(mode, blob);
 			discard();
+			// A dropped photo has no viewfinder to go back to, and a full document
+			// has nowhere further to go: both land on the review screen. Otherwise
+			// return to the camera, which is what someone scanning a stack wants.
+			screen = fromUpload || session.full ? 'review' : 'capture';
+		} catch (error) {
+			failure = error instanceof Error ? error.message : 'That page could not be kept.';
+		} finally {
+			busy = false;
+		}
+	}
+
+	/** Write every kept page into one PDF, in the order shown. */
+	async function make() {
+		if (session.pages.length === 0) return;
+		busy = true;
+		failure = null;
+		try {
+			const name = session.filename;
+			const bytes = await assemblePdf(
+				// Providers, not pages: each is decoded, written and dropped before
+				// the next is touched, so twenty pages cost one page of memory.
+				session.pages.map((page) => async () => {
+					const bitmap = await createImageBitmap(page.blob);
+					try {
+						return { frame: frameFromBitmap(bitmap), mode: page.mode };
+					} finally {
+						bitmap.close();
+					}
+				}),
+				{ title: name, encodeJpeg }
+			);
+			await ondone(new File([bytes], `${name}.pdf`, { type: 'application/pdf' }));
+			session.dispose();
 			onclose();
 		} catch (error) {
 			failure = error instanceof Error ? error.message : 'That PDF could not be built.';
@@ -206,6 +253,7 @@
 			const cv = await loadCv();
 			const found = detectOnce(cv, frame, { gates: false, refine: true });
 			source = { frame, corners: 'corners' in found ? found.corners : null, from: 'upload' };
+			fromUpload = true;
 			await show('bw');
 		} catch (error) {
 			failure = error instanceof Error ? error.message : 'That photo could not be read.';
@@ -217,25 +265,50 @@
 		const [file] = incoming;
 		if (file) void readDropped(file);
 	});
-
-	const filename = () => `Scan ${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
 </script>
 
 {#if screen === 'reading'}
 	<div class="reading">
 		<p>Reading photo…</p>
 	</div>
+{:else if screen === 'review'}
+	<ScanReview
+		pages={session.pages}
+		filename={session.filename}
+		{busy}
+		onmove={session.move}
+		onremove={session.remove}
+		onrename={session.rename}
+		onadd={() => (screen = 'capture')}
+		onmake={() => void make()}
+		oncancel={() => {
+			session.dispose();
+			discard();
+			onclose();
+		}}
+	/>
 {:else if screen === 'capture'}
 	<ScanCapture
+		pageCount={session.pages.length}
+		thumbnail={session.pages.at(-1)?.previewUrl ?? null}
 		oncapture={(frame, corners) => {
 			source = { frame, corners, from: 'camera' };
 			void show('bw');
 		}}
+		onreview={() => (screen = 'review')}
 		oncancel={() => {
+			// Pages already kept are not thrown away silently: if there are any,
+			// Cancel goes to the review screen where discarding is a deliberate act.
+			if (session.pages.length > 0) {
+				discard();
+				screen = 'review';
+				return;
+			}
 			discard();
 			onclose();
 		}}
 		onchoosefile={() => {
+			session.dispose();
 			discard();
 			onclose();
 		}}

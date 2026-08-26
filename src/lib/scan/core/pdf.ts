@@ -22,6 +22,17 @@ import type { Frame, PageMode } from './types.ts';
 export type RenderedPage = { frame: Frame; mode: PageMode };
 
 /**
+ * A page fetched only when it is about to be written.
+ *
+ * Twenty A4 pages held as frames at once is about 700 MB, which no phone
+ * survives — and twenty pages is the documented cap, so it is a case that will
+ * happen rather than a theoretical one. Taking providers instead means each
+ * page is decoded, embedded, and dropped before the next is touched, so peak
+ * memory is one page however long the document is.
+ */
+export type PageProvider = () => Promise<RenderedPage>;
+
+/**
  * A4 in PDF points — 210 × 297 mm at 72 points per inch.
  *
  * Every page is laid out at this size, oriented to match the image. Deriving
@@ -35,7 +46,7 @@ const A4_WIDTH = 595.276;
 const A4_HEIGHT = 841.89;
 
 export async function assemblePdf(
-	pages: RenderedPage[],
+	pages: readonly PageProvider[],
 	options: { title: string; encodeJpeg: (frame: Frame) => Promise<Uint8Array> }
 ): Promise<Uint8Array<ArrayBuffer>> {
 	if (pages.length === 0) throw new Error('A PDF needs at least one page.');
@@ -45,7 +56,8 @@ export async function assemblePdf(
 	doc.setCreator('Continuum');
 	doc.setProducer('Continuum scan engine');
 
-	for (const { frame, mode } of pages) {
+	for (const load of pages) {
+		const { frame, mode } = await load();
 		// A4, turned to match the image so a landscape page gets a landscape
 		// sheet rather than being rotated into a portrait one.
 		const portrait = frame.height >= frame.width;

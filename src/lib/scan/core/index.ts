@@ -46,3 +46,4 @@ export {
 	type Line,
 	type Segment
 } from './lines.ts';
+export { defaultFilename } from './naming.ts';

@@ -26,12 +26,18 @@
 		oncapture,
 		oncancel,
 		onchoosefile,
-		pageCount = 0
+		onreview,
+		pageCount = 0,
+		thumbnail = null
 	}: {
 		oncapture: (frame: Frame, corners: Corners | null) => void;
 		oncancel: () => void;
 		onchoosefile: () => void;
+		/** Through to the document so far. */
+		onreview?: () => void;
 		pageCount?: number;
+		/** The last page kept, shown in the deck's left slot. */
+		thumbnail?: string | null;
 	} = $props();
 
 	/** Where the capture-time detection pass runs: twice the live width, so a
@@ -340,15 +346,27 @@
 
 		<div class="top">
 			<button type="button" class="chip" onclick={oncancel}>Cancel</button>
-			{#if pageCount > 0}
-				<span class="chip">{pageCount} {pageCount === 1 ? 'page' : 'pages'}</span>
-			{/if}
 		</div>
 
 		<p class="guidance"><span class="chip">{guidance}</span></p>
 
 		<div class="deck">
-			<span class="slot"></span>
+			<span class="slot">
+				{#if pageCount > 0}
+					<!-- The way to the document so far. A thumbnail rather than a
+					     labelled button: it shows what was last kept, which is the
+					     reassurance someone scanning a stack actually wants. -->
+					<button
+						type="button"
+						class="thumb"
+						aria-label="Review {pageCount} {pageCount === 1 ? 'page' : 'pages'}"
+						onclick={() => onreview?.()}
+					>
+						{#if thumbnail}<img src={thumbnail} alt="" />{/if}
+						<span class="count">{pageCount}</span>
+					</button>
+				{/if}
+			</span>
 			<button
 				type="button"
 				class="shutter"
@@ -487,6 +505,38 @@
 	}
 	.slot {
 		display: flex;
+	}
+	.thumb {
+		position: relative;
+		width: 46px;
+		height: 60px;
+		padding: 0;
+		border: 1px solid var(--scan-plate-edge);
+		border-radius: var(--radius-sm);
+		background: var(--scan-plate);
+		overflow: hidden;
+		cursor: pointer;
+	}
+	.thumb img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.count {
+		position: absolute;
+		right: -4px;
+		bottom: -4px;
+		min-width: 20px;
+		padding: 1px 5px;
+		border-radius: var(--radius-pill);
+		background: var(--detect-stable);
+		color: var(--fg-inverse);
+		font-size: var(--text-2xs);
+		font-weight: 600;
+	}
+	.thumb:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
 	}
 	.slot.end {
 		justify-content: flex-end;
