@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { markupOf } from '../svelte-markup';
 
 /**
  * `{#await import('…')}` in a template hangs the browser.
@@ -27,18 +28,11 @@ function svelteFiles(dir: string): string[] {
 	});
 }
 
-/**
- * `{#await}` is markup, so only the markup is searched. Scanning the whole file
- * would flag the comment in UploadDropzone that explains this very rule — the
- * first version of this test did exactly that.
- */
-function markup(path: string): string {
-	return readFileSync(path, 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
-}
-
 describe('dynamic imports', () => {
 	it('never sit inside an await block', () => {
-		const offenders = svelteFiles('src').filter((path) => /\{#await\s+import\(/.test(markup(path)));
+		const offenders = svelteFiles('src').filter((path) =>
+			/\{#await\s+import\(/.test(markupOf(path))
+		);
 		expect(offenders).toEqual([]);
 	});
 

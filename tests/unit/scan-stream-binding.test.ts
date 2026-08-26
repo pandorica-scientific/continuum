@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { markupOf } from '../svelte-markup';
 
 /**
  * `srcObject` must never be a template binding on the viewfinder.
@@ -21,7 +22,7 @@ import { readFileSync } from 'node:fs';
  * It has to be attached imperatively, once, guarded by an identity check.
  */
 const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
-const markup = capture.replace(/<script[\s\S]*?<\/script>/g, '');
+const markup = markupOf('src/lib/scan/client/ScanCapture.svelte');
 
 describe('the viewfinder stream', () => {
 	it('is not bound in the template', () => {
