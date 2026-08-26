@@ -62,6 +62,17 @@ describe('the page preview', () => {
 		expect(body).toContain('Cleaning up this page');
 	});
 
+	it('fits the whole page in its box', () => {
+		// `max-height: 100%` resolves against the grid track, and a `1fr` track
+		// has no definite height — so a tall photograph ran off the bottom and
+		// only part of the page being approved was visible.
+		const source = readFileSync('src/lib/scan/client/ScanPagePreview.svelte', 'utf8');
+		const img = source.slice(source.indexOf('\timg {'));
+		expect(img.slice(0, 200)).toContain('object-fit: contain');
+		expect(img.slice(0, 200)).toContain('position: absolute');
+		expect(img.slice(0, 200)).not.toContain('max-height');
+	});
+
 	it('meets the touch floor on every control', () => {
 		const source = readFileSync('src/lib/scan/client/ScanPagePreview.svelte', 'utf8');
 		expect(source).toContain('min-height: var(--touch-min)');
@@ -74,14 +85,40 @@ describe('the flow around it', () => {
 	it('shows the capture before keeping it', () => {
 		// Previously a capture went straight into the field: a wrong crop was
 		// filed with no moment at which it could be seen, let alone refused.
-		expect(flow).toMatch(/screen = \$state<'capture' \| 'preview'>\('capture'\)/);
+		// The screen union must include a preview step, and the flow must render
+		// it. Written against the states rather than one literal, so adding
+		// another (a dropped photo decodes on a 'reading' screen) does not break
+		// a test that is really about the preview existing at all.
+		expect(flow).toMatch(/let screen = \$state<[^>]*'preview'[^>]*>/);
 		expect(flow).toContain('ScanPagePreview');
+	});
+
+	it('previews from a downscaled draft, not the capture resolution', () => {
+		// Switching mode re-runs the pipeline. Doing that at capture resolution
+		// warps and filters 13 megapixels to fill a box about 800px wide — wasted
+		// work, and felt: a dropped 48MP photo took roughly five times as long as
+		// a phone capture, which is why the same switch felt quick on a phone and
+		// slow on a Mac.
+		expect(flow).toMatch(/const PREVIEW_WIDTH = \d+;/);
+		expect(flow).toMatch(/renderPage\(cv, draft\.frame, draft\.corners, next\)/);
+	});
+
+	it('renders the kept page once, at full resolution', () => {
+		// Nothing may be lost from the output: the draft is for looking at.
+		expect(flow).toMatch(/renderPage\(cv, source\.frame, source\.corners, mode\)/);
+	});
+
+	it('rebuilds the draft after a rotation', () => {
+		// It describes the frame as it was; keeping it would preview the old one.
+		expect(flow).toMatch(
+			/applyOrientation\(source\.frame, 6\), corners: null \};\s*\n[^\n]*\n\s*draft = null;/
+		);
 	});
 
 	it('holds the source frame so a mode change can re-render it', () => {
 		// Switching mode has to go back to the original pixels; re-processing the
 		// already-thresholded result would compound the loss.
-		expect(flow).toMatch(/renderPage\(cv, source\.frame, source\.corners, next\)/);
+		expect(flow).toMatch(/frameFromBitmapSource\(source\.frame, PREVIEW_WIDTH\)/);
 	});
 
 	it('revokes the preview URL rather than leaking one per mode switch', () => {

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { describe, expect, it } from 'vitest';
-import { applyOrientation, readOrientation } from '$lib/scan/core/exif';
+import {
+	applyOrientation,
+	needsRotation,
+	readOrientation,
+	readStoredSize,
+	turnsAQuarter
+} from '$lib/scan/core/exif';
 import { looksLikeHeic } from '$lib/scan/core/heic';
 import { admitsImages, admitsPdf } from '$lib/scan/core/accept';
 import type { Frame } from '$lib/scan/core/types';
@@ -197,5 +203,151 @@ describe('admitsPdf', () => {
 		expect(admitsPdf('application/json')).toBe(false);
 		expect(admitsPdf('.xlsx')).toBe(false);
 		expect(admitsPdf(undefined)).toBe(false);
+	});
+});
+
+/** A JPEG with an XMP APP1 BEFORE the Exif one, as an iPhone actually writes. */
+function jpegWithXmpFirst(orientation: number): Uint8Array {
+	const xmp = [...'http://ns.adobe.com/xap/1.0/\0<x:xmpmeta/>'].map((c) => c.charCodeAt(0));
+	const xmpLength = xmp.length + 2;
+
+	const body = new DataView(new ArrayBuffer(20));
+	body.setUint16(0, 0x4d4d);
+	body.setUint16(2, 0x002a);
+	body.setUint32(4, 8);
+	body.setUint16(8, 1);
+	body.setUint16(10, 0x0112);
+	body.setUint16(12, 3);
+	body.setUint32(14, 1);
+	body.setUint16(18, orientation);
+	const exif = [...new Uint8Array(body.buffer)];
+	const exifLength = 2 + 6 + exif.length;
+
+	return new Uint8Array([
+		0xff,
+		0xd8,
+		0xff,
+		0xe1,
+		(xmpLength >> 8) & 0xff,
+		xmpLength & 0xff,
+		...xmp,
+		0xff,
+		0xe1,
+		(exifLength >> 8) & 0xff,
+		exifLength & 0xff,
+		0x45,
+		0x78,
+		0x69,
+		0x66,
+		0x00,
+		0x00,
+		...exif,
+		0xff,
+		0xc0,
+		0x00,
+		0x11,
+		0x08,
+		0x17,
+		0x70,
+		0x1f,
+		0x40,
+		0x03,
+		0x01,
+		0x11,
+		0x00,
+		0x02,
+		0x11,
+		0x01,
+		0x03,
+		0x11,
+		0x01,
+		0xff,
+		0xd9
+	]);
+}
+
+describe('an APP1 that is not Exif', () => {
+	it('is skipped rather than parsed as a TIFF header', () => {
+		// An iPhone writes TWO APP1 segments, Exif and XMP. Reading the XMP's
+		// opening text as a TIFF header yields a plausible-looking number — it
+		// produced 6 where the truth was 1 — and a photo needing no rotation was
+		// turned ninety degrees.
+		expect(readOrientation(jpegWithXmpFirst(6))).toBe(6);
+		expect(readOrientation(jpegWithXmpFirst(1))).toBe(1);
+	});
+
+	it('stops at the start of scan rather than walking into pixel data', () => {
+		const truncated = jpegWithXmpFirst(6).slice(0, 30);
+		expect(() => readOrientation(truncated)).not.toThrow();
+	});
+});
+
+describe('readStoredSize', () => {
+	it('reads the dimensions the file actually holds', () => {
+		// 0x1770 = 6000 tall, 0x1f40 = 8000 wide, from the SOF above.
+		expect(readStoredSize(jpegWithXmpFirst(6))).toEqual({ width: 8000, height: 6000 });
+	});
+
+	it('is null for something that is not a JPEG', () => {
+		// The caller's cue not to guess: unreadable means leave the image alone.
+		expect(readStoredSize(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBeNull();
+	});
+
+	it('does not mistake a Huffman table for a frame', () => {
+		// 0xFFC4 sits inside the SOF marker range and is not one.
+		const withDht = new Uint8Array([0xff, 0xd8, 0xff, 0xc4, 0x00, 0x04, 0x00, 0x00, 0xff, 0xd9]);
+		expect(readStoredSize(withDht)).toBeNull();
+	});
+});
+
+describe('turnsAQuarter', () => {
+	it('is true only for the four that swap width and height', () => {
+		expect([1, 2, 3, 4].map(turnsAQuarter)).toEqual([false, false, false, false]);
+		expect([5, 6, 7, 8].map(turnsAQuarter)).toEqual([true, true, true, true]);
+	});
+});
+
+describe('needsRotation', () => {
+	// Your iPhone's photo: stored landscape, EXIF 6, displayed portrait.
+	const stored = { width: 8064, height: 6048 };
+
+	it('says no when the decoder already turned it — Chrome', () => {
+		// Chrome applies EXIF whatever `imageOrientation` asks. Measured: 'none',
+		// 'from-image' and the default all return the same rotated bitmap.
+		expect(needsRotation(6, { width: 6048, height: 8064 }, stored)).toBe(false);
+	});
+
+	it('says yes when the decoder did not — Safari', () => {
+		expect(needsRotation(6, { width: 8064, height: 6048 }, stored)).toBe(true);
+	});
+
+	it('is unaffected by the frame having been scaled down first', () => {
+		// THE bug. Frames are capped at 3200px before this runs, so no dimension
+		// matches anything stored. Comparing sizes concluded "not turned" every
+		// time and rotated twice — right on Safari, wrong on Chrome, which is
+		// exactly the split that showed up: upright on the phone, on its side in
+		// the browser.
+		expect(needsRotation(6, { width: 3200, height: 4267 }, stored)).toBe(false);
+		expect(needsRotation(6, { width: 3200, height: 2400 }, stored)).toBe(true);
+	});
+
+	it('leaves an upright image alone', () => {
+		expect(needsRotation(1, { width: 100, height: 200 }, stored)).toBe(false);
+	});
+
+	it('applies a mirror or a half turn, which change no shape to compare', () => {
+		for (const orientation of [2, 3, 4]) {
+			expect(needsRotation(orientation, { width: 100, height: 200 }, stored)).toBe(true);
+		}
+	});
+
+	it('does nothing when the stored size cannot be read', () => {
+		// Wrong way round is recoverable with the rotate button; corrupted is not.
+		expect(needsRotation(6, { width: 3200, height: 4267 }, null)).toBe(false);
+	});
+
+	it('ignores a nonsense orientation rather than acting on it', () => {
+		expect(needsRotation(0, { width: 100, height: 200 }, stored)).toBe(false);
+		expect(needsRotation(99, { width: 100, height: 200 }, stored)).toBe(false);
 	});
 });

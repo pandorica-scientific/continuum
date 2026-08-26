@@ -33,3 +33,17 @@ export function admitsPdf(accept: string | undefined): boolean {
 	if (!accept) return false;
 	return entries(accept).some((entry) => entry === 'application/pdf' || entry === '.pdf');
 }
+
+/**
+ * Is this file a photograph, as far as we can tell before opening it?
+ *
+ * `type` alone is not enough: Safari and several Android pickers hand over a
+ * HEIC with an empty or wrong MIME type, which is the same reason the decoder
+ * sniffs magic bytes rather than trusting the header. Here the bytes are not
+ * read yet, so the name is the fallback.
+ */
+export function isImageFile(file: { name: string; type: string }): boolean {
+	if (file.type.startsWith('image/')) return true;
+	const dot = file.name.lastIndexOf('.');
+	return dot >= 0 && IMAGE_EXTENSIONS.includes(file.name.slice(dot).toLowerCase());
+}

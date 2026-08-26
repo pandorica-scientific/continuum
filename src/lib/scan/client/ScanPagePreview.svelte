@@ -125,9 +125,18 @@
 		background: var(--card);
 		overflow: hidden;
 	}
+	/* Absolutely positioned, not merely capped.
+	 *
+	 * `max-height: 100%` resolves against the grid track, and a `1fr` track has
+	 * no definite height to resolve against — so a tall photograph ignored the
+	 * cap and ran off the bottom, showing only part of the page the user is
+	 * being asked to approve. Filling an absolutely positioned box and letting
+	 * `object-fit: contain` do the work has no such ambiguity. */
 	img {
-		max-width: 100%;
-		max-height: 100%;
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
 	}
 	.working {

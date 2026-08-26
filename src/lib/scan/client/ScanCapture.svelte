@@ -357,8 +357,16 @@
 				onclick={() => (holding ? cancelHold() : void shoot())}
 			>
 				<span class="disc"></span>
+				<!--
+					`pathLength="100"` makes the dash values below a percentage of the
+					circumference rather than a length in user units. Without it the
+					dash array has to be 2πr written out as a number, which is
+					correct until someone adjusts the radius — and then the ring
+					fills to the wrong fraction, silently, because it still looks
+					like a ring.
+				-->
 				<svg class="ring" viewBox="0 0 72 72" aria-hidden="true">
-					<circle cx="36" cy="36" r="33" />
+					<circle cx="36" cy="36" r="30" pathLength="100" />
 				</svg>
 			</button>
 			<span class="slot end">
@@ -513,12 +521,19 @@
 		position: absolute;
 		inset: 0;
 	}
+	/* r=30 against the 28 the disc occupies: the ring sits ON the button with a
+	   hair of clearance. At the 33 it started as, it stood five pixels clear all
+	   the way round and read as a halo hanging behind the shutter rather than
+	   part of it. */
 	.ring circle {
 		fill: none;
 		stroke: var(--detect-stable);
 		stroke-width: 3;
-		stroke-dasharray: 208;
-		stroke-dashoffset: 208;
+		stroke-dasharray: 100;
+		stroke-dashoffset: 100;
+		/* Start the fill at twelve o'clock, where an eye expects a timer to. */
+		transform: rotate(-90deg);
+		transform-origin: 50% 50%;
 	}
 	/* A TRANSITION, not an animation — which is exactly why the reduced-motion
 	   block in app.css has to cover transitions as well. */

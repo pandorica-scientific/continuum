@@ -2,7 +2,7 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import type { ActionOutcome } from '$lib/actions/result';
 	import Icon from '$lib/components/Icon.svelte';
-	import { admitsImages, admitsPdf } from '$lib/scan/core/accept';
+	import { admitsImages, admitsPdf, isImageFile } from '$lib/scan/core/accept';
 	import { isSecureForCamera } from '$lib/scan/client/camera.svelte';
 
 	let {
@@ -59,6 +59,8 @@
 	 * production build has no such guard and simply freezes.
 	 */
 	let ScanFlow = $state<typeof import('$lib/scan/client/ScanFlow.svelte').default | null>(null);
+	/** A dropped photograph waiting to go through the pipeline. */
+	let incoming = $state<File[]>([]);
 	let scanFailed = $state(false);
 
 	async function openScanner() {
@@ -113,6 +115,23 @@
 
 	async function receive(files: FileList | File[]) {
 		const picked = list(files);
+
+		// A dropped photograph goes through the same pipeline as a captured one,
+		// so both produce the same artifact — a cropped, flattened PDF rather
+		// than a crooked snapshot of a desk. This is the path for photos someone
+		// already has: a picture of a bill sent to them, something shot earlier
+		// and still in the camera roll.
+		//
+		// PDFs pass through untouched; only images enter the pipeline. And only
+		// ONE at a time: the spec has several dropped images becoming a single
+		// PDF, but that needs the review screen to be meaningful, so until then a
+		// multiple drop keeps the plain behaviour rather than half-doing it.
+		if (offersScan && picked.length === 1 && isImageFile(picked[0])) {
+			incoming = picked;
+			await openScanner();
+			return;
+		}
+
 		chosen = picked.map((file) => file.name);
 		if (!onfiles) return; // field mode: the form posts it, nothing to do now
 		error = null;
@@ -249,9 +268,19 @@
 </div>
 {#if scanning && ScanFlow}
 	<ScanFlow
-		onclose={() => (scanning = false)}
+		{incoming}
+		onclose={() => {
+			scanning = false;
+			incoming = [];
+		}}
+		onchoosefile={() => {
+			scanning = false;
+			incoming = [];
+			input?.click();
+		}}
 		ondone={(page) => {
 			scanning = false;
+			incoming = [];
 			adopt([page]);
 		}}
 	/>

@@ -67,6 +67,23 @@ const SEGMENT_OPEN = 9;
 /** Closing kernel, to seal the holes dark text punches in the page mask. */
 const SEGMENT_CLOSE = 9;
 /**
+ * A margin of background added around the mask before contours are traced.
+ *
+ * A page photographed close up runs off the edge of the frame, and its bright
+ * region then touches the image border. Without a margin there is no closed
+ * shape there to find, so a page that fills the view — the best-framed shot
+ * someone can take — is the one the detector misses. Padding gives the region
+ * somewhere to close against, and the corners come back sitting on the old
+ * boundary, which is exactly right: the crop is the part that was in view.
+ *
+ * Honestly labelled: this is a precaution taken from the reference reading, and
+ * on every sample available it changed nothing — the regions closed without it.
+ * It costs one small allocation, so it stays, but it has not been shown to earn
+ * its place and should be the first thing questioned if this file needs
+ * simplifying.
+ */
+const SEGMENT_PAD = 8;
+/**
  * How much of its own convex hull the page region must fill.
  *
  * A clean sheet is very nearly its own hull. A blob still trailing a bridge of
@@ -169,9 +186,21 @@ export function detectOnce(
 		);
 		cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, closing);
 
+		const padded = keep(new cv.Mat());
+		cv.copyMakeBorder(
+			mask,
+			padded,
+			SEGMENT_PAD,
+			SEGMENT_PAD,
+			SEGMENT_PAD,
+			SEGMENT_PAD,
+			cv.BORDER_CONSTANT,
+			new cv.Scalar(0, 0, 0, 0)
+		);
+
 		const contours = keep(new cv.MatVector());
 		const hierarchy = keep(new cv.Mat());
-		cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+		cv.findContours(padded, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
 		const frameArea = frame.width * frame.height;
 		let best: Corners | null = null;
@@ -206,7 +235,14 @@ export function detectOnce(
 			if (approx.rows !== 4 || !cv.isContourConvex(approx)) continue;
 
 			const points: Point[] = [];
-			for (let r = 0; r < 4; r++) points.push({ x: approx.intAt(r, 0), y: approx.intAt(r, 1) });
+			for (let r = 0; r < 4; r++) {
+				// Back out of the padded frame's coordinates, and clamp: a corner
+				// found in the margin belongs on the edge of the real image.
+				points.push({
+					x: Math.min(frame.width, Math.max(0, approx.intAt(r, 0) - SEGMENT_PAD)),
+					y: Math.min(frame.height, Math.max(0, approx.intAt(r, 1) - SEGMENT_PAD))
+				});
+			}
 			const corners = orderCorners(points);
 			if (quadAspect(corners) > MAX_ASPECT) continue;
 

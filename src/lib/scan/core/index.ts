@@ -20,9 +20,15 @@ export {
 	outputSize,
 	scaleCorners
 } from './geometry.ts';
-export { applyOrientation, readOrientation } from './exif.ts';
+export {
+	applyOrientation,
+	needsRotation,
+	readOrientation,
+	readStoredSize,
+	turnsAQuarter
+} from './exif.ts';
 export { looksLikeHeic } from './heic.ts';
-export { admitsImages, admitsPdf } from './accept.ts';
+export { admitsImages, admitsPdf, isImageFile } from './accept.ts';
 export { deflate, isBilevel, packBilevel } from './bilevel.ts';
 export { assemblePdf, type RenderedPage } from './pdf.ts';
 export { DETECT_WIDTH, detectOnce, orderCorners } from './detect.ts';

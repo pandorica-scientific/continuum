@@ -11,7 +11,9 @@ import {
 	DETECT_WIDTH,
 	applyOrientation,
 	looksLikeHeic,
+	needsRotation,
 	readOrientation,
+	readStoredSize,
 	type Frame
 } from '../core/index.ts';
 
@@ -143,7 +145,13 @@ export async function frameFromFile(file: File): Promise<Frame> {
 
 	// Try the browser first: Safari decodes HEIC natively, and avoiding 1.5 MB
 	// of WASM when it is not needed is most of the win here.
-	const bitmap = await createImageBitmap(file).catch(() => null);
+	//
+	// `none` explicitly, because the rotation is applied below and doing it
+	// twice is worse than not doing it at all. Chrome now defaults to
+	// `from-image`, so leaving this unsaid meant a portrait photo was turned by
+	// the browser and then turned again here — arriving in landscape, which is
+	// precisely what a double rotation looks like.
+	const bitmap = await createImageBitmap(file, { imageOrientation: 'none' }).catch(() => null);
 
 	if (!bitmap) {
 		if (!looksLikeHeic(bytes, file.name)) throw new Error('That image could not be read.');
@@ -155,7 +163,26 @@ export async function frameFromFile(file: File): Promise<Frame> {
 	// Freed immediately: a 12 MP bitmap is ~48 MB, and holding one per dropped
 	// file is how a ten-image drop kills the tab.
 	bitmap.close();
-	return applyOrientation(frame, readOrientation(bytes));
+	return orientUpright(frame, bytes);
+}
+
+/**
+ * Apply the EXIF rotation, but only if the decoder has not already done it.
+ *
+ * Chrome applies it to `createImageBitmap` whatever `imageOrientation` asks —
+ * measured against a real iPhone JPEG, `'none'`, `'from-image'` and the default
+ * all return the same rotated bitmap — while other decoders may not. Rotating a
+ * second time lays an upright page on its side, and that looks so much like
+ * "the rotation was not applied" that it invites the same wrong fix twice.
+ *
+ * So this does not guess. It compares what came out of the decoder against the
+ * dimensions stored in the file: if they are transposed, the turn has happened
+ * already.
+ */
+function orientUpright(frame: Frame, bytes: Uint8Array): Frame {
+	const orientation = readOrientation(bytes);
+	if (!needsRotation(orientation, frame, readStoredSize(bytes))) return frame;
+	return applyOrientation(frame, orientation);
 }
 
 export function frameToBlob(frame: Frame, type = 'image/jpeg', quality = 0.85): Promise<Blob> {

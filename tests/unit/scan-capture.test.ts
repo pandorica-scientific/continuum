@@ -61,3 +61,31 @@ describe('the permission screens', () => {
 		expect(source).toContain('min-height: var(--touch-min)');
 	});
 });
+
+describe('the stability ring', () => {
+	const source = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
+
+	it('sits on the shutter rather than around it', () => {
+		// The disc occupies a radius of 28 in the 72-unit viewBox. At the 33 this
+		// started as, the ring stood five pixels clear all the way round and read
+		// as a halo behind the button.
+		const radius = Number(source.match(/<circle cx="36" cy="36" r="(\d+)"/)?.[1]);
+		expect(radius).toBeGreaterThan(28);
+		expect(radius).toBeLessThanOrEqual(31);
+	});
+
+	it('measures its fill in percent, not in user units', () => {
+		// Otherwise the dash array is 2πr written out as a number: correct until
+		// somebody adjusts the radius, and then the ring fills to the wrong
+		// fraction — silently, because it still looks like a ring.
+		expect(source).toContain('pathLength="100"');
+		expect(source).toContain('stroke-dasharray: 100;');
+		expect(source).toContain('stroke-dashoffset: 100;');
+	});
+
+	it('fills over the hold window, as a transition', () => {
+		// A transition rather than an animation, which is exactly why the
+		// reduced-motion block has to cover transitions too.
+		expect(source).toMatch(/transition: stroke-dashoffset var\(--motion-hold\)/);
+	});
+});
