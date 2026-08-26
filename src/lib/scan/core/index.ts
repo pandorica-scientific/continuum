@@ -15,6 +15,7 @@ export {
 	A4_RATIO,
 	MAX_OUTPUT_WIDTH,
 	fullFrameCorners,
+	turnCorners,
 	hairline,
 	quadAspect,
 	outputSize,
@@ -31,7 +32,14 @@ export { looksLikeHeic } from './heic.ts';
 export { admitsImages, admitsPdf, isImageFile } from './accept.ts';
 export { deflate, isBilevel, packBilevel } from './bilevel.ts';
 export { assemblePdf, type RenderedPage } from './pdf.ts';
-export { DETECT_WIDTH, detectOnce, orderCorners } from './detect.ts';
+export {
+	DETECT_WIDTH,
+	detectBest,
+	detectOnce,
+	flattenLighting,
+	orderCorners,
+	type RefineMode
+} from './detect.ts';
 export { renderPage } from './enhance.ts';
 export {
 	angleBetween,
@@ -41,7 +49,6 @@ export {
 	lineAngle,
 	lineThrough,
 	quadAngles,
-	refineQuad,
 	worstCornerSkew,
 	type Line,
 	type Segment

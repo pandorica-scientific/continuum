@@ -165,6 +165,7 @@ each](docs/statement-import.md)
 - **Is safe to re-run** — re-import overlapping exports as often as you like; duplicates are impossible. Backfilling years of history is the intended use.
 - **Is exact about money** — integer minor units end to end, never floats, and multi-currency totals use the rate from the day.
 - **Fits two people** — separate sign-ins, passkeys, dashboards and tax statements over one shared household.
+- **Scans paper with a phone** — photograph a page and get a cropped, flattened, black-and-white PDF; several pages become one document. It runs in the browser, so no page is uploaded until the finished file is.
 
 ## Try it in one command
 

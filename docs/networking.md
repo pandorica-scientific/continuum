@@ -64,6 +64,77 @@ Browsers refuse the passkey API outside a secure context, so the passkey control
 appear only when `ORIGIN` is `https://` (or `localhost` during development). On a
 plain-HTTP LAN address they are simply absent rather than broken.
 
+## The camera needs HTTPS too
+
+The same rule that governs passkeys governs the scanner. Browsers refuse
+`getUserMedia` outside a secure context, so on a plain-HTTP LAN address the
+in-app viewfinder cannot open, ever — no setting changes that.
+
+Continuum does not simply lose the feature there. The scan button falls back to
+**your phone's own camera app**, which needs no secure context, and the photo it
+returns goes through exactly the same processing: detected, cropped, flattened
+and written as a PDF. What is missing is only the live outline and the automatic
+shutter, not the scan.
+
+Set up HTTPS and the viewfinder appears by itself. There are three routes, and
+which one suits you depends on whether you have a domain name.
+
+### The quick one: HTTPS on the LAN, no account, no domain
+
+Bundled as an optional profile. Give it the address you actually type — a name
+or a LAN IP, but it must match, because a certificate issued for the wrong one
+is rejected outright rather than warned about:
+
+```sh
+# .env
+CONTINUUM_HOST=continuum.local
+
+docker compose --profile lan-tls up -d
+```
+
+Then open **https://continuum.local:8443** on the phone.
+
+The certificate is issued by Caddy's own authority, which no device trusts, so
+every browser warns once. **Accept it and everything works** — the origin is a
+secure context from then on as far as the browser is concerned, which is all
+getUserMedia and passkeys require. Set `ORIGIN=https://continuum.local:8443` to
+turn the passkey controls on as well.
+
+To stop the warning, install Caddy's root certificate on each device and mark it
+trusted:
+
+```sh
+docker compose cp tls:/data/caddy/pki/authorities/local/root.crt ./continuum-root.crt
+```
+
+On iOS, mail or AirDrop it to yourself, open it, install the profile, then turn
+it on under **Settings → General → About → Certificate Trust Settings** — the
+second step is separate and easy to miss. On macOS, open it in Keychain Access
+and set it to _Always Trust_. On Android, **Settings → Security → Encryption &
+credentials → Install a certificate → CA certificate**.
+
+The `caddy-state` volume holds that authority. Delete the volume and a new root
+is issued, and every device warns again.
+
+This route is deliberately the _quick_ one, not the good one. It is right for
+testing the scanner on a phone this evening. For daily use, prefer:
+
+### The good one: a trusted certificate
+
+Tailscale, below, gets you one with no domain name of your own. If you already
+have a domain, any reverse proxy terminating TLS does the job — with
+[Caddy](https://caddyserver.com) it is three lines, and the certificate is
+obtained and renewed for you:
+
+```caddyfile
+ledger.example.com {
+    reverse_proxy localhost:3000
+}
+```
+
+Whatever terminates TLS, set `ORIGIN` to the `https://` address so passkeys work
+at the same time.
+
 A passkey here always requires **user verification** — the face, the fingerprint,
 or the device PIN. That is what keeps it a second factor rather than a bearer
 token, and it means a roaming security key with no PIN configured cannot be

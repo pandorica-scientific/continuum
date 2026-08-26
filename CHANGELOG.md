@@ -2,6 +2,31 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.6.0 — 2026-08-26
+
+> Paper is the part of a household ledger that never arrives as a file.
+
+### ✨ Added
+
+- 📷 **Photograph a page and get a scan, not a snapshot** — the page is found in the frame, cropped out of it, flattened from whatever angle it was shot at and written as a black-and-white A4 PDF, which is both legible and about thirty times smaller than the photograph it came from
+- 🖼️ **A dropped photo goes through the same pipeline as a captured one** — a picture of a bill someone sent you produces the same document as holding the page under a camera, because the alternative was filing a crooked snapshot of a desk
+- ⧉ **Two capture buttons, because a photograph and a scan are different jobs** — one keeps the picture as it came off the camera, the other crops and flattens it into a PDF, and which appear is decided by what the field already accepts
+- 📄 **Several pages become one document** — keep them one after another, reorder them, name the file, and the order of the tiles is the order of the pages
+- 🎛️ **Black and white, grayscale, colour, or the photograph untouched** — chosen before the page is kept, with the original there as the recovery when the edges come out wrong
+- 📱 **Every file input in the product now takes a drop, a click or a photo** — one control, everywhere paper is filed
+
+### 🔧 Changed
+
+- 🔍 **Uploading a file is one control rather than a browser default** — drag, click and camera in a single line the height of every other control on the form, with the accepted formats on hover
+
+### 🔒 Security
+
+- 🔐 **Nothing is written to disk before the finished PDF** — the whole pipeline runs in the browser, so no page, no frame and no half-processed image ever reaches the server or a temporary directory
+
+### ⬆️ Upgrading
+
+- 🎥 **The in-app viewfinder needs HTTPS** — browsers refuse camera access on a plain-HTTP address, so on one the scan button opens your phone's own camera app instead and processes the photo identically; see [networking](docs/networking.md)
+
 ## 0.5.7 — 2026-08-25
 
 > Two payslips in a month is what 0.5.5 was for; the same payslip twice never was.

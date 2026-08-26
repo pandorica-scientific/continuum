@@ -26,11 +26,36 @@ function scratch(width: number, height: number) {
 	return { canvas, context };
 }
 
+/**
+ * Free a scratch canvas's pixels NOW, rather than whenever the collector gets
+ * to it.
+ *
+ * A canvas's backing store lives outside the JavaScript heap and is not counted
+ * against it, so dropping the last reference is a promise to free it eventually
+ * and nothing more. Every page here allocates several at full capture size — a
+ * 3200x4267 frame is 54 MB apiece — and a rotation allocates a fresh set for
+ * the turned frame on top of whatever the last render left behind.
+ *
+ * When a browser will not give out another backing store it does not throw:
+ * `putImageData` writes into nothing, `toBlob` hands back a fully TRANSPARENT
+ * image, and a transparent PNG over the preview's dark card reads as a solid
+ * black page. Zeroing the dimensions releases the memory at once and is the
+ * documented way to do it.
+ */
+function release(canvas: HTMLCanvasElement) {
+	canvas.width = 0;
+	canvas.height = 0;
+}
+
 function draw(source: CanvasImageSource, width: number, height: number): Frame {
-	const { context } = scratch(width, height);
-	context.drawImage(source, 0, 0, width, height);
-	const { data } = context.getImageData(0, 0, width, height);
-	return { data, width, height };
+	const { canvas, context } = scratch(width, height);
+	try {
+		context.drawImage(source, 0, 0, width, height);
+		const { data } = context.getImageData(0, 0, width, height);
+		return { data, width, height };
+	} finally {
+		release(canvas);
+	}
 }
 
 /**
@@ -73,8 +98,12 @@ export function frameFromBitmapSource(frame: Frame, targetWidth: number): Frame 
 	const { width, height } = fit(frame.width, frame.height, targetWidth);
 	if (width === frame.width && height === frame.height) return frame;
 	const { canvas, context } = scratch(frame.width, frame.height);
-	context.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
-	return draw(canvas, width, height);
+	try {
+		context.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
+		return draw(canvas, width, height);
+	} finally {
+		release(canvas);
+	}
 }
 
 export function frameFromBitmap(bitmap: ImageBitmap, targetWidth?: number): Frame {
@@ -188,13 +217,15 @@ function orientUpright(frame: Frame, bytes: Uint8Array): Frame {
 export function frameToBlob(frame: Frame, type = 'image/jpeg', quality = 0.85): Promise<Blob> {
 	const { canvas, context } = scratch(frame.width, frame.height);
 	context.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
-	return new Promise((resolve, reject) => {
+	return new Promise<Blob>((resolve, reject) => {
 		canvas.toBlob(
 			(blob) => (blob ? resolve(blob) : reject(new Error('The page could not be encoded.'))),
 			type,
 			quality
 		);
-	});
+		// NOT in a `finally` on the promise: the callback is asynchronous and the
+		// pixels have to still be there when it runs.
+	}).finally(() => release(canvas));
 }
 
 export async function encodeJpeg(frame: Frame, quality = 0.85): Promise<Uint8Array> {

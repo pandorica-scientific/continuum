@@ -9,7 +9,8 @@ import {
 	hairline,
 	outputSize,
 	quadAspect,
-	scaleCorners
+	scaleCorners,
+	turnCorners
 } from '$lib/scan/core/geometry';
 
 const rect = (w: number, h: number) => ({
@@ -126,5 +127,39 @@ describe('quadAspect', () => {
 		// Detection can collapse on a blank wall, and a NaN here would sail
 		// through every comparison that is meant to reject it.
 		expect(quadAspect(rect(0, 0))).toBe(Infinity);
+	});
+});
+
+describe('turnCorners', () => {
+	// A page inset in a 100x200 frame, which becomes a 200x100 frame once turned.
+	const corners = {
+		tl: { x: 10, y: 20 },
+		tr: { x: 90, y: 20 },
+		br: { x: 90, y: 180 },
+		bl: { x: 10, y: 180 }
+	};
+	const turned = turnCorners(corners, 200);
+
+	it('lands every corner where the pixels land', () => {
+		// applyOrientation's orientation 6 sends (x, y) to (height - 1 - y, x),
+		// so the corner that was at the bottom-left arrives at the top-left.
+		expect(turned.tl).toEqual({ x: 19, y: 10 });
+		expect(turned.tr).toEqual({ x: 179, y: 10 });
+		expect(turned.br).toEqual({ x: 179, y: 90 });
+		expect(turned.bl).toEqual({ x: 19, y: 90 });
+	});
+
+	it('keeps the corners named for where they now are', () => {
+		// The whole point: rotating used to discard the crop, handing back the
+		// entire photograph. A quarter turn is exact, so there is nothing to lose.
+		expect(turned.tl.x).toBeLessThan(turned.tr.x);
+		expect(turned.tl.y).toBeLessThan(turned.bl.y);
+	});
+
+	it('comes back exactly after four turns', () => {
+		// Which is what makes this safe to apply repeatedly: someone spinning a
+		// page all the way round must not lose a pixel of the crop to rounding.
+		const round = turnCorners(turnCorners(turnCorners(turned, 100), 200), 100);
+		expect(round).toEqual(corners);
 	});
 });

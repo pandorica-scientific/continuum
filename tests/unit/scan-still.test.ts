@@ -52,3 +52,25 @@ describe('the captured still', () => {
 		expect(source).toContain('bitmap.close()');
 	});
 });
+
+describe('scratch canvases', () => {
+	const source = readFileSync('src/lib/scan/client/frame.ts', 'utf8');
+
+	it('are released the moment their pixels are read', () => {
+		// A backing store lives outside the JavaScript heap and is not counted
+		// against it, so dropping the reference frees it eventually and no
+		// sooner. Every page allocates several at capture size — 54 MB apiece
+		// for a 3200x4267 frame — and a rotation allocates a fresh set on top.
+		expect(source).toMatch(
+			/function release\(canvas: HTMLCanvasElement\) \{\s*canvas\.width = 0;\s*canvas\.height = 0;/
+		);
+		expect(source.match(/release\(canvas\)/g)?.length).toBeGreaterThanOrEqual(3);
+	});
+
+	it('releases the encoder canvas only after the callback has run', () => {
+		// toBlob's callback is asynchronous. Zeroing the canvas before it fires
+		// hands back a fully TRANSPARENT image — which, over the preview's dark
+		// card, is a page that looks solid black rather than an error.
+		expect(source).toMatch(/\}\)\.finally\(\(\) => release\(canvas\)\);/);
+	});
+});

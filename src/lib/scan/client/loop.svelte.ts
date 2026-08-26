@@ -69,7 +69,9 @@ export function guidanceFor(state: DetectState): string {
 		case 'detected':
 			return 'Hold steady';
 		case 'stable':
-			return 'Got it — hold still';
+			// No longer a promise that something is about to happen by itself:
+			// the shutter is the only way a page is taken now.
+			return 'Looks good — take it';
 		case 'rejected':
 			switch (state.reason) {
 				case 'blurry':

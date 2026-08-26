@@ -106,7 +106,7 @@ describe('guidanceFor', () => {
 	it('names what the user controls, in every state', () => {
 		expect(guidanceFor({ kind: 'searching' })).toBe('Point at the page');
 		expect(guidanceFor(detected())).toBe('Hold steady');
-		expect(guidanceFor({ kind: 'stable', corners: at(0) })).toBe('Got it — hold still');
+		expect(guidanceFor({ kind: 'stable', corners: at(0) })).toBe('Looks good — take it');
 		expect(guidanceFor({ kind: 'rejected', corners: null, reason: 'blurry' })).toBe(
 			'Hold still — that came out blurry'
 		);

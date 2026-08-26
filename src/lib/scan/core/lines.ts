@@ -39,6 +39,14 @@ export function distanceToLine(line: Line, p: Point): number {
 	return Math.abs(line.a * p.x + line.b * p.y + line.c);
 }
 
+/**
+ * The same distance, keeping its sign, so two lines on OPPOSITE sides of a
+ * reference are not grouped together as one.
+ */
+export function signedDistanceToLine(line: Line, p: Point): number {
+	return line.a * p.x + line.b * p.y + line.c;
+}
+
 /** Direction of the line in radians, folded to [0, π) so opposites agree. */
 export function lineAngle(line: Line): number {
 	const angle = Math.atan2(-line.a, line.b);
@@ -99,62 +107,12 @@ export function fitLine(points: Point[]): Line | null {
 	return { a, b, c: -(a * mx + b * my) };
 }
 
-const EDGES = [
+export const EDGES = [
 	['tl', 'tr'],
 	['tr', 'br'],
 	['br', 'bl'],
 	['bl', 'tl']
 ] as const;
-
-/**
- * Pull each edge of a rough quad onto the segments that lie along it.
- *
- * Deliberately conservative. An edge with no convincing support keeps its
- * original line, and if the refined quad disagrees with the rough one by more
- * than `maxDrift` the rough one is returned untouched. Refinement may improve a
- * detection; it must never be able to wreck one.
- */
-export function refineQuad(
-	rough: Corners,
-	segments: Segment[],
-	options: { angleTolerance: number; distanceTolerance: number; maxDrift: number }
-): Corners {
-	const refined = EDGES.map(([from, to]) => {
-		const base = lineThrough(rough[from], rough[to]);
-		const wanted = lineAngle(base);
-
-		const support: Point[] = [];
-		for (const s of segments) {
-			const ends = [
-				{ x: s.x1, y: s.y1 },
-				{ x: s.x2, y: s.y2 }
-			];
-			const angle = lineAngle(lineThrough(ends[0], ends[1]));
-			if (angleBetween(angle, wanted) > options.angleTolerance) continue;
-			if (ends.some((p) => distanceToLine(base, p) > options.distanceTolerance)) continue;
-			support.push(...ends);
-		}
-		// Two points is one segment: enough to tilt a line onto nonsense. Ask for
-		// at least two segments' worth before trusting it over the mask.
-		return support.length >= 4 ? (fitLine(support) ?? base) : base;
-	});
-
-	const corners: Point[] = [];
-	for (let i = 0; i < 4; i++) {
-		// Corner i is where edge i-1 meets edge i.
-		const point = intersect(refined[(i + 3) % 4], refined[i]);
-		if (!point) return rough;
-		corners.push(point);
-	}
-
-	const [tl, tr, br, bl] = corners;
-	const result = { tl, tr, br, bl };
-	const drifted = (['tl', 'tr', 'br', 'bl'] as const).some(
-		(key) =>
-			Math.hypot(result[key].x - rough[key].x, result[key].y - rough[key].y) > options.maxDrift
-	);
-	return drifted ? rough : result;
-}
 
 /**
  * The four interior angles of a quad, in degrees, corner by corner.
@@ -186,4 +144,132 @@ export function quadAngles(corners: Corners): number[] {
 /** How far the worst corner is from square, in degrees. */
 export function worstCornerSkew(corners: Corners): number {
 	return Math.max(...quadAngles(corners).map((angle) => Math.abs(angle - 90)));
+}
+
+/**
+ * The straight lines running along one edge of the page, best first.
+ *
+ * Fragments pointing roughly the same way and lying roughly the same distance
+ * from `base` are one edge seen in pieces — broken by a fold, a shadow, or a
+ * second sheet lying across it — so they are grouped and fitted as one line.
+ * Groups are ranked by how much total segment length went into them, because a
+ * page edge is the longest straight thing anywhere near it.
+ *
+ * `base` is NOT included in the result: the caller adds it, so that "leave this
+ * edge where the mask put it" is always among the options considered.
+ */
+export function candidateLines(
+	base: Line,
+	segments: readonly Segment[],
+	options: {
+		angleTolerance: number;
+		groupAngle: number;
+		groupDistance: number;
+		keep: number;
+	}
+): Line[] {
+	const wanted = lineAngle(base);
+	const groups: { offset: number; angle: number; length: number; points: Point[] }[] = [];
+
+	for (const s of segments) {
+		const ends = [
+			{ x: s.x1, y: s.y1 },
+			{ x: s.x2, y: s.y2 }
+		];
+		const line = lineThrough(ends[0], ends[1]);
+		const angle = lineAngle(line);
+		if (angleBetween(angle, wanted) > options.angleTolerance) continue;
+
+		const length = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+		const middle = { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 };
+		const offset = signedDistanceToLine(base, middle);
+		const group = groups.find(
+			(g) =>
+				Math.abs(g.offset - offset) < options.groupDistance &&
+				angleBetween(g.angle, angle) < options.groupAngle
+		);
+		if (group) {
+			// Weight the running offset by length, so one stray fragment cannot
+			// drag a group off the edge that formed it.
+			group.offset = (group.offset * group.length + offset * length) / (group.length + length);
+			group.length += length;
+			group.points.push(...ends);
+		} else {
+			groups.push({ offset, angle, length, points: [...ends] });
+		}
+	}
+
+	groups.sort((one, two) => two.length - one.length);
+	const lines: Line[] = [];
+	for (const group of groups.slice(0, options.keep)) {
+		const line = fitLine(group.points);
+		if (line) lines.push(line);
+	}
+	return lines;
+}
+
+/** The four corners where consecutive edges meet, or null if any pair is parallel. */
+export function quadFromLines(top: Line, right: Line, bottom: Line, left: Line): Corners | null {
+	const tl = intersect(left, top);
+	const tr = intersect(top, right);
+	const br = intersect(right, bottom);
+	const bl = intersect(bottom, left);
+	if (!tl || !tr || !br || !bl) return null;
+	if (![tl, tr, br, bl].every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
+	return { tl, tr, br, bl };
+}
+
+/**
+ * True when the corners wind consistently one way.
+ *
+ * Four lines always meet SOMEWHERE, and most combinations of them meet in a
+ * bow tie or an inside-out shape rather than a page. This is the cheap test
+ * that throws those away before anything expensive looks at them.
+ */
+export function isConvexQuad(corners: Corners): boolean {
+	const points = [corners.tl, corners.tr, corners.br, corners.bl];
+	let sign = 0;
+	for (let i = 0; i < 4; i++) {
+		const a = points[i];
+		const b = points[(i + 1) % 4];
+		const c = points[(i + 2) % 4];
+		const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+		if (cross === 0) return false;
+		const here = cross > 0 ? 1 : -1;
+		if (sign === 0) sign = here;
+		else if (here !== sign) return false;
+	}
+	return true;
+}
+
+/**
+ * Twice the signed area, positive when the corners run tl → tr → br → bl the
+ * way `orderCorners` lays them out.
+ *
+ * Four lines bound a quad without saying which side of it is the top. Label
+ * them the wrong way round and the corners come out wound backwards — the same
+ * shape MIRRORED — and the page is warped through it into a mirror image of
+ * itself. It scores identically to the correct one, because it is built from
+ * the very same four lines, so nothing else in the search can tell them apart
+ * and whichever is reached first wins. That is why the fault appeared at
+ * random rather than on particular pages.
+ */
+export function quadWinding(corners: Corners): number {
+	const points = [corners.tl, corners.tr, corners.br, corners.bl];
+	let sum = 0;
+	for (let i = 0; i < 4; i++) {
+		const a = points[i];
+		const b = points[(i + 1) % 4];
+		sum += a.x * b.y - b.x * a.y;
+	}
+	return sum;
+}
+
+/** Area of the quad, as two triangles. */
+export function quadArea(corners: Corners): number {
+	const triangle = (a: Point, b: Point, c: Point) =>
+		Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+	return (
+		triangle(corners.tl, corners.tr, corners.bl) + triangle(corners.tr, corners.br, corners.bl)
+	);
 }

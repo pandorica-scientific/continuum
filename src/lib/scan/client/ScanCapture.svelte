@@ -3,6 +3,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import {
 		DETECT_WIDTH,
+		detectBest,
 		detectOnce,
 		hairline,
 		scaleCorners,
@@ -16,7 +17,6 @@
 	import {
 		DETECT_INTERVAL_MS,
 		GUIDANCE_DEBOUNCE_MS,
-		HOLD_MS,
 		createStability,
 		guidanceFor
 	} from './loop.svelte.ts';
@@ -50,7 +50,6 @@
 	let video: HTMLVideoElement | undefined = $state();
 	let detect = $state<DetectState>({ kind: 'searching' });
 	let guidance = $state('Point at the page');
-	let holding = $state(false);
 	let torchOn = $state(false);
 	let shooting = $state(false);
 	// The detection frame's own dimensions. The overlay's viewBox is exactly
@@ -96,7 +95,6 @@
 	}
 
 	let guidanceTimer: ReturnType<typeof setTimeout> | undefined;
-	let holdTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/**
 	 * No entry for `searching`, deliberately: no page found means no outline,
@@ -140,34 +138,26 @@
 		guidanceTimer = setTimeout(() => (guidance = line), GUIDANCE_DEBOUNCE_MS);
 	}
 
-	function cancelHold() {
-		if (!holding) return;
-		holding = false;
-		clearTimeout(holdTimer);
-		stability.reset();
-	}
-
 	async function shoot() {
 		if (!video || !camera.track || shooting) return;
 		shooting = true;
-		cancelHold();
 		try {
 			// Sensor resolution for the page itself — not the 640px detection
 			// frame, and not the video track's 1080p either.
 			const full = await stillFromTrack(camera.track, video);
 
-			// Detect again, on the STILL, at twice the live resolution and with
-			// edge refinement on.
+			// The real detection, on the STILL, at twice the live resolution and
+			// reading the picture two different ways.
 			//
-			// Two things are wrong with reusing the live corners. They describe a
-			// frame captured a moment earlier, so any movement between the last
-			// tick and the shutter is baked into the crop; and they come from a
-			// 640px pass whose corners are a polygon approximation of a blurred
-			// mask. This pass costs a few hundred milliseconds, paid once, while
-			// the preview is being prepared anyway.
+			// The live corners are no use here: they describe a frame captured a
+			// moment earlier, so any movement between the last tick and the
+			// shutter is baked into the crop, and they come from a 640px pass
+			// whose corners approximate the boundary of a blurred mask. Nothing
+			// is waiting on this — the preview is being prepared anyway — so it
+			// gets a second or two rather than a tenth of one.
 			const cv = await loadCv();
 			const measured = frameFromBitmapSource(full, REFINE_WIDTH);
-			const settled = detectOnce(cv, measured, { gates: false, refine: true });
+			const settled = detectBest(cv, measured);
 			const found = 'corners' in settled ? settled.corners : null;
 
 			const scaled = found
@@ -247,25 +237,23 @@
 				frameWidth = frame.width;
 				frameHeight = frame.height;
 				measurePicture();
+				// A FRAMING AID, nothing more. It never fires the shutter, so it
+				// can afford to be the cheap reading: the outline is here to show
+				// roughly what has been found while someone aims, and the real
+				// work happens once, after they press the button, with seconds to
+				// spend rather than a tenth of one.
 				const next = detectOnce(cv, frame);
-				const settled = stability.settled(next);
 				detect =
-					settled && next.kind === 'detected' ? { kind: 'stable', corners: next.corners } : next;
+					stability.settled(next) && next.kind === 'detected'
+						? { kind: 'stable', corners: next.corners }
+						: next;
 				say(guidanceFor(detect));
-
-				if (settled && !holding) {
-					holding = true;
-					holdTimer = setTimeout(() => void shoot(), HOLD_MS);
-				} else if (!settled) {
-					cancelHold();
-				}
 			};
 			requestAnimationFrame(tick);
 		})();
 
 		return () => {
 			running = false;
-			cancelHold();
 			clearTimeout(guidanceTimer);
 			camera.stop();
 		};
@@ -273,14 +261,7 @@
 </script>
 
 {#if camera.state.kind === 'live'}
-	<!-- Any touch ANYWHERE cancels a pending capture, not just a touch on a
-	     control. Capture phase, so a control's own handler cannot swallow it. -->
-	<div
-		class="capture"
-		role="application"
-		aria-label="Camera viewfinder"
-		onpointerdowncapture={cancelHold}
-	>
+	<div class="capture" role="application" aria-label="Camera viewfinder">
 		<!--
 			`srcObject` is deliberately NOT bound here. Svelte groups template
 			bindings into one reactive effect, and this element sits beside values
@@ -370,22 +351,10 @@
 			<button
 				type="button"
 				class="shutter"
-				class:holding
-				aria-label={holding ? 'Capturing now — tap to cancel' : 'Take the photo'}
-				onclick={() => (holding ? cancelHold() : void shoot())}
+				aria-label="Take the photo"
+				onclick={() => void shoot()}
 			>
 				<span class="disc"></span>
-				<!--
-					`pathLength="100"` makes the dash values below a percentage of the
-					circumference rather than a length in user units. Without it the
-					dash array has to be 2πr written out as a number, which is
-					correct until someone adjusts the radius — and then the ring
-					fills to the wrong fraction, silently, because it still looks
-					like a ring.
-				-->
-				<svg class="ring" viewBox="0 0 72 72" aria-hidden="true">
-					<circle cx="36" cy="36" r="30" pathLength="100" />
-				</svg>
 			</button>
 			<span class="slot end">
 				{#if camera.state.torch}
@@ -566,30 +535,6 @@
 		margin: 8px;
 		border-radius: var(--radius-pill);
 		background: var(--scan-ink);
-	}
-	.ring {
-		position: absolute;
-		inset: 0;
-	}
-	/* r=30 against the 28 the disc occupies: the ring sits ON the button with a
-	   hair of clearance. At the 33 it started as, it stood five pixels clear all
-	   the way round and read as a halo hanging behind the shutter rather than
-	   part of it. */
-	.ring circle {
-		fill: none;
-		stroke: var(--detect-stable);
-		stroke-width: 3;
-		stroke-dasharray: 100;
-		stroke-dashoffset: 100;
-		/* Start the fill at twelve o'clock, where an eye expects a timer to. */
-		transform: rotate(-90deg);
-		transform-origin: 50% 50%;
-	}
-	/* A TRANSITION, not an animation — which is exactly why the reduced-motion
-	   block in app.css has to cover transitions as well. */
-	.shutter.holding .ring circle {
-		stroke-dashoffset: 0;
-		transition: stroke-dashoffset var(--motion-hold) linear;
 	}
 	.chip:focus-visible,
 	.shutter:focus-visible {

@@ -74,6 +74,45 @@ services:
   #
   # Keep the app's port mapping above until a passkey sign-in over the tailnet
   # works, then remove it to make Tailscale the only way in.
+  # HTTPS on the local network, without an account or a domain name.
+  #
+  #   CONTINUUM_HOST=continuum.local docker compose --profile lan-tls up -d
+  #
+  # The scanner's in-app camera needs a secure context and a plain-http LAN
+  # address is not one, so without this — or Tailscale below — the viewfinder
+  # cannot open on a phone. (The scan button still works there: it falls back to
+  # the phone's own camera app.)
+  #
+  # Off unless asked for, and it is the QUICK route rather than the good one:
+  # the certificate comes from Caddy's own authority, so every browser warns
+  # once until you install its root. Accepting the warning is enough — the
+  # origin is a secure context from then on. Tailscale gives a genuinely trusted
+  # certificate and is the better answer for daily use.
+  tls:
+    profiles: ['lan-tls']
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # No config file to download: this is the whole configuration. `--from` must
+    # be the address you actually type, because a certificate issued for a
+    # different one is rejected outright rather than warned about — a LAN IP
+    # works here as well as a name.
+    command:
+      - caddy
+      - reverse-proxy
+      - --from
+      - https://${CONTINUUM_HOST:-continuum.local}:8443
+      - --to
+      - app:3000
+      - --internal-certs
+    ports:
+      - '${CONTINUUM_TLS_PORT:-8443}:8443'
+    volumes:
+      # Keeps the certificate authority across restarts. Without it every
+      # restart issues a new root and every device warns again.
+      - caddy-state:/data
+    depends_on:
+      - app
+
   tailscale:
     image: tailscale/tailscale:latest
     hostname: continuum
@@ -88,7 +127,14 @@ services:
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
       - tailscale-state:/var/lib/tailscale
-      - ./docker/tailscale-serve.json:/config/serve.json:ro
+    configs:
+      # Inlined rather than a file beside this one, so installing is a single
+      # download. The `$$` in the content below is deliberate: it makes Compose
+      # emit a literal ${TS_CERT_DOMAIN}, which the SIDECAR substitutes at
+      # startup with the name Tailscale issued. Written with one `$`, Compose
+      # expands it first and the sidecar receives an empty hostname.
+      - source: tailscale-serve
+        target: /config/serve.json
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -109,8 +155,21 @@ services:
       timeout: 3s
       retries: 10
 
+configs:
+  tailscale-serve:
+    content: |
+      {
+        "TCP": { "443": { "HTTPS": true } },
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": { "/": { "Proxy": "http://app:3000" } }
+          }
+        }
+      }
+
 volumes:
   continuum-data:
   continuum-db:
   continuum-backups:
   tailscale-state:
+  caddy-state:

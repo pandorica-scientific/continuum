@@ -9,9 +9,10 @@
 	import {
 		applyOrientation,
 		assemblePdf,
-		detectOnce,
+		detectBest,
 		renderPage,
 		scaleCorners,
+		turnCorners,
 		type Corners,
 		type Frame,
 		type PageMode,
@@ -251,7 +252,7 @@
 			// this screen exists at all rather than a silent pause.
 			const frame = await frameFromFile(file);
 			const cv = await loadCv();
-			const found = detectOnce(cv, frame, { gates: false, refine: true });
+			const found = detectBest(cv, frame);
 			source = { frame, corners: 'corners' in found ? found.corners : null, from: 'upload' };
 			fromUpload = true;
 			await show('bw');
@@ -335,8 +336,17 @@
 			if (!source) return;
 			// Rotate the SOURCE and re-render, rather than rotating the result:
 			// resampling a binarized page softens every edge the threshold just
-			// sharpened. The corners no longer apply once the frame has turned.
-			source = { ...source, frame: applyOrientation(source.frame, 6), corners: null };
+			// sharpened.
+			//
+			// The corners turn WITH it. They used to be discarded here, which
+			// meant straightening a page also threw its crop away and handed back
+			// the whole photograph, desk and all.
+			const was = source.frame.height;
+			source = {
+				...source,
+				frame: applyOrientation(source.frame, 6),
+				corners: source.corners ? turnCorners(source.corners, was) : null
+			};
 			// The draft describes the frame as it was; rebuild it from the turned one.
 			draft = null;
 			void show(mode);

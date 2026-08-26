@@ -2,13 +2,18 @@
 import { describe, expect, it } from 'vitest';
 import {
 	angleBetween,
+	candidateLines,
 	distanceToLine,
 	fitLine,
 	intersect,
+	isConvexQuad,
 	lineAngle,
 	lineThrough,
 	quadAngles,
-	refineQuad,
+	quadArea,
+	quadFromLines,
+	quadWinding,
+	signedDistanceToLine,
 	worstCornerSkew,
 	type Segment
 } from '$lib/scan/core/lines';
@@ -97,72 +102,143 @@ describe('fitLine', () => {
 });
 
 const rough: Corners = { tl: P(10, 10), tr: P(210, 10), br: P(210, 310), bl: P(10, 310) };
-const tolerant = { angleTolerance: 0.2, distanceTolerance: 12, maxDrift: 40 };
+const grouping = {
+	angleTolerance: 0.52,
+	groupAngle: 0.17,
+	groupDistance: 12,
+	keep: 5
+};
 
-/** Segments lying along a rectangle inset from `rough` by `off`. */
-function edgesOf(off: number): Segment[] {
-	const l = 10 + off,
-		r = 210 + off,
-		t = 10 + off,
-		b = 310 + off;
-	return [
-		{ x1: l, y1: t, x2: r, y2: t },
-		{ x1: l + 20, y1: t, x2: r - 20, y2: t },
-		{ x1: r, y1: t, x2: r, y2: b },
-		{ x1: r, y1: t + 20, x2: r, y2: b - 20 },
-		{ x1: r, y1: b, x2: l, y2: b },
-		{ x1: r - 20, y1: b, x2: l + 20, y2: b },
-		{ x1: l, y1: b, x2: l, y2: t },
-		{ x1: l, y1: b - 20, x2: l, y2: t + 20 }
-	];
-}
-
-describe('refineQuad', () => {
-	it('pulls the corners onto the real edges', () => {
-		const refined = refineQuad(rough, edgesOf(6), tolerant);
-		expect(refined.tl.x).toBeCloseTo(16, 3);
-		expect(refined.tl.y).toBeCloseTo(16, 3);
-		expect(refined.br.x).toBeCloseTo(216, 3);
-		expect(refined.br.y).toBeCloseTo(316, 3);
+describe('signedDistanceToLine', () => {
+	it('separates the two sides of a line', () => {
+		const line = lineThrough(P(0, 100), P(200, 100));
+		const above = signedDistanceToLine(line, P(100, 40));
+		const below = signedDistanceToLine(line, P(100, 160));
+		expect(Math.sign(above)).not.toBe(Math.sign(below));
+		expect(Math.abs(above)).toBeCloseTo(60);
+		expect(Math.abs(below)).toBeCloseTo(60);
 	});
+});
 
-	it('leaves the quad alone when nothing supports a move', () => {
-		expect(refineQuad(rough, [], tolerant)).toEqual(rough);
-	});
+describe('candidateLines', () => {
+	const top = lineThrough(rough.tl, rough.tr);
 
-	it('ignores segments at the wrong angle', () => {
-		// Text lines run parallel to the top edge but sit nowhere near it; the
-		// distance test is what keeps them out. A diagonal has neither excuse.
-		const diagonal: Segment[] = [{ x1: 20, y1: 20, x2: 200, y2: 300 }];
-		expect(refineQuad(rough, diagonal, tolerant)).toEqual(rough);
-	});
-
-	it('ignores segments too far from the edge, however well aligned', () => {
-		const textLine: Segment[] = [{ x1: 30, y1: 150, x2: 190, y2: 150 }];
-		expect(refineQuad(rough, textLine, tolerant)).toEqual(rough);
-	});
-
-	it('refuses a single segment, which could tilt a line onto nonsense', () => {
-		const one: Segment[] = [{ x1: 10, y1: 14, x2: 60, y2: 14 }];
-		expect(refineQuad(rough, one, tolerant)).toEqual(rough);
-	});
-
-	it('falls back to the rough quad when refinement drifts too far', () => {
-		// Refinement may improve a detection; it must never be able to wreck one.
-		const strict = { ...tolerant, maxDrift: 2 };
-		expect(refineQuad(rough, edgesOf(6), strict)).toEqual(rough);
-	});
-
-	it('returns the rough quad rather than an impossible corner', () => {
-		const parallel: Segment[] = [
-			{ x1: 0, y1: 10, x2: 300, y2: 10 },
-			{ x1: 0, y1: 11, x2: 300, y2: 11 }
+	it('gathers the pieces of one broken edge into a single line', () => {
+		// Two fragments of the same edge with a gap between them, which is what a
+		// fold or a second sheet lying across the page leaves behind.
+		const broken: Segment[] = [
+			{ x1: 10, y1: 60, x2: 90, y2: 60 },
+			{ x1: 130, y1: 60, x2: 210, y2: 60 }
 		];
-		const out = refineQuad(rough, parallel, tolerant);
-		for (const key of ['tl', 'tr', 'br', 'bl'] as const) {
-			expect(Number.isFinite(out[key].x)).toBe(true);
-			expect(Number.isFinite(out[key].y)).toBe(true);
-		}
+		const found = candidateLines(top, broken, grouping);
+		expect(found).toHaveLength(1);
+		expect(distanceToLine(found[0], P(110, 60))).toBeLessThan(1);
+	});
+
+	it('keeps edges at different distances apart', () => {
+		const two: Segment[] = [
+			{ x1: 10, y1: 60, x2: 210, y2: 60 },
+			{ x1: 10, y1: 200, x2: 210, y2: 200 }
+		];
+		expect(candidateLines(top, two, grouping)).toHaveLength(2);
+	});
+
+	it('ignores anything pointing the wrong way', () => {
+		const across: Segment[] = [{ x1: 100, y1: 10, x2: 100, y2: 310 }];
+		expect(candidateLines(top, across, grouping)).toHaveLength(0);
+	});
+
+	it('offers the longest edges first', () => {
+		const mixed: Segment[] = [
+			{ x1: 90, y1: 60, x2: 130, y2: 60 },
+			{ x1: 10, y1: 200, x2: 210, y2: 200 }
+		];
+		const found = candidateLines(top, mixed, grouping);
+		expect(distanceToLine(found[0], P(100, 200))).toBeLessThan(1);
+	});
+
+	it('returns no more than it was asked for', () => {
+		const many: Segment[] = [40, 80, 120, 160, 200, 240, 280].map((y) => ({
+			x1: 10,
+			y1: y,
+			x2: 210,
+			y2: y
+		}));
+		expect(candidateLines(top, many, { ...grouping, keep: 3 })).toHaveLength(3);
+	});
+
+	it('does not include the edge it was given', () => {
+		// The caller adds that itself, so "leave this edge alone" is always an
+		// option; returning it here as well would just double the search.
+		const along: Segment[] = [{ x1: 10, y1: 10, x2: 210, y2: 10 }];
+		const found = candidateLines(top, along, grouping);
+		expect(found).toHaveLength(1);
+		expect(found[0]).not.toBe(top);
+	});
+});
+
+describe('quadFromLines', () => {
+	it('rebuilds a rectangle from its four sides', () => {
+		const quad = quadFromLines(
+			lineThrough(rough.tl, rough.tr),
+			lineThrough(rough.tr, rough.br),
+			lineThrough(rough.br, rough.bl),
+			lineThrough(rough.bl, rough.tl)
+		);
+		expect(quad?.tl.x).toBeCloseTo(10);
+		expect(quad?.br.y).toBeCloseTo(310);
+	});
+
+	it('is null when two ADJACENT sides are parallel', () => {
+		// Which is most of what the search enumerates: four lines picked out of a
+		// pool have no obligation to bound anything.
+		const top = lineThrough(P(0, 0), P(100, 0));
+		const right = lineThrough(P(0, 50), P(100, 50));
+		const bottom = lineThrough(P(0, 100), P(100, 100));
+		const left = lineThrough(P(0, 0), P(0, 100));
+		expect(quadFromLines(top, right, bottom, left)).toBeNull();
+	});
+});
+
+describe('isConvexQuad', () => {
+	it('accepts a rectangle and a page seen at an angle', () => {
+		expect(isConvexQuad(rough)).toBe(true);
+		expect(isConvexQuad({ tl: P(30, 10), tr: P(210, 40), br: P(190, 310), bl: P(10, 280) })).toBe(
+			true
+		);
+	});
+
+	it('rejects the bow tie four crossing lines usually make', () => {
+		expect(isConvexQuad({ tl: P(10, 10), tr: P(210, 10), br: P(10, 310), bl: P(210, 310) })).toBe(
+			false
+		);
+	});
+});
+
+describe('quadWinding', () => {
+	it('is positive for corners named the way orderCorners names them', () => {
+		expect(quadWinding(rough)).toBeGreaterThan(0);
+	});
+
+	it('is negative for the same shape mirrored', () => {
+		// Swapping left for right is the whole bug: four lines bound a quad
+		// without saying which side is the top, and a page warped through the
+		// mirrored labelling comes out as a mirror image of itself.
+		const mirrored = { tl: rough.tr, tr: rough.tl, br: rough.bl, bl: rough.br };
+		expect(quadWinding(mirrored)).toBeLessThan(0);
+	});
+
+	it('does not notice a half turn, which is why ordering is what fixes it', () => {
+		// Rotating the labels by two keeps the winding and still turns the page
+		// upside down, so the winding test alone was never enough.
+		const turned = { tl: rough.br, tr: rough.bl, br: rough.tl, bl: rough.tr };
+		expect(quadWinding(turned)).toBeGreaterThan(0);
+	});
+});
+
+describe('quadArea', () => {
+	it('measures a rectangle', () => {
+		expect(quadArea(rough)).toBeCloseTo(200 * 300);
 	});
 });
 

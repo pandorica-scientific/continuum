@@ -110,9 +110,7 @@ describe('the flow around it', () => {
 
 	it('rebuilds the draft after a rotation', () => {
 		// It describes the frame as it was; keeping it would preview the old one.
-		expect(flow).toMatch(
-			/applyOrientation\(source\.frame, 6\), corners: null \};\s*\n[^\n]*\n\s*draft = null;/
-		);
+		expect(flow).toMatch(/applyOrientation\(source\.frame, 6\),[\s\S]{0,160}?draft = null;/);
 	});
 
 	it('holds the source frame so a mode change can re-render it', () => {
@@ -125,9 +123,10 @@ describe('the flow around it', () => {
 		expect(flow).toContain('URL.revokeObjectURL');
 	});
 
-	it('drops the corners when the page is rotated', () => {
-		// They describe the frame as it was; after a quarter turn they point at
-		// the wrong edges entirely.
-		expect(flow).toMatch(/applyOrientation\(source\.frame, 6\), corners: null/);
+	it('turns the corners with the page rather than dropping them', () => {
+		// They describe the frame as it was, but a quarter turn is exact
+		// arithmetic on four points. Discarding them, which is what this did,
+		// silently swapped the cropped page for the whole photograph.
+		expect(flow).toMatch(/turnCorners\(source\.corners, was\)/);
 	});
 });

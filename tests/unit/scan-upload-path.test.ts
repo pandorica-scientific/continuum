@@ -62,10 +62,11 @@ describe('the flow', () => {
 		expect(flow).toContain('Reading photo…');
 	});
 
-	it('turns the quality gates off for a dropped file', () => {
-		// There is no retake: the file is whatever the gallery held. Refusing it
-		// for being blurry tells the user no and offers nothing.
-		expect(flow).toMatch(/detectOnce\(cv, frame, \{ gates: false, refine: true \}\)/);
+	it('reads a dropped file the thorough way, with the gates off', () => {
+		// There is no retake: the file is whatever the gallery held, so refusing
+		// it for being blurry tells the user no and offers nothing. detectBest
+		// runs gateless by construction and reads the picture twice.
+		expect(flow).toMatch(/detectBest\(cv, frame\)/);
 	});
 
 	it('marks it as the upload path, so Replace becomes Choose another file', () => {
@@ -75,5 +76,21 @@ describe('the flow', () => {
 
 	it('survives a photo it cannot read', () => {
 		expect(flow).toMatch(/could not be read/);
+	});
+});
+
+describe('rotating a page', () => {
+	const flow = readFileSync('src/lib/scan/client/ScanFlow.svelte', 'utf8');
+
+	it('turns the corners with the frame instead of dropping them', () => {
+		// Discarding them silently swapped a cropped page for the whole
+		// photograph, desk and all, for anyone who straightened one.
+		expect(flow).toMatch(/corners: source\.corners \? turnCorners\(source\.corners, was\) : null/);
+	});
+
+	it('measures the height BEFORE the turn', () => {
+		// turnCorners maps (x, y) to (height - 1 - y, x); reading the height off
+		// the already-turned frame would use the width and fold the page over.
+		expect(flow).toMatch(/const was = source\.frame\.height;/);
 	});
 });

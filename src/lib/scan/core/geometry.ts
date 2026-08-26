@@ -89,3 +89,28 @@ export function quadAspect(corners: Corners): number {
 export function hairline(raw: number): { width: number; stroked: boolean } {
 	return { width: Math.max(0.8, raw), stroked: raw >= 2.5 };
 }
+
+/**
+ * Turn the corners with the page, a quarter turn clockwise.
+ *
+ * The rotate button turns the SOURCE frame and re-renders, because resampling
+ * an already-binarized page softens every edge the threshold just sharpened.
+ * The corners were measured in the frame as it was, and they used to be thrown
+ * away at that point — which silently swapped a cropped page for the whole
+ * photograph, background and all, for anyone who straightened one. A quarter
+ * turn is exact arithmetic on four points, so there is nothing to re-detect and
+ * nothing to lose.
+ *
+ * `height` is the frame's height BEFORE the turn, matching `applyOrientation`'s
+ * orientation 6: a pixel at (x, y) lands at (height - 1 - y, x).
+ */
+export function turnCorners(corners: Corners, height: number): Corners {
+	const turn = (p: Point): Point => ({ x: height - 1 - p.y, y: p.x });
+	// Clockwise, so the corner that was at the bottom-left arrives at the top-left.
+	return {
+		tl: turn(corners.bl),
+		tr: turn(corners.tl),
+		br: turn(corners.tr),
+		bl: turn(corners.br)
+	};
+}
