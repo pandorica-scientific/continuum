@@ -9,7 +9,7 @@
 // TypeScript accepts it via `rewriteRelativeImportExtensions`, already set in
 // tsconfig.json, and Vite resolves it unchanged.
 export * from './types.ts';
-export { heapBytes, allocMark, type CV } from './opencv.ts';
+export { type CV } from './opencv.ts';
 export { withMats, type Arena, type Disposable } from './arena.ts';
 export {
 	A4_RATIO,
