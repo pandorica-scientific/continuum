@@ -19,14 +19,12 @@ down rather than blocking the interface.
 
 ## Install
 
-**1. Fetch the two files** — the Compose file, and the small serve config the
-Tailscale sidecar mounts.
+**1. Fetch the Compose file.** It is the only file you need — nothing else is
+downloaded and nothing is built on your machine.
 
 ```sh
 mkdir continuum && cd continuum
 curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
-curl --create-dirs -o docker/tailscale-serve.json \
-  https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docker/tailscale-serve.json
 ```
 
 **2. Start it,** with a database password of your own.
@@ -39,8 +37,13 @@ POSTGRES_PASSWORD=change-me docker compose up -d
 wizard. Everything is configured there rather than in files: people, base
 currency (CZK, EUR or PLN), and which modules are on.
 
-That is the whole installation. Nothing is built on your machine, and the app
-runs its own database migrations at boot, so there is no separate database step.
+**4. Turn on HTTPS** if you want to use Continuum from a phone or tablet — see
+below. The document scanner's camera and passkey sign-in both need it, and
+neither can work over a plain-http LAN address.
+
+That is the whole installation. The published image is pulled from Docker Hub,
+and the app runs its own database migrations at boot, so there is no build step
+and no separate database step.
 
 Two things worth knowing now rather than later:
 
@@ -51,9 +54,6 @@ Two things worth knowing now rather than later:
   `http://continuum.local`. If something already owns 80, put
   `CONTINUUM_PORT=3000` in a `.env` file beside `compose.yaml`; Compose fails
   loudly on a collision rather than starting somewhere unexpected.
-
-Skipping Tailscale? Then step 1 needs only `compose.yaml`, and step 2 is
-`docker compose up -d app db`.
 
 ## Demo data
 
@@ -69,30 +69,74 @@ Sign in as Jana Nováková with `demo-demo-demo`. An instance that already has
 people is never touched, and every screenshot in the gallery comes from exactly
 this data.
 
-## HTTPS and passkeys
+## HTTPS
 
-Passkeys need HTTPS: browsers refuse WebAuthn outside a secure context, so on a
-plain-HTTP address the passkey controls are simply absent. Everything else works
-without it.
+Two features refuse to run outside a secure context, because browsers refuse
+them: **the scanner's camera** and **passkey sign-in**. On the server machine
+itself `http://localhost` already counts as one, so both work there. From any
+other device — which is where you actually scan paperwork — they need HTTPS.
 
-`docker compose up -d` therefore also brings up a **Tailscale sidecar**, which is
-a home server's easiest route to a trusted certificate. It is tailnet-only —
-`tailscale funnel`, the command that would expose the app to the open internet,
-is not run anywhere here — and until you authenticate it the sidecar simply idles
-while the app stays reachable on the port above.
+Nothing else does. Password sign-in, uploads and every other screen work over
+plain http at whatever address the server answers on, and the scan button still
+scans there: it falls back to the phone's own camera app, which needs no secure
+context. What is missing is the live outline, not the scan.
 
-1. `docker compose logs tailscale` prints a login URL; visit it. Setting
-   `TS_AUTHKEY` in `.env` instead authenticates unattended and skips this step.
-2. Put the name Tailscale issues in `.env` and restart:
-   `ORIGIN=https://continuum.<your-tailnet>.ts.net`.
+Pick whichever route suits you. Both are in the Compose file already.
 
-Step 2 is not optional if you want passkeys — they are bound to that exact
-address. `ORIGIN` governs nothing else: ordinary sign-in already works at every
-address the server answers on, because form submissions are checked against the
-address your browser actually used. See [Networking and passkeys](networking.md).
+### Tailscale — a trusted certificate, no domain of your own
 
-Once a passkey sign-in over the tailnet works, you can drop the port mapping from
-`compose.yaml` and make Tailscale the only way in.
+The better answer for daily use: the certificate comes from Let's Encrypt, so
+nothing warns, on any device. Tailscale is a private mesh — only devices you
+have added can reach the machine, and `tailscale funnel`, the command that would
+expose the app to the open internet, is not run anywhere here.
+
+The sidecar is already running — it comes up with `docker compose up -d` and
+idles until you authenticate it:
+
+```sh
+docker compose logs tailscale        # visit the login URL it prints
+```
+
+Setting `TS_AUTHKEY` in `.env` instead authenticates unattended and skips this
+step entirely. Either way, finish by telling the app the name Tailscale issued,
+because a passkey is bound to exactly that address:
+
+```sh
+# .env
+ORIGIN=https://continuum.<your-tailnet>.ts.net
+```
+
+Once a passkey sign-in over the tailnet works, you can drop the `ports:` block
+from the `app` service and make Tailscale the only way in.
+
+### LAN — no account, no domain, one warning
+
+Quicker, and entirely local. Give it the address you actually type — a name or a
+LAN IP, but it must match, because a certificate issued for a different one is
+rejected outright rather than warned about:
+
+```sh
+# .env
+CONTINUUM_HOST=continuum.local
+
+docker compose --profile lan-tls up -d
+```
+
+Then open **https://continuum.local:8443**.
+
+The certificate is issued by Caddy's own authority, which no device trusts, so
+every browser warns once. **Accept it and everything works** — from then on the
+origin is a secure context as far as the browser is concerned, which is all the
+camera and passkeys require. Set `ORIGIN=https://continuum.local:8443` to turn
+the passkey controls on too.
+
+To stop the warning, install Caddy's root certificate on each device and mark it
+trusted — [Networking](networking.md#the-camera-needs-https-too) has the steps,
+including the second, easy-to-miss step on iOS.
+
+`ORIGIN` governs passkeys and nothing else: ordinary sign-in already works at
+every address the server answers on, because form submissions are checked
+against the address your browser actually used.
 
 ## Upgrading
 

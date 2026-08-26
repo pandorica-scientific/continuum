@@ -14,10 +14,12 @@
 - 📄 **Several pages become one document** — keep them one after another, reorder them, name the file, and the order of the tiles is the order of the pages
 - 🎛️ **Black and white, grayscale, colour, or the photograph untouched** — chosen before the page is kept, with the original there as the recovery when the edges come out wrong
 - 📱 **Every file input in the product now takes a drop, a click or a photo** — one control, everywhere paper is filed
+- 🔒 **HTTPS on the local network without an account or a domain name** — `--profile lan-tls` issues a certificate from a local authority so the camera works from a phone, at the cost of one warning to accept per device
 
 ### 🔧 Changed
 
 - 🔍 **Uploading a file is one control rather than a browser default** — drag, click and camera in a single line the height of every other control on the form, with the accepted formats on hover
+- 📦 **Installing is one file and one command** — the Tailscale sidecar's configuration now travels inside `compose.yaml` instead of beside it
 
 ### 🔒 Security
 
@@ -25,7 +27,7 @@
 
 ### ⬆️ Upgrading
 
-- 🎥 **The in-app viewfinder needs HTTPS** — browsers refuse camera access on a plain-HTTP address, so on one the scan button opens your phone's own camera app instead and processes the photo identically; see [networking](docs/networking.md)
+- 🎥 **The in-app viewfinder needs HTTPS** — browsers refuse camera access on a plain-HTTP address, so the scan button opens your phone's own camera app instead and processes the photo identically; [two routes to a certificate](docs/install.md#https) are in the Compose file and neither needs a domain name
 
 ## 0.5.7 — 2026-08-25
 

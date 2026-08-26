@@ -114,3 +114,25 @@ export function turnCorners(corners: Corners, height: number): Corners {
 		bl: turn(corners.br)
 	};
 }
+
+/** A page is between square and about 1:2. A line of text is 20:1 or worse. */
+export const MAX_ASPECT = 4;
+
+/**
+ * How far the worst corner may sit from square, in degrees.
+ *
+ * Perspective skews a rectangle; it does not turn it into a dart. 35° allows a
+ * comfortably angled shot of a page on a desk while rejecting the wildly skewed
+ * quads that produce an unreadable capture — which the user only discovers
+ * after saving, which is the worst moment to discover it.
+ */
+export const MAX_CORNER_SKEW = 35;
+
+export function orderCorners(points: Point[]): Corners {
+	// Sum and difference, which needs no trigonometry: the top-left corner has
+	// the smallest x+y and the bottom-right the largest, while the top-right has
+	// the largest x−y and the bottom-left the smallest.
+	const bySum = [...points].sort((a, b) => a.x + a.y - (b.x + b.y));
+	const byDiff = [...points].sort((a, b) => a.x - a.y - (b.x - b.y));
+	return { tl: bySum[0], br: bySum[3], bl: byDiff[0], tr: byDiff[3] };
+}

@@ -186,6 +186,12 @@ wizard:
 POSTGRES_PASSWORD=change-me docker compose up -d
 ```
 
+**To scan from a phone you need HTTPS** — browsers refuse a camera on a plain
+LAN address. Two routes are in the Compose file, and neither needs a domain
+name: Tailscale, or one local command with `--profile lan-tls`. See
+[Install](docs/install.md#https). Without it the scan button falls back to the
+phone's own camera app, which still gives you the cropped PDF.
+
 **What it needs.** About 300 MB of memory at rest — measured at 191 MB for the
 app and 69 MB for Postgres — from a 393 MB image built for both `amd64` and
 `arm64`. A Raspberry Pi 4 or 5 with 2 GB on a 64-bit OS runs it comfortably.
@@ -206,17 +212,17 @@ restore](docs/backups.md)
 
 ## Documentation
 
-|                                                |                                                  |
-| ---------------------------------------------- | ------------------------------------------------ |
-| [Statement import](docs/statement-import.md)   | how the reader works, and what it refuses        |
-| [Install and configuration](docs/install.md)   | `.env` reference, ports, upgrading               |
-| [Networking and passkeys](docs/networking.md)  | reaching it by name, HTTPS via Tailscale         |
-| [Accounts and roles](docs/accounts.md)         | enrollment links, administrators, recovery       |
-| [Backups and restore](docs/backups.md)         | scheduled dumps, restoring into a fresh instance |
-| [API and Home Assistant](docs/api.md)          | read-only tokens, smart-meter billing            |
-| [Calendar sync](docs/google-calendar-setup.md) | connecting Google, iCloud or CalDAV              |
-| [Screenshot gallery](docs/screenshots.md)      | every screen, both themes, desktop and phone     |
-| [Architecture](ARCHITECTURE.md)                | how the codebase is laid out                     |
+|                                                |                                                        |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| [Statement import](docs/statement-import.md)   | how the reader works, and what it refuses              |
+| [Install and configuration](docs/install.md)   | `.env` reference, ports, upgrading                     |
+| [Networking and passkeys](docs/networking.md)  | reaching it by name, HTTPS for the camera and passkeys |
+| [Accounts and roles](docs/accounts.md)         | enrollment links, administrators, recovery             |
+| [Backups and restore](docs/backups.md)         | scheduled dumps, restoring into a fresh instance       |
+| [API and Home Assistant](docs/api.md)          | read-only tokens, smart-meter billing                  |
+| [Calendar sync](docs/google-calendar-setup.md) | connecting Google, iCloud or CalDAV                    |
+| [Screenshot gallery](docs/screenshots.md)      | every screen, both themes, desktop and phone           |
+| [Architecture](ARCHITECTURE.md)                | how the codebase is laid out                           |
 
 ## Contributing
 

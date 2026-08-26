@@ -232,7 +232,6 @@
 	 * study it. */
 	--motion-snap: 90ms;
 	--motion-capture: 700ms;
-	--motion-hold: 1500ms;
 	--motion-settle: 220ms;
 	--ease-out: cubic-bezier(0.2, 0, 0.2, 1);
 }
@@ -642,11 +641,10 @@ textarea {
 /* Honour a stated preference for less motion: the colour change still reports
    the press, which is the part that carries the information.
 
-   TRANSITIONS, not only animations. The scan flow's stability ring is a
-   transition on stroke-dashoffset and is named pass/fail in the design's
-   quality floor — an animation-only override, which is what a first pass
-   naturally writes, leaves the single motion that matters untouched while
-   correctly neutralising the searching sweep. */
+   TRANSITIONS, not only animations. An animation-only override is what a first
+   pass naturally writes, and it neutralises the obvious sweeps while leaving
+   every transition — the outline settling onto a page, a mode change — running
+   at full speed. Both are motion; the preference asks about both. */
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,

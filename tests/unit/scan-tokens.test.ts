@@ -31,7 +31,6 @@ describe('the scan tokens', () => {
 			'--shutter-size',
 			'--motion-snap',
 			'--motion-capture',
-			'--motion-hold',
 			'--motion-settle',
 			'--ease-out'
 		];

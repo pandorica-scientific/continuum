@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Stability, and the words the user reads while holding the phone still.
+// Stability, and the words the user reads while aiming.
 //
-// The design and the pipeline brief disagreed: six consecutive stable frames
-// AND a 1500ms ring is about 2.2 seconds of holding still, which is too long to
-// ask of someone leaning over a table. Settled on three frames (~350ms at 9fps)
-// to ENTER stable, then the full ring — about 1.85s in total. The ring is a
-// plain timer rather than a live confidence value: simpler, and it matches the
-// design's "the fill runs its full length".
+// Both exist to help someone FRAME a page, and nothing more: the viewfinder no
+// longer takes the picture by itself, so settling is a cue that the outline can
+// be trusted rather than a countdown to a shutter. Three agreeing frames — about
+// 350 ms at 9 fps — is enough to stop the outline flickering between two
+// readings of a page that is not quite still.
 
 import type { Corners, DetectState } from '../core/index.ts';
 
@@ -17,26 +16,19 @@ export const STABLE_FRAMES = 3;
 export const STABLE_TOLERANCE = 0.02;
 /** Below this, the instruction strobes and cannot be read. */
 export const GUIDANCE_DEBOUNCE_MS = 400;
-/** The auto-capture window; must match --motion-hold. */
-export const HOLD_MS = 1500;
-
 const CORNERS = ['tl', 'tr', 'br', 'bl'] as const;
 
 export function createStability(frameWidth: number) {
 	let previous: Corners | null = null;
 	let agreed = 0;
 
-	function reset() {
-		previous = null;
-		agreed = 0;
-	}
-
 	function settled(state: DetectState): boolean {
 		// Only a CLEAN detection counts. A rejected frame has corners but failed
 		// a gate, and auto-capturing a blurry page is the exact outcome the gates
 		// exist to prevent.
 		if (state.kind !== 'detected') {
-			reset();
+			previous = null;
+			agreed = 0;
 			return false;
 		}
 
@@ -54,7 +46,7 @@ export function createStability(frameWidth: number) {
 		return agreed >= STABLE_FRAMES;
 	}
 
-	return { settled, reset };
+	return { settled };
 }
 
 /**

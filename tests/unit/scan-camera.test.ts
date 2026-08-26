@@ -4,7 +4,6 @@ import { isSecureForCamera } from '$lib/scan/client/camera.svelte';
 import {
 	DETECT_INTERVAL_MS,
 	GUIDANCE_DEBOUNCE_MS,
-	HOLD_MS,
 	STABLE_FRAMES,
 	createStability,
 	guidanceFor
@@ -137,11 +136,11 @@ describe('the loop timings', () => {
 		expect(DETECT_INTERVAL_MS).toBeLessThanOrEqual(125);
 	});
 
-	it('adds up to under two seconds of holding still', () => {
-		// Three frames to enter stable, then the full ring. The design's six
-		// frames PLUS the ring came to ~2.2s, which is too long to ask of
-		// someone leaning over a table.
-		expect(STABLE_FRAMES * DETECT_INTERVAL_MS + HOLD_MS).toBeLessThan(2000);
+	it('settles quickly enough to be a useful cue while aiming', () => {
+		// Three frames, about 350ms at 9fps. It no longer counts down to
+		// anything — the shutter is the only way a page is taken — so this is
+		// only about the outline not flickering between two readings.
+		expect(STABLE_FRAMES * DETECT_INTERVAL_MS).toBeLessThan(600);
 	});
 
 	it('debounces guidance slowly enough to be read', () => {

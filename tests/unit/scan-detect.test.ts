@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 // no WASM and runs like any other unit test. `detectOnce` itself needs a real
 // runtime and is verified on a device, not here.
 import { readFileSync } from 'node:fs';
-import { DETECT_WIDTH, orderCorners } from '$lib/scan/core/detect';
+import { DETECT_WIDTH } from '$lib/scan/core/detect';
+import { orderCorners } from '$lib/scan/core/geometry';
 
 describe('orderCorners', () => {
 	it('names the four points regardless of the order they arrive in', () => {
@@ -62,6 +63,9 @@ describe('DETECT_WIDTH', () => {
 
 describe('the two readings of a still', () => {
 	const source = readFileSync('src/lib/scan/core/detect.ts', 'utf8');
+	// The search that pulls a rough quad onto the page's real edges lives beside
+	// it rather than inside it: one file, one job.
+	const refine = readFileSync('src/lib/scan/core/refine.ts', 'utf8');
 	const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
 
 	it('is off while the phone is moving', () => {
@@ -75,8 +79,9 @@ describe('the two readings of a still', () => {
 		// photo returned 383-557 segments and the sixteen longest near-horizontal
 		// ones all lay inside the text block, while the page's own top edge
 		// produced none. The mask's outline returns 29-82 and no typography.
-		expect(source).toMatch(/cv\.MORPH_GRADIENT/);
-		expect(source).toMatch(/cv\.HoughLinesP\(\s*outline,/);
+		expect(refine).toMatch(/cv\.MORPH_GRADIENT/);
+		expect(refine).toMatch(/cv\.HoughLinesP\(\s*outline,/);
+		expect(refine).not.toMatch(/cv\.Canny\(/);
 		expect(source).not.toMatch(/cv\.Canny\(/);
 	});
 
@@ -84,14 +89,14 @@ describe('the two readings of a still', () => {
 		// Support alone cropped four paragraphs out of the middle of the page:
 		// a line of type is a strong straight edge too. Contrast is what tells
 		// a page edge from a text edge — paper on one side, desk on the other.
-		expect(source).toMatch(/WEIGHT_SUPPORT \* worstSupport/);
-		expect(source).toMatch(/WEIGHT_CONTRAST \* Math\.min\(1, meanContrast \/ CONTRAST_FULL\)/);
-		expect(source).toMatch(/WEIGHT_AREA \* area/);
+		expect(refine).toMatch(/WEIGHT_SUPPORT \* worstSupport/);
+		expect(refine).toMatch(/WEIGHT_CONTRAST \* Math\.min\(1, meanContrast \/ CONTRAST_FULL\)/);
+		expect(refine).toMatch(/WEIGHT_AREA \* area/);
 	});
 
 	it('keeps the rough edges among the candidates', () => {
 		// So a quad that was already right cannot be talked out of it.
-		expect(source).toMatch(/return \[\s*base,\s*\.\.\.candidateLines\(/);
+		expect(refine).toMatch(/return \[\s*base,\s*\.\.\.candidateLines\(/);
 	});
 
 	it('names the corners by where they are, not by which line found them', () => {
@@ -99,10 +104,10 @@ describe('the two readings of a still', () => {
 		// Labelling by line role mirrored the page on five of fourteen real
 		// captures, and scored the mirror exactly as well as the right way up
 		// because both are built from the same four lines.
-		expect(source).toMatch(
+		expect(refine).toMatch(
 			/const quad = orderCorners\(\[meeting\.tl, meeting\.tr, meeting\.br, meeting\.bl\]\);/
 		);
-		expect(source).toMatch(/if \(quadWinding\(quad\) <= 0\) continue;/);
+		expect(refine).toMatch(/if \(quadWinding\(quad\) <= 0\) continue;/);
 	});
 
 	it('takes the page boundary from a PADDED mask', () => {
@@ -110,7 +115,7 @@ describe('the two readings of a still', () => {
 		// there is no gradient along the image border, so the one side hardest to
 		// frame scored zero and the search kept pulling the quad away from it.
 		// With it, four real captures moved onto A4: 1.33 to 1.43, 1.37 to 1.42.
-		expect(source).toMatch(/cv\.morphologyEx\(bordered, wide, cv\.MORPH_GRADIENT, thin\)/);
+		expect(refine).toMatch(/cv\.morphologyEx\(bordered, wide, cv\.MORPH_GRADIENT, thin\)/);
 	});
 
 	it('proposes generously only when there is a pass to check the answer', () => {
@@ -127,7 +132,7 @@ describe('the two readings of a still', () => {
 		// to do. Measured over real captures, every good outcome improves that a
 		// lot — 0.12 to 0.87, 0.16 to 0.70 — while the capture that produced a
 		// visibly loose crop was the only one to go backwards, 0.27 to 0.24.
-		expect(source).toMatch(/return bestSupport > roughSupport \? best : null;/);
+		expect(refine).toMatch(/return bestSupport > roughSupport \? best : null;/);
 	});
 
 	it('drops a loose candidate the search cannot confirm', () => {
@@ -178,6 +183,6 @@ describe('the two readings of a still', () => {
 		// Perspective skews a rectangle; it does not turn it into one. Four lines
 		// picked from a pool are under no such obligation, and one wildly skewed
 		// quad scored respectably on support and contrast without this.
-		expect(source).toMatch(/if \(worstCornerSkew\(quad\) > MAX_CORNER_SKEW\) continue;/);
+		expect(refine).toMatch(/if \(worstCornerSkew\(quad\) > MAX_CORNER_SKEW\) continue;/);
 	});
 });

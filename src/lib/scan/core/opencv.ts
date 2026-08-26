@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The OpenCV handle, and the two probes used to audit its memory.
+// The OpenCV handle, and two probes for auditing its memory.
+//
+// NOTHING IN THE APP CALLS THE PROBES. They are instruments, kept for reading
+// the WASM heap by hand from the console while checking for a leak — which the
+// browser's own tools cannot do, because that heap is one ArrayBuffer they
+// report as a single allocation. Delete them if a leak check ever lands in the
+// test suite and makes them redundant.
 //
 // This module does NOT load OpenCV. The import is type-only and therefore
 // erased, so nothing here pulls the WebAssembly into a bundle — which is what
