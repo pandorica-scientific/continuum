@@ -184,10 +184,19 @@ transfer, and this took three attempts to get right:**
 - **700ms** is long enough to follow the page down to the counter, which is the information
   the beat carries, and still ends before you can study it.
 
-`--motion-hold` is the auto-capture window, and the ring's fill must run its full length.
+`--motion-hold` was the auto-capture window, and the ring's fill had to run its full length.
 At `--motion-settle` the ring completed in 220ms and then sat full for 1.3s, which made the
 shutter look like it fired for its own reasons rather than at the end of something the user
 was watching.
+
+> **Not built, as of v0.6.0.** Auto-capture was dropped and with it the ring and the
+> `--motion-hold` token: the viewfinder no longer takes the picture, so nothing counts down.
+> The outline remains as a framing aid and the shutter is the only way a page is taken. The
+> reason was detection quality — a live loop has about 110ms a frame, and holding every
+> decision inside that budget was the constraint behind most of the engine's complexity.
+> Pressing first and processing afterwards buys a second or two, which is what lets the
+> still be read two ways and the better crop kept. The note above is kept because the
+> reasoning about ring timing still applies to anything that does count down.
 
 ### `prefers-reduced-motion`
 

@@ -73,8 +73,11 @@ in-app viewfinder cannot open, ever — no setting changes that.
 Continuum does not simply lose the feature there. The scan button falls back to
 **your phone's own camera app**, which needs no secure context, and the photo it
 returns goes through exactly the same processing: detected, cropped, flattened
-and written as a PDF. What is missing is only the live outline and the automatic
-shutter, not the scan.
+and written as a PDF.
+
+What HTTPS adds is the shooting rather than the scanning: an outline showing what
+has been found while you aim, the torch, and staying inside the app between pages
+instead of leaving for the camera app and coming back for each one.
 
 Set up HTTPS and the viewfinder appears by itself. There are three routes, and
 which one suits you depends on whether you have a domain name.

@@ -29,12 +29,26 @@ describe('the scan tokens', () => {
 			'--safe-right',
 			'--touch-min',
 			'--shutter-size',
-			'--motion-snap',
-			'--motion-capture',
-			'--motion-settle',
 			'--ease-out'
 		];
 		expect(required.filter((token) => !css.includes(`${token}:`))).toEqual([]);
+	});
+
+	it('declares the motion beats the design specifies but nothing has built yet', () => {
+		// Kept apart from the list above on purpose. Every token there is read by
+		// a rule somewhere; these three are read by nothing, and never have been.
+		// They belong to the design's capture collapse — the outline travelling
+		// into the thumbnail — which is specified and not implemented.
+		//
+		// Asserting them alongside the live tokens made a green suite look like
+		// the motion design was delivered. Listed separately, the split is the
+		// documentation: values measured and agreed, beats not built. Move one up
+		// when a rule starts reading it, and delete this test when the list is
+		// empty.
+		const reserved = ['--motion-snap', '--motion-capture', '--motion-settle'];
+		expect(reserved.filter((token) => !css.includes(`${token}:`))).toEqual([]);
+		const stylesheets = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
+		expect(reserved.filter((token) => stylesheets.includes(`var(${token})`))).toEqual([]);
 	});
 
 	it('pins the four scrim tokens across both themes', () => {
@@ -73,9 +87,10 @@ describe('the scan tokens', () => {
 	});
 
 	it('neutralises transitions under reduced motion, not only animations', () => {
-		// The stability ring is a stroke-dashoffset TRANSITION and is named
-		// pass/fail in the quality floor. An animation-only override leaves
-		// exactly the one motion that matters untouched.
+		// An animation-only override is what a first pass naturally writes, and
+		// it neutralises the obvious sweeps while leaving every transition
+		// running at full speed. Both are motion; the preference asks about
+		// both.
 		expect(reducedMotion).toContain('transition-duration: 1ms !important');
 		expect(reducedMotion).toContain('animation-duration: 1ms !important');
 	});

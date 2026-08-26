@@ -77,9 +77,16 @@ itself `http://localhost` already counts as one, so both work there. From any
 other device — which is where you actually scan paperwork — they need HTTPS.
 
 Nothing else does. Password sign-in, uploads and every other screen work over
-plain http at whatever address the server answers on, and the scan button still
-scans there: it falls back to the phone's own camera app, which needs no secure
-context. What is missing is the live outline, not the scan.
+plain http at whatever address the server answers on, and **the scan itself is
+unchanged** there: the scan button hands over to the phone's own camera app,
+which needs no secure context, and the photo comes back through the same
+detection, cropping and flattening.
+
+What HTTPS buys is the shooting, not the scanning — an outline showing what has
+been found while you aim, the torch, and staying inside the app between pages
+rather than a round trip out to the camera app for every one. On a single receipt
+that is a convenience. On a ten-page tenancy agreement it is the difference
+between one sitting and twenty taps.
 
 Pick whichever route suits you. Both are in the Compose file already.
 

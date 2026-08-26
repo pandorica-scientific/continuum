@@ -230,6 +230,11 @@
 	 * real phone. 700ms is long enough to follow the page down to the counter —
 	 * which is the information the beat carries — and still ends before you can
 	 * study it. */
+	/* RESERVED, and read by nothing today: these three belong to the capture
+	   collapse — the outline travelling into the thumbnail — which the design
+	   specifies and no rule has implemented. The values are kept because they
+	   were measured rather than picked, and the reasoning above is what would
+	   otherwise have to be rediscovered. */
 	--motion-snap: 90ms;
 	--motion-capture: 700ms;
 	--motion-settle: 220ms;
