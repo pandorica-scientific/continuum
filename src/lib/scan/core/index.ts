@@ -9,19 +9,20 @@
 // TypeScript accepts it via `rewriteRelativeImportExtensions`, already set in
 // tsconfig.json, and Vite resolves it unchanged.
 export * from './types.ts';
-export { loadCv, heapBytes, allocMark, type CV } from './opencv.ts';
+export { heapBytes, allocMark, type CV } from './opencv.ts';
 export { withMats, type Arena, type Disposable } from './arena.ts';
 export {
 	A4_RATIO,
 	MAX_OUTPUT_WIDTH,
 	fullFrameCorners,
 	hairline,
+	quadAspect,
 	outputSize,
 	scaleCorners
 } from './geometry.ts';
 export { applyOrientation, readOrientation } from './exif.ts';
 export { looksLikeHeic } from './heic.ts';
-export { admitsImages } from './accept.ts';
+export { admitsImages, admitsPdf } from './accept.ts';
 export { deflate, isBilevel, packBilevel } from './bilevel.ts';
 export { assemblePdf, type RenderedPage } from './pdf.ts';
 export { DETECT_WIDTH, detectOnce, orderCorners } from './detect.ts';

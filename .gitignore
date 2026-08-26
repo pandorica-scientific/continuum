@@ -47,6 +47,10 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# OpenCV, split out of node_modules at build time (node scripts/prepare-opencv.mjs).
+# 7.6 MB of WebAssembly does not belong in a git history.
+static/opencv/
+
 # OCR language data — fetched at build time, never committed
 tessdata/
 # The directory rule above does not match a model downloaded to the repo

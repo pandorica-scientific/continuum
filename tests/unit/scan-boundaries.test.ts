@@ -59,6 +59,20 @@ describe('the scan engine', () => {
 		expect(offenders).toEqual([]);
 	});
 
+	it('never pulls the OpenCV package into a bundle', () => {
+		// It must be imported for TYPES only. A value import drags 10 MB of
+		// JavaScript, with 7.6 MB of base64 WebAssembly inside it, into whichever
+		// chunk touches it — which does not merely load slowly: it hangs the tab
+		// with no error at all. The runtime copy is loaded as a script from
+		// static/opencv/, split out of node_modules at build time.
+		const offenders = files(ROOT).filter((path) => {
+			const source = code(path);
+			if (!source.includes('@techstark/opencv-js')) return false;
+			return !/import type .*from '@techstark\/opencv-js'/.test(source);
+		});
+		expect(offenders).toEqual([]);
+	});
+
 	it('gives each half an entry point', () => {
 		for (const half of ['core', 'client']) {
 			expect(readdirSync(join(ROOT, half))).toContain('index.ts');

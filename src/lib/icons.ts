@@ -112,7 +112,39 @@ export const ICONS = {
 
 	// Actions
 	plus: [{ line: [12, 5.5, 12, 18.5] }, { line: [5.5, 12, 18.5, 12] }],
-	clock: [{ circle: [12, 12, 8.5] }, { path: 'M12 7.2V12l3.2 2' }]
+	clock: [{ circle: [12, 12, 8.5] }, { path: 'M12 7.2V12l3.2 2' }],
+
+	// Scan flow
+	camera: [
+		{
+			path: 'M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.3-2h8l1.3 2h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z'
+		},
+		{ circle: [12, 13, 3.4] }
+	],
+	bolt: [{ path: 'M13 2.5 5.5 13.5H11l-1 8 8.5-11H13z' }],
+	// Corner brackets around a page: the shape every scanner app uses, and
+	// readable at 18px in a way a camera-with-a-document is not.
+	scan: [
+		{ path: 'M3 8V5.5A1.5 1.5 0 0 1 4.5 4H7' },
+		{ path: 'M17 4h2.5A1.5 1.5 0 0 1 21 5.5V8' },
+		{ path: 'M21 16v2.5a1.5 1.5 0 0 1-1.5 1.5H17' },
+		{ path: 'M7 20H4.5A1.5 1.5 0 0 1 3 18.5V16' },
+		{ line: [3, 12, 21, 12] }
+	],
+	rotate: [{ path: 'M20 12a8 8 0 1 1-2.6-5.9' }, { path: 'M20 3.5V8h-4.5' }],
+	// Six dots, not three lines: a grip that reads as a drag handle rather than
+	// as a menu, which three stacked lines always will.
+	grip: [
+		{ circle: [9, 6, 1.1] },
+		{ circle: [15, 6, 1.1] },
+		{ circle: [9, 12, 1.1] },
+		{ circle: [15, 12, 1.1] },
+		{ circle: [9, 18, 1.1] },
+		{ circle: [15, 18, 1.1] }
+	],
+	check: [{ path: 'M4.5 12.5 9.5 17.5 19.5 6.5' }],
+	arrowUp: [{ line: [12, 20, 12, 4] }, { path: 'M6 10l6-6 6 6' }],
+	arrowDown: [{ line: [12, 4, 12, 20] }, { path: 'M18 14l-6 6-6-6' }]
 } as const satisfies Record<string, readonly IconPrimitive[]>;
 
 export type IconName = keyof typeof ICONS;

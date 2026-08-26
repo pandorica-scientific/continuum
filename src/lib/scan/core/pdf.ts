@@ -21,13 +21,23 @@ import type { Frame, PageMode } from './types.ts';
 
 export type RenderedPage = { frame: Frame; mode: PageMode };
 
-/** 300 DPI expressed in PDF points: 72 points per inch, 300 pixels per inch. */
-const POINTS_PER_PIXEL = 72 / 300;
+/**
+ * A4 in PDF points — 210 × 297 mm at 72 points per inch.
+ *
+ * Every page is laid out at this size, oriented to match the image. Deriving
+ * the page size from the pixel count instead — as this did at first — makes the
+ * PHYSICAL page shrink when the capture resolution does: a 1240 px scan came
+ * out as a 105 × 148 mm sheet, an A6 card, which prints and reads as wrong even
+ * though the pixels are all present. Resolution should decide quality, not
+ * paper size.
+ */
+const A4_WIDTH = 595.276;
+const A4_HEIGHT = 841.89;
 
 export async function assemblePdf(
 	pages: RenderedPage[],
 	options: { title: string; encodeJpeg: (frame: Frame) => Promise<Uint8Array> }
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
 	if (pages.length === 0) throw new Error('A PDF needs at least one page.');
 
 	const doc = await PDFDocument.create();
@@ -36,13 +46,21 @@ export async function assemblePdf(
 	doc.setProducer('Continuum scan engine');
 
 	for (const { frame, mode } of pages) {
-		// The draw box is what decides whether this looks like a scan or a photo
-		// pasted onto A4: 2480px across 210mm IS 300 DPI, and nothing downstream
-		// reads a DPI tag. Sizing the page from the image also means a landscape
-		// page gets a landscape box rather than being rotated into a portrait one.
-		const width = frame.width * POINTS_PER_PIXEL;
-		const height = frame.height * POINTS_PER_PIXEL;
-		const page = doc.addPage([width, height]);
+		// A4, turned to match the image so a landscape page gets a landscape
+		// sheet rather than being rotated into a portrait one.
+		const portrait = frame.height >= frame.width;
+		const pageWidth = portrait ? A4_WIDTH : A4_HEIGHT;
+		const pageHeight = portrait ? A4_HEIGHT : A4_WIDTH;
+		const page = doc.addPage([pageWidth, pageHeight]);
+
+		// Fitted whole, centred. A scan that has been cropped to the page should
+		// fill the sheet; cropping it again to fill would cut off the edges the
+		// rectification just worked to find.
+		const scale = Math.min(pageWidth / frame.width, pageHeight / frame.height);
+		const width = frame.width * scale;
+		const height = frame.height * scale;
+		const x = (pageWidth - width) / 2;
+		const y = (pageHeight - height) / 2;
 
 		if (mode === 'bw' && isBilevel(frame)) {
 			// Drawn through the operator API rather than `drawImage`, which type-
@@ -52,17 +70,19 @@ export async function assemblePdf(
 			const name = page.node.newXObject('Img', await embedBilevel(doc, frame));
 			page.pushOperators(
 				pushGraphicsState(),
-				concatTransformationMatrix(width, 0, 0, height, 0, 0),
+				concatTransformationMatrix(width, 0, 0, height, x, y),
 				drawObject(name),
 				popGraphicsState()
 			);
 		} else {
 			const image = await doc.embedJpg(await options.encodeJpeg(frame));
-			page.drawImage(image, { x: 0, y: 0, width, height });
+			page.drawImage(image, { x, y, width, height });
 		}
 	}
 
-	return doc.save();
+	// Pinned to ArrayBuffer rather than ArrayBufferLike so the result can go
+	// straight into a File without a cast at every call site.
+	return new Uint8Array(await doc.save());
 }
 
 /**

@@ -65,6 +65,21 @@ export function fullFrameCorners(width: number, height: number): Corners {
 }
 
 /**
+ * Long edge over short edge, before any A4 snapping.
+ *
+ * A page is somewhere between square and about 1:2. A line of text is 20:1 or
+ * worse, which is how the detector used to end up outlining a heading.
+ */
+export function quadAspect(corners: Corners): number {
+	const { tl, tr, br, bl } = corners;
+	const width = Math.max(distance(tl, tr), distance(bl, br));
+	const height = Math.max(distance(tl, bl), distance(tr, br));
+	const short = Math.min(width, height);
+	if (short <= 0) return Infinity;
+	return Math.max(width, height) / short;
+}
+
+/**
  * A segment thinner than its own border gets no border.
  *
  * A 1px rect with a 1px stroke centred on its edges paints a ~2px band at full

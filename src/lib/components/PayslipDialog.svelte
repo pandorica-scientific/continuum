@@ -335,9 +335,9 @@
 					<span>Payslip PDF</span>
 					<UploadDropzone
 						name="file"
-						accept=".pdf"
+						accept=".pdf,image/*"
 						idleText="Drop the payslip here, or click to browse"
-						description="PDF"
+						description="A PDF, or a photo of the slip — figures are only read from a PDF"
 					/>
 				</label>
 				<label>

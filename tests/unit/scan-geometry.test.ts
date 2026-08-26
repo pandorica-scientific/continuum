@@ -8,6 +8,7 @@ import {
 	fullFrameCorners,
 	hairline,
 	outputSize,
+	quadAspect,
 	scaleCorners
 } from '$lib/scan/core/geometry';
 
@@ -102,5 +103,28 @@ describe('hairline', () => {
 	it('applies the stroke only from 2.5px up', () => {
 		expect(hairline(2.4).stroked).toBe(false);
 		expect(hairline(2.5).stroked).toBe(true);
+	});
+});
+
+describe('quadAspect', () => {
+	it('is about 1.41 for A4, either way up', () => {
+		expect(quadAspect(rect(1000, 1414))).toBeCloseTo(A4_RATIO, 2);
+		expect(quadAspect(rect(1414, 1000))).toBeCloseTo(A4_RATIO, 2);
+	});
+
+	it('is 1 for a square', () => {
+		expect(quadAspect(rect(500, 500))).toBeCloseTo(1, 5);
+	});
+
+	it('is huge for a line of text, which is how one gets rejected', () => {
+		// Measured against real photographs, the old edge-based detector outlined
+		// a single heading: 0.2% of the frame at roughly 20:1.
+		expect(quadAspect(rect(560, 28))).toBeCloseTo(20, 1);
+	});
+
+	it('is Infinity rather than NaN for a collapsed quad', () => {
+		// Detection can collapse on a blank wall, and a NaN here would sail
+		// through every comparison that is meant to reject it.
+		expect(quadAspect(rect(0, 0))).toBe(Infinity);
 	});
 });

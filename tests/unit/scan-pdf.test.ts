@@ -115,25 +115,36 @@ describe('assemblePdf', () => {
 		expect((await PDFDocument.load(bytes)).getTitle()).toBe('Nájemní smlouva');
 	});
 
-	it('gives a landscape page a landscape box, so no page is rotated in the file', async () => {
+	it('turns the sheet to match the image, rather than rotating the page', async () => {
 		const bytes = await assemblePdf([{ frame: bilevelPage(283, 200), mode: 'bw' }], {
 			title: 'Wide',
 			encodeJpeg
 		});
 		const [page] = (await PDFDocument.load(bytes)).getPages();
 		expect(page.getWidth()).toBeGreaterThan(page.getHeight());
+		// Still A4, just landscape.
+		expect(Math.round(page.getWidth())).toBe(842);
+		expect(Math.round(page.getHeight())).toBe(595);
 	});
 
-	it('draws a 2480px page at 300 DPI — 210mm across, which is A4', async () => {
-		const bytes = await assemblePdf([{ frame: bilevelPage(2480, 3508), mode: 'bw' }], {
-			title: 'A4',
-			encodeJpeg
-		});
-		const [page] = (await PDFDocument.load(bytes)).getPages();
-		// 210mm in points, to the nearest point.
-		expect(Math.round(page.getWidth())).toBe(595);
-		expect(Math.round(page.getHeight())).toBe(842);
-	}, 30_000);
+	it('makes an A4 sheet regardless of how many pixels the capture had', async () => {
+		// Deriving the page size from the pixel count made the PHYSICAL page
+		// shrink with the capture resolution: a 1240px scan came out as a
+		// 105x148mm card. Resolution decides quality, not paper size.
+		for (const [w, h] of [
+			[2480, 3508],
+			[1240, 1754],
+			[800, 1131]
+		]) {
+			const bytes = await assemblePdf([{ frame: bilevelPage(w, h), mode: 'bw' }], {
+				title: 'A4',
+				encodeJpeg
+			});
+			const [page] = (await PDFDocument.load(bytes)).getPages();
+			expect(Math.round(page.getWidth())).toBe(595);
+			expect(Math.round(page.getHeight())).toBe(842);
+		}
+	}, 60_000);
 
 	it('keeps a binarized A4 page well under 150 KB', async () => {
 		// The acceptance criterion, and the thing that silently breaks if anyone

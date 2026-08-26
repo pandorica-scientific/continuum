@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyOrientation, readOrientation } from '$lib/scan/core/exif';
 import { looksLikeHeic } from '$lib/scan/core/heic';
-import { admitsImages } from '$lib/scan/core/accept';
+import { admitsImages, admitsPdf } from '$lib/scan/core/accept';
 import type { Frame } from '$lib/scan/core/types';
 
 /** A minimal JPEG: SOI, an APP1/Exif segment holding one IFD0 tag, EOI. */
@@ -176,5 +176,26 @@ describe('admitsImages', () => {
 
 	it('is false when no accept is given, rather than guessing', () => {
 		expect(admitsImages(undefined)).toBe(false);
+	});
+});
+
+describe('admitsPdf', () => {
+	it('is true where a PDF is welcome, however the accept is spelled', () => {
+		expect(admitsPdf('.pdf')).toBe(true);
+		expect(admitsPdf('application/pdf,image/*')).toBe(true);
+		expect(admitsPdf('.pdf,.png,.jpg,.jpeg,.webp')).toBe(true);
+	});
+
+	it('is false for image-only sites, which is what separates the two buttons', () => {
+		// A scan is a PDF. Offering one where PDFs are refused would produce a
+		// file the form then rejects.
+		expect(admitsPdf('image/png,image/jpeg,image/webp')).toBe(false);
+		expect(admitsPdf('image/*')).toBe(false);
+	});
+
+	it('is false for the sites that take neither', () => {
+		expect(admitsPdf('application/json')).toBe(false);
+		expect(admitsPdf('.xlsx')).toBe(false);
+		expect(admitsPdf(undefined)).toBe(false);
 	});
 });

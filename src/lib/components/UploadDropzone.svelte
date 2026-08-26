@@ -1,6 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import type { ActionOutcome } from '$lib/actions/result';
+	import Icon from '$lib/components/Icon.svelte';
+	import { admitsImages, admitsPdf } from '$lib/scan/core/accept';
+	import { isSecureForCamera } from '$lib/scan/client/camera.svelte';
 
 	let {
 		accept,
@@ -43,6 +46,61 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let chosen = $state<string[]>([]);
+	let cameraInput: HTMLInputElement | undefined = $state();
+	let scanning = $state(false);
+	/**
+	 * The scan flow, resolved ONCE and held.
+	 *
+	 * It must not be imported from the template. `{#await import(…)}` re-runs
+	 * its expression whenever the block re-renders, and `import()` hands back a
+	 * new promise each time — so the block invalidates itself and Svelte's flush
+	 * loop never settles. That pegs the main thread: no error, no log, the tab
+	 * just stops. A dev build throws `effect_update_depth_exceeded`; a
+	 * production build has no such guard and simply freezes.
+	 */
+	let ScanFlow = $state<typeof import('$lib/scan/client/ScanFlow.svelte').default | null>(null);
+	let scanFailed = $state(false);
+
+	async function openScanner() {
+		// Once the chunk has failed, stop trying: a second stall helps nobody
+		// when the camera app is right there.
+		if (scanFailed) return void cameraInput?.click();
+		if (!ScanFlow) {
+			try {
+				// Lazy, so the 10 MB of WASM behind this never reaches a visitor
+				// who does not scan.
+				ScanFlow = (await import('$lib/scan/client/ScanFlow.svelte')).default;
+			} catch {
+				// The chunk did not load. Fall back to the camera app rather than
+				// leaving the button dead.
+				scanFailed = true;
+				cameraInput?.click();
+				return;
+			}
+		}
+		scanning = true;
+	}
+
+	/**
+	 * No `scan` prop. `accept` already says whether a camera could help, and
+	 * every call site passes it — so the payslip dialog (.pdf) draws no button
+	 * without being told, and the sites that are not document uploads keep the
+	 * plain input they always had. A second prop would only be needed for a
+	 * dropzone that admits images but must not photograph them, and there is no
+	 * such site.
+	 */
+	/**
+	 * Two different jobs, so two different buttons.
+	 *
+	 * A PHOTOGRAPH is the thing itself — a picture of a meter reading, a receipt
+	 * you want to look at later — and it should arrive untouched, as a JPEG.
+	 * A SCAN is a document: cropped square, flattened, thresholded and written
+	 * as a PDF. Cropping and binarising a photograph someone wanted as a
+	 * photograph is destructive, and handing over a curled, shadowed snapshot
+	 * when someone asked for a scan is useless. One button cannot be both.
+	 */
+	const offersPhoto = $derived(admitsImages(accept));
+	const offersScan = $derived(admitsPdf(accept));
 
 	/**
 	 * The one place the two shapes meet. `onfiles` was typed FileList because a
@@ -86,6 +144,7 @@
 	 */
 	function adopt(files: FileList | File[]) {
 		if (!input) return;
+		if (!name) return void receive(files); // callback mode: no field to fill
 		const transfer = new DataTransfer();
 		for (const file of list(files)) transfer.items.add(file);
 		input.files = transfer.files;
@@ -119,6 +178,64 @@
 	}}
 >
 	<span class="title">{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}</span>
+	{#if !busy && !dragging}
+		{#if offersPhoto}
+			<button
+				type="button"
+				class="capture-btn"
+				aria-label="Take a photo"
+				title="Take a photo — kept as it is"
+				onclick={(event) => {
+					// This button sits inside a region that is itself clickable.
+					// Without this, tapping it also opens the file browser behind.
+					event.stopPropagation();
+					cameraInput?.click();
+				}}
+			>
+				<Icon name="camera" size={18} />
+			</button>
+		{/if}
+		{#if offersScan}
+			<button
+				type="button"
+				class="capture-btn"
+				aria-label="Scan a document"
+				title="Scan a document — cropped, flattened and saved as a PDF"
+				onclick={(event) => {
+					event.stopPropagation();
+					// getUserMedia needs a secure context. Without one — a
+					// self-hosted instance on a plain-http address — the phone's
+					// own camera app still works and needs no such thing.
+					if (isSecureForCamera(window.location)) void openScanner();
+					else cameraInput?.click();
+				}}
+			>
+				<Icon name="scan" size={18} />
+			</button>
+		{/if}
+	{/if}
+
+	<!--
+		The native camera app, via `capture`. It needs no secure context, which
+		matters: getUserMedia does, so a self-hosted Continuum on a plain-http LAN
+		address can never open an in-app viewfinder. This path works there.
+
+		The photo is moved onto the field input above, so it arrives exactly as a
+		browsed or dropped file does and every handler downstream sees one event.
+	-->
+	<input
+		bind:this={cameraInput}
+		class="field"
+		type="file"
+		accept="image/*"
+		capture="environment"
+		tabindex="-1"
+		aria-hidden="true"
+		onchange={() => {
+			if (cameraInput?.files?.length) adopt(cameraInput.files);
+			if (cameraInput) cameraInput.value = '';
+		}}
+	/>
 	<input
 		bind:this={input}
 		class="field"
@@ -130,6 +247,15 @@
 		onchange={() => input?.files?.length && void receive(input.files)}
 	/>
 </div>
+{#if scanning && ScanFlow}
+	<ScanFlow
+		onclose={() => (scanning = false)}
+		ondone={(page) => {
+			scanning = false;
+			adopt([page]);
+		}}
+	/>
+{/if}
 {#if error && reportErrors}<p class="error" role="alert">{error}</p>{/if}
 
 <style>
@@ -176,6 +302,41 @@
 	.dropzone.busy {
 		cursor: progress;
 		opacity: 0.75;
+	}
+	/* The camera lives IN the row rather than under a rule below it. The design
+	   put it below one, but that assumed the two-line panel this control used to
+	   be; in a one-line control a rule would be a divider across nothing. */
+	.capture-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: 30px;
+		height: 30px;
+		margin: -4px -6px -4px 0;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--fg3);
+		cursor: pointer;
+	}
+	.capture-btn:hover {
+		background: var(--card2);
+		color: var(--fg1);
+	}
+	.capture-btn:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+	}
+	/* 44px is a floor for FINGERS. On a mouse, 30px inside a 36px row is right
+	   and matches every other control; on touch the row grows to meet the floor
+	   rather than shipping a target nobody can hit. */
+	@media (pointer: coarse) {
+		.capture-btn {
+			width: var(--touch-min);
+			height: var(--touch-min);
+			margin: -6px -9px;
+		}
 	}
 	.title {
 		flex: 1 1 auto;

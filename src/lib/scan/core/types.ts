@@ -20,11 +20,15 @@ export type Rotation = 0 | 90 | 180 | 270;
 /**
  * A canvas-free image, shaped exactly like ImageData.
  *
- * This is the boundary that lets `core` run under node: a browser hands one
- * straight through from a canvas, and a test builds one from a fixture. Nothing
- * in `core` ever sees an HTMLCanvasElement, an ImageBitmap or a File.
+ * This is the boundary that lets `core` be tested without a DOM: a browser
+ * hands one straight through from a canvas, and a test builds one from an
+ * array. Nothing in `core` ever sees a canvas, a bitmap or a File.
+ *
+ * The buffer is pinned to ArrayBuffer rather than ArrayBufferLike so a Frame
+ * can be handed to the ImageData constructor without a defensive copy — and a
+ * copy of a 2480x3508 page is 35 MB, paid on every encode.
  */
-export type Frame = { data: Uint8ClampedArray; width: number; height: number };
+export type Frame = { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number };
 
 /** What the detection loop returns for each frame. */
 export type DetectState =

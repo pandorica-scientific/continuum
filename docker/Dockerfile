@@ -7,6 +7,9 @@ COPY . .
 # OCR language data, fetched ONCE here so the running product never reaches the
 # network. ~7.4 MB for English, Czech, Polish, German and Spanish.
 RUN node scripts/fetch-tessdata.mjs
+# `npm run build` also splits OpenCV out of node_modules into static/opencv/ —
+# a small loader plus a separate .wasm. Bundling the package's single 10 MB file
+# hangs the browser outright; see scripts/prepare-opencv.mjs.
 RUN npm run build && npm prune --omit=dev
 
 # Runtime stage
