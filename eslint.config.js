@@ -71,6 +71,16 @@ export default ts.config(
 		}
 	},
 	{
+		// Rune modules — `.svelte.ts` — are handed to the Svelte parser by the
+		// plugin's recommended config so it can see `$state` outside a component.
+		// That parser still needs TypeScript underneath it, or every type
+		// annotation in the file reads as a syntax error.
+		files: ['**/*.svelte.ts', '**/*.svelte.js'],
+		languageOptions: {
+			parserOptions: { parser: ts.parser }
+		}
+	},
+	{
 		// src/ only: the tests and the build scripts are not distributed.
 		files: ['src/**/*.ts', 'src/**/*.svelte'],
 		plugins: { licence },
@@ -96,6 +106,9 @@ export default ts.config(
 			'design_system_V3/',
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
+			// Generated at build time out of node_modules by
+			// scripts/prepare-opencv.mjs — vendor output, not source.
+			'static/opencv/',
 			'.remember/',
 			// Design handoffs are references, not source: their prototype runtimes
 			// are scaffolding the README says outright is nothing to port.

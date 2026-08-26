@@ -17,6 +17,12 @@ const ALLOWED_EXT = new Set([
 	'.webp',
 	'.gif',
 	'.svg',
+	// An iPhone photographs in HEIC, so the camera button hands one over
+	// directly. Refusing it fails the upload outright with "File type .heic is
+	// not allowed", which is a dead end at the moment someone has just taken a
+	// picture.
+	'.heic',
+	'.heif',
 	'.pdf',
 	// original statement files, kept for re-parsing
 	'.csv',
@@ -104,6 +110,8 @@ const CONTENT_TYPES: Record<string, string> = {
 	'.jpeg': 'image/jpeg',
 	'.webp': 'image/webp',
 	'.gif': 'image/gif',
+	'.heic': 'image/heic',
+	'.heif': 'image/heif',
 	'.svg': 'image/svg+xml',
 	'.pdf': 'application/pdf',
 	'.csv': 'text/csv',

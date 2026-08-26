@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&amp;family=Source+Code+Pro:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  /* ── Continuum's shipped tokens (src/lib/styles/app.css), dark = default ── */
+  :root {
+    /* Paint the browser's OWN chrome dark too — without it the scrollbar track
+       renders light, which app.css calls out as a white bar down every long page. */
+    color-scheme: dark;
+
+    --bg: #0e1117; --bg2: #11161f; --side: #0a0d13;
+    --card: rgba(255,255,255,0.03); --card2: rgba(255,255,255,0.06); --card3: rgba(255,255,255,0.09);
+    --bd: rgba(255,255,255,0.08); --bd2: rgba(255,255,255,0.18);
+    --fg1: #e6e9ef; --fg2: #c5ccd6; --fg3: #99a4b3; --fg-inverse: #0e1117;
+    --green: #2ecc71; --red: #ef6a5c; --yellow: #f1c40f; --blue: #5aaee4;
+    --purple: #bd85d3; --orange: #e67e22; --teal: #1abc9c; --indigo: #7b8ce8; --brand: #4a86c8;
+    --plate: rgba(14,17,23,0.86);
+    --green-tint: rgba(46,204,113,0.18); --yellow-tint: rgba(241,196,15,0.18);
+    --red-tint: rgba(239,106,92,0.18); --blue-tint: rgba(90,174,228,0.18);
+    --teal-tint: rgba(26,188,156,0.18); --grey-tint: rgba(138,150,166,0.16);
+    --green-wash: rgba(46,204,113,0.07); --yellow-wash: rgba(241,196,15,0.07);
+    --red-wash: rgba(239,106,92,0.07); --blue-wash: rgba(90,174,228,0.07);
+    --teal-wash: rgba(26,188,156,0.07);
+    --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: "Source Code Pro", ui-monospace, monospace;
+    --text-2xs: 10px; --text-xs: 11px; --text-sm: 12px; --text-md: 13px; --text-lg: 14px;
+    --text-xl: 16px; --text-2xl: 19px; --text-3xl: 22px; --text-4xl: 28px;
+    --radius-xs: 4px; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 10px;
+    --radius-xl: 12px; --radius-2xl: 16px; --radius-pill: 999px;
+    --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px;
+    --space-5: 10px; --space-6: 12px; --space-7: 14px; --space-8: 16px;
+    --control-h: 36px;
+
+    /* ══ PASS A — new tokens. Extend, never replace. ══
+       Six axes. Everything else the scan flow needs already exists above. */
+
+    /* 1 · Scrim — the app's --plate, pinned across themes.
+       app.css already has --plate for text that must sit on an unknown ground
+       (chart labels over ribbons). These are literally its dark values, held
+       constant when the theme flips: a camera frame is not a themed surface, so
+       --plate's light override (near-white, correct over a light page) is
+       unreadable over a dark kitchen. Nothing here is a new colour. */
+    --scan-plate: rgba(14,17,23,0.72);   /* --plate, one step softer */
+    --scan-plate-edge: rgba(14,17,23,0.86); /* --plate exactly */
+    --scan-ink: #e6e9ef;                 /* dark --fg1, pinned */
+    --scan-ink-2: #c5ccd6;               /* dark --fg2, pinned */
+
+    /* 2 · Detection states. Colour is REINFORCEMENT — the primary signal is
+       stroke weight, dash pattern and whether corner brackets are drawn. */
+    --detect-searching: var(--fg3);
+    --detect-found: var(--blue);
+    --detect-stable: var(--green);
+    --detect-rejected: var(--yellow);
+    --detect-w-searching: 1.5px;
+    --detect-w-found: 2px;
+    --detect-w-stable: 3px;
+    --detect-dash-searching: 7 9;
+    --detect-dash-rejected: 4 4;
+
+    /* 3 · Safe area. Full-bleed camera means every edge control needs these. */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+
+    /* 4 · Touch. 44 is the floor, not the target; the shutter is the exception. */
+    --touch-min: 44px;
+    --shutter-size: 72px;
+
+    /* 5 · Motion. Seeded from the ONE transition app.css already has
+       (background-color 90ms ease-out on .btn:active) rather than invented. */
+    --motion-snap: 90ms;
+    --motion-settle: 220ms;
+    /* The collapse travels the height of the screen. At --motion-snap it was a
+       jump cut — over that distance 90ms is below the threshold where the eye
+       reads movement at all, so the "decisive snap" §10 asks for landed as a
+       frame that simply changed. 300ms was still read as a flicker on a real
+       phone; 700ms is long enough to follow the page to the counter, which is
+       the information the beat carries. */
+    --motion-capture: 700ms;
+    /* The stability window itself. The ring must fill across the WHOLE wait —
+       at --motion-settle it completed in 220ms and then sat full for 1.3s,
+       so the shutter appeared to fire long after the indicator finished. */
+    --motion-hold: 1500ms;
+    --ease-out: cubic-bezier(0.2, 0, 0.2, 1);
+
+  }
+
+  html[data-ledger-theme="light"] {
+    color-scheme: light;
+    --bg: #f3f0e9; --bg2: #eeeae1; --side: #efebe2;
+    --card: #ffffff; --card2: #f7f4ee; --card3: #ebe6dc;
+    --bd: rgba(60,52,40,0.10); --bd2: rgba(60,52,40,0.20);
+    --fg1: #1c1a16; --fg2: #494339; --fg3: #6b6559; --fg-inverse: #ffffff;
+    --green: #0e7a4a; --red: #bd2e21; --yellow: #8a5900; --blue: #186294;
+    --purple: #743990; --orange: #a2530f; --teal: #087059; --indigo: #454fb0; --brand: #1b4f8a;
+    --plate: rgba(243,240,233,0.9);
+    --green-tint: rgba(34,163,102,0.13); --yellow-tint: rgba(232,169,4,0.16);
+    --red-tint: rgba(224,80,63,0.13); --blue-tint: rgba(63,143,206,0.13);
+    --teal-tint: rgba(20,161,132,0.13); --grey-tint: rgba(120,130,145,0.13);
+    --green-wash: rgba(34,163,102,0.06); --yellow-wash: rgba(232,169,4,0.06);
+    --red-wash: rgba(224,80,63,0.05); --blue-wash: rgba(63,143,206,0.06);
+    --teal-wash: rgba(20,161,132,0.06);
+    /* --plate flips here, as it should for a chart label on paper. The four
+       --scan-* tokens deliberately do NOT — see the note above. */
+  }
+
+  html, body { margin: 0; padding: 0; }
+  /* Reserve the scrollbar's width whether or not one shows, so nothing anchored
+     to the right edge jumps between pages. Straight from app.css. */
+  html { background: var(--bg); scrollbar-gutter: stable; }
+  body {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background-attachment: fixed;
+    color: var(--fg1);
+    font-family: var(--font-sans);
+    font-size: var(--text-xl);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  * { box-sizing: border-box; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { color: var(--blue); text-decoration: underline; }
+  input, select, button, textarea { font-family: inherit; }
+  input::placeholder { color: var(--fg3); }
+  /* app.css's base control layer, verbatim. `:where()` is load-bearing: a bare
+     :not() chain carries its attribute selectors' specificity and would silently
+     beat a component override it is meant to lose to. */
+  input:where(:not([type='checkbox'], [type='radio'], [type='range'])),
+  select, textarea {
+    border: 1px solid var(--bd2);
+    background: var(--card);
+    color: var(--fg1);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) 11px;
+    font-size: var(--text-md);
+    font-family: inherit;
+  }
+  input[type='checkbox'], input[type='radio'] { accent-color: var(--blue); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  /* Focus is visible on every interactive element, dropzone included. */
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  @keyframes scan-sweep {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(1100%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* Transitions as well as animations. The stability ring is a TRANSITION on
+       stroke-dashoffset, so an animation-only override left the one motion the
+       brief names pass/fail untouched. Covering both means the ring arrives
+       full, the outline's weight change is instant, and the 90ms capture
+       collapse does not run — which is right: a deliberate snap is exactly what
+       someone enabling this setting is opting out of. */
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+    /* app.css deliberately KEEPS the 90ms colour change on a press under this
+       setting — "the colour change still reports the press, which is the part
+       that carries the information". A blanket override would have quietly
+       reversed that decision, so it is re-asserted rather than overruled. */
+    button { transition-duration: 90ms !important; }
+  }
+</style>
+</helmet>
+
+<div style="max-width: 1280px; margin: 0 auto; padding: 32px 36px 80px; display: flex; flex-direction: column; gap: 26px;">
+
+  <!-- ═══════════ chrome ═══════════ -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em;">Scan engine</h1>
+      <span style="font-family: var(--font-mono); font-size: 11px; color: var(--fg3); border: 1px solid var(--bd); border-radius: 999px; padding: 2px 9px;">passes A · B · C</span>
+    </div>
+    <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center;">
+      <div style="display: flex; gap: 6px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card);">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+          <button onClick="{{ t.go }}" style="border: 0; border-radius: 6px; padding: 6px 13px; font-size: 12px; cursor: pointer; background: {{ t.bg }}; color: {{ t.fg }};">{{ t.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: 6px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card);">
+        <button onClick="{{ setDark }}" style="border: 0; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; background: {{ darkBg }}; color: {{ darkFg }};">🌙 Dark</button>
+        <button onClick="{{ setLight }}" style="border: 0; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; background: {{ lightBg }}; color: {{ lightFg }};">☀️ Light</button>
+      </div>
+      <span style="font-size: 12px; color: var(--fg3);">{{ themeNote }}</span>
+    </div>
+  </div>
+
+  <!-- ═══════════ TOKENS ═══════════ -->
+  <sc-if value="{{ isTokens }}" hint-placeholder-val="{{ true }}">
+    <div style="display: flex; flex-direction: column; gap: 22px;">
+      <p style="margin: 0; font-size: 14px; color: var(--fg2); max-width: 92ch; text-wrap: pretty;">Five new axes, and nothing replaced. Continuum's existing tokens already cover surfaces, ink, radii, type and the traffic-light hues — what the scan flow adds is everything that only makes sense when chrome sits on a live camera feed, plus the two physical constraints (safe area, touch floor) a full-bleed screen introduces.</p>
+
+      <div style="border: 1px solid var(--blue); border-radius: 10px; padding: 14px 16px; background: var(--blue-wash); display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">The one decision worth arguing with</span>
+        <span style="font-size: 14px; color: var(--fg1); text-wrap: pretty;">You asked for the scan flow to follow the user's theme, and it does — <strong style="font-weight: 600;">except for the four <span style="font-family: var(--font-mono);">--scan-*</span> tokens, which are the same in both</strong>. The chrome around the viewfinder is themed; what floats <em style="font-style: normal; font-weight: 600;">on</em> the feed is not. A camera frame is not a themed surface: its luminance is unknown and changes every frame, so a light-theme scrim would be unreadable over a dark kitchen and a dark-theme one unreadable over a white page. Switch the theme toggle above while on the Capture tab to see how far that gets you.</span>
+        <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">They are not new colours, though. <span style="font-family: var(--font-mono);">app.css</span> already has <span style="font-family: var(--font-mono);">--plate</span> for text that must sit on an unknown ground — chart labels over waterfall ribbons — and these are its dark values held constant. Same problem, same solution, one theme rule apart.</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">1 · Scrim — <span style="font-family: var(--font-mono); text-transform: none; letter-spacing: 0;">--plate</span>, pinned across themes</span>
+          <div style="position: relative; height: 132px; border-radius: 8px; overflow: hidden; border: 1px solid var(--bd2); background: linear-gradient(118deg, #1a1712 0%, #45392a 32%, #d8cbb0 55%, #6b5c45 78%, #17140f 100%);">
+            <span style="position: absolute; left: 12px; top: 12px; background: var(--scan-plate); color: var(--scan-ink); font-size: 12px; border-radius: 6px; padding: 5px 10px;">Hold steady</span>
+            <span style="position: absolute; left: 12px; bottom: 12px; color: #fff; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.6);">No scrim — unreadable on the pale band</span>
+            <span style="position: absolute; inset: auto 0 0 0; height: 42px; background: linear-gradient(180deg, transparent, var(--scan-plate-edge)); pointer-events: none;"></span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--scan-plate</span><span>--plate at 0.72 · behind a chip</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--scan-plate-edge</span><span>--plate exactly · edge gradient</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--scan-ink</span><span>dark --fg1 · text on scrim</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--scan-ink-2</span><span>dark --fg2 · secondary</span></span>
+          </div>
+          <span style="font-size: 12px; color: var(--fg3); text-wrap: pretty;">Every overlay control uses one of these two grounds. A text-shadow was tried and rejected: it survives a busy backdrop but reads as a mistake on a plain one — which is presumably why the chart labels use <span style="font-family: var(--font-mono);">--plate</span> rather than a shadow too.</span>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">2 · Detection state — shape first, colour second</span>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <sc-for list="{{ stateSwatches }}" as="s" hint-placeholder-count="4">
+              <div style="border: 1px solid var(--bd); border-radius: 8px; padding: 10px 11px; display: flex; flex-direction: column; gap: 8px; background: var(--card);">
+                <svg viewBox="0 0 100 52" style="width: 100%; height: 44px; display: block;">
+                  <rect x="14" y="8" width="72" height="36" rx="2" fill="none" style="stroke: {{ s.hue }}; stroke-width: {{ s.w }}; stroke-dasharray: {{ s.dash }};"></rect>
+                  <sc-if value="{{ s.brackets }}" hint-placeholder-val="{{ false }}">
+                    <g style="stroke: {{ s.hue }}; stroke-width: {{ s.w }}; fill: none; stroke-linecap: round;">
+                      <path d="M14 18 L14 8 L24 8"></path>
+                      <path d="M76 8 L86 8 L86 18"></path>
+                      <path d="M86 34 L86 44 L76 44"></path>
+                      <path d="M24 44 L14 44 L14 34"></path>
+                    </g>
+                  </sc-if>
+                </svg>
+                <span style="font-size: 12px; color: var(--fg1);">{{ s.label }}</span>
+                <span style="font-family: var(--font-mono); font-size: 10px; color: var(--fg3);">{{ s.spec }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: var(--fg3); text-wrap: pretty;">Weight goes 1.5 → 2 → 3 and the dash resolves to solid as confidence rises, so the four states are separable in greyscale. Rejected is the only one that dashes <em style="font-style: normal; font-weight: 600;">tighter</em> than searching — a different rhythm, not just a different hue.</span>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">3 · Safe area &amp; 4 · touch floor</span>
+          <div style="position: relative; height: 150px; border-radius: 12px; border: 1px solid var(--bd2); background: var(--card2); overflow: hidden;">
+            <span style="position: absolute; inset: 0 0 auto 0; height: 26px; background: var(--red-tint); border-bottom: 1px dashed var(--red); display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; color: var(--red);">--safe-top · notch</span>
+            <span style="position: absolute; inset: auto 0 0 0; height: 22px; background: var(--red-tint); border-top: 1px dashed var(--red); display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; color: var(--red);">--safe-bottom · home indicator</span>
+            <span style="position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%); width: var(--touch-min); height: var(--touch-min); border-radius: 999px; border: 2px solid var(--fg2); background: var(--card3);"></span>
+            <span style="position: absolute; left: 12px; bottom: 34px; font-family: var(--font-mono); font-size: 10px; color: var(--fg3);">--touch-min</span>
+          </div>
+          <span style="font-size: 12px; color: var(--fg3); text-wrap: pretty;">The home indicator sits exactly where a shutter wants to be. Every bottom control is inset by <span style="font-family: var(--font-mono);">--safe-bottom</span> plus its own padding, never by a guessed constant.</span>
+        </div>
+
+        <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 13px;">
+          <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">5 · Motion — inherited, not invented</span>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--motion-snap</span><span>90ms · inherited, button press</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--motion-capture</span><span>700ms · the collapse</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--motion-hold</span><span>1500ms · the stability ring</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--motion-settle</span><span>220ms · sheets, mode swaps</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);"><span>--ease-out</span><span>cubic-bezier(0.2, 0, 0.2, 1)</span></span>
+          </div>
+          <span style="font-size: 12px; color: var(--fg3); text-wrap: pretty;">The product has exactly one transition today — <span style="font-family: var(--font-mono);">background-color 90ms ease-out</span> on a pressed button — and that easing is the seed the whole set inherits. Duration does not transfer, though: <strong style="font-weight: 600;">90ms is right for a 1px tint in place and wrong for travel across a screen</strong>, where it falls below the threshold at which the eye reads movement at all. The collapse ran at 90ms and landed as a jump cut rather than a snap, so it has its own token.</span>
+          <div style="border-top: 1px solid var(--bd); padding-top: 11px; display: flex; flex-direction: column; gap: 7px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Not a token — thumb reach</span>
+            <span style="font-size: 12px; color: var(--fg3); text-wrap: pretty;">There was a <span style="font-family: var(--font-mono);">--thumb-zone: 34%</span> here and it has been removed. Thumb reach is a <strong style="font-weight: 600;">placement rule</strong>, not a value any declaration consumes: nothing a one-handed user must reach mid-capture may sit above the bottom third, and the way to honour that is to position the control deck from the bottom edge — which the capture screen does. A token that only ever appeared in a comment is spec pretending to be code.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ═══════════ DROPZONE ═══════════ -->
+  <sc-if value="{{ isDrop }}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 22px;">
+      <p style="margin: 0; font-size: 14px; color: var(--fg2); max-width: 92ch; text-wrap: pretty;">One design, every upload point — as you asked. <span style="font-family: var(--font-mono);">UploadDropzone.svelte</span> already exists and already has idle, dragging and busy; it is used in two of the twelve sites. This extends it rather than replacing it, and the extension is one button.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(376px, 1fr)); gap: 16px;">
+        <sc-for list="{{ dropStates }}" as="d" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 9px;">
+            <span style="display: flex; align-items: baseline; gap: 9px;"><span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; border: 1px solid {{ d.pillHue }}; color: {{ d.pillHue }}; background: {{ d.pillBg }}; border-radius: 12px; padding: 2px 10px;">{{ d.state }}</span><span style="font-size: 12px; color: var(--fg3);">{{ d.note }}</span></span>
+            <div style="border: {{ d.border }}; border-radius: 12px; padding: 20px 22px; background: {{ d.bg }}; display: flex; flex-direction: column; gap: 12px; min-height: 132px; justify-content: center;">
+              <span style="display: flex; align-items: center; gap: 11px;">
+                <span style="display: flex; color: {{ d.iconHue }};">
+                  <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="12" y1="3" x2="12" y2="13"></line>
+                    <path d="M8 9.5l4 4 4-4"></path>
+                    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
+                  </svg>
+                </span>
+                <span style="display: flex; flex-direction: column; min-width: 0;">
+                  <span style="font-size: 14px; color: {{ d.titleHue }};">{{ d.title }}</span>
+                  <span style="font-size: 12px; color: var(--fg3);">{{ d.sub }}</span>
+                </span>
+              </span>
+              <sc-if value="{{ d.showCamera }}" hint-placeholder-val="{{ true }}">
+                <span style="display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--bd); padding-top: 12px;">
+                  <button onClick="{{ goCapture }}" style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 8px 13px; font-size: 13px; cursor: pointer; min-height: 36px;" style-hover="background: var(--card2);">
+                    <svg viewBox="0 0 24 24" style="width: 17px; height: 17px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 8.6A1.6 1.6 0 0 1 4.6 7h2.9l1.3-2h6.4l1.3 2h2.9A1.6 1.6 0 0 1 21 8.6v9.8A1.6 1.6 0 0 1 19.4 20H4.6A1.6 1.6 0 0 1 3 18.4z"></path>
+                      <circle cx="12" cy="13" r="3.6"></circle>
+                    </svg>
+                    Take a photo
+                  </button>
+                  <span style="font-size: 12px; color: var(--fg3);">{{ d.cameraNote }}</span>
+                </span>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px;">
+        <div style="border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; background: var(--green-wash); display: flex; flex-direction: column; gap: 7px;">
+          <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; align-self: flex-start; border: 1px solid var(--green); color: var(--green); background: var(--green-tint); border-radius: 12px; padding: 2px 10px;">the region/button tension</span>
+          <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Three affordances, but only <strong style="font-weight: 600;">two things that look pressable</strong>. The dashed region carries click-and-drop together — one dashed rule has meant &ldquo;a file goes here&rdquo; for twenty years, and clicking a drop target is the behaviour everyone already tries. Only the camera is drawn as a button, because it is the one affordance nothing about a dashed rectangle suggests.</span>
+        </div>
+        <div style="border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; background: var(--green-wash); display: flex; flex-direction: column; gap: 7px;">
+          <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; align-self: flex-start; border: 1px solid var(--green); color: var(--green); background: var(--green-tint); border-radius: 12px; padding: 2px 10px;">one design, twelve sites</span>
+          <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">The camera button appears when <span style="font-family: var(--font-mono);">accept</span> admits an image — a prop the component is already given at every call site. So it is genuinely one component with one design: the Settings JSON restore and the <span style="font-family: var(--font-mono);">.xlsx</span> broker report simply never draw a button for a thing they cannot use.</span>
+        </div>
+        <div style="border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; background: var(--card); display: flex; flex-direction: column; gap: 7px;">
+          <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; align-self: flex-start; border: 1px solid var(--fg3); color: var(--fg3); background: var(--grey-tint); border-radius: 12px; padding: 2px 10px;">nested pressables</span>
+          <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">The camera button sits inside a clickable region, so its handler stops propagation — otherwise tapping it also opens the file browser behind it. The existing component's <span style="font-family: var(--font-mono);">role="button"</span> and Enter/Space handling stay; the camera is a real <span style="font-family: var(--font-mono);">&lt;button&gt;</span> and lands next in tab order.</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ═══════════ CAPTURE ═══════════ -->
+  <sc-if value="{{ isCapture }}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); margin-right: 4px;">State</span>
+        <sc-for list="{{ captureStates }}" as="c" hint-placeholder-count="8">
+          <button onClick="{{ c.go }}" style="border: 1px solid {{ c.bd }}; background: {{ c.bg }}; color: {{ c.fg }}; border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer;">{{ c.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
+
+        <!-- the phone -->
+        <div style="width: 390px; flex: 0 0 390px; height: 780px; border-radius: 26px; overflow: hidden; position: relative; border: 1px solid var(--bd2); background: #0b0e13;">
+
+          <!-- live feed: night kitchen, one warm ceiling light -->
+          <span style="position: absolute; inset: 0; background:
+            radial-gradient(120% 80% at 52% 22%, rgba(255,214,160,0.30) 0%, rgba(255,214,160,0.06) 42%, transparent 68%),
+            linear-gradient(168deg, #14110c 0%, #221c14 38%, #171310 72%, #0d0b09 100%);
+            display: block;"></span>
+
+          <!-- the page in frame -->
+          <sc-if value="{{ cap.showDoc }}" hint-placeholder-val="{{ true }}">
+            <span style="position: absolute; inset: 0; display: block; filter: {{ cap.docFilter }};">
+              <svg viewBox="0 0 390 780" style="width: 100%; height: 100%; display: block;">
+                <polygon points="{{ cap.quad }}" fill="#e8e2d4" fillOpacity="0.94"></polygon>
+                <g stroke="#8d8677" strokeWidth="1.4" strokeLinecap="round" opacity="0.5">
+                  <sc-for list="{{ cap.lines }}" as="l" hint-placeholder-count="8">
+                    <line x1="{{ l.x1 }}" y1="{{ l.y1 }}" x2="{{ l.x2 }}" y2="{{ l.y2 }}"></line>
+                  </sc-for>
+                </g>
+              </svg>
+            </span>
+          </sc-if>
+
+          <!-- detection outline -->
+          <sc-if value="{{ cap.showOutline }}" hint-placeholder-val="{{ true }}">
+            <span style="position: absolute; inset: 0; display: block;">
+              <svg viewBox="0 0 390 780" style="width: 100%; height: 100%; display: block; overflow: visible;">
+                <polygon points="{{ cap.quad }}" fill="none" style="stroke: {{ cap.hue }}; stroke-width: {{ cap.weightVar }}; stroke-dasharray: {{ cap.dashVar }}; stroke-linejoin: round; transition: stroke-width var(--motion-settle) var(--ease-out);"></polygon>
+                <sc-if value="{{ cap.brackets }}" hint-placeholder-val="{{ false }}">
+                  <g style="stroke: {{ cap.hue }}; stroke-width: {{ cap.weightVar }}; fill: none; stroke-linecap: round; stroke-linejoin: round;">
+                    <sc-for list="{{ cap.bracketPaths }}" as="b" hint-placeholder-count="4">
+                      <path d="{{ b.d }}"></path>
+                    </sc-for>
+                  </g>
+                </sc-if>
+              </svg>
+            </span>
+          </sc-if>
+
+          <!-- searching sweep: motion carries "still looking", not colour -->
+          <sc-if value="{{ cap.sweeping }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; left: 0; right: 0; top: 0; height: 68px; background: linear-gradient(180deg, transparent, rgba(153,164,179,0.14), transparent); animation: scan-sweep 2.4s linear infinite; display: block; pointer-events: none;"></span>
+          </sc-if>
+
+          <!-- capture collapse: the outline snaps to the counter -->
+          <sc-if value="{{ cap.collapsing }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; left: {{ collapse.left }}; top: {{ collapse.top }}; width: {{ collapse.w }}; height: {{ collapse.h }}; border: 2px solid var(--green); border-radius: {{ collapse.r }}; background: rgba(232,226,212,0.5); transition: {{ collapse.transition }}; display: block; pointer-events: none;"></span>
+          </sc-if>
+
+          <!-- top bar: themed chrome, scrim only where it meets the feed -->
+          <span style="position: absolute; inset: 0 0 auto 0; padding: 16px 14px 12px; background: linear-gradient(180deg, var(--scan-plate-edge), transparent); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <button style="display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-min); min-height: var(--touch-min); border: 0; background: var(--scan-plate); border-radius: 999px; color: var(--scan-ink); font-size: 13px; cursor: pointer;" aria-label="Cancel scanning">Cancel</button>
+            <span style="display: inline-flex; align-items: center; gap: 7px; background: var(--scan-plate); color: var(--scan-ink); border-radius: 999px; padding: 7px 12px; font-size: 12px;">
+              <span style="font-family: var(--font-mono);">{{ cap.pageCount }}</span>
+              <span style="color: var(--scan-ink-2);">so far</span>
+            </span>
+          </span>
+
+          <!-- guidance: one line, fixed height, replaced not stacked -->
+          <span style="position: absolute; left: 0; right: 0; bottom: 158px; display: flex; justify-content: center; padding: 0 20px; pointer-events: none;">
+            <span style="display: inline-flex; align-items: center; gap: 9px; min-height: 34px; background: var(--scan-plate); border-radius: 999px; padding: 7px 15px; color: var(--scan-ink); font-size: 13px; text-align: center; border: 1px solid {{ cap.guideBd }};">
+              <sc-if value="{{ cap.guideGlyph }}" hint-placeholder-val="{{ false }}">
+                <span style="width: 7px; height: 7px; border-radius: 999px; background: {{ cap.hue }}; flex: 0 0 7px; display: block;"></span>
+              </sc-if>
+              {{ cap.guide }}
+            </span>
+          </span>
+
+          <!-- control deck: everything reachable, in the bottom third -->
+          <span style="position: absolute; inset: auto 0 0 0; padding: 18px calc(20px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(20px + var(--safe-left)); background: linear-gradient(0deg, var(--scan-plate-edge) 0%, var(--scan-plate-edge) 58%, transparent 100%); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px;">
+            <span style="display: flex; align-items: center;">
+              <sc-if value="{{ cap.hasThumb }}" hint-placeholder-val="{{ true }}">
+                <!-- Goes to Review, not to the preview: the preview is about the
+                     page you just took, this is about the stack so far. -->
+                <button onClick="{{ goReview }}" style="width: 46px; height: 58px; border-radius: 6px; border: 1px solid var(--scan-ink-2); background: #ded7c6; cursor: pointer; padding: 0; position: relative;" aria-label="Review 2 captured pages">
+                  <span style="position: absolute; right: -5px; top: -5px; min-width: 19px; height: 19px; border-radius: 999px; background: var(--green); color: var(--fg-inverse); font-family: var(--font-mono); font-size: 10px; display: grid; place-items: center; padding: 0 5px;">2</span>
+                </button>
+              </sc-if>
+            </span>
+
+            <!-- shutter: 72px, the one control allowed to be bigger than the floor -->
+            <button onClick="{{ fireShutter }}" style="width: var(--shutter-size); height: var(--shutter-size); border-radius: 999px; border: 3px solid var(--scan-ink); background: {{ cap.shutterBg }}; cursor: pointer; padding: 0; position: relative; display: grid; place-items: center;" aria-label="{{ cap.shutterLabel }}">
+              <span style="width: calc(var(--shutter-size) - 16px); height: calc(var(--shutter-size) - 16px); border-radius: 999px; background: var(--scan-ink); display: block;"></span>
+              <sc-if value="{{ cap.showRing }}" hint-placeholder-val="{{ false }}">
+                <!-- Stability is a ring FILLING, not a number ticking down: a
+                     countdown invites waiting, a filling ring invites holding still.
+                     The viewBox is a coordinate space, not a size — the ring scales
+                     with --shutter-size through the width/height above, so r and
+                     the dash length stay in viewBox units on purpose. -->
+                <svg viewBox="0 0 72 72" style="position: absolute; inset: 0; width: var(--shutter-size); height: var(--shutter-size); transform: rotate(-90deg);">
+                  <circle cx="36" cy="36" r="33" fill="none" stroke="var(--green)" strokeWidth="4" strokeLinecap="round" strokeDasharray="207" style="stroke-dashoffset: {{ cap.ringOffset }}; transition: stroke-dashoffset var(--motion-hold) linear;"></circle>
+                </svg>
+              </sc-if>
+            </button>
+
+            <span style="display: flex; align-items: center; justify-content: flex-end;">
+              <button style="display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-min); min-height: var(--touch-min); border: 0; background: var(--scan-plate); border-radius: 999px; color: var(--scan-ink); cursor: pointer;" aria-label="Flash: automatic">
+                <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13 3 6 13h5l-1 8 7-10h-5z"></path></svg>
+              </button>
+            </span>
+          </span>
+
+          <!-- permission / no-camera take the whole frame, themed -->
+          <sc-if value="{{ cap.blocking }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 24px calc(22px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(22px + var(--safe-left));">
+              <span style="display: flex; color: var(--fg3);">
+                <svg viewBox="0 0 24 24" style="width: 30px; height: 30px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 8.6A1.6 1.6 0 0 1 4.6 7h2.9l1.3-2h6.4l1.3 2h2.9A1.6 1.6 0 0 1 21 8.6v9.8A1.6 1.6 0 0 1 19.4 20H4.6A1.6 1.6 0 0 1 3 18.4z"></path>
+                  <circle cx="12" cy="13" r="3.6"></circle>
+                </svg>
+              </span>
+              <span style="font-size: 22px; font-weight: 600; letter-spacing: -0.01em; text-wrap: pretty;">{{ cap.blockTitle }}</span>
+              <span style="font-size: 14px; color: var(--fg2); text-wrap: pretty;">{{ cap.blockBody }}</span>
+              <span style="display: flex; gap: 9px; flex-wrap: wrap; margin-top: 4px;">
+                <button style="border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 11px 16px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: var(--touch-min);">{{ cap.blockPrimary }}</button>
+                <button style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 11px 16px; font-size: 14px; cursor: pointer; min-height: var(--touch-min);">Choose a file instead</button>
+              </span>
+            </span>
+          </sc-if>
+        </div>
+
+        <!-- annotation -->
+        <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">This state</span>
+            <span style="font-size: 14px; color: var(--fg1);">{{ cap.title }}</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">{{ cap.why }}</span>
+            <span style="display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--bd); padding-top: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--fg3);">
+              <span>{{ cap.weightLabel }}</span>
+              <span>{{ cap.dashLabel }}</span>
+              <span>brackets {{ cap.bracketLabel }}</span>
+            </span>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Auto-capture, as you specified</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Stable fires on its own, and <strong style="font-weight: 600;">any touch anywhere cancels it</strong> — not just a touch on a control. The ring fills rather than counting down: a number invites you to wait for it, a filling ring invites you to keep still, which is the thing that actually helps.</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">The fill runs the length of the whole wait — <span style="font-family: var(--font-mono);">--motion-hold</span>, 1500ms. It used to complete in 220ms and then sit full, which made the shutter look like it fired for its own reasons rather than at the end of a countdown you were watching.</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Under <span style="font-family: var(--font-mono);">prefers-reduced-motion</span> the ring arrives full instead of sweeping, so stability never depends on motion alone. The override covers <em style="font-style: normal; font-weight: 600;">transitions as well as animations</em> — the ring is a transition on <span style="font-family: var(--font-mono);">stroke-dashoffset</span>, so an animation-only rule would have missed the single motion the brief marks pass/fail. The capture collapse goes with it, which is the point of the setting.</span>
+          </div>
+
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Steppy at 8–10 fps, on purpose</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">The outline is a plain polygon with no per-frame smoothing, and nothing about it improves at 60 fps. What <em style="font-style: normal; font-weight: 600;">is</em> transitioned is stroke-width between states, which changes on a state boundary rather than every frame — so the appeal survives a slow detector.</span>
+          </div>
+
+          <div style="background: var(--yellow-wash); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; align-self: flex-start; border: 1px solid var(--yellow); color: var(--yellow); background: var(--yellow-tint); border-radius: 12px; padding: 2px 10px;">no layout shift</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">The guidance chip is centred with a fixed <span style="font-family: var(--font-mono);">min-height</span>, so &ldquo;Move closer to the page&rdquo; and &ldquo;Too dark — try more light&rdquo; occupy the same band and nothing below them moves. Step through the reject states above and watch the shutter stay put.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ═══════════ PREVIEW ═══════════ -->
+  <sc-if value="{{ isPreview }}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <p style="margin: 0; font-size: 14px; color: var(--fg2); max-width: 92ch; text-wrap: pretty;">No corner handles — you decide whether the shot is good and replace it if not, before anything is processed. That removes the loupe, the offset crosshair and the edge-of-frame grab problem entirely, and it makes this screen a <strong style="font-weight: 600;">two-answer question</strong> rather than an editor.</p>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); margin-right: 4px;">State</span>
+        <sc-for list="{{ previewStates }}" as="p" hint-placeholder-count="2">
+          <button onClick="{{ p.go }}" style="border: 1px solid {{ p.bd }}; background: {{ p.bg }}; color: {{ p.fg }}; border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer;">{{ p.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="width: 390px; flex: 0 0 390px; height: 780px; border-radius: 26px; overflow: hidden; position: relative; border: 1px solid var(--bd2); background: var(--bg); display: flex; flex-direction: column;">
+
+          <span style="padding: calc(14px + var(--safe-top)) 16px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--bd);">
+            <span style="font-size: 14px; font-weight: 500;">Page 3</span>
+            <span style="font-family: var(--font-mono); font-size: 12px; color: var(--fg3);">{{ prev.badge }}</span>
+          </span>
+
+          <span style="flex: 1; display: grid; place-items: center; padding: 18px; min-height: 0; position: relative;">
+            <span style="width: 100%; max-width: 300px; aspect-ratio: 210 / 297; border: 1px solid var(--bd2); border-radius: 4px; background: {{ prev.paper }}; display: block; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.18);">
+              <svg viewBox="0 0 210 297" style="width: 100%; height: 100%; display: block;">
+                <g style="stroke: {{ prev.ink }};" strokeWidth="2.2" strokeLinecap="round">
+                  <sc-for list="{{ prev.lines }}" as="l" hint-placeholder-count="10">
+                    <line x1="{{ l.x1 }}" y1="{{ l.y1 }}" x2="{{ l.x2 }}" y2="{{ l.y2 }}"></line>
+                  </sc-for>
+                </g>
+              </svg>
+              <sc-if value="{{ prev.processing }}" hint-placeholder-val="{{ false }}">
+                <span style="position: absolute; inset: 0; background: rgba(10,13,19,0.5); display: grid; place-items: center;">
+                  <span style="display: inline-flex; align-items: center; gap: 9px; background: var(--scan-plate); color: var(--scan-ink); border-radius: 999px; padding: 8px 14px; font-size: 13px;">
+                    <span style="width: 13px; height: 13px; border-radius: 999px; border: 2px solid var(--scan-ink-2); border-top-color: var(--scan-ink); display: block; animation: scan-spin 700ms linear infinite;"></span>
+                    Cleaning up page 3
+                  </span>
+                </span>
+              </sc-if>
+            </span>
+          </span>
+
+          <span style="padding: 14px 16px; display: flex; flex-direction: column; gap: 13px; border-top: 1px solid var(--bd);">
+            <span style="display: flex; gap: 6px; border: 1px solid var(--bd); border-radius: 8px; padding: 3px; background: var(--card);">
+              <sc-for list="{{ prev.modes }}" as="m" hint-placeholder-count="3">
+                <button onClick="{{ m.go }}" style="flex: 1; border: 0; border-radius: 6px; padding: 9px 6px; font-size: 13px; cursor: pointer; min-height: var(--touch-min); background: {{ m.bg }}; color: {{ m.fg }};">{{ m.label }}</button>
+              </sc-for>
+            </span>
+            <span style="font-size: 12px; color: var(--fg3); min-height: 32px; text-wrap: pretty;">{{ prev.modeNote }}</span>
+            <span style="display: grid; grid-template-columns: auto auto 1fr; gap: 9px; align-items: center; padding-bottom: var(--safe-bottom);">
+              <button style="display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-min); min-height: var(--touch-min); border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; cursor: pointer;" aria-label="Rotate page">
+                <svg viewBox="0 0 24 24" style="width: 19px; height: 19px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4.5V11h-6.2"></path></svg>
+              </button>
+              <button onClick="{{ goCapture }}" style="border: 1px solid var(--bd2); background: var(--card); color: var(--fg1); border-radius: 8px; padding: 11px 15px; font-size: 14px; cursor: pointer; min-height: var(--touch-min);">Replace</button>
+              <button onClick="{{ goReview }}" style="border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 11px 15px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: var(--touch-min);">{{ prev.keepLabel }}</button>
+            </span>
+          </span>
+        </div>
+
+        <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Two answers, not an editor</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;"><strong style="font-weight: 600;">Keep</strong> is primary and <strong style="font-weight: 600;">Replace</strong> is secondary, because the shot is usually fine and the flow should not make you confirm that carefully. Replace goes straight back to the camera with this page still in the stack — nothing is lost by trying again, which is what makes skipping corner editing safe.</span>
+          </div>
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">The mode-switch gap</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Tapping a mode re-processes, so the tap lands instantly and the <em style="font-style: normal; font-weight: 600;">page</em> catches up under a scrim that names what it is doing. The note under the switcher has a fixed height so the deck does not jump as the wording changes — and Keep stays live throughout, since the mode can be changed again later.</span>
+          </div>
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Why B&amp;W is the default</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Household paper is text on white, and B&amp;W is where OCR reads best and the file is smallest. Colour is the exception you reach for when the page has a stamp, a signature or a chart worth keeping — so it is the last option, not the first.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ═══════════ REVIEW ═══════════ -->
+  <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3); margin-right: 4px;">State</span>
+        <sc-for list="{{ reviewStates }}" as="r" hint-placeholder-count="4">
+          <button onClick="{{ r.go }}" style="border: 1px solid {{ r.bd }}; background: {{ r.bg }}; color: {{ r.fg }}; border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer;">{{ r.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="width: 390px; flex: 0 0 390px; height: 780px; border-radius: 26px; overflow: hidden; position: relative; border: 1px solid var(--bd2); background: var(--bg); display: flex; flex-direction: column;">
+
+          <span style="padding: calc(14px + var(--safe-top)) 16px 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--bd);">
+            <span style="display: flex; flex-direction: column; gap: 1px;">
+              <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.01em;">{{ rev.title }}</span>
+              <span style="font-size: 12px; color: var(--fg3);">{{ rev.sub }}</span>
+            </span>
+            <button style="border: 0; background: none; color: var(--fg2); font-size: 13px; cursor: pointer; min-height: var(--touch-min); padding: 0 2px;">Cancel</button>
+          </span>
+
+          <span style="flex: 1; overflow-y: auto; padding: 16px; min-height: 0;">
+            <sc-if value="{{ rev.empty }}" hint-placeholder-val="{{ false }}">
+              <span style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 0 24px;">
+                <span style="font-size: 14px; color: var(--fg2); text-wrap: pretty;">Nothing here yet. Take a photo of the first page and it will appear in this list.</span>
+                <button onClick="{{ goCapture }}" style="border: 1px solid var(--blue); background: var(--blue); color: var(--fg-inverse); border-radius: 8px; padding: 11px 16px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: var(--touch-min);">Take a photo</button>
+              </span>
+            </sc-if>
+
+            <sc-if value="{{ rev.hasPages }}" hint-placeholder-val="{{ true }}">
+              <span style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-items: start;">
+                <sc-for list="{{ rev.pages }}" as="p" hint-placeholder-count="5">
+                  <span style="display: flex; flex-direction: column; gap: 7px;">
+                    <!-- Mixed orientations: every tile is the SAME box and the
+                         page sits inside it, so a landscape page does not make
+                         its row taller than the one beside it. -->
+                    <span style="position: relative; width: 100%; aspect-ratio: 3 / 4; background: var(--card2); border: 1px solid var(--bd); border-radius: 8px; display: grid; place-items: center; overflow: hidden;">
+                      <span style="aspect-ratio: {{ p.ratio }}; max-width: 92%; max-height: 92%; background: {{ p.paper }}; border: 1px solid var(--bd2); border-radius: 2px; display: block; position: relative; overflow: hidden;">
+                        <svg viewBox="0 0 {{ p.vbW }} {{ p.vbH }}" style="width: 100%; height: 100%; display: block;">
+                          <g style="stroke: {{ p.ink }};" strokeWidth="3" strokeLinecap="round">
+                            <sc-for list="{{ p.lines }}" as="l" hint-placeholder-count="6">
+                              <line x1="{{ l.x1 }}" y1="{{ l.y1 }}" x2="{{ l.x2 }}" y2="{{ l.y2 }}"></line>
+                            </sc-for>
+                          </g>
+                        </svg>
+                      </span>
+                      <span style="position: absolute; left: 6px; top: 6px; display: inline-flex; align-items: center; gap: 5px; height: 20px; border-radius: 999px; background: var(--scan-plate); color: var(--scan-ink); font-family: var(--font-mono); font-size: 10px; padding: 0 7px; cursor: grab;">
+                        <svg viewBox="0 0 24 24" style="width: 9px; height: 9px; display: block; opacity: 0.7;" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"></circle><circle cx="15" cy="6" r="1.6"></circle><circle cx="9" cy="12" r="1.6"></circle><circle cx="15" cy="12" r="1.6"></circle><circle cx="9" cy="18" r="1.6"></circle><circle cx="15" cy="18" r="1.6"></circle></svg>
+                        {{ p.n }}
+                      </span>
+                      <sc-if value="{{ p.uploading }}" hint-placeholder-val="{{ false }}">
+                        <span style="position: absolute; inset: 0; background: rgba(10,13,19,0.44); display: flex; flex-direction: column; justify-content: flex-end; padding: 8px;">
+                          <span style="width: 100%; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.22); display: block; overflow: hidden;">
+                            <span style="display: block; height: 100%; width: {{ p.pct }}; background: var(--green); transition: width var(--motion-settle) linear;"></span>
+                          </span>
+                        </span>
+                      </sc-if>
+                      <sc-if value="{{ p.done }}" hint-placeholder-val="{{ false }}">
+                        <span style="position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 999px; background: var(--green); color: var(--fg-inverse); display: grid; place-items: center; font-size: 11px;">✓</span>
+                      </sc-if>
+                      <sc-if value="{{ p.failed }}" hint-placeholder-val="{{ false }}">
+                        <span style="position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 999px; background: var(--red); color: var(--fg-inverse); display: grid; place-items: center; font-size: 11px;">!</span>
+                      </sc-if>
+                    </span>
+                    <span style="font-size: 12px; color: var(--fg3);">{{ p.label }}</span>
+                    <sc-if value="{{ rev.editable }}" hint-placeholder-val="{{ true }}">
+                      <!-- Page order IS the document's order, so moving a page is a
+                           first-class action rather than a 30px afterthought. Both
+                           directions, because with only ↑ the first page reaches the
+                           end by pressing buttons on four other tiles. All three sit
+                           at the 44px floor the brief sets. -->
+                      <span style="display: flex; gap: var(--space-2);">
+                        <button style="flex: 1; min-height: var(--touch-min); border: 1px solid var(--bd); background: var(--card); color: {{ p.upFg }}; border-radius: var(--radius-sm); cursor: {{ p.upCursor }}; font-size: 13px; padding: 0;" aria-label="Move page {{ p.n }} earlier">↑</button>
+                        <button style="flex: 1; min-height: var(--touch-min); border: 1px solid var(--bd); background: var(--card); color: {{ p.downFg }}; border-radius: var(--radius-sm); cursor: {{ p.downCursor }}; font-size: 13px; padding: 0;" aria-label="Move page {{ p.n }} later">↓</button>
+                        <button style="flex: 1; min-height: var(--touch-min); border: 1px solid var(--bd); background: var(--card); color: var(--fg3); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; padding: 0;" aria-label="Remove page {{ p.n }}" style-hover="color: var(--red); border-color: var(--red);">✕</button>
+                      </span>
+                    </sc-if>
+                  </span>
+                </sc-for>
+
+                <sc-if value="{{ rev.editable }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ goCapture }}" style="width: 100%; aspect-ratio: 3 / 4; border: 1.5px dashed var(--bd2); background: transparent; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--fg3); font-size: 13px;" style-hover="border-color: var(--blue); color: var(--fg2);">
+                    <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; display: block;" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5"></line><line x1="5.5" y1="12" x2="18.5" y2="12"></line></svg>
+                    Add a page
+                  </button>
+                </sc-if>
+              </span>
+            </sc-if>
+          </span>
+
+          <span style="padding: 14px 16px calc(14px + var(--safe-bottom)); border-top: 1px solid var(--bd); display: flex; flex-direction: column; gap: 10px;">
+            <sc-if value="{{ rev.showBar }}" hint-placeholder-val="{{ false }}">
+              <span style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12px;">
+                  <span style="color: var(--fg2);">{{ rev.barLabel }}</span>
+                  <span style="font-family: var(--font-mono); color: var(--fg3);">{{ rev.barCount }}</span>
+                </span>
+                <span style="width: 100%; height: 5px; border-radius: 5px; background: var(--card3); display: block; overflow: hidden;">
+                  <span style="display: block; height: 100%; width: {{ rev.barPct }}; background: {{ rev.barHue }}; transition: width var(--motion-settle) linear;"></span>
+                </span>
+              </span>
+            </sc-if>
+            <sc-if value="{{ rev.showName }}" hint-placeholder-val="{{ true }}">
+              <!-- One PDF needs one name, and this is the only moment the user
+                   knows what the document is. Uses app.css's base input layer. -->
+              <label style="display: flex; flex-direction: column; gap: var(--space-3); font-size: var(--text-sm); color: var(--fg3); min-width: 0;">
+                Save as
+                <input type="text" value="lease-vinohrady-2027.pdf" style="min-height: var(--touch-min);">
+              </label>
+            </sc-if>
+            <sc-if value="{{ rev.showRetry }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">{{ rev.retryNote }}</span>
+            </sc-if>
+            <button onClick="{{ rev.action }}" style="width: 100%; border: 1px solid {{ rev.ctaBd }}; background: {{ rev.ctaBg }}; color: {{ rev.ctaFg }}; border-radius: 8px; padding: 13px 16px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 48px;">{{ rev.cta }}</button>
+          </span>
+        </div>
+
+        <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Mixed orientations</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Every tile is the same 3:4 box and the page sits inside it at its own aspect ratio. A landscape page therefore cannot make its row taller than the row beside it, and the grid stays a grid — which is the thing that breaks when thumbnails size themselves to their content.</span>
+          </div>
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Five photographs, one document</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">The pages are never separate files in Continuum, so nothing here calls them a batch. The screen names the PDF from the first tap, and the wait is called <strong style="font-weight: 600;">Combining</strong> rather than &ldquo;Uploading page 3 of 5&rdquo; — which read as five separate uploads of five separate files. The per-page work is real, so the bar still counts pages; what it counts <em style="font-style: normal; font-weight: 600;">toward</em> is one document, and a tick means the page is cleaned up and written into it.</span>
+          </div>
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">One PDF makes failure worse, so say so</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Four pages on a server are not a document. The Failed state therefore says the four are <em style="font-style: normal; font-weight: 600;">being held rather than filed</em> — claiming they were filed would be a lie the Documents shelf immediately exposes. It still never re-sends what arrived, and never offers to discard.</span>
+          </div>
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">The button carries through</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">&ldquo;Upload PDF&rdquo; → &ldquo;Combining into one PDF&rdquo; → &ldquo;Uploaded&rdquo;. Cleaning the pages and writing the PDF were two states with two chips and two bars; to the person holding the phone that is <strong style="font-weight: 600;">one wait</strong> making <strong style="font-weight: 600;">one file</strong>, so it is one state named for the file. The name typed above is what the last label opens.</span>
+          </div>
+          <div style="background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 15px 17px; display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg3);">Page order is the document</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">One PDF means the order of the tiles <em style="font-style: normal; font-weight: 600;">is</em> the order of the pages — getting it wrong is not a display preference, it is a wrong document. So moving a page is a first-class action: <span style="font-family: var(--font-mono);">↑</span> and <span style="font-family: var(--font-mono);">↓</span> both, at the 44px floor, on their own row. They were 30px and up-only before, which meant the first page reached the end by pressing buttons on four other tiles.</span>
+            <span style="font-size: 13px; color: var(--fg2); text-wrap: pretty;">Dragging is still the gesture; the buttons are what make it reachable by keyboard, by screen reader, and by anyone whose drag does not register. The grip on each page's badge says which part of a tile to pull. Order locks once uploading starts — the pages are already going in that order.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1340}}">
+// Ruled paper for the mock document, so a page reads as text without drawing
+// anything that pretends to be a real letter.
+function ruled(w, h, rows, seed) {
+  const out = [];
+  const top = h * 0.14;
+  const gap = (h * 0.72) / rows;
+  let s = seed;
+  for (let i = 0; i < rows; i++) {
+    s = (s * 9301 + 49297) % 233280;
+    const frac = 0.42 + (s / 233280) * 0.5;
+    const y = top + gap * i;
+    out.push({ x1: w * 0.14, y1: y, x2: w * 0.14 + w * 0.72 * frac, y2: y });
+  }
+  return out;
+}
+
+const QUADS = {
+  // Slightly off-square, as a hand-held shot of a letter on a table is.
+  found: '74,182 322,164 336,566 62,584',
+  small: '148,306 254,298 260,470 142,476',
+  none: ''
+};
+
+const MODES = {
+  bw: { label: 'B&W', paper: '#ffffff', ink: '#111111', note: 'Smallest file, sharpest text. Best for OCR — this is the right answer for almost every household letter.' },
+  gray: { label: 'Grayscale', paper: '#f4f2ee', ink: '#3a3a38', note: 'Keeps shading, so a photocopy or a photo on the page survives. Roughly three times the size of B&W.' },
+  colour: { label: 'Colour', paper: '#fbf7ef', ink: '#2b3a52', note: 'Only when colour carries meaning — a stamp, a signature, a coloured chart. Largest file by far.' }
+};
+
+// Each state names the TOKENS it draws with, not the values. Editing
+// --detect-w-stable or --detect-dash-rejected in app.css now moves the outline
+// on screen — which is the only way the token set can be validated from here.
+const CAP = {
+  searching: {
+    title: 'Searching',
+    guide: 'Point at the page',
+    hue: 'var(--detect-searching)', weight: 'var(--detect-w-searching)', dash: 'var(--detect-dash-searching)', brackets: false,
+    showDoc: false, showOutline: false, sweeping: true,
+    why: 'No page found yet, so there is nothing to outline — drawing a speculative box here would be a claim the detector has not made. A slow vertical sweep says the camera is working without asserting a result.'
+  },
+  found: {
+    title: 'Detected',
+    guide: 'Hold steady',
+    hue: 'var(--detect-found)', weight: 'var(--detect-w-found)', dash: 'none', brackets: true,
+    showDoc: true, showOutline: true,
+    why: 'Four corners found. The dash resolves to solid and corner brackets appear — two shape changes, so the transition from searching is legible with no colour at all.'
+  },
+  stable: {
+    title: 'Stable — about to capture',
+    guide: 'Got it — hold still',
+    hue: 'var(--detect-stable)', weight: 'var(--detect-w-stable)', dash: 'none', brackets: true,
+    showDoc: true, showOutline: true, ring: true,
+    why: 'The outline thickens to 3px and the shutter ring fills. This is the only moment the interface asks you to do nothing, so it says so in three words and takes the decision off you.'
+  },
+  blurry: {
+    title: 'Rejected — motion blur',
+    guide: 'Hold still — that came out blurry',
+    hue: 'var(--detect-rejected)', weight: 'var(--detect-w-found)', dash: 'var(--detect-dash-rejected)', brackets: false,
+    showDoc: true, showOutline: true, blur: true,
+    why: 'A tighter dash than searching, so rejection reads as a different rhythm rather than a different colour. The frame itself is visibly soft, which is the real evidence.'
+  },
+  dark: {
+    title: 'Rejected — too dark',
+    guide: 'Too dark — try more light',
+    hue: 'var(--detect-rejected)', weight: 'var(--detect-w-found)', dash: 'var(--detect-dash-rejected)', brackets: false,
+    showDoc: true, showOutline: true, dim: true,
+    why: 'Names the fix, not the measurement. "Insufficient illumination" tells you what the sensor thinks; "try more light" tells you what to do with your free hand.'
+  },
+  small: {
+    title: 'Rejected — too small in frame',
+    guide: 'Move closer to the page',
+    hue: 'var(--detect-rejected)', weight: 'var(--detect-w-found)', dash: 'var(--detect-dash-rejected)', brackets: false,
+    showDoc: true, showOutline: true, small: true,
+    why: 'The page is found but occupies too little of the frame to resolve text. Moving closer is a physical instruction, which is the only kind worth giving someone holding a phone.'
+  },
+  captured: {
+    title: 'Captured',
+    guide: 'Page 3 saved',
+    hue: 'var(--detect-stable)', weight: 'var(--detect-w-stable)', dash: 'none', brackets: false,
+    showDoc: true, showOutline: false, collapsing: true,
+    why: 'The one bold beat in the flow, and it is the collapse you chose: the outline travels inward to the thumbnail in the corner over --motion-capture, 700ms. It ran at the button press\u2019s 90ms first and read as a jump cut — over that distance 90ms is below the threshold where the eye registers movement at all — then at 300ms, which still flickered. 700ms is long enough to actually follow the page to the counter, which is the information the beat carries. Once it lands, the page preview opens — press the shutter, or pick Stable and let it fire on its own, to run the whole sequence.'
+  },
+  denied: {
+    title: 'Permission denied',
+    blocking: true,
+    blockTitle: 'Continuum cannot reach the camera',
+    blockBody: 'Your browser is blocking it, and it will not ask again on its own. Open the padlock in the address bar, allow the camera, then reload this page.',
+    blockPrimary: 'Reload and try again',
+    why: 'The OS will not re-prompt, so the recovery path has to be instructions rather than a button that quietly does nothing. It names the padlock because that is the thing to tap, and it keeps the file route beside it so the task is never blocked.'
+  },
+  nocamera: {
+    title: 'No camera available',
+    blocking: true,
+    blockTitle: 'No camera on this device',
+    blockBody: 'Nothing is wrong — this machine has no camera Continuum can use. Pick a file instead, or open Continuum on your phone and scan from there.',
+    blockPrimary: 'Open on my phone',
+    why: 'Degrades to the file path without treating it as a failure. The phone suggestion matters because the same self-hosted instance is reachable from the phone on the same network, which the desktop user may not have considered.'
+  },
+  ask: {
+    title: 'Permission request',
+    blocking: true,
+    blockTitle: 'Use the camera to photograph this page?',
+    blockBody: 'Continuum needs the camera to take the photo. The image is processed on your own server and never leaves it — there is no third party here.',
+    blockPrimary: 'Allow the camera',
+    why: 'Shown before the OS prompt, because a raw system dialog with no context gets denied and cannot be re-asked. For a self-hosted product the sentence that earns the tap is where the image goes.'
+  }
+};
+
+const CAP_ORDER = ['searching', 'found', 'stable', 'blurry', 'dark', 'small', 'captured', 'ask', 'denied', 'nocamera'];
+const CAP_LABEL = {
+  searching: 'Searching', found: 'Detected', stable: 'Stable', blurry: 'Blurry',
+  dark: 'Too dark', small: 'Too small', captured: 'Captured',
+  ask: 'Ask', denied: 'Denied', nocamera: 'No camera'
+};
+
+const PAGES = [
+  { n: 1, orient: 'portrait', label: 'B&W · portrait' },
+  { n: 2, orient: 'portrait', label: 'B&W · portrait' },
+  { n: 3, orient: 'landscape', label: 'Colour · landscape' },
+  { n: 4, orient: 'portrait', label: 'Grayscale · portrait' },
+  { n: 5, orient: 'landscape', label: 'B&W · landscape' }
+];
+
+class Component extends DCLogic {
+  state = {
+    tab: 'tokens',
+    theme: 'dark',
+    cap: 'found',
+    ring: false,
+    collapsed: false,
+    mode: 'bw',
+    processing: false,
+    review: 'idle'
+  };
+
+  componentDidMount() {
+    const style = document.createElement('style');
+    style.textContent = '@keyframes scan-spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  }
+
+  // Drives the shutter ring and, on arrival, the collapse — so "stable" is a
+  // thing you watch happen rather than a static frame labelled stable.
+  runStable() {
+    this.setState({ cap: 'stable', ring: false });
+    setTimeout(() => this.setState({ ring: true }), 60);
+    this.stableTimer = setTimeout(() => this.fire(true), 1500);
+  }
+
+  /**
+   * @param advance true when this came from the shutter or auto-capture, i.e.
+   *   from somebody actually scanning. The page preview opens once the collapse
+   *   has landed — §2.3 shows it immediately after every capture, and without
+   *   this the only way out of Capture was the thumbnail, which goes to Review
+   *   and skips the preview entirely.
+   *
+   *   False when it came from the Captured state chip, which exists to let you
+   *   inspect that state — navigating away from a state inspector on click
+   *   would make the state unviewable.
+   */
+  fire(advance) {
+    clearTimeout(this.stableTimer);
+    clearTimeout(this.collapseTimer);
+    clearTimeout(this.advanceTimer);
+    this.setState({ cap: 'captured', collapsed: false });
+    // Two frames, not one tick: the browser has to paint the un-collapsed box
+    // before a transition to the collapsed one has anything to travel from.
+    this.collapseTimer = setTimeout(() => this.setState({ collapsed: true }), 60);
+    if (advance) {
+      // 60 for the paint + 700 of travel, plus a beat to see it land.
+      this.advanceTimer = setTimeout(() => this.setState({ tab: 'preview' }), 900);
+    }
+  }
+
+  goCap(key) {
+    clearTimeout(this.stableTimer);
+    if (key === 'stable') return this.runStable();
+    // Captured has to PLAY, not be parked at its first frame. Setting
+    // collapsed:false and never scheduling true left the chip showing a stalled
+    // mid-animation rect over the viewfinder — and the chip is the documented
+    // way in, since the brief asks for every state to be togglable.
+    if (key === 'captured') return this.fire(false);
+    this.setState({ cap: key, ring: false, collapsed: false });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const c = CAP[s.cap];
+    const mode = MODES[s.mode];
+
+    const quad = c.small ? QUADS.small : QUADS.found;
+    const filters = [];
+    if (c.blur) filters.push('blur(2.4px)');
+    if (c.dim) filters.push('brightness(0.4)');
+
+    const pill = (on, hue) => ({
+      bd: on ? hue : 'var(--bd)',
+      bg: on ? 'var(--card3)' : 'transparent',
+      fg: on ? 'var(--fg1)' : 'var(--fg3)'
+    });
+
+    // Review states as one table: label, per-page marks, and the CTA that
+    // carries the same count through every one of them.
+    // Five photographs are ONE document — the pages are never separate files in
+    // Continuum, so every label here names the PDF rather than the batch, and
+    // the last step is an assembly the user can see happen.
+    const revStates = {
+      idle: {
+        title: '5 pages', sub: 'They will be combined into one PDF',
+        cta: 'Upload PDF', editable: true, showBar: false, showName: true,
+        ctaBg: 'var(--blue)', ctaFg: 'var(--fg-inverse)', ctaBd: 'var(--blue)'
+      },
+      // Reading the pages and writing the PDF were two states with two chips and
+      // two bars. To the person holding the phone it is ONE wait — so it is one
+      // state, one bar, and the sub-line names whichever step is running.
+      combining: {
+        title: 'Combining', sub: 'Building one PDF from 5 pages',
+        cta: 'Combining into one PDF', editable: false, showBar: true,
+        barLabel: 'Cleaning up page 3 of 5', barCount: 'then writing the PDF', barPct: '52%', barHue: 'var(--green)',
+        ctaBg: 'var(--card2)', ctaFg: 'var(--fg3)', ctaBd: 'var(--bd2)'
+      },
+      done: {
+        title: 'Uploaded', sub: 'One PDF · 5 pages · 1.8 MB',
+        cta: 'Open lease-vinohrady-2027.pdf', editable: false, showBar: false, allDone: true,
+        ctaBg: 'var(--card)', ctaFg: 'var(--fg1)', ctaBd: 'var(--bd2)'
+      },
+      failed: {
+        title: 'Upload stopped', sub: '4 pages sent · no PDF yet',
+        cta: 'Send page 5 and finish', editable: false, showBar: true, showRetry: true,
+        // Honest about the consequence of one PDF: four pages on the server are
+        // not a document. Nothing is lost, but nothing is filed either.
+        retryNote: 'The server stopped responding partway through page 5. Nothing you photographed has been lost — but a PDF needs every page, so the four that arrived are being held rather than filed. Sending page 5 finishes the document.',
+        barLabel: 'Page 5 did not arrive', barCount: '4 of 5 pages', barPct: '80%', barHue: 'var(--red)',
+        ctaBg: 'var(--card)', ctaFg: 'var(--fg1)', ctaBd: 'var(--bd2)'
+      },
+      empty: {
+        title: 'No pages yet', sub: 'This should not be reachable',
+        cta: 'Take a photo', editable: false, showBar: false, empty: true,
+        ctaBg: 'var(--blue)', ctaFg: 'var(--fg-inverse)', ctaBd: 'var(--blue)'
+      }
+    };
+    const rv = revStates[s.review];
+
+    return {
+      tabs: [
+        ['tokens', 'Tokens'], ['drop', 'Dropzone'], ['capture', 'Capture'],
+        ['preview', 'Page preview'], ['review', 'Review']
+      ].map((t) => ({
+        label: t[1],
+        go: () => this.setState({ tab: t[0] }),
+        bg: s.tab === t[0] ? 'var(--card3)' : 'transparent',
+        fg: s.tab === t[0] ? 'var(--fg1)' : 'var(--fg3)'
+      })),
+      isTokens: s.tab === 'tokens', isDrop: s.tab === 'drop',
+      isCapture: s.tab === 'capture', isPreview: s.tab === 'preview',
+      isReview: s.tab === 'review',
+      goCapture: () => this.setState({ tab: 'capture', cap: 'found', ring: false }),
+      goReview: () => this.setState({ tab: 'review', review: 'idle' }),
+
+      setDark: () => { document.documentElement.removeAttribute('data-ledger-theme'); this.setState({ theme: 'dark' }); },
+      setLight: () => { document.documentElement.setAttribute('data-ledger-theme', 'light'); this.setState({ theme: 'light' }); },
+      darkBg: s.theme === 'dark' ? 'var(--card3)' : 'transparent',
+      darkFg: s.theme === 'dark' ? 'var(--fg1)' : 'var(--fg3)',
+      lightBg: s.theme === 'light' ? 'var(--card3)' : 'transparent',
+      lightFg: s.theme === 'light' ? 'var(--fg1)' : 'var(--fg3)',
+      themeNote: s.theme === 'light'
+        ? 'Chrome follows the theme; the scrim on the feed does not.'
+        : 'Dark is the shipped default.',
+
+      stateSwatches: [
+        { label: 'Searching', hue: 'var(--detect-searching)', w: 'var(--detect-w-searching)', dash: 'var(--detect-dash-searching)', brackets: false, spec: '--detect-w-searching · -dash-searching' },
+        { label: 'Detected', hue: 'var(--detect-found)', w: 'var(--detect-w-found)', dash: 'none', brackets: true, spec: '--detect-w-found · solid · brackets' },
+        { label: 'Stable', hue: 'var(--detect-stable)', w: 'var(--detect-w-stable)', dash: 'none', brackets: true, spec: '--detect-w-stable · solid · brackets' },
+        { label: 'Rejected', hue: 'var(--detect-rejected)', w: 'var(--detect-w-found)', dash: 'var(--detect-dash-rejected)', brackets: false, spec: '--detect-w-found · -dash-rejected' }
+      ],
+
+      dropStates: [
+        {
+          state: 'idle', note: 'three affordances, two pressable things',
+          border: '1.5px dashed var(--bd2)', bg: 'transparent',
+          iconHue: 'var(--fg3)', titleHue: 'var(--fg1)',
+          title: 'Drop a file here, or click to browse',
+          sub: 'PDF, PNG or JPEG · up to 20 MB',
+          showCamera: true, cameraNote: 'or photograph the page'
+        },
+        {
+          state: 'drag-active', note: 'the region takes over; the button recedes',
+          border: '1.5px dashed var(--blue)', bg: 'var(--blue-wash)',
+          iconHue: 'var(--blue)', titleHue: 'var(--fg1)',
+          title: 'Release to add lease-2027.pdf',
+          sub: 'One file · 2.4 MB',
+          showCamera: false, cameraNote: ''
+        },
+        {
+          state: 'rejected', note: 'says what it accepts, not what you did wrong',
+          border: '1.5px dashed var(--red)', bg: 'var(--red-wash)',
+          iconHue: 'var(--red)', titleHue: 'var(--red)',
+          title: 'That is a .zip — this takes PDF, PNG or JPEG',
+          sub: 'Drop a different file, or photograph the page instead',
+          showCamera: true, cameraNote: 'the offer stays live'
+        },
+        {
+          state: 'busy', note: 'the existing component already has this',
+          border: '1.5px dashed var(--bd)', bg: 'var(--card)',
+          iconHue: 'var(--fg3)', titleHue: 'var(--fg3)',
+          title: 'Uploading lease-2027.pdf',
+          sub: 'Cancel by leaving this screen',
+          showCamera: false, cameraNote: ''
+        }
+      ],
+
+      captureStates: CAP_ORDER.map((k) => ({
+        label: CAP_LABEL[k],
+        go: () => this.goCap(k),
+        ...pill(s.cap === k, 'var(--blue)')
+      })),
+
+      cap: {
+        title: c.title,
+        why: c.why,
+        guide: c.guide || '',
+        guideGlyph: !!c.showOutline,
+        guideBd: c.showOutline ? 'transparent' : 'transparent',
+        hue: c.hue,
+        // The three blocking states (ask / denied / no camera) draw no outline at
+        // all, so they carry no weight or dash. Reading .replace() off those
+        // threw a TypeError out of renderVals, which took the ENTIRE component
+        // down — the three screens rendered nothing at all rather than degrading.
+        weightVar: c.weight || 'var(--detect-w-found)',
+        dashVar: c.dash || 'none',
+        weightLabel: c.weight ? c.weight.replace('var(', '').replace(')', '') : 'no outline',
+        dashLabel: !c.dash || c.dash === 'none' ? 'dash solid' : c.dash.replace('var(', '').replace(')', ''),
+        brackets: !!c.brackets,
+        bracketLabel: c.brackets ? 'yes' : 'no',
+        bracketPaths: c.brackets ? this.brackets(quad) : [],
+        showDoc: !!c.showDoc,
+        showOutline: !!c.showOutline,
+        sweeping: !!c.sweeping,
+        collapsing: !!c.collapsing,
+        blocking: !!c.blocking,
+        blockTitle: c.blockTitle || '',
+        blockBody: c.blockBody || '',
+        blockPrimary: c.blockPrimary || '',
+        quad,
+        docFilter: filters.length ? filters.join(' ') : 'none',
+        lines: ruled(390, 780, 9, 77).map((l) => ({
+          x1: 74 + (l.x1 - 54) * 0.62, y1: 182 + (l.y1 - 109) * 0.66,
+          x2: 74 + (l.x2 - 54) * 0.62, y2: 182 + (l.y2 - 109) * 0.66
+        })),
+        pageCount: '2 pages',
+        hasThumb: !c.blocking,
+        showRing: !!c.ring && s.ring,
+        ringOffset: s.ring ? '0' : '207',
+        shutterBg: c.ring ? 'var(--green-tint)' : 'transparent',
+        shutterLabel: c.ring ? 'Capturing now — tap to cancel' : 'Take the photo'
+      },
+      // The rest position must be the thumbnail's own box, or the plate settles
+      // beside the thing it became. The deck is 18px of padding above a 58px
+      // thumb inside a 780px frame: 780 - 18 - 58 - 11 = 693.
+      // The reset leg carries NO transition. With one, re-firing sent the plate
+      // travelling back to the page over --motion-capture, and the 40ms later
+      // collapse reversed it mid-flight — so every run after the first was a few
+      // pixels of movement near the thumbnail. Only the collapse animates.
+      collapse: s.collapsed
+        ? { left: '20px', top: '693px', w: '46px', h: '58px', r: '6px', transition: 'all var(--motion-capture) var(--ease-out)' }
+        : { left: '62px', top: '164px', w: '274px', h: '420px', r: '2px', transition: 'none' },
+      fireShutter: () => (s.cap === 'stable' ? this.goCap('found') : this.fire(true)),
+
+      previewStates: [
+        { label: 'Ready', go: () => this.setState({ processing: false }), ...pill(!s.processing, 'var(--blue)') },
+        { label: 'Processing', go: () => this.setState({ processing: true }), ...pill(s.processing, 'var(--blue)') }
+      ],
+      prev: {
+        badge: s.processing ? 'working' : 'ready',
+        paper: mode.paper,
+        ink: mode.ink,
+        lines: ruled(210, 297, 11, 41),
+        processing: s.processing,
+        modes: Object.keys(MODES).map((k) => ({
+          label: MODES[k].label,
+          go: () => { this.setState({ mode: k, processing: true }); setTimeout(() => this.setState({ processing: false }), 700); },
+          bg: s.mode === k ? 'var(--card3)' : 'transparent',
+          fg: s.mode === k ? 'var(--fg1)' : 'var(--fg3)'
+        })),
+        modeNote: mode.note,
+        keepLabel: 'Keep page'
+      },
+
+      reviewStates: ['idle', 'combining', 'done', 'failed', 'empty'].map((k) => ({
+        label: k === 'idle' ? '5 pages' : k.charAt(0).toUpperCase() + k.slice(1),
+        go: () => this.setState({ review: k }),
+        ...pill(s.review === k, 'var(--blue)')
+      })),
+      rev: {
+        ...rv,
+        hasPages: !rv.empty,
+        pages: PAGES.map((p) => {
+          const land = p.orient === 'landscape';
+          return {
+            n: p.n,
+            label: p.label,
+            // A4, the right way round. Percentage pairs made a landscape page
+            // render square (1.05) while claiming to be 1.41.
+            ratio: land ? '297 / 210' : '210 / 297',
+            vbW: land ? 297 : 210,
+            vbH: land ? 210 : 297,
+            paper: p.label.startsWith('Colour') ? '#fbf7ef' : p.label.startsWith('Gray') ? '#f4f2ee' : '#ffffff',
+            ink: p.label.startsWith('Colour') ? '#2b3a52' : p.label.startsWith('Gray') ? '#3a3a38' : '#111111',
+            lines: ruled(land ? 297 : 210, land ? 210 : 297, 6, 13 + p.n * 7),
+            uploading: s.review === 'combining' && p.n === 3,
+            // A tick means "cleaned up and placed in the PDF" — the per-page
+            // work is real, but it is progress toward one file, not five uploads.
+            done: (s.review === 'combining' && p.n < 3) ||
+              (s.review === 'failed' && p.n < 5) ||
+              s.review === 'done',
+            failed: s.review === 'failed' && p.n === 5,
+            pct: '55%',
+            // The first page cannot move earlier and the last cannot move later.
+            // Dimmed and not-allowed rather than hidden: a control that vanishes
+            // shifts the two beside it, so the buttons stop landing where the
+            // eye left them.
+            upFg: p.n === 1 ? 'var(--bd2)' : 'var(--fg2)',
+            upCursor: p.n === 1 ? 'not-allowed' : 'pointer',
+            downFg: p.n === PAGES.length ? 'var(--bd2)' : 'var(--fg2)',
+            downCursor: p.n === PAGES.length ? 'not-allowed' : 'pointer'
+          };
+        }),
+        // Walks the real sequence rather than toggling, so the four upload
+        // states can be stepped through by pressing the button they belong to.
+        action: () => {
+          const next = { idle: 'combining', combining: 'done', done: 'idle', failed: 'done', empty: 'idle' };
+          this.setState({ review: next[s.review] });
+        }
+      }
+    };
+  }
+
+  /** Corner brackets, drawn inside the quad's own corners. */
+  brackets(quad) {
+    const pts = quad.split(' ').map((p) => p.split(',').map(Number));
+    const L = 30;
+    return pts.map((p, i) => {
+      const prev = pts[(i + 3) % 4];
+      const next = pts[(i + 1) % 4];
+      const to = (q) => {
+        const dx = q[0] - p[0], dy = q[1] - p[1];
+        const m = Math.hypot(dx, dy) || 1;
+        return [p[0] + (dx / m) * L, p[1] + (dy / m) * L];
+      };
+      const a = to(prev), b = to(next);
+      return { d: 'M' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) + ' L' + p[0] + ' ' + p[1] + ' L' + b[0].toFixed(1) + ' ' + b[1].toFixed(1) };
+    });
+  }
+}
+</script>
+</body>
+</html>

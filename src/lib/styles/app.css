@@ -175,6 +175,70 @@
 	 * smaller keeps its own padding and only stops being SHORTER than this.
 	 */
 	--control-h: 36px;
+
+	/* ── Scan engine ──────────────────────────────────────────────────────────
+	 * Five axes the scan flow reads. Everything in src/lib/scan/client consumes
+	 * these; none of them is written as a literal in a component.
+	 */
+
+	/* Scrim. These are `--plate`'s DARK values, held constant when the theme
+	 * flips — the one place the scan flow does not follow the theme, and it is
+	 * deliberate. The chrome AROUND the viewfinder is themed; what floats ON the
+	 * feed is not, because a camera frame's luminance is unknown and changes
+	 * every frame. Do NOT add a light override: near-white text is correct over
+	 * a light page and unreadable over a dark kitchen at night, which is the
+	 * primary usage context. */
+	--scan-plate: rgba(14, 17, 23, 0.72);
+	--scan-plate-edge: rgba(14, 17, 23, 0.86);
+	--scan-ink: #e6e9ef;
+	--scan-ink-2: #c5ccd6;
+
+	/* Detection state. The primary signal is stroke WEIGHT and DASH; colour only
+	 * reinforces it, so the four states stay separable in greyscale and over an
+	 * unpredictable backdrop. Rejected dashes TIGHTER than searching — a
+	 * different rhythm, not just a different hue. */
+	--detect-searching: var(--fg3);
+	--detect-found: var(--blue);
+	--detect-stable: var(--green);
+	--detect-rejected: var(--yellow);
+	--detect-w-searching: 1.5px;
+	--detect-w-found: 2px;
+	--detect-w-stable: 3px;
+	--detect-dash-searching: 7 9;
+	--detect-dash-rejected: 4 4;
+
+	/* Safe area. The home indicator sits exactly where the shutter wants to be.
+	 * Left and right matter too — a landscape phone has insets on the long
+	 * edges. Every edge control is inset by the relevant token PLUS its own
+	 * padding, never by a guessed constant. */
+	--safe-top: env(safe-area-inset-top, 0px);
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-left: env(safe-area-inset-left, 0px);
+	--safe-right: env(safe-area-inset-right, 0px);
+
+	/* Touch. 44 is the floor, not the target, and it applies to every control in
+	 * the scan flow — including ones inheriting the base input layer, which
+	 * resolves to 34px: right for a desktop form row, ten pixels short on a
+	 * phone held one-handed. */
+	--touch-min: 44px;
+	--shutter-size: 72px;
+
+	/* Motion. The easing is seeded from the one transition the product already
+	 * has; the durations are NOT, and that took three attempts. 90ms is right
+	 * for a 1px tint changing in place and is below the threshold of visible
+	 * movement across the height of a screen. 300ms still read as a flicker on a
+	 * real phone. 700ms is long enough to follow the page down to the counter —
+	 * which is the information the beat carries — and still ends before you can
+	 * study it. */
+	/* RESERVED, and read by nothing today: these three belong to the capture
+	   collapse — the outline travelling into the thumbnail — which the design
+	   specifies and no rule has implemented. The values are kept because they
+	   were measured rather than picked, and the reasoning above is what would
+	   otherwise have to be rediscovered. */
+	--motion-snap: 90ms;
+	--motion-capture: 700ms;
+	--motion-settle: 220ms;
+	--ease-out: cubic-bezier(0.2, 0, 0.2, 1);
 }
 
 html[data-ledger-theme='light'] {
@@ -580,10 +644,26 @@ textarea {
 }
 
 /* Honour a stated preference for less motion: the colour change still reports
-   the press, which is the part that carries the information. */
+   the press, which is the part that carries the information.
+
+   TRANSITIONS, not only animations. An animation-only override is what a first
+   pass naturally writes, and it neutralises the obvious sweeps while leaving
+   every transition — the outline settling onto a page, a mode change — running
+   at full speed. Both are motion; the preference asks about both. */
 @media (prefers-reduced-motion: reduce) {
-	.btn {
-		transition: background-color 90ms ease-out;
+	*,
+	*::before,
+	*::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+	}
+	/* Re-asserted, not overlooked. The blanket rule above would otherwise
+	   silently reverse the decision the first paragraph of this comment
+	   records, which is a real regression disguised as a consistency fix. */
+	.btn,
+	button {
+		transition-duration: 90ms !important;
 	}
 	.btn:active:not(:disabled),
 	.btn-primary:active:not(:disabled) {

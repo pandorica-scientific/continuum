@@ -68,7 +68,9 @@
 		return () => clearInterval(timer);
 	});
 
-	async function uploadFiles(files: FileList) {
+	// FileList from a browse or a drop, File[] from the scan engine, which
+	// builds its PDF in memory and has no FileList to hand over.
+	async function uploadFiles(files: FileList | File[]) {
 		const body = new FormData();
 		for (const f of files) body.append('statements', f);
 		if (assignAccountId) body.set('accountId', assignAccountId);
@@ -544,14 +546,20 @@
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
+	/* A taller, more prominent target than elsewhere — importing statements is
+	   what this screen is for — but still a ROW: the dropzone is a one-line
+	   control now, and a column layout drops its capture buttons onto a second
+	   line under the copy. */
 	:global(.dropzone) {
 		padding: 34px 24px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 7px;
+		justify-content: center;
 		text-align: center;
 		background: var(--card);
+	}
+	/* Do not let the copy claim the whole row, or the buttons are pushed to the
+	   far edge instead of sitting with the text they belong to. */
+	:global(.dropzone .title) {
+		flex: 0 1 auto;
 	}
 	.assign {
 		display: flex;

@@ -5,6 +5,7 @@
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { SHELVES } from '$lib/documents';
 	import { syncedDocumentState } from '$lib/ui/state';
 
@@ -147,7 +148,15 @@
 					{/if}
 				</div>
 			</div>
-			<label><span>File (optional)</span><input name="file" type="file" /></label>
+			<div class="field">
+				<span>File (optional)</span>
+				<UploadDropzone
+					name="file"
+					accept="application/pdf,image/*"
+					idleText="Drop a file here, or click to browse"
+					description="PDF, PNG or JPEG"
+				/>
+			</div>
 			<div class="field">
 				<span>Expiry (optional)</span>
 				<div class="expiry">
