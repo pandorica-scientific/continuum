@@ -27,3 +27,16 @@ export { deflate, isBilevel, packBilevel } from './bilevel.ts';
 export { assemblePdf, type RenderedPage } from './pdf.ts';
 export { DETECT_WIDTH, detectOnce, orderCorners } from './detect.ts';
 export { renderPage } from './enhance.ts';
+export {
+	angleBetween,
+	distanceToLine,
+	fitLine,
+	intersect,
+	lineAngle,
+	lineThrough,
+	quadAngles,
+	refineQuad,
+	worstCornerSkew,
+	type Line,
+	type Segment
+} from './lines.ts';

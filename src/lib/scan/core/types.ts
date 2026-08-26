@@ -35,7 +35,7 @@ export type DetectState =
 	| { kind: 'searching' }
 	| { kind: 'detected'; corners: Corners }
 	| { kind: 'stable'; corners: Corners }
-	| { kind: 'rejected'; corners: Corners | null; reason: 'blurry' | 'dark' | 'small' };
+	| { kind: 'rejected'; corners: Corners | null; reason: 'blurry' | 'dark' | 'small' | 'angle' };
 
 export interface ScanPage {
 	id: string;

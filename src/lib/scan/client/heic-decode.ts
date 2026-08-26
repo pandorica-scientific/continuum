@@ -12,6 +12,14 @@
 
 import type { Frame } from '../core/index.ts';
 
+function isPrimary(image: { is_primary?(): boolean }): boolean {
+	try {
+		return image.is_primary?.() === true;
+	} catch {
+		return false;
+	}
+}
+
 export async function decodeHeic(bytes: Uint8Array): Promise<Frame> {
 	const { default: libheif } = await import('libheif-js');
 	const decoder = new libheif.HeifDecoder();
@@ -20,7 +28,18 @@ export async function decodeHeic(bytes: Uint8Array): Promise<Frame> {
 
 	// The PRIMARY item, not images[0]: a burst or a Live Photo carries several
 	// and the first is not reliably the one the user saw in their gallery.
-	const primary = images.find((image) => image.is_primary?.()) ?? images[0];
+	//
+	// `is_primary` has to be called defensively. libheif-js defines it, so a
+	// `typeof` check passes, but its body calls a bare global the bundle never
+	// declares:
+	//
+	//   is_primary = function () { return !!heif_image_handle_is_primary_image(this.handle) }
+	//
+	// so invoking it throws ReferenceError — on every file, for every image.
+	// Optional chaining does not help: the function exists, it just does not
+	// work. Falling back to the first image is right anyway; the overwhelming
+	// majority of HEICs hold exactly one.
+	const primary = images.find((image) => isPrimary(image)) ?? images[0];
 
 	const width = primary.get_width();
 	const height = primary.get_height();

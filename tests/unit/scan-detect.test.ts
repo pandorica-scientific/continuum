@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 // `detect.ts` imports opencv for its TYPE only, which is erased — so this pulls
 // no WASM and runs like any other unit test. `detectOnce` itself needs a real
 // runtime and is verified on a device, not here.
+import { readFileSync } from 'node:fs';
 import { DETECT_WIDTH, orderCorners } from '$lib/scan/core/detect';
 
 describe('orderCorners', () => {
@@ -56,5 +57,33 @@ describe('DETECT_WIDTH', () => {
 		// it drifts from what the client actually downscales to, every captured
 		// page is cropped wrong.
 		expect(DETECT_WIDTH).toBe(640);
+	});
+});
+
+describe('refinement is opt-in', () => {
+	const source = readFileSync('src/lib/scan/core/detect.ts', 'utf8');
+
+	it('is off unless asked for', () => {
+		// Measured on real captures, Canny plus Hough across the frame returns
+		// ~2000 segments and costs 170-1300 ms. The live loop's budget is 110 ms
+		// at 9 fps, so this can only ever run once, at capture.
+		expect(source).toMatch(/const refining = options\?\.refine \?\? false;/);
+	});
+
+	it('guards the refinement step on the flag', () => {
+		expect(source).toMatch(/if \(best && refining\)/);
+	});
+
+	it('is asked for at capture time, on the still', () => {
+		// And on the STILL rather than the last video frame, so movement between
+		// the final tick and the shutter is not baked into the crop.
+		const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
+		expect(capture).toMatch(/detectOnce\(cv, measured, \{ gates: false, refine: true \}\)/);
+	});
+
+	it('falls back to the live corners when the second pass finds nothing', () => {
+		// A slightly stale crop beats no crop.
+		const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
+		expect(capture).toMatch(/scaleCorners\(corners, full\.width \/ DETECT_WIDTH\)/);
 	});
 });

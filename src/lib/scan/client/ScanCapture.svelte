@@ -12,7 +12,7 @@
 	} from '../core/index.ts';
 	import { loadCv } from './opencv-load.ts';
 	import { createCamera } from './camera.svelte.ts';
-	import { frameFromVideo, stillFromTrack } from './frame.ts';
+	import { frameFromBitmapSource, frameFromVideo, stillFromTrack } from './frame.ts';
 	import {
 		DETECT_INTERVAL_MS,
 		GUIDANCE_DEBOUNCE_MS,
@@ -33,6 +33,10 @@
 		onchoosefile: () => void;
 		pageCount?: number;
 	} = $props();
+
+	/** Where the capture-time detection pass runs: twice the live width, so a
+	 *  refined corner is worth having. */
+	const REFINE_WIDTH = 1280;
 
 	const camera = createCamera();
 	const stability = createStability(DETECT_WIDTH);
@@ -145,10 +149,29 @@
 			// Sensor resolution for the page itself — not the 640px detection
 			// frame, and not the video track's 1080p either.
 			const full = await stillFromTrack(camera.track, video);
-			// Scaled from the STILL, not the video: ImageCapture may hand back a
-			// larger image than the track, and scaling by the wrong one puts every
-			// corner in the wrong place — a crop that cuts the page in half.
-			const scaled = corners ? scaleCorners(corners, full.width / DETECT_WIDTH) : null;
+
+			// Detect again, on the STILL, at twice the live resolution and with
+			// edge refinement on.
+			//
+			// Two things are wrong with reusing the live corners. They describe a
+			// frame captured a moment earlier, so any movement between the last
+			// tick and the shutter is baked into the crop; and they come from a
+			// 640px pass whose corners are a polygon approximation of a blurred
+			// mask. This pass costs a few hundred milliseconds, paid once, while
+			// the preview is being prepared anyway.
+			const cv = await loadCv();
+			const measured = frameFromBitmapSource(full, REFINE_WIDTH);
+			const settled = detectOnce(cv, measured, { gates: false, refine: true });
+			const found = 'corners' in settled ? settled.corners : null;
+
+			const scaled = found
+				? scaleCorners(found, full.width / measured.width)
+				: // Fall back to the live corners rather than to nothing: a slightly
+					// stale crop beats no crop, and `renderPage` treats null as the
+					// full frame.
+					corners
+					? scaleCorners(corners, full.width / DETECT_WIDTH)
+					: null;
 			oncapture(full, scaled);
 		} finally {
 			shooting = false;
@@ -168,6 +191,25 @@
 	 * draws that element to a canvas, reads pure black, and reports "Too dark —
 	 * try more light" about a camera that never started.
 	 */
+	/**
+	 * Re-measure when the window changes shape.
+	 *
+	 * The video's own `resize` event fires when the STREAM's intrinsic size
+	 * changes, not when its element does — so rotating the phone changes the box
+	 * the picture is drawn into while the stream stays 4:3, the measurement goes
+	 * stale, and the outline drifts off the page it is tracing. `orientationchange`
+	 * as well as `resize`, because iOS does not always fire the latter on a turn.
+	 */
+	$effect(() => {
+		const remeasure = () => measurePicture();
+		window.addEventListener('resize', remeasure);
+		window.addEventListener('orientationchange', remeasure);
+		return () => {
+			window.removeEventListener('resize', remeasure);
+			window.removeEventListener('orientationchange', remeasure);
+		};
+	});
+
 	$effect(() => {
 		if (camera.state.kind !== 'live' || !video) return;
 		const stream = camera.state.stream;
@@ -345,8 +387,25 @@
 	.capture {
 		position: fixed;
 		inset: 0;
+		/* Not `inset: 0` alone.
+		 *
+		 * On iOS Safari a fixed element sized that way resolves against the LARGE
+		 * viewport — the full height including the strip behind the collapsing
+		 * browser chrome — so the panel ends up taller than the part you can see
+		 * and the page scrolls to make up the difference. `100dvh` follows the
+		 * visible area as the chrome expands and contracts; `100vh` is the
+		 * fallback for anything that predates it, and is what `inset: 0` would
+		 * have given anyway. */
+		height: 100vh;
+		height: 100dvh;
 		z-index: 40;
 		background: #000;
+		overflow: hidden;
+		/* A drag on a scan screen is not a scroll. Without this the browser
+		   still tries to pan, which on iOS shows as the whole panel rubber-banding
+		   away from the top of the screen. */
+		touch-action: none;
+		overscroll-behavior: none;
 		overflow: hidden;
 	}
 	video {
@@ -423,6 +482,15 @@
 	}
 	.slot.end {
 		justify-content: flex-end;
+	}
+	/* Landscape on a PHONE. The guidance chip is placed clear of the deck by a
+	   distance that assumes a tall screen; on a 390px one that pushes it into
+	   the middle of the page being framed. The deck itself already sits on the
+	   bottom edge and needs no change — a thumb reaches it either way round. */
+	@media (orientation: landscape) and (max-height: 620px) {
+		.guidance {
+			bottom: calc(var(--safe-bottom) + 96px);
+		}
 	}
 	.shutter {
 		position: relative;

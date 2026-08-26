@@ -116,10 +116,13 @@ describe('guidanceFor', () => {
 		expect(guidanceFor({ kind: 'rejected', corners: null, reason: 'small' })).toBe(
 			'Move closer to the page'
 		);
+		expect(guidanceFor({ kind: 'rejected', corners: null, reason: 'angle' })).toBe(
+			'Hold the camera flat over the page'
+		);
 	});
 
 	it('tells the user what to do, not what the sensor thinks', () => {
-		const lines = (['blurry', 'dark', 'small'] as const).map((reason) =>
+		const lines = (['blurry', 'dark', 'small', 'angle'] as const).map((reason) =>
 			guidanceFor({ kind: 'rejected', corners: null, reason })
 		);
 		for (const line of lines) {

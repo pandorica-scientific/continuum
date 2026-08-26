@@ -71,10 +71,17 @@ export function guidanceFor(state: DetectState): string {
 		case 'stable':
 			return 'Got it — hold still';
 		case 'rejected':
-			return state.reason === 'blurry'
-				? 'Hold still — that came out blurry'
-				: state.reason === 'dark'
-					? 'Too dark — try more light'
-					: 'Move closer to the page';
+			switch (state.reason) {
+				case 'blurry':
+					return 'Hold still — that came out blurry';
+				case 'dark':
+					return 'Too dark — try more light';
+				case 'angle':
+					// Says what to do with the hand holding the phone, not what the
+					// geometry looked like.
+					return 'Hold the camera flat over the page';
+				default:
+					return 'Move closer to the page';
+			}
 	}
 }

@@ -70,6 +70,17 @@
 	.screen {
 		position: fixed;
 		inset: 0;
+		/* Not `inset: 0` alone.
+		 *
+		 * On iOS Safari a fixed element sized that way resolves against the LARGE
+		 * viewport — the full height including the strip behind the collapsing
+		 * browser chrome — so the panel ends up taller than the part you can see
+		 * and the page scrolls to make up the difference. `100dvh` follows the
+		 * visible area as the chrome expands and contracts; `100vh` is the
+		 * fallback for anything that predates it, and is what `inset: 0` would
+		 * have given anyway. */
+		height: 100vh;
+		height: 100dvh;
 		z-index: 40;
 		display: flex;
 		flex-direction: column;
@@ -80,6 +91,12 @@
 		padding-bottom: calc(var(--safe-bottom) + var(--space-8));
 		background: var(--bg);
 		color: var(--fg1);
+		overflow: hidden;
+		/* A drag on a scan screen is not a scroll. Without this the browser
+		   still tries to pan, which on iOS shows as the whole panel rubber-banding
+		   away from the top of the screen. */
+		touch-action: none;
+		overscroll-behavior: none;
 	}
 	.art {
 		flex: 1;
