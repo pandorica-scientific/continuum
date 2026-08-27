@@ -2,6 +2,15 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.6.2 — 2026-08-27
+
+> Photographing a page is something you do with the device in your hand, not the one on your desk.
+
+### 🔧 Changed
+
+- 📷 **The camera and scan buttons are offered to phones and tablets rather than to a mouse** — `capture="environment"` is ignored by desktop browsers, so on a computer the photo button opened the same file picker that clicking the field already opens, and the scanner would have opened a webcam, which is a poor way to photograph a page and never what it was built for; a photo dropped or browsed there still becomes a cropped, flattened PDF, so the desktop route to a scan is the one it was always going to be — take the picture on your phone, put the file here
+- 🖐️ **A tablet keeps them with a keyboard attached** — the question is whether a finger is available at all rather than which pointer happens to be primary, because an iPad on a Magic Keyboard and a Surface under its type cover both answer "a trackpad" and are both still tablets with a rear camera; a touchscreen laptop keeps a button it does not need, which is the cheaper of the two mistakes
+
 ## 0.6.1 — 2026-08-27
 
 > A register you can read is one whose rows are not all shouting at once.

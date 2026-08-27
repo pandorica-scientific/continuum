@@ -32,6 +32,13 @@ describe('the upload dropzone as a form field', () => {
 		expect(body).not.toContain('name=');
 	});
 
+	it('still reaches the scan pipeline from a computer, through the drop path', () => {
+		// What makes hiding the buttons affordable: a photo dropped or browsed
+		// anywhere still becomes a cropped, flattened PDF.
+		const source = readFileSync('src/lib/components/UploadDropzone.svelte', 'utf8');
+		expect(source).toContain('offersScan && picked.length === 1 && isImageFile(picked[0])');
+	});
+
 	it('says what it accepts on hover, not as a permanent second line', () => {
 		// A second line costs every form a taller control forever, to answer a
 		// question the user asks once.
