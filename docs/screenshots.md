@@ -34,12 +34,14 @@ Balances stay in their own currency. Only totals convert.
 
 ## Transactions
 
-Search, split a receipt across categories, tag into projects.
+A month at a time: what it took in and what it spent, opened into its rows, and
+a row opened into everything you can do to it — file it, split a receipt across
+categories, tag it into a project, or turn it into a rule.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/transactions-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/transactions-light-web.png">
-  <img src="screenshots/transactions-dark-web.png" alt="Transactions — Search, split a receipt across categories, tag into projects">
+  <img src="screenshots/transactions-dark-web.png" alt="Transactions — a register of months, one of them opened into its rows">
 </picture>
 
 ## Import

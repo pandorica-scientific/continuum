@@ -8,9 +8,14 @@
  *   docs/screenshots/<screen>-<dark|light>-<web|mobile>.png
  *
  * Usage:
+ *   npm install --no-save playwright
  *   DEMO=1 CONTINUUM_PORT=8081 ORIGIN=http://localhost:8081 \
  *     docker compose up -d app db
  *   SHOT_BASE_URL=http://localhost:8081 node scripts/take-screenshots.mjs
+ *
+ * Playwright is deliberately NOT a dependency. Nothing but this script wants
+ * it, it drags a browser download behind it, and screenshots are regenerated a
+ * few times a release — so it is installed for the run and not kept.
  *
  * ORIGIN has to match the address you point this at, or every form POST —
  * including the sign-in — is refused as cross-origin and the run dies on the
@@ -62,12 +67,19 @@ const THEMES = ['dark', 'light'];
  * `phone` marks the handful the README actually shows in a phone frame. Every
  * screen reflows to one column, but committing a retina phone capture of all
  * eleven costs several megabytes of repository for pictures nothing links to.
+ *
+ * `open` is a selector to click before the shot. The register collapses to a
+ * row per month, so photographed as it loads it is a table of totals with no
+ * transaction in it — a picture of the one thing that screen is not for. The
+ * selector is followed rather than a `?month=` in the path because which month
+ * is newest moves with the demo seed, and a path pinned to one would go blank
+ * the moment the seed rolled past it.
  */
 const SCREENS = [
 	{ name: 'overview', path: '/overview', settle: 900, phone: true },
 	{ name: 'cashflow', path: '/cashflow', settle: 900 },
 	{ name: 'accounts', path: '/accounts', settle: 600 },
-	{ name: 'transactions', path: '/transactions', phone: true },
+	{ name: 'transactions', path: '/transactions', phone: true, open: '.matrix a.row', settle: 400 },
 	{ name: 'import', path: '/import' },
 	{ name: 'rules', path: '/rules' },
 	{ name: 'tags', path: '/tags', settle: 600 },
@@ -166,6 +178,16 @@ async function capture(browser, device, theme) {
 		// on an idle signal the app does not emit, but it is honest about what
 		// it is waiting for.
 		if (screen.settle) await page.waitForTimeout(screen.settle);
+		// Expanding a row navigates — the open one lives in the URL — so wait for
+		// the load rather than a fixed pause after the click.
+		if (screen.open) {
+			const row = page.locator(screen.open).first();
+			if (await row.count()) {
+				await row.click();
+				await page.waitForLoadState('networkidle');
+				await page.waitForTimeout(300);
+			}
+		}
 		// Some screens carry a list above the thing worth photographing.
 		// scrollIntoViewIfNeeded() is not enough: it treats an element peeking
 		// over the bottom edge as already visible and does nothing.
