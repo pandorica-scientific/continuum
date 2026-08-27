@@ -2,7 +2,7 @@ import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { deleteTag, loadTagsFor, setTransactionTags, tagTotals, tagUsage } from '$lib/server/tags';
-import { registerPage } from '$lib/server/transactions';
+import { registerMonths, registerPage } from '$lib/server/transactions';
 import { DEFAULT_PAGE_SIZE } from '$lib/transactions/filter';
 import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 
@@ -23,6 +23,7 @@ const filter = (overrides: Partial<RegisterFilter> = {}): RegisterFilter => ({
 	tagId: null,
 	includeTransfers: false,
 	sourceMethod: null,
+	month: null,
 	page: 1,
 	pageSize: DEFAULT_PAGE_SIZE,
 	...overrides
@@ -287,5 +288,67 @@ describe('tag persistence', () => {
 
 	it('says so when the tag is not there', async () => {
 		expect(await deleteTag(rowId('nope'), testDb)).toBe(false);
+	});
+});
+
+/**
+ * The register lists a month per row and opens one at a time. Two rules carry
+ * that: a month's figures come from the same effective lines the register's own
+ * footing does, and the open month narrows the transactions loaded WITHOUT
+ * narrowing the list of months — a register showing only the row it had
+ * expanded would have nothing left to expand into.
+ */
+describe('register months', () => {
+	beforeEach(async () => {
+		await harness.sql.unsafe(`
+			insert into "transaction"
+				(id, dedup_fingerprint, account_id, booked_on, amount_minor, fee_minor, currency, category_id, review_state)
+			values
+				('${rowId('may-pay')}', '${rowId('may-pay')}', '${rowId('a1')}', '2026-05-29', 10000, null, 'CZK', 'salary', 'confirmed'),
+				('${rowId('jun-pay')}', '${rowId('jun-pay')}', '${rowId('a1')}', '2026-06-30', 20000, null, 'CZK', 'salary', 'confirmed'),
+				('${rowId('jun-shop')}', '${rowId('jun-shop')}', '${rowId('a1')}', '2026-06-02', -5000, 100, 'CZK', 'groceries', 'confirmed'),
+				('${rowId('jun-rent')}', '${rowId('jun-rent')}', '${rowId('a1')}', '2026-06-01', -3000, null, 'CZK', 'groceries', 'confirmed');
+		`);
+	});
+
+	it('groups by booked month, newest first, with in and out kept apart', async () => {
+		const months = await registerMonths(filter(), testDb);
+
+		expect(months.map((m) => m.month)).toEqual(['2026-06', '2026-05']);
+		expect(months[0].count).toBe(3);
+		// The fee comes off the line it belongs to, exactly as the register's own
+		// totals take it — so 5000 + 100 went out, not 5000.
+		expect(months[0].byCurrency).toEqual([
+			{ currency: 'CZK', inMinor: 20000n, outMinor: 8100n, sumMinor: 11900n }
+		]);
+		expect(months[1].byCurrency).toEqual([
+			{ currency: 'CZK', inMinor: 10000n, outMinor: 0n, sumMinor: 10000n }
+		]);
+	});
+
+	it('narrows to what the filter selects, on the same effective lines', async () => {
+		const months = await registerMonths(filter({ categoryId: 'groceries' }), testDb);
+
+		// May held only pay, so it drops out entirely rather than reporting zero.
+		expect(months.map((m) => m.month)).toEqual(['2026-06']);
+		expect(months[0].count).toBe(2);
+		expect(months[0].byCurrency).toEqual([
+			{ currency: 'CZK', inMinor: 0n, outMinor: 8100n, sumMinor: -8100n }
+		]);
+	});
+
+	it('lists every month whichever one is open', async () => {
+		const open = filter({ month: '2026-06' });
+
+		// The month says which row is EXPANDED, so it governs the transactions...
+		const page = await registerPage(open, testDb);
+		expect(page.total).toBe(3);
+		expect(page.rows.every((r) => r.bookedAt.startsWith('2026-06'))).toBe(true);
+
+		// ...and nothing about the list of months.
+		expect((await registerMonths(open, testDb)).map((m) => m.month)).toEqual([
+			'2026-06',
+			'2026-05'
+		]);
 	});
 });

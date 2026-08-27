@@ -39,6 +39,17 @@ export interface RegisterFilter {
 	 * ledger records this per row precisely so the question can be asked.
 	 */
 	sourceMethod: string | null;
+	/**
+	 * Which month the register has expanded, as `YYYY-MM`, or null for none.
+	 *
+	 * Deliberately NOT a date filter, though it narrows on the same column. The
+	 * register lists a month per row and pages that list on its own; `month` says
+	 * which of those rows is open, and so narrows the transactions loaded and
+	 * nothing else. The month summaries are always computed with it cleared —
+	 * a register listing only the month it had expanded would have nothing left
+	 * to expand into.
+	 */
+	month: string | null;
 	page: number;
 	/** How many rows one page holds. One of PAGE_SIZES. */
 	pageSize: number;
@@ -117,6 +128,24 @@ function isoDate(params: URLSearchParams, key: string): string | null {
 	return parsed.toISOString().slice(0, 10) === raw ? raw : null;
 }
 
+/** A `YYYY-MM` month, with a month number that exists. */
+function isoMonth(params: URLSearchParams, key: string): string | null {
+	const raw = text(params, key);
+	return raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : null;
+}
+
+/**
+ * The first day of the month AFTER the one given.
+ *
+ * A half-open upper bound, so the month's own length never has to be worked
+ * out — no leap year, no 30-versus-31. Exported because the register's SQL and
+ * its tests both need the same answer.
+ */
+export function monthAfter(month: string): string {
+	const [year, index] = month.split('-').map(Number);
+	return index === 12 ? `${year + 1}-01-01` : `${year}-${String(index + 1).padStart(2, '0')}-01`;
+}
+
 /** Bounds are magnitudes — the sign is the direction filter's job. */
 function bound(params: URLSearchParams, key: string, baseCurrency: string): bigint | null {
 	const raw = text(params, key);
@@ -155,6 +184,7 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		tagId: text(params, 'tag'),
 		includeTransfers: params.get('transfers') === '1',
 		sourceMethod: text(params, 'source'),
+		month: isoMonth(params, 'month'),
 		// Clamped, not merely checked for integerness: Number.isInteger(1e21) is
 		// true, so ?page=1e21 rendered as OFFSET 5e+22 and Postgres rejected the
 		// statement — a 500 from a hand-edited URL.

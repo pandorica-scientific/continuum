@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { historyTicks } from '$lib/charts/ticks';
 import { flowData, monthlyHistory, type Period } from '$lib/server/cashflow';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { PageServerLoad } from './$types';
@@ -42,7 +41,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		history: {
 			months: history,
-			ticks: historyTicks(history.map((m) => m.month)),
 			negativeMonths,
 			savedRate
 		}

@@ -2,6 +2,28 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.6.1 — 2026-08-27
+
+> A register you can read is one whose rows are not all shouting at once.
+
+### ✨ Added
+
+- 🪄 **A transaction can start a rule** — "Make a rule" carries the counterparty and what the row is filed as into the rule editor, which until now opened blank and asked you to retype what you had just been looking at
+- 📈 **The cash-flow history has an axis, and answers when you rest on it** — every month on record now reads against a labelled scale rather than only against the bar beside it, and hovering one gives what came in, what went out, what was kept and what share of the month that was
+
+### 🔧 Changed
+
+- 📒 **The register is a table of months rather than a run of cards** — a month collapses to what it earned and spent, opens into its transactions, and a transaction opens into everything you can do to it, so reading the ledger no longer costs the price of editing it
+- 🔢 **The months and the transactions inside one page separately** — walking the record by month and walking a single month's rows are different movements, and neither moves the other
+- 📅 **The tax table opens with every year collapsed** — the newest year used to open itself, so the table never showed the shape it exists for, every year against every other, until something was collapsed first
+
+### 🐛 Fixed
+
+- 📱 **The Salary and Tax summary figures line up on a phone** — the first and last figures pull to the row's outer edges, which spreads them across a wide row and leaves them ragged the moment they stack into one column
+- 📏 **The Salary and Tax charts stop printing their axis values over one another** — the geometry is a fixed viewBox, so a narrower card is a shorter chart, and on a phone eight values shared about a hundred pixels; the plot scrolls sideways now, as the tables beside it do
+- 📐 **A gridline is labelled with the figure it actually sits on** — the axis rounded each label on its own until they merely differed from one another, which printed `0 · 653k · 1M · 2M · 3M` for five even steps of 653 000: two units on one scale, and a top line overstating itself by a sixth; every label now shares the step its largest value takes and carries the precision that keeps it nearer its own gridline than its neighbour's
+- 🏷️ **"Base" and "Bonus" stop overlapping in the Salary table's heading** — both columns had a floor of zero, so the table's scroll width was the only thing holding them open and it left each about 35px, narrower than the word printed in it
+
 ## 0.6.0 — 2026-08-26
 
 > Paper is the part of a household ledger that never arrives as a file.

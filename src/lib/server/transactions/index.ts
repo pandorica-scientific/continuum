@@ -4,7 +4,7 @@
 // learned rule has to be replayed by `pairAndCategorise`, and ingest already
 // imports categorize — putting it there would close a cycle.
 
-import { and, asc, desc, eq, gte, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	account,
@@ -24,7 +24,7 @@ import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';
 import { attributeSalary, recordSalary, rememberAttribution } from '$lib/server/salary';
-import { UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
+import { monthAfter, UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
 import type { EnumValue } from '$lib/enums';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
@@ -178,6 +178,14 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 	if (filter.maxMinor !== null)
 		clauses.push(sql`${magnitude} <= ${filter.maxMinor.toString()}::numeric`);
 
+	// The expanded month. A half-open range rather than to_char, so it reads the
+	// same index the from/to bounds above do — a register that had to compute a
+	// string per row to find one month would scan the whole ledger to open it.
+	if (filter.month) {
+		clauses.push(gte(transaction.bookedOn, `${filter.month}-01`));
+		clauses.push(lt(transaction.bookedOn, monthAfter(filter.month)));
+	}
+
 	if (filter.reviewState) clauses.push(eq(transaction.reviewState, filter.reviewState));
 
 	// Own-account transfers are noise in a ledger view, as they are in cash
@@ -220,9 +228,25 @@ interface RegisterRow {
 interface RegisterPage {
 	rows: RegisterRow[];
 	total: number;
-	/** Signed sums over the whole filtered set, never re-denominated. */
+	/** Signed sums over everything the filter selects, never re-denominated. */
 	totals: { currency: string; sumMinor: bigint }[];
 	pageCount: number;
+}
+
+/** One month of the register, as its collapsed row states it. */
+interface RegisterMonth {
+	/** `YYYY-MM`. */
+	month: string;
+	/** How many transactions it holds, over every currency. */
+	count: number;
+	/**
+	 * What came in and what went out, per currency, both as magnitudes.
+	 *
+	 * Never re-denominated and never netted into one figure: two currencies in
+	 * one month are two facts, and adding them would invent a third that is true
+	 * in neither. `sumMinor` is what the month came to, signed.
+	 */
+	byCurrency: { currency: string; inMinor: bigint; outMinor: bigint; sumMinor: bigint }[];
 }
 
 /** 10^(minor digits) per row, derived from the currencies actually present. */
@@ -321,6 +345,65 @@ export async function registerPage(
 		totals,
 		pageCount: Math.max(1, Math.ceil(total / filter.pageSize))
 	};
+}
+
+/**
+ * Every month the filter selects, newest first, with what it came to.
+ *
+ * The register's collapsed rows. Summed from the same effective lines as
+ * `registerPage`'s totals — split resolution, fee allocation, the category and
+ * tag predicates — so a month's figures and the register's own footing agree
+ * rather than being two answers to the same question.
+ *
+ * `filter.month` is deliberately cleared before the predicate is built: it says
+ * which row is EXPANDED, and a list that showed only the row it had opened
+ * would have nothing left to open. One aggregate row per month per currency
+ * crosses the wire; a decade of a two-currency household is a couple of hundred
+ * of them, which is why this is loaded whole rather than paged in the database.
+ */
+export async function registerMonths(
+	filter: RegisterFilter,
+	handle: Queryable = db
+): Promise<RegisterMonth[]> {
+	const scope: RegisterFilter = { ...filter, month: null };
+	const needsScale = scope.minMinor !== null || scope.maxMinor !== null;
+	const rowFactor = needsScale ? await currencyRowFactor(handle) : undefined;
+	const month = sql<string>`to_char(${transaction.bookedOn}, 'YYYY-MM')`;
+
+	const rows = await handle
+		.select({
+			month,
+			currency: transaction.currency,
+			count: sql<number>`count(distinct ${transaction.id})::integer`.mapWith(Number),
+			// Magnitudes, split by sign: a month's "in" is the sum of its credits,
+			// not the positive part of its net.
+			inMinor: sql`sum(greatest(selected_line.amount_minor, 0::bigint))`.mapWith(
+				transaction.amountMinor
+			),
+			outMinor: sql`sum(greatest(-selected_line.amount_minor, 0::bigint))`.mapWith(
+				transaction.amountMinor
+			)
+		})
+		.from(transaction)
+		.innerJoin(sql`lateral (${selectedEffectiveLines(scope)}) selected_line`, sql`true`)
+		.where(registerTransactionWhere(scope, rowFactor))
+		.groupBy(month, transaction.currency)
+		.orderBy(desc(month), asc(transaction.currency));
+
+	const byMonth = new Map<string, RegisterMonth>();
+	for (const row of rows) {
+		if (!byMonth.has(row.month))
+			byMonth.set(row.month, { month: row.month, count: 0, byCurrency: [] });
+		const entry = byMonth.get(row.month)!;
+		entry.count += row.count;
+		entry.byCurrency.push({
+			currency: row.currency,
+			inMinor: row.inMinor,
+			outMinor: row.outMinor,
+			sumMinor: row.inMinor - row.outMinor
+		});
+	}
+	return [...byMonth.values()];
 }
 
 type FileResult = { ok: true } | { ok: false; status: number; message: string };

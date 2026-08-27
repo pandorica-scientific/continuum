@@ -23,14 +23,16 @@
 
 	type Row = (typeof data.statements)[number];
 
-	// The most recent year is the one a person opening this screen most likely
-	// wants, and defaulting it open makes the expansion discoverable without a
-	// hint that would otherwise have to be written somewhere.
+	// Closed on arrival. The newest year used to open itself, which meant the
+	// table never showed the shape it is for — every year against every other —
+	// until something was collapsed first. The chevron on every row is enough to
+	// find, and the screen's own summary already answers the question the open
+	// year was answering.
 	//
-	// All four read the load once and belong to the screen afterwards, which is
-	// what untrack says: `savePrefs` reloads the page data, and a re-read would
-	// snap an expanded year shut while it was being read.
-	let openYear = $state<number | null>(untrack(() => data.years.at(-1)?.year ?? null));
+	// The three below read the load once and belong to the screen afterwards,
+	// which is what untrack says: `savePrefs` reloads the page data, and a
+	// re-read would snap an expanded year shut while it was being read.
+	let openYear = $state<number | null>(null);
 	let mode = $state<'stack' | 'rate'>(untrack(() => data.prefs.mode));
 	let personFilter = $state(untrack(() => data.prefs.person));
 	// ?add=1 from the quick-add menu opens the dialog on arrival.

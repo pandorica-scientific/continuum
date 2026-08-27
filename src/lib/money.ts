@@ -182,18 +182,66 @@ export function compactMinor(amountMinor: bigint, currency: string, decimals?: n
 	return `${sign}${magnitude.toFixed(decimals ?? 0)}`;
 }
 
+/** The steps an axis abbreviates by, largest first. */
+const AXIS_STEPS = [
+	{ divisor: 1_000_000, suffix: 'M' },
+	{ divisor: 1_000, suffix: 'k' },
+	{ divisor: 1, suffix: '' }
+] as const;
+
 /**
- * A set of axis labels that are distinct from each other.
+ * Labels for one axis's gridlines.
  *
- * A cell can round thousands to whole numbers because it stands alone; an axis
- * cannot, because two adjacent gridlines then carry the same text and the scale
- * silently stops meaning anything. This raises the precision until the labels
- * differ, which is the least it can do and still be readable.
+ * Two rules, and neither is what mapping `compactMinor` over the values gives
+ * you — which is what this used to do.
+ *
+ * ONE step across the whole axis, chosen from its largest value. Left to decide
+ * for itself, every label crossed the thousand and million thresholds on its
+ * own, so a single scale printed `0 · 653k · 1M · 2M · 3M`. Those are five even
+ * steps of about 653 000, and nothing on screen says so: the reader has to
+ * convert two units in their head before the axis is even linear.
+ *
+ * And a label may not move its own gridline nearer a neighbouring one than the
+ * one it names — half the closest gap, below. Distinctness was the whole of the
+ * old test, and at whole millions 1.96M and 2.61M are distinct: as "2M" and
+ * "3M", each overstating its line by about a sixth. Distinctness cannot catch
+ * that, because it asks whether two labels differ rather than whether either is
+ * true. A gridline is a claim about where a value sits; sharing the step is
+ * what makes the precision affordable, because one decimal now buys it on every
+ * label at once.
+ *
+ * A cell may still round hard — `compactMinor` is untouched. It stands alone,
+ * with no neighbour to be measured against and no scale to be linear on.
  */
 export function compactAxis(values: bigint[], currency: string): string[] {
+	const majors = values.map((v) => toMajor(v, currency));
+	const largest = majors.reduce((most, major) => Math.max(most, Math.abs(major)), 0);
+	const step = AXIS_STEPS.find(({ divisor }) => largest >= divisor) ?? AXIS_STEPS.at(-1)!;
+
+	// Half the closest two gridlines ever come. An axis of one distinct value
+	// has no gap to be measured against, so nothing but an exact label will do.
+	const ordered = [...new Set(majors)].sort((a, b) => a - b);
+	const tolerance =
+		ordered.length < 2
+			? 0
+			: ordered
+					.slice(1)
+					.reduce((closest, major, i) => Math.min(closest, major - ordered[i]), Infinity) / 2;
+
+	// Zero is zero at every step. "0.0M" is not more precise than "0", only
+	// longer, and it is the one label on the axis that cannot be rounded wrong.
+	const label = (major: number, decimals: number) =>
+		major === 0 ? '0' : `${(major / step.divisor).toFixed(decimals)}${step.suffix}`;
+	/** How far this label moves the gridline it names. */
+	const drift = (major: number, decimals: number) =>
+		Math.abs(Number.parseFloat((major / step.divisor).toFixed(decimals)) * step.divisor - major);
+
 	for (let decimals = 0; decimals <= 2; decimals++) {
-		const labels = values.map((v) => compactMinor(v, currency, decimals));
-		if (new Set(labels).size === labels.length) return labels;
+		const labels = majors.map((major) => label(major, decimals));
+		if (new Set(labels).size !== labels.length) continue;
+		if (majors.every((major) => drift(major, decimals) <= tolerance)) return labels;
 	}
-	return values.map((v) => compactMinor(v, currency, 2));
+	// Two gridlines on the same figure cannot be told apart at any precision.
+	// That is the caller's business, not something to keep looping over.
+	return majors.map((major) => label(major, 2));
 }

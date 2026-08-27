@@ -11,7 +11,7 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import SalaryMatrix, { SALARY_COLUMNS } from '$lib/components/SalaryMatrix.svelte';
+	import SalaryMatrix from '$lib/components/SalaryMatrix.svelte';
 	import SalarySummaryBand from '$lib/components/SalarySummaryBand.svelte';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
 	import BulkPayslipDialog from '$lib/components/BulkPayslipDialog.svelte';
@@ -156,7 +156,7 @@
 					     the column each one belongs to. They used to be laid on a
 					     three-column grid with six children in it, which wrapped them
 					     onto two lines and stretched the bonus across a whole fraction. -->
-					<div class="slip" style:grid-template-columns={SALARY_COLUMNS}>
+					<div class="slip">
 						<span class="month">
 							<span class="mono">{s.periodMonth}</span>
 							<!-- The word "slip" said nothing the paperclip does not: every row
@@ -463,14 +463,16 @@
 		color: var(--fg3);
 		white-space: nowrap;
 	}
-	/* Same grid as the table above, set inline from SALARY_COLUMNS so a month's
-	   figures land under the column each belongs to. */
+	/* Same grid as the table above. `--row-cols` and `--row-min` are set on the
+	   matrix and inherit down to here, so a month's figures land under the column
+	   each belongs to and cannot fall out of step with the header. */
 	.slip {
 		display: grid;
+		grid-template-columns: var(--row-cols);
 		align-items: center;
 		gap: var(--space-5);
 		padding: 6px var(--space-6);
-		min-width: 720px;
+		min-width: var(--row-min);
 		border-bottom: 1px solid var(--bd2);
 	}
 	.slip:last-of-type {

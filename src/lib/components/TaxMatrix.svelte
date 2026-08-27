@@ -106,12 +106,31 @@
 		totalGross === 0n ? null : Number((totalTax * 10000n) / totalGross) / 100
 	);
 
-	// 92px year, one fraction per jurisdiction, 196px total. Repeated on the
-	// header, every row and the footer so the three cannot drift apart.
-	const columns = $derived(`92px repeat(${countries.length}, minmax(0, 1fr)) 196px`);
+	// 92px year, one fraction per jurisdiction, 196px total. Set as custom
+	// properties on the table and read by the header, every row and the summary,
+	// so the three cannot drift apart.
+	//
+	// A jurisdiction column carries a MINIMUM rather than `minmax(0, 1fr)`. With
+	// a floor of zero the scroll width was the only thing holding these open, and
+	// it divides between however many jurisdictions a household has filed in — so
+	// a fourth country squeezed each heading down until they printed over one
+	// another.
+	const YEAR = 92;
+	const COUNTRY_MIN = 104;
+	const TOTAL = 196;
+	const columns = $derived(
+		`${YEAR}px repeat(${countries.length}, minmax(${COUNTRY_MIN}px, 1fr)) ${TOTAL}px`
+	);
+	// Every column at its minimum, plus one gap between each pair and the row's
+	// own padding — derived from the same numbers as the columns above rather
+	// than kept by hand beside them. The 620px floor is the width the table had
+	// before any column carried a minimum.
+	const minWidth = $derived(
+		`max(620px, calc(${YEAR + TOTAL + countries.length * COUNTRY_MIN}px + ${countries.length + 1} * var(--space-5) + 2 * var(--space-6)))`
+	);
 </script>
 
-<div class="matrix">
+<div class="matrix" style:--row-cols={columns} style:--row-min={minWidth}>
 	{#if ordered.length > LIST_PAGE_SIZES[0]}
 		<!-- Above the rows it sizes: how much to show is a decision made before
 		     reading, while which page to read is one made after. -->
@@ -121,7 +140,7 @@
 	{/if}
 
 	<div class="scroll">
-		<div class="head" style:grid-template-columns={columns}>
+		<div class="head">
 			<span class="h-cell">Year</span>
 			{#each countries as c (c.code)}
 				<span class="h-cell right">
@@ -133,7 +152,7 @@
 		</div>
 
 		{#if ordered.length > 0}
-			<div class="summary" style:grid-template-columns={columns}>
+			<div class="summary">
 				<span class="f-cell">All</span>
 				{#each summary as f (f.code)}
 					<span class="f-cell right">
@@ -153,7 +172,6 @@
 			<div
 				class="row"
 				class:open
-				style:grid-template-columns={columns}
 				role="button"
 				tabindex="0"
 				aria-expanded={open}
@@ -241,10 +259,11 @@
 	.row,
 	.summary {
 		display: grid;
+		grid-template-columns: var(--row-cols);
 		align-items: center;
 		gap: var(--space-5);
 		padding: 10px var(--space-6);
-		min-width: 620px;
+		min-width: var(--row-min);
 	}
 	.head {
 		background: var(--card2);

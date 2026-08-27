@@ -1,14 +1,38 @@
 <script module lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	/**
-	 * The grid every row in this table is built on, exported so an expanded
-	 * year's detail can sit on the SAME one.
+	 * The grid every row in this table is built on.
 	 *
 	 * Year, then the three that make up gross, then what it averaged and what
-	 * survived tax. The header, the summary, every year row and the payslips
-	 * underneath all take it from here, so none can drift out of line.
+	 * survived tax. The header, the summary, every year row and the payslips an
+	 * expanded year renders underneath all read it off the `--row-cols` and
+	 * `--row-min` custom properties set on the table, so none can drift out of
+	 * line — the payslip rows included, and those live on the Salary screen
+	 * rather than here, so they used to import the column string to keep step.
+	 *
+	 * Base and Bonus are the two flexible columns, and they carry a MINIMUM
+	 * rather than `minmax(0, 1fr)`. With a floor of zero the scroll width below
+	 * was all that held them open, and at that width it left them about 35px
+	 * each — narrower than the word "Bonus" — so on a phone the two headings
+	 * printed over one another.
 	 */
-	export const SALARY_COLUMNS = '96px minmax(0, 1fr) minmax(0, 1fr) 190px 140px 150px';
+	const YEAR = 96;
+	const FLEX_MIN = 112;
+	const GROSS = 190;
+	const AVG = 140;
+	const NET = 150;
+
+	const COLUMNS = `${YEAR}px minmax(${FLEX_MIN}px, 1fr) minmax(${FLEX_MIN}px, 1fr) ${GROSS}px ${AVG}px ${NET}px`;
+
+	/**
+	 * The narrowest the grid may be drawn before it scrolls: every column at its
+	 * minimum, plus the five gaps between them and the row's own padding.
+	 *
+	 * Derived from the same numbers as the columns rather than written out beside
+	 * them — a hand-kept figure is exactly what let the two disagree. The 720px
+	 * floor is the width the table had before any column carried a minimum.
+	 */
+	const MIN_WIDTH = `max(720px, calc(${YEAR + 2 * FLEX_MIN + GROSS + AVG + NET}px + 5 * var(--space-5) + 2 * var(--space-6)))`;
 </script>
 
 <script lang="ts">
@@ -110,11 +134,9 @@
 	const lifetimeAvg = $derived(
 		lifetime.grossMonths === 0 ? null : lifetime.gross / BigInt(lifetime.grossMonths)
 	);
-
-	const columns = SALARY_COLUMNS;
 </script>
 
-<div class="matrix">
+<div class="matrix" style:--row-cols={COLUMNS} style:--row-min={MIN_WIDTH}>
 	{#if ordered.length > LIST_PAGE_SIZES[0]}
 		<!-- Above the rows it sizes: how much to show is a decision made before
 		     reading, while which page to read is one made after. -->
@@ -128,12 +150,12 @@
 		     already say what they are and that they add up; net is the one figure
 		     whose relation to the others is not visible from its name, so it gets
 		     the heading and the rule beside it. -->
-		<div class="group" style:grid-template-columns={columns}>
+		<div class="group">
 			<span class="g-cell span5"></span>
 			<span class="g-cell divide">After tax</span>
 		</div>
 
-		<div class="head" style:grid-template-columns={columns}>
+		<div class="head">
 			<span class="h-cell">Year</span>
 			<span class="h-cell right"><span class="swatch base"></span>Base</span>
 			<span class="h-cell right"><span class="swatch bonus"></span>Bonus</span>
@@ -143,7 +165,7 @@
 		</div>
 
 		{#if ordered.length > 0}
-			<div class="summary" style:grid-template-columns={columns}>
+			<div class="summary">
 				<span class="f-cell">
 					<span class="f-label">All</span>
 					<span class="c-sub">{years.length} {years.length === 1 ? 'year' : 'years'}</span>
@@ -192,7 +214,6 @@
 			<div
 				class="row"
 				class:open
-				style:grid-template-columns={columns}
 				role="button"
 				tabindex="0"
 				aria-expanded={open}
@@ -320,10 +341,11 @@
 	.row,
 	.summary {
 		display: grid;
+		grid-template-columns: var(--row-cols);
 		align-items: center;
 		gap: var(--space-5);
 		padding: 10px var(--space-6);
-		min-width: 720px;
+		min-width: var(--row-min);
 	}
 	/* The tier that says which side of tax a column is on. */
 	.group {
@@ -367,6 +389,10 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
+		/* A flex item's automatic minimum is its content, so without this a
+		   heading wider than its column spills into the one beside it rather
+		   than being held inside its own track. */
+		min-width: 0;
 	}
 	.h-cell.right {
 		justify-content: flex-end;

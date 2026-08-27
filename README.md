@@ -77,9 +77,9 @@ Continuum is for you if you…
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/transactions-dark-web.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/transactions-light-web.png">
-    <img src="docs/screenshots/transactions-dark-web.png" alt="Transactions — the searchable register">
+    <img src="docs/screenshots/transactions-dark-web.png" alt="Transactions — a register of months, one of them opened into its rows">
   </picture>
-  <br><b>Transactions</b><br><sub>Search, split a receipt, tag into projects</sub>
+  <br><b>Transactions</b><br><sub>Open a month, then a row — file, split, tag</sub>
 </td>
 </tr>
 <tr>
