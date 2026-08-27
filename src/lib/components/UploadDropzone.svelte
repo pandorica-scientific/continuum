@@ -357,6 +357,47 @@
 		outline: 2px solid var(--blue);
 		outline-offset: 2px;
 	}
+	/*
+	 * Capture is a phone and tablet job, so the two buttons are not offered to a
+	 * mouse.
+	 *
+	 * `capture="environment"` is ignored by desktop browsers, so the photo
+	 * button there opened the ordinary file picker — the same thing clicking the
+	 * region already does. The scanner would open a webcam, which is a poor way
+	 * to photograph a page and never the reason this exists.
+	 *
+	 * Nothing is lost by hiding them. A photo dropped or browsed on a computer
+	 * still goes through the crop-flatten-PDF pipeline — see `receive` above —
+	 * so the desktop route to a scan is the one it was always going to be: take
+	 * the picture on your phone, put the file here.
+	 *
+	 * Three clauses, and each is load-bearing:
+	 *
+	 * `pointer: fine` and `hover: hover` describe the PRIMARY pointer, and they
+	 * are what keeps a phone safe. A phone's primary pointer is never fine, so
+	 * this rule cannot match one however the rest is read — and that matters
+	 * more than tidiness on a desktop, because a phone that lost these would
+	 * have lost the feature on the only device it is for.
+	 *
+	 * `not (any-pointer: coarse)` is what saves a TABLET. The primary pointer is
+	 * the wrong question for one: an iPad on a Magic Keyboard, or a Surface
+	 * under its type cover, answers "a trackpad" and would have been treated as
+	 * a laptop by the first two clauses alone. `any-pointer` asks whether a
+	 * finger is available AT ALL, which a tablet answers yes to whatever is
+	 * plugged into it, and a stylus tablet answers yes to as well. A touchscreen
+	 * laptop also answers yes and keeps a button it does not need, which is the
+	 * cheaper of the two mistakes.
+	 *
+	 * Every way this can fail leaves the buttons SHOWING. On a browser too old
+	 * for `not (…)` inside a media query the whole rule fails to parse and is
+	 * dropped; on one that does not know `any-pointer` the clause is false and
+	 * the rule falls back to the primary-pointer test, which a phone still fails.
+	 */
+	@media (pointer: fine) and (hover: hover) and (not (any-pointer: coarse)) {
+		.capture-btn {
+			display: none;
+		}
+	}
 	/* 44px is a floor for FINGERS. On a mouse, 30px inside a 36px row is right
 	   and matches every other control; on touch the row grows to meet the floor
 	   rather than shipping a target nobody can hit. */
