@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import ActionError from '$lib/components/ActionError.svelte';
@@ -46,14 +47,21 @@
 	let conditions = $state<DraftCondition[]>([]);
 	let actionError = $state<string | null>(null);
 
-	function openEditor() {
-		draftName = '';
-		draftCategory = '';
+	function openEditor(prefill?: { counterparty: string | null; categoryId: string | null }) {
+		const counterparty = prefill?.counterparty ?? '';
+		draftName = counterparty;
+		draftCategory = prefill?.categoryId ?? '';
 		draftTags = '';
-		conditions = [{ field: 'counterparty', value: '', min: '', max: '' }];
+		conditions = [{ field: 'counterparty', value: counterparty, min: '', max: '' }];
 		actionError = null;
 		editing = true;
 	}
+
+	// Arriving from a transaction's "Make a rule". Read once, at init, which is
+	// what untrack says: the draft belongs to the screen from here on, and a
+	// re-read on the next load would throw away whatever had been typed since.
+	const prefill = untrack(() => data.prefill);
+	if (prefill) openEditor(prefill);
 
 	const canSave = $derived(
 		draftName.trim() !== '' &&
@@ -89,7 +97,7 @@
 		</div>
 	</div>
 	<div class="toolbar">
-		<button type="button" class="btn btn-primary" onclick={openEditor}>New rule</button>
+		<button type="button" class="btn btn-primary" onclick={() => openEditor()}>New rule</button>
 	</div>
 	<p class="scope-note">
 		Changes apply to future imports and transactions still awaiting a category. Existing automatic

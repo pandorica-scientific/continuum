@@ -153,197 +153,206 @@
 	{#if years.length === 0}
 		<p class="empty">Nothing filed yet — the chart draws itself once a statement is recorded.</p>
 	{:else}
-		<div class="plot">
-			<svg viewBox="0 0 {VIEW_W} {VIEW_H}" role="img" aria-label="Tax by year">
-				<defs>
-					<filter id="tax-bar-shadow" x="-50%" y="-50%" width="200%" height="200%">
-						<feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3" />
-					</filter>
-					{#each present as c (c.code)}
-						<linearGradient id="tax-fill-{c.code}" x1="0" y1="0" x2="0" y2="1">
-							<stop offset="0" style="stop-color: var({c.token}); stop-opacity: 0.62" />
-							<stop offset="1" style="stop-color: var({c.token}); stop-opacity: 0.42" />
-						</linearGradient>
-						<pattern
-							id="tax-hatch-{c.code}"
-							width="7"
-							height="7"
-							patternUnits="userSpaceOnUse"
-							patternTransform="rotate(45)"
-						>
-							<rect width="7" height="7" style="fill: var({c.token}); fill-opacity: 0.12" />
-							<line
-								x1="0"
-								y1="0"
-								x2="0"
-								y2="7"
-								style="stroke: var({c.token}); stroke-opacity: 0.5; stroke-width: 2.6"
-							/>
-						</pattern>
-					{/each}
-				</defs>
+		<!-- Scrolls sideways rather than shrinking. The geometry is a fixed
+		     viewBox, so a narrower card is a shorter chart too, and on a phone the
+		     panel collapsed to about a hundred pixels — with eight axis values
+		     printed over one another inside it. The matrices answer "this does not
+		     fit a phone" the same way. -->
+		<div class="plot-scroll">
+			<div class="plot">
+				<svg viewBox="0 0 {VIEW_W} {VIEW_H}" role="img" aria-label="Tax by year">
+					<defs>
+						<filter id="tax-bar-shadow" x="-50%" y="-50%" width="200%" height="200%">
+							<feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3" />
+						</filter>
+						{#each present as c (c.code)}
+							<linearGradient id="tax-fill-{c.code}" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" style="stop-color: var({c.token}); stop-opacity: 0.62" />
+								<stop offset="1" style="stop-color: var({c.token}); stop-opacity: 0.42" />
+							</linearGradient>
+							<pattern
+								id="tax-hatch-{c.code}"
+								width="7"
+								height="7"
+								patternUnits="userSpaceOnUse"
+								patternTransform="rotate(45)"
+							>
+								<rect width="7" height="7" style="fill: var({c.token}); fill-opacity: 0.12" />
+								<line
+									x1="0"
+									y1="0"
+									x2="0"
+									y2="7"
+									style="stroke: var({c.token}); stroke-opacity: 0.5; stroke-width: 2.6"
+								/>
+							</pattern>
+						{/each}
+					</defs>
 
-				<!-- gridlines -->
-				{#if mode === 'stack'}
-					{#each moneyGrid as g (g.label)}
+					<!-- gridlines -->
+					{#if mode === 'stack'}
+						{#each moneyGrid as g (g.label)}
+							<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
+							<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
+						{/each}
+					{/if}
+					{#each rateGrid as g (g.pct)}
 						<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
 						<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
 					{/each}
-				{/if}
-				{#each rateGrid as g (g.pct)}
-					<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
-					<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
-				{/each}
 
-				<!-- spines -->
-				{#if mode === 'stack'}
-					<line x1={X_LEFT} y1={MONEY_TOP} x2={X_LEFT} y2={MONEY_BOTTOM} class="spine" />
-					<line x1={X_LEFT} y1={MONEY_BOTTOM} x2={X_RIGHT} y2={MONEY_BOTTOM} class="spine" />
-				{/if}
-				<line x1={X_LEFT} y1={band[0]} x2={X_LEFT} y2={band[1]} class="spine" />
-				<line x1={X_LEFT} y1={band[1]} x2={X_RIGHT} y2={band[1]} class="spine" />
+					<!-- spines -->
+					{#if mode === 'stack'}
+						<line x1={X_LEFT} y1={MONEY_TOP} x2={X_LEFT} y2={MONEY_BOTTOM} class="spine" />
+						<line x1={X_LEFT} y1={MONEY_BOTTOM} x2={X_RIGHT} y2={MONEY_BOTTOM} class="spine" />
+					{/if}
+					<line x1={X_LEFT} y1={band[0]} x2={X_LEFT} y2={band[1]} class="spine" />
+					<line x1={X_LEFT} y1={band[1]} x2={X_RIGHT} y2={band[1]} class="spine" />
 
-				{#if mode === 'stack'}
-					{#each bars as bar (bar.row.year)}
-						{#each bar.segments as seg, i (i)}
-							<rect
-								x={bar.x - width / 2}
-								y={seg.y}
-								{width}
-								height={seg.height}
-								rx="2"
-								filter="url(#tax-bar-shadow)"
-								style="fill: url(#tax-{seg.hatched ? 'hatch' : 'fill'}-{seg.country}); {seg.stroked
-									? `stroke: var(${seg.token}); stroke-width: 1`
-									: 'stroke: none'}"
-							/>
-						{/each}
-					{/each}
-				{:else}
-					{#each present as c (c.code)}
-						{#each rateRuns(years, c.code, band) as run, i (i)}
-							{#if run.length > 1}
-								<path d={path(run)} class="rate-line" style="stroke: var({c.token})" />
-							{/if}
-							{#each run as p (p.year)}
-								<circle cx={p.x} cy={p.y} r="3.5" style="fill: var({c.token})" class="dot" />
+					{#if mode === 'stack'}
+						{#each bars as bar (bar.row.year)}
+							{#each bar.segments as seg, i (i)}
+								<rect
+									x={bar.x - width / 2}
+									y={seg.y}
+									{width}
+									height={seg.height}
+									rx="2"
+									filter="url(#tax-bar-shadow)"
+									style="fill: url(#tax-{seg.hatched
+										? 'hatch'
+										: 'fill'}-{seg.country}); {seg.stroked
+										? `stroke: var(${seg.token}); stroke-width: 1`
+										: 'stroke: none'}"
+								/>
 							{/each}
 						{/each}
+					{:else}
+						{#each present as c (c.code)}
+							{#each rateRuns(years, c.code, band) as run, i (i)}
+								{#if run.length > 1}
+									<path d={path(run)} class="rate-line" style="stroke: var({c.token})" />
+								{/if}
+								{#each run as p (p.year)}
+									<circle cx={p.x} cy={p.y} r="3.5" style="fill: var({c.token})" class="dot" />
+								{/each}
+							{/each}
+						{/each}
+					{/if}
+
+					<!-- the household's blended rate, always -->
+					{#if blendedRun.length > 1}
+						<path
+							d={path(blendedRun)}
+							class="blended"
+							style="stroke-width: {mode === 'rate' ? 3 : 2}"
+						/>
+					{/if}
+					{#each blendedRun as p, i (i)}
+						<circle cx={p.x} cy={p.y} r="3.5" class="blended-dot" />
+					{/each}
+
+					<!-- the hovered year's guide -->
+					{#if hover !== null}
+						<line
+							x1={slotFor(hover, years.length)}
+							y1={mode === 'stack' ? MONEY_TOP : band[0]}
+							x2={slotFor(hover, years.length)}
+							y2={band[1]}
+							class="guide"
+						/>
+					{/if}
+				</svg>
+
+				<!-- Axis labels as HTML. See the header comment. -->
+				{#if mode === 'stack'}
+					<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
+					{#each moneyGrid as g (g.label)}
+						<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.text}</span>
 					{/each}
 				{/if}
-
-				<!-- the household's blended rate, always -->
-				{#if blendedRun.length > 1}
-					<path
-						d={path(blendedRun)}
-						class="blended"
-						style="stroke-width: {mode === 'rate' ? 3 : 2}"
-					/>
-				{/if}
-				{#each blendedRun as p, i (i)}
-					<circle cx={p.x} cy={p.y} r="3.5" class="blended-dot" />
-				{/each}
-
-				<!-- the hovered year's guide -->
-				{#if hover !== null}
-					<line
-						x1={slotFor(hover, years.length)}
-						y1={mode === 'stack' ? MONEY_TOP : band[0]}
-						x2={slotFor(hover, years.length)}
-						y2={band[1]}
-						class="guide"
-					/>
-				{/if}
-			</svg>
-
-			<!-- Axis labels as HTML. See the header comment. -->
-			{#if mode === 'stack'}
-				<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
-				{#each moneyGrid as g (g.label)}
-					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.text}</span>
-				{/each}
-			{/if}
-			<span class="axis-title" style:top="{mode === 'rate' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
-				>Rate</span
-			>
-			{#each rateGrid as g (g.pct)}
-				<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
-			{/each}
-			{#each years as y, i (y.year)}
-				<span
-					class="axis-year mono"
-					style:left="{(slotFor(i, years.length) / VIEW_W) * 100}%"
-					style:top="{(RATE_BOTTOM_Y / VIEW_H) * 100}%">{y.year}</span
+				<span class="axis-title" style:top="{mode === 'rate' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
+					>Rate</span
 				>
-			{/each}
-			<span class="axis-caption">Tax year</span>
+				{#each rateGrid as g (g.pct)}
+					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
+				{/each}
+				{#each years as y, i (y.year)}
+					<span
+						class="axis-year mono"
+						style:left="{(slotFor(i, years.length) / VIEW_W) * 100}%"
+						style:top="{(RATE_BOTTOM_Y / VIEW_H) * 100}%">{y.year}</span
+					>
+				{/each}
 
-			<!--
+				<!--
 				One hit area per year, not per mark: a per-mark tooltip cannot answer
 				"which country is this AND what were the others that year". The spans
 				sit above the SVG and cover it, which is also why no mark carries an
 				SVG <title> — it would be an unreachable second tooltip.
 			-->
-			{#each years as y, i (y.year)}
-				<button
-					type="button"
-					class="hit"
-					style:left="{((slotFor(i, years.length) - (X_RIGHT - X_LEFT) / years.length / 2) /
-						VIEW_W) *
-						100}%"
-					style:width="{((X_RIGHT - X_LEFT) / years.length / VIEW_W) * 100}%"
-					onmouseenter={() => (hover = i)}
-					onmouseleave={() => (hover = null)}
-					onfocus={() => (hover = i)}
-					onblur={() => (hover = null)}
-					aria-label="{y.year} figures"
-				></button>
-			{/each}
+				{#each years as y, i (y.year)}
+					<button
+						type="button"
+						class="hit"
+						style:left="{((slotFor(i, years.length) - (X_RIGHT - X_LEFT) / years.length / 2) /
+							VIEW_W) *
+							100}%"
+						style:width="{((X_RIGHT - X_LEFT) / years.length / VIEW_W) * 100}%"
+						onmouseenter={() => (hover = i)}
+						onmouseleave={() => (hover = null)}
+						onfocus={() => (hover = i)}
+						onblur={() => (hover = null)}
+						aria-label="{y.year} figures"
+					></button>
+				{/each}
 
-			{#if hovered}
-				<!--
+				{#if hovered}
+					<!--
 					The offset is folded into the positioning value rather than written
 					as translateX(calc(-100% - 12px)) — a calc() inside an interpolated
 					style value may not survive the parser, and the flip silently stops.
 				-->
-				<div
-					class="readout"
-					class:flip
-					style:left="{(slotFor(hover!, years.length) / VIEW_W) * 100}%"
-				>
-					<span class="r-year mono">{hovered.year}</span>
-					{#each hovered.byCountry as c (c.country)}
-						<div class="r-row">
-							<span class="swatch" style="background: var({hues.get(c.country)})"></span>
-							<span class="r-name">{nameOf.get(c.country) ?? c.country}</span>
-							<span class="mono r-rate"
-								>{c.ratePct === null ? '—' : `${c.ratePct.toFixed(2)}%`}</span
-							>
-						</div>
-						<div class="r-figures">
-							earned <strong class="mono">{formatMinor(BigInt(c.grossMinor), currency)}</strong>
-							· tax <strong class="mono">{formatMinor(BigInt(c.taxMinor), currency)}</strong>
-							{#each c.native ?? [] as n, i (i)}
-								<span class="r-filed"
-									>filed {formatMinor(BigInt(n.grossMinor), n.currency)}
-									{displayCurrency(n.currency)}</span
+					<div
+						class="readout"
+						class:flip
+						style:left="{(slotFor(hover!, years.length) / VIEW_W) * 100}%"
+					>
+						<span class="r-year mono">{hovered.year}</span>
+						{#each hovered.byCountry as c (c.country)}
+							<div class="r-row">
+								<span class="swatch" style="background: var({hues.get(c.country)})"></span>
+								<span class="r-name">{nameOf.get(c.country) ?? c.country}</span>
+								<span class="mono r-rate"
+									>{c.ratePct === null ? '—' : `${c.ratePct.toFixed(2)}%`}</span
 								>
-							{/each}
-						</div>
-					{/each}
-					{#if hovered.byCountry.length > 1}
-						<div class="r-total">
-							<span>all</span>
-							<strong class="mono">{formatMinor(BigInt(hovered.grossMinor), currency)}</strong>
-							<span class="mono"
-								>{hovered.ratePct === null ? '—' : `${hovered.ratePct.toFixed(2)}%`}</span
-							>
-						</div>
-					{/if}
-				</div>
-			{/if}
+							</div>
+							<div class="r-figures">
+								earned <strong class="mono">{formatMinor(BigInt(c.grossMinor), currency)}</strong>
+								· tax <strong class="mono">{formatMinor(BigInt(c.taxMinor), currency)}</strong>
+								{#each c.native ?? [] as n, i (i)}
+									<span class="r-filed"
+										>filed {formatMinor(BigInt(n.grossMinor), n.currency)}
+										{displayCurrency(n.currency)}</span
+									>
+								{/each}
+							</div>
+						{/each}
+						{#if hovered.byCountry.length > 1}
+							<div class="r-total">
+								<span>all</span>
+								<strong class="mono">{formatMinor(BigInt(hovered.grossMinor), currency)}</strong>
+								<span class="mono"
+									>{hovered.ratePct === null ? '—' : `${hovered.ratePct.toFixed(2)}%`}</span
+								>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
 		</div>
 
+		<span class="axis-caption">Tax year</span>
 		<div class="legend">
 			{#each present as c (c.code)}
 				<span class="key">
@@ -392,9 +401,26 @@
 	}
 	/* Pinned to the viewBox. A fixed pixel height would letterbox it and every
 	   percentage-positioned label would drift. */
+	.plot-scroll {
+		overflow-x: auto;
+		/* The rotated axis title steps out into this padding when the gutter it
+		   normally sits in is too narrow to hold it beside the value nearest it —
+		   see the container query below. The negative margin gives the space back,
+		   so on a wide card the plot occupies exactly the pixels it always did.
+
+		   A container, so that decision is made from the width the PLOT actually
+		   gets rather than the viewport's: the same viewport gives this card very
+		   different widths with and without the sidebar. */
+		container-type: inline-size;
+		padding-left: 16px;
+		margin-left: -16px;
+	}
 	.plot {
 		position: relative;
 		width: 100%;
+		/* The width at which the two stacked bands still have room for their axis
+		   values — roughly what the chart already gets on a tablet. */
+		min-width: 640px;
 		aspect-ratio: 1000 / 322;
 	}
 	svg {
@@ -451,6 +477,20 @@
 		transform: rotate(-90deg) translateX(-50%);
 		white-space: nowrap;
 	}
+	/* Snug against the plot's left edge, inside the gutter the axis values are
+	   right-aligned in. That gutter is a PERCENTAGE of the plot's width while the
+	   text in it is a fixed size, so below the width below it stops holding both
+	   and the title lands on top of the value beside it — "Millions Kč" printed
+	   through "2.6M". Only then does the title step out.
+
+	   1024px is where a five-character value and the title's own band still
+	   clear each other: the gutter is 5.2% of the plot, so about 53px, against
+	   33px of value and 15px of rotated title. */
+	@container (max-width: 1024px) {
+		.axis-title {
+			left: -16px;
+		}
+	}
 	.axis-value {
 		position: absolute;
 		right: calc(100% - 5.2%);
@@ -466,11 +506,15 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
+	/* Below the plot, in the flow, rather than hanging off its bottom edge.
+	   Absolutely positioned at `bottom: -8%` it stuck out of the scroll
+	   container, and a scroll container clips or scrolls what leaves it — so the
+	   chart grew a vertical scrollbar of its own and could be dragged up and
+	   down inside the card. */
 	.axis-caption {
-		position: absolute;
-		left: 50%;
-		bottom: -8%;
-		transform: translateX(-50%);
+		display: block;
+		margin-top: var(--space-3);
+		text-align: center;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}

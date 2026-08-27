@@ -5,7 +5,7 @@ import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
 import { account, tag } from '$lib/server/db/schema';
 import { getBaseCurrency } from '$lib/server/settings';
-import { fileTransaction, registerPage } from '$lib/server/transactions';
+import { fileTransaction, registerMonths, registerPage } from '$lib/server/transactions';
 import { deleteSplits, loadSplits, saveSplits } from '$lib/server/splits';
 import {
 	loadSplitTagsFor,
@@ -38,21 +38,46 @@ import { extname } from 'node:path';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
+/** A month as a person reads it — "July 2026", not "2026-07". */
+function monthLabel(month: string): string {
+	const [year, index] = month.split('-').map(Number);
+	return `${new Date(Date.UTC(2000, index - 1, 1)).toLocaleString('en', { month: 'long' })} ${year}`;
+}
+
 export const load: PageServerLoad = async ({ url }) => {
 	const baseCurrency = await getBaseCurrency();
 	const filter = parseFilter(url.searchParams, baseCurrency);
 
-	const [page, categories, accounts] = await Promise.all([
-		registerPage(filter),
+	const [months, categories, accounts, groups] = await Promise.all([
+		registerMonths(filter),
 		loadCategories(),
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
-			.orderBy(account.createdAt, account.id)
+			.orderBy(account.createdAt, account.id),
+		loadCategoryGroups()
 	]);
 
+	// Only the expanded month's transactions are read. The register lists a row
+	// per month and opens one at a time, so loading every row it lists a month
+	// for would mean fetching the whole ledger — with its splits, tags and
+	// receipts — to draw a table of totals.
+	const page = filter.month ? await registerPage(filter) : null;
+
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
-	const rowIds = page.rows.map((r) => r.id);
+	// A category's colour is its GROUP's: the dot on a row says which part of the
+	// waterfall the money went to, which is the distinction the charts are
+	// coloured by, so the two agree rather than each inventing a palette.
+	const groupToken = new Map(groups.map((g) => [g.key, g.colorToken]));
+	const tokenFor = (categoryId: string | null) => {
+		const group = categoryId ? categories.find((c) => c.id === categoryId)?.groupKey : null;
+		return (group && groupToken.get(group)) || '--fg3';
+	};
+
+	// Empty with no month open, and each of these returns without touching the
+	// database on an empty id list — so a collapsed register costs one query for
+	// the known tags and nothing else.
+	const rowIds = page?.rows.map((r) => r.id) ?? [];
 	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags, docsByTxn] = await Promise.all([
 		loadSplits(rowIds),
 		loadTagsFor(rowIds),
@@ -61,12 +86,15 @@ export const load: PageServerLoad = async ({ url }) => {
 		loadTransactionDocuments(rowIds)
 	]);
 
-	/** A page link that carries every active filter forward. */
-	const pageHref = (n: number) => {
+	/** A link that carries every active filter forward. */
+	const href = (mutate: (params: URLSearchParams) => void) => {
 		const params = new URLSearchParams(url.searchParams);
-		params.set('page', String(n));
-		return `?${params}`;
+		mutate(params);
+		const query = params.toString();
+		return query ? `?${query}` : url.pathname;
 	};
+
+	const pageHref = (n: number) => href((params) => params.set('page', String(n)));
 
 	/**
 	 * Switching page size returns to page one.
@@ -75,25 +103,76 @@ export const load: PageServerLoad = async ({ url }) => {
 	 * of 10, and landing three hundred rows into the ledger is not what pressing
 	 * "10" means.
 	 */
-	const sizeHref = (size: number) => {
-		const params = new URLSearchParams(url.searchParams);
-		params.set('per', String(size));
-		params.delete('page');
-		return `?${params}`;
+	const sizeHref = (size: number) =>
+		href((params) => {
+			params.set('per', String(size));
+			params.delete('page');
+		});
+
+	/** Opens a month, or closes it when it is already the open one. */
+	const monthHref = (month: string) =>
+		href((params) => {
+			if (filter.month === month) params.delete('month');
+			else params.set('month', month);
+			// The inner pager belongs to the month it was paging. Carrying page 4
+			// into a month with one page would open it on nothing at all.
+			params.delete('page');
+		});
+
+	// Per currency, over every month listed. Two currencies in one month are two
+	// facts; adding them would invent a third that is true in neither.
+	const byCurrency = new Map<string, { in: bigint; out: bigint; ceiling: bigint }>();
+	for (const m of months) {
+		for (const c of m.byCurrency) {
+			const running = byCurrency.get(c.currency) ?? { in: 0n, out: 0n, ceiling: 0n };
+			const volume = c.inMinor + c.outMinor;
+			byCurrency.set(c.currency, {
+				in: running.in + c.inMinor,
+				out: running.out + c.outMinor,
+				// The widest month in this currency, so the bars compare months
+				// against each other rather than each against itself.
+				ceiling: volume > running.ceiling ? volume : running.ceiling
+			});
+		}
+	}
+	const share = (value: bigint, currency: string) => {
+		const ceiling = byCurrency.get(currency)?.ceiling ?? 0n;
+		return ceiling === 0n ? 0 : (Number(value) / Number(ceiling)) * 100;
 	};
 
 	return {
 		baseCurrency: displayCurrency(baseCurrency),
 		prevHref: pageHref(Math.max(1, filter.page - 1)),
-		nextHref: pageHref(Math.min(page.pageCount, filter.page + 1)),
+		nextHref: pageHref(Math.min(page?.pageCount ?? 1, filter.page + 1)),
 		filter: {
 			...filter,
 			// Amount bounds go back to the form as the text the person typed.
 			minMinor: filter.minMinor === null ? '' : formatMinor(filter.minMinor, baseCurrency),
 			maxMinor: filter.maxMinor === null ? '' : formatMinor(filter.maxMinor, baseCurrency)
 		},
-		rows: page.rows.map((r) => {
+		openMonth: filter.month,
+		months: months.map((m) => ({
+			month: m.month,
+			label: monthLabel(m.month),
+			count: m.count,
+			currencies: m.byCurrency.map((c) => ({
+				currency: displayCurrency(c.currency),
+				in: formatMinor(c.inMinor, c.currency),
+				out: formatMinor(c.outMinor, c.currency),
+				net: formatMinor(c.sumMinor, c.currency, { signed: true }),
+				negative: c.sumMinor < 0n,
+				inPct: share(c.inMinor, c.currency),
+				outPct: share(c.outMinor, c.currency)
+			})),
+			href: monthHref(m.month)
+		})),
+		rows: (page?.rows ?? []).map((r) => {
 			const splits = (splitsByTxn.get(r.id) ?? []).sort((a, b) => a.sort - b.sort);
+			// Carries what the rule would be about, so the editor opens describing
+			// this row rather than asking for what you were just looking at.
+			const ruleParams = new URLSearchParams();
+			if (r.counterparty) ruleParams.set('counterparty', r.counterparty);
+			if (r.categoryId) ruleParams.set('category', r.categoryId);
 			return {
 				id: r.id,
 				date: r.bookedAt,
@@ -103,6 +182,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				negative: r.amount < 0n,
 				categoryId: r.categoryId,
 				categoryLabel: r.categoryLabel,
+				categoryToken: tokenFor(r.categoryId),
 				reviewState: r.reviewState,
 				account: r.accountName,
 				isTransfer: r.isTransfer,
@@ -114,6 +194,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					? sourceLabel(r.sourceMethod)
 					: null,
 				proofClass: r.proofClass,
+				ruleHref: `/rules?${ruleParams}`,
 				// The dialog works in the transaction's own currency and needs the
 				// raw figure to compute a remainder against.
 				currency: r.currency,
@@ -138,12 +219,22 @@ export const load: PageServerLoad = async ({ url }) => {
 				}))
 			};
 		}),
-		totals: page.totals.map((t) => ({
-			currency: displayCurrency(t.currency),
-			amount: formatMinor(t.sumMinor, t.currency, { signed: true })
-		})),
-		total: page.total,
-		pageCount: page.pageCount,
+		// Over every month listed, never the open one: this is the register's own
+		// footing, and a total that moved when a month was expanded would be
+		// answering a different question from the one its label asks.
+		totals: [...byCurrency.entries()]
+			.sort((a, b) => (a[0] < b[0] ? -1 : 1))
+			.map(([currency, sums]) => ({
+				currency: displayCurrency(currency),
+				in: formatMinor(sums.in, currency),
+				out: formatMinor(sums.out, currency),
+				net: formatMinor(sums.in - sums.out, currency, { signed: true }),
+				negative: sums.in < sums.out
+			})),
+		total: months.reduce((n, m) => n + m.count, 0),
+		/** How many pages the OPEN month runs to; one when nothing is open. */
+		pageCount: page?.pageCount ?? 1,
+		monthTotal: page?.total ?? 0,
 		pageSize: filter.pageSize,
 		defaultPageSize: DEFAULT_PAGE_SIZE,
 		pageSizes: PAGE_SIZES.map((size) => ({
@@ -161,7 +252,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		proofLabels: PROOF_LABELS,
 		accounts,
-		categories: (await loadCategoryGroups())
+		categories: groups
 			.map((group) => ({
 				key: group.key,
 				label: group.label,

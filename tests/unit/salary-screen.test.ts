@@ -149,12 +149,17 @@ describe('the salary screen', () => {
 		// and stretched the bonus across a whole fraction. The detail takes its
 		// columns from the matrix so a figure sits under the column it belongs to.
 		const source = readFileSync(resolve('src/routes/(app)/salary/+page.svelte'), 'utf8');
-		expect(source).toContain('style:grid-template-columns={SALARY_COLUMNS}');
+		expect(source).toContain('grid-template-columns: var(--row-cols)');
+		expect(source).toContain('min-width: var(--row-min)');
 		const matrix = readFileSync(resolve('src/lib/components/SalaryMatrix.svelte'), 'utf8');
-		expect(matrix).toContain('export const SALARY_COLUMNS');
-		// One definition, so the header, the rows and the detail cannot drift:
-		// the page states no column template of its own.
+		// The one definition, handed down as custom properties so the header, the
+		// rows and the detail cannot drift — including the detail, which lives on
+		// the page rather than in the matrix.
+		expect(matrix).toContain('style:--row-cols={COLUMNS}');
+		expect(matrix).toContain('style:--row-min={MIN_WIDTH}');
+		// The page states no column template and no scroll width of its own.
 		expect(source).not.toMatch(/grid-template-columns:\s*\d+px/);
+		expect(source).not.toMatch(/min-width:\s*\d+px/);
 	});
 
 	it('keeps the correction explainer behind an ⓘ too, not under every open year', () => {

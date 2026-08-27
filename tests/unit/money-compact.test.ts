@@ -57,4 +57,31 @@ describe('compactAxis', () => {
 	it('gives up gracefully rather than looping on identical values', () => {
 		expect(compactAxis([500n, 500n], 'EUR')).toEqual(['5.00', '5.00']);
 	});
+
+	it('abbreviates every label by the same step', () => {
+		// Five even steps of 653 000, which the axis used to print as
+		// 0 · 653k · 1M · 2M · 3M — two units on one scale, so the reader had to
+		// convert before they could see it was even linear.
+		const ceiling = 261_200_000n;
+		const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => BigInt(Math.round(Number(ceiling) * f)));
+		expect(compactAxis(ticks, 'CZK')).toEqual(['0', '0.7M', '1.3M', '2.0M', '2.6M']);
+	});
+
+	it('does not round a gridline to a figure it is not', () => {
+		// "2M" and "3M" are distinct, which is all the old rule asked of them, and
+		// each overstates its own gridline by about a sixth.
+		// Distinct at whole millions, so the old rule accepted them outright.
+		expect(compactAxis([0n, 195_900_000n, 261_200_000n], 'CZK')).toEqual(['0', '2.0M', '2.6M']);
+	});
+
+	it('keeps zero as zero rather than 0.0M', () => {
+		expect(compactAxis([0n, 261_200_000n], 'CZK')[0]).toBe('0');
+	});
+
+	it('stays on whole units when the scale does not need decimals', () => {
+		// The cash-flow history: a household's month, in thousands. Nothing here
+		// crosses a threshold, so nothing gains a decimal it does not need.
+		const ticks = [0n, 2_163_875n, 4_327_750n, 6_491_625n, 8_655_500n];
+		expect(compactAxis(ticks, 'CZK')).toEqual(['0', '22k', '43k', '65k', '87k']);
+	});
 });

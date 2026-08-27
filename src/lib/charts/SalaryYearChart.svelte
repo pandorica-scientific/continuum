@@ -122,194 +122,208 @@
 			Transactions screen, and the history draws itself.
 		</p>
 	{:else}
-		<div class="plot">
-			<svg viewBox="0 0 {VIEW_W} {VIEW_H}" role="img" aria-label="Salary by year">
-				<defs>
-					<filter id="salary-shadow" x="-50%" y="-50%" width="200%" height="200%">
-						<feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3" />
-					</filter>
-					<linearGradient id="salary-base" x1="0" y1="0" x2="0" y2="1">
-						<stop offset="0" style="stop-color: var(--series-health-soft); stop-opacity: 0.62" />
-						<stop offset="1" style="stop-color: var(--series-health-soft); stop-opacity: 0.42" />
-					</linearGradient>
-					<pattern
-						id="salary-bonus"
-						width="7"
-						height="7"
-						patternUnits="userSpaceOnUse"
-						patternTransform="rotate(45)"
-					>
-						<rect width="7" height="7" style="fill: var(--orange); fill-opacity: 0.12" />
-						<line
-							x1="0"
-							y1="0"
-							x2="0"
-							y2="7"
-							style="stroke: var(--orange); stroke-opacity: 0.5; stroke-width: 2.6"
-						/>
-					</pattern>
-				</defs>
+		<!-- Scrolls sideways rather than shrinking. The geometry is a fixed
+		     viewBox, so a narrower card is a shorter chart too, and on a phone the
+		     panel collapsed to about a hundred pixels — with eight axis values
+		     printed over one another inside it. The matrices answer "this does not
+		     fit a phone" the same way. -->
+		<div class="plot-scroll">
+			<div class="plot">
+				<svg viewBox="0 0 {VIEW_W} {VIEW_H}" role="img" aria-label="Salary by year">
+					<defs>
+						<filter id="salary-shadow" x="-50%" y="-50%" width="200%" height="200%">
+							<feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3" />
+						</filter>
+						<linearGradient id="salary-base" x1="0" y1="0" x2="0" y2="1">
+							<stop offset="0" style="stop-color: var(--series-health-soft); stop-opacity: 0.62" />
+							<stop offset="1" style="stop-color: var(--series-health-soft); stop-opacity: 0.42" />
+						</linearGradient>
+						<pattern
+							id="salary-bonus"
+							width="7"
+							height="7"
+							patternUnits="userSpaceOnUse"
+							patternTransform="rotate(45)"
+						>
+							<rect width="7" height="7" style="fill: var(--orange); fill-opacity: 0.12" />
+							<line
+								x1="0"
+								y1="0"
+								x2="0"
+								y2="7"
+								style="stroke: var(--orange); stroke-opacity: 0.5; stroke-width: 2.6"
+							/>
+						</pattern>
+					</defs>
 
-				{#if mode !== 'change'}
-					{#each moneyGrid as g (g.fraction)}
-						<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
+					{#if mode !== 'change'}
+						{#each moneyGrid as g (g.fraction)}
+							<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
+							<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
+						{/each}
+						<line x1={X_LEFT} y1={MONEY_TOP} x2={X_LEFT} y2={MONEY_BOTTOM} class="spine" />
+						<line x1={X_LEFT} y1={MONEY_BOTTOM} x2={X_RIGHT} y2={MONEY_BOTTOM} class="spine" />
+					{/if}
+
+					{#each changeGrid as g (g.pct)}
+						<line
+							x1={X_LEFT}
+							y1={g.y}
+							x2={X_RIGHT}
+							y2={g.y}
+							class="grid"
+							class:zero={g.pct === 0}
+						/>
 						<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
 					{/each}
-					<line x1={X_LEFT} y1={MONEY_TOP} x2={X_LEFT} y2={MONEY_BOTTOM} class="spine" />
-					<line x1={X_LEFT} y1={MONEY_BOTTOM} x2={X_RIGHT} y2={MONEY_BOTTOM} class="spine" />
-				{/if}
+					<line x1={X_LEFT} y1={band[0]} x2={X_LEFT} y2={band[1]} class="spine" />
 
-				{#each changeGrid as g (g.pct)}
-					<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" class:zero={g.pct === 0} />
-					<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
-				{/each}
-				<line x1={X_LEFT} y1={band[0]} x2={X_LEFT} y2={band[1]} class="spine" />
+					{#if mode !== 'change'}
+						{#each years as row, i (row.year)}
+							{#each bars(row, mode, ceiling) as seg, j (j)}
+								<rect
+									x={slotFor(i, years.length) - width / 2}
+									y={seg.y}
+									{width}
+									height={seg.height}
+									rx="2"
+									filter="url(#salary-shadow)"
+									style="fill: url(#salary-{seg.kind}); {seg.stroked
+										? `stroke: var(${seg.kind === 'bonus' ? '--orange' : '--series-health-soft'}); stroke-width: 1`
+										: 'stroke: none'}"
+								/>
+							{/each}
+							{@const tick = netTickY(row, mode, ceiling)}
+							{#if tick !== null}
+								<line
+									x1={slotFor(i, years.length) - width / 2}
+									y1={tick}
+									x2={slotFor(i, years.length) + width / 2}
+									y2={tick}
+									class="net-tick"
+								/>
+							{/if}
+						{/each}
+					{/if}
+
+					<!-- The base line is the one that answers "did my salary go up".
+				     The total moves with a one-off bonus and reads as a raise. -->
+					{#each totalRuns as run, i (i)}
+						{#if run.length > 1}<path d={path(run)} class="line total" />{/if}
+						{#each run as p (p.year)}
+							<circle cx={p.x} cy={p.y} r="3.5" class="dot total" />
+						{/each}
+					{/each}
+					{#if anyBonus}
+						{#each baseRuns as run, i (i)}
+							{#if run.length > 1}<path d={path(run)} class="line base" />{/if}
+							{#each run as p (p.year)}
+								<circle cx={p.x} cy={p.y} r="3" class="dot base" />
+							{/each}
+						{/each}
+					{/if}
+
+					{#if hover !== null}
+						<line
+							x1={slotFor(hover, years.length)}
+							y1={mode === 'change' ? band[0] : MONEY_TOP}
+							x2={slotFor(hover, years.length)}
+							y2={band[1]}
+							class="guide"
+						/>
+					{/if}
+				</svg>
 
 				{#if mode !== 'change'}
-					{#each years as row, i (row.year)}
-						{#each bars(row, mode, ceiling) as seg, j (j)}
-							<rect
-								x={slotFor(i, years.length) - width / 2}
-								y={seg.y}
-								{width}
-								height={seg.height}
-								rx="2"
-								filter="url(#salary-shadow)"
-								style="fill: url(#salary-{seg.kind}); {seg.stroked
-									? `stroke: var(${seg.kind === 'bonus' ? '--orange' : '--series-health-soft'}); stroke-width: 1`
-									: 'stroke: none'}"
-							/>
-						{/each}
-						{@const tick = netTickY(row, mode, ceiling)}
-						{#if tick !== null}
-							<line
-								x1={slotFor(i, years.length) - width / 2}
-								y1={tick}
-								x2={slotFor(i, years.length) + width / 2}
-								y2={tick}
-								class="net-tick"
-							/>
-						{/if}
+					<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
+					{#each moneyGrid as g (g.fraction)}
+						<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.label}</span>
 					{/each}
 				{/if}
-
-				<!-- The base line is the one that answers "did my salary go up".
-				     The total moves with a one-off bonus and reads as a raise. -->
-				{#each totalRuns as run, i (i)}
-					{#if run.length > 1}<path d={path(run)} class="line total" />{/if}
-					{#each run as p (p.year)}
-						<circle cx={p.x} cy={p.y} r="3.5" class="dot total" />
-					{/each}
-				{/each}
-				{#if anyBonus}
-					{#each baseRuns as run, i (i)}
-						{#if run.length > 1}<path d={path(run)} class="line base" />{/if}
-						{#each run as p (p.year)}
-							<circle cx={p.x} cy={p.y} r="3" class="dot base" />
-						{/each}
-					{/each}
-				{/if}
-
-				{#if hover !== null}
-					<line
-						x1={slotFor(hover, years.length)}
-						y1={mode === 'change' ? band[0] : MONEY_TOP}
-						x2={slotFor(hover, years.length)}
-						y2={band[1]}
-						class="guide"
-					/>
-				{/if}
-			</svg>
-
-			{#if mode !== 'change'}
-				<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
-				{#each moneyGrid as g (g.fraction)}
-					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.label}</span>
-				{/each}
-			{/if}
-			<span class="axis-title" style:top="{mode === 'change' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
-				>Change</span
-			>
-			{#each changeGrid as g (g.pct)}
-				<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
-			{/each}
-			{#each years as y, i (y.year)}
-				<span
-					class="axis-year mono"
-					style:left="{(slotFor(i, years.length) / VIEW_W) * 100}%"
-					style:top="{(RATE_BOTTOM_Y / VIEW_H) * 100}%">{y.year}</span
+				<span class="axis-title" style:top="{mode === 'change' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
+					>Change</span
 				>
-			{/each}
-			<span class="axis-caption">Year</span>
+				{#each changeGrid as g (g.pct)}
+					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
+				{/each}
+				{#each years as y, i (y.year)}
+					<span
+						class="axis-year mono"
+						style:left="{(slotFor(i, years.length) / VIEW_W) * 100}%"
+						style:top="{(RATE_BOTTOM_Y / VIEW_H) * 100}%">{y.year}</span
+					>
+				{/each}
 
-			{#each years as y, i (y.year)}
-				<button
-					type="button"
-					class="hit"
-					style:left="{((slotFor(i, years.length) - (X_RIGHT - X_LEFT) / years.length / 2) /
-						VIEW_W) *
-						100}%"
-					style:width="{((X_RIGHT - X_LEFT) / years.length / VIEW_W) * 100}%"
-					onmouseenter={() => (hover = i)}
-					onmouseleave={() => (hover = null)}
-					onfocus={() => (hover = i)}
-					onblur={() => (hover = null)}
-					aria-label="{y.year} figures"
-				></button>
-			{/each}
+				{#each years as y, i (y.year)}
+					<button
+						type="button"
+						class="hit"
+						style:left="{((slotFor(i, years.length) - (X_RIGHT - X_LEFT) / years.length / 2) /
+							VIEW_W) *
+							100}%"
+						style:width="{((X_RIGHT - X_LEFT) / years.length / VIEW_W) * 100}%"
+						onmouseenter={() => (hover = i)}
+						onmouseleave={() => (hover = null)}
+						onfocus={() => (hover = i)}
+						onblur={() => (hover = null)}
+						aria-label="{y.year} figures"
+					></button>
+				{/each}
 
-			{#if hovered}
-				{@const v = barValues(hovered, mode === 'change' ? 'total' : mode)}
-				<div
-					class="readout"
-					class:flip
-					style:left="{(slotFor(hover!, years.length) / VIEW_W) * 100}%"
-				>
-					<span class="r-year mono">{hovered.year}</span>
-					<div class="r-row">
-						<span class="swatch base"></span>
-						<span>base</span>
-						<strong class="mono">{formatMinor(v.base, currency)}</strong>
-					</div>
-					{#if v.bonus > 0n}
+				{#if hovered}
+					{@const v = barValues(hovered, mode === 'change' ? 'total' : mode)}
+					<div
+						class="readout"
+						class:flip
+						style:left="{(slotFor(hover!, years.length) / VIEW_W) * 100}%"
+					>
+						<span class="r-year mono">{hovered.year}</span>
 						<div class="r-row">
-							<span class="swatch bonus"></span>
-							<span>bonus</span>
-							<strong class="mono">{formatMinor(v.bonus, currency)}</strong>
+							<span class="swatch base"></span>
+							<span>base</span>
+							<strong class="mono">{formatMinor(v.base, currency)}</strong>
 						</div>
-					{/if}
-					<!-- The sum the bar actually draws. base + bonus IS gross, and with
+						{#if v.bonus > 0n}
+							<div class="r-row">
+								<span class="swatch bonus"></span>
+								<span>bonus</span>
+								<strong class="mono">{formatMinor(v.bonus, currency)}</strong>
+							</div>
+						{/if}
+						<!-- The sum the bar actually draws. base + bonus IS gross, and with
 					     the two stacked it is worth stating rather than leaving to be
 					     added up by eye — especially beside net, which is what was left
 					     of this same figure rather than a further amount. -->
-					<div class="r-row total">
-						<span class="swatch gross"></span>
-						<span>gross</span>
-						<strong class="mono">{formatMinor(v.base + v.bonus, currency)}</strong>
-					</div>
-					{#if v.net !== null}
-						<div class="r-row">
-							<span class="swatch net"></span>
-							<span>net</span>
-							<strong class="mono">{formatMinor(v.net, currency)}</strong>
+						<div class="r-row total">
+							<span class="swatch gross"></span>
+							<span>gross</span>
+							<strong class="mono">{formatMinor(v.base + v.bonus, currency)}</strong>
 						</div>
-					{/if}
-					<div class="r-foot">
-						{#if hovered.deltaPct !== null}
-							<span>{hovered.deltaPct > 0 ? '+' : ''}{hovered.deltaPct}% total</span>
+						{#if v.net !== null}
+							<div class="r-row">
+								<span class="swatch net"></span>
+								<span>net</span>
+								<strong class="mono">{formatMinor(v.net, currency)}</strong>
+							</div>
 						{/if}
-						{#if hovered.baseDeltaPct !== null && anyBonus}
-							<span>{hovered.baseDeltaPct > 0 ? '+' : ''}{hovered.baseDeltaPct}% base</span>
-						{/if}
-						<span class="months">
-							{hovered.grossMonths} gross · {hovered.netMonths} net
-							{#if !hovered.netComplete && hovered.netMonths > 0}⚠{/if}
-						</span>
+						<div class="r-foot">
+							{#if hovered.deltaPct !== null}
+								<span>{hovered.deltaPct > 0 ? '+' : ''}{hovered.deltaPct}% total</span>
+							{/if}
+							{#if hovered.baseDeltaPct !== null && anyBonus}
+								<span>{hovered.baseDeltaPct > 0 ? '+' : ''}{hovered.baseDeltaPct}% base</span>
+							{/if}
+							<span class="months">
+								{hovered.grossMonths} gross · {hovered.netMonths} net
+								{#if !hovered.netComplete && hovered.netMonths > 0}⚠{/if}
+							</span>
+						</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</div>
 
+		<span class="axis-caption">Year</span>
 		<div class="legend">
 			<span class="key"><span class="swatch base"></span> base salary</span>
 			{#if anyBonus}
@@ -348,9 +362,26 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	.plot-scroll {
+		overflow-x: auto;
+		/* The rotated axis title steps out into this padding when the gutter it
+		   normally sits in is too narrow to hold it beside the value nearest it —
+		   see the container query below. The negative margin gives the space back,
+		   so on a wide card the plot occupies exactly the pixels it always did.
+
+		   A container, so that decision is made from the width the PLOT actually
+		   gets rather than the viewport's: the same viewport gives this card very
+		   different widths with and without the sidebar. */
+		container-type: inline-size;
+		padding-left: 16px;
+		margin-left: -16px;
+	}
 	.plot {
 		position: relative;
 		width: 100%;
+		/* The width at which the two stacked bands still have room for their axis
+		   values — roughly what the chart already gets on a tablet. */
+		min-width: 640px;
 		aspect-ratio: 1000 / 322;
 	}
 	svg {
@@ -415,6 +446,20 @@
 		transform: rotate(-90deg) translateX(-50%);
 		white-space: nowrap;
 	}
+	/* Snug against the plot's left edge, inside the gutter the axis values are
+	   right-aligned in. That gutter is a PERCENTAGE of the plot's width while the
+	   text in it is a fixed size, so below the width below it stops holding both
+	   and the title lands on top of the value beside it — "Millions Kč" printed
+	   through "2.6M". Only then does the title step out.
+
+	   1024px is where a five-character value and the title's own band still
+	   clear each other: the gutter is 5.2% of the plot, so about 53px, against
+	   33px of value and 15px of rotated title. */
+	@container (max-width: 1024px) {
+		.axis-title {
+			left: -16px;
+		}
+	}
 	.axis-value {
 		position: absolute;
 		right: calc(100% - 5.2%);
@@ -430,11 +475,15 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
+	/* Below the plot, in the flow, rather than hanging off its bottom edge.
+	   Absolutely positioned at `bottom: -8%` it stuck out of the scroll
+	   container, and a scroll container clips or scrolls what leaves it — so the
+	   chart grew a vertical scrollbar of its own and could be dragged up and
+	   down inside the card. */
 	.axis-caption {
-		position: absolute;
-		left: 50%;
-		bottom: -8%;
-		transform: translateX(-50%);
+		display: block;
+		margin-top: var(--space-3);
+		text-align: center;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}

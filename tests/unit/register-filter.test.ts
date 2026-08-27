@@ -32,6 +32,7 @@ describe('parseFilter', () => {
 			tagId: null,
 			includeTransfers: false,
 			sourceMethod: null,
+			month: null,
 			page: 1,
 			pageSize: DEFAULT_PAGE_SIZE
 		});

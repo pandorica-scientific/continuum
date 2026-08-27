@@ -40,7 +40,7 @@ function describe(condition: Condition, currency: string): string {
 	return `${FIELD_LABELS[condition.field]} ${verb} “${condition.value}”`;
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
 	const [rows, categories, tags, threshold, base] = await Promise.all([
 		db.select().from(rule),
 		loadCategories(),
@@ -54,6 +54,23 @@ export const load: PageServerLoad = async () => {
 	const tagName = new Map(tags.map((t) => [t.id, t.name]));
 
 	return {
+		/**
+		 * What a rule should be about, when the register sent you here.
+		 *
+		 * A transaction's "Make a rule" carries its counterparty and what it is
+		 * filed as, so the editor opens already describing the row you were
+		 * looking at rather than asking you to retype it. Both are read straight
+		 * from the URL and both are only ever put into a form field — the save
+		 * action validates whatever is actually submitted, as it does for a rule
+		 * typed by hand.
+		 */
+		prefill:
+			url.searchParams.has('counterparty') || url.searchParams.has('category')
+				? {
+						counterparty: url.searchParams.get('counterparty')?.trim() || null,
+						categoryId: url.searchParams.get('category')?.trim() || null
+					}
+				: null,
 		baseCurrency: displayCurrency(base),
 		thresholdPct: Math.round(threshold * 100),
 		rules: rows

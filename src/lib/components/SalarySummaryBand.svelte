@@ -217,4 +217,14 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
+	/* One column, so there are no edges to read from and to. The first and last
+	   figures' outward alignment is what spreads them across a wide row; stacked
+	   on a phone it just makes every figure start in a different place. */
+	@media (max-width: 640px) {
+		.figure:first-child,
+		.figure:last-child {
+			align-items: center;
+			text-align: center;
+		}
+	}
 </style>

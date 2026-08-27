@@ -58,6 +58,15 @@ describe('the tax screen', () => {
 		expect(body.indexOf('Jana')).toBeLessThan(body.indexOf('Tax year'));
 	});
 
+	it('opens with every year collapsed', () => {
+		// The newest year used to open itself, so the table never showed the shape
+		// it exists for — every year against every other — until something was
+		// collapsed first.
+		const { body } = render(Page, { props: props as never });
+		expect(body).not.toContain('aria-expanded="true"');
+		expect(body).toContain('aria-expanded="false"');
+	});
+
 	it('puts the chart above the matrix', () => {
 		const { body } = render(Page, { props: props as never });
 		expect(body.indexOf('Tax year')).toBeLessThan(body.indexOf('Year total'));
