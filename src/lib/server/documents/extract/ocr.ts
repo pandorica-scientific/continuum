@@ -48,19 +48,29 @@ export function availableLanguages(): string[] {
 }
 
 /**
- * Narrow a `+`-joined language string to what is vendored.
+ * Narrow a `+`-joined language string to a set that is actually present.
+ *
+ * Takes the available list rather than reading the disk, so the rule can be
+ * tested where no language data is installed — `tessdata/` is fetched at build
+ * time and is not in the repository, so a test that reached for the disk would
+ * assert a fact about one developer's machine.
  *
  * Returns null when nothing survives: a run with no language is not a run, and
  * the caller records that rather than recognising in a language it does not
  * have.
  */
-export function usableLanguages(requested: string): string | null {
-	const available = new Set(availableLanguages());
+export function narrowLanguages(requested: string, available: readonly string[]): string | null {
+	const present = new Set(available);
 	const kept = requested
 		.split('+')
 		.map((code) => code.trim())
-		.filter((code) => available.has(code));
+		.filter((code) => present.has(code));
 	return kept.length > 0 ? kept.join('+') : null;
+}
+
+/** The same, against what is vendored on this machine. */
+export function usableLanguages(requested: string): string | null {
+	return narrowLanguages(requested, availableLanguages());
 }
 
 export const ocrAvailable = (): boolean => availableLanguages().length > 0;

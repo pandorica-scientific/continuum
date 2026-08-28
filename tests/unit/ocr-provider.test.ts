@@ -5,10 +5,17 @@ import { describe, expect, it } from 'vitest';
 import { renderPdfPages } from '$lib/server/import/ocr';
 import {
 	availableLanguages,
+	narrowLanguages,
 	ocrAvailable,
 	tesseractProvider,
 	usableLanguages
 } from '$lib/server/documents/extract/ocr';
+
+// `tessdata/` is fetched at build time and is not in the repository, so CI has
+// none. The RULE is tested against a fixed list either way; the two cases that
+// genuinely need the models on disk say so.
+const VENDORED = ['ces', 'deu', 'eng', 'pol', 'spa'];
+const installed = ocrAvailable();
 
 /**
  * The seam, not tesseract.
@@ -26,22 +33,28 @@ describe('the OCR provider seam', () => {
 		expect(provider.engineVersion).toMatch(/^\d/);
 	});
 
-	it('keeps only the languages that are actually on disk', () => {
-		const available = availableLanguages();
-		expect(available).toContain('ces');
-		expect(available).toContain('eng');
-		expect(usableLanguages('ces+eng')).toBe('ces+eng');
-		expect(usableLanguages('ces+klingon')).toBe('ces');
+	it('keeps only the languages that are present', () => {
+		expect(narrowLanguages('ces+eng', VENDORED)).toBe('ces+eng');
+		expect(narrowLanguages('ces+klingon', VENDORED)).toBe('ces');
+		expect(narrowLanguages(' ces + eng ', VENDORED)).toBe('ces+eng');
 	});
 
-	it('refuses a request with no vendored language at all', () => {
+	it('refuses a request with no available language at all', () => {
 		// Rejecting here is the difference between a setting that cannot be saved
 		// and a job that fails inside a worker with a message about a file path.
-		expect(usableLanguages('klingon')).toBeNull();
+		expect(narrowLanguages('klingon', VENDORED)).toBeNull();
+		expect(narrowLanguages('ces+eng', [])).toBeNull();
 	});
 
 	it('says whether OCR can run at all', () => {
 		expect(ocrAvailable()).toBe(availableLanguages().length > 0);
+	});
+
+	it('reads its own list off the disk when there is one', () => {
+		// Only meaningful where `npm run fetch:tessdata` has run.
+		if (!installed) return;
+		expect(availableLanguages()).toContain('ces');
+		expect(usableLanguages('ces+klingon')).toBe('ces');
 	});
 
 	it('refuses to recognise in a language it does not have', async () => {
