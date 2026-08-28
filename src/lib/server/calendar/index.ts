@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, loan, loanFixationPeriod, property, tenancy } from '$lib/server/db/schema';
 import { periodForMonth } from '$lib/loans/amortise';
@@ -133,7 +134,12 @@ export async function generateEvents(
 		handle.select().from(loanFixationPeriod),
 		handle.select().from(tenancy),
 		handle.select().from(property),
-		handle.select().from(document)
+		// Restricted documents generate no event AT ALL — not for a member, not
+		// for an admin. This is deliberately not `visibleDocumentPredicate`: a
+		// generated event syncs to iCloud and to a published feed, where there is
+		// no session and no role to filter by, so filtering by who happened to
+		// trigger generation would be false safety.
+		handle.select().from(document).where(eq(document.sensitivity, 'normal'))
 	]);
 
 	const events: LedgerEvent[] = [];

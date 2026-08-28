@@ -9,9 +9,8 @@
  * They drifted before this existed. `REVIEW_STATES` in `transactions/filter.ts`
  * described itself as "the review states the schema allows" and listed three of
  * the four — so a transaction in the `filed` state, which `ingest.ts` treats as
- * terminal, could not be selected by any filter on the register. The schema
- * comment for `document.shelf` named eight shelves while `SHELVES` held nine.
- * Neither was caught, because nothing compared them.
+ * terminal, could not be selected by any filter on the register. It was not
+ * caught, because nothing compared the two.
  *
  * PostgreSQL `ENUM` types are deliberately NOT used. A value cannot be dropped
  * or reordered without recreating the type and every column that depends on it,
@@ -98,7 +97,7 @@ export const ENUMS = {
 	'transaction.review_state': ['auto', 'needs_review', 'confirmed', 'filed'],
 	'transfer_pair.state': ['auto', 'proposed', 'confirmed', 'rejected'],
 
-	'job.kind': ['import', 'calendar_sync'],
+	'job.kind': ['import', 'calendar_sync', 'extract_text'],
 	job_state: ['queued', 'running', 'done', 'failed'],
 	'import_profile.source': ['delimited', 'xlsx'],
 	'import_profile.origin': ['builtin', 'user', 'imported'],
@@ -107,22 +106,42 @@ export const ENUMS = {
 	// 0033 retired it and nothing writes it now.
 	'rule.provenance': ['learned', 'manual'],
 
-	'document.shelf': [
-		'payslips',
-		'tax',
-		'identity',
-		'family',
-		'health',
-		'property',
-		'tenancy',
-		'loans',
-		'insurance',
-		// Bank statements, filed automatically when one is accepted. The bytes
-		// were always kept (import_file.stored_name); this is what makes them
-		// reachable.
-		'statements'
+	// What KIND of paper this is — orthogonal to where it is filed. Behaviour
+	// hangs off type (the salary tracker reads `type='payslip'`), never off the
+	// shelf, which is now a row a household may rename or delete.
+	'document.type': [
+		'contract',
+		'invoice',
+		'receipt',
+		'payslip',
+		'bank_statement',
+		'insurance_policy',
+		'claim',
+		'id_document',
+		'certificate',
+		'medical_record',
+		'tax_document',
+		'technical_plan',
+		'correspondence',
+		'warranty',
+		'manual',
+		'other'
 	],
-	'document.expiry_verb': ['expires', 'ends', 'renews', 'due'],
+
+	// v1 is two values and one rule: an admin sees both, a member sees `normal`
+	// and cannot infer the other from a count, a search hint or a calendar feed.
+	// Per-person ACLs are deferred; this column does not change if they arrive.
+	'document.sensitivity': ['normal', 'restricted'],
+
+	// How a chunk's text was obtained. Shown only under an admin disclosure —
+	// a person filing paper does not care that page 3 was recognised.
+	'document_text_chunk.source': ['text_layer', 'ocr', 'plain'],
+	// Three verbs, three meanings — the kind lives in the word. `renews`: a
+	// successor arrives on the date. `expires`: validity stops and nothing
+	// replaces it. `due`: money is owed by the date. `ends` was a fourth that
+	// meant exactly what `expires` means, and a picker of near-synonyms is a
+	// picker nobody can answer; the upgrade folds it into `expires`.
+	'document.expiry_verb': ['expires', 'renews', 'due'],
 
 	'calendar_account.provider': ['icloud', 'google'],
 	'calendar_conflict.resolution': ['local-won', 'remote-won', 'wrote-back'],
@@ -166,7 +185,9 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'import_profile', column: 'origin', enum: 'import_profile.origin' },
 	{ table: 'import_file', column: 'proof_class', enum: 'proof_class' },
 	{ table: 'rule', column: 'provenance', enum: 'rule.provenance' },
-	{ table: 'document', column: 'shelf', enum: 'document.shelf' },
+	{ table: 'document', column: 'type', enum: 'document.type' },
+	{ table: 'document', column: 'sensitivity', enum: 'document.sensitivity' },
+	{ table: 'document_text_chunk', column: 'source', enum: 'document_text_chunk.source' },
 	{ table: 'document', column: 'expiry_verb', enum: 'document.expiry_verb' },
 	{ table: 'calendar_account', column: 'provider', enum: 'calendar_account.provider' },
 	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' },

@@ -66,7 +66,7 @@ export async function loadSalaryHistory(
 			.select({ id: person.id, name: person.name, birthYear: person.birthYear })
 			.from(person)
 			.orderBy(person.createdAt, person.id),
-		handle.select().from(document).where(eq(document.shelf, 'payslips')),
+		handle.select().from(document).where(eq(document.type, 'payslip')),
 		// Filtered to people: document_link also holds a document's properties,
 		// accounts and subjects, and a payslip filed against a flat is not a
 		// payslip belonging to a flat.

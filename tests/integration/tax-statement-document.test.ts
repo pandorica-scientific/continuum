@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	attachDocumentsToStatement,
@@ -86,7 +87,8 @@ describe('a statement that brings its own document', () => {
 
 		expect(await attachedTo(statement.id)).toEqual([statementDocumentName(2025, 'CZ')]);
 		expect(doc).toMatchObject({
-			shelf: 'tax',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'tax_document',
 			storedName: upload.storedName,
 			ext: 'PDF',
 			addedOn: upload.addedOn,
@@ -159,7 +161,9 @@ describe('a statement that brings several documents', () => {
 			'2025 CZ employer earnings report',
 			'2025 CZ tax statement'
 		]);
-		for (const doc of docs) expect(doc.shelf).toBe('tax');
+		// Type, not shelf: a household may rename or move the shelf these sit
+		// on, and the statement's attachments must still read as tax paperwork.
+		for (const doc of docs) expect(doc.type).toBe('tax_document');
 	});
 
 	it('links every one of them to the statement', async () => {
@@ -337,7 +341,8 @@ describe('loadStatements', () => {
 		await testDb.insert(schema.document).values({
 			id: rowId('loose-doc'),
 			name: 'Passport · Person A',
-			shelf: 'identity',
+			shelfId: await shelfIdByKey('identity', testDb),
+			type: 'id_document',
 			ext: 'PDF',
 			addedOn: '2026-08-23'
 		});

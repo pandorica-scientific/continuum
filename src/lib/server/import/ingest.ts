@@ -20,6 +20,7 @@ import { addTagsToTransaction } from '$lib/server/tags';
 import { extname } from 'node:path';
 import { hashBytes, saveUpload } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { systemShelfId } from '$lib/server/documents/shelves';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';
@@ -882,7 +883,8 @@ export async function ingestFile(
 					{
 						id: uuidv7(),
 						name: statementDocumentName(filename, statements),
-						shelf: 'statements',
+						shelfId: await systemShelfId('statements', tx),
+						type: 'bank_statement',
 						storedName,
 						ext: extname(filename).replace(/^\./, '').toLowerCase() || 'csv',
 						addedOn: new Date().toISOString().slice(0, 10),

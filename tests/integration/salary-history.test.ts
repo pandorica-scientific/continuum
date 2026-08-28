@@ -4,6 +4,7 @@ import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { loadSalaryHistory } from '$lib/server/salary';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -41,7 +42,8 @@ describe('loadSalaryHistory', () => {
 		await testDb.insert(document).values({
 			id: DOC,
 			name: 'Payslip 2026-08 · Robert',
-			shelf: 'payslips',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'payslip',
 			storedName: 'slip-aug.pdf',
 			ext: 'PDF',
 			addedOn: '2026-09-01',

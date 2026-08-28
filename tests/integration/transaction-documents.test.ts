@@ -11,6 +11,7 @@ import {
 } from '$lib/server/transactions/documents';
 import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
 import { upsertTag } from '$lib/server/tags';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -24,7 +25,8 @@ async function addDocument(id: string, name: string) {
 		{
 			id,
 			name,
-			shelf: 'family',
+			shelfId: await shelfIdByKey('family', testDb),
+			type: 'other',
 			storedName: `${id}.pdf`,
 			ext: 'PDF',
 			addedOn: '2026-07-20',

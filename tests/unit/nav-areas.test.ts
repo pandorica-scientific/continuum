@@ -68,8 +68,7 @@ describe('the area structure', () => {
 			'/salary',
 			'/tax',
 			'/import',
-			'/rules',
-			'/tags'
+			'/rules'
 		]);
 	});
 
@@ -144,8 +143,7 @@ describe('visibleAreas', () => {
 			'/cashflow',
 			'/accounts',
 			'/transactions',
-			'/rules',
-			'/tags'
+			'/rules'
 		]);
 	});
 

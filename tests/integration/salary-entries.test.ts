@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { rowId } from '../row-id';
 import { account, document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	attributeSalary,
@@ -421,7 +422,8 @@ describe('slipDocument', () => {
 			{
 				id: rowId('doc-tax'),
 				name: 'Tax 2026',
-				shelf: 'tax',
+				shelfId: await shelfIdByKey('finance', testDb),
+				type: 'tax_document',
 				storedName: 'tax.pdf',
 				ext: 'PDF',
 				addedOn: '2026-09-01',
@@ -430,7 +432,8 @@ describe('slipDocument', () => {
 			{
 				id: rowId('doc-slip'),
 				name: 'Payslip 2026-08',
-				shelf: 'payslips',
+				shelfId: await shelfIdByKey('finance', testDb),
+				type: 'payslip',
 				storedName: 'slip.pdf',
 				ext: 'PDF',
 				addedOn: '2026-09-01',
@@ -439,7 +442,8 @@ describe('slipDocument', () => {
 			{
 				id: rowId('doc-jan'),
 				name: 'Payslip 2026-01',
-				shelf: 'payslips',
+				shelfId: await shelfIdByKey('finance', testDb),
+				type: 'payslip',
 				storedName: 'jan.pdf',
 				ext: 'PDF',
 				addedOn: '2026-02-01',

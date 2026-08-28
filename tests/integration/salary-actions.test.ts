@@ -7,6 +7,7 @@ import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { recordSalary, salaryMonths, slipDocument } from '$lib/server/salary';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -37,7 +38,8 @@ async function slipFor(month: string, id = DOC) {
 	await testDb.insert(document).values({
 		id,
 		name: `Payslip ${month} · Robert`,
-		shelf: 'payslips',
+		shelfId: await shelfIdByKey('finance', testDb),
+		type: 'payslip',
 		storedName: `${month}.pdf`,
 		ext: 'PDF',
 		addedOn: '2026-09-01',

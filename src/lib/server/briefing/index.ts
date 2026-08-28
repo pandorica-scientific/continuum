@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { eq, isNull, sql } from 'drizzle-orm';
+import { eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { groupMonthlySpending } from '$lib/briefing';
 import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
@@ -18,10 +18,12 @@ import {
 	loanFixationPeriod,
 	person,
 	property,
+	shelf,
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
+import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 
 interface BriefingItem {
 	emoji: string;
@@ -41,7 +43,15 @@ interface BriefingItem {
 // The optional handle is what lets a source be exercised against a test
 // database. Sources that do not take one still satisfy this — a function of
 // fewer parameters is assignable — so the older five are untouched.
-type Source = (handle?: Queryable) => Promise<BriefingItem[]>;
+/**
+ * A briefing source, optionally told who is reading.
+ *
+ * The actor arrives second so the handle stays the first argument every source
+ * already took. Only `documentExpiry` uses it today, and it must: a member
+ * cannot be shown a restricted document's renewal date on the Overview, and
+ * "no actor" is read as a member rather than as an admin.
+ */
+type Source = (handle?: Queryable, actor?: Actor | null) => Promise<BriefingItem[]>;
 
 const unreviewedImports: Source = async () => {
 	const rows = await db
@@ -130,9 +140,15 @@ const fixationHorizon: Source = async () => {
 	return items;
 };
 
-const documentExpiry: Source = async () => {
+const documentExpiry: Source = async (_handle, actor = null) => {
 	const today = new Date().toISOString().slice(0, 10);
-	const docs = await db.select().from(document);
+	const docs = await db
+		.select({ ...getTableColumns(document), shelfLabel: shelf.label })
+		.from(document)
+		.innerJoin(shelf, eq(shelf.id, document.shelfId))
+		// The invariant, not a screen filter: a member must not learn a restricted
+		// document exists from a renewal date on the Overview.
+		.where(visibleDocumentPredicate(actor));
 	// What each document belongs to, by current name, for the detail line.
 	const [links, people, properties] = await Promise.all([
 		// One table for every kind of target, so the kind comes from `entity`. Only
@@ -175,8 +191,8 @@ const documentExpiry: Source = async () => {
 			hue: days <= 60 ? 'yellow' : 'grey',
 			title: `${d.name} ${d.expiryVerb} ${d.expiresOn}`,
 			detail: about.get(d.id)?.length
-				? `Filed under ${d.shelf}, about ${about.get(d.id)!.filter(Boolean).join(' and ')}.`
-				: `Filed under ${d.shelf}.`,
+				? `Filed under ${d.shelfLabel}, about ${about.get(d.id)!.filter(Boolean).join(' and ')}.`
+				: `Filed under ${d.shelfLabel}.`,
 			href: '/documents',
 			rank: days + 5
 		});
@@ -348,8 +364,10 @@ const SOURCES: Source[] = [
 	calendarSyncFailures
 ];
 
-export async function buildBriefing(): Promise<{ items: BriefingItem[]; caption: string }> {
-	const all = (await Promise.all(SOURCES.map((s) => s()))).flat();
+export async function buildBriefing(
+	actor: Actor | null = null
+): Promise<{ items: BriefingItem[]; caption: string }> {
+	const all = (await Promise.all(SOURCES.map((s) => s(undefined, actor)))).flat();
 	all.sort((a, b) => a.rank - b.rank);
 	const items = all.slice(0, 4);
 	const urgent = items.filter((i) => i.hue === 'red').length;

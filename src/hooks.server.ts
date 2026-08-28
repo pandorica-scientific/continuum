@@ -11,7 +11,7 @@ import { db } from '$lib/server/db';
 import { refreshCurrencies } from '$lib/server/db/currency-refresh';
 import { runMigrations } from '$lib/server/db/migrate';
 import { backfillPayslips } from '$lib/server/salary';
-import { runQueue } from '$lib/server/import/queue';
+import { runCpuQueue } from '$lib/server/jobs';
 import { refreshRates } from '$lib/server/fx';
 import { isSetUp } from '$lib/server/settings';
 
@@ -62,7 +62,7 @@ async function boot(): Promise<void> {
 	// afterwards so a job whose worker died is retried without waiting for the
 	// next upload.
 	const readQueued = () =>
-		runQueue().catch((err) => console.warn('Statement queue failed:', err.message ?? err));
+		runCpuQueue().catch((err) => console.warn('CPU queue failed:', err.message ?? err));
 	void readQueued();
 	setInterval(readQueued, 5 * 60 * 1000);
 

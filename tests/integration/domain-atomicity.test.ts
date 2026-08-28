@@ -25,6 +25,7 @@ import { deleteSplits, saveSplits } from '$lib/server/splits';
 import { setSetting } from '$lib/server/settings';
 import { updateLoanTags, updatePropertyTags, updateTransactionTags } from '$lib/server/tags';
 import { saveStatement } from '$lib/server/tax';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
@@ -371,7 +372,8 @@ describe('domain replacement writes', () => {
 				{
 					id: rowId('document-fail'),
 					name: 'Rollback document',
-					shelf: 'family',
+					shelfId: await shelfIdByKey('family', testDb),
+					type: 'other',
 					storedName: 'stored.pdf',
 					ext: 'PDF',
 					addedOn: '2026-08-15',
@@ -696,7 +698,8 @@ describe('domain replacement writes', () => {
 		await testDb.insert(schema.document).values({
 			id: rowId('historical-amount-document'),
 			name: 'Historical payslip',
-			shelf: 'payslips',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'payslip',
 			ext: 'PDF',
 			addedOn: '2026-08-15',
 			amountMinor: 100n,
@@ -905,7 +908,7 @@ describe('domain replacement writes', () => {
 
 		expect(result.ok).toBe(false);
 		expect(
-			await testDb.select().from(schema.document).where(eq(schema.document.shelf, 'tax'))
+			await testDb.select().from(schema.document).where(eq(schema.document.type, 'tax_document'))
 		).toEqual([]);
 	});
 

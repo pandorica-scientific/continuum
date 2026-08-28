@@ -45,8 +45,8 @@ describe('registration', () => {
 		await harness.sql`insert into account (id, name, bank, currency)
 			values (${rowId('a-1')}, 'Current', 'other', 'CZK')`;
 		await harness.sql`insert into property (id, name, kind) values (${rowId('pr-1')}, 'Flat', 'lived')`;
-		await harness.sql`insert into document (id, name, shelf, added_on)
-			values (${rowId('d-1')}, 'Lease', 'tenancy', '2026-01-01')`;
+		await harness.sql`insert into document (id, name, shelf_id, type, added_on)
+			values (${rowId('d-1')}, 'Lease', (select id from shelf where key = 'tenancy'), 'contract', '2026-01-01')`;
 		await harness.sql`insert into contact (id, name) values (${rowId('c-1')}, 'Plumber')`;
 		await harness.sql`insert into subject (id, name) values (${rowId('s-1')}, 'The car')`;
 

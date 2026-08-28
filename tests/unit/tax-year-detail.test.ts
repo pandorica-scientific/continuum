@@ -39,9 +39,13 @@ describe('the expanded year', () => {
 
 	it('links an attachment that has a file and does not link one that does not', () => {
 		// A document can be metadata-only; a dead link is worse than plain text.
+		// The link addresses the DOCUMENT, not its stored name: `/files/[name]`
+		// cannot say which document a name belongs to, and a member holding one
+		// could open a restricted document with it.
 		const { body } = render(TaxYearDetail, { props });
-		expect(body).toContain('/files/abc.pdf');
-		expect(body.match(/\/files\//g)).toHaveLength(1);
+		expect(body).toContain('/documents/d1/file');
+		expect(body.match(/\/documents\/[^/]+\/file/g)).toHaveLength(1);
+		expect(body).not.toContain('/files/');
 	});
 
 	it('offers every attachment kind on the adder', () => {

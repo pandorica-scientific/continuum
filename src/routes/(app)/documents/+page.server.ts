@@ -1,74 +1,166 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+/**
+ * One archive, read through one rule.
+ *
+ * Every query below carries `visibleDocumentPredicate` and
+ * `archiveScopePredicate`, including the counts — a member seeing "27" beside a
+ * shelf holding the 26 documents they can open has been told something exists,
+ * which is the fact the invariant protects. Searching happens in SQL rather
+ * than over the loaded array, because contents live in chunks nobody would ship
+ * to a screen.
+ */
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, count, eq, getTableColumns, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	account,
 	document,
 	documentLink,
+	documentText,
 	entity,
+	job,
+	shelf as shelfTable,
+	subject,
+	tag,
 	tagLink,
 	person,
-	property,
-	subject,
-	tag
+	property
 } from '$lib/server/db/schema';
-import { saveUpload } from '$lib/server/system/files';
-import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
-import { deriveColumns, isUnlinked, type LinkedDoc } from '$lib/documents-links';
-import { SHELVES, type ShelfKey } from '$lib/documents';
+import { saveUpload, saveUploadBytes, uploadSize } from '$lib/server/system/files';
+import {
+	createDocument,
+	deleteDocument,
+	replaceDocumentFile
+} from '$lib/server/documents/mutations';
+import {
+	addShelf,
+	listShelves,
+	reassignAndDelete,
+	renameShelf,
+	reorderShelves,
+	shelfIdByKey
+} from '$lib/server/documents/shelves';
+import { deleteTag } from '$lib/server/tags';
+import { loadTagsScreen } from '$lib/server/tags/screen';
+import { archiveScopePredicate, visibleDocumentPredicate } from '$lib/server/documents/visibility';
+import { searchDocuments } from '$lib/server/documents/search';
+import { enqueueExtraction } from '$lib/server/documents/extract/queue';
+import { upsertTag } from '$lib/server/tags';
+import { runCpuQueue } from '$lib/server/jobs';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	const shelf = url.searchParams.get('shelf') ?? 'all';
 	const query = url.searchParams.get('q') ?? '';
-	const tagFilter = url.searchParams.get('tag') ?? '';
+	// Filters narrow the list and never the rail. Several tags AND together:
+	// "insurance" and "car" is the car's insurance, not everything about either.
+	const tagFilters = url.searchParams.getAll('tag').filter(Boolean);
+	const typeFilter = url.searchParams.get('type') ?? '';
+	const entityFilter = url.searchParams.get('entity') ?? '';
+	const includeArchived = url.searchParams.get('archived') === '1';
+	const openDocumentId = url.searchParams.get('doc') ?? '';
+	// The centre column shows the list, or the Tags view. The rail stays put
+	// either way — a view is a thing the rail opens, not a screen of its own.
+	const view = url.searchParams.get('view') === 'tags' ? 'tags' : 'list';
+	const isAdmin = locals.person?.role === 'admin';
 
-	// Other screens open the add form pre-addressed by id, never by name:
-	// ?add=1&addShelf=tenancy&propertyId=…  /  &personId=…
-	const addShelf = url.searchParams.get('addShelf') ?? '';
+	// Other screens open capture pre-addressed by id, never by name:
+	// ?add=1&addShelfKey=tenancy&propertyId=…  /  &personId=…
+	const addShelfKey = url.searchParams.get('addShelfKey') ?? '';
+
+	const readable = and(
+		visibleDocumentPredicate(locals.person),
+		archiveScopePredicate(includeArchived)
+	);
+	// Deliberately without the archive half: this is how many are being hidden.
+	const readableEverywhere = visibleDocumentPredicate(locals.person);
+
+	const [
+		shelves,
+		docs,
+		railCounts,
+		everywhereCount,
+		people,
+		properties,
+		accounts,
+		subjects,
+		docLinks,
+		docTags,
+		tags,
+		texts,
+		pending
+	] = await Promise.all([
+		listShelves(),
+		// The shelf key travels with the row: the rail filters by key and the
+		// label is the household's to change, so neither may be a code list.
+		db
+			.select({
+				...getTableColumns(document),
+				shelfKey: shelfTable.key,
+				shelfLabel: shelfTable.label
+			})
+			.from(document)
+			.innerJoin(shelfTable, eq(shelfTable.id, document.shelfId))
+			.where(readable)
+			.orderBy(document.addedOn),
+		// Rail counts are computed in SQL, after the read rule and nothing else.
+		// They deliberately ignore the search term and the active tag: a rail
+		// whose numbers move as you type cannot be used to navigate.
+		db
+			.select({ key: shelfTable.key, n: count() })
+			.from(document)
+			.innerJoin(shelfTable, eq(shelfTable.id, document.shelfId))
+			.where(readable)
+			.groupBy(shelfTable.key),
+		db.select({ n: count() }).from(document).where(readableEverywhere),
+		db
+			.select({ id: person.id, name: person.name })
+			.from(person)
+			.orderBy(person.createdAt, person.id),
+		db.select({ id: property.id, name: property.name }).from(property).orderBy(property.name),
+		db
+			.select({ id: account.id, name: account.name })
+			.from(account)
+			.where(eq(account.kind, 'brokerage'))
+			.orderBy(account.name),
+		db.select().from(subject).orderBy(subject.name),
+		// One select for every kind of target; the kind comes from `entity`.
+		db
+			.select({
+				documentId: documentLink.documentId,
+				targetId: documentLink.targetId,
+				kind: entity.kind
+			})
+			.from(documentLink)
+			.innerJoin(entity, eq(entity.id, documentLink.targetId)),
+		db.select({ documentId: tagLink.targetId, tagId: tagLink.tagId }).from(tagLink),
+		db.select({ id: tag.id, name: tag.name }).from(tag),
+		db
+			.select({
+				documentId: documentText.documentId,
+				complete: documentText.complete,
+				pagesExtracted: documentText.pagesExtracted,
+				engine: documentText.engine,
+				engineVersion: documentText.engineVersion,
+				meanConfidence: documentText.meanConfidence,
+				languages: documentText.languages
+			})
+			.from(documentText),
+		db
+			.select({ documentId: job.subjectId })
+			.from(job)
+			.where(and(eq(job.kind, 'extract_text'), inArray(job.state, ['queued', 'running'])))
+	]);
+
 	const prefill = {
 		open: url.searchParams.get('add') === '1',
-		shelf: SHELVES.some((s) => s.key === addShelf) ? addShelf : '',
+		shelf: shelves.some((s) => s.key === addShelfKey) ? addShelfKey : '',
 		personId: url.searchParams.get('personId') ?? '',
 		propertyId: url.searchParams.get('propertyId') ?? ''
 	};
-
-	const [docs, people, properties, accounts, subjects, docLinks, docTags, tags] = await Promise.all(
-		[
-			db.select().from(document).orderBy(document.addedOn),
-			db
-				.select({ id: person.id, name: person.name })
-				.from(person)
-				.orderBy(person.createdAt, person.id),
-			db.select({ id: property.id, name: property.name }).from(property).orderBy(property.name),
-			db
-				.select({ id: account.id, name: account.name })
-				.from(account)
-				.where(eq(account.kind, 'brokerage'))
-				.orderBy(account.name),
-			db.select().from(subject).orderBy(subject.name),
-			// Four selects became one; the kind that used to be implied by the table
-			// name now comes from `entity`.
-			db
-				.select({
-					documentId: documentLink.documentId,
-					targetId: documentLink.targetId,
-					kind: entity.kind
-				})
-				.from(documentLink)
-				.innerJoin(entity, eq(entity.id, documentLink.targetId)),
-			// A document's own tags: tag links whose target is this document.
-			db
-				.select({ documentId: tagLink.targetId, tagId: tagLink.tagId })
-				.from(tagLink)
-				.innerJoin(document, eq(document.id, tagLink.targetId)),
-			db.select().from(tag).orderBy(tag.name)
-		]
-	);
 
 	const nameOf = {
 		person: new Map(people.map((x) => [x.id, x.name])),
@@ -77,186 +169,416 @@ export const load: PageServerLoad = async ({ url }) => {
 		subject: new Map(subjects.map((x) => [x.id, x.name])),
 		tag: new Map(tags.map((x) => [x.id, x.name]))
 	};
+	const archivedSubjects = new Set(subjects.filter((s) => s.archivedAt !== null).map((s) => s.id));
 
-	// Everything each document belongs to, by current name.
-	const linked = new Map<string, LinkedDoc>(
-		docs.map((d) => [d.id, { id: d.id, people: [], properties: [], accounts: [], subjects: [] }])
-	);
-	const bucketOf = {
-		person: (d: LinkedDoc) => d.people,
-		property: (d: LinkedDoc) => d.properties,
-		account: (d: LinkedDoc) => d.accounts,
-		subject: (d: LinkedDoc) => d.subjects
-	} as const;
+	const entitiesByDoc = new Map<string, string[]>();
+	const targetsByDoc = new Map<string, { id: string; kind: string }[]>();
+	const archivedByDoc = new Set<string>();
 	for (const link of docLinks) {
-		const doc = linked.get(link.documentId);
-		const kind = link.kind as keyof typeof bucketOf;
-		// A kind this screen has no column for is skipped rather than pushed
-		// somewhere arbitrary — a document tagged is not a document "about" a tag.
-		if (!doc || !(kind in bucketOf)) continue;
-		bucketOf[kind](doc).push(nameOf[kind].get(link.targetId) ?? '');
+		const kind = link.kind as keyof typeof nameOf;
+		if (!(kind in nameOf) || kind === 'tag') continue;
+		const label = nameOf[kind].get(link.targetId);
+		if (label)
+			entitiesByDoc.set(link.documentId, [...(entitiesByDoc.get(link.documentId) ?? []), label]);
+		targetsByDoc.set(link.documentId, [
+			...(targetsByDoc.get(link.documentId) ?? []),
+			{ id: link.targetId, kind }
+		]);
+		if (archivedSubjects.has(link.targetId)) archivedByDoc.add(link.documentId);
 	}
 
 	const tagsByDoc = new Map<string, string[]>();
 	for (const r of docTags) {
-		const list = tagsByDoc.get(r.documentId) ?? [];
-		list.push(nameOf.tag.get(r.tagId) ?? '');
-		tagsByDoc.set(r.documentId, list);
+		const name = nameOf.tag.get(r.tagId);
+		if (name) tagsByDoc.set(r.documentId, [...(tagsByDoc.get(r.documentId) ?? []), name]);
 	}
 
-	const belongings = (id: string) => {
-		const l = linked.get(id)!;
-		return [...l.people, ...l.properties, ...l.accounts, ...l.subjects].filter(Boolean);
-	};
+	const textByDoc = new Map(texts.map((t) => [t.documentId, t]));
+	const pendingDocs = new Set(pending.map((p) => p.documentId).filter(Boolean) as string[]);
 
-	const matchesQuery = (d: (typeof docs)[number]) => {
-		if (!query) return true;
-		const haystack = [
-			d.name,
-			d.addedOn,
-			d.expiresOn ?? '',
-			d.expiryVerb,
-			...belongings(d.id),
-			...(tagsByDoc.get(d.id) ?? [])
-		]
-			.join(' ')
-			.toLowerCase();
-		return query
-			.toLowerCase()
-			.split(/\s+/)
-			.every((word) => haystack.includes(word));
-	};
+	// Searching happens in SQL, not over the loaded array: the tiers are what
+	// make a name match outrank a mention on page forty.
+	const search = query
+		? await searchDocuments(query, locals.person, {
+				includeArchived,
+				shelfKey: shelf === 'all' ? undefined : shelf
+			})
+		: null;
+	const hitById = new Map((search?.hits ?? []).map((hit) => [hit.documentId, hit]));
 
-	const shelfCounts = new Map<string, number>();
-	for (const d of docs) shelfCounts.set(d.shelf, (shelfCounts.get(d.shelf) ?? 0) + 1);
+	const shelfCounts = new Map(railCounts.map((r) => [r.key, r.n]));
+	const readableTotal = railCounts.reduce((sum, r) => sum + r.n, 0);
 
-	const onShelf = docs.filter((d) => shelf === 'all' || d.shelf === shelf);
-	const visible = onShelf
-		.filter(matchesQuery)
-		.filter((d) => !tagFilter || (tagsByDoc.get(d.id) ?? []).includes(tagFilter))
-		.sort((a, b) => (a.addedOn < b.addedOn ? 1 : -1));
+	// The Inbox is where paper waits, not a shelf among the others: nothing in
+	// it appears under Everything until it has been filed. A search still finds
+	// it — a person hunting for a document they dropped in an hour ago should
+	// not be told it does not exist — and the row says "Inbox".
+	const onShelf = docs.filter((d) =>
+		shelf === 'all' ? Boolean(query) || d.shelfKey !== 'inbox' : d.shelfKey === shelf
+	);
+	const found = search
+		? // The order the tiers put them in, not the order they arrived.
+			(search.hits
+				.map((hit) => onShelf.find((d) => d.id === hit.documentId))
+				.filter(Boolean) as typeof onShelf)
+		: onShelf;
+	const visible = found.filter((d) => {
+		const tags = tagsByDoc.get(d.id) ?? [];
+		if (tagFilters.some((t) => !tags.includes(t))) return false;
+		if (typeFilter && d.type !== typeFilter) return false;
+		if (entityFilter && !(targetsByDoc.get(d.id) ?? []).some((t) => t.id === entityFilter))
+			return false;
+		return true;
+	});
 
-	// The sub-taxonomy stays emergent: whatever tags exist on this shelf become
-	// filter chips — now from the shared tag table instead of a jsonb copy.
+	// What the filters can offer: every tag, type and entity that appears on
+	// the shelf in view, with how many documents each would leave. Derived from
+	// the scope rather than the whole archive, so a filter never offers a
+	// choice that empties the list.
 	const tagCounts = new Map<string, number>();
-	for (const d of onShelf)
+	const typeCounts = new Map<string, number>();
+	const entityCounts = new Map<string, number>();
+	for (const d of onShelf) {
 		for (const t of tagsByDoc.get(d.id) ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
-	const tagChips = [...tagCounts.entries()]
-		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-		.slice(0, 14)
-		.map(([name, count]) => ({ name, count, active: name === tagFilter }));
+		typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
+		for (const t of targetsByDoc.get(d.id) ?? [])
+			entityCounts.set(t.id, (entityCounts.get(t.id) ?? 0) + 1);
+	}
+	const entityName = (id: string, kind: string) =>
+		nameOf[kind as 'person' | 'property' | 'account' | 'subject']?.get(id);
+	const filterOptions = {
+		tags: [...tagCounts.entries()]
+			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+			.map(([name, n]) => ({ name, count: n })),
+		types: [...typeCounts.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.map(([code, n]) => ({ code, count: n })),
+		entities: [...entityCounts.entries()]
+			.map(([id, n]) => {
+				const kind = [...targetsByDoc.values()].flat().find((t) => t.id === id)?.kind ?? '';
+				return { id, name: entityName(id, kind) ?? '', count: n };
+			})
+			.filter((e) => e.name)
+			.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+	};
 
-	const today = new Date().toISOString().slice(0, 10);
-	const byId = new Map(visible.map((d) => [d.id, d]));
-	const columns = deriveColumns(visible.map((d) => linked.get(d.id)!))
-		.map((c) => ({
-			label: c.label,
-			items: c.docIds
-				.map((id) => byId.get(id)!)
-				.map((d) => ({
-					id: d.id,
-					name: d.name,
-					ext: d.ext,
-					file: d.storedName,
-					meta: d.expiresOn ? `${d.expiryVerb} ${d.expiresOn}` : `added ${d.addedOn}`,
-					amber: d.expiresOn !== null,
-					expired: d.expiresOn !== null && d.expiresOn < today
-				}))
-		}))
-		.filter((c) => c.items.length > 0);
+	const rowOf = (d: (typeof docs)[number]) => {
+		const text = textByDoc.get(d.id);
+		return {
+			id: d.id,
+			name: d.name,
+			type: d.type,
+			shelfKey: d.shelfKey,
+			shelfLabel: d.shelfLabel,
+			entities: entitiesByDoc.get(d.id) ?? [],
+			tags: tagsByDoc.get(d.id) ?? [],
+			addedOn: d.addedOn,
+			periodOn: d.periodOn,
+			expiresOn: d.expiresOn,
+			expiryVerb: d.expiryVerb,
+			subjectArchived: archivedByDoc.has(d.id),
+			ext: d.ext,
+			hasFile: d.storedName !== null,
+			note: d.note,
+			// Members never see this field carry `restricted`; the row they cannot
+			// see is not in `docs` at all.
+			restricted: d.sensitivity === 'restricted',
+			extraction: text
+				? {
+						complete: text.complete,
+						pagesExtracted: text.pagesExtracted,
+						engine: `${text.engine} ${text.engineVersion}`,
+						languages: text.languages,
+						meanConfidence: text.meanConfidence
+					}
+				: null,
+			pending: pendingDocs.has(d.id),
+			match: hitById.get(d.id)
+				? {
+						matchedIn: hitById.get(d.id)!.matchedIn,
+						pageNo: hitById.get(d.id)!.pageNo,
+						snippet: hitById.get(d.id)!.snippet
+					}
+				: null
+		};
+	};
+
+	const inboxKey = shelves.find((s) => s.system && s.key === 'inbox')?.key ?? 'inbox';
+	const selected = openDocumentId ? docs.find((d) => d.id === openDocumentId) : undefined;
 
 	return {
+		view,
+		tagsScreen: view === 'tags' ? await loadTagsScreen() : null,
 		shelf,
 		query,
-		tag: tagFilter,
-		tags: tagChips,
+		filters: { tags: tagFilters, type: typeFilter, entity: entityFilter },
+		filterOptions,
+		includeArchived,
+		isAdmin,
+		group: url.searchParams.get('group') ?? 'type',
+		sort: url.searchParams.get('sort') ?? 'newest',
+		// What the screen is allowed to say about what it could not find.
+		honesty: search?.honesty ?? null,
 		prefill,
 		shelves: [
-			{ key: 'all', label: 'Everything', count: docs.length },
-			...SHELVES.map((s) => ({ ...s, count: shelfCounts.get(s.key) ?? 0 }))
+			{
+				id: '',
+				key: 'all',
+				label: 'Everything',
+				// Filed paper only. The Inbox has its own row and its own number.
+				count: readableTotal - (shelfCounts.get(inboxKey) ?? 0),
+				system: true,
+				emoji: ''
+			},
+			...shelves.map((s) => ({
+				id: s.id,
+				key: s.key,
+				label: s.label,
+				emoji: s.emoji,
+				system: s.system,
+				count: shelfCounts.get(s.key) ?? 0
+			}))
 		],
-		columns,
+		inboxCount: shelfCounts.get(inboxKey) ?? 0,
+		// How many the archive scope is currently hiding — the affordance's number.
+		archivedHidden: Math.max(0, (everywhereCount[0]?.n ?? 0) - readableTotal),
+		rows: visible.map(rowOf),
 		total: visible.length,
-		// checkbox groups for the add form — records, never suggestions to retype
+		selected: selected
+			? {
+					...rowOf(selected),
+					// `PDF · 412 kB · added 2026-02-11` — the header's own sub-line.
+					fileSize: selected.storedName ? await uploadSize(selected.storedName) : null,
+					links: targetsByDoc.get(selected.id) ?? [],
+					amountMinor: selected.amountMinor === null ? null : String(selected.amountMinor),
+					currency: selected.currency,
+					sensitivity: selected.sensitivity
+				}
+			: null,
+		// Every tag the household has, so the tag field offers them rather than
+		// letting a near-miss create a second one.
+		knownTags: tags.map((t) => t.name).sort((a, b) => a.localeCompare(b)),
+		// Records for capture and the inspector — never suggestions to retype.
 		people,
 		properties,
 		accounts,
-		subjects: subjects.map((s) => ({ id: s.id, name: s.name }))
+		subjects: subjects.map((s) => ({
+			id: s.id,
+			name: s.name,
+			archived: s.archivedAt !== null
+		}))
 	};
 };
 
+/**
+ * The one place capture, the inspector and the bulk bar agree on what the
+ * tag field posts: one `tags` input per tag, and a bare comma-separated string
+ * still accepted from a plain input.
+ */
+async function readTags(form: FormData): Promise<string[]> {
+	return form
+		.getAll('tags')
+		.flatMap((value) => String(value).split(','))
+		.map((t) => t.trim())
+		.filter(Boolean);
+}
+
 export const actions: Actions = {
+	/**
+	 * Capture: a file, a generated name, and the Inbox.
+	 *
+	 * No required enrichment, ever (D10). Everything else on the form is
+	 * optional, and a contextual add pre-applies what Continuum already knows.
+	 */
 	addDocument: async ({ request }) => {
 		const form = await request.formData();
-		const name = String(form.get('name') ?? '').trim();
-		const shelf = String(form.get('shelf') ?? '') as ShelfKey;
-		if (!name) return fail(400, { message: 'The document needs a name.' });
-		if (!SHELVES.some((s) => s.key === shelf)) return fail(400, { message: 'Pick a shelf.' });
+		const shelfKey = String(form.get('shelf') ?? '') || 'inbox';
+		let shelfId: string;
+		try {
+			shelfId = await shelfIdByKey(shelfKey);
+		} catch {
+			return fail(400, { message: 'That shelf no longer exists.' });
+		}
 
-		const picked = {
-			people: form.getAll('personIds').map(String),
-			properties: form.getAll('propertyIds').map(String),
-			accounts: form.getAll('accountIds').map(String),
-			subjects: form.getAll('subjectIds').map(String)
+		// Several files at once is the ordinary case — a folder's worth of scans,
+		// a phone's camera roll. Each becomes its own document, named after its
+		// file; the optional fields on the form apply to all of them.
+		const files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
+		const typedName = String(form.get('name') ?? '').trim();
+		if (files.length === 0 && !typedName) {
+			return fail(400, { message: 'Choose a file, or give the document a name.' });
+		}
+
+		const shared = {
+			shelfId,
+			type: asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other'),
+			note: String(form.get('note') ?? '').trim() || null,
+			sensitivity: asEnumValue(
+				'document.sensitivity',
+				String(form.get('sensitivity') ?? 'normal'),
+				'normal'
+			),
+			addedOn: new Date().toISOString().slice(0, 10),
+			expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
+			expiryVerb: asEnumValue(
+				'document.expiry_verb',
+				String(form.get('expiryVerb') ?? 'expires'),
+				'expires'
+			),
+			personIds: form.getAll('personIds').map(String),
+			propertyIds: form.getAll('propertyIds').map(String),
+			accountIds: form.getAll('accountIds').map(String),
+			transactionIds: [] as string[],
+			subjectIds: form.getAll('subjectIds').map(String),
+			newSubjectName: String(form.get('newSubject') ?? '').trim() || undefined,
+			tagNames: await readTags(form)
 		};
 
-		// "＋ new subject": creating the record and linking it is one save.
-		const newSubject = String(form.get('newSubject') ?? '').trim();
-		if (isUnlinked(picked) && !newSubject)
-			return fail(400, {
-				message: 'A document has to belong to something — tick the household if nothing else fits.'
+		const addedIds: string[] = [];
+		if (files.length === 0) {
+			const documentId = uuidv7();
+			await createDocument({
+				id: documentId,
+				name: typedName,
+				storedName: null,
+				ext: 'PDF',
+				...shared
 			});
-
-		const file = form.get('file');
-		let storedName: string | null = null;
-		let ext = 'PDF';
-		if (file instanceof File && file.size > 0) {
+			addedIds.push(documentId);
+		}
+		for (const file of files) {
+			let storedName: string;
 			try {
 				storedName = await saveUpload(file);
-				ext = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
+			const documentId = uuidv7();
+			await createDocument({
+				id: documentId,
+				// A typed name applies to a single file; several files keep their own.
+				name: (files.length === 1 && typedName) || file.name.replace(/\.[^.]+$/, '') || 'Document',
+				storedName,
+				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
+				...shared
+			});
+			addedIds.push(documentId);
+		}
+		void runCpuQueue().catch(() => undefined);
+		return { ok: true, addedIds, addedShelf: shelfKey };
+	},
+
+	/** The inspector's Save: metadata only, never the file. */
+	updateDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which document?' });
+
+		const shelfKey = String(form.get('shelf') ?? '');
+		let shelfId: string | undefined;
+		if (shelfKey) {
+			try {
+				shelfId = await shelfIdByKey(shelfKey);
+			} catch {
+				return fail(400, { message: 'That shelf no longer exists.' });
+			}
 		}
 
-		const expiresOn = String(form.get('expiresOn') ?? '').trim() || null;
-		const verb = String(form.get('expiryVerb') ?? 'expires');
-		const documentId = uuidv7();
-		const tagNames = String(form.get('tags') ?? '')
-			.split(',')
-			.map((t) => t.trim())
-			.filter(Boolean);
+		await db.transaction(async (tx) => {
+			await tx
+				.update(document)
+				.set({
+					name: String(form.get('name') ?? '').trim() || 'Document',
+					...(shelfId ? { shelfId } : {}),
+					type: asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other'),
+					note: String(form.get('note') ?? '').trim() || null,
+					expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
+					expiryVerb: asEnumValue(
+						'document.expiry_verb',
+						String(form.get('expiryVerb') ?? 'expires'),
+						'expires'
+					),
+					// Only an admin can restrict, and only an admin can unrestrict:
+					// a member's form has no such field and must not be able to send one.
+					...(locals.person?.role === 'admin'
+						? {
+								sensitivity: asEnumValue(
+									'document.sensitivity',
+									String(form.get('sensitivity') ?? 'normal'),
+									'normal'
+								)
+							}
+						: {})
+				})
+				.where(eq(document.id, id));
 
-		// The file is already durably stored above; the domain mutation owns every
-		// related database row, so a bad link or tag cannot leave a partial record.
-		await createDocument({
-			id: documentId,
-			name,
-			shelf,
-			storedName,
-			ext,
-			addedOn: new Date().toISOString().slice(0, 10),
-			expiresOn,
-			expiryVerb: asEnumValue('document.expiry_verb', verb, 'expires'),
-			personIds: picked.people,
-			propertyIds: picked.properties,
-			accountIds: picked.accounts,
-			// The documents screen files against people, property and accounts; a
-			// receipt is attached from the transaction it evidences instead.
-			transactionIds: [],
-			subjectIds: picked.subjects,
-			newSubjectName: newSubject || undefined,
-			tagNames
+			const linked = form.getAll('linkIds').map(String).filter(Boolean);
+			await tx.delete(documentLink).where(eq(documentLink.documentId, id));
+			if (linked.length > 0) {
+				await tx
+					.insert(documentLink)
+					.values(linked.map((targetId) => ({ documentId: id, targetId })))
+					.onConflictDoNothing();
+			}
+
+			// Tags are replaced with what the form holds: the field shows every tag
+			// the document has, so what comes back IS the intended set.
+			await tx.delete(tagLink).where(eq(tagLink.targetId, id));
+			for (const tagName of form.getAll('tags').map(String).filter(Boolean)) {
+				const resolved = await upsertTag(tagName, tx);
+				await tx.insert(tagLink).values({ tagId: resolved.id, targetId: id }).onConflictDoNothing();
+			}
 		});
 		return { ok: true };
 	},
 
+	/** Put different bytes behind the same record. */
+	replaceFile: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		const file = form.get('file');
+		if (!id) return fail(400, { message: 'Which document?' });
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { message: 'Choose a file to put in its place.' });
+		}
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		let storedName: string;
+		try {
+			storedName = await saveUploadBytes(bytes, file.name);
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
+		}
+		const ext = extname(file.name).replace('.', '') || 'pdf';
+		const outcome = await replaceDocumentFile(id, { storedName, ext, bytes });
+		if (!outcome.ok) return fail(404, { message: 'That document is no longer there.' });
+		void runCpuQueue().catch(() => undefined);
+		return { ok: true };
+	},
+
+	/** Read it again — an admin action, for a file that came back badly. */
+	reExtract: async ({ request, locals }) => {
+		if (locals.person?.role !== 'admin') return fail(403, { message: 'Admins only.' });
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which document?' });
+		await db.delete(documentText).where(eq(documentText.documentId, id));
+		await enqueueExtraction(id);
+		void runCpuQueue().catch(() => undefined);
+		return { ok: true };
+	},
+
+	/** The next slice of a file that stopped at the automatic limit. */
+	continueExtraction: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which document?' });
+		await enqueueExtraction(id);
+		void runCpuQueue().catch(() => undefined);
+		return { ok: true };
+	},
+
 	/**
-	 * Remove a document from the household.
-	 *
-	 * There was no way to do this at all: a document could be filed but never
-	 * unfiled, so a mistyped name or a receipt attached to the wrong row stayed
-	 * on the shelf forever. The mutation owns the cascade and the file.
+	 * Remove a document from the household: the record, its links and the file.
 	 */
 	deleteDocument: async ({ request }) => {
 		const form = await request.formData();
@@ -264,6 +586,118 @@ export const actions: Actions = {
 		if (!id) return fail(400, { message: 'Which document?' });
 		const outcome = await deleteDocument(id);
 		if (!outcome.ok) return fail(404, { id, message: 'That document is no longer there.' });
+		return { ok: true };
+	},
+
+	/** Bulk edits from the selection bar: additive for links and tags. */
+	bulkUpdate: async ({ request, locals }) => {
+		const form = await request.formData();
+		const ids = form.getAll('ids').map(String).filter(Boolean);
+		if (ids.length === 0) return fail(400, { message: 'Nothing was selected.' });
+
+		const shelfKey = String(form.get('shelf') ?? '');
+		const type = String(form.get('type') ?? '');
+		const sensitivity = String(form.get('sensitivity') ?? '');
+		const addTags = await readTags(form);
+		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
+
+		await db.transaction(async (tx) => {
+			// Shelf and type REPLACE: a document has one of each. Links and tags
+			// ADD: they are sets, and a bulk edit that silently cleared them would
+			// be a destructive action disguised as a convenience.
+			if (shelfKey) {
+				const shelfId = await shelfIdByKey(shelfKey, tx);
+				await tx.update(document).set({ shelfId }).where(inArray(document.id, ids));
+			}
+			if (type) {
+				await tx
+					.update(document)
+					.set({ type: asEnumValue('document.type', type, 'other') })
+					.where(inArray(document.id, ids));
+			}
+			if (sensitivity && locals.person?.role === 'admin') {
+				await tx
+					.update(document)
+					.set({
+						sensitivity: asEnumValue('document.sensitivity', sensitivity, 'normal')
+					})
+					.where(inArray(document.id, ids));
+			}
+			if (linkIds.length > 0) {
+				await tx
+					.insert(documentLink)
+					.values(ids.flatMap((id) => linkIds.map((targetId) => ({ documentId: id, targetId }))))
+					.onConflictDoNothing();
+			}
+			for (const name of addTags) {
+				const resolved = await upsertTag(name, tx);
+				await tx
+					.insert(tagLink)
+					.values(ids.map((id) => ({ tagId: resolved.id, targetId: id })))
+					.onConflictDoNothing();
+			}
+		});
+		return { ok: true };
+	},
+	// ---- The rail's own edits: rename, reorder, add, reassign-then-delete ----
+	// Deleting a shelf is never a delete: `ON DELETE RESTRICT` on
+	// `document.shelf_id` refuses one that still holds paper, so the dialog's
+	// "move them to" is the mechanism rather than a courtesy.
+
+	renameShelf: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const label = String(form.get('label') ?? '').trim();
+		if (!id || !label) return fail(400, { message: 'A shelf needs a name.' });
+		await renameShelf(id, { label, emoji: String(form.get('emoji') ?? '') }, db);
+		return { ok: true };
+	},
+
+	addShelf: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await addShelf(String(form.get('label') ?? ''), String(form.get('emoji') ?? '🗂️'), db);
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
+		return { ok: true };
+	},
+
+	reorderShelves: async ({ request }) => {
+		const form = await request.formData();
+		const order = String(form.get('order') ?? '')
+			.split(',')
+			.filter(Boolean);
+		if (order.length === 0) return fail(400, { message: 'Nothing to reorder.' });
+		await reorderShelves(order, db);
+		return { ok: true };
+	},
+
+	removeShelf: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await reassignAndDelete(
+				String(form.get('id') ?? ''),
+				String(form.get('reassignTo') ?? ''),
+				db
+			);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not delete that shelf.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/**
+	 * Remove a tag. Everything carrying it is untagged by the cascade, and any
+	 * rule that applied it stops applying it.
+	 */
+	deleteTag: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which tag?' });
+		if (!(await deleteTag(id))) return fail(404, { message: 'That tag is no longer there.' });
 		return { ok: true };
 	}
 };

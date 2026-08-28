@@ -106,7 +106,11 @@ export const load: PageServerLoad = async ({ url }) => {
 				// is not one.
 				currency: displayCurrency(s.currency),
 				currencyCode: s.currency,
-				file: s.file
+				// The document, and the extension the overlay needs: the file is
+				// served through the document now, so the stored name never has to
+				// reach the browser.
+				documentId: s.documentId,
+				fileExt: s.file ? (s.file.split('.').pop() ?? 'pdf').toUpperCase() : null
 			}))
 		}))
 	};

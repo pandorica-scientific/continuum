@@ -20,6 +20,18 @@ const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 /** Where an uploaded file's bytes are served from. */
 export const FILE_PREFIX = '/files/';
 
+/**
+ * A document's bytes are served through the document, not through the filename
+ * — `/files/[name]` cannot say which document a name belongs to, which is how a
+ * member could once open a restricted one by holding its stored name.
+ */
+const DOCUMENT_FILE = /^\/documents\/([0-9a-fA-F-]{36})\/file$/;
+
+/** The link a document's file is opened through. */
+export function documentFileHref(id: string): string {
+	return `/documents/${id}/file`;
+}
+
 function extensionOf(name: string): string {
 	const dot = name.lastIndexOf('.');
 	return dot < 0 ? '' : name.slice(dot).toLowerCase();
@@ -31,9 +43,20 @@ function extensionOf(name: string): string {
  * so the overlay must not try.
  */
 export function fileKind(name: string): FileKind {
-	const ext = extensionOf(name);
-	if (IMAGE_EXT.has(ext)) return 'image';
-	if (ext === '.pdf') return 'pdf';
+	return fileKindFromExtension(extensionOf(name));
+}
+
+/**
+ * The same answer from an extension alone.
+ *
+ * A `/documents/<id>/file` link carries no filename, so the row states the
+ * extension it already holds — `PDF`, `JPG` — and the dot and the case are
+ * this function's problem rather than every call site's.
+ */
+export function fileKindFromExtension(ext: string): FileKind {
+	const dotted = ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
+	if (IMAGE_EXT.has(dotted)) return 'image';
+	if (dotted === '.pdf') return 'pdf';
 	return 'download';
 }
 
@@ -115,4 +138,45 @@ export function viewerTitle(
 		if (text && MEANINGFUL.test(text)) return text;
 	}
 	return kind === 'image' ? 'Image' : 'Document';
+}
+
+/** Where the overlay reads from, and how it can show it. */
+export type ViewerSource = { src: string; kind: FileKind; download: string };
+
+/**
+ * What the overlay should open for this click, from either link shape.
+ *
+ * `/files/<name>` carries its own extension; `/documents/<id>/file` does not,
+ * so the anchor states it (`data-file-ext`). A link whose kind cannot be worked
+ * out falls through to the browser, which is the same thing the server would do
+ * with it anyway.
+ */
+export function viewerSourceFor(
+	href: string | null | undefined,
+	intent: ClickIntent,
+	ext?: string | null
+): ViewerSource | null {
+	if (intent.download || !isPlainClick(intent)) return null;
+
+	const name = fileNameFrom(href);
+	if (name) {
+		const kind = fileKind(name);
+		if (kind === 'download') return null;
+		return { src: `${FILE_PREFIX}${encodeURIComponent(name)}`, kind, download: name };
+	}
+
+	const path = href && /^https?:\/\//i.test(href) ? safePathname(href) : (href ?? '');
+	const document = path && DOCUMENT_FILE.test(path.split(/[?#]/)[0]);
+	if (!document || !ext) return null;
+	const kind = fileKindFromExtension(ext);
+	if (kind === 'download') return null;
+	return { src: path.split(/[?#]/)[0], kind, download: '' };
+}
+
+function safePathname(href: string): string {
+	try {
+		return new URL(href).pathname;
+	} catch {
+		return '';
+	}
 }

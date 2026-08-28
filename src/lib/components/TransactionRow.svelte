@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tagHue } from '$lib/tag-hue';
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	// One transaction, collapsed to a line and expanded to everything.
 	//
@@ -208,14 +209,27 @@
 				<div class="tags">
 					{#each row.tags as t (t.id)}
 						{#if t.direct}
-							<form method="POST" action="?/tags" use:enhance class="tag-chip">
+							<form
+								method="POST"
+								action="?/tags"
+								use:enhance
+								class="tag-chip"
+								style:color="var({tagHue(t.name)})"
+								style:border-color="color-mix(in srgb, var({tagHue(t.name)}) 45%, transparent)"
+							>
 								<input type="hidden" name="id" value={row.id} />
 								<input type="hidden" name="removeTag" value={t.name} />
 								<span>{t.name}</span>
 								<button type="submit" aria-label="Remove tag {t.name}">✕</button>
 							</form>
 						{:else}
-							<span class="tag-chip" title="This tag belongs to a split line">{t.name}</span>
+							<span
+								class="tag-chip"
+								title="This tag belongs to a split line"
+								style:color="var({tagHue(t.name)})"
+								style:border-color="color-mix(in srgb, var({tagHue(t.name)}) 45%, transparent)"
+								>{t.name}</span
+							>
 						{/if}
 					{/each}
 					<form method="POST" action="?/tags" use:enhance>

@@ -360,6 +360,35 @@ No icon library is linked and none should be: this ships as a self-hosted packag
 not depend on a CDN. If the target codebase already has an icon set, substitute equivalents.
 Emoji survive only at card level (briefing kinds, account rows) and in `data-` content.
 
+Documents (v0.7.0) added two: `lock` — a **closed** padlock, shown at 13px in `--fg3` beside
+a restricted document's name, to admins only, because restricted is an access state and not
+a warning; and `search`, 16px inside the search field at `left: 11px` with
+`pointer-events: none`. The drag handle on a sortable shelf row is the existing `grip`
+(six dots), not a new glyph — three stacked lines read as a menu, and a second handle icon
+would be exactly the near-duplicate this set exists to avoid.
+
+### Shelf management components (v0.7.0)
+
+`ShelfRow` — handle · emoji · label · count · `System` badge or `⋯`, at a 52px
+row height on a `28px 36px minmax(0,1fr) auto 36px` grid. The only sortable row
+in the app, which is why it is not an extension of a data row: the dragged row
+takes `--card3` (the active rail fill) and keeps its 1px border, with **no lift,
+no shadow and no transition** — the system has none.
+
+`EmojiPicker` — a fixed `repeat(6, 36px)` grid of 24 emoji plus a `maxlength=2`
+field and Clear. No external picker (self-hosted, no CDN) and no OS picker (a
+Linux box may have none reachable); the field covers the twenty-fifth emoji
+without shipping an emoji database.
+
+### Highlighting a search term
+
+`SnippetMark` is the one place a tint sits **behind ink** rather than behind a border:
+600 weight, `--yellow-tint` ground, `--fg1` ink, 3px radius, on the matched term only.
+Never a border (that reads as a pill, and pills mean state), never the whole row, never the
+whole snippet. Yellow because yellow is already the attention hue in the pill scale. If the
+light theme's contrast ever fails here, darken the ink — never deepen the tint, for the
+reason the tint block in `app.css` gives.
+
 ### App header (every screen)
 
 Left: the screen's icon in `--brand` + screen title (28px/600) with a caption below.

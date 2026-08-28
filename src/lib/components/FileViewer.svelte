@@ -6,12 +6,24 @@
 	// Deliberately not the browser's tab: the row the file belongs to stays
 	// visible behind it, and coming back is one key rather than a tab switch.
 	import { overlayFocus } from '$lib/actions/overlay';
-	import { fileKind } from '$lib/ui/file-viewer';
+	import type { FileKind } from '$lib/ui/file-viewer';
 
-	let { file, title, onclose }: { file: string; title: string; onclose: () => void } = $props();
-
-	const src = $derived(`/files/${encodeURIComponent(file)}`);
-	const kind = $derived(fileKind(file));
+	// The source is resolved by the caller, because the two link shapes answer
+	// it differently: `/files/<name>` carries its extension, a document's file
+	// is addressed by id and states its extension on the link.
+	let {
+		src,
+		kind,
+		download = '',
+		title,
+		onclose
+	}: {
+		src: string;
+		kind: FileKind;
+		download?: string;
+		title: string;
+		onclose: () => void;
+	} = $props();
 </script>
 
 <div
@@ -34,7 +46,7 @@
 			<!-- The two things the old new-tab behaviour was good for are kept as
 			     buttons rather than lost: saving the file, and putting it on a
 			     screen of its own beside the app. -->
-			<a class="act" href={src} download={file}>Download</a>
+			<a class="act" href={src} {download}>Download</a>
 			<a class="act" href={src} target="_blank" rel="noopener">Open in tab</a>
 			<button type="button" class="close" onclick={onclose} aria-label="Close">✕</button>
 		</div>

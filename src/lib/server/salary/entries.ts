@@ -18,6 +18,7 @@ import {
 	salaryEntry
 } from '$lib/server/db/schema';
 import { hashStoredUpload } from '$lib/server/system/files';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 export type SalaryResult = { ok: true } | { ok: false; status: 400 | 404; message: string };
 
@@ -250,15 +251,17 @@ const monthOf = (periodOn: string | null) => (periodOn ? periodOn.slice(0, 7) : 
  * same month are a real arrangement and must never be merged into one, while
  * the same file is the same file whatever the browser called it.
  *
- * Scoped to this person's payslips shelf: the same PDF filed for two people is
- * two statements, and a tax attachment is not a payslip.
+ * Scoped to this person's payslips by TYPE, not by shelf: shelves are rows a
+ * household may rename, move or delete, and a renamed shelf must not unhook the
+ * salary tracker. The same PDF filed for two people is two statements, and a
+ * tax attachment is not a payslip.
  */
 export async function payslipMatchingContent(
 	personId: string,
 	contentHash: string,
 	handle: Db = db
 ): Promise<{ id: string; periodMonth: string | null } | null> {
-	const onShelf = (...where: (SQL | undefined)[]) =>
+	const asPayslip = (...where: (SQL | undefined)[]) =>
 		handle
 			.select({
 				id: document.id,
@@ -267,17 +270,17 @@ export async function payslipMatchingContent(
 			})
 			.from(document)
 			.innerJoin(documentLink, eq(documentLink.documentId, document.id))
-			.where(and(eq(documentLink.targetId, personId), eq(document.shelf, 'payslips'), ...where));
+			.where(and(eq(documentLink.targetId, personId), eq(document.type, 'payslip'), ...where));
 
 	// The steady-state answer, and the reason `content_hash` carries an index.
-	const [known] = await onShelf(eq(document.contentHash, contentHash)).limit(1);
+	const [known] = await asPayslip(eq(document.contentHash, contentHash)).limit(1);
 	if (known) return { id: known.id, periodMonth: monthOf(known.periodOn) };
 
 	// Only then the slips filed before there was a column to hold a hash. They
 	// are fingerprinted here rather than by a migration nobody upgrading would
 	// have run — a shrinking set, read together and written back together, so
-	// the shelf converges after one upload and this pass then finds nothing.
-	const unhashed = await onShelf(isNull(document.contentHash), isNotNull(document.storedName));
+	// the set converges after one upload and this pass then finds nothing.
+	const unhashed = await asPayslip(isNull(document.contentHash), isNotNull(document.storedName));
 	if (unhashed.length === 0) return null;
 
 	const hashed = await Promise.all(
@@ -358,10 +361,14 @@ export async function filePayslipDocument(
 
 	const documentId = uuidv7();
 	await handle.transaction(async (tx) => {
+		// Finance is where a payslip lives now; `type` is what the tracker reads.
+		// The two are orthogonal on purpose — a household may move this document
+		// to a shelf of its own and the month still counts.
 		await tx.insert(document).values({
 			id: documentId,
 			name,
-			shelf: 'payslips',
+			shelfId: await shelfIdByKey('finance', tx),
+			type: 'payslip',
 			storedName,
 			ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
 			addedOn: new Date().toISOString().slice(0, 10),

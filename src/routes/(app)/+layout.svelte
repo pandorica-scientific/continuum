@@ -4,6 +4,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import FileViewer from '$lib/components/FileViewer.svelte';
+	import type { ViewerSource } from '$lib/ui/file-viewer';
 	import type { IconName } from '$lib/icons';
 	import { overlayFocus } from '$lib/actions/overlay';
 	import { filePreview } from '$lib/actions/file-preview';
@@ -15,7 +16,7 @@
 	// Every `/files/…` link in the app opens here instead of in a browser tab —
 	// wired once, on the shell, rather than screen by screen. See
 	// $lib/actions/file-preview for why it is delegated.
-	let openFile = $state<{ file: string; title: string } | null>(null);
+	let openFile = $state<{ source: ViewerSource; title: string } | null>(null);
 
 	// Pinned and hovered are separate states, exactly as InfoHint keeps them.
 	// One shared flag looks fine until a pointer arrives: hovering opens the
@@ -96,7 +97,7 @@
 	);
 </script>
 
-<div class="shell" use:filePreview={{ open: (file, title) => (openFile = { file, title }) }}>
+<div class="shell" use:filePreview={{ open: (source, title) => (openFile = { source, title }) }}>
 	<div
 		class="side"
 		class:open={drawerOpen}
@@ -234,7 +235,13 @@
 	{/if}
 
 	{#if openFile}
-		<FileViewer file={openFile.file} title={openFile.title} onclose={() => (openFile = null)} />
+		<FileViewer
+			src={openFile.source.src}
+			kind={openFile.source.kind}
+			download={openFile.source.download}
+			title={openFile.title}
+			onclose={() => (openFile = null)}
+		/>
 	{/if}
 </div>
 

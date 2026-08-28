@@ -22,6 +22,7 @@
 	import TransactionRow from '$lib/components/TransactionRow.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { REVIEW_LABELS } from '$lib/transactions/filter';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	let { data, form } = $props();
 
@@ -284,7 +285,12 @@
 				{#each attaching.documents as doc (doc.id)}
 					<span class="doc-chip">
 						{#if doc.storedName}
-							<a href="/files/{doc.storedName}" target="_blank" rel="noopener">{doc.name}</a>
+							<a
+								href={documentFileHref(doc.id)}
+								target="_blank"
+								rel="noopener"
+								data-file-ext={doc.ext}>{doc.name}</a
+							>
 						{:else}
 							<span>{doc.name}</span>
 						{/if}

@@ -54,7 +54,7 @@ export async function backfillPayslips(handle: Db = db): Promise<BackfillOutcome
 		.from(document)
 		.innerJoin(documentLink, eq(documentLink.documentId, document.id))
 		.innerJoin(person, eq(person.id, documentLink.targetId))
-		.where(eq(document.shelf, 'payslips'));
+		.where(eq(document.type, 'payslip'));
 
 	const existing = await handle.select().from(salaryEntry);
 	const held = new Map(existing.map((e) => [`${e.personId}|${e.periodMonth}`, e]));

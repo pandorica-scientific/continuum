@@ -13,6 +13,7 @@ import { document, documentLink, person, salaryEntry } from '$lib/server/db/sche
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { learnPayslipCurrency, loadSalaryHistory, recordSalary } from '$lib/server/salary';
 import { getSetting } from '$lib/server/settings';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -135,7 +136,8 @@ describe('which currency a slip row is read in', () => {
 		await testDb.insert(document).values({
 			id,
 			name: `Payslip ${month} · Robert`,
-			shelf: 'payslips',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'payslip',
 			storedName: `${month}.pdf`,
 			ext: 'PDF',
 			addedOn: '2026-08-25',

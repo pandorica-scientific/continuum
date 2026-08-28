@@ -122,8 +122,7 @@ export const AREAS: Area[] = [
 			{ path: '/salary', label: 'Salary', icon: 'wallet', module: 'salary' },
 			{ path: '/tax', label: 'Tax', icon: 'receipt', module: 'tax' },
 			{ path: '/import', label: 'Import', icon: 'inbox', module: 'import' },
-			{ path: '/rules', label: 'Rules', icon: 'sliders' },
-			{ path: '/tags', label: 'Tags', icon: 'tag' }
+			{ path: '/rules', label: 'Rules', icon: 'sliders' }
 		]
 	},
 	{
