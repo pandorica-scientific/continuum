@@ -29,7 +29,7 @@ import {
 	person,
 	property
 } from '$lib/server/db/schema';
-import { saveUpload, saveUploadBytes } from '$lib/server/system/files';
+import { saveUpload, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import {
 	createDocument,
 	deleteDocument,
@@ -287,6 +287,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		selected: selected
 			? {
 					...rowOf(selected),
+					// `PDF · 412 kB · added 2026-02-11` — the header's own sub-line.
+					fileSize: selected.storedName ? await uploadSize(selected.storedName) : null,
 					links: targetsByDoc.get(selected.id) ?? [],
 					amountMinor: selected.amountMinor === null ? null : String(selected.amountMinor),
 					currency: selected.currency,

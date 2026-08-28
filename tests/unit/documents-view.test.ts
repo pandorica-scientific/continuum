@@ -2,6 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import {
 	expiryTreatment,
+	honestyState,
+	readableSize,
+	rowTags,
+	rowVariant,
 	groupDocuments,
 	matchLabel,
 	readableDate,
@@ -29,10 +33,10 @@ const row = (over: Partial<DocRow> = {}): DocRow => ({
 });
 
 describe('expiryTreatment', () => {
-	it('leaves a distant renewal plain', () => {
+	it('reads a distant renewal as green — fine, and here is when', () => {
 		expect(
 			expiryTreatment({ expiresOn: '2027-01-12', expiryVerb: 'renews' }, false, TODAY, 'wide')
-		).toEqual({ kind: 'plain', text: 'renews 12 Jan 2027' });
+		).toEqual({ kind: 'pill', hue: 'green', text: 'renews 12 Jan 2027' });
 	});
 
 	it('turns amber inside sixty days', () => {
@@ -55,12 +59,12 @@ describe('expiryTreatment', () => {
 		).toEqual({ kind: 'plain', text: 'ended 2026-04-18' });
 	});
 
-	it('sheds the verb below 1200px only when the state is plain — A2', () => {
+	it('sheds the verb below 1200px only in the quiet state — A2', () => {
 		// "due" and "renews" mean different things to do. Urgent rows are few
 		// enough to afford the 12px; the quiet ones are not.
 		expect(
 			expiryTreatment({ expiresOn: '2027-01-12', expiryVerb: 'renews' }, false, TODAY, 'medium')
-		).toEqual({ kind: 'plain', text: '12 Jan 2027' });
+		).toEqual({ kind: 'pill', hue: 'green', text: '12 Jan 2027' });
 		expect(
 			expiryTreatment({ expiresOn: '2026-09-18', expiryVerb: 'renews' }, false, TODAY, 'medium')
 		).toEqual({ kind: 'pill', hue: 'yellow', text: 'renews in 21 days' });
@@ -166,6 +170,12 @@ describe('the row itself', () => {
 		);
 	});
 
+	it('shows a few tags and counts the rest rather than hiding them', () => {
+		expect(rowTags(['a', 'b', 'c', 'd', 'e'])).toEqual({ shown: ['a', 'b', 'c'], more: 2 });
+		expect(rowTags(['a'])).toEqual({ shown: ['a'], more: 0 });
+		expect(rowTags([])).toEqual({ shown: [], more: 0 });
+	});
+
 	it('never shows a raw type code', () => {
 		expect(typeLabel('bank_statement')).toBe('Bank statement');
 		expect(typeLabel('nonsense')).toBe('Other');
@@ -194,5 +204,43 @@ describe('search presentation', () => {
 	it('says nothing rather than guessing when the term is not in the snippet', () => {
 		expect(splitSnippet('nothing here', 'absent')).toBeNull();
 		expect(splitSnippet('nothing here', '   ')).toBeNull();
+	});
+});
+
+describe('result rows and honesty', () => {
+	it('picks a row shape from where the match was found', () => {
+		expect(rowVariant({ matchedIn: 'name' })).toBe('metadata');
+		expect(rowVariant({ matchedIn: 'contents' })).toBe('content');
+		expect(rowVariant({ matchedIn: 'note' })).toBe('note');
+		expect(rowVariant(null)).toBe('metadata');
+	});
+
+	it('writes a size a person reads', () => {
+		expect(readableSize(412 * 1024)).toBe('412 kB');
+		expect(readableSize(900)).toBe('900 B');
+		expect(readableSize(3_500_000)).toBe('3.3 MB');
+		expect(readableSize(null)).toBeNull();
+	});
+
+	it('tells "nothing matched" apart from "nothing matched yet"', () => {
+		// A person told the first when the second is true concludes the search
+		// is broken, and stops using it.
+		const none = { pending: 0, notSearchable: 0, archivedOnly: 0 };
+		expect(honestyState('smlouva', 0, none)).toBe('empty');
+		expect(honestyState('smlouva', 0, { ...none, pending: 3 })).toBe('preparing');
+		expect(honestyState('smlouva', 0, { ...none, archivedOnly: 2 })).toBe('archived-only');
+	});
+
+	it('says what was not searched even when something was found', () => {
+		expect(honestyState('smlouva', 4, { pending: 0, notSearchable: 9, archivedOnly: 0 })).toBe(
+			'not-searchable'
+		);
+		expect(honestyState('smlouva', 4, { pending: 0, notSearchable: 0, archivedOnly: 0 })).toBe(
+			'none'
+		);
+	});
+
+	it('says nothing at all when nobody searched', () => {
+		expect(honestyState('', 0, { pending: 3, notSearchable: 9, archivedOnly: 1 })).toBe('none');
 	});
 });

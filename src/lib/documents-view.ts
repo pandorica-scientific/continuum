@@ -111,8 +111,10 @@ export function expiryTreatment(
 		};
 	}
 
+	// A2: the verb is shed below 1200px only here, in the quiet state — amber
+	// and red keep theirs, because "due" and "renews" ask for different things.
 	const date = readableDate(doc.expiresOn);
-	return { kind: 'plain', text: width === 'wide' ? `${verb} ${date}` : date };
+	return { kind: 'pill', hue: 'green', text: width === 'wide' ? `${verb} ${date}` : date };
 }
 
 /** The labels a `document.type` code is shown under. Raw codes never surface. */
@@ -208,6 +210,16 @@ export function subLine(doc: DocRow): string {
 	return [doc.shelfLabel, ...doc.entities].filter(Boolean).join(' · ');
 }
 
+/**
+ * Which tags earn a place on the row.
+ *
+ * A row is one line of context, not a tag cloud: the first few, in the order
+ * they were applied, and a count for the rest so nothing is silently absent.
+ */
+export function rowTags(tags: string[], max = 3): { shown: string[]; more: number } {
+	return { shown: tags.slice(0, max), more: Math.max(0, tags.length - max) };
+}
+
 /** What a search hit is labelled with. The vocabulary a person would use. */
 export function matchLabel(matchedIn: string): string | null {
 	if (matchedIn === 'contents') return 'Matched in contents';
@@ -237,4 +249,54 @@ export function splitSnippet(
 		match: snippet.slice(at, at + needle.length),
 		after: snippet.slice(at + needle.length)
 	};
+}
+
+/**
+ * Which of the three result-row shapes a hit takes.
+ *
+ * `metadata` is a plain row with the term highlighted in the name. The other
+ * two carry a snippet behind a left rule and align to the TOP of the row rather
+ * than the middle, because a two-line row centred against a one-line badge
+ * reads as a misalignment rather than as more information.
+ */
+export type RowVariant = 'metadata' | 'content' | 'note';
+
+export function rowVariant(match: { matchedIn: string } | null | undefined): RowVariant {
+	if (match?.matchedIn === 'contents') return 'content';
+	if (match?.matchedIn === 'note') return 'note';
+	return 'metadata';
+}
+
+/** `412 kB`, `1.2 MB` — a size a person reads, not a byte count. */
+export function readableSize(bytes: number | null): string | null {
+	if (bytes === null) return null;
+	if (bytes < 1024) return `${bytes} B`;
+	const kb = bytes / 1024;
+	if (kb < 1024) return `${Math.round(kb)} kB`;
+	return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * Which honesty card the search should show, if any.
+ *
+ * Four states, and they are not interchangeable: "nothing matched" and "nothing
+ * matched YET" are different facts about the same empty screen, and a person
+ * told the first when the second is true concludes the search is broken.
+ */
+export type HonestyState = 'none' | 'empty' | 'preparing' | 'archived-only' | 'not-searchable';
+
+export function honestyState(
+	query: string,
+	hitCount: number,
+	honesty: { pending: number; notSearchable: number; archivedOnly: number } | null
+): HonestyState {
+	if (!query || !honesty) return 'none';
+	if (hitCount === 0) {
+		if (honesty.archivedOnly > 0) return 'archived-only';
+		if (honesty.pending > 0) return 'preparing';
+		return 'empty';
+	}
+	// Results, but an incomplete corpus behind them — worth saying, quietly,
+	// under the results rather than instead of them.
+	return honesty.notSearchable > 0 ? 'not-searchable' : 'none';
 }
