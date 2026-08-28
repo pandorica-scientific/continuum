@@ -55,25 +55,26 @@
 	<span class="emoji">{shelf.emoji}</span>
 	<button type="button" class="label" onclick={() => onrename?.()}>{shelf.label}</button>
 	<span class="mono count">{shelf.count}</span>
-	{#if shelf.system}
-		<!-- Relabelable, never deletable, key immutable. The badge says which. -->
-		<span class="mono badge">System</span>
-	{:else}
-		<button
-			type="button"
-			class="menu"
-			aria-label="More for {shelf.label}"
-			onclick={() => ondelete?.()}
-		>
-			⋯
-		</button>
-	{/if}
+	<!-- Relabelable, never deletable, key immutable. The badge says which, in a
+	     column of its own so it never sits on top of the count. -->
+	<span class="tail">
+		{#if shelf.system}
+			<span class="mono badge">System</span>
+		{:else}
+			<button
+				type="button"
+				class="menu"
+				aria-label="More for {shelf.label}"
+				onclick={() => ondelete?.()}>⋯</button
+			>
+		{/if}
+	</span>
 </div>
 
 <style>
 	.shelf-row {
 		display: grid;
-		grid-template-columns: 28px 36px minmax(0, 1fr) auto 36px;
+		grid-template-columns: 28px 36px minmax(0, 1fr) auto minmax(36px, auto);
 		align-items: center;
 		gap: var(--space-4);
 		height: 52px;
@@ -89,8 +90,13 @@
 		cursor: grab;
 	}
 	.emoji {
-		font-size: var(--text-md);
+		font-size: var(--text-xl);
+		line-height: 1;
 		text-align: center;
+	}
+	.tail {
+		display: flex;
+		justify-content: flex-end;
 	}
 	.label {
 		border: 0;
@@ -116,7 +122,7 @@
 		background: var(--grey-tint);
 		border-radius: var(--radius-xl);
 		padding: 2px 8px;
-		text-align: center;
+		white-space: nowrap;
 	}
 	.menu {
 		border: 0;

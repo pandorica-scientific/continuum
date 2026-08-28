@@ -11,6 +11,8 @@
 	import { enhance } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import { EXPIRY_VERBS } from '$lib/documents';
 	import { TYPE_LABELS } from '$lib/documents-view';
@@ -34,6 +36,11 @@
 
 	const current = $derived(data.waiting.find((d) => d.id === currentId(session)) ?? null);
 	const kept = $derived(keptFields(session));
+	let confirmingDelete = $state(false);
+	$effect(() => {
+		void current?.id;
+		confirmingDelete = false;
+	});
 </script>
 
 <!-- Enter files (the submit button owns it); Escape leaves. The hint on screen
@@ -123,12 +130,22 @@
 
 			<div class="field">
 				<span class="eyebrow">About</span>
-				<div class="checks">
-					{#each data.targets as target (target.id)}
-						<label class="check">
-							<input type="checkbox" name="linkIds" value={target.id} />
-							{target.name}
-						</label>
+				<div class="about">
+					{#each [{ label: 'People', kind: 'person' }, { label: 'Property', kind: 'property' }, { label: 'Subjects', kind: 'subject' }] as group (group.kind)}
+						{@const items = data.targets.filter((t) => t.kind === group.kind)}
+						{#if items.length}
+							<div class="about-group">
+								<span class="mono about-kind">{group.label}</span>
+								<div class="chips">
+									{#each items as target (target.id)}
+										<label class="pick-chip">
+											<input type="checkbox" name="linkIds" value={target.id} />
+											<span>{target.name}</span>
+										</label>
+									{/each}
+								</div>
+							</div>
+						{/if}
 					{/each}
 				</div>
 			</div>
@@ -142,16 +159,39 @@
 				<input type="date" name="expiresOn" />
 			</div>
 
+			<div class="field">
+				<span class="eyebrow">Tags</span>
+				<TagField known={data.knownTags} />
+			</div>
+
 			<label><span class="eyebrow">Note</span><textarea name="note"></textarea></label>
 
 			{#if data.isAdmin}
-				<label class="check">
+				<!-- Its own bordered row rather than one checkbox among the fields:
+				     this is the one decision on the form that changes who can see the
+				     document, and it should not be ticked by momentum. -->
+				<label class="restricted">
 					<input type="checkbox" name="sensitivity" value="restricted" />
-					Restricted — admins only
+					<span class="lock"><Icon name="lock" size={15} /></span>
+					<span class="restricted-text">
+						<span class="restricted-title">Restricted — admins only</span>
+						<span class="quiet"
+							>Absent for household members: no row, no search hit, no calendar event.</span
+						>
+					</span>
 				</label>
 			{/if}
 
 			<div class="foot">
+				<!-- Two taps, and it leaves the flow only for this document: a photo
+				     of the floor should not have to be filed to be got rid of. -->
+				{#if confirmingDelete}
+					<button type="submit" class="btn danger" formaction="?/remove">Delete for good</button>
+				{:else}
+					<button type="button" class="btn ghost-danger" onclick={() => (confirmingDelete = true)}>
+						Delete
+					</button>
+				{/if}
 				<button type="button" class="btn skip" onclick={() => (session = skip(session))}>
 					Skip
 				</button>
@@ -263,17 +303,94 @@
 		text-transform: none;
 		letter-spacing: 0;
 	}
-	.checks {
+	.about {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	.about-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.about-kind {
+		font-size: var(--text-2xs);
+		color: var(--fg3);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-4);
+		gap: var(--space-3);
 	}
-	.check {
+	.pick-chip {
+		position: relative;
+		display: inline-flex;
 		flex-direction: row;
 		align-items: center;
-		gap: var(--space-3);
-		font-size: var(--text-sm);
+		height: 28px;
+		padding: 0 var(--space-6);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-chip);
+		background: var(--card);
 		color: var(--fg2);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.pick-chip input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		margin: 0;
+		height: auto;
+		padding: 0;
+		cursor: pointer;
+	}
+	.pick-chip:hover {
+		background: var(--card2);
+	}
+	.pick-chip:has(input:checked) {
+		background: var(--card3);
+		border-color: var(--bd2);
+		color: var(--fg1);
+	}
+	.restricted {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-5);
+		padding: var(--space-5) var(--space-6);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		background: var(--card2);
+		cursor: pointer;
+	}
+	.restricted input {
+		height: auto;
+		width: 16px;
+		flex: none;
+	}
+	.restricted .lock {
+		color: var(--fg3);
+		display: inline-flex;
+		flex: none;
+	}
+	.restricted-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	.restricted-title {
+		font-size: var(--text-md);
+		font-weight: 500;
+		color: var(--fg1);
+	}
+	.danger,
+	.ghost-danger {
+		border-color: var(--red);
+		color: var(--red);
+		flex: none;
 	}
 	.foot {
 		display: flex;

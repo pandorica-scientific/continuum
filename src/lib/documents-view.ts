@@ -9,9 +9,17 @@
  * to verify by looking at it.
  */
 
-/** How an expiry reads on a row: quietly, or as a traffic-light pill. */
+/**
+ * How an expiry reads on a row.
+ *
+ * The full traffic light: green is "fine, and here is when", amber is "soon",
+ * red is "passed". The design pass had the far-future case as plain text; the
+ * household asked for the green so every expiry reads the same way at a glance.
+ * `plain` survives for exactly one case — an expiry that passed on an ARCHIVED
+ * subject, which is history rather than a state.
+ */
 export type ExpiryTreatment =
-	{ kind: 'plain'; text: string } | { kind: 'pill'; hue: 'yellow' | 'red'; text: string };
+	{ kind: 'plain'; text: string } | { kind: 'pill'; hue: 'green' | 'yellow' | 'red'; text: string };
 
 /** Which of the three layouts is on screen. Decides A2's verb shedding. */
 export type RowWidth = 'wide' | 'medium' | 'narrow';

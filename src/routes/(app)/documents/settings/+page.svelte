@@ -50,7 +50,11 @@
 <ScreenHeader
 	title="Shelves"
 	caption="Where in life a document belongs. Rename them, reorder them, make your own."
-/>
+>
+	{#snippet actions()}
+		<a class="btn" href="/documents">← Back to documents</a>
+	{/snippet}
+</ScreenHeader>
 
 {#if form?.message}
 	<div class="error" role="alert">{form.message}</div>
@@ -59,14 +63,15 @@
 <div class="card" role="list">
 	{#each shelves as s (s.id)}
 		{#if renaming === s.id}
+			<!-- The same 52px row, with the label swapped for a field: renaming
+			     happens in the place the shelf sits, not in a dialog. -->
 			<form class="rename" method="POST" action="?/rename" use:enhance>
 				<input type="hidden" name="id" value={s.id} />
+				<span class="spacer"></span>
 				<EmojiPicker name="emoji" value={s.emoji} />
 				<input name="label" value={s.label} aria-label="Shelf name" />
-				<div class="rename-actions">
-					<button type="submit" class="btn btn-primary">Save</button>
-					<button type="button" class="btn" onclick={() => (renaming = null)}>Cancel</button>
-				</div>
+				<button type="submit" class="btn btn-primary">Save</button>
+				<button type="button" class="btn" onclick={() => (renaming = null)}>Cancel</button>
 			</form>
 		{:else}
 			<ShelfRow
@@ -84,8 +89,11 @@
 		{/if}
 	{/each}
 
+	<!-- The add row is the last row of the same card, in the position the new
+	     shelf will occupy. One field; a dialog for one field is a wizard. -->
 	<form class="add" method="POST" action="?/add" use:enhance>
-		<EmojiPicker name="emoji" bind:value={newEmoji} />
+		<span class="spacer"></span>
+		<EmojiPicker name="emoji" bind:value={newEmoji} dashed />
 		<input name="label" placeholder="New shelf name" aria-label="New shelf name" />
 		<button type="submit" class="btn">Add</button>
 	</form>
@@ -139,11 +147,19 @@
 	.add,
 	.rename {
 		display: flex;
-		align-items: flex-start;
-		gap: var(--space-5);
-		padding: var(--space-6);
+		align-items: center;
+		gap: var(--space-4);
+		height: 52px;
+		padding: 0 var(--space-5);
 		border-bottom: 1px solid var(--bd);
-		flex-wrap: wrap;
+	}
+	.add {
+		border-bottom: 0;
+	}
+	/* The handle's column, kept empty so the emoji lines up with the rows above. */
+	.spacer {
+		width: 28px;
+		flex: none;
 	}
 	.add input,
 	.rename input,
@@ -157,7 +173,6 @@
 		font-size: var(--text-md);
 		flex: 1 1 200px;
 	}
-	.rename-actions,
 	.modal-actions {
 		display: flex;
 		gap: var(--space-4);

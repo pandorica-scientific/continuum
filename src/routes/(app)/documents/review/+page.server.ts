@@ -12,14 +12,24 @@ import { and, asc, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { asEnumValue } from '$lib/enums';
 import { db } from '$lib/server/db';
-import { document, documentLink, person, property, subject } from '$lib/server/db/schema';
+import {
+	document,
+	documentLink,
+	person,
+	property,
+	subject,
+	tag,
+	tagLink
+} from '$lib/server/db/schema';
+import { upsertTag } from '$lib/server/tags';
+import { deleteDocument } from '$lib/server/documents/mutations';
 import { listShelves, shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
 import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const inboxId = await systemShelfId('inbox');
-	const [waiting, shelves, people, properties, subjects] = await Promise.all([
+	const [waiting, shelves, people, properties, subjects, tags] = await Promise.all([
 		db
 			.select({
 				id: document.id,
@@ -34,13 +44,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		listShelves(),
 		db.select({ id: person.id, name: person.name }).from(person).orderBy(person.name),
 		db.select({ id: property.id, name: property.name }).from(property).orderBy(property.name),
-		db.select({ id: subject.id, name: subject.name }).from(subject).orderBy(subject.name)
+		db.select({ id: subject.id, name: subject.name }).from(subject).orderBy(subject.name),
+		db.select({ name: tag.name }).from(tag).orderBy(tag.name)
 	]);
 
 	return {
 		waiting,
 		isAdmin: locals.person?.role === 'admin',
 		shelves: shelves.filter((s) => s.key !== 'inbox'),
+		knownTags: tags.map((t) => t.name),
 		targets: [
 			...people.map((p) => ({ ...p, kind: 'person' })),
 			...properties.map((p) => ({ ...p, kind: 'property' })),
@@ -102,8 +114,25 @@ export const actions: Actions = {
 					.values(linked.map((targetId) => ({ documentId: id, targetId })))
 					.onConflictDoNothing();
 			}
+			for (const tagName of form.getAll('tags').map(String).filter(Boolean)) {
+				const resolved = await upsertTag(tagName, tx);
+				await tx.insert(tagLink).values({ tagId: resolved.id, targetId: id }).onConflictDoNothing();
+			}
 		});
 		return { ok: true, filedId: id };
+	},
+
+	/**
+	 * Something arrived that should never have: a duplicate, a photo of the
+	 * floor. Gone with its file and its links, and the next one takes its place.
+	 */
+	remove: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which document?' });
+		const outcome = await deleteDocument(id);
+		if (!outcome.ok) return fail(404, { message: 'That document is no longer there.' });
+		return { ok: true, removedId: id };
 	},
 
 	/** Leaving the flow is a navigation, and everything unfiled stays unfiled. */

@@ -39,6 +39,7 @@ import { listShelves, shelfIdByKey } from '$lib/server/documents/shelves';
 import { archiveScopePredicate, visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { searchDocuments } from '$lib/server/documents/search';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
+import { upsertTag } from '$lib/server/tags';
 import { runCpuQueue } from '$lib/server/jobs';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -192,7 +193,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const shelfCounts = new Map(railCounts.map((r) => [r.key, r.n]));
 	const readableTotal = railCounts.reduce((sum, r) => sum + r.n, 0);
 
-	const onShelf = docs.filter((d) => shelf === 'all' || d.shelfKey === shelf);
+	// The Inbox is where paper waits, not a shelf among the others: nothing in
+	// it appears under Everything until it has been filed. A search still finds
+	// it — a person hunting for a document they dropped in an hour ago should
+	// not be told it does not exist — and the row says "Inbox".
+	const onShelf = docs.filter((d) =>
+		shelf === 'all' ? Boolean(query) || d.shelfKey !== 'inbox' : d.shelfKey === shelf
+	);
 	const found = search
 		? // The order the tiers put them in, not the order they arrived.
 			(search.hits
@@ -270,7 +277,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		tags: tagChips,
 		prefill,
 		shelves: [
-			{ key: 'all', label: 'Everything', count: readableTotal, system: true, emoji: '' },
+			{
+				key: 'all',
+				label: 'Everything',
+				// Filed paper only. The Inbox has its own row and its own number.
+				count: readableTotal - (shelfCounts.get(inboxKey) ?? 0),
+				system: true,
+				emoji: ''
+			},
 			...shelves.map((s) => ({
 				key: s.key,
 				label: s.label,
@@ -295,8 +309,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					sensitivity: selected.sensitivity
 				}
 			: null,
-		// Checkbox groups for capture and the inspector — records, never
-		// suggestions to retype.
+		// Every tag the household has, so the tag field offers them rather than
+		// letting a near-miss create a second one.
+		knownTags: tags.map((t) => t.name).sort((a, b) => a.localeCompare(b)),
+		// Records for capture and the inspector — never suggestions to retype.
 		people,
 		properties,
 		accounts,
@@ -308,10 +324,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	};
 };
 
-/** The one place capture and the inspector agree on what a form field means. */
+/**
+ * The one place capture, the inspector and the bulk bar agree on what the
+ * tag field posts: one `tags` input per tag, and a bare comma-separated string
+ * still accepted from a plain input.
+ */
 async function readTags(form: FormData): Promise<string[]> {
-	return String(form.get('tags') ?? '')
-		.split(',')
+	return form
+		.getAll('tags')
+		.flatMap((value) => String(value).split(','))
 		.map((t) => t.trim())
 		.filter(Boolean);
 }
@@ -441,6 +462,14 @@ export const actions: Actions = {
 					.values(linked.map((targetId) => ({ documentId: id, targetId })))
 					.onConflictDoNothing();
 			}
+
+			// Tags are replaced with what the form holds: the field shows every tag
+			// the document has, so what comes back IS the intended set.
+			await tx.delete(tagLink).where(eq(tagLink.targetId, id));
+			for (const tagName of form.getAll('tags').map(String).filter(Boolean)) {
+				const resolved = await upsertTag(tagName, tx);
+				await tx.insert(tagLink).values({ tagId: resolved.id, targetId: id }).onConflictDoNothing();
+			}
 		});
 		return { ok: true };
 	},
@@ -543,7 +572,6 @@ export const actions: Actions = {
 					.onConflictDoNothing();
 			}
 			for (const name of addTags) {
-				const { upsertTag } = await import('$lib/server/tags');
 				const resolved = await upsertTag(name, tx);
 				await tx
 					.insert(tagLink)

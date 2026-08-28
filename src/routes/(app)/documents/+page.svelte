@@ -18,6 +18,7 @@
 	import Segmented from '$lib/components/Segmented.svelte';
 	import SnippetMark from '$lib/components/SnippetMark.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import { EXPIRY_VERBS } from '$lib/documents';
 	import {
@@ -312,7 +313,7 @@
 						<option value={code}>{label}</option>
 					{/each}
 				</select>
-				<input name="tags" placeholder="Add tags, comma separated" />
+				<TagField known={data.knownTags} placeholder="Add tags…" />
 				{#if data.isAdmin}
 					<select name="sensitivity" aria-label="Set visibility">
 						<option value="">Visibility…</option>
@@ -406,12 +407,8 @@
 				<div class="empty">
 					<p class="empty-title">Nothing on {shelfLabel} yet.</p>
 					<p class="quiet">
-						Drop a file anywhere on this screen and it lands in the Inbox — you can move it here
-						later.
+						Add a document from the toolbar and it lands in the Inbox — file it here from there.
 					</p>
-					<button type="button" class="btn btn-primary" onclick={() => (capturing = true)}>
-						+ Add document
-					</button>
 				</div>
 			{/if}
 		{:else}
@@ -596,6 +593,14 @@
 						</div>
 					{/if}
 				</div>
+				<!-- Back closes too (the panel is a URL), but a person looking at a
+				     panel expects a way out on the panel itself. -->
+				<button
+					type="button"
+					class="ins-more"
+					aria-label="Close"
+					onclick={() => navigate({ doc: null })}>✕</button
+				>
 			</header>
 
 			<!-- 2. Preview. A tall receipt letterboxes rather than crops — cropping
@@ -739,17 +744,29 @@
 					</div>
 					<div class="sec">
 						<span class="eyebrow">About</span>
-						<div class="checks">
-							{#each [...data.people.map( (x) => ({ ...x, kind: 'person' }) ), ...data.properties.map( (x) => ({ ...x, kind: 'property' }) ), ...data.subjects.map( (x) => ({ ...x, kind: 'subject' }) )] as target (target.id)}
-								<label class="check">
-									<input
-										type="checkbox"
-										name="linkIds"
-										value={target.id}
-										checked={d.links.some((l) => l.id === target.id)}
-									/>
-									{target.name}
-								</label>
+						<!-- Chips, grouped by what kind of thing they are. A chip is as wide
+						     as its name, so a street address and a first name share one flow
+						     without a grid forcing them to the same width. -->
+						<div class="about">
+							{#each [{ label: 'People', items: data.people }, { label: 'Property', items: data.properties }, { label: 'Subjects', items: data.subjects }] as group (group.label)}
+								{#if group.items.length}
+									<div class="about-group">
+										<span class="mono about-kind">{group.label}</span>
+										<div class="chips">
+											{#each group.items as target (target.id)}
+												<label class="pick-chip">
+													<input
+														type="checkbox"
+														name="linkIds"
+														value={target.id}
+														checked={d.links.some((l) => l.id === target.id)}
+													/>
+													<span>{target.name}</span>
+												</label>
+											{/each}
+										</div>
+									</div>
+								{/if}
 							{/each}
 						</div>
 					</div>
@@ -766,7 +783,7 @@
 					</div>
 					<div class="sec">
 						<span class="eyebrow">Tags</span>
-						<input name="tags" value={d.tags.join(', ')} placeholder="comma separated" />
+						<TagField tags={[...d.tags]} known={data.knownTags} />
 					</div>
 					<div class="sec last">
 						<span class="eyebrow">Note</span>
@@ -1344,6 +1361,9 @@
 		position: relative;
 		flex: none;
 	}
+	.ins-head > .ins-more {
+		flex: none;
+	}
 	.ins-more {
 		width: 36px;
 		height: 36px;
@@ -1481,10 +1501,63 @@
 		gap: var(--space-5);
 		padding-top: var(--space-5);
 	}
-	.checks {
+	.about {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	.about-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.about-kind {
+		font-size: var(--text-2xs);
+		color: var(--fg3);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-4);
+		gap: var(--space-3);
+	}
+	/* The checkbox is the control and stays in the accessibility tree; the chip
+	   is its face. Checked is a fill change, not a tint: it is a selection. */
+	.pick-chip {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		height: 28px;
+		padding: 0 var(--space-6);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-chip);
+		background: var(--card);
+		color: var(--fg2);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.pick-chip input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		margin: 0;
+		height: auto;
+		padding: 0;
+		cursor: pointer;
+	}
+	.pick-chip:hover {
+		background: var(--card2);
+	}
+	.pick-chip:has(input:checked) {
+		background: var(--card3);
+		border-color: var(--bd2);
+		color: var(--fg1);
+	}
+	.pick-chip:has(input:focus-visible) {
+		outline: 2px solid var(--brand);
+		outline-offset: 1px;
 	}
 	.check {
 		display: flex;
