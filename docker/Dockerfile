@@ -43,6 +43,14 @@ FROM node:26-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Alpine's own packages, refreshed. The base image is rebuilt on Node's cadence,
+# not Alpine's, so a `node:26-alpine` pulled today can still be carrying an
+# openssl that was superseded weeks ago — 3.5.7-r0 against an available 3.5.8-r0
+# was eight high-severity findings on its own. Upgrading here costs one layer
+# and keeps the fix general: it picks up whatever the base lags on, rather than
+# naming a package that will be the wrong one next month.
+RUN apk upgrade --no-cache
+
 # npm is never used here — the server starts with `node build` and migrations
 # run in-process through drizzle-orm — but it ships in the base image with its
 # own bundled dependencies, and those carry their own advisories. Three of the
