@@ -4,10 +4,9 @@ import {
 	expiryTreatment,
 	honestyState,
 	readableSize,
-	rowTags,
 	rowVariant,
 	groupDocuments,
-	matchLabel,
+	groupSummary,
 	readableDate,
 	sortDocuments,
 	splitSnippet,
@@ -17,6 +16,9 @@ import {
 } from '$lib/documents-view';
 
 const TODAY = '2026-08-28';
+
+/** The pill hue, or null for a plain treatment — the union is narrowed once here. */
+const hueOf = (t: ReturnType<typeof expiryTreatment>) => (t?.kind === 'pill' ? t.hue : null);
 
 const row = (over: Partial<DocRow> = {}): DocRow => ({
 	id: over.id ?? 'd1',
@@ -33,30 +35,69 @@ const row = (over: Partial<DocRow> = {}): DocRow => ({
 });
 
 describe('expiryTreatment', () => {
-	it('reads a distant renewal as green — fine, and here is when', () => {
+	it('reads a distant renewal as blue — an obligation stands behind the date', () => {
 		expect(
 			expiryTreatment({ expiresOn: '2027-01-12', expiryVerb: 'renews' }, false, TODAY, 'wide')
-		).toEqual({ kind: 'pill', hue: 'green', text: 'renews 12 Jan 2027' });
+		).toEqual({ kind: 'pill', hue: 'blue', text: 'renews 12 Jan 2027' });
 	});
 
-	it('turns amber inside sixty days', () => {
+	it('reads a distant expiry as purple — nothing stands behind it', () => {
+		expect(
+			expiryTreatment({ expiresOn: '2032-08-04', expiryVerb: 'expires' }, false, TODAY, 'wide')
+		).toEqual({ kind: 'pill', hue: 'purple', text: 'expires 4 Aug 2032' });
+	});
+
+	it('turns amber inside sixty days, and the verb hue is replaced rather than tinted', () => {
 		expect(
 			expiryTreatment({ expiresOn: '2026-09-18', expiryVerb: 'renews' }, false, TODAY, 'wide')
 		).toEqual({ kind: 'pill', hue: 'yellow', text: 'renews in 21 days' });
 	});
 
-	it('turns red once it has passed', () => {
+	it('gives money owed a shorter window', () => {
+		// Two months out is rarely worth amber for a bill; a month is.
+		expect(
+			hueOf(expiryTreatment({ expiresOn: '2026-10-10', expiryVerb: 'due' }, false, TODAY))
+		).toBe('blue');
+		expect(
+			hueOf(expiryTreatment({ expiresOn: '2026-09-20', expiryVerb: 'due' }, false, TODAY))
+		).toBe('yellow');
+	});
+
+	it('turns red once it has passed, and never claims a renewal happened', () => {
 		expect(
 			expiryTreatment({ expiresOn: '2026-08-22', expiryVerb: 'expires' }, false, TODAY, 'wide')
 		).toEqual({ kind: 'pill', hue: 'red', text: 'expired 6 days ago' });
+		expect(
+			expiryTreatment({ expiresOn: '2026-08-22', expiryVerb: 'renews' }, false, TODAY)?.text
+		).toBe('renewal due 6 days ago');
+		expect(
+			expiryTreatment({ expiresOn: '2026-08-22', expiryVerb: 'due' }, false, TODAY)?.text
+		).toBe('overdue 6 days');
 	});
 
-	it('carries no red for an expiry that passed on an archived subject', () => {
+	it('lets a lapsed expiry go back to purple after a month — the alarm has said all it can', () => {
+		expect(
+			expiryTreatment({ expiresOn: '2026-06-01', expiryVerb: 'expires' }, false, TODAY)
+		).toEqual({ kind: 'pill', hue: 'purple', text: 'expired 1 Jun 2026' });
+		// Nothing can know a replacement was filed or a bill was paid, so these
+		// stay red until the date changes or the subject is archived.
+		expect(
+			hueOf(expiryTreatment({ expiresOn: '2026-06-01', expiryVerb: 'renews' }, false, TODAY))
+		).toBe('red');
+		expect(
+			hueOf(expiryTreatment({ expiresOn: '2026-06-01', expiryVerb: 'due' }, false, TODAY))
+		).toBe('red');
+	});
+
+	it('lifts the red on an archived subject and lets the verb hue return', () => {
 		// History, not a problem. A sold car's insurance expired in April and
 		// nobody needs to be told about it in red every time they open the list.
 		expect(
-			expiryTreatment({ expiresOn: '2026-04-18', expiryVerb: 'ends' }, true, TODAY, 'wide')
-		).toEqual({ kind: 'plain', text: 'ended 2026-04-18' });
+			expiryTreatment({ expiresOn: '2026-04-18', expiryVerb: 'expires' }, true, TODAY, 'wide')
+		).toEqual({ kind: 'pill', hue: 'purple', text: 'expired 18 Apr 2026' });
+		expect(expiryTreatment({ expiresOn: '2026-04-18', expiryVerb: 'renews' }, true, TODAY)).toEqual(
+			{ kind: 'pill', hue: 'blue', text: 'renewal was due 18 Apr 2026' }
+		);
 	});
 
 	it('sheds the verb below 1200px only in the quiet state — A2', () => {
@@ -64,13 +105,23 @@ describe('expiryTreatment', () => {
 		// enough to afford the 12px; the quiet ones are not.
 		expect(
 			expiryTreatment({ expiresOn: '2027-01-12', expiryVerb: 'renews' }, false, TODAY, 'medium')
-		).toEqual({ kind: 'pill', hue: 'green', text: '12 Jan 2027' });
+		).toEqual({ kind: 'pill', hue: 'blue', text: '12 Jan 2027' });
 		expect(
 			expiryTreatment({ expiresOn: '2026-09-18', expiryVerb: 'renews' }, false, TODAY, 'medium')
 		).toEqual({ kind: 'pill', hue: 'yellow', text: 'renews in 21 days' });
 	});
 
-	it('says nothing at all about a document with no expiry', () => {
+	it('says when a document with no expiry arrived, in an outline pill', () => {
+		// The column reads as a column, but there is no logic behind the date, so
+		// no fill: fifty filled pills saying nothing would be the loudest thing
+		// on the screen.
+		expect(
+			expiryTreatment(
+				{ expiresOn: null, expiryVerb: 'expires', addedOn: '2024-11-02' },
+				false,
+				TODAY
+			)
+		).toEqual({ kind: 'outline', text: 'added 2 Nov 2024' });
 		expect(expiryTreatment({ expiresOn: null, expiryVerb: 'expires' }, false, TODAY)).toBeNull();
 	});
 
@@ -170,12 +221,6 @@ describe('the row itself', () => {
 		);
 	});
 
-	it('shows a few tags and counts the rest rather than hiding them', () => {
-		expect(rowTags(['a', 'b', 'c', 'd', 'e'])).toEqual({ shown: ['a', 'b', 'c'], more: 2 });
-		expect(rowTags(['a'])).toEqual({ shown: ['a'], more: 0 });
-		expect(rowTags([])).toEqual({ shown: [], more: 0 });
-	});
-
 	it('never shows a raw type code', () => {
 		expect(typeLabel('bank_statement')).toBe('Bank statement');
 		expect(typeLabel('nonsense')).toBe('Other');
@@ -187,13 +232,6 @@ describe('the row itself', () => {
 });
 
 describe('search presentation', () => {
-	it('labels only the matches a person would not otherwise see', () => {
-		expect(matchLabel('contents')).toBe('Matched in contents');
-		expect(matchLabel('note')).toBe('Matched in note');
-		// A name match needs no label: the match is the row.
-		expect(matchLabel('name')).toBeNull();
-	});
-
 	it('highlights the term through the fold, not by exact bytes', () => {
 		// A highlight that misses the word the search matched reads as a bug in
 		// the search itself.
@@ -242,5 +280,27 @@ describe('result rows and honesty', () => {
 
 	it('says nothing at all when nobody searched', () => {
 		expect(honestyState('', 0, { pending: 3, notSearchable: 9, archivedOnly: 1 })).toBe('none');
+	});
+});
+
+describe('groupSummary', () => {
+	it('says how many, how many need attention, and when the next one falls due', () => {
+		const summary = groupSummary(
+			[
+				row({ id: 'a', expiresOn: '2026-08-22' }), // passed
+				row({ id: 'b', expiresOn: '2026-09-18' }), // amber
+				row({ id: 'c', expiresOn: '2027-03-01' }), // green
+				row({ id: 'd' })
+			],
+			TODAY
+		);
+		expect(summary).toEqual({ count: 4, expired: 1, soon: 1, nextExpiry: '2026-09-18' });
+	});
+
+	it('does not count a lapsed expiry on an archived subject as expired', () => {
+		// History, not a state — the same rule the row itself follows.
+		const summary = groupSummary([row({ expiresOn: '2026-04-18', subjectArchived: true })], TODAY);
+		expect(summary.expired).toBe(0);
+		expect(summary.nextExpiry).toBeNull();
 	});
 });

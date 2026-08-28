@@ -136,7 +136,12 @@ export const ENUMS = {
 	// How a chunk's text was obtained. Shown only under an admin disclosure —
 	// a person filing paper does not care that page 3 was recognised.
 	'document_text_chunk.source': ['text_layer', 'ocr', 'plain'],
-	'document.expiry_verb': ['expires', 'ends', 'renews', 'due'],
+	// Three verbs, three meanings — the kind lives in the word. `renews`: a
+	// successor arrives on the date. `expires`: validity stops and nothing
+	// replaces it. `due`: money is owed by the date. `ends` was a fourth that
+	// meant exactly what `expires` means, and a picker of near-synonyms is a
+	// picker nobody can answer; the upgrade folds it into `expires`.
+	'document.expiry_verb': ['expires', 'renews', 'due'],
 
 	'calendar_account.provider': ['icloud', 'google'],
 	'calendar_conflict.resolution': ['local-won', 'remote-won', 'wrote-back'],

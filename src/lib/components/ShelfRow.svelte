@@ -51,7 +51,7 @@
 		ondrop?.();
 	}}
 >
-	<span class="handle" aria-hidden="true"><Icon name="grip" size={16} /></span>
+	<span class="handle" aria-hidden="true"><Icon name="grip" size={14} /></span>
 	<span class="emoji">{shelf.emoji}</span>
 	<button type="button" class="label" onclick={() => onrename?.()}>{shelf.label}</button>
 	<span class="mono count">{shelf.count}</span>
@@ -74,23 +74,30 @@
 <style>
 	.shelf-row {
 		display: grid;
-		grid-template-columns: 28px 36px minmax(0, 1fr) auto minmax(36px, auto);
+		/* Sized for the 218px rail it lives in: the only sortable row in the app,
+		   and its home is the rail's edit mode rather than a settings screen. */
+		grid-template-columns: 18px 26px minmax(0, 1fr) auto minmax(24px, auto);
 		align-items: center;
-		gap: var(--space-4);
-		height: 52px;
-		padding: 0 var(--space-5);
-		border-bottom: 1px solid var(--bd);
+		gap: var(--space-3);
+		height: 36px;
+		padding: 0 var(--space-3);
+		border-radius: var(--radius-md);
+		border: 1px solid transparent;
 		background: transparent;
+	}
+	.shelf-row:hover {
+		background: var(--card2);
 	}
 	.shelf-row.dragging {
 		background: var(--card3);
+		border-color: var(--bd);
 	}
 	.handle {
 		color: var(--fg3);
 		cursor: grab;
 	}
 	.emoji {
-		font-size: var(--text-xl);
+		font-size: var(--text-lg);
 		line-height: 1;
 		text-align: center;
 	}

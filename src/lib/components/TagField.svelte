@@ -14,7 +14,8 @@
 		tags = $bindable([]),
 		known = [],
 		name = 'tags',
-		placeholder = 'Add a tag…'
+		placeholder = 'Add a tag…',
+		onchange
 	}: {
 		tags?: string[];
 		/** Every tag the household has, for the suggestions. */
@@ -22,7 +23,11 @@
 		/** The field name each tag is posted under — one hidden input per tag. */
 		name?: string;
 		placeholder?: string;
+		/** Fired after a tag is added or removed — a filter bar navigates on it. */
+		onchange?: (tags: string[]) => void;
 	} = $props();
+
+	import { tagHue } from '$lib/tag-hue';
 
 	let draft = $state('');
 	const listId = `tag-field-${Math.random().toString(36).slice(2, 8)}`;
@@ -36,20 +41,28 @@
 		// Prefer the household's own spelling when the fold matches one it has.
 		const existing = known.find((k) => fold(k) === fold(value));
 		const chosen = existing ?? value;
-		if (!tags.some((t) => fold(t) === fold(chosen))) tags = [...tags, chosen];
+		if (!tags.some((t) => fold(t) === fold(chosen))) {
+			tags = [...tags, chosen];
+			onchange?.(tags);
+		}
 		draft = '';
 	}
 
 	function remove(value: string) {
 		tags = tags.filter((t) => t !== value);
+		onchange?.(tags);
 	}
 </script>
 
 {#each tags as t (t)}<input type="hidden" {name} value={t} />{/each}
 
-<div class="field">
+<div class="tag-field">
 	{#each tags as t (t)}
-		<span class="chip">
+		<span
+			class="chip"
+			style:color="var({tagHue(t)})"
+			style:border-color="color-mix(in srgb, var({tagHue(t)}) 45%, transparent)"
+		>
 			{t}
 			<button type="button" class="x" aria-label="Remove {t}" onclick={() => remove(t)}>✕</button>
 		</span>
@@ -77,7 +90,9 @@
 </div>
 
 <style>
-	.field {
+	/* Not `.field`: app.css defines that globally as a column of eyebrow and
+	   control, and this IS the control. */
+	.tag-field {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -97,8 +112,8 @@
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-chip);
 		background: var(--card2);
-		color: var(--fg1);
 		font-size: var(--text-sm);
+		font-weight: 500;
 		white-space: nowrap;
 	}
 	.x {

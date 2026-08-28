@@ -897,7 +897,7 @@ ALTER TABLE import_file ADD CONSTRAINT import_file_proof_class_check
 ALTER TABLE rule ADD CONSTRAINT rule_provenance_check
 	CHECK (provenance in ('learned', 'manual'));--> statement-breakpoint
 ALTER TABLE document ADD CONSTRAINT document_expiry_verb_check
-	CHECK (expiry_verb in ('expires', 'ends', 'renews', 'due'));--> statement-breakpoint
+	CHECK (expiry_verb in ('expires', 'renews', 'due'));--> statement-breakpoint
 -- No normalisation on a bad provider: one that is neither of these cannot be
 -- synced with, so rewriting it would hide a broken connection rather than fix it.
 ALTER TABLE calendar_account ADD CONSTRAINT calendar_account_provider_check

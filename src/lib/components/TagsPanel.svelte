@@ -1,16 +1,25 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// Every tag, what it is on, and what it has cost — in the Documents centre
+	// column, where the rail stays put beside it.
 	import { enhance } from '$app/forms';
-	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import { tagHue } from '$lib/tag-hue';
+	import type { TagsScreen } from '$lib/server/tags/screen';
 
-	let { data, form } = $props();
+	let {
+		screen,
+		message
+	}: {
+		screen: TagsScreen;
+		message?: string;
+	} = $props();
 
-	// Two taps rather than a browser confirm(): this untags everything the tag is
-	// on, and a native dialog blocks the page while it is open.
+	// Two taps rather than a browser confirm(): this untags everything the tag
+	// is on, and a native dialog blocks the page while it is open.
 	let confirming = $state<string | null>(null);
 	$effect(() => {
-		void data.tags;
+		void screen.tags;
 		confirming = null;
 	});
 
@@ -23,37 +32,32 @@
 	}
 </script>
 
-<ScreenHeader
-	title="Tags"
-	caption="What each project has cost so far, across every category it touches."
-/>
-
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="🏷️" label="Running totals" />
+		<Eyebrow emoji="🏷️" label="Tags" />
 		<span class="eyebrow-caption">
-			{data.tags.length}
-			{data.tags.length === 1 ? 'tag' : 'tags'}
+			{screen.tags.length}
+			{screen.tags.length === 1 ? 'tag' : 'tags'} · what each has cost, across every category it touches
 		</span>
 	</div>
 
-	{#if data.tags.length === 0}
-		<p class="empty">
-			No tags yet. Add one to a transaction in the register and its total appears here.
-		</p>
+	{#if screen.tags.length === 0}
+		<p class="empty">No tags yet. Add one to a document or a transaction and it appears here.</p>
 	{/if}
 
-	{#if form?.message}
-		<p class="row-error" role="alert">{form.message}</p>
+	{#if message}
+		<p class="row-error" role="alert">{message}</p>
 	{/if}
 
-	{#each data.tags as t (t.id)}
-		<!-- The card is no longer the link itself: a delete button cannot live
-		     inside an anchor, so the anchor covers the row's content and the
-		     button sits beside it. -->
+	{#each screen.tags as t (t.id)}
 		<div class="card tag-row">
-			<a class="t-link" href="/transactions?tag={t.id}">
-				<span class="t-name">{t.name}</span>
+			<a class="t-link" href="/documents?tag={encodeURIComponent(t.name)}">
+				<span
+					class="t-name"
+					style:color="var({tagHue(t.name)})"
+					style:border-color="color-mix(in srgb, var({tagHue(t.name)}) 45%, transparent)"
+					>{t.name}</span
+				>
 				{#if t.documents.length || t.properties.length}
 					<span class="t-linked">
 						{#each t.properties as p (p.id)}<span class="t-item">🏢 {p.name}</span>{/each}
@@ -65,7 +69,7 @@
 				{/if}
 				<span class="t-figures">
 					{#if t.empty}
-						<span class="t-quiet">nothing tagged yet</span>
+						<span class="t-quiet">no money tagged</span>
 					{:else}
 						{#each t.parts as p, i (i)}
 							<span class="mono t-part">{p.amount}</span>
@@ -75,6 +79,9 @@
 						{/if}
 					{/if}
 				</span>
+			</a>
+			<a class="t-money" href="/transactions?tag={t.id}" title="Transactions carrying this tag">
+				register →
 			</a>
 			{#if confirming === t.id}
 				<form method="POST" action="?/deleteTag" use:enhance class="t-confirm">
@@ -97,6 +104,11 @@
 </section>
 
 <style>
+	.section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
 	.tag-row {
 		display: flex;
 		align-items: center;
@@ -118,6 +130,25 @@
 	}
 	.t-link:hover {
 		text-decoration: none;
+	}
+	.t-name {
+		display: inline-flex;
+		align-items: center;
+		height: 26px;
+		padding: 0 var(--space-5);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-chip);
+		font-size: var(--text-sm);
+		font-weight: 500;
+	}
+	.t-money {
+		flex: none;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		text-decoration: none;
+	}
+	.t-money:hover {
+		color: var(--fg1);
 	}
 	.t-confirm {
 		display: flex;
@@ -147,15 +178,11 @@
 		font-size: var(--text-sm);
 		color: var(--red);
 	}
-	.t-name {
-		font-size: var(--text-md);
-		font-weight: 500;
-	}
 	.t-linked {
 		flex-basis: 100%;
 		display: flex;
 		flex-wrap: wrap;
-		gap: 4px 14px;
+		gap: var(--space-2) var(--space-7);
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}

@@ -35,7 +35,16 @@ import {
 	deleteDocument,
 	replaceDocumentFile
 } from '$lib/server/documents/mutations';
-import { listShelves, shelfIdByKey } from '$lib/server/documents/shelves';
+import {
+	addShelf,
+	listShelves,
+	reassignAndDelete,
+	renameShelf,
+	reorderShelves,
+	shelfIdByKey
+} from '$lib/server/documents/shelves';
+import { deleteTag } from '$lib/server/tags';
+import { loadTagsScreen } from '$lib/server/tags/screen';
 import { archiveScopePredicate, visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { searchDocuments } from '$lib/server/documents/search';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
@@ -46,9 +55,16 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const shelf = url.searchParams.get('shelf') ?? 'all';
 	const query = url.searchParams.get('q') ?? '';
-	const tagFilter = url.searchParams.get('tag') ?? '';
+	// Filters narrow the list and never the rail. Several tags AND together:
+	// "insurance" and "car" is the car's insurance, not everything about either.
+	const tagFilters = url.searchParams.getAll('tag').filter(Boolean);
+	const typeFilter = url.searchParams.get('type') ?? '';
+	const entityFilter = url.searchParams.get('entity') ?? '';
 	const includeArchived = url.searchParams.get('archived') === '1';
 	const openDocumentId = url.searchParams.get('doc') ?? '';
+	// The centre column shows the list, or the Tags view. The rail stays put
+	// either way — a view is a thing the rail opens, not a screen of its own.
+	const view = url.searchParams.get('view') === 'tags' ? 'tags' : 'list';
 	const isAdmin = locals.person?.role === 'admin';
 
 	// Other screens open capture pre-addressed by id, never by name:
@@ -206,19 +222,45 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				.map((hit) => onShelf.find((d) => d.id === hit.documentId))
 				.filter(Boolean) as typeof onShelf)
 		: onShelf;
-	const visible = found.filter(
-		(d) => !tagFilter || (tagsByDoc.get(d.id) ?? []).includes(tagFilter)
-	);
+	const visible = found.filter((d) => {
+		const tags = tagsByDoc.get(d.id) ?? [];
+		if (tagFilters.some((t) => !tags.includes(t))) return false;
+		if (typeFilter && d.type !== typeFilter) return false;
+		if (entityFilter && !(targetsByDoc.get(d.id) ?? []).some((t) => t.id === entityFilter))
+			return false;
+		return true;
+	});
 
-	// Whatever tags exist in this scope become filter chips; the sub-taxonomy
-	// stays emergent rather than being another list to maintain.
+	// What the filters can offer: every tag, type and entity that appears on
+	// the shelf in view, with how many documents each would leave. Derived from
+	// the scope rather than the whole archive, so a filter never offers a
+	// choice that empties the list.
 	const tagCounts = new Map<string, number>();
-	for (const d of onShelf)
+	const typeCounts = new Map<string, number>();
+	const entityCounts = new Map<string, number>();
+	for (const d of onShelf) {
 		for (const t of tagsByDoc.get(d.id) ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
-	const tagChips = [...tagCounts.entries()]
-		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-		.slice(0, 14)
-		.map(([name, n]) => ({ name, count: n, active: name === tagFilter }));
+		typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
+		for (const t of targetsByDoc.get(d.id) ?? [])
+			entityCounts.set(t.id, (entityCounts.get(t.id) ?? 0) + 1);
+	}
+	const entityName = (id: string, kind: string) =>
+		nameOf[kind as 'person' | 'property' | 'account' | 'subject']?.get(id);
+	const filterOptions = {
+		tags: [...tagCounts.entries()]
+			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+			.map(([name, n]) => ({ name, count: n })),
+		types: [...typeCounts.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.map(([code, n]) => ({ code, count: n })),
+		entities: [...entityCounts.entries()]
+			.map(([id, n]) => {
+				const kind = [...targetsByDoc.values()].flat().find((t) => t.id === id)?.kind ?? '';
+				return { id, name: entityName(id, kind) ?? '', count: n };
+			})
+			.filter((e) => e.name)
+			.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+	};
 
 	const rowOf = (d: (typeof docs)[number]) => {
 		const text = textByDoc.get(d.id);
@@ -265,19 +307,22 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const selected = openDocumentId ? docs.find((d) => d.id === openDocumentId) : undefined;
 
 	return {
+		view,
+		tagsScreen: view === 'tags' ? await loadTagsScreen() : null,
 		shelf,
 		query,
-		tag: tagFilter,
+		filters: { tags: tagFilters, type: typeFilter, entity: entityFilter },
+		filterOptions,
 		includeArchived,
 		isAdmin,
 		group: url.searchParams.get('group') ?? 'type',
 		sort: url.searchParams.get('sort') ?? 'newest',
 		// What the screen is allowed to say about what it could not find.
 		honesty: search?.honesty ?? null,
-		tags: tagChips,
 		prefill,
 		shelves: [
 			{
+				id: '',
 				key: 'all',
 				label: 'Everything',
 				// Filed paper only. The Inbox has its own row and its own number.
@@ -286,6 +331,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				emoji: ''
 			},
 			...shelves.map((s) => ({
+				id: s.id,
 				key: s.key,
 				label: s.label,
 				emoji: s.emoji,
@@ -354,31 +400,16 @@ export const actions: Actions = {
 			return fail(400, { message: 'That shelf no longer exists.' });
 		}
 
-		const file = form.get('file');
-		let storedName: string | null = null;
-		let ext = 'PDF';
-		let generated = 'Document';
-		if (file instanceof File && file.size > 0) {
-			try {
-				storedName = await saveUpload(file);
-				ext = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
-				// The file's own name is the best name available, and a name is
-				// never asked for: capture completes with zero decisions.
-				generated = file.name.replace(/\.[^.]+$/, '') || 'Document';
-			} catch (err) {
-				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
-			}
-		}
-
-		const name = String(form.get('name') ?? '').trim() || generated;
-		if (!storedName && !String(form.get('name') ?? '').trim()) {
+		// Several files at once is the ordinary case — a folder's worth of scans,
+		// a phone's camera roll. Each becomes its own document, named after its
+		// file; the optional fields on the form apply to all of them.
+		const files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
+		const typedName = String(form.get('name') ?? '').trim();
+		if (files.length === 0 && !typedName) {
 			return fail(400, { message: 'Choose a file, or give the document a name.' });
 		}
 
-		const documentId = uuidv7();
-		await createDocument({
-			id: documentId,
-			name,
+		const shared = {
 			shelfId,
 			type: asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other'),
 			note: String(form.get('note') ?? '').trim() || null,
@@ -387,8 +418,6 @@ export const actions: Actions = {
 				String(form.get('sensitivity') ?? 'normal'),
 				'normal'
 			),
-			storedName,
-			ext,
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
 			expiryVerb: asEnumValue(
@@ -399,15 +428,44 @@ export const actions: Actions = {
 			personIds: form.getAll('personIds').map(String),
 			propertyIds: form.getAll('propertyIds').map(String),
 			accountIds: form.getAll('accountIds').map(String),
-			transactionIds: [],
+			transactionIds: [] as string[],
 			subjectIds: form.getAll('subjectIds').map(String),
 			newSubjectName: String(form.get('newSubject') ?? '').trim() || undefined,
 			tagNames: await readTags(form)
-		});
-		// Extraction is already queued by the mutation; running the queue here is
-		// what makes "it is searchable in a moment" true without a cron tick.
+		};
+
+		const addedIds: string[] = [];
+		if (files.length === 0) {
+			const documentId = uuidv7();
+			await createDocument({
+				id: documentId,
+				name: typedName,
+				storedName: null,
+				ext: 'PDF',
+				...shared
+			});
+			addedIds.push(documentId);
+		}
+		for (const file of files) {
+			let storedName: string;
+			try {
+				storedName = await saveUpload(file);
+			} catch (err) {
+				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
+			}
+			const documentId = uuidv7();
+			await createDocument({
+				id: documentId,
+				// A typed name applies to a single file; several files keep their own.
+				name: (files.length === 1 && typedName) || file.name.replace(/\.[^.]+$/, '') || 'Document',
+				storedName,
+				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
+				...shared
+			});
+			addedIds.push(documentId);
+		}
 		void runCpuQueue().catch(() => undefined);
-		return { ok: true, addedId: documentId, addedShelf: shelfKey };
+		return { ok: true, addedIds, addedShelf: shelfKey };
 	},
 
 	/** The inspector's Save: metadata only, never the file. */
@@ -579,6 +637,67 @@ export const actions: Actions = {
 					.onConflictDoNothing();
 			}
 		});
+		return { ok: true };
+	},
+	// ---- The rail's own edits: rename, reorder, add, reassign-then-delete ----
+	// Deleting a shelf is never a delete: `ON DELETE RESTRICT` on
+	// `document.shelf_id` refuses one that still holds paper, so the dialog's
+	// "move them to" is the mechanism rather than a courtesy.
+
+	renameShelf: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const label = String(form.get('label') ?? '').trim();
+		if (!id || !label) return fail(400, { message: 'A shelf needs a name.' });
+		await renameShelf(id, { label, emoji: String(form.get('emoji') ?? '') }, db);
+		return { ok: true };
+	},
+
+	addShelf: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await addShelf(String(form.get('label') ?? ''), String(form.get('emoji') ?? '🗂️'), db);
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
+		return { ok: true };
+	},
+
+	reorderShelves: async ({ request }) => {
+		const form = await request.formData();
+		const order = String(form.get('order') ?? '')
+			.split(',')
+			.filter(Boolean);
+		if (order.length === 0) return fail(400, { message: 'Nothing to reorder.' });
+		await reorderShelves(order, db);
+		return { ok: true };
+	},
+
+	removeShelf: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await reassignAndDelete(
+				String(form.get('id') ?? ''),
+				String(form.get('reassignTo') ?? ''),
+				db
+			);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not delete that shelf.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/**
+	 * Remove a tag. Everything carrying it is untagged by the cascade, and any
+	 * rule that applied it stops applying it.
+	 */
+	deleteTag: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which tag?' });
+		if (!(await deleteTag(id))) return fail(404, { message: 'That tag is no longer there.' });
 		return { ok: true };
 	}
 };

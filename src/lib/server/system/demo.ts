@@ -550,7 +550,7 @@ export async function seedDemo(): Promise<void> {
 		// The two drifting apart is how a demo ends up claiming a lease document
 		// outlives the lease.
 		expiresOn: monthShift(thisMonth, 3) + '-01',
-		expiryVerb: 'ends'
+		expiryVerb: 'expires'
 	});
 	await db.insert(document).values(payslips);
 	// Real links, not names: payslips belong to Jana, the contract to the flat.

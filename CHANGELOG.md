@@ -8,30 +8,29 @@
 
 ### ✨ Added
 
-- 🗂️ **Shelves are yours to name, reorder and invent** — the ten places a document could live were a list in the source code, so adding "Vehicles" was a migration and renaming one was a rename in three files that could disagree; they are rows now, and deleting one always moves the paper first
+- 🗂️ **Shelves are yours to name, reorder and invent** — the ten places a document could live were a list in the source code, so adding "Vehicles" was a migration and renaming one was a rename in three files that could disagree; they are rows now, edited straight in the rail behind a pencil, and deleting one always moves the paper first
 - 🔎 **Search reads what is inside a document, not only its name** — a scanned invoice is now findable by the variable symbol printed on page two, matched through a trigram index because an identifier is not a word any text search would recognise
 - 📄 **Filed documents are read in the background** — a PDF gives up its text layer page by page, a scanned page is recognised instead, and a plain-text file is sliced; a mixed contract with one signed page is handled correctly in both directions rather than being decided by the file it happens to be
 - 🔒 **A document can be restricted to admins** — and "restricted" means absent rather than locked: no row, no count, no search hint, no calendar event, no file, and a member's shelf reads 26 where an admin's reads 27
 - 🏷️ **A document says what KIND of paper it is, separately from where it is filed** — the salary tracker used to look on the payslips shelf, so renaming that shelf would quietly unhook a feature; it reads the type now, and the shelf is free to move
-- 📬 **An Inbox, and a review flow built for it** — capture asks nothing at all beyond the file, and filing is a separate pass at email-triage speed where shelf and type carry over between documents
+- 📬 **An Inbox, and a review flow built for it** — capture asks nothing at all beyond the file, several files at once each become their own document, and filing is a separate pass at email-triage speed where shelf and type carry over between documents
 - 📝 **A note, in your own words, on any document** — ranked above its contents in search, because the phrase you would think to type is rarely the one printed on the page
 - 🗄️ **A subject can be archived** — a sold car's paperwork stops crowding every list without anything being deleted, and its long-passed expiry stops being painted red
+- 🔖 **Tags moved in beside the paper, and each keeps one colour everywhere** — the colour comes from the tag's own name, so nothing has to be stored or agreed; adding one offers the tags you already have, which is what stops `renovation` and `renovations` both existing
 - 📥 **A backlog import for the paper already on disk** — `scripts/import-documents.mjs` walks a directory, files by a mapping table you edit, recognises what it has already seen by its bytes, and sends everything unmapped to the Inbox rather than guessing
 
 ### 🔧 Changed
 
 - 🔗 **A document's file is served through the document, not through its filename** — `/files/[name]` knew only a name, so a member holding one could open a restricted document; both routes resolve the row first now and answer 404 rather than 403, because a 403 confirms the thing exists
 - ⚙️ **One CPU slot, shared by statement imports and text extraction** — two queues would have let an import and an OCR run at once, which is exactly the situation the queue exists to prevent on a box whose web server has to stay responsive
-- 📚 **The Documents screen is a list rather than columns** — a document appeared once per person it was about, so the same contract could be read three times and counted three times; it appears once now, and grouping is a separate control from sorting
+- 📚 **The Documents screen is a list of collapsible groups rather than columns** — a document appeared once per person it was about, so the same contract could be read three times and counted three times; it appears once now, each group says how many need attention and when the next date falls, and grouping is a separate control from sorting
+- 📅 **Three expiry verbs instead of four, and the colour stops repeating the word** — `ends` meant exactly what `expires` means, and four near-synonyms is a question nobody can answer; the hue now says whether a deadline has fired, while `renews`, `expires` and `due` carry the kind
+- 🏷️ **Tags left the Money area for the Documents rail** — a tag cuts across paper and payments alike, and the household reaches for it from the paper far more often; `/tags` still lands where it went
 
 ### 🐛 Fixed
 
 - 🚗 **An expiry that passed on an archived subject is history, not an alarm** — a sold car's lapsed insurance was painted red on every visit, which is how a person learns to ignore red
 - 🔢 **A document nobody may see is not counted** — the rail's numbers are computed after the visibility rule rather than before it, so a count can no longer tell a member that something exists
-
-### ⬆️ Upgrading
-
-- 🛠️ **Run `node scripts/upgrade-documents-v2.mjs` before the 0.7.0 image serves traffic** — it creates and seeds the shelf table, maps every old shelf onto a shelf and a type, adds the text tables and their indexes and drops the old column, all in one transaction; it is idempotent, so a second run finds nothing to do, and the old code cannot read the new shape
 
 ## 0.6.2 — 2026-08-27
 

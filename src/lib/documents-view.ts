@@ -12,14 +12,23 @@
 /**
  * How an expiry reads on a row.
  *
- * The full traffic light: green is "fine, and here is when", amber is "soon",
- * red is "passed". The design pass had the far-future case as plain text; the
- * household asked for the green so every expiry reads the same way at a glance.
- * `plain` survives for exactly one case — an expiry that passed on an ARCHIVED
- * subject, which is history rather than a state.
+ * Two layers. The QUIET hue says which channel the date is on — `--blue` when
+ * an obligation stands behind it (`renews`: file the replacement; `due`: pay),
+ * `--purple` when nothing does (`expires`: it simply stops). The kind of
+ * obligation lives in the word, where there is unlimited room and no collision.
+ *
+ * A fired THRESHOLD replaces the verb hue rather than tinting it: `--yellow`
+ * inside the window, `--red` once passed while the subject is still active. A
+ * pill cannot be two colours, and the one a person needs is the warning.
+ *
+ * A document with no date is a pill too — `added 2 Nov 2024` — but an OUTLINE
+ * one: same shape as its neighbours so the column reads as a column, and no
+ * fill, because there is no logic behind it and fifty filled pills saying
+ * nothing would be the loudest thing on the screen.
  */
 export type ExpiryTreatment =
-	{ kind: 'plain'; text: string } | { kind: 'pill'; hue: 'green' | 'yellow' | 'red'; text: string };
+	| { kind: 'outline'; text: string }
+	| { kind: 'pill'; hue: 'blue' | 'purple' | 'yellow' | 'red'; text: string };
 
 /** Which of the three layouts is on screen. Decides A2's verb shedding. */
 export type RowWidth = 'wide' | 'medium' | 'narrow';
@@ -50,6 +59,15 @@ export interface DocGroup<T extends DocRow = DocRow> {
 
 /** Amber inside this many days. Beyond it, a renewal is a fact, not a task. */
 const SOON_DAYS = 60;
+/** Money owed two months out is rarely worth amber; a month is. */
+const DUE_SOON_DAYS = 30;
+/**
+ * How long a lapsed `expires` stays red. Nothing replaces it and nothing is
+ * owed, so after a month the alarm has said all it can and the date is history.
+ * `renews` and `due` stay red until the date changes or the subject is
+ * archived: nothing can know the replacement was filed or the bill was paid.
+ */
+const EXPIRED_RED_DAYS = 30;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -66,52 +84,66 @@ function daysBetween(from: string, to: string): number {
 	return Math.round((b - a) / 86_400_000);
 }
 
-/** The past tense of an expiry verb, for a date that has already gone by. */
+/** The channel a verb is on: an obligation stands behind the date, or not. */
+function quietHue(verb: string): 'blue' | 'purple' {
+	return verb === 'expires' ? 'purple' : 'blue';
+}
+
+/** What a passed date says. Never "renewed": nothing knows that it was. */
+function passed(verb: string, ago: string): string {
+	if (verb === 'renews') return `renewal due ${ago} ago`;
+	if (verb === 'due') return `overdue ${ago}`;
+	return `expired ${ago} ago`;
+}
+
+/** The past tense, for a date that is history rather than a state. */
 function pastTense(verb: string): string {
-	if (verb === 'expires') return 'expired';
-	if (verb === 'ends') return 'ended';
-	if (verb === 'renews') return 'renewed';
+	if (verb === 'renews') return 'renewal was due';
 	if (verb === 'due') return 'was due';
-	return verb;
+	return 'expired';
 }
 
 /**
  * How a document's expiry reads, if it has one.
  *
- * The row that matters most is the last one: an expiry that has already passed
- * on an ARCHIVED subject is history, not a problem. A sold car's insurance
- * lapsed in April, and painting that red every time the list opens trains a
- * person to ignore red.
+ * Passed on an ARCHIVED subject: the threshold override lifts and the verb hue
+ * returns with the date. A sold car's lapsed insurance is history — it must not
+ * be missed, and it must not be an alarm.
  *
- * A2: below 1200px the verb is shed only in the plain state. "due" and "renews"
- * change what a person has to do, and the urgent rows are few enough to afford
- * the twelve pixels; the quiet ones are not.
+ * A2: below 1200px the verb is shed only in the quiet state. "due" and
+ * "renews" change what a person has to do, and the urgent rows are few enough
+ * to afford the twelve pixels; the quiet ones are not.
  */
 export function expiryTreatment(
-	doc: { expiresOn: string | null; expiryVerb: string },
+	doc: { expiresOn: string | null; expiryVerb: string; addedOn?: string },
 	subjectArchived: boolean,
 	today: string,
 	width: RowWidth = 'wide'
 ): ExpiryTreatment | null {
-	if (!doc.expiresOn) return null;
+	if (!doc.expiresOn) {
+		return doc.addedOn ? { kind: 'outline', text: `added ${readableDate(doc.addedOn)}` } : null;
+	}
 	const days = daysBetween(today, doc.expiresOn);
 	const verb = doc.expiryVerb;
+	const date = readableDate(doc.expiresOn);
 
 	if (days < 0) {
-		if (subjectArchived) {
-			// History. Plain, and dated rather than counted: "6 days ago" invites
-			// action on a subject nobody is acting on any more.
-			return { kind: 'plain', text: `${pastTense(verb)} ${doc.expiresOn}` };
-		}
 		const ago = Math.abs(days);
+		const stillRed = verb !== 'expires' || ago <= EXPIRED_RED_DAYS;
+		if (subjectArchived || !stillRed) {
+			// History: the verb hue, with the date rather than a count. "6 days
+			// ago" invites action on something nobody is acting on any more.
+			return { kind: 'pill', hue: quietHue(verb), text: `${pastTense(verb)} ${date}` };
+		}
 		return {
 			kind: 'pill',
 			hue: 'red',
-			text: `${pastTense(verb)} ${ago === 1 ? '1 day' : `${ago} days`} ago`
+			text: passed(verb, ago === 1 ? '1 day' : `${ago} days`)
 		};
 	}
 
-	if (days <= SOON_DAYS && !subjectArchived) {
+	const window = verb === 'due' ? DUE_SOON_DAYS : SOON_DAYS;
+	if (days <= window && !subjectArchived) {
 		return {
 			kind: 'pill',
 			hue: 'yellow',
@@ -119,10 +151,7 @@ export function expiryTreatment(
 		};
 	}
 
-	// A2: the verb is shed below 1200px only here, in the quiet state — amber
-	// and red keep theirs, because "due" and "renews" ask for different things.
-	const date = readableDate(doc.expiresOn);
-	return { kind: 'pill', hue: 'green', text: width === 'wide' ? `${verb} ${date}` : date };
+	return { kind: 'pill', hue: quietHue(verb), text: width === 'wide' ? `${verb} ${date}` : date };
 }
 
 /** The labels a `document.type` code is shown under. Raw codes never surface. */
@@ -219,23 +248,6 @@ export function subLine(doc: DocRow): string {
 }
 
 /**
- * Which tags earn a place on the row.
- *
- * A row is one line of context, not a tag cloud: the first few, in the order
- * they were applied, and a count for the rest so nothing is silently absent.
- */
-export function rowTags(tags: string[], max = 3): { shown: string[]; more: number } {
-	return { shown: tags.slice(0, max), more: Math.max(0, tags.length - max) };
-}
-
-/** What a search hit is labelled with. The vocabulary a person would use. */
-export function matchLabel(matchedIn: string): string | null {
-	if (matchedIn === 'contents') return 'Matched in contents';
-	if (matchedIn === 'note') return 'Matched in note';
-	return null;
-}
-
-/**
  * The three pieces of a snippet: before the term, the term, after it.
  *
  * Folded on both sides so `rezim` highlights `režim`, which is the whole point
@@ -307,4 +319,36 @@ export function honestyState(
 	// Results, but an incomplete corpus behind them — worth saying, quietly,
 	// under the results rather than instead of them.
 	return honesty.notSearchable > 0 ? 'not-searchable' : 'none';
+}
+
+/**
+ * What a collapsed group says about itself.
+ *
+ * The Tax table's rows carry their figures closed; a group row here carries the
+ * three things a person would open it to find out — how many, how many need
+ * attention, and when the next one falls due. `soon` counts the amber window,
+ * `expired` the red; a lapsed expiry on an archived subject counts as neither,
+ * because it is history rather than a state.
+ */
+export interface GroupSummary {
+	count: number;
+	expired: number;
+	soon: number;
+	/** The nearest expiry still ahead, as an ISO date, or null. */
+	nextExpiry: string | null;
+}
+
+export function groupSummary(items: DocRow[], today: string): GroupSummary {
+	let expired = 0;
+	let soon = 0;
+	let nextExpiry: string | null = null;
+	for (const doc of items) {
+		const treatment = expiryTreatment(doc, doc.subjectArchived, today);
+		if (treatment?.kind === 'pill' && treatment.hue === 'red') expired++;
+		if (treatment?.kind === 'pill' && treatment.hue === 'yellow') soon++;
+		if (doc.expiresOn && doc.expiresOn >= today && (!nextExpiry || doc.expiresOn < nextExpiry)) {
+			nextExpiry = doc.expiresOn;
+		}
+	}
+	return { count: items.length, expired, soon, nextExpiry };
 }

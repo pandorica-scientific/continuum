@@ -14,7 +14,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
-	import { EXPIRY_VERBS } from '$lib/documents';
+	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
 	import { TYPE_LABELS } from '$lib/documents-view';
 	import {
 		counterLabel,
@@ -153,7 +153,9 @@
 			<div class="field expiry">
 				<span class="eyebrow">Expiry</span>
 				<select name="expiryVerb">
-					{#each EXPIRY_VERBS as verb (verb)}<option value={verb}>{verb}</option>{/each}
+					{#each EXPIRY_VERBS as verb (verb)}<option value={verb}
+							>{verb} — {EXPIRY_VERB_MEANINGS[verb]}</option
+						>{/each}
 				</select>
 				<!-- Native date input, never a text mask. -->
 				<input type="date" name="expiresOn" />
@@ -356,7 +358,9 @@
 		border-color: var(--bd2);
 		color: var(--fg1);
 	}
-	.restricted {
+	/* `.fields label` above lays every field out as a column; this one is a row
+	   and needs the specificity to say so. */
+	.fields label.restricted {
 		flex-direction: row;
 		align-items: center;
 		gap: var(--space-5);

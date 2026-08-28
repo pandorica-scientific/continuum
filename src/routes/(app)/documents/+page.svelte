@@ -9,7 +9,7 @@
 	// is no browser suite in this repository and anything automation must hold
 	// has to be reachable without a page.
 	import { untrack } from 'svelte';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -19,16 +19,21 @@
 	import SnippetMark from '$lib/components/SnippetMark.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import TagField from '$lib/components/TagField.svelte';
+	import TagsPanel from '$lib/components/TagsPanel.svelte';
+	import ShelfRow from '$lib/components/ShelfRow.svelte';
+	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
-	import { EXPIRY_VERBS } from '$lib/documents';
+	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
 	import {
 		expiryTreatment,
 		groupDocuments,
+		groupSummary,
 		honestyState,
 		readableSize,
 		rowVariant,
 		splitSnippet,
-		rowTags,
+		readableDate,
 		sortDocuments,
 		subLine,
 		typeLabel,
@@ -37,6 +42,8 @@
 		type SortKey
 	} from '$lib/documents-view';
 	import { navigating } from '$app/state';
+	import { tagHue } from '$lib/tag-hue';
+	import { fitChips } from '$lib/actions/fit-chips';
 
 	let { data, form } = $props();
 
@@ -49,6 +56,82 @@
 	// not what filing paper is.
 	let selecting = $state(false);
 	let overflowOpen = $state(false);
+
+	// The rail's edit mode: reorder by dragging, rename by clicking a name,
+	// remove through ⋯ — in place, with the list still beside it. No settings
+	// screen: managing shelves is a thing done to the rail, not somewhere else.
+	// Groups follow the Tax table: closed on arrival, a chevron on every header,
+	// and the count on the header is the summary the open group was answering.
+	// Three exceptions open a group for you — there is only one, a search is on
+	// (results must be visible), or the document open in the inspector is in it.
+	let openGroups = new SvelteSet<string>();
+	let touchedGroups = $state(false);
+	$effect(() => {
+		void data.rows;
+		void data.group;
+		touchedGroups = false;
+		openGroups.clear();
+	});
+	function groupOpen(key: string): boolean {
+		if (data.group === 'none' || data.query) return true;
+		if (openGroups.has(key)) return true;
+		if (touchedGroups) return false;
+		if (groups.length === 1) return true;
+		return Boolean(
+			data.selected &&
+			groups.find((g) => g.key === key)?.items.some((i) => i.id === data.selected?.id)
+		);
+	}
+	function toggleGroup(key: string) {
+		if (groupOpen(key)) {
+			// Closing an implicitly-open group has to be remembered as a closing,
+			// not as "no opinion", or it would spring open again on the next read.
+			const stillOpen = groups.filter((g) => g.key !== key && groupOpen(g.key)).map((g) => g.key);
+			touchedGroups = true;
+			for (const k of stillOpen) openGroups.add(k);
+			openGroups.delete(key);
+		} else {
+			openGroups.add(key);
+		}
+	}
+
+	let editingRail = $state(false);
+	let railOrder = $state<string[]>([]);
+	let dragging = $state<string | null>(null);
+	let renaming = $state<string | null>(null);
+	let deleting = $state<string | null>(null);
+	let reassignTo = $state('');
+	let addingShelf = $state(false);
+	let newEmoji = $state('🗂️');
+	let reorderForm = $state<HTMLFormElement | null>(null);
+
+	const railShelves = $derived(
+		(railOrder.length
+			? railOrder.map((id) => data.shelves.find((s) => s.id === id)).filter(Boolean)
+			: data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox')) as typeof data.shelves
+	);
+	const deletingShelf = $derived(data.shelves.find((s) => s.id === deleting) ?? null);
+	const elsewhere = $derived(
+		data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox' && s.id !== deleting)
+	);
+
+	$effect(() => {
+		void data.shelves;
+		railOrder = [];
+		renaming = null;
+		deleting = null;
+		addingShelf = false;
+	});
+
+	function moveOver(id: string) {
+		if (!dragging || dragging === id) return;
+		const ids = railShelves.map((s) => s.id);
+		const from = ids.indexOf(dragging);
+		const to = ids.indexOf(id);
+		if (from < 0 || to < 0) return;
+		ids.splice(to, 0, ids.splice(from, 1)[0]);
+		railOrder = ids;
+	}
 	let confirmingDelete = $state(false);
 	let replacing = $state(false);
 
@@ -72,11 +155,12 @@
 	// which is what a PDF needs and what everything else degrades to.
 	const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'];
 
-	function navigate(next: Record<string, string | null>) {
+	function navigate(next: Record<string, string | string[] | null>) {
 		const params = new SvelteURLSearchParams(window.location.search);
 		for (const [key, value] of Object.entries(next)) {
-			if (value === null || value === '') params.delete(key);
-			else params.set(key, value);
+			params.delete(key);
+			if (Array.isArray(value)) for (const v of value) params.append(key, v);
+			else if (value !== null && value !== '') params.set(key, value);
 		}
 		// Opening a different document must not keep the last one's scroll
 		// position halfway down the list.
@@ -85,6 +169,11 @@
 
 	const groups = $derived(
 		groupDocuments(sortDocuments(data.rows, data.sort as SortKey), data.group as GroupKey, today)
+	);
+	const groupHeading = $derived(
+		{ type: 'Type', entity: 'About', year: 'Year', expiry: 'Expiry', none: '' }[
+			data.group as GroupKey
+		] ?? ''
 	);
 	const shelfLabel = $derived(
 		data.shelves.find((s) => s.key === data.shelf)?.label ?? 'Everything'
@@ -107,12 +196,23 @@
 	<div class="error" role="alert">{form.message}</div>
 {/if}
 
-{#if form?.ok && form?.addedId}
+{#if form?.ok && form?.addedIds?.length}
 	<div class="ack">
-		<Pill hue="green">Added to {form.addedShelf === 'inbox' ? 'Inbox' : form.addedShelf}</Pill>
-		<button type="button" class="link" onclick={() => navigate({ doc: form.addedId, add: null })}>
-			File it now
-		</button>
+		<Pill hue="green">
+			Added {form.addedIds.length > 1 ? `${form.addedIds.length} to` : 'to'}
+			{form.addedShelf === 'inbox' ? 'Inbox' : form.addedShelf}
+		</Pill>
+		{#if form.addedIds.length === 1}
+			<button
+				type="button"
+				class="link"
+				onclick={() => navigate({ doc: form.addedIds[0], add: null })}
+			>
+				File it now
+			</button>
+		{:else}
+			<a class="link" href="/documents/review">Review them now</a>
+		{/if}
 	</div>
 {/if}
 
@@ -198,12 +298,13 @@
 			/>{/if}
 		<UploadDropzone
 			name="file"
-			idleText="Drop a file here, or click to browse"
-			description="PDF, images, text and spreadsheets"
+			multiple
+			idleText="Drop files here, or click to browse"
+			description="PDF, images, text and spreadsheets — several at once is fine"
 		/>
 		<div class="capture-foot">
 			<span class="quiet">
-				It goes to {captureShelfLabel} with the file's own name. Nothing else is asked of you.
+				They go to {captureShelfLabel} with their own names. Nothing else is asked of you.
 			</span>
 			<button type="submit" class="btn btn-primary">Add</button>
 			<button type="button" class="btn" onclick={() => (capturing = false)}>Cancel</button>
@@ -217,8 +318,8 @@
 			<button
 				type="button"
 				class="rail-item"
-				class:active={data.shelf === s.key}
-				onclick={() => navigate({ shelf: s.key === 'all' ? null : s.key, doc: null })}
+				class:active={data.view === 'list' && data.shelf === s.key}
+				onclick={() => navigate({ shelf: s.key === 'all' ? null : s.key, doc: null, view: null })}
 			>
 				<span class="rail-label"
 					>{#if s.emoji}<span class="rail-emoji">{s.emoji}</span>{/if}{s.label}</span
@@ -232,285 +333,439 @@
 
 		<div class="rail-divider"></div>
 
-		<div class="rail-shelves">
-			{#each data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox') as s (s.key)}
-				<button
-					type="button"
-					class="rail-item"
-					class:active={data.shelf === s.key}
-					onclick={() => navigate({ shelf: s.key, doc: null })}
-				>
-					<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
-					<span class="mono rail-count">{s.count}</span>
-				</button>
-			{/each}
+		<!-- The pencil turns the rail into its own settings: drag to reorder,
+		     click a name to rename, ⋯ to remove. Done puts it back. -->
+		<div class="rail-head">
+			<span class="eyebrow">Shelves</span>
+			<button
+				type="button"
+				class="rail-tool"
+				class:active={editingRail}
+				aria-label={editingRail ? 'Done editing shelves' : 'Edit shelves'}
+				aria-pressed={editingRail}
+				onclick={() => {
+					editingRail = !editingRail;
+					renaming = null;
+					railOrder = [];
+				}}
+			>
+				{#if editingRail}Done{:else}<Icon name="pencil" size={14} />{/if}
+			</button>
 		</div>
 
-		<div class="rail-divider"></div>
-
-		<a class="rail-item manage" href="/documents/settings">
-			<span class="rail-label"><Icon name="plus" size={16} /> Manage shelves</span>
-		</a>
-	</nav>
-
-	<div class="area">
-		{#if data.inboxCount > 0 && data.shelf !== 'inbox'}
-			<div class="strip">
-				<Pill hue="yellow">{data.inboxCount} in Inbox</Pill>
-				<span class="strip-text">
-					{data.inboxCount}
-					{data.inboxCount === 1 ? 'document is' : 'documents are'} waiting in Inbox
-				</span>
-				<a class="btn strip-act" href="/documents/review">Review inbox →</a>
+		{#if editingRail}
+			<div class="rail-shelves" role="list">
+				{#each railShelves as s (s.id)}
+					{#if renaming === s.id}
+						<form class="rail-rename" method="POST" action="?/renameShelf" use:enhance>
+							<input type="hidden" name="id" value={s.id} />
+							<EmojiPicker name="emoji" value={s.emoji} />
+							<input name="label" value={s.label} aria-label="Shelf name" />
+							<button type="submit" class="btn small btn-primary">Save</button>
+							<button type="button" class="btn small" onclick={() => (renaming = null)}>✕</button>
+						</form>
+					{:else}
+						<ShelfRow
+							shelf={s}
+							dragging={dragging === s.id}
+							ondragstart={() => (dragging = s.id)}
+							ondragover={() => moveOver(s.id)}
+							ondrop={() => {
+								dragging = null;
+								// Saved as soon as the row lands; nothing to press afterwards.
+								if (railOrder.length) reorderForm?.requestSubmit();
+							}}
+							onrename={() => (renaming = s.id)}
+							ondelete={() => {
+								deleting = s.id;
+								reassignTo = elsewhere[0]?.id ?? '';
+							}}
+						/>
+					{/if}
+				{/each}
 			</div>
-		{/if}
-
-		{#if data.archivedHidden > 0 || data.includeArchived}
-			<div class="archive-line">
-				<span class="quiet">
-					Active subjects · <span class="mono">{data.archivedHidden}</span>
-					{data.archivedHidden === 1 ? 'document' : 'documents'} hidden from archived subjects
-				</span>
-				<button
-					type="button"
-					class="btn small"
-					class:active={data.includeArchived}
-					onclick={() => navigate({ archived: data.includeArchived ? null : '1' })}
-				>
-					{data.includeArchived ? 'Hide archived' : 'Include archived subjects'}
-				</button>
-			</div>
-		{/if}
-
-		{#if data.tags.length}
-			<div class="tag-chips">
-				{#each data.tags as t (t.name)}
+			<form method="POST" action="?/reorderShelves" use:enhance bind:this={reorderForm} hidden>
+				<input type="hidden" name="order" value={railOrder.join(',')} />
+			</form>
+			<button type="button" class="rail-item manage" onclick={() => (addingShelf = true)}>
+				<span class="rail-label"><Icon name="plus" size={16} /> New shelf</span>
+			</button>
+		{:else}
+			<div class="rail-shelves">
+				{#each railShelves as s (s.key)}
 					<button
 						type="button"
-						class="tag-chip"
-						class:active={t.active}
-						onclick={() => navigate({ tag: t.active ? null : t.name })}
+						class="rail-item"
+						class:active={data.view === 'list' && data.shelf === s.key}
+						onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
 					>
-						{t.name} <span class="mono t-count">{t.count}</span>
+						<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
+						<span class="mono rail-count">{s.count}</span>
 					</button>
 				{/each}
 			</div>
 		{/if}
 
-		{#if selection.length > 0}
-			<form class="bulk" method="POST" action="?/bulkUpdate" use:enhance>
-				{#each selection as id (id)}<input type="hidden" name="ids" value={id} />{/each}
-				<span class="mono">{selection.length} selected</span>
-				<select name="shelf" aria-label="Move to shelf">
-					<option value="">Shelf…</option>
-					{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
-						<option value={s.key}>{s.label}</option>
-					{/each}
-				</select>
-				<select name="type" aria-label="Set type">
-					<option value="">Type…</option>
-					{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
-						<option value={code}>{label}</option>
-					{/each}
-				</select>
-				<TagField known={data.knownTags} placeholder="Add tags…" />
-				{#if data.isAdmin}
-					<select name="sensitivity" aria-label="Set visibility">
-						<option value="">Visibility…</option>
-						<option value="normal">Everyone in the household</option>
-						<option value="restricted">Admins only</option>
-					</select>
-				{/if}
-				<button type="submit" class="btn btn-primary">Apply</button>
-				<button
-					type="button"
-					class="btn cancel"
-					onclick={() => {
-						selection = [];
-						selecting = false;
-					}}>Cancel selection</button
-				>
-			</form>
-		{/if}
+		<div class="rail-divider"></div>
 
-		{#if navigating.to}
-			<!-- Three static blocks, always three regardless of the real count: a
+		<!-- Tags cut across documents and money alike; a household reaches for
+		     them from the paper far more often than from the register. -->
+		<button
+			type="button"
+			class="rail-item"
+			class:active={data.view === 'tags'}
+			onclick={() => navigate({ view: 'tags', doc: null })}
+		>
+			<span class="rail-label"><span class="rail-emoji">🏷️</span>Tags</span>
+			<span class="mono rail-count">{data.knownTags.length}</span>
+		</button>
+	</nav>
+
+	<div class="area">
+		{#if data.view === 'tags' && data.tagsScreen}
+			<TagsPanel screen={data.tagsScreen} message={form?.message} />
+		{:else}
+			{#if data.inboxCount > 0 && data.shelf !== 'inbox'}
+				<div class="strip">
+					<Pill hue="yellow">{data.inboxCount} in Inbox</Pill>
+					<span class="strip-text">
+						{data.inboxCount}
+						{data.inboxCount === 1 ? 'document is' : 'documents are'} waiting in Inbox
+					</span>
+					<a class="btn strip-act" href="/documents/review">Review inbox →</a>
+				</div>
+			{/if}
+
+			{#if data.archivedHidden > 0 || data.includeArchived}
+				<div class="archive-line">
+					<span class="quiet">
+						Active subjects · <span class="mono">{data.archivedHidden}</span>
+						{data.archivedHidden === 1 ? 'document' : 'documents'} hidden from archived subjects
+					</span>
+					<button
+						type="button"
+						class="btn small"
+						class:active={data.includeArchived}
+						onclick={() => navigate({ archived: data.includeArchived ? null : '1' })}
+					>
+						{data.includeArchived ? 'Hide archived' : 'Include archived subjects'}
+					</button>
+				</div>
+			{/if}
+
+			{#if data.rows.length > 0 || data.filters.tags.length || data.filters.type || data.filters.entity}
+				<!-- Filters narrow the list and never the rail. Each offers only what is
+			     on the shelf in view, with the count it would leave, so no choice
+			     empties the screen. Every filter is in the URL: a bookmark is the
+			     saved view. -->
+				<div class="filters">
+					<select
+						class="filter"
+						aria-label="Filter by type"
+						value={data.filters.type}
+						onchange={(e) => navigate({ type: e.currentTarget.value, doc: null })}
+					>
+						<option value="">Type · any</option>
+						{#each data.filterOptions.types as t (t.code)}
+							<option value={t.code}>{typeLabel(t.code)} · {t.count}</option>
+						{/each}
+					</select>
+					<select
+						class="filter"
+						aria-label="Filter by what it is about"
+						value={data.filters.entity}
+						onchange={(e) => navigate({ entity: e.currentTarget.value, doc: null })}
+					>
+						<option value="">About · anything</option>
+						{#each data.filterOptions.entities as e (e.id)}
+							<option value={e.id}>{e.name} · {e.count}</option>
+						{/each}
+					</select>
+					<div class="tag-filter">
+						<TagField
+							tags={[...data.filters.tags]}
+							known={data.filterOptions.tags.map((t) => t.name)}
+							placeholder={data.filters.tags.length ? 'and…' : 'Filter by tag…'}
+							onchange={(tags) => navigate({ tag: tags, doc: null })}
+						/>
+					</div>
+					{#if data.filters.tags.length || data.filters.type || data.filters.entity}
+						<button
+							type="button"
+							class="link"
+							onclick={() => navigate({ tag: null, type: null, entity: null })}
+						>
+							Clear filters
+						</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if selection.length > 0}
+				<form class="bulk" method="POST" action="?/bulkUpdate" use:enhance>
+					{#each selection as id (id)}<input type="hidden" name="ids" value={id} />{/each}
+					<span class="mono">{selection.length} selected</span>
+					<select name="shelf" aria-label="Move to shelf">
+						<option value="">Shelf…</option>
+						{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
+							<option value={s.key}>{s.label}</option>
+						{/each}
+					</select>
+					<select name="type" aria-label="Set type">
+						<option value="">Type…</option>
+						{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+							<option value={code}>{label}</option>
+						{/each}
+					</select>
+					<TagField known={data.knownTags} placeholder="Add tags…" />
+					{#if data.isAdmin}
+						<select name="sensitivity" aria-label="Set visibility">
+							<option value="">Visibility…</option>
+							<option value="normal">Everyone in the household</option>
+							<option value="restricted">Admins only</option>
+						</select>
+					{/if}
+					<button type="submit" class="btn btn-primary">Apply</button>
+					<button
+						type="button"
+						class="btn cancel"
+						onclick={() => {
+							selection = [];
+							selecting = false;
+						}}>Cancel selection</button
+					>
+				</form>
+			{/if}
+
+			{#if navigating.to}
+				<!-- Three static blocks, always three regardless of the real count: a
 			     guessed count that then changes is worse than none. No shimmer —
 			     the system has no animation. -->
-			<div class="loading" aria-hidden="true">
-				<div class="skeleton" style:opacity="1"></div>
-				<div class="skeleton" style:opacity="0.7"></div>
-				<div class="skeleton" style:opacity="0.45"></div>
-			</div>
-		{:else if data.rows.length === 0}
-			{#if data.query}
-				{@const state = honestyState(data.query, 0, data.honesty)}
-				<div class="honesty">
-					{#if state === 'archived-only'}
-						<span class="mono h-key">ARCHIVED ONLY</span>
-						<p class="h-head">No active documents match “{data.query}”.</p>
-						<p class="h-body">
-							<span class="mono">{data.honesty?.archivedOnly}</span>
-							{data.honesty?.archivedOnly === 1 ? 'match belongs' : 'matches belong'} only to archived
-							subjects.
-						</p>
-						<button type="button" class="btn h-act" onclick={() => navigate({ archived: '1' })}>
-							Show archived matches
-						</button>
-					{:else if state === 'preparing'}
-						<span class="mono h-key">STILL PREPARING</span>
-						<p class="h-head">
-							No match yet. <span class="mono">{data.honesty?.pending}</span> documents are still being
-							prepared for content search.
-						</p>
-						<p class="h-body">
-							Their contents are not searchable until that finishes. Names, notes and tags already
-							are.
-						</p>
-					{:else}
-						<span class="mono h-key">NO MATCH</span>
-						<p class="h-head">
-							No documents match “{data.query}”. Try fewer words or remove a filter.
-						</p>
-						<p class="h-body">
-							No match in names, entities, tags, notes or searchable contents.
-							{#if data.honesty?.notSearchable}
-								<span class="mono">{data.honesty.notSearchable}</span> documents don't have searchable
-								contents.
-							{/if}
-						</p>
-						<button type="button" class="btn h-act" onclick={() => navigate({ q: null })}>
-							Clear search
-						</button>
-					{/if}
+				<div class="loading" aria-hidden="true">
+					<div class="skeleton" style:opacity="1"></div>
+					<div class="skeleton" style:opacity="0.7"></div>
+					<div class="skeleton" style:opacity="0.45"></div>
 				</div>
-			{:else if data.total === 0 && data.shelf === 'all'}
-				<!-- Fresh install: the dropzone IS the empty state, at full width.
+			{:else if data.rows.length === 0}
+				{#if data.query}
+					{@const state = honestyState(data.query, 0, data.honesty)}
+					<div class="honesty">
+						{#if state === 'archived-only'}
+							<span class="mono h-key">ARCHIVED ONLY</span>
+							<p class="h-head">No active documents match “{data.query}”.</p>
+							<p class="h-body">
+								<span class="mono">{data.honesty?.archivedOnly}</span>
+								{data.honesty?.archivedOnly === 1 ? 'match belongs' : 'matches belong'} only to archived
+								subjects.
+							</p>
+							<button type="button" class="btn h-act" onclick={() => navigate({ archived: '1' })}>
+								Show archived matches
+							</button>
+						{:else if state === 'preparing'}
+							<span class="mono h-key">STILL PREPARING</span>
+							<p class="h-head">
+								No match yet. <span class="mono">{data.honesty?.pending}</span> documents are still being
+								prepared for content search.
+							</p>
+							<p class="h-body">
+								Their contents are not searchable until that finishes. Names, notes and tags already
+								are.
+							</p>
+						{:else}
+							<span class="mono h-key">NO MATCH</span>
+							<p class="h-head">
+								No documents match “{data.query}”. Try fewer words or remove a filter.
+							</p>
+							<p class="h-body">
+								No match in names, entities, tags, notes or searchable contents.
+								{#if data.honesty?.notSearchable}
+									<span class="mono">{data.honesty.notSearchable}</span> documents don't have searchable
+									contents.
+								{/if}
+							</p>
+							<button type="button" class="btn h-act" onclick={() => navigate({ q: null })}>
+								Clear search
+							</button>
+						{/if}
+					</div>
+				{:else if data.total === 0 && data.shelf === 'all'}
+					<!-- Fresh install: the dropzone IS the empty state, at full width.
 				     Its dashed border is its own treatment, not a new one. -->
-				<form
-					class="fresh"
-					method="POST"
-					action="?/addDocument"
-					enctype="multipart/form-data"
-					use:enhance
-				>
-					<input type="hidden" name="shelf" value="inbox" />
-					<p class="empty-title">No documents yet.</p>
-					<p class="quiet">
-						Drop files here, or click to browse. A name is generated and they go to the Inbox —
-						nothing else is asked of you.
-					</p>
-					<UploadDropzone name="file" idleText="Drop files here, or click to browse" />
-					<button type="submit" class="btn btn-primary">Add</button>
-				</form>
+					<form
+						class="fresh"
+						method="POST"
+						action="?/addDocument"
+						enctype="multipart/form-data"
+						use:enhance
+					>
+						<input type="hidden" name="shelf" value="inbox" />
+						<p class="empty-title">No documents yet.</p>
+						<p class="quiet">
+							Drop files here, or click to browse. A name is generated and they go to the Inbox —
+							nothing else is asked of you.
+						</p>
+						<UploadDropzone name="file" multiple idleText="Drop files here, or click to browse" />
+						<button type="submit" class="btn btn-primary">Add</button>
+					</form>
+				{:else}
+					<div class="empty">
+						<p class="empty-title">Nothing on {shelfLabel} yet.</p>
+						<p class="quiet">
+							Add a document from the toolbar and it lands in the Inbox — file it here from there.
+						</p>
+					</div>
+				{/if}
 			{:else}
-				<div class="empty">
-					<p class="empty-title">Nothing on {shelfLabel} yet.</p>
+				{#if honestyState(data.query, data.rows.length, data.honesty) === 'not-searchable'}
 					<p class="quiet">
-						Add a document from the toolbar and it lands in the Inbox — file it here from there.
+						<span class="mono">{data.honesty?.notSearchable}</span> documents cannot be searched by contents
+						— photographs and scans without a text layer are matched on name, note and tags only.
 					</p>
-				</div>
-			{/if}
-		{:else}
-			{#if honestyState(data.query, data.rows.length, data.honesty) === 'not-searchable'}
-				<p class="quiet">
-					<span class="mono">{data.honesty?.notSearchable}</span> documents cannot be searched by contents
-					— photographs and scans without a text layer are matched on name, note and tags only.
-				</p>
-			{/if}
-			{#each groups as g (g.key)}
-				<div class="group">
-					{#if g.label}
-						<div class="group-head">
-							<span class="group-label">{g.label}</span>
-							<span class="mono group-count">{g.items.length}</span>
+				{/if}
+				<div class="matrix">
+					{#if data.group !== 'none'}
+						<!-- The same header the Tax and Salary tables carry: what each column
+						     of a collapsed row means, so a closed group still says something. -->
+						<div class="mhead">
+							<span class="h-cell">{groupHeading}</span>
+							<span class="h-cell right">Documents</span>
+							<span class="h-cell right">Attention</span>
+							<span class="h-cell right">Next expiry</span>
 						</div>
 					{/if}
-					{#each g.items as d (d.id)}
-						{@const expiry = expiryTreatment(d, d.subjectArchived, today, 'wide')}
-						{@const variant = rowVariant(d.match)}
-						{@const parts = d.match?.snippet ? splitSnippet(d.match.snippet, data.query) : null}
-						{@const nameParts = data.query ? splitSnippet(d.name, data.query) : null}
-						<div
-							class="row"
-							class:selected={data.selected?.id === d.id}
-							class:picked={selection.includes(d.id)}
-							class:tall={variant !== 'metadata'}
-						>
-							<button
-								type="button"
-								class="row-main"
-								onclick={() => navigate({ doc: d.id })}
-								aria-label="Open {d.name}"
-							>
-								<span class="mono ext">{d.ext}</span>
-								<span class="names">
-									<span class="row-name">
-										{#if nameParts}
-											{nameParts.before}<SnippetMark>{nameParts.match}</SnippetMark
-											>{nameParts.after}
-										{:else}
-											{d.name}
+					{#each groups as g (g.key)}
+						{@const open = groupOpen(g.key)}
+						{@const summary = groupSummary(g.items, today)}
+						<div class="group" class:open>
+							{#if g.label}
+								<button
+									type="button"
+									class="group-head"
+									class:open
+									aria-expanded={open}
+									onclick={() => toggleGroup(g.key)}
+								>
+									<span class="group-label">
+										<span class="chevron" class:open>{open ? '▼' : '▶'}</span>
+										{g.label}
+									</span>
+									<span class="cell right"><span class="mono c-main">{summary.count}</span></span>
+									<span class="cell right">
+										{#if summary.expired}
+											<span class="c-main mono" style:color="var(--red)"
+												>{summary.expired} expired</span
+											>
 										{/if}
-										{#if d.restricted}
-											<!-- Inline in the title flow, not a flex sibling: on a
+										{#if summary.soon}
+											<span class="c-sub mono" style:color="var(--yellow)">{summary.soon} soon</span
+											>
+										{/if}
+										{#if !summary.expired && !summary.soon}<span class="absent">·</span>{/if}
+									</span>
+									<span class="cell right">
+										{#if summary.nextExpiry}
+											<span class="mono c-main">{readableDate(summary.nextExpiry)}</span>
+										{:else}
+											<span class="absent">·</span>
+										{/if}
+									</span>
+								</button>
+							{/if}
+							{#each open ? g.items : [] as d (d.id)}
+								{@const expiry = expiryTreatment(d, d.subjectArchived, today, 'wide')}
+								{@const variant = rowVariant(d.match)}
+								{@const parts = d.match?.snippet ? splitSnippet(d.match.snippet, data.query) : null}
+								{@const nameParts = data.query ? splitSnippet(d.name, data.query) : null}
+								<div
+									class="row"
+									class:selected={data.selected?.id === d.id}
+									class:picked={selection.includes(d.id)}
+									class:tall={variant !== 'metadata'}
+								>
+									<button
+										type="button"
+										class="row-main"
+										onclick={() => navigate({ doc: d.id })}
+										aria-label="Open {d.name}"
+									>
+										<span class="mono ext">{d.ext}</span>
+										<span class="names">
+											<span class="row-name">
+												{#if nameParts}
+													{nameParts.before}<SnippetMark>{nameParts.match}</SnippetMark
+													>{nameParts.after}
+												{:else}
+													{d.name}
+												{/if}
+												{#if d.restricted}
+													<!-- Inline in the title flow, not a flex sibling: on a
 											     two-line name a sibling centres against the block and
 											     reads as a second button. Quiet, and admins only —
 											     restricted is an access state, not a warning. -->
-											<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span>
-										{/if}
-										{#if d.subjectArchived}
-											<span class="chip">Archived subject</span>
-										{/if}
-									</span>
-									<span class="sub">
-										{subLine(d)}
-										{#if d.tags.length}
-											{@const t = rowTags(d.tags)}
-											{#each t.shown as tagName (tagName)}<span class="chip tag">{tagName}</span
-												>{/each}
-											{#if t.more}<span class="chip tag">+{t.more}</span>{/if}
-										{/if}
-									</span>
-									{#if variant !== 'metadata' && d.match?.snippet}
-										<span class="snippet">
-											{#if variant === 'note'}<span class="snippet-key">Note ·</span>{/if}
-											{#if parts}
-												„{parts.before}<SnippetMark>{parts.match}</SnippetMark>{parts.after}“
-											{:else}
-												„{d.match.snippet}“
+													<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span
+													>
+												{/if}
+												{#if d.subjectArchived}
+													<span class="chip">Archived subject</span>
+												{/if}
+											</span>
+											<span class="sub">
+												<span class="sub-text">{subLine(d)}</span>
+												{#if d.tags.length}
+													<!-- As many as fit on the line, the rest counted. -->
+													<span class="row-tags" use:fitChips={d.tags}>
+														{#each d.tags as tagName (tagName)}<span
+																class="chip tag"
+																data-chip
+																style:color="var({tagHue(tagName)})"
+																style:border-color="color-mix(in srgb, var({tagHue(tagName)}) 45%,
+																transparent)">{tagName}</span
+															>{/each}
+														<span class="chip tag" data-more hidden></span>
+													</span>
+												{/if}
+											</span>
+											{#if variant !== 'metadata' && d.match?.snippet}
+												<span class="snippet">
+													{#if variant === 'note'}<span class="snippet-key">Note ·</span>{/if}
+													{#if parts}
+														„{parts.before}<SnippetMark>{parts.match}</SnippetMark>{parts.after}“
+													{:else}
+														„{d.match.snippet}“
+													{/if}
+												</span>
+												<span class="mono match-label">
+													{variant === 'content' ? 'Matched in contents' : 'Matched in note'}{d
+														.match.pageNo
+														? ` · page ${d.match.pageNo}`
+														: ''}
+												</span>
 											{/if}
 										</span>
-										<span class="mono match-label">
-											{variant === 'content' ? 'Matched in contents' : 'Matched in note'}{d.match
-												.pageNo
-												? ` · page ${d.match.pageNo}`
-												: ''}
+										<span class="expiry">
+											{#if expiry?.kind === 'pill'}
+												<Pill hue={expiry.hue}>{expiry.text}</Pill>
+											{:else if expiry}
+												<span class="mono outline-pill">{expiry.text}</span>
+											{/if}
 										</span>
-									{/if}
-								</span>
-								<span class="expiry">
-									{#if expiry?.kind === 'pill'}
-										<Pill hue={expiry.hue}>{expiry.text}</Pill>
-									{:else if expiry}
-										<span class="mono plain-expiry">{expiry.text}</span>
-									{/if}
-								</span>
-							</button>
-							<!-- Last in the DOM, positioned over the row: the grid stays
+									</button>
+									<!-- Last in the DOM, positioned over the row: the grid stays
 							     38px / 1fr / 140px whether or not anything is selectable. -->
-							<label class="pick" class:shown={selecting || selection.includes(d.id)}>
-								<input
-									type="checkbox"
-									aria-label="Select {d.name}"
-									checked={selection.includes(d.id)}
-									onchange={() => toggleSelected(d.id)}
-								/>
-							</label>
+									<label class="pick" class:shown={selecting || selection.includes(d.id)}>
+										<input
+											type="checkbox"
+											aria-label="Select {d.name}"
+											checked={selection.includes(d.id)}
+											onchange={() => toggleSelected(d.id)}
+										/>
+									</label>
+								</div>
+							{/each}
 						</div>
 					{/each}
 				</div>
-			{/each}
+			{/if}
 		{/if}
 	</div>
 
@@ -667,22 +922,13 @@
 			<!-- 3. Actions. Open file outranks the menu by fill and by width; on a
 			     metadata-only document it is ABSENT rather than disabled, and Edit
 			     becomes primary. -->
+			<!-- The preview above is the way to the file, so the one action here is
+			     Edit. Download stays in the menu for a person who wants the bytes. -->
 			{#if !editing}
 				<div class="ins-primary">
-					{#if d.hasFile}
-						<a
-							class="btn btn-primary open"
-							href={documentFileHref(d.id)}
-							target="_blank"
-							rel="noopener"
-							data-file-ext={d.ext}>Open file</a
-						>
-						<button type="button" class="btn" onclick={() => (editing = true)}>Edit</button>
-					{:else}
-						<button type="button" class="btn btn-primary open" onclick={() => (editing = true)}>
-							Edit
-						</button>
-					{/if}
+					<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
+						Edit
+					</button>
 				</div>
 			{/if}
 
@@ -774,7 +1020,9 @@
 						<span class="eyebrow">Expiry</span>
 						<div class="expiry-grid">
 							<select name="expiryVerb" value={d.expiryVerb}>
-								{#each EXPIRY_VERBS as verb (verb)}<option value={verb}>{verb}</option>{/each}
+								{#each EXPIRY_VERBS as verb (verb)}<option value={verb}
+										>{verb} — {EXPIRY_VERB_MEANINGS[verb]}</option
+									>{/each}
 							</select>
 							<!-- Native date input, never a text mask: 12/01/2027 is a
 							     DD/MM-vs-MM/DD bug waiting to happen in a Czech household. -->
@@ -791,16 +1039,21 @@
 					</div>
 					{#if data.isAdmin}
 						<div class="sec last">
-							<label class="check">
+							<!-- Its own bordered row: the one decision on the form that
+							     changes who can see the document. -->
+							<label class="restricted">
 								<input
 									type="checkbox"
 									name="sensitivity"
 									value="restricted"
 									checked={d.sensitivity === 'restricted'}
 								/>
-								Restricted
+								<span class="lock"><Icon name="lock" size={15} /></span>
+								<span class="restricted-text">
+									<span class="restricted-title">Restricted — admins only</span>
+									<span class="quiet">Absent for household members, not locked.</span>
+								</span>
 							</label>
-							<span class="quiet">Absent for members, not locked.</span>
 						</div>
 					{/if}
 					<div class="ins-actions">
@@ -848,6 +1101,44 @@
 		</aside>
 	{/if}
 </section>
+
+{#if addingShelf}
+	<Modal onclose={() => (addingShelf = false)} title="New shelf">
+		<form class="shelf-dialog" method="POST" action="?/addShelf" use:enhance>
+			<div class="shelf-dialog-row">
+				<span class="shelf-dialog-emoji" aria-hidden="true">{newEmoji}</span>
+				<input name="label" placeholder="Shelf name" aria-label="Shelf name" />
+			</div>
+			<EmojiPicker name="emoji" bind:value={newEmoji} inline />
+			<div class="modal-actions">
+				<button type="button" class="btn" onclick={() => (addingShelf = false)}>Cancel</button>
+				<button type="submit" class="btn btn-primary">Add shelf</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
+{#if deletingShelf}
+	<Modal onclose={() => (deleting = null)} title={`Delete “${deletingShelf.label}”?`}>
+		<form class="shelf-dialog" method="POST" action="?/removeShelf" use:enhance>
+			<input type="hidden" name="id" value={deletingShelf.id} />
+			<p class="quiet">
+				<span class="mono">{deletingShelf.count}</span>
+				{deletingShelf.count === 1 ? 'document needs' : 'documents need'} another shelf first.
+			</p>
+			<label class="shelf-dialog-field">
+				<span class="eyebrow">Move them to</span>
+				<select name="reassignTo" bind:value={reassignTo}>
+					{#each elsewhere as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
+				</select>
+			</label>
+			<div class="modal-actions">
+				<button type="button" class="btn" onclick={() => (deleting = null)}>Cancel</button>
+				<button type="submit" class="btn btn-primary">Move &amp; delete</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
 
 <style>
 	.error {
@@ -1014,8 +1305,105 @@
 		background: var(--bd);
 		margin: var(--space-3) 0;
 	}
+	.rail-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0 10px;
+		min-height: 24px;
+	}
+	.rail-tool {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 24px;
+		height: 24px;
+		padding: 0 var(--space-3);
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--fg3);
+		font-size: var(--text-xs);
+		cursor: pointer;
+	}
+	.rail-tool:hover {
+		color: var(--fg1);
+		background: var(--card2);
+	}
+	.rail-tool.active {
+		color: var(--fg1);
+		border-color: var(--bd);
+		background: var(--card3);
+	}
+	.rail-rename {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		height: 36px;
+		padding: 0 var(--space-3);
+	}
+	.rail-rename input {
+		flex: 1;
+		min-width: 0;
+		height: 28px;
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-sm);
+		background: var(--card);
+		color: var(--fg1);
+		padding: 0 var(--space-3);
+		font-size: var(--text-md);
+	}
+	.rail-rename :global(.trigger) {
+		width: 28px;
+		height: 28px;
+	}
+	.shelf-dialog {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+	}
+	.shelf-dialog-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.shelf-dialog-emoji {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: var(--control-h);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-md);
+		background: var(--card2);
+		font-size: var(--text-xl);
+		line-height: 1;
+		flex: none;
+	}
+	.shelf-dialog-row input,
+	.shelf-dialog select {
+		flex: 1;
+		height: var(--control-h);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		background: var(--card);
+		color: var(--fg1);
+		padding: 0 10px;
+		font-size: var(--text-md);
+	}
+	.shelf-dialog-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-4);
+	}
 	.manage {
 		color: var(--fg3);
+		cursor: pointer;
 	}
 	.manage .rail-label {
 		display: flex;
@@ -1052,27 +1440,25 @@
 		align-items: center;
 		gap: var(--space-5);
 	}
-	.tag-chips {
+	.filters {
 		display: flex;
+		align-items: center;
 		flex-wrap: wrap;
 		gap: var(--space-4);
 	}
-	.tag-chip {
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-chip);
-		background: transparent;
-		color: var(--fg2);
-		padding: 3px 10px;
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.tag-chip.active {
-		background: var(--card3);
+	.filter {
+		height: var(--control-h);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		background: var(--card);
 		color: var(--fg1);
+		padding: 0 10px;
+		font-size: var(--text-md);
+		max-width: 240px;
 	}
-	.t-count {
-		color: var(--fg3);
-		font-size: var(--text-2xs);
+	.tag-filter {
+		flex: 1 1 260px;
+		max-width: 520px;
 	}
 	.bulk {
 		display: flex;
@@ -1084,31 +1470,103 @@
 		background: var(--card);
 		padding: 10px 14px;
 	}
+	.matrix {
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-lg);
+		background: var(--card);
+		overflow: hidden;
+	}
+	.mhead,
+	.group-head {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 90px 130px 130px;
+		align-items: center;
+		gap: var(--space-5);
+		padding: 10px var(--space-6);
+	}
+	.mhead {
+		background: var(--card2);
+		border-bottom: 1px solid var(--bd2);
+	}
+	.h-cell {
+		font-size: var(--text-xs);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--fg3);
+		min-width: 0;
+	}
+	.right {
+		justify-content: flex-end;
+		text-align: right;
+		align-items: flex-end;
+	}
 	.group {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
+		border-bottom: 1px solid var(--bd);
+	}
+	.group:last-child {
+		border-bottom: 0;
 	}
 	.group-head {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		padding: 0 var(--space-4) var(--space-4);
+		width: 100%;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+		/* The Tax table's open mark: a bar in the row's own edge. */
+		box-shadow: inset 3px 0 0 transparent;
+	}
+	.group-head:hover {
+		background: var(--card2);
+	}
+	.group-head.open {
+		box-shadow: inset 3px 0 0 var(--teal);
 		border-bottom: 1px solid var(--bd);
 	}
 	.group-label {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-lg);
+		color: var(--fg1);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.chevron {
+		font-size: 9px;
+		color: var(--fg3);
+		flex: none;
+	}
+	.chevron.open {
+		color: var(--teal);
+	}
+	.cell {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	.c-main {
 		font-size: var(--text-md);
-		font-weight: 500;
 		color: var(--fg1);
 	}
-	.group-count {
-		font-size: var(--text-2xs);
+	.c-sub {
+		font-size: var(--text-xs);
 		color: var(--fg3);
-		font-variant-numeric: tabular-nums;
+	}
+	.absent {
+		color: var(--bd2);
 	}
 	.row {
 		position: relative;
-		border-radius: var(--radius-md);
+		border-bottom: 1px solid var(--bd);
+		padding-left: var(--space-6);
+	}
+	.group .row:last-child {
+		border-bottom: 0;
 	}
 	.row:hover,
 	.row.selected,
@@ -1124,7 +1582,6 @@
 		opacity: 0;
 		pointer-events: none;
 	}
-	.row:hover .pick,
 	.pick.shown {
 		opacity: 1;
 		pointer-events: auto;
@@ -1201,8 +1658,23 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.chip.tag {
+	.sub-text {
+		flex: none;
+		max-width: 60%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.row-tags {
+		flex: 1 1 0;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		overflow: hidden;
 		margin-left: var(--space-2);
+	}
+	.row-tags .chip {
+		flex: none;
 	}
 	.snippet {
 		font-size: var(--text-sm);
@@ -1225,9 +1697,17 @@
 		display: flex;
 		justify-content: flex-end;
 	}
-	.plain-expiry {
-		font-size: var(--text-2xs);
+	/* The same shape as `Pill`, without the fill: a date nobody has to act on.
+	   Matches Pill's own geometry so the column lines up. */
+	.outline-pill {
+		display: inline-block;
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-xl);
+		padding: 2px 10px;
+		font-size: var(--text-xs);
+		line-height: 1.2;
 		color: var(--fg3);
+		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 	}
 	.loading {
@@ -1455,7 +1935,10 @@
 		gap: var(--space-5);
 		margin: 0 var(--space-8);
 	}
-	.open {
+	/* Named for what it is, not `.open`: that class is the open-group modifier
+	   on the list beside this panel, and a bare `.open { flex: 1 }` was
+	   stretching the group header's first column. */
+	.ins-edit {
 		flex: 1;
 	}
 	.ins-rule {
@@ -1486,6 +1969,38 @@
 		align-items: center;
 		padding: 0 10px;
 		font-size: var(--text-md);
+		color: var(--fg1);
+	}
+	.sec label.restricted {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-5);
+		padding: var(--space-5) var(--space-6);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		background: var(--card2);
+		cursor: pointer;
+	}
+	.sec .restricted input {
+		height: auto;
+		width: 16px;
+		padding: 0;
+		flex: none;
+	}
+	.restricted .lock {
+		color: var(--fg3);
+		display: inline-flex;
+		flex: none;
+	}
+	.restricted-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	.restricted-title {
+		font-size: var(--text-md);
+		font-weight: 500;
 		color: var(--fg1);
 	}
 	.expiry-grid {
@@ -1558,13 +2073,6 @@
 	.pick-chip:has(input:focus-visible) {
 		outline: 2px solid var(--brand);
 		outline-offset: 1px;
-	}
-	.check {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		font-size: var(--text-sm);
-		color: var(--fg2);
 	}
 	.replace {
 		display: flex;

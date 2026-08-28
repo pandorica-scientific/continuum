@@ -44,33 +44,42 @@
 	let {
 		value = $bindable('🗂️'),
 		name,
-		dashed = false
+		dashed = false,
+		inline = false
 	}: {
 		value?: string;
 		name?: string;
 		/** The add row's empty state: a dashed square that reads as "pick one". */
 		dashed?: boolean;
+		/**
+		 * Grid always shown, no trigger. For a dialog, which has the room and
+		 * whose own overflow would clip a popover.
+		 */
+		inline?: boolean;
 	} = $props();
 
 	let open = $state(false);
+	const showGrid = $derived(inline || open);
 </script>
 
 {#if name}<input type="hidden" {name} {value} />{/if}
 
-<div class="picker">
-	<button
-		type="button"
-		class="trigger"
-		class:dashed
-		aria-label="Choose an emoji"
-		aria-expanded={open}
-		onclick={() => (open = !open)}
-	>
-		{value}
-	</button>
+<div class="picker" class:inline>
+	{#if !inline}
+		<button
+			type="button"
+			class="trigger"
+			class:dashed
+			aria-label="Choose an emoji"
+			aria-expanded={open}
+			onclick={() => (open = !open)}
+		>
+			{value}
+		</button>
+	{/if}
 
-	{#if open}
-		<div class="pop">
+	{#if showGrid}
+		<div class="pop" class:inline>
 			<div class="grid">
 				{#each CHOICES as choice (choice)}
 					<button
@@ -141,6 +150,12 @@
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-lg);
 		background: var(--bg2);
+	}
+	.pop.inline {
+		position: static;
+		padding: 0;
+		border: 0;
+		background: transparent;
 	}
 	.grid {
 		display: grid;

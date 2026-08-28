@@ -14,7 +14,7 @@
  * there" is explicitly out of scope, and a reader who adds it here will have
  * quietly made extraction a thing that edits records.
  */
-import { and, eq, max, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, documentText, documentTextChunk } from '$lib/server/db/schema';
 import { hashBytes, readUpload } from '$lib/server/system/files';
@@ -87,10 +87,10 @@ async function ocrLanguages(handle: Db = db): Promise<string> {
 /**
  * Read one file into chunks, starting after `fromPage` pages already read.
  *
- * Pure with respect to the database: it takes bytes and returns chunks, so the
- * routing can be tested without a row anywhere.
+ * Pure with respect to the database: it takes bytes and returns chunks, which
+ * is what keeps the routing rules readable next to the writes below.
  */
-export async function extractFromBytes(
+async function extractFromBytes(
 	bytes: Uint8Array,
 	ext: string,
 	options: {
@@ -313,19 +313,4 @@ export async function continueExtraction(
 	options: { limits?: ExtractionLimits; provider?: OcrProvider } = {}
 ): Promise<'extracted' | 'stale' | 'unreadable' | 'missing'> {
 	return extractDocumentText(documentId, handle, options);
-}
-
-/** How far a document has been read, for the inspector's copy. */
-export async function extractionState(documentId: string, handle: Db = db) {
-	const [row] = await handle
-		.select()
-		.from(documentText)
-		.where(eq(documentText.documentId, documentId))
-		.limit(1);
-	if (!row) return null;
-	const [{ last }] = await handle
-		.select({ last: max(documentTextChunk.ordinal) })
-		.from(documentTextChunk)
-		.where(and(eq(documentTextChunk.documentId, documentId)));
-	return { ...row, lastOrdinal: last };
 }

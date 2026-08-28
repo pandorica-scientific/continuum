@@ -9,3 +9,13 @@ import { ENUMS } from '$lib/enums';
 
 /** Derived, so the document form and the CHECK on document.expiry_verb agree. */
 export const EXPIRY_VERBS = ENUMS['document.expiry_verb'];
+
+/**
+ * What each verb means, for the picker. The words alone sound alike; the
+ * meaning beside them is what makes the choice answerable.
+ */
+export const EXPIRY_VERB_MEANINGS: Record<(typeof EXPIRY_VERBS)[number], string> = {
+	renews: 'a replacement will arrive',
+	expires: 'it simply stops',
+	due: 'a payment falls'
+};

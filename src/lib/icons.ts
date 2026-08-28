@@ -150,6 +150,8 @@ export const ICONS = {
 	// which is the opposite of what a restricted document is. Shown quietly, to
 	// an admin only — restricted is an access state, never a warning.
 	lock: [{ rect: [5, 10.5, 14, 10, 2] }, { path: 'M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3' }],
+	// Edit mode on the shelf rail: reorder, rename, remove.
+	pencil: [{ path: 'M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z' }, { path: 'M13.5 6.5l3 3' }],
 	// A magnifier whose handle leaves the circle at 45°, so it reads at 16px.
 	search: [{ circle: [11, 11, 6.5] }, { line: [15.8, 15.8, 20, 20] }],
 	arrowUp: [{ line: [12, 20, 12, 4] }, { path: 'M6 10l6-6 6 6' }],

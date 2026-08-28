@@ -399,7 +399,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			mortgage: mortgageCard,
 			documents: propertyDocs,
 			// a rented flat's paperwork lands on the Tenancy shelf by default
-			addDocumentHref: `/documents?add=1&addShelf=${current.kind === 'rented' ? 'tenancy' : 'property'}&propertyId=${current.id}`
+			addDocumentHref: `/documents?add=1&addShelfKey=${current.kind === 'rented' ? 'tenancy' : 'property'}&propertyId=${current.id}`
 		};
 	}
 
