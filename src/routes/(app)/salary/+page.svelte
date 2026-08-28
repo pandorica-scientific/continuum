@@ -18,6 +18,7 @@
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
 	import type { SalaryMode } from '$lib/charts/salary-chart-geometry';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	let { data } = $props();
 
@@ -162,12 +163,13 @@
 							<!-- The word "slip" said nothing the paperclip does not: every row
 							     in this table IS a slip. The icon is the link, and whose month
 							     it is takes the space the word had. -->
-							{#if s.file}
+							{#if s.fileExt}
 								<a
-									href="/files/{s.file}"
+									href={documentFileHref(s.documentId)}
 									target="_blank"
 									rel="noopener"
 									class="s-file"
+									data-file-ext={s.fileExt}
 									data-file-name="Payslip {s.periodMonth} · {s.personName}"
 									aria-label="Open the payslip for {s.periodMonth}">📎</a
 								>

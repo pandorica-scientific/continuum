@@ -35,6 +35,7 @@ import {
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { saveSplits } from '$lib/server/splits';
 import { FINGERPRINT_VERSION } from '$lib/server/import/fingerprint';
 import { setTransactionTags } from '$lib/server/tags';
@@ -494,6 +495,10 @@ export async function seedDemo(): Promise<void> {
 
 	// Payslips feed the salary tracker; a contract shows document linking.
 	const today = new Date().toISOString().slice(0, 10);
+	// Shelves are rows now, so the seed resolves them by key like everything
+	// else rather than writing a string the database might not accept.
+	const financeShelf = await shelfIdByKey('finance');
+	const tenancyShelf = await shelfIdByKey('tenancy');
 	const payslips: (typeof document.$inferInsert)[] = [];
 	const salaryRows: (typeof salaryEntry.$inferInsert)[] = [];
 	for (let i = 11; i >= 0; i--) {
@@ -515,7 +520,8 @@ export async function seedDemo(): Promise<void> {
 		payslips.push({
 			id: documentId,
 			name: `Payslip ${m} · Jana Nováková`,
-			shelf: 'payslips',
+			shelfId: financeShelf,
+			type: 'payslip',
 			addedOn: today,
 			currency: 'CZK',
 			// The month the payslip covers, pinned to its first day.
@@ -537,7 +543,8 @@ export async function seedDemo(): Promise<void> {
 	payslips.push({
 		id: contractId,
 		name: 'Renting contract · Karlín',
-		shelf: 'tenancy',
+		shelfId: tenancyShelf,
+		type: 'contract',
 		addedOn: today,
 		// The same day the tenancy ends, because it IS that tenancy's contract.
 		// The two drifting apart is how a demo ends up claiming a lease document
@@ -551,7 +558,7 @@ export async function seedDemo(): Promise<void> {
 		.insert(documentLink)
 		.values(
 			payslips
-				.filter((d) => d.shelf === 'payslips')
+				.filter((d) => d.type === 'payslip')
 				.map((d) => ({ documentId: d.id, targetId: jana }))
 		)
 		.onConflictDoNothing();

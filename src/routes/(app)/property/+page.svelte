@@ -13,6 +13,7 @@
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import FloorPlan from '$lib/components/FloorPlan.svelte';
 	import FloorPlanEditor from '$lib/components/FloorPlanEditor.svelte';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	let { data, form } = $props();
 
@@ -608,7 +609,12 @@
 						<span class="mono ext">{d.ext}</span>
 						<div class="doc-names">
 							{#if d.file}
-								<a href="/files/{d.file}" target="_blank" class="doc-name">{d.name}</a>
+								<a
+									href={documentFileHref(d.id)}
+									target="_blank"
+									class="doc-name"
+									data-file-ext={d.ext}>{d.name}</a
+								>
 							{:else}
 								<span class="doc-name">{d.name}</span>
 							{/if}

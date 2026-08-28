@@ -95,10 +95,33 @@ CREATE TABLE "contact" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+-- Where in life a document belongs — one level, never a tree. The slug `key`
+-- is immutable and is what code refers to; the label is the household's.
+CREATE TABLE "shelf" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"key" text NOT NULL,
+	"label" text NOT NULL,
+	"emoji" text DEFAULT '🗂️' NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"system" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "shelf_key_unique" UNIQUE("key")
+);
+--> statement-breakpoint
 CREATE TABLE "document" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
-	"shelf" text NOT NULL,
+	-- Where in life it is filed. A row, not an enum: a household renames and
+	-- reorders its own shelves. RESTRICT below, so deleting one can never take
+	-- the paper with it.
+	"shelf_id" uuid NOT NULL,
+	-- What kind of paper it is, independent of where it sits. Behaviour hangs
+	-- off this — the salary tracker reads type='payslip'.
+	"type" text DEFAULT 'other' NOT NULL,
+	-- The one user-authored phrase field, ranked above contents in search.
+	"note" text,
+	-- Absent for members everywhere, enforced by visibleDocumentPredicate.
+	"sensitivity" text DEFAULT 'normal' NOT NULL,
 	"stored_name" text,
 	"ext" text DEFAULT 'PDF' NOT NULL,
 	"added_on" date NOT NULL,
@@ -112,11 +135,43 @@ CREATE TABLE "document" (
 	"content_hash" text
 );
 --> statement-breakpoint
+-- That a document's text was read, and by what. The text itself lives in the
+-- chunk table: PostgreSQL refuses a tsvector over about 1 MB, which a 600-page
+-- OCR run passes comfortably.
+CREATE TABLE "document_text" (
+	"document_id" uuid PRIMARY KEY NOT NULL,
+	"engine" text NOT NULL,
+	"engine_version" text NOT NULL,
+	"languages" text NOT NULL,
+	"mean_confidence" real,
+	"extracted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	-- The bounded-work contract: a partial run says so rather than looking done.
+	"complete" boolean DEFAULT true NOT NULL,
+	"pages_extracted" integer
+);
+--> statement-breakpoint
+-- One PDF page, one image, or a ≤100 KB slice of a plain-text file. Every
+-- content index lives here and nowhere else.
+CREATE TABLE "document_text_chunk" (
+	"document_id" uuid NOT NULL,
+	"ordinal" integer NOT NULL,
+	-- Null for plain-text slices and single images: they have no page.
+	"page_no" integer,
+	"source" text NOT NULL,
+	"text" text NOT NULL,
+	CONSTRAINT "document_text_chunk_document_id_ordinal_pk" PRIMARY KEY("document_id","ordinal")
+);
+--> statement-breakpoint
 CREATE TABLE "subject" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"emoji" text DEFAULT '🏠' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	-- Archiving a subject demotes everything filed under it in one reversible
+	-- action; the period is what lets an old document read as history.
+	"archived_at" timestamp with time zone,
+	"active_from" date,
+	"active_to" date,
 	CONSTRAINT "subject_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
@@ -545,6 +600,9 @@ ALTER TABLE "credential" ADD CONSTRAINT "credential_person_id_person_id_fk" FORE
 ALTER TABLE "enrollment_token" ADD CONSTRAINT "enrollment_token_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "webauthn_challenge" ADD CONSTRAINT "webauthn_challenge_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document" ADD CONSTRAINT "document_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document" ADD CONSTRAINT "document_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -607,8 +665,10 @@ CREATE INDEX "webauthn_challenge_expires_idx" ON "webauthn_challenge" USING btre
 CREATE INDEX "webauthn_challenge_address_created_idx" ON "webauthn_challenge" USING btree ("address","created_at");--> statement-breakpoint
 CREATE INDEX "webauthn_challenge_person_idx" ON "webauthn_challenge" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "document_currency_idx" ON "document" USING btree ("currency");--> statement-breakpoint
-CREATE INDEX "document_shelf_idx" ON "document" USING btree ("shelf");--> statement-breakpoint
+CREATE INDEX "document_shelf_id_idx" ON "document" USING btree ("shelf_id");--> statement-breakpoint
+CREATE INDEX "document_type_idx" ON "document" USING btree ("type");--> statement-breakpoint
 CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_hash");--> statement-breakpoint
+CREATE INDEX "dtc_document_idx" ON "document_text_chunk" USING btree ("document_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "subject_name_ci_idx" ON "subject" USING btree (lower("name"));--> statement-breakpoint
 CREATE INDEX "contact_link_target_idx" ON "contact_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "document_link_target_idx" ON "document_link" USING btree ("target_id");--> statement-breakpoint
@@ -824,7 +884,8 @@ ALTER TABLE transaction ADD CONSTRAINT transaction_proof_class_check
 	CHECK (proof_class in ('P4', 'P3', 'P2', 'P1', 'P0'));--> statement-breakpoint
 ALTER TABLE transfer_pair ADD CONSTRAINT transfer_pair_state_check
 	CHECK (state in ('auto', 'proposed', 'confirmed', 'rejected'));--> statement-breakpoint
-ALTER TABLE job ADD CONSTRAINT job_kind_check CHECK (kind in ('import', 'calendar_sync'));--> statement-breakpoint
+ALTER TABLE job ADD CONSTRAINT job_kind_check
+	CHECK (kind in ('import', 'calendar_sync', 'extract_text'));--> statement-breakpoint
 ALTER TABLE job ADD CONSTRAINT job_state_check
 	CHECK (state in ('queued', 'running', 'done', 'failed'));--> statement-breakpoint
 ALTER TABLE import_profile ADD CONSTRAINT import_profile_source_check
@@ -835,9 +896,6 @@ ALTER TABLE import_file ADD CONSTRAINT import_file_proof_class_check
 	CHECK (proof_class in ('P4', 'P3', 'P2', 'P1', 'P0'));--> statement-breakpoint
 ALTER TABLE rule ADD CONSTRAINT rule_provenance_check
 	CHECK (provenance in ('learned', 'manual'));--> statement-breakpoint
-ALTER TABLE document ADD CONSTRAINT document_shelf_check CHECK (shelf in (
-	'payslips', 'tax', 'identity', 'family', 'health', 'property', 'tenancy', 'loans',
-	'insurance', 'statements'));--> statement-breakpoint
 ALTER TABLE document ADD CONSTRAINT document_expiry_verb_check
 	CHECK (expiry_verb in ('expires', 'ends', 'renews', 'due'));--> statement-breakpoint
 -- No normalisation on a bad provider: one that is neither of these cannot be
@@ -1176,3 +1234,49 @@ ALTER TABLE "salary_attribution" ADD CONSTRAINT "salary_attribution_account_id_a
 CREATE INDEX "salary_attribution_key_idx" ON "salary_attribution" USING btree ("match_key");--> statement-breakpoint
 CREATE INDEX "salary_attribution_person_idx" ON "salary_attribution" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "salary_attribution_account_idx" ON "salary_attribution" USING btree ("account_id");
+
+-- ---- Documents v2 ----
+
+-- Trigram matching for identifiers: a variable symbol like 10078410 is not a
+-- word to any text-search configuration, so FTS alone never finds it. The
+-- extension is schema-qualified in every reference below, as unaccent already
+-- is, because search_path is not something a migration should depend on.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
+
+-- Both indexes fold with the SAME expression the query uses. contact_fold is
+-- IMMUTABLE and PARALLEL SAFE, which is what makes it indexable at all.
+CREATE INDEX dtc_fts_idx ON document_text_chunk
+	USING gin (to_tsvector('simple', public.contact_fold(text)));--> statement-breakpoint
+CREATE INDEX dtc_trgm_idx ON document_text_chunk
+	USING gin (public.contact_fold(text) gin_trgm_ops);--> statement-breakpoint
+CREATE INDEX document_name_trgm_idx ON document
+	USING gin (public.contact_fold(name) gin_trgm_ops);--> statement-breakpoint
+
+ALTER TABLE document ADD CONSTRAINT document_type_check CHECK (type in (
+	'contract', 'invoice', 'receipt', 'payslip', 'bank_statement', 'insurance_policy',
+	'claim', 'id_document', 'certificate', 'medical_record', 'tax_document',
+	'technical_plan', 'correspondence', 'warranty', 'manual', 'other'));--> statement-breakpoint
+ALTER TABLE document ADD CONSTRAINT document_sensitivity_check
+	CHECK (sensitivity in ('normal', 'restricted'));--> statement-breakpoint
+ALTER TABLE document_text_chunk ADD CONSTRAINT document_text_chunk_source_check
+	CHECK (source in ('text_layer', 'ocr', 'plain'));--> statement-breakpoint
+
+-- A period that ends before it starts is not a period. NULLs are legal on both
+-- sides: a subject that is simply current has neither.
+ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
+	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);--> statement-breakpoint
+
+-- The ten shelves a fresh install starts with. Households edit these freely;
+-- `inbox` and `statements` are the two the application refers to by key.
+INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
+	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
+	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, false),
+	(gen_random_uuid(), 'family',     'Family',     '👶', 20, false),
+	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, false),
+	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, false),
+	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
+	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
+	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, false),
+	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, false),
+	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
+ON CONFLICT (key) DO NOTHING;

@@ -1,217 +1,259 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	//
+	// A very good filing cabinet with excellent search — not a document
+	// management system. One rail, one list, one document per row, and an
+	// inspector that opens beside the list rather than over it.
+	//
+	// Every decision worth testing lives in `$lib/documents-view`, because there
+	// is no browser suite in this repository and anything automation must hold
+	// has to be reachable without a page.
 	import { untrack } from 'svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
-	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import Pill from '$lib/components/Pill.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
+	import SnippetMark from '$lib/components/SnippetMark.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
-	import { SHELVES } from '$lib/documents';
-	import { syncedDocumentState } from '$lib/ui/state';
+	import { documentFileHref } from '$lib/ui/file-viewer';
+	import { EXPIRY_VERBS } from '$lib/documents';
+	import {
+		expiryTreatment,
+		groupDocuments,
+		matchLabel,
+		splitSnippet,
+		sortDocuments,
+		subLine,
+		typeLabel,
+		TYPE_LABELS,
+		type GroupKey,
+		type SortKey
+	} from '$lib/documents-view';
 
 	let { data, form } = $props();
 
-	// Read once here; the effect below is what carries a navigation into them,
-	// and it decides for itself what a fresh load should reopen.
 	let query = $state(untrack(() => data.query));
-	let adding = $state(untrack(() => data.prefill.open));
-	let newSubjectOpen = $state(false);
+	let capturing = $state(untrack(() => data.prefill.open));
+	let editing = $state(false);
+	let selection = $state<string[]>([]);
+	let confirmingDelete = $state(false);
+	let replacing = $state(false);
+
 	$effect(() => {
-		const state = syncedDocumentState({ query: data.query, prefillOpen: data.prefill.open });
-		query = state.query;
-		adding = state.adding;
-		newSubjectOpen = false;
+		// A navigation is what carries new data in; nothing stays armed across it.
+		void data.rows;
+		confirmingDelete = false;
+		selection = [];
+	});
+	$effect(() => {
+		// The inspector opens read-only, whichever document it opens on.
+		void data.selected?.id;
+		editing = false;
+		replacing = false;
 	});
 
-	// Two taps rather than a browser confirm(): this deletes a stored file and
-	// every link to it, and a native dialog blocks the page while it is open.
-	// Keyed by document id, not by column — the same document appears in every
-	// column it belongs to, and arming one copy should arm the document.
-	let confirming = $state<string | null>(null);
-	$effect(() => {
-		// A delete reloads the page data; nothing should still be armed after it.
-		void data.columns;
-		confirming = null;
-	});
+	const today = new Date().toISOString().slice(0, 10);
 
-	function navigate(shelf: string, q: string, tag = '') {
-		const parts: string[] = [];
-		if (shelf !== 'all') parts.push(`shelf=${encodeURIComponent(shelf)}`);
-		if (q) parts.push(`q=${encodeURIComponent(q)}`);
-		if (tag) parts.push(`tag=${encodeURIComponent(tag)}`);
-		goto(`?${parts.join('&')}`, { keepFocus: true, noScroll: true });
+	function navigate(next: Record<string, string | null>) {
+		const params = new SvelteURLSearchParams(window.location.search);
+		for (const [key, value] of Object.entries(next)) {
+			if (value === null || value === '') params.delete(key);
+			else params.set(key, value);
+		}
+		// Opening a different document must not keep the last one's scroll
+		// position halfway down the list.
+		goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
+
+	const groups = $derived(
+		groupDocuments(sortDocuments(data.rows, data.sort as SortKey), data.group as GroupKey, today)
+	);
+	const shelfLabel = $derived(
+		data.shelves.find((s) => s.key === data.shelf)?.label ?? 'Everything'
+	);
+	const captureShelf = $derived(data.prefill.shelf || 'inbox');
+	const captureShelfLabel = $derived(
+		data.shelves.find((s) => s.key === captureShelf)?.label ?? 'Inbox'
+	);
+
+	const toggleSelected = (id: string) =>
+		(selection = selection.includes(id) ? selection.filter((s) => s !== id) : [...selection, id]);
 </script>
 
 <ScreenHeader
 	title="Documents"
-	caption="One archive for the household — columns follow whoever the documents are about."
+	caption="One archive for the household — filed by shelf, found by anything you remember."
 />
 
 {#if form?.message}
-	<div class="error">{form.message}</div>
+	<div class="error" role="alert">{form.message}</div>
+{/if}
+
+{#if form?.ok && form?.addedId}
+	<div class="ack">
+		<Pill hue="green">Added to {form.addedShelf === 'inbox' ? 'Inbox' : form.addedShelf}</Pill>
+		<button type="button" class="link" onclick={() => navigate({ doc: form.addedId, add: null })}>
+			File it now
+		</button>
+	</div>
 {/if}
 
 <section class="toolbar">
-	<input
-		type="text"
-		bind:value={query}
-		placeholder="Search by name, person, flat, year or tag"
-		onkeydown={(e) => e.key === 'Enter' && navigate(data.shelf, query)}
+	<div class="search">
+		<span class="search-icon"><Icon name="search" size={16} /></span>
+		<input
+			type="search"
+			bind:value={query}
+			placeholder="Search documents and their contents…"
+			onkeydown={(e) => e.key === 'Enter' && navigate({ q: query, doc: null })}
+			aria-label="Search documents"
+		/>
+	</div>
+
+	<span class="eyebrow">Group</span>
+	<Segmented
+		options={[
+			{ value: 'type', label: 'Type' },
+			{ value: 'entity', label: 'Entity' },
+			{ value: 'year', label: 'Year' },
+			{ value: 'expiry', label: 'Expiry' },
+			{ value: 'none', label: 'None' }
+		]}
+		value={data.group}
+		onchange={(value) => navigate({ group: value === 'type' ? null : value })}
 	/>
-	<button
-		type="button"
-		class="btn"
-		onclick={() => {
-			query = '';
-			navigate(data.shelf, '');
-		}}
+
+	<!-- Group is not sort. Two questions, two controls. -->
+	<select
+		class="sort"
+		aria-label="Sort documents"
+		value={data.sort}
+		onchange={(e) =>
+			navigate({ sort: e.currentTarget.value === 'newest' ? null : e.currentTarget.value })}
 	>
-		Clear
-	</button>
-	<button type="button" class="btn btn-primary add" onclick={() => (adding = !adding)}>
-		➕ Add document
+		<option value="newest">Newest first</option>
+		<option value="oldest">Oldest first</option>
+		<option value="name">Name A–Z</option>
+		<option value="expiry">Expiry soonest</option>
+	</select>
+
+	<button type="button" class="btn btn-primary add" onclick={() => (capturing = !capturing)}>
+		+ Add document
 	</button>
 </section>
 
-{#if adding}
+{#if capturing}
 	<form
+		class="capture"
 		method="POST"
 		action="?/addDocument"
-		use:enhance
 		enctype="multipart/form-data"
-		class="card add-form"
+		use:enhance={() =>
+			async ({ update }) => {
+				await update();
+				capturing = false;
+			}}
 	>
-		<div class="grid">
-			<label><span>Name</span><input name="name" placeholder="Passport · Robert" /></label>
-			<label
-				><span>Shelf</span>
-				<select name="shelf">
-					{#each SHELVES as s (s.key)}
-						<option value={s.key} selected={s.key === data.prefill.shelf}>{s.label}</option>
-					{/each}
-				</select></label
-			>
-			<div class="field belongs">
-				<span>Belongs to</span>
-				<div class="belong-groups">
-					{#each data.people as p (p.id)}
-						<label class="tick">
-							<input
-								type="checkbox"
-								name="personIds"
-								value={p.id}
-								checked={data.prefill.personId === p.id}
-							/>
-							{p.name}
-						</label>
-					{/each}
-					{#each data.properties as pr (pr.id)}
-						<label class="tick">
-							<input
-								type="checkbox"
-								name="propertyIds"
-								value={pr.id}
-								checked={data.prefill.propertyId === pr.id}
-							/>
-							{pr.name}
-						</label>
-					{/each}
-					{#each data.accounts as a (a.id)}
-						<label class="tick">
-							<input type="checkbox" name="accountIds" value={a.id} />
-							{a.name}
-						</label>
-					{/each}
-					{#each data.subjects as s (s.id)}
-						<label class="tick">
-							<input type="checkbox" name="subjectIds" value={s.id} />
-							{s.name}
-						</label>
-					{/each}
-					{#if newSubjectOpen}
-						<input
-							class="new-subject"
-							name="newSubject"
-							placeholder="Car, Dog, …"
-							aria-label="New subject name"
-						/>
-					{:else}
-						<button
-							type="button"
-							class="btn tick-add"
-							onclick={() => (newSubjectOpen = true)}
-							aria-label="New subject"
-						>
-							＋ new subject
-						</button>
-					{/if}
-				</div>
-			</div>
-			<div class="field">
-				<span>File (optional)</span>
-				<UploadDropzone
-					name="file"
-					accept="application/pdf,image/*"
-					idleText="Drop a file here, or click to browse"
-					description="PDF, PNG or JPEG"
-				/>
-			</div>
-			<div class="field">
-				<span>Expiry (optional)</span>
-				<div class="expiry">
-					<select name="expiryVerb" aria-label="Expiry kind">
-						<option value="expires">expires</option>
-						<option value="ends">ends</option>
-						<option value="renews">renews</option>
-						<option value="due">due</option>
-					</select>
-					<input name="expiresOn" type="date" aria-label="Expiry date" />
-				</div>
-			</div>
-			<label
-				><span>Tags (comma separated)</span><input
-					name="tags"
-					placeholder="e.g. vaccination, lab, dentist"
-				/></label
-			>
-		</div>
-		<div class="row">
+		<!-- Capture asks nothing. A file, a generated name, the Inbox — filing is
+		     a separate decision made later, or never. -->
+		<input type="hidden" name="shelf" value={captureShelf} />
+		{#if data.prefill.personId}<input
+				type="hidden"
+				name="personIds"
+				value={data.prefill.personId}
+			/>{/if}
+		{#if data.prefill.propertyId}<input
+				type="hidden"
+				name="propertyIds"
+				value={data.prefill.propertyId}
+			/>{/if}
+		<UploadDropzone
+			name="file"
+			idleText="Drop a file here, or click to browse"
+			description="PDF, images, text and spreadsheets"
+		/>
+		<div class="capture-foot">
+			<span class="quiet">
+				It goes to {captureShelfLabel} with the file's own name. Nothing else is asked of you.
+			</span>
 			<button type="submit" class="btn btn-primary">Add</button>
-			<button type="button" class="btn" onclick={() => (adding = false)}>Cancel</button>
+			<button type="button" class="btn" onclick={() => (capturing = false)}>Cancel</button>
 		</div>
 	</form>
 {/if}
 
-<section class="layout">
-	<div class="rail">
-		<Eyebrow emoji="🗂️" label="Shelves" />
-		<div class="shelves">
-			{#each data.shelves as s (s.key)}
+<section class="layout" class:with-inspector={data.selected}>
+	<nav class="rail" aria-label="Shelves">
+		{#each data.shelves.filter((s) => s.key === 'all' || s.key === 'inbox') as s (s.key)}
+			<button
+				type="button"
+				class="rail-item"
+				class:active={data.shelf === s.key}
+				onclick={() => navigate({ shelf: s.key === 'all' ? null : s.key, doc: null })}
+			>
+				<span class="rail-label">{s.label}</span>
+				<!-- Amber only when there is something waiting: work, not an error. -->
+				<span class="mono rail-count" class:waiting={s.key === 'inbox' && s.count > 0}>
+					{s.count}
+				</span>
+			</button>
+		{/each}
+
+		<div class="rail-divider"></div>
+
+		<div class="rail-shelves">
+			{#each data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox') as s (s.key)}
 				<button
 					type="button"
-					class="shelf"
+					class="rail-item"
 					class:active={data.shelf === s.key}
-					onclick={() => navigate(s.key, query)}
+					onclick={() => navigate({ shelf: s.key, doc: null })}
 				>
-					<span class="s-label">{s.label}</span>
-					<span class="mono s-count">{s.count}</span>
+					<span class="rail-label">{s.label}</span>
+					<span class="mono rail-count">{s.count}</span>
 				</button>
 			{/each}
 		</div>
-	</div>
+
+		<div class="rail-divider"></div>
+
+		<a class="rail-item manage" href="/documents/settings">
+			<span class="rail-label">Manage shelves</span>
+		</a>
+	</nav>
 
 	<div class="area">
-		<div class="eyebrow-row">
-			<span class="eyebrow">
-				{data.shelves.find((s) => s.key === data.shelf)?.label ?? 'Everything'}
-			</span>
-			<span class="eyebrow-caption">
-				{data.total === 0
-					? 'nothing here yet'
-					: `${data.total} document${data.total === 1 ? '' : 's'} · columns derive from who they are about`}
-			</span>
-		</div>
+		{#if data.inboxCount > 0 && data.shelf !== 'inbox'}
+			<div class="strip">
+				<Pill hue="yellow">{data.inboxCount} in Inbox</Pill>
+				<span class="strip-text">
+					{data.inboxCount}
+					{data.inboxCount === 1 ? 'document is' : 'documents are'} waiting in Inbox
+				</span>
+				<a class="btn strip-act" href="/documents/review">Review inbox →</a>
+			</div>
+		{/if}
+
+		{#if data.archivedHidden > 0 || data.includeArchived}
+			<div class="archive-line">
+				<span class="quiet">
+					Active subjects · <span class="mono">{data.archivedHidden}</span>
+					{data.archivedHidden === 1 ? 'document' : 'documents'} hidden from archived subjects
+				</span>
+				<button
+					type="button"
+					class="btn small"
+					class:active={data.includeArchived}
+					onclick={() => navigate({ archived: data.includeArchived ? null : '1' })}
+				>
+					{data.includeArchived ? 'Hide archived' : 'Include archived subjects'}
+				</button>
+			</div>
+		{/if}
+
 		{#if data.tags.length}
 			<div class="tag-chips">
 				{#each data.tags as t (t.name)}
@@ -219,61 +261,490 @@
 						type="button"
 						class="tag-chip"
 						class:active={t.active}
-						onclick={() => navigate(data.shelf, query, t.active ? '' : t.name)}
+						onclick={() => navigate({ tag: t.active ? null : t.name })}
 					>
 						{t.name} <span class="mono t-count">{t.count}</span>
 					</button>
 				{/each}
 			</div>
 		{/if}
-		<div class="columns">
-			{#each data.columns as col (col.label)}
-				<div class="col">
-					<div class="col-head">
-						<span class="col-label">{col.label}</span>
-						<span class="mono col-count">{col.items.length}</span>
-					</div>
-					{#each col.items as d (d.id)}
-						<div class="doc">
-							<span class="mono ext">{d.ext}</span>
-							<div class="names">
-								{#if d.file}
-									<a href="/files/{d.file}" target="_blank" class="doc-name">{d.name}</a>
-								{:else}
-									<span class="doc-name">{d.name}</span>
-								{/if}
-								<span
-									class="meta"
-									style:color={d.expired ? 'var(--red)' : d.amber ? 'var(--yellow)' : 'var(--fg3)'}
-								>
-									{d.meta}
+
+		{#if selection.length > 0}
+			<form class="bulk" method="POST" action="?/bulkUpdate" use:enhance>
+				{#each selection as id (id)}<input type="hidden" name="ids" value={id} />{/each}
+				<span class="mono">{selection.length} selected</span>
+				<select name="shelf" aria-label="Move to shelf">
+					<option value="">Shelf…</option>
+					{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
+						<option value={s.key}>{s.label}</option>
+					{/each}
+				</select>
+				<select name="type" aria-label="Set type">
+					<option value="">Type…</option>
+					{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+						<option value={code}>{label}</option>
+					{/each}
+				</select>
+				<input name="tags" placeholder="Add tags, comma separated" />
+				{#if data.isAdmin}
+					<select name="sensitivity" aria-label="Set visibility">
+						<option value="">Visibility…</option>
+						<option value="normal">Everyone in the household</option>
+						<option value="restricted">Admins only</option>
+					</select>
+				{/if}
+				<button type="submit" class="btn btn-primary">Apply</button>
+				<button type="button" class="btn" onclick={() => (selection = [])}>Done</button>
+			</form>
+		{/if}
+
+		{#if data.rows.length === 0}
+			<div class="empty">
+				{#if data.query}
+					<!-- The honesty states. What was NOT searched is as important as
+					     what was, and saying nothing is what makes a search feel broken. -->
+					<p class="empty-title">
+						No documents match “{data.query}”. Try fewer words or remove a filter.
+					</p>
+					{#if data.honesty?.pending}
+						<p class="quiet">
+							No match yet. <span class="mono">{data.honesty.pending}</span> documents are still being
+							prepared for content search.
+						</p>
+					{/if}
+					{#if data.honesty?.notSearchable}
+						<p class="quiet">
+							<span class="mono">{data.honesty.notSearchable}</span> documents don't have searchable contents.
+						</p>
+					{/if}
+					{#if data.honesty?.archivedOnly}
+						<p class="quiet">
+							<span class="mono">{data.honesty.archivedOnly}</span>
+							{data.honesty.archivedOnly === 1 ? 'match belongs' : 'matches belong'} only to archived
+							subjects.
+							<button type="button" class="link" onclick={() => navigate({ archived: '1' })}>
+								Show archived matches
+							</button>
+						</p>
+					{/if}
+				{:else if data.total === 0 && data.shelf === 'all'}
+					<p class="empty-title">No documents yet.</p>
+					<p class="quiet">
+						Drop files here, or click to browse. A name is generated and they go to the Inbox —
+						nothing else is asked of you.
+					</p>
+					<button type="button" class="btn btn-primary" onclick={() => (capturing = true)}>
+						+ Add document
+					</button>
+				{:else}
+					<p class="empty-title">Nothing on {shelfLabel} yet.</p>
+					<p class="quiet">
+						Drop a file anywhere on this screen and it lands in the Inbox — you can move it here
+						later.
+					</p>
+					<button type="button" class="btn btn-primary" onclick={() => (capturing = true)}>
+						+ Add document
+					</button>
+				{/if}
+			</div>
+		{:else}
+			{#each groups as g (g.key)}
+				<div class="group">
+					{#if g.label}
+						<div class="group-head">
+							<span class="group-label">{g.label}</span>
+							<span class="mono group-count">{g.items.length}</span>
+						</div>
+					{/if}
+					{#each g.items as d (d.id)}
+						{@const expiry = expiryTreatment(d, d.subjectArchived, today, 'wide')}
+						<div class="row" class:selected={data.selected?.id === d.id}>
+							<input
+								type="checkbox"
+								class="pick"
+								aria-label="Select {d.name}"
+								checked={selection.includes(d.id)}
+								onchange={() => toggleSelected(d.id)}
+							/>
+							<button
+								type="button"
+								class="row-main"
+								onclick={() => navigate({ doc: d.id })}
+								aria-label="Open {d.name}"
+							>
+								<span class="mono ext">{d.ext}</span>
+								<span class="names">
+									<span class="row-name">
+										{d.name}
+										{#if d.restricted}
+											<!-- Quiet, and admins only. Restricted is an access
+											     state, not a warning: no tint, no pill, never red. -->
+											<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span>
+										{/if}
+										{#if d.subjectArchived}
+											<span class="chip">Archived subject</span>
+										{/if}
+									</span>
+									<span class="sub">{subLine(d)}</span>
+									{#if d.match?.snippet}
+										{@const parts = splitSnippet(d.match.snippet, data.query)}
+										<span class="snippet">
+											{#if parts}
+												{parts.before}<SnippetMark>{parts.match}</SnippetMark>{parts.after}
+											{:else}
+												{d.match.snippet}
+											{/if}
+										</span>
+									{/if}
+									{#if d.match && matchLabel(d.match.matchedIn)}
+										<span class="match-label">
+											{matchLabel(d.match.matchedIn)}{d.match.pageNo
+												? ` · page ${d.match.pageNo}`
+												: ''}
+										</span>
+									{/if}
 								</span>
-							</div>
-							{#if confirming === d.id}
-								<form method="POST" action="?/deleteDocument" use:enhance>
-									<input type="hidden" name="id" value={d.id} />
-									<button type="submit" class="del confirm">Delete?</button>
-								</form>
-							{:else}
-								<button
-									type="button"
-									class="del"
-									aria-label="Remove {d.name}"
-									onclick={() => (confirming = d.id)}
-								>
-									✕
-								</button>
-							{/if}
+								<span class="expiry">
+									{#if expiry?.kind === 'pill'}
+										<Pill hue={expiry.hue}>{expiry.text}</Pill>
+									{:else if expiry}
+										<span class="mono plain-expiry">{expiry.text}</span>
+									{/if}
+								</span>
+							</button>
 						</div>
 					{/each}
 				</div>
-			{:else}
-				<span class="quiet"
-					>Add the first document above — shelves and columns build themselves.</span
-				>
 			{/each}
-		</div>
+		{/if}
 	</div>
+
+	{#if data.selected}
+		{@const d = data.selected}
+		<aside class="inspector" aria-label="Document details">
+			<div class="ins-head">
+				<h2 class="ins-name">
+					{d.name}
+					{#if d.restricted}
+						<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span>
+					{/if}
+				</h2>
+				<button type="button" class="btn small" onclick={() => navigate({ doc: null })}>Back</button
+				>
+			</div>
+
+			<div class="preview">
+				{#if d.hasFile}
+					<a
+						class="btn"
+						href={documentFileHref(d.id)}
+						target="_blank"
+						rel="noopener"
+						data-file-ext={d.ext}
+					>
+						Open file
+					</a>
+				{:else}
+					<!-- Metadata-only: the dropzone takes the preview's place rather
+					     than an "Open file" button that opens nothing. -->
+					<form method="POST" action="?/replaceFile" enctype="multipart/form-data" use:enhance>
+						<input type="hidden" name="id" value={d.id} />
+						<span class="quiet">No file attached</span>
+						<UploadDropzone name="file" idleText="Attach file" />
+						<button type="submit" class="btn">Attach</button>
+					</form>
+				{/if}
+			</div>
+
+			{#if d.pending}
+				<p class="quiet">Preparing contents for search…</p>
+			{:else if d.extraction && !d.extraction.complete}
+				<div class="state-line">
+					<p class="quiet">
+						Pages 1–<span class="mono">{d.extraction.pagesExtracted}</span> are searchable. This file
+						is larger than the automatic extraction limit.
+					</p>
+					<form method="POST" action="?/continueExtraction" use:enhance>
+						<input type="hidden" name="id" value={d.id} />
+						<button type="submit" class="link">Continue extracting</button>
+					</form>
+				</div>
+			{:else if d.hasFile && !d.extraction}
+				<div class="state-line">
+					<p class="quiet">
+						Couldn't read searchable text from this file. The document itself is safe and still
+						available.
+					</p>
+					{#if data.isAdmin}
+						<form method="POST" action="?/reExtract" use:enhance>
+							<input type="hidden" name="id" value={d.id} />
+							<button type="submit" class="link">Retry</button>
+						</form>
+					{/if}
+				</div>
+			{/if}
+
+			{#if replacing}
+				<!-- The same dropzone every document upload goes through: drag,
+				     click and the camera in one place rather than a bare input
+				     each screen wires up its own way. -->
+				<form
+					class="replace"
+					method="POST"
+					action="?/replaceFile"
+					enctype="multipart/form-data"
+					use:enhance={() =>
+						async ({ update }) => {
+							await update();
+							replacing = false;
+						}}
+				>
+					<input type="hidden" name="id" value={d.id} />
+					<UploadDropzone name="file" idleText="Drop the replacement here, or click to browse" />
+					<div class="ins-actions">
+						<button type="submit" class="btn btn-primary">Replace</button>
+						<button type="button" class="btn" onclick={() => (replacing = false)}>Cancel</button>
+					</div>
+				</form>
+			{/if}
+
+			{#if editing}
+				<form class="ins-form" method="POST" action="?/updateDocument" use:enhance>
+					<input type="hidden" name="id" value={d.id} />
+					<label><span class="eyebrow">Name</span><input name="name" value={d.name} /></label>
+					<label>
+						<span class="eyebrow">Filed in</span>
+						<select name="shelf" value={d.shelfKey}>
+							{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
+								<option value={s.key}>{s.label}</option>
+							{/each}
+						</select>
+					</label>
+					<label>
+						<span class="eyebrow">Type</span>
+						<select name="type" value={d.type}>
+							{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+								<option value={code}>{label}</option>
+							{/each}
+						</select>
+					</label>
+					<div class="field">
+						<span class="eyebrow">About</span>
+						<div class="checks">
+							{#each [...data.people.map( (p) => ({ ...p, kind: 'person' }) ), ...data.properties.map( (p) => ({ ...p, kind: 'property' }) ), ...data.subjects.map( (s) => ({ ...s, kind: 'subject' }) )] as target (target.id)}
+								<label class="check">
+									<input
+										type="checkbox"
+										name="linkIds"
+										value={target.id}
+										checked={d.links.some((l) => l.id === target.id)}
+									/>
+									{target.name}
+								</label>
+							{/each}
+						</div>
+					</div>
+					<div class="field expiry-field">
+						<span class="eyebrow">Expiry</span>
+						<select name="expiryVerb" value={d.expiryVerb}>
+							{#each EXPIRY_VERBS as verb (verb)}<option value={verb}>{verb}</option>{/each}
+						</select>
+						<!-- Native date input, never a text mask: 12/01/2027 is a
+						     DD/MM-vs-MM/DD bug waiting to happen in a Czech household. -->
+						<input type="date" name="expiresOn" value={d.expiresOn ?? ''} />
+					</div>
+					<label
+						><span class="eyebrow">Note</span><textarea name="note">{d.note ?? ''}</textarea></label
+					>
+					{#if data.isAdmin}
+						<label class="check">
+							<input
+								type="checkbox"
+								name="sensitivity"
+								value="restricted"
+								checked={d.sensitivity === 'restricted'}
+							/>
+							Restricted
+						</label>
+						<span class="quiet">
+							Restricted documents do not appear in search, document lists, briefing, calendar or
+							downloads for household members.
+						</span>
+					{/if}
+					<div class="ins-actions">
+						<button type="submit" class="btn btn-primary">Save</button>
+						<button type="button" class="btn" onclick={() => (editing = false)}>Cancel</button>
+					</div>
+				</form>
+			{:else}
+				<dl class="ins-read">
+					<dt class="eyebrow">Filed in</dt>
+					<dd>{d.shelfLabel}</dd>
+					<dt class="eyebrow">Type</dt>
+					<dd>{typeLabel(d.type)}</dd>
+					<dt class="eyebrow">About</dt>
+					<dd>{d.entities.length ? d.entities.join(', ') : '—'}</dd>
+					<dt class="eyebrow">Expiry</dt>
+					<dd class="mono">{d.expiresOn ? `${d.expiryVerb} ${d.expiresOn}` : '—'}</dd>
+					<dt class="eyebrow">Tags</dt>
+					<dd>{d.tags.length ? d.tags.join(', ') : '—'}</dd>
+					<dt class="eyebrow">Note</dt>
+					<dd>{d.note ?? '—'}</dd>
+				</dl>
+				<!-- Pinned to exactly this order — Replace file, Re-extract,
+				     Download, Delete — so the destructive one is never where the
+				     harmless one was a moment ago. -->
+				<div class="ins-actions">
+					<button type="button" class="btn btn-primary" onclick={() => (editing = true)}
+						>Edit</button
+					>
+					{#if d.hasFile}
+						<button type="button" class="btn" onclick={() => (replacing = !replacing)}>
+							Replace file
+						</button>
+					{/if}
+					{#if data.isAdmin}
+						<form method="POST" action="?/reExtract" use:enhance>
+							<input type="hidden" name="id" value={d.id} />
+							<button type="submit" class="link">Retry</button>
+						</form>
+					{/if}
+				</div>
+			{/if}
+
+			{#if editing}
+				<form class="ins-form" method="POST" action="?/updateDocument" use:enhance>
+					<input type="hidden" name="id" value={d.id} />
+					<label><span class="eyebrow">Name</span><input name="name" value={d.name} /></label>
+					<label>
+						<span class="eyebrow">Filed in</span>
+						<select name="shelf" value={d.shelfKey}>
+							{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
+								<option value={s.key}>{s.label}</option>
+							{/each}
+						</select>
+					</label>
+					<label>
+						<span class="eyebrow">Type</span>
+						<select name="type" value={d.type}>
+							{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+								<option value={code}>{label}</option>
+							{/each}
+						</select>
+					</label>
+					<div class="field">
+						<span class="eyebrow">About</span>
+						<div class="checks">
+							{#each [...data.people.map( (p) => ({ ...p, kind: 'person' }) ), ...data.properties.map( (p) => ({ ...p, kind: 'property' }) ), ...data.subjects.map( (s) => ({ ...s, kind: 'subject' }) )] as target (target.id)}
+								<label class="check">
+									<input
+										type="checkbox"
+										name="linkIds"
+										value={target.id}
+										checked={d.links.some((l) => l.id === target.id)}
+									/>
+									{target.name}
+								</label>
+							{/each}
+						</div>
+					</div>
+					<div class="field expiry-field">
+						<span class="eyebrow">Expiry</span>
+						<select name="expiryVerb" value={d.expiryVerb}>
+							{#each EXPIRY_VERBS as verb (verb)}<option value={verb}>{verb}</option>{/each}
+						</select>
+						<!-- Native date input, never a text mask: 12/01/2027 is a
+						     DD/MM-vs-MM/DD bug waiting to happen in a Czech household. -->
+						<input type="date" name="expiresOn" value={d.expiresOn ?? ''} />
+					</div>
+					<label
+						><span class="eyebrow">Note</span><textarea name="note">{d.note ?? ''}</textarea></label
+					>
+					{#if data.isAdmin}
+						<label class="check">
+							<input
+								type="checkbox"
+								name="sensitivity"
+								value="restricted"
+								checked={d.sensitivity === 'restricted'}
+							/>
+							Restricted
+						</label>
+						<span class="quiet">
+							Restricted documents do not appear in search, document lists, briefing, calendar or
+							downloads for household members.
+						</span>
+					{/if}
+					<div class="ins-actions">
+						<button type="submit" class="btn btn-primary">Save</button>
+						<button type="button" class="btn" onclick={() => (editing = false)}>Cancel</button>
+					</div>
+				</form>
+			{:else}
+				<dl class="ins-read">
+					<dt class="eyebrow">Filed in</dt>
+					<dd>{d.shelfLabel}</dd>
+					<dt class="eyebrow">Type</dt>
+					<dd>{typeLabel(d.type)}</dd>
+					<dt class="eyebrow">About</dt>
+					<dd>{d.entities.length ? d.entities.join(', ') : '—'}</dd>
+					<dt class="eyebrow">Expiry</dt>
+					<dd class="mono">{d.expiresOn ? `${d.expiryVerb} ${d.expiresOn}` : '—'}</dd>
+					<dt class="eyebrow">Tags</dt>
+					<dd>{d.tags.length ? d.tags.join(', ') : '—'}</dd>
+					<dt class="eyebrow">Note</dt>
+					<dd>{d.note ?? '—'}</dd>
+				</dl>
+				<!-- Pinned to exactly this order — Replace file, Re-extract,
+				     Download, Delete — so the destructive one is never where the
+				     harmless one was a moment ago. -->
+				<div class="ins-actions">
+					<button type="button" class="btn btn-primary" onclick={() => (editing = true)}
+						>Edit</button
+					>
+					{#if d.hasFile}
+						<button type="button" class="btn" onclick={() => (replacing = !replacing)}>
+							Replace file
+						</button>
+					{/if}
+					{#if data.isAdmin}
+						<form method="POST" action="?/reExtract" use:enhance>
+							<input type="hidden" name="id" value={d.id} />
+							<button type="submit" class="btn">Re-extract</button>
+						</form>
+					{/if}
+					{#if d.hasFile}
+						<!-- `download` on the anchor: the file overlay leaves a save
+						     alone, which is why it checks for the attribute. -->
+						<a class="btn" href={documentFileHref(d.id)} download>Download</a>
+					{/if}
+					{#if confirmingDelete}
+						<form method="POST" action="?/deleteDocument" use:enhance>
+							<input type="hidden" name="id" value={d.id} />
+							<button type="submit" class="btn danger">
+								Delete — this removes the file and every link to it
+							</button>
+						</form>
+					{:else}
+						<button type="button" class="btn" onclick={() => (confirmingDelete = true)}
+							>Delete</button
+						>
+					{/if}
+				</div>
+				{#if data.isAdmin && d.extraction}
+					<details class="tech">
+						<summary class="quiet">Technical details</summary>
+						<p class="quiet mono">
+							{d.extraction.engine} · {d.extraction.languages}
+							{#if d.extraction.meanConfidence !== null}
+								· confidence {Math.round(d.extraction.meanConfidence)}
+							{/if}
+						</p>
+					</details>
+				{/if}
+			{/if}
+		</aside>
+	{/if}
 </section>
 
 <style>
@@ -285,24 +756,79 @@
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
+	.ack {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+	}
 	.toolbar {
 		display: flex;
 		align-items: center;
 		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
-	.toolbar input[type='text'] {
+	.search {
+		position: relative;
+		flex: 1 1 280px;
+		max-width: 420px;
+	}
+	.search-icon {
+		position: absolute;
+		left: 11px;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--fg3);
+		pointer-events: none;
+	}
+	.search input {
+		width: 100%;
+		height: var(--control-h);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		padding: 9px 12px;
-		font-size: var(--text-md);
-		color: var(--fg1);
 		background: var(--card);
-		flex: 1 1 260px;
-		max-width: 440px;
+		color: var(--fg1);
+		padding: 0 12px 0 34px;
+		font-size: var(--text-md);
+	}
+	.sort,
+	.bulk select,
+	.bulk input,
+	.ins-form input,
+	.ins-form select,
+	.ins-form textarea {
+		height: var(--control-h);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		background: var(--card);
+		color: var(--fg1);
+		padding: 0 10px;
+		font-size: var(--text-md);
+	}
+	.ins-form textarea {
+		height: auto;
+		min-height: calc(var(--control-h) * 2);
+		padding: 8px 10px;
+		font-family: inherit;
 	}
 	.add {
 		margin-left: auto;
+	}
+	.capture {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-lg);
+		background: var(--card);
+		padding: var(--space-7);
+	}
+	.capture-foot {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+	}
+	.capture-foot .quiet {
+		margin-right: auto;
 	}
 	.layout {
 		display: grid;
@@ -310,227 +836,416 @@
 		gap: 28px;
 		align-items: start;
 	}
-	@media (max-width: 860px) {
-		.layout {
-			grid-template-columns: minmax(0, 1fr);
-		}
+	.layout.with-inspector {
+		grid-template-columns: 218px minmax(0, 1fr) 460px;
 	}
 	.rail {
+		position: sticky;
+		top: 14px;
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-6);
+		gap: var(--space-3);
+		/* A1: the shelf list uses the viewport it has rather than a fixed height
+		   that scrolls while the page still has room. */
+		max-height: calc(100vh - 120px);
+		min-height: 0;
 	}
-	.shelves {
+	.rail-shelves {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
+		gap: var(--space-3);
+		min-height: 0;
+		overflow-y: auto;
 	}
-	.shelf {
+	.rail-item {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--space-5);
-		width: 100%;
-		text-align: left;
-		border: 0;
-		cursor: pointer;
 		padding: 8px 10px;
+		border: 0;
 		border-radius: var(--radius-md);
 		background: transparent;
 		color: var(--fg2);
 		font-size: var(--text-md);
+		text-align: left;
+		text-decoration: none;
+		cursor: pointer;
 	}
-	.shelf:hover {
+	.rail-item:hover {
 		background: var(--card2);
 	}
-	.shelf.active {
+	.rail-item.active {
 		background: var(--card3);
 		color: var(--fg1);
 	}
-	.s-label {
-		min-width: 0;
+	.rail-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.s-count {
-		font-size: var(--text-xs);
+	.rail-count {
+		font-size: var(--text-2xs);
 		color: var(--fg3);
+		font-variant-numeric: tabular-nums;
+	}
+	.rail-count.waiting {
+		color: var(--yellow);
+	}
+	.rail-divider {
+		height: 1px;
+		background: var(--bd);
+		margin: var(--space-3) 0;
+	}
+	.manage {
+		color: var(--fg3);
+	}
+	.manage:hover {
+		color: var(--fg2);
 	}
 	.area {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-8);
+		gap: var(--space-7);
 		min-width: 0;
+	}
+	.strip {
+		display: flex;
+		align-items: center;
+		gap: var(--space-6);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-lg);
+		background: var(--card);
+		padding: 11px 14px;
+	}
+	.strip-text {
+		font-size: var(--text-md);
+		color: var(--fg2);
+	}
+	.strip-act {
+		margin-left: auto;
+	}
+	.archive-line {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
 	}
 	.tag-chips {
 		display: flex;
-		gap: var(--space-3);
 		flex-wrap: wrap;
+		gap: var(--space-4);
 	}
 	.tag-chip {
 		border: 1px solid var(--bd);
-		background: var(--card);
+		border-radius: var(--radius-chip);
+		background: transparent;
 		color: var(--fg2);
-		border-radius: 20px;
-		padding: 5px 12px;
+		padding: 3px 10px;
 		font-size: var(--text-sm);
 		cursor: pointer;
-	}
-	.tag-chip:hover {
-		border-color: var(--bd2);
 	}
 	.tag-chip.active {
-		border-color: var(--blue);
-		background: var(--blue-tint);
-		color: var(--blue);
+		background: var(--card3);
+		color: var(--fg1);
 	}
 	.t-count {
-		font-size: var(--text-2xs);
 		color: var(--fg3);
-		margin-left: 3px;
+		font-size: var(--text-2xs);
 	}
-	.columns {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
-		gap: var(--space-8);
+	.bulk {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		flex-wrap: wrap;
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-lg);
+		background: var(--card);
+		padding: 10px 14px;
 	}
-	.col {
+	.group {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
+		gap: var(--space-3);
 	}
-	.col-head {
+	.group-head {
 		display: flex;
+		justify-content: space-between;
 		align-items: baseline;
-		gap: 9px;
-		padding: 0 2px 8px;
+		padding: 0 var(--space-4) var(--space-4);
 		border-bottom: 1px solid var(--bd);
 	}
-	.col-label {
+	.group-label {
 		font-size: var(--text-md);
 		font-weight: 500;
+		color: var(--fg1);
 	}
-	.col-count {
-		font-size: var(--text-xs);
+	.group-count {
+		font-size: var(--text-2xs);
 		color: var(--fg3);
+		font-variant-numeric: tabular-nums;
 	}
-	.doc {
-		display: grid;
-		grid-template-columns: 38px minmax(0, 1fr) auto;
-		gap: 11px;
+	.row {
+		display: flex;
 		align-items: center;
-		padding: 10px 2px;
-		border-bottom: 1px solid var(--bd);
+		gap: var(--space-4);
+		border-radius: var(--radius-md);
 	}
-	.del {
-		background: none;
+	.row:hover,
+	.row.selected {
+		background: var(--card2);
+	}
+	.pick {
+		flex: none;
+		margin-left: var(--space-4);
+	}
+	.row-main {
+		flex: 1;
+		display: grid;
+		grid-template-columns: 38px minmax(0, 1fr) 140px;
+		align-items: center;
+		gap: var(--space-5);
+		padding: 9px var(--space-4);
 		border: 0;
-		color: var(--fg3);
+		background: transparent;
+		color: inherit;
+		text-align: left;
 		cursor: pointer;
-		font-size: var(--text-sm);
-		padding: 2px 4px;
-	}
-	.del:hover {
-		color: var(--red);
-	}
-	.del.confirm {
-		color: var(--red);
+		min-width: 0;
 	}
 	.ext {
 		font-size: var(--text-2xs);
+		font-weight: 600;
 		letter-spacing: 0.04em;
 		color: var(--fg3);
 		border: 1px solid var(--bd);
-		border-radius: 5px;
-		padding: 4px 0;
+		border-radius: var(--radius-xs);
+		padding: 2px 0;
 		text-align: center;
 	}
 	.names {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
+		gap: 1px;
 		min-width: 0;
 	}
-	/* Wraps rather than truncating. The remove button took the width the ellipsis
-	   was living on, and a document is found by its name — half of
-	   "Fio · 1234567890/2010 · July 2026" identifies nothing. */
-	.doc-name {
+	.row-name {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
 		font-size: var(--text-md);
 		color: var(--fg1);
-		overflow-wrap: anywhere;
-		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
-	.meta {
-		font-size: var(--text-xs);
+	.lock {
+		flex: none;
+		color: var(--fg3);
+		display: inline-flex;
+	}
+	.chip {
+		flex: none;
+		font-size: var(--text-2xs);
+		color: var(--fg3);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-xl);
+		padding: 0 7px;
+	}
+	.sub,
+	.snippet,
+	.match-label {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.snippet {
+		border-left: 1px solid var(--bd2);
+		padding-left: var(--space-4);
+		color: var(--fg2);
+	}
+	.expiry {
+		display: flex;
+		justify-content: flex-end;
+	}
+	.plain-expiry {
+		font-size: var(--text-2xs);
+		color: var(--fg3);
+		font-variant-numeric: tabular-nums;
+	}
+	.empty {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		align-items: flex-start;
+		padding: var(--space-8) 0;
+	}
+	.empty-title {
+		font-size: var(--text-md);
+		color: var(--fg1);
+		margin: 0;
 	}
 	.quiet {
 		font-size: var(--text-sm);
 		color: var(--fg3);
+		margin: 0;
 	}
-	.add-form {
+	.link {
+		border: 0;
+		background: transparent;
+		color: var(--brand);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		padding: 0;
+	}
+	.inspector {
+		position: sticky;
+		top: 14px;
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-7);
-	}
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 		gap: var(--space-6);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-lg);
+		background: var(--card);
+		padding: var(--space-7);
+		max-height: calc(100vh - 120px);
+		overflow-y: auto;
 	}
-	label,
-	/* Checkboxes, not autocomplete: at household scale every possible owner
-	   fits on one row and the "both of us" case is two visible ticks. */
-	.belongs {
-		grid-column: 1 / -1;
-	}
-	.belong-groups {
+	.ins-head {
 		display: flex;
+		align-items: flex-start;
+		gap: var(--space-5);
+	}
+	.ins-name {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		margin: 0;
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--fg1);
+	}
+	.preview {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	.ins-read {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: var(--space-1);
+		margin: 0;
+	}
+	.ins-read dd {
+		margin: 0 0 var(--space-5);
+		font-size: var(--text-md);
+		color: var(--fg1);
+		min-height: var(--control-h);
+		/* The same 10px inset the inputs use, so the read view and the edit view
+		   do not shift the panel when they swap. */
+		padding: 8px 10px;
+	}
+	.ins-form,
+	.ins-actions {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	.ins-actions {
+		flex-direction: row;
 		flex-wrap: wrap;
-		gap: 8px 14px;
 		align-items: center;
 	}
-	.tick {
-		flex-direction: row !important;
+	.ins-form label,
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.expiry-field {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-4);
+		flex-wrap: wrap;
+	}
+	.checks {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+	}
+	.check {
+		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		font-size: var(--text-md) !important;
-		color: var(--fg1) !important;
-	}
-	.tick input {
-		width: auto;
-	}
-	.tick-add {
-		min-height: auto;
-		padding: 5px 10px;
 		font-size: var(--text-sm);
+		color: var(--fg2);
 	}
-	.new-subject {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 7px 10px;
-		font-size: var(--text-md);
-		width: 140px;
-	}
-	.add-form input,
-	.expiry {
+	.replace {
 		display: flex;
-		gap: var(--space-4);
-		flex-wrap: wrap;
-		min-width: 0;
+		flex-direction: column;
+		gap: var(--space-5);
 	}
-	.expiry select {
-		min-width: 0;
-		flex: 0 1 auto;
+	.danger {
+		border-color: var(--red);
+		color: var(--red);
 	}
-	.expiry input {
-		flex: 1 1 130px;
-		min-width: 0;
+	.tech summary {
+		cursor: pointer;
 	}
-	.row {
+	.state-line {
 		display: flex;
-		gap: var(--space-4);
+		flex-direction: column;
+		gap: var(--space-3);
+		align-items: flex-start;
+	}
+
+	@media (max-width: 1200px) {
+		.layout,
+		.layout.with-inspector {
+			grid-template-columns: 218px minmax(0, 1fr);
+		}
+		.layout.with-inspector .inspector {
+			grid-column: 1 / -1;
+		}
+		.row-main {
+			grid-template-columns: 32px minmax(0, 1fr) 128px;
+			gap: var(--space-4);
+		}
+	}
+	@media (max-width: 860px) {
+		.layout,
+		.layout.with-inspector {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.rail {
+			position: static;
+			flex-direction: row;
+			flex-wrap: wrap;
+			max-height: none;
+		}
+		.rail-shelves {
+			flex-direction: row;
+			flex-wrap: wrap;
+			overflow: visible;
+		}
+		.rail-divider {
+			display: none;
+		}
+	}
+	@media (max-width: 640px) {
+		.row-main {
+			grid-template-columns: 32px minmax(0, 1fr);
+			row-gap: var(--space-3);
+		}
+		.row-name {
+			white-space: normal;
+			text-wrap: pretty;
+		}
+		.expiry {
+			grid-column: 2;
+			justify-content: flex-start;
+		}
 	}
 </style>

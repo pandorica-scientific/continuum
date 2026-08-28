@@ -23,6 +23,7 @@ import {
 	transaction
 } from '$lib/server/db/schema';
 import { buildBriefing } from '$lib/server/briefing';
+import type { Actor } from '$lib/server/documents/visibility';
 import { next30Days } from '$lib/server/calendar';
 import { flowData, monthlyHistory, type Period } from '$lib/server/cashflow';
 import type { NetWorth } from '$lib/server/networth';
@@ -53,6 +54,12 @@ interface PanelContext {
 	period: Period;
 	netWorth: () => Promise<NetWorth>;
 	rates: () => ReturnType<typeof loadRateTable>;
+	/**
+	 * Who is looking at the board. Only the briefing panel needs it, and it
+	 * needs it absolutely: a restricted document's renewal date must not reach
+	 * a member's Overview.
+	 */
+	actor: Actor | null;
 }
 
 type Builder = (ctx: PanelContext) => Promise<unknown>;
@@ -67,7 +74,7 @@ function share(value: number, largest: number): number {
 }
 
 const builders: Record<string, Builder> = {
-	briefing: () => buildBriefing(),
+	briefing: (ctx) => buildBriefing(ctx.actor),
 
 	flow: (ctx) => flowData(ctx.period),
 

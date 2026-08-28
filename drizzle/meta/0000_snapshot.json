@@ -732,11 +732,31 @@
           "primaryKey": false,
           "notNull": true
         },
-        "shelf": {
-          "name": "shelf",
-          "type": "text",
+        "shelf_id": {
+          "name": "shelf_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'other'"
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sensitivity": {
+          "name": "sensitivity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'normal'"
         },
         "stored_name": {
           "name": "stored_name",
@@ -811,11 +831,26 @@
           "method": "btree",
           "with": {}
         },
-        "document_shelf_idx": {
-          "name": "document_shelf_idx",
+        "document_shelf_id_idx": {
+          "name": "document_shelf_id_idx",
           "columns": [
             {
-              "expression": "shelf",
+              "expression": "shelf_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "document_type_idx": {
+          "name": "document_type_idx",
+          "columns": [
+            {
+              "expression": "type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -843,6 +878,19 @@
         }
       },
       "foreignKeys": {
+        "document_shelf_id_shelf_id_fk": {
+          "name": "document_shelf_id_shelf_id_fk",
+          "tableFrom": "document",
+          "tableTo": "shelf",
+          "columnsFrom": [
+            "shelf_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
         "document_currency_currency_code_fk": {
           "name": "document_currency_currency_code_fk",
           "tableFrom": "document",
@@ -859,6 +907,231 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.document_text": {
+      "name": "document_text",
+      "schema": "",
+      "columns": {
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "engine": {
+          "name": "engine",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "engine_version": {
+          "name": "engine_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "languages": {
+          "name": "languages",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mean_confidence": {
+          "name": "mean_confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "extracted_at": {
+          "name": "extracted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "complete": {
+          "name": "complete",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "pages_extracted": {
+          "name": "pages_extracted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "document_text_document_id_document_id_fk": {
+          "name": "document_text_document_id_document_id_fk",
+          "tableFrom": "document_text",
+          "tableTo": "document",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.document_text_chunk": {
+      "name": "document_text_chunk",
+      "schema": "",
+      "columns": {
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_no": {
+          "name": "page_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "dtc_document_idx": {
+          "name": "dtc_document_idx",
+          "columns": [
+            {
+              "expression": "document_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "document_text_chunk_document_id_document_text_document_id_fk": {
+          "name": "document_text_chunk_document_id_document_text_document_id_fk",
+          "tableFrom": "document_text_chunk",
+          "tableTo": "document_text",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "document_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "document_text_chunk_document_id_ordinal_pk": {
+          "name": "document_text_chunk_document_id_ordinal_pk",
+          "columns": [
+            "document_id",
+            "ordinal"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.shelf": {
+      "name": "shelf",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "emoji": {
+          "name": "emoji",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'\ud83d\uddc2\ufe0f'"
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "system": {
+          "name": "system",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "shelf_key_unique": {
+          "name": "shelf_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "key"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -892,6 +1165,24 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_from": {
+          "name": "active_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_to": {
+          "name": "active_to",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

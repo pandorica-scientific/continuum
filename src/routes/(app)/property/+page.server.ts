@@ -4,7 +4,7 @@ import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, getTableColumns } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	contact,
@@ -16,12 +16,12 @@ import {
 	loanProperty,
 	property,
 	propertyBill,
+	shelf,
 	tagLink,
 	tag,
 	tenancy,
 	propertyOpening
 } from '$lib/server/db/schema';
-import { SHELVES } from '$lib/documents';
 import { initialsFor } from '$lib/people';
 import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
@@ -57,7 +57,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		db.select().from(loan),
 		db.select().from(loanFixationPeriod),
 		db.select().from(loanProperty),
-		db.select().from(document).orderBy(document.addedOn),
+		// The shelf's label comes from the join, not from a code list: shelves are
+		// rows a household renames, and a stale copy here would print the old name.
+		db
+			.select({ ...getTableColumns(document), shelfLabel: shelf.label })
+			.from(document)
+			.innerJoin(shelf, eq(shelf.id, document.shelfId))
+			.orderBy(document.addedOn),
 		loadRateTable()
 	]);
 	const today = new Date().toISOString().slice(0, 10);
@@ -342,7 +348,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				name: d.name,
 				ext: d.ext,
 				file: d.storedName,
-				shelfLabel: SHELVES.find((s) => s.key === d.shelf)?.label ?? d.shelf,
+				shelfLabel: d.shelfLabel,
 				meta: d.expiresOn ? `${d.expiryVerb} ${d.expiresOn}` : `added ${d.addedOn}`,
 				amber: d.expiresOn !== null,
 				expired: d.expiresOn !== null && d.expiresOn < today2

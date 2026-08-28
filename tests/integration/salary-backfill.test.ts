@@ -4,6 +4,7 @@ import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { backfillPayslips, salaryMonths } from '$lib/server/salary';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -35,7 +36,8 @@ async function legacySlip(id: string, month: string, amountMinor: bigint) {
 	await testDb.insert(document).values({
 		id,
 		name: `Payslip ${month} · Robert`,
-		shelf: 'payslips',
+		shelfId: await shelfIdByKey('finance', testDb),
+		type: 'payslip',
 		storedName: 'missing-file.pdf',
 		ext: 'PDF',
 		addedOn: '2026-09-01',
@@ -107,7 +109,8 @@ describe('backfillPayslips', () => {
 		await testDb.insert(document).values({
 			id: rowId('doc-undated'),
 			name: 'Payslip · Robert',
-			shelf: 'payslips',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'payslip',
 			storedName: null,
 			ext: 'PDF',
 			addedOn: '2026-09-01',
@@ -127,7 +130,8 @@ describe('backfillPayslips', () => {
 		await testDb.insert(document).values({
 			id: rowId('doc-tax'),
 			name: 'Tax 2026',
-			shelf: 'tax',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'tax_document',
 			storedName: null,
 			ext: 'PDF',
 			addedOn: '2026-09-01',

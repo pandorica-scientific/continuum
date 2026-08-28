@@ -15,6 +15,7 @@ import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { payslipMatchingContent, recordSalary, restateSlipMonth } from '$lib/server/salary';
 import { hashBytes } from '$lib/server/system/files';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
@@ -69,7 +70,7 @@ async function fileOnShelf(options: {
 	bytes: Uint8Array;
 	month: string;
 	personId?: string;
-	shelf?: 'payslips' | 'tax';
+	type?: 'payslip' | 'tax_document';
 	withHash?: boolean;
 	/** Record the document but never write the file, as a lost upload. */
 	missing?: boolean;
@@ -80,7 +81,8 @@ async function fileOnShelf(options: {
 	await testDb.insert(document).values({
 		id,
 		name: `Payslip ${options.month}`,
-		shelf: options.shelf ?? 'payslips',
+		shelfId: await shelfIdByKey('finance', testDb),
+		type: options.type ?? 'payslip',
 		storedName,
 		ext: 'PDF',
 		addedOn: '2026-08-25',
@@ -133,8 +135,8 @@ describe('payslipMatchingContent', () => {
 		);
 	});
 
-	it('is scoped to the payslips shelf', async () => {
-		await fileOnShelf({ bytes: AUGUST, month: '2026-08', shelf: 'tax' });
+	it("is scoped to documents of type payslip, not to a shelf's name", async () => {
+		await fileOnShelf({ bytes: AUGUST, month: '2026-08', type: 'tax_document' });
 
 		expect(await payslipMatchingContent(ROBERT, hashBytes(AUGUST), testDb)).toBeNull();
 	});

@@ -8,33 +8,27 @@
  * belongs on a request someone is waiting behind, and a person dropping six
  * files should see six of them queue rather than one long pause.
  *
- * ONE at a time, deliberately. The work is CPU-bound, and on the sort of box
- * this product is self-hosted on — a NAS, a small VPS — parallel readers would
- * starve the web server that is meant to stay responsive. A queue that keeps
- * the interface alive is the whole point; a queue that races itself is not.
+ * ONE at a time, deliberately — and one across every CPU-bound kind, not one
+ * per kind. The claim, the lease and the sweep now live in
+ * `$lib/server/jobs/dispatcher`, which reading a statement shares with reading
+ * a scanned document: on the sort of box this product is self-hosted on, two of
+ * those at once starve the web server that is meant to stay responsive.
  *
- * The claim is a LEASE rather than a lock, following `calendar/sync/engine.ts`
- * for the same reason: the work in the middle runs for seconds and no database
- * lock belongs open across it. The lease is what lets a job survive a worker
- * that dies mid-read — it becomes claimable again instead of being stranded
- * forever in `running`.
+ * What is left here is the import half: accepting a file, running one, and the
+ * list a person watches while they wait.
  */
 import { uuidv7 } from 'uuidv7';
-import { and, asc, count, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { job } from '$lib/server/db/schema';
+import { LEASE_MS, type JobHandler } from '$lib/server/jobs/dispatcher';
 import { ingestFile, type IngestResult } from './ingest';
 
 type Handle = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
-/**
- * How long a claim is believed before the job is offered again.
- *
- * Long enough that a slow read is never taken away from a worker still doing
- * it, short enough that a killed process does not leave a file unread until
- * someone notices.
- */
-export const LEASE_MS = 10 * 60 * 1000;
+// The lease belongs to the dispatcher now; re-exported so the import screen and
+// its tests keep referring to one name for it.
+export { LEASE_MS };
 
 /**
  * How long a finished job stays in the list.
@@ -75,118 +69,39 @@ export async function enqueue(
 }
 
 /**
- * Take the oldest job nobody is working on.
- *
- * The advisory lock makes the read-then-claim atomic across processes, which an
- * in-memory guard would not be. It is held only for the claim itself.
+ * Read one queued statement. Registered with the CPU dispatcher, which owns the
+ * claim, the lease and the sweep.
  */
-async function claimNext(handle: Handle = db): Promise<typeof job.$inferSelect | null> {
-	const expiry = new Date(Date.now() - LEASE_MS);
-	return await (handle as Db).transaction(async (tx) => {
-		await tx.execute(
-			sql`select pg_advisory_xact_lock(hashtextextended('continuum:import-queue', 0))`
+export const runImportJob: JobHandler = async (claimed, handle) => {
+	let result: IngestResult | undefined;
+	let failure: string | undefined;
+	try {
+		const bytes = new Uint8Array(Buffer.from(claimed.blob ?? '', 'base64'));
+		result = await ingestFile(
+			claimed.filename ?? 'upload',
+			bytes,
+			claimed.subjectId ?? undefined,
+			handle,
+			// This is the whole reason the queue exists. Reading a page as an
+			// image takes seconds per page, which is unacceptable on a request
+			// and perfectly acceptable here — and it is only ever reached when
+			// the text layer could not prove itself.
+			{ ocr: true }
 		);
-		const [next] = await tx
-			.select()
-			.from(job)
-			.where(
-				and(
-					// The table is shared with calendar sync, whose passes are claimed
-					// by the calendar engine and must never be handed to this worker.
-					eq(job.kind, 'import'),
-					or(
-						eq(job.state, 'queued'),
-						// A worker that died mid-read left this behind.
-						and(eq(job.state, 'running'), lt(job.claimedAt, expiry))
-					)
-				)
-			)
-			.orderBy(asc(job.queuedAt))
-			.limit(1);
-		if (!next) return null;
-		await tx
-			.update(job)
-			.set({ state: 'running', claimedAt: new Date() })
-			.where(eq(job.id, next.id));
-		return next;
-	});
-}
-
-/**
- * Read every waiting statement, one after another.
- *
- * Returns when the queue is empty. Safe to call concurrently: the second caller
- * finds nothing to claim and returns, so a burst of uploads does not start a
- * burst of workers.
- */
-let sweep: Promise<number> | null = null;
-
-export function runQueue(handle: Handle = db): Promise<number> {
-	// Join the sweep already running rather than starting a second one.
-	//
-	// The advisory lock makes one CLAIM atomic; it does nothing about two
-	// callers, because the second finds the NEXT job still queued and reads it
-	// in parallel — which is precisely the burst of CPU-bound readers this
-	// module exists to prevent, and there are two independent callers: every
-	// upload, and a tick every five minutes. Worse, since the lease is never
-	// renewed, a read running longer than LEASE_MS was re-offered to that tick
-	// and ingested a second time while the first was still inside it.
-	//
-	// In-process is the right scope, as it is for backups: one sweep works
-	// through the queue serially, so nothing it is holding can be re-claimed.
-	sweep ??= drainQueue(handle).finally(() => {
-		sweep = null;
-	});
-	return sweep;
-}
-
-async function drainQueue(handle: Handle = db): Promise<number> {
-	// Settled work from earlier sweeps, cleared before this one starts.
-	await clearFinished(KEEP_FINISHED_MS, handle);
-	let done = 0;
-	for (;;) {
-		const claimed = await claimNext(handle);
-		if (!claimed) return done;
-
-		let result: IngestResult | undefined;
-		let failure: string | undefined;
-		try {
-			const bytes = new Uint8Array(Buffer.from(claimed.blob ?? '', 'base64'));
-			result = await ingestFile(
-				claimed.filename ?? 'upload',
-				bytes,
-				claimed.subjectId ?? undefined,
-				handle as Db,
-				// This is the whole reason the queue exists. Reading a page as an
-				// image takes seconds per page, which is unacceptable on a request
-				// and perfectly acceptable here — and it is only ever reached when
-				// the text layer could not prove itself.
-				{ ocr: true }
-			);
-		} catch (error) {
-			// A reader that throws is a defect, not a rejected statement — those
-			// come back as a `result` carrying an error. Either way the job stops
-			// here rather than being retried into the same failure.
-			failure = error instanceof Error ? error.message : String(error);
-		}
-
-		await handle
-			.update(job)
-			.set({
-				state: failure ? 'failed' : 'done',
-				finishedAt: new Date(),
-				result: result ?? null,
-				error: failure ?? null,
-				// Kept when the file was NOT read: mapping it by hand needs the bytes,
-				// and asking someone to upload the same statement again because we
-				// could not read it the first time is a poor apology. Cleared once
-				// the job is swept away.
-				blob: (result?.rowsAdded ?? 0) > 0 ? null : claimed.blob
-			})
-			.where(eq(job.id, claimed.id));
-		done++;
+	} catch (error) {
+		// A reader that throws is a defect, not a rejected statement — those come
+		// back as a `result` carrying an error.
+		failure = error instanceof Error ? error.message : String(error);
 	}
-}
+	return {
+		result: result ?? undefined,
+		error: failure,
+		// Kept when the file was NOT read: mapping it by hand needs the bytes, and
+		// asking someone to upload the same statement again because we could not
+		// read it the first time is a poor apology. Cleared once the job is swept.
+		keepBlob: (result?.rowsAdded ?? 0) === 0
+	};
+};
 
 /** What the queue looks like to someone watching it. */
 export async function queueStatus(
@@ -270,32 +185,6 @@ export async function jobBytes(
 		bytes: new Uint8Array(Buffer.from(row.blob, 'base64')),
 		accountId: row.subjectId ?? undefined
 	};
-}
-
-/**
- * Forget finished jobs once their outcome has had time to be seen.
- *
- * The queue is a view of work in flight, not a history — `import_file` is the
- * record of what was imported. Left alone this table would grow with every
- * upload forever, and the page's list of recent files would fill with months of
- * settled work.
- */
-const KEEP_FINISHED_MS = 60 * 60 * 1000;
-
-async function clearFinished(olderThanMs = KEEP_FINISHED_MS, handle: Handle = db): Promise<number> {
-	const removed = await handle
-		.delete(job)
-		.where(
-			and(
-				// Only this module's own kind: a finished calendar pass is swept by the
-				// calendar engine, on its own schedule.
-				eq(job.kind, 'import'),
-				or(eq(job.state, 'done'), eq(job.state, 'failed')),
-				lt(job.finishedAt, new Date(Date.now() - olderThanMs))
-			)
-		)
-		.returning({ id: job.id });
-	return removed.length;
 }
 
 /**

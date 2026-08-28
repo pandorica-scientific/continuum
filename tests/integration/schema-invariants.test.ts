@@ -126,7 +126,10 @@ describe('enum columns', () => {
  * is about — rather than an attribute of it, so it keeps its bare name. Listed
  * here rather than tolerated silently.
  */
-const DATE_NAME_EXCEPTIONS = new Set(['day']);
+// `active_from`/`active_to` are the two ends of a subject's period. `_on` reads
+// as a single occasion — "active_from_on" is not English — and neither name can
+// be mistaken for an instant, which is what the convention is protecting.
+const DATE_NAME_EXCEPTIONS = new Set(['day', 'active_from', 'active_to']);
 
 describe('naming conventions', () => {
 	it('every money column is bigint and ends _minor', async () => {

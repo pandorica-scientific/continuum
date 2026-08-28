@@ -32,6 +32,7 @@ import {
 	loadTransactionDocuments
 } from '$lib/server/transactions/documents';
 import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
+import { systemShelfId } from '$lib/server/documents/shelves';
 import { saveUpload } from '$lib/server/system/files';
 import { uuidv7 } from 'uuidv7';
 import { extname } from 'node:path';
@@ -307,7 +308,11 @@ export const actions: Actions = {
 		await createDocument({
 			id: documentId,
 			name: file.name || 'Receipt',
-			shelf: 'family',
+			// Continuum knows this is a receipt and what it evidences; it does not
+			// know where the household files receipts, so it lands in the inbox
+			// rather than being guessed onto a shelf.
+			shelfId: await systemShelfId('inbox'),
+			type: 'receipt',
 			storedName,
 			ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
 			addedOn: new Date().toISOString().slice(0, 10),

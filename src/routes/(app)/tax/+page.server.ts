@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			db
 				.select({ id: document.id, name: document.name })
 				.from(document)
-				.where(eq(document.shelf, 'tax'))
+				.where(eq(document.type, 'tax_document'))
 				.orderBy(document.addedOn),
 			getBaseCurrency(),
 			loadRateTable(),

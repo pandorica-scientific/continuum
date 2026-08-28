@@ -126,3 +126,68 @@ describe('what it replaces', () => {
 		expect(rows).toHaveLength(0);
 	});
 });
+
+describe('the CPU dispatcher', () => {
+	it('claims one job across both kinds, never one of each', async () => {
+		// The whole reason the queue exists: two CPU-bound jobs at once starve
+		// the web server on the box this is self-hosted on. Two kinds share ONE
+		// slot rather than getting a queue each.
+		const { registerHandler, runCpuQueue } = await import('$lib/server/jobs');
+		await harness.sql`insert into job (id, kind, state) values ('i1', 'import', 'queued')`;
+		await harness.sql`insert into job (id, kind, state) values ('x1', 'extract_text', 'queued')`;
+
+		let inFlight = 0;
+		let peak = 0;
+		const ran: string[] = [];
+		const handler = (name: string) => async () => {
+			ran.push(name);
+			inFlight++;
+			peak = Math.max(peak, inFlight);
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			inFlight--;
+			return {};
+		};
+		registerHandler('import', handler('import'));
+		registerHandler('extract_text', handler('extract'));
+
+		await Promise.all([runCpuQueue(harness.db), runCpuQueue(harness.db)]);
+		expect(ran.sort()).toEqual(['extract', 'import']);
+		expect(peak).toBe(1);
+	});
+
+	it('leaves calendar_sync alone', async () => {
+		// Network-bound, and claimed by the calendar engine on its own schedule.
+		const { runCpuQueue } = await import('$lib/server/jobs');
+		await harness.sql`insert into job (id, kind, state) values ('c1', 'calendar_sync', 'queued')`;
+		await runCpuQueue(harness.db);
+		const [row] = await harness.sql<{ state: string }[]>`select state from job where id = 'c1'`;
+		expect(row.state).toBe('queued');
+	});
+
+	it('re-offers a job whose worker died', async () => {
+		// The lease, unchanged. Kept as a test because the claim moved files.
+		const { registerHandler, runCpuQueue } = await import('$lib/server/jobs');
+		await harness.sql`insert into job (id, kind, state, claimed_at)
+			values ('x2', 'extract_text', 'running', now() - interval '20 minutes')`;
+		let claimed = 0;
+		registerHandler('extract_text', async () => {
+			claimed++;
+			return {};
+		});
+		await runCpuQueue(harness.db);
+		expect(claimed).toBe(1);
+	});
+
+	it('fails a job whose kind nobody registered rather than stranding it', async () => {
+		// Leaving it `running` would strand it until the lease expired, and then
+		// again, for ever. It fails once and says why.
+		const { registerHandler, runCpuQueue } = await import('$lib/server/jobs');
+		registerHandler('extract_text', undefined as never);
+		await harness.sql`insert into job (id, kind, state) values ('x3', 'extract_text', 'queued')`;
+		await runCpuQueue(harness.db);
+		const [row] = await harness.sql<{ state: string; error: string }[]>`
+			select state, error from job where id = 'x3'`;
+		expect(row.state).toBe('failed');
+		expect(row.error).toMatch(/extract_text/);
+	});
+});

@@ -6,7 +6,8 @@ import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
 import { account, importFile, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
-import { dismissJob, enqueue, jobBytes, queueStatus, runQueue } from '$lib/server/import/queue';
+import { dismissJob, enqueue, jobBytes, queueStatus } from '$lib/server/import/queue';
+import { runCpuQueue } from '$lib/server/jobs';
 import { previewLayout } from '$lib/server/import/detect';
 import { confirmMapping } from '$lib/server/import/wizard';
 import { loadProfiles } from '$lib/server/import/profiles';
@@ -214,7 +215,7 @@ export const actions: Actions = {
 		// Start the worker without waiting for it. It claims one job at a time and
 		// stops when the queue is empty, so a second upload arriving mid-run does
 		// not start a second reader — it finds nothing to claim and returns.
-		void runQueue().catch((error) => {
+		void runCpuQueue().catch((error) => {
 			console.error('Statement queue stopped unexpectedly.', error);
 		});
 

@@ -9,6 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { loadSalaryHistory, recordSalary } from '$lib/server/salary';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 let harness: Harness;
@@ -41,7 +42,8 @@ async function slip(id: string, month: string) {
 	await testDb.insert(document).values({
 		id,
 		name: `Payslip ${month} · Robert`,
-		shelf: 'payslips',
+		shelfId: await shelfIdByKey('finance', testDb),
+		type: 'payslip',
 		storedName: `${id}.pdf`,
 		ext: 'PDF',
 		addedOn: '2026-08-25',

@@ -2,6 +2,7 @@
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { contact, contactLink, property, propertyBill, tenancy } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { tenancyRangesOverlap } from '$lib/property/tenancy';
 import { normalise } from '$lib/rules/match';
 import { uuidv7 } from 'uuidv7';
@@ -49,7 +50,10 @@ export async function createPropertyBill(
 			await insertDocumentAggregate(
 				{
 					...input.document,
-					shelf: 'property',
+					shelfId: await shelfIdByKey('property', tx),
+					// A utility bill is an invoice; the shelf says where it lives,
+					// the type says what it is.
+					type: 'invoice',
 					expiresOn: null,
 					expiryVerb: 'expires',
 					personIds: [],

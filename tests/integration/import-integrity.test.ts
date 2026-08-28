@@ -368,7 +368,8 @@ describe('import database integrity', () => {
 	});
 
 	it('reads queued statements one at a time and records what happened', async () => {
-		const { enqueue, queueStatus, runQueue } = await import('$lib/server/import/queue');
+		const { enqueue, queueStatus } = await import('$lib/server/import/queue');
+		const { runCpuQueue } = await import('$lib/server/jobs');
 		await insertAccount(rowId('fio-queue'), 'CZK', ['1234567890/2010']);
 		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
 
@@ -381,7 +382,7 @@ describe('import database integrity', () => {
 		expect(waiting.waiting).toBe(1);
 		expect(waiting.recent[0]).toMatchObject({ id, filename: 'fio.csv', state: 'queued' });
 
-		expect(await runQueue(testDb)).toBe(1);
+		expect(await runCpuQueue(testDb)).toBe(1);
 
 		const after = await queueStatus(testDb);
 		expect(after.waiting).toBe(0);
@@ -398,7 +399,8 @@ describe('import database integrity', () => {
 	}, 30_000);
 
 	it('offers a job again when the worker holding it died, and not before', async () => {
-		const { enqueue, runQueue, LEASE_MS } = await import('$lib/server/import/queue');
+		const { enqueue, LEASE_MS } = await import('$lib/server/import/queue');
+		const { runCpuQueue } = await import('$lib/server/jobs');
 		await insertAccount(rowId('fio-lease'), 'CZK', ['1234567890/2010']);
 		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
 		const id = await enqueue('fio.csv', source, rowId('fio-lease'), testDb);
@@ -412,7 +414,7 @@ describe('import database integrity', () => {
 
 		// While the lease holds, the job is left alone — a slow read must never be
 		// taken away from the worker still doing it.
-		expect(await runQueue(testDb)).toBe(0);
+		expect(await runCpuQueue(testDb)).toBe(0);
 		expect(await count('transaction')).toBe(0);
 
 		// Once it has expired, the file is read rather than stranded.
@@ -420,12 +422,13 @@ describe('import database integrity', () => {
 			.update(schema.job)
 			.set({ claimedAt: new Date(Date.now() - LEASE_MS - 1000) })
 			.where(eq(schema.job.id, id));
-		expect(await runQueue(testDb)).toBe(1);
+		expect(await runCpuQueue(testDb)).toBe(1);
 		expect(await count('transaction')).toBe(5);
 	}, 30_000);
 
 	it('does not read the same file twice when two workers start at once', async () => {
-		const { enqueue, runQueue } = await import('$lib/server/import/queue');
+		const { enqueue } = await import('$lib/server/import/queue');
+		const { runCpuQueue } = await import('$lib/server/jobs');
 		await insertAccount(rowId('fio-race'), 'CZK', ['1234567890/2010']);
 		const source = new Uint8Array(await readFile(resolve('tests/fixtures/fio.csv')));
 		await enqueue('fio.csv', source, rowId('fio-race'), testDb);
@@ -436,7 +439,7 @@ describe('import database integrity', () => {
 		// values add up to. Counting the sum instead measured the old behaviour,
 		// where the second caller raced the first for the NEXT job and merely
 		// happened to find none because this fixture holds a single file.
-		const [first, second] = await Promise.all([runQueue(testDb), runQueue(testDb)]);
+		const [first, second] = await Promise.all([runCpuQueue(testDb), runCpuQueue(testDb)]);
 		expect(first).toBe(1);
 		expect(second).toBe(first);
 		expect(await count('transaction')).toBe(5);

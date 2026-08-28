@@ -13,6 +13,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rowId } from '../row-id';
 import * as schema from '$lib/server/db/schema';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
@@ -125,7 +126,8 @@ describe('dumpDatabase', () => {
 		await testDb.insert(schema.document).values({
 			id: DOCUMENT,
 			name: 'Passport · Person A',
-			shelf: 'identity',
+			shelfId: await shelfIdByKey('identity', testDb),
+			type: 'id_document',
 			ext: 'PDF',
 			addedOn: '2026-08-23'
 		});

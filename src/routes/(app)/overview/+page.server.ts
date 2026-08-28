@@ -46,7 +46,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			baseCurrency,
 			period,
 			netWorth: () => (netWorthPromise ??= computeNetWorth()),
-			rates: () => (ratesPromise ??= loadRateTable())
+			rates: () => (ratesPromise ??= loadRateTable()),
+			actor: locals.person
 		}
 	);
 

@@ -6,9 +6,13 @@
 import { sql } from 'drizzle-orm';
 import {
 	bigint,
+	boolean,
 	date,
 	index,
+	integer,
 	pgTable,
+	primaryKey,
+	real,
 	text,
 	timestamp,
 	uniqueIndex,
@@ -21,13 +25,54 @@ import { currency } from './money';
 
 // ---- Documents ----
 
+/**
+ * Where in life a document belongs — one level, never a tree.
+ *
+ * Rows rather than an enum, on the category-tree precedent: the slug `key` is
+ * immutable and is what code refers to, the `label` is the household's to
+ * change, and deleting one is a transactional reassign-and-delete because a
+ * document must always be somewhere. Volume is answered by filtering and
+ * grouping; there is no parent column and there will not be one.
+ *
+ * `system` marks the two rows the application refers to by key — `inbox`, where
+ * capture lands, and `statements`, where an accepted import files itself. Their
+ * label and emoji are the household's ("K vyřízení" is a legal name for the
+ * inbox); their key and their existence are not.
+ */
+export const shelf = pgTable('shelf', {
+	id: uuid('id').primaryKey(),
+	key: text('key').notNull().unique(),
+	label: text('label').notNull(),
+	emoji: text('emoji').notNull().default('🗂️'),
+	sortOrder: integer('sort_order').notNull().default(0),
+	system: boolean('system').notNull().default(false),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const document = pgTable(
 	'document',
 	{
 		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
-		// payslips | tax | identity | family | property | tenancy | loans | insurance
-		shelf: text('shelf').$type<EnumValue<'document.shelf'>>().notNull(),
+		// ON DELETE RESTRICT, not CASCADE: deleting a shelf must never delete the
+		// paper on it. The only legal delete is the transactional reassign-and-
+		// delete in `shelves.ts`, and this constraint is what proves it.
+		shelfId: uuid('shelf_id')
+			.notNull()
+			.references(() => shelf.id, { onDelete: 'restrict' }),
+		// What kind of paper this is, independent of where it sits. The salary
+		// tracker reads this; it used to read the shelf, which meant renaming a
+		// shelf could silently unhook a feature.
+		type: text('type').$type<EnumValue<'document.type'>>().notNull().default('other'),
+		// The one user-authored phrase field, ranked above contents in search.
+		note: text('note'),
+		// Absent for members everywhere — list, search, counts, briefing,
+		// calendar, ICS and the file itself. Enforced by
+		// `visibleDocumentPredicate`, never by a screen.
+		sensitivity: text('sensitivity')
+			.$type<EnumValue<'document.sensitivity'>>()
+			.notNull()
+			.default('normal'),
 		// uploaded file on the data volume; a document may be metadata-only
 		storedName: text('stored_name'),
 		ext: text('ext').notNull().default('PDF'),
@@ -53,8 +98,59 @@ export const document = pgTable(
 	},
 	(table) => [
 		index('document_currency_idx').on(table.currency),
-		index('document_shelf_idx').on(table.shelf),
+		index('document_shelf_id_idx').on(table.shelfId),
+		index('document_type_idx').on(table.type),
 		index('document_content_hash_idx').on(table.contentHash)
+	]
+);
+
+/**
+ * That a document's text was read, and by what.
+ *
+ * One row per document. The text itself is NOT here — see the chunk table
+ * below, and §2.4 of the handoff for why a single column cannot hold it.
+ *
+ * `complete=false` with `pagesExtracted` is the bounded-work contract: a
+ * 600-page manual occupies the single CPU worker in slices rather than for an
+ * afternoon, and the inspector says which pages are searchable instead of
+ * quietly indexing a third of the file.
+ */
+export const documentText = pgTable('document_text', {
+	documentId: uuid('document_id')
+		.primaryKey()
+		.references(() => document.id, { onDelete: 'cascade' }),
+	engine: text('engine').notNull(),
+	engineVersion: text('engine_version').notNull(),
+	languages: text('languages').notNull(),
+	meanConfidence: real('mean_confidence'),
+	extractedAt: timestamp('extracted_at', { withTimezone: true }).notNull().defaultNow(),
+	complete: boolean('complete').notNull().default(true),
+	pagesExtracted: integer('pages_extracted')
+});
+
+/**
+ * One PDF page, one image, or a ≤100 KB slice of a plain-text file.
+ *
+ * Every content index lives here and nowhere else. The two GIN indexes are
+ * expression indexes over `public.contact_fold(text)` and are written by hand
+ * in the baseline appendix, because the query has to fold identically for the
+ * index to be used at all — the contacts search already learned this.
+ */
+export const documentTextChunk = pgTable(
+	'document_text_chunk',
+	{
+		documentId: uuid('document_id')
+			.notNull()
+			.references(() => documentText.documentId, { onDelete: 'cascade' }),
+		ordinal: integer('ordinal').notNull(),
+		/** Null for plain-text slices and single images: they have no page. */
+		pageNo: integer('page_no'),
+		source: text('source').$type<EnumValue<'document_text_chunk.source'>>().notNull(),
+		text: text('text').notNull()
+	},
+	(table) => [
+		primaryKey({ columns: [table.documentId, table.ordinal] }),
+		index('dtc_document_idx').on(table.documentId)
 	]
 );
 
@@ -79,7 +175,15 @@ export const subject = pgTable(
 		id: uuid('id').primaryKey(),
 		name: text('name').notNull().unique(),
 		emoji: text('emoji').notNull().default('🏠'),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		// Archiving a subject demotes everything filed under it in one reversible
+		// action — a sold car stops crowding the list without anything being
+		// deleted. `activeFrom`/`activeTo` are the period the subject was real,
+		// which is what lets an old document read as history rather than as an
+		// expiry someone forgot.
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		activeFrom: date('active_from'),
+		activeTo: date('active_to')
 	},
 	// "Car" and "car" are the same thing; two records differing only in case
 	// would be the phantom-column problem sneaking back in.

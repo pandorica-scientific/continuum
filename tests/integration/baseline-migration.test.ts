@@ -124,4 +124,57 @@ describe('the baseline migration', () => {
 			where schemaname = 'public' and viewname = 'net_worth_component'`;
 		expect(view).toBe(1);
 	});
+	it('carries pg_trgm and the three expression indexes the search needs', async () => {
+		// Expression indexes over contact_fold(), matching the query's own fold
+		// exactly. A query that folds differently gets a sequential scan and
+		// nothing says so — which is what makes this an assertion rather than a
+		// benchmark.
+		const [{ n: ext }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from pg_extension where extname = 'pg_trgm'`;
+		expect(ext).toBe(1);
+
+		const indexes = await harness.sql<{ indexname: string }[]>`
+			select indexname from pg_indexes where schemaname = 'public'`;
+		const names = indexes.map((i) => i.indexname);
+		expect(names).toContain('dtc_fts_idx');
+		expect(names).toContain('dtc_trgm_idx');
+		expect(names).toContain('document_name_trgm_idx');
+	});
+
+	it('seeds ten shelves, two of them system', async () => {
+		const rows = await harness.sql<{ key: string; system: boolean }[]>`
+			select key, system from shelf order by sort_order`;
+		expect(rows.map((r) => r.key)).toEqual([
+			'inbox',
+			'identity',
+			'family',
+			'health',
+			'property',
+			'tenancy',
+			'vehicles',
+			'finance',
+			'household',
+			'statements'
+		]);
+		expect(rows.filter((r) => r.system).map((r) => r.key)).toEqual(['inbox', 'statements']);
+	});
+
+	it('refuses to delete a shelf that still holds paper', async () => {
+		// ON DELETE RESTRICT. The only legal delete is reassign-then-delete, and
+		// this is the constraint that makes "always" true rather than "in the UI".
+		const [{ id: shelfId }] = await harness.sql<{ id: string }[]>`
+			select id from shelf where key = 'household'`;
+		await harness.sql`
+			insert into document (id, name, shelf_id, ext, added_on, type)
+			values (gen_random_uuid(), 'Deed', ${shelfId}, 'PDF', current_date, 'other')`;
+		await expect(harness.sql`delete from shelf where id = ${shelfId}`).rejects.toThrow();
+	});
+
+	it('refuses a subject whose active period runs backwards', async () => {
+		await expect(
+			harness.sql`
+			insert into subject (id, name, active_from, active_to)
+			values (gen_random_uuid(), 'Backwards', '2026-06-01', '2026-01-01')`
+		).rejects.toThrow();
+	});
 });

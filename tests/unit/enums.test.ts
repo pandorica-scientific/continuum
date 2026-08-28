@@ -1,23 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { ENTITY_KINDS, ENUMS, ENUM_COLUMNS, asEnumValue, isEnumValue } from '$lib/enums';
-import { SHELVES, EXPIRY_VERBS } from '$lib/documents';
+import { EXPIRY_VERBS } from '$lib/documents';
 import { DAY_COUNTS } from '$lib/loans';
 import { REVIEW_STATES } from '$lib/transactions/filter';
 
 /**
  * The lists the screens use are the lists the database enforces.
  *
- * Three of these were written out by hand beside the schema and had already
- * drifted from it — `REVIEW_STATES` was missing `filed`, and the schema comment
- * for `document.shelf` named eight shelves where the app offered nine. Deriving
- * them removes the drift; this suite is what stops it coming back through a
- * list that cannot be derived, like `SHELVES`, which carries labels too.
+ * Several of these were written out by hand beside the schema and had already
+ * drifted from it — `REVIEW_STATES` was missing `filed`, which `ingest.ts`
+ * treats as terminal, so the register could not filter for it. Deriving them
+ * removes the drift; this suite is what stops it coming back through a list
+ * that cannot be derived because it carries labels too.
  */
 describe('the screens and the schema agree', () => {
-	it('SHELVES offers exactly the shelves the column accepts', () => {
-		expect(SHELVES.map((shelf) => shelf.key)).toEqual([...ENUMS['document.shelf']]);
-	});
-
 	it('the derived lists are the schema lists', () => {
 		expect(EXPIRY_VERBS).toEqual(ENUMS['document.expiry_verb']);
 		expect(DAY_COUNTS).toEqual(ENUMS['loan.day_count']);
@@ -63,5 +59,34 @@ describe('narrowing at a boundary', () => {
 		expect(isEnumValue('account.kind', 3)).toBe(false);
 		// A FormData field arrives as File | string; neither may slip through.
 		expect(asEnumValue('account.kind', null, 'current')).toBe('current');
+	});
+});
+
+describe('the documents-v2 registry', () => {
+	it('no longer knows about a shelf', () => {
+		// Shelves became rows. A closed set here would be a migration every time
+		// a household added one, which is the cost this file exists to avoid.
+		expect(ENUMS).not.toHaveProperty('document.shelf');
+		expect(ENUM_COLUMNS.some((c) => c.table === 'document' && c.column === 'shelf')).toBe(false);
+	});
+
+	it('constrains type, sensitivity and chunk source', () => {
+		expect(ENUMS['document.type']).toContain('payslip');
+		expect(ENUMS['document.type']).toContain('bank_statement');
+		expect(ENUMS['document.type']).toContain('other');
+		expect(ENUMS['document.sensitivity']).toEqual(['normal', 'restricted']);
+		expect(ENUMS['document_text_chunk.source']).toEqual(['text_layer', 'ocr', 'plain']);
+		for (const [table, column, key] of [
+			['document', 'type', 'document.type'],
+			['document', 'sensitivity', 'document.sensitivity'],
+			['document_text_chunk', 'source', 'document_text_chunk.source']
+		] as const) {
+			expect(ENUM_COLUMNS).toContainEqual({ table, column, enum: key });
+		}
+	});
+
+	it('lets the queue carry an extraction', () => {
+		expect(ENUMS['job.kind']).toEqual(['import', 'calendar_sync', 'extract_text']);
+		expect(isEnumValue('job.kind', 'extract_text')).toBe(true);
 	});
 });

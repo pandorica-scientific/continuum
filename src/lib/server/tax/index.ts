@@ -13,6 +13,7 @@ import {
 	taxStatementLine
 } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 // Naming a filed document needs no database, and the screen renders the same
 // kinds this module files under — so both live in the pure module. Re-exported
 // because callers have always reached for it here.
@@ -139,7 +140,10 @@ export async function attachDocumentsToStatement(
 			{
 				id: documentId,
 				name,
-				shelf: 'tax',
+				// The `tax` shelf is gone: a tax document is finance paperwork with
+				// a type that says so, which survives a household renaming shelves.
+				shelfId: await shelfIdByKey('finance', handle),
+				type: 'tax_document',
 				storedName: attachment.storedName,
 				ext: attachment.ext,
 				addedOn: attachment.addedOn,

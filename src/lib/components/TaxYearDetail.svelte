@@ -17,6 +17,7 @@
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { ATTACHMENT_KINDS } from '$lib/tax';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	interface Attachment {
 		id: string;
@@ -105,7 +106,13 @@
 						<div class="attachment">
 							<span class="mono ext">{a.ext}</span>
 							{#if a.file}
-								<a href="/files/{a.file}" target="_blank" rel="noopener" class="a-name">{a.name}</a>
+								<a
+									href={documentFileHref(a.id)}
+									target="_blank"
+									rel="noopener"
+									class="a-name"
+									data-file-ext={a.ext}>{a.name}</a
+								>
 							{:else}
 								<span class="a-name">{a.name}</span>
 							{/if}

@@ -93,6 +93,22 @@ export async function hashStoredUpload(name: string): Promise<string | null> {
 	}
 }
 
+/**
+ * The bytes of a stored upload, for a reader that needs the file itself.
+ *
+ * Null when the name is not one we generated or the file is gone: a document
+ * whose upload has been lost still exists as a record, and extraction has to
+ * say so rather than throwing.
+ */
+export async function readUpload(name: string): Promise<Uint8Array | null> {
+	if (!isUploadName(name)) return null;
+	try {
+		return new Uint8Array(await readFile(join(uploadDir(), name)));
+	} catch {
+		return null;
+	}
+}
+
 /** Remove a just-saved orphan after a later database mutation fails. */
 export async function removeUpload(name: string): Promise<boolean> {
 	if (!isUploadName(name)) return false;
