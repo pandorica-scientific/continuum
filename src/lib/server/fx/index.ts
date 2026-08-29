@@ -149,10 +149,13 @@ export async function missingRateCurrencies(
 			-- Salary comes off the ENTRY, not off the payslip document: the document
 			-- is the file, while the figure and the currency it is stated in belong
 			-- to the month. period_month is 'YYYY-MM', so the day a rate is wanted
-			-- for is the first of the month the pay covers.
+			-- for is the first of the month the pay covers. The column has no
+			-- CHECK constraint, so guard the cast against a malformed value
+			-- instead of letting the whole scan fail on one bad row.
 			union all select ${salaryEntry.currency},
 				(${salaryEntry.periodMonth} || '-01')::date
 			from ${salaryEntry}
+			where ${salaryEntry.periodMonth} ~ '^\\d{4}-\\d{2}$'
 			union all select currency, happened_at::date from ${brokerOperation}
 			union all select currency, opened_at::date from ${brokerPosition}
 			union all select currency, make_date(year, 1, 1) from ${taxStatement}

@@ -32,7 +32,7 @@ import { visibleDocumentPredicate, type Actor } from './visibility';
  * glance. Exported so the subject minted by typing a name into capture and the
  * subject added from the rail start out looking the same.
  */
-export const DEFAULT_SUBJECT_EMOJI = '📁';
+const DEFAULT_SUBJECT_EMOJI = '📁';
 
 /** What a person is told when the name they typed is already taken. */
 export const SUBJECT_NAME_TAKEN = 'A subject with that name already exists.';

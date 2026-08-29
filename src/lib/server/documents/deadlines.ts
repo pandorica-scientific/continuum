@@ -21,7 +21,7 @@ import { db, type Queryable } from '$lib/server/db';
 import { loanFixationPeriod, tenancy } from '$lib/server/db/schema';
 
 /** The record-side dates a document's own date is compared against. */
-export interface RecordDates {
+interface RecordDates {
 	/** tenancy id -> its `ends_on`, or null when the tenancy has none set. */
 	tenancyEndsOn: Map<string, string | null>;
 	/** loan id -> its CURRENT fixation period's `ends_on`. */
@@ -94,6 +94,14 @@ export async function loadRecordDates(handle: Queryable = db): Promise<RecordDat
 	// alone — without also requiring ends_on > today, the way the briefing's
 	// own fixation-horizon source does — is what makes an open-ended period
 	// (ends_on null) resolve as current rather than being skipped.
+	//
+	// The same lack of an ends_on > today check means a loan whose latest period
+	// has already LAPSED, with no successor entered yet, still gets that lapsed
+	// period back as "current" rather than nothing. That is harmless here: this
+	// map only decides whether a document's own expiry duplicates the record's
+	// date, never a reminder by itself. A document whose expiry no longer
+	// matches the lapsed date just keeps its own ordinary reminder instead of
+	// having it suppressed as a duplicate.
 	const currentByLoan = new Map<string, { startsOn: string; endsOn: string | null }>();
 	for (const period of periods) {
 		if (period.startsOn > today) continue;

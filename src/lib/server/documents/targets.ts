@@ -85,7 +85,7 @@ export interface TargetRow {
 	archived?: boolean;
 }
 
-export interface TargetKindSpec {
+interface TargetKindSpec {
 	kind: DocumentTargetKind;
 	/** Plural, for the heading over a group of chips or picker options. */
 	groupLabel: string;
@@ -145,7 +145,7 @@ export interface CandidateDocument {
 	shelfLabel: string;
 }
 
-export type AttachmentResult = { ok: true } | { ok: false; status: 404; message: string };
+type AttachmentResult = { ok: true } | { ok: false; status: 404; message: string };
 
 /** The same wording as a missing document, for a record that is missing. */
 const NO_SUCH_RECORD = 'That record is not there.';
@@ -356,6 +356,11 @@ export async function loadPickableTargets(handle: Queryable = db): Promise<Targe
  * screen hides exactly what the Documents screen hides. Tags come back in a
  * second query keyed by document rather than one query per row: a card with
  * eight documents on it should cost two round trips, not nine.
+ *
+ * `targetId` is checked against the registry first — the same check
+ * `attachDocument` has — so a stray `document_link` row that never went
+ * through `attachDocument` (or a caller passing a document's own id) cannot
+ * surface paper against something that is not a fileable record.
  */
 export async function documentsAbout(
 	targetId: string,
@@ -363,6 +368,8 @@ export async function documentsAbout(
 	handle: Queryable = db,
 	{ includeArchived = false }: { includeArchived?: boolean } = {}
 ): Promise<AboutDocument[]> {
+	if (!(await isFileableTarget(targetId, handle))) return [];
+
 	const rows = await handle
 		.select({
 			id: document.id,
@@ -387,7 +394,7 @@ export async function documentsAbout(
 				archiveScopePredicate(includeArchived)
 			)
 		)
-		.orderBy(document.name);
+		.orderBy(document.name, document.id);
 
 	if (rows.length === 0) return [];
 
@@ -428,6 +435,23 @@ async function isVisible(
 }
 
 /**
+ * Whether this id names a record of a kind this registry manages.
+ *
+ * `document_link.target_id` references `entity`, so the foreign key accepts
+ * any entity at all — including another document. This is the one check that
+ * says which of them are actually places to file paper, shared by every entry
+ * point so a document is never treated as a target of itself.
+ */
+async function isFileableTarget(targetId: string, handle: Queryable): Promise<boolean> {
+	const [record] = await handle
+		.select({ kind: entity.kind })
+		.from(entity)
+		.where(eq(entity.id, targetId))
+		.limit(1);
+	return !!record && isDocumentTargetKind(record.kind);
+}
+
+/**
  * File an existing document against a record.
  *
  * Visibility-checked, which the transactions-only version it replaces was not:
@@ -443,14 +467,7 @@ export async function attachDocument(
 	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<AttachmentResult> {
-	const [record] = await handle
-		.select({ kind: entity.kind })
-		.from(entity)
-		.where(eq(entity.id, targetId))
-		.limit(1);
-	// The foreign key would accept any entity, including another document. The
-	// registry is what says which of them are places to file paper.
-	if (!record || !isDocumentTargetKind(record.kind)) {
+	if (!(await isFileableTarget(targetId, handle))) {
 		return { ok: false, status: 404, message: NO_SUCH_RECORD };
 	}
 	if (!(await isVisible(documentId, actor, handle))) {
@@ -468,6 +485,9 @@ export async function attachDocument(
  * shelf, not to the row it happened to hang on. Deleting it here would destroy
  * evidence to undo a mis-click. Visibility-checked for the same reason as
  * attaching — a member must not be able to unfile paper they cannot see.
+ *
+ * Same target-kind check as `attachDocument`, for the same reason: a missing
+ * or unfileable target is a 404 here too, not silently a no-op delete.
  */
 export async function detachDocument(
 	targetId: string,
@@ -475,6 +495,9 @@ export async function detachDocument(
 	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<AttachmentResult> {
+	if (!(await isFileableTarget(targetId, handle))) {
+		return { ok: false, status: 404, message: NO_SUCH_RECORD };
+	}
 	if (!(await isVisible(documentId, actor, handle))) {
 		return { ok: false, status: 404, message: NO_SUCH_DOCUMENT };
 	}
@@ -498,6 +521,11 @@ export async function detachDocument(
  *
  * `targetIds` with nothing in it is nothing to ask: no query at all, the same
  * rule `loadTargetNames` follows for an empty id list.
+ *
+ * Each target's kind is checked against the registry too — the same check
+ * `attachDocument` has — in one batched query rather than one per target, so
+ * a document offered by mistake as a target of itself gets an empty list
+ * instead of the whole visible library.
  */
 export async function candidateDocumentsFor(
 	targetIds: readonly string[],
@@ -506,7 +534,7 @@ export async function candidateDocumentsFor(
 ): Promise<Map<string, CandidateDocument[]>> {
 	if (targetIds.length === 0) return new Map();
 
-	const [visible, links] = await Promise.all([
+	const [visible, links, kinds] = await Promise.all([
 		handle
 			.select({
 				id: document.id,
@@ -517,12 +545,20 @@ export async function candidateDocumentsFor(
 			.from(document)
 			.innerJoin(shelf, eq(shelf.id, document.shelfId))
 			.where(and(visibleDocumentPredicate(actor), archiveScopePredicate(false)))
-			.orderBy(document.name),
+			.orderBy(document.name, document.id),
 		handle
 			.select({ targetId: documentLink.targetId, documentId: documentLink.documentId })
 			.from(documentLink)
-			.where(inArray(documentLink.targetId, targetIds))
+			.where(inArray(documentLink.targetId, targetIds)),
+		handle
+			.select({ id: entity.id, kind: entity.kind })
+			.from(entity)
+			.where(inArray(entity.id, targetIds))
 	]);
+
+	const fileableTargetIds = new Set(
+		kinds.filter((row) => isDocumentTargetKind(row.kind)).map((row) => row.id)
+	);
 
 	const linkedByTarget = new Map<string, Set<string>>();
 	for (const link of links) {
@@ -535,6 +571,7 @@ export async function candidateDocumentsFor(
 	// rather than re-sorting per target.
 	return new Map(
 		targetIds.map((targetId) => {
+			if (!fileableTargetIds.has(targetId)) return [targetId, []] as const;
 			const linked = linkedByTarget.get(targetId);
 			const candidates = linked ? visible.filter((doc) => !linked.has(doc.id)) : visible;
 			return [targetId, candidates] as const;

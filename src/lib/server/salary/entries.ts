@@ -262,6 +262,11 @@ export async function forgetPayslip(documentId: string, handle: Db = db): Promis
 		// bank-evidenced figure to keep, and inventing one from the slip's gross
 		// would put a payslip's number back under a statement's name.
 		if (row.transactionId === null || row.netMinor === null) continue;
+		// `amountOverridden` is not carried into this call. That flag means "a
+		// person corrected what the SLIP said"; once the slip is gone the row is
+		// credit-only, its figure is just what the bank stated, and there is no
+		// slip left to re-read and overwrite it — the thing the flag guards
+		// against cannot happen to a row with no document behind it.
 		const rerecorded = await recordSalary(
 			{
 				personId: row.personId,
@@ -507,11 +512,7 @@ export async function filePayslipDocument(
 				expiryVerb: 'expires',
 				periodOn,
 				contentHash,
-				personIds: [personId],
-				propertyIds: [],
-				accountIds: [],
-				transactionIds: [],
-				subjectIds: [],
+				targetIds: [personId],
 				tagNames: []
 			},
 			tx

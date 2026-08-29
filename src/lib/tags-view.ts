@@ -8,7 +8,7 @@
  * with its own test rather than something only reachable through a page.
  */
 
-export interface TagReach {
+interface TagReach {
 	/** Documents, properties and loans — exactly what the item list shows. */
 	tagged: number;
 	/** Whole transactions carrying the tag directly — no card of their own. */

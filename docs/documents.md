@@ -121,7 +121,10 @@ Under **About — optional** it offers the same chips the inspector does, groupe
 by kind, so a lease you have just scanned can be filed against the tenancy while
 you still remember whose it is. Typing into **Or a new subject** makes one on the
 spot; a name that already exists files against it rather than making a second.
-Coming from another screen, whatever sent you here is already ticked.
+Coming from another screen, the record you came from is shown ready-linked: a
+pickable kind arrives already ticked in its group, while a transaction or a
+tax statement — neither offers a pickable list — arrives as a read-only chip
+instead, since there is nothing to tick it out of.
 
 Filing is still a separate pass, so dropping twenty scans never turns into twenty
 forms.
@@ -326,8 +329,8 @@ sets, so they add — a bulk edit never silently clears what it did not mention)
 
 A payslip that carries a salary entry keeps its type: retyping it would leave a
 month's pay counted with nothing on screen to account for it. Everything else in
-the same edit still applies to it, and the bar says how many were left as they
-were.
+the same edit still applies to it, and the message above the list says how many
+were left as they were.
 
 ## Importing a backlog
 

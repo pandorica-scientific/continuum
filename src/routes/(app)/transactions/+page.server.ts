@@ -31,7 +31,7 @@ import { attachDocument, candidateDocuments, detachDocument } from '$lib/server/
 import { createDocument } from '$lib/server/documents/mutations';
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { systemShelfId } from '$lib/server/documents/shelves';
-import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
+import { saveUploadAndHash } from '$lib/server/system/files';
 import { uuidv7 } from 'uuidv7';
 import { extname } from 'node:path';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
@@ -299,13 +299,10 @@ export const actions: Actions = {
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { id, message: 'Choose a file, or a document you already have.' });
 		}
-		// Read once, so the same bytes that are saved are also what gets
-		// fingerprinted — `saveUploadBytes` in place of `saveUpload` is what makes
-		// them available for the hash rather than reading the file twice.
-		const bytes = new Uint8Array(await file.arrayBuffer());
 		let storedName: string;
+		let contentHash: string;
 		try {
-			storedName = await saveUploadBytes(bytes, file.name);
+			({ storedName, contentHash } = await saveUploadAndHash(file));
 		} catch (err) {
 			return fail(400, { id, message: err instanceof Error ? err.message : 'Upload failed.' });
 		}
@@ -324,14 +321,10 @@ export const actions: Actions = {
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn: null,
 			expiryVerb: 'expires',
-			contentHash: hashBytes(bytes),
-			personIds: [],
-			propertyIds: [],
-			accountIds: [],
+			contentHash,
 			// Linked in the same aggregate the documents screen uses, so the file and
 			// its link commit together or not at all.
-			transactionIds: [id],
-			subjectIds: [],
+			targetIds: [id],
 			// No subject: that used to be how a receipt reached the Documents
 			// screen at all, filing every one of them under a subject literally
 			// called "Receipts" whether or not the household ever had such a
@@ -369,8 +362,12 @@ export const actions: Actions = {
 		// nothing stops one being filed against a transaction, and the salary
 		// month behind it must not be orphaned from here either.
 		const outcome = await removeDocument(documentId, locals.person);
-		// A 404 is "it was already gone", which is the state the unlink above was
-		// asking for anyway. A refusal is a different thing and has to be said.
+		// A 404 usually is "it was already gone", the state the unlink above was
+		// asking for anyway — but it is also what a member gets back from BOTH
+		// calls for a restricted receipt they cannot see: neither the unlink nor
+		// this delete does anything, and this still answers ok. That is fine only
+		// because a member is never offered the control that posts here for
+		// paper they cannot see; a 409 is a real refusal and has to be said.
 		if (!outcome.ok && outcome.status === 409) {
 			return fail(409, { id, message: outcome.message });
 		}

@@ -391,22 +391,13 @@
 		<div class="sec capture-about">
 			<span class="eyebrow">About — optional</span>
 			<div class="about">
-				{#each groupAboutOptions(prefillReadOnly) as group (group.label)}
-					<div class="about-group">
-						<span class="mono about-kind">{group.label}</span>
-						<div class="chips">
-							{#each group.options as target (target.id)}
-								<span class="link-chip">
-									<span>{target.name}</span>
-									{#if target.meta}<span class="quiet chip-meta">{target.meta}</span>{/if}
-								</span>
-							{/each}
-						</div>
-					</div>
-				{/each}
-				<!-- Only the kinds the document side may pick, from the registry. A
-				     transaction is deliberately absent: a list of every payment the
-				     household has made is a list nobody can search by eye. -->
+				<!-- Registry order: the kinds the document side may pick, then the
+				     prefill's read-only groups after — the same order `aboutGroups`
+				     above puts them in for the inspector. A transaction is
+				     deliberately absent from the pickable half: a list of every
+				     payment the household has made is a list nobody can search by
+				     eye, which is exactly why it arrives as a read-only prefill chip
+				     instead. -->
 				{#each groupAboutOptions(data.pickableTargets) as group (group.label)}
 					<div class="about-group">
 						<span class="mono about-kind">{group.label}</span>
@@ -421,6 +412,19 @@
 									/>
 									<span>{target.name}</span>
 								</label>
+							{/each}
+						</div>
+					</div>
+				{/each}
+				{#each groupAboutOptions(prefillReadOnly) as group (group.label)}
+					<div class="about-group">
+						<span class="mono about-kind">{group.label}</span>
+						<div class="chips">
+							{#each group.options as target (target.id)}
+								<span class="link-chip">
+									<span>{target.name}</span>
+									{#if target.meta}<span class="quiet chip-meta">{target.meta}</span>{/if}
+								</span>
 							{/each}
 						</div>
 					</div>

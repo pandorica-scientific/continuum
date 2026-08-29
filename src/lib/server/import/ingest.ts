@@ -643,12 +643,20 @@ function statementDocumentTags(statements: ParsedStatement[]): string[] {
 	].filter((tag): tag is string => Boolean(tag));
 }
 
-/** Ingest one uploaded statement file end to end. */
+/**
+ * Ingest one uploaded statement file end to end.
+ *
+ * `handle` is `Db`, not the wider `DatabaseHandle` most of this module takes:
+ * `enqueueExtraction` below runs after `inTransaction` returns, on the
+ * strength of that having committed. A caller passing its own open
+ * transaction here would make that call still be inside it — the type is
+ * what keeps that from compiling rather than needing to be remembered.
+ */
 export async function ingestFile(
 	filename: string,
 	buffer: Uint8Array,
 	explicitAccountId?: string,
-	handle: DatabaseHandle = db,
+	handle: Db = db,
 	/**
 	 * Allow the page to be read as an image when its text layer cannot be
 	 * proven. Rasterising and recognising a statement takes seconds per page, so
@@ -901,11 +909,7 @@ export async function ingestFile(
 						// the file and the document it is filed as are one upload, so
 						// they carry one hash between them.
 						contentHash,
-						personIds: [],
-						propertyIds: [],
-						accountIds: firstAccountId ? [firstAccountId] : [],
-						transactionIds: [],
-						subjectIds: [],
+						targetIds: firstAccountId ? [firstAccountId] : [],
 						tagNames: statementDocumentTags(statements)
 					},
 					tx

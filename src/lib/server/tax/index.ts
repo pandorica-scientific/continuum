@@ -156,11 +156,7 @@ export async function attachDocumentsToStatement(
 				// Filed against whose statement it is. Without this link the
 				// documents screen builds no column for it, so a document filed
 				// here would be missing from the household's own files.
-				personIds: [personId],
-				propertyIds: [],
-				accountIds: [],
-				transactionIds: [],
-				subjectIds: [],
+				targetIds: [personId],
 				tagNames: [attachmentKind(attachment.kind).tag]
 			},
 			handle

@@ -20,7 +20,7 @@
  * bug lived in and it has to be reachable by a test without a database.
  */
 
-export interface LinkDiff {
+interface LinkDiff {
 	/** Links the document has that the form did not send back. */
 	remove: string[];
 	/** Links the form sent that the document does not have yet. */

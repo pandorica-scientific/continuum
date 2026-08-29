@@ -182,11 +182,6 @@ async function fileDemoPdf(input: {
 		addedOn: new Date().toISOString().slice(0, 10),
 		expiresOn: input.expiresOn ?? null,
 		expiryVerb: input.expiryVerb ?? 'expires',
-		personIds: [],
-		propertyIds: [],
-		accountIds: [],
-		transactionIds: [],
-		subjectIds: [],
 		targetIds: input.targetIds ?? [],
 		tagNames: input.tagNames ?? [],
 		contentHash: hashBytes(bytes),
@@ -280,12 +275,14 @@ export async function seedDemo(): Promise<void> {
 
 	const fio = uuidv7();
 	const revolut = uuidv7();
-	// The brokerage account the portfolio actually sits in. Without it the demo
-	// showed three years of XTB deposits leaving the current account and arriving
-	// nowhere, and the broker report below had nothing to be filed against. Its
-	// balance is the uninvested cash at the broker, and net worth deliberately
-	// leaves a brokerage balance out of its cash total — the portfolio value
-	// already counts it.
+	// The brokerage account the seeded portfolio sits in and the broker report
+	// below is filed against. Its balance is set directly here, not derived from
+	// the "XTB deposit" lines added to the current account further down — those
+	// are ordinary categorised outgoings with no transfer linking them across, so
+	// this account does not make that money arrive anywhere; it exists so the
+	// portfolio and the report have an account to be about. Net worth
+	// deliberately leaves a brokerage's cash balance out of its own cash total —
+	// the portfolio value already counts it.
 	const broker = uuidv7();
 	await db.insert(account).values([
 		{

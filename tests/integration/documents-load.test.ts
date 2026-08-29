@@ -279,6 +279,27 @@ describe('capture', () => {
 		const [row] = await testDb.select().from(subject).where(eq(subject.id, minted));
 		expect(row.name).toBe('The boiler');
 	});
+
+	it('fails plainly, rather than throwing, when a posted file cannot be read', async () => {
+		// A real multipart round trip through `Request` reconstructs its own File,
+		// so this drives the action directly with a fake `request.formData()` —
+		// the only thing the action calls on it — carrying a File whose
+		// `arrayBuffer()` is broken, the way a truncated upload can be.
+		const { actions } = await import('../../src/routes/(app)/documents/+page.server');
+		const file = new File(['broken'], 'broken.pdf', { type: 'application/pdf' });
+		file.arrayBuffer = () => Promise.reject(new Error('Corrupt upload.'));
+		const form = new FormData();
+		form.set('shelf', 'household');
+		form.set('file', file);
+		const request = { formData: async () => form } as unknown as Request;
+
+		const result = await (actions.addDocument as unknown as (event: unknown) => Promise<unknown>)({
+			request,
+			locals: asAdmin
+		});
+
+		expect(result).toMatchObject({ status: 400, data: { message: 'Corrupt upload.' } });
+	});
 });
 
 describe('the review screen', () => {

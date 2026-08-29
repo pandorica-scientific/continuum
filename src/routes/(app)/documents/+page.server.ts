@@ -25,7 +25,7 @@ import {
 	tag,
 	tagLink
 } from '$lib/server/db/schema';
-import { hashBytes, saveUploadBytes, uploadSize } from '$lib/server/system/files';
+import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
 import {
 	removeDocument,
@@ -528,19 +528,10 @@ export const actions: Actions = {
 				String(form.get('expiryVerb') ?? 'expires'),
 				'expires'
 			),
-			// The per-kind lists belong to callers that hold a per-kind id — the
-			// property screen filing its own paper, the salary reader filing a
-			// slip. This form has none: every record it was pointed at, ticked in
-			// its picker or pre-applied by the screen that sent us here, arrives on
-			// `linkIds` and of any registered kind. The `personIds`/`propertyIds`/
-			// `accountIds`/`subjectIds` reads that used to sit here had nothing
-			// posting into them, and could not have carried a tenancy or a loan if
-			// they had: no screen ever wrote a `loanIds` input.
-			personIds: [],
-			propertyIds: [],
-			accountIds: [],
-			transactionIds: [],
-			subjectIds: [],
+			// Every record this document was pointed at, ticked in its picker or
+			// pre-applied by the screen that sent us here, arrives on `linkIds` and
+			// of any registered kind — a per-kind field here could not have carried
+			// a tenancy or a loan anyway: no screen ever wrote a `loanIds` input.
 			targetIds: form.getAll('linkIds').map(String).filter(Boolean),
 			newSubjectName: String(form.get('newSubject') ?? '').trim() || undefined,
 			tagNames: await readTags(form)
@@ -561,13 +552,10 @@ export const actions: Actions = {
 			addedIds.push(documentId);
 		}
 		for (const file of files) {
-			// Read once, so the same bytes that are saved are also what gets
-			// fingerprinted — `saveUploadBytes` in place of `saveUpload` is what
-			// makes them available for the hash rather than reading the file twice.
-			const bytes = new Uint8Array(await file.arrayBuffer());
 			let storedName: string;
+			let contentHash: string;
 			try {
-				storedName = await saveUploadBytes(bytes, file.name);
+				({ storedName, contentHash } = await saveUploadAndHash(file));
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
@@ -578,7 +566,7 @@ export const actions: Actions = {
 				name: (files.length === 1 && typedName) || file.name.replace(/\.[^.]+$/, '') || 'Document',
 				storedName,
 				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
-				contentHash: hashBytes(bytes),
+				contentHash,
 				...shared
 			});
 			addedIds.push(documentId);
@@ -702,9 +690,14 @@ export const actions: Actions = {
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { message: 'Choose a file to put in its place.' });
 		}
-		const bytes = new Uint8Array(await file.arrayBuffer());
+		// `replaceDocumentFile` hashes the bytes itself (it needs them for the
+		// document's contentHash), so this can't hand off to `saveUploadAndHash`
+		// the way the other actions do — but the read still belongs inside the
+		// try, same as theirs, so a broken file fails plainly here too.
+		let bytes: Uint8Array;
 		let storedName: string;
 		try {
+			bytes = new Uint8Array(await file.arrayBuffer());
 			storedName = await saveUploadBytes(bytes, file.name);
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
@@ -762,6 +755,15 @@ export const actions: Actions = {
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		const type = String(form.get('type') ?? '');
+		// Normalised once, here — the inspector's own `updateDocument` already
+		// normalises before its guard call; this bar used to guard on the raw
+		// string and only normalise at the write below, two readings of the same
+		// field that happened to agree only because nothing but an exact
+		// 'payslip' match takes either branch differently. One value now feeds
+		// both, the same way the inspector's does. Empty stays empty — asEnumValue
+		// would otherwise fall back to the truthy 'other' and turn "no type was
+		// selected" into "retype everything to Other".
+		const normalisedType = type ? asEnumValue('document.type', type, 'other') : '';
 		const sensitivity = String(form.get('sensitivity') ?? '');
 		const addTags = await readTags(form);
 		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
@@ -778,7 +780,9 @@ export const actions: Actions = {
 		//
 		// No `keptTargetIds`: this bar only ADDS links, so it can never untick
 		// the person an entry belongs to.
-		const guarded = type ? await salaryGuardedDocuments(ids, { type }) : [];
+		const guarded = normalisedType
+			? await salaryGuardedDocuments(ids, { type: normalisedType })
+			: [];
 		const retype = ids.filter((id) => !guarded.includes(id));
 
 		await db.transaction(async (tx) => {
@@ -789,11 +793,8 @@ export const actions: Actions = {
 				const shelfId = await shelfIdByKey(shelfKey, tx);
 				await tx.update(document).set({ shelfId }).where(inArray(document.id, ids));
 			}
-			if (type && retype.length > 0) {
-				await tx
-					.update(document)
-					.set({ type: asEnumValue('document.type', type, 'other') })
-					.where(inArray(document.id, retype));
+			if (normalisedType && retype.length > 0) {
+				await tx.update(document).set({ type: normalisedType }).where(inArray(document.id, retype));
 			}
 			if (sensitivity && locals.person?.role === 'admin') {
 				await tx

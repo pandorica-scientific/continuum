@@ -392,6 +392,43 @@ describe('the documents about a record', () => {
 	it('returns nothing for a record nothing is filed against', async () => {
 		expect(await documentsAbout(target.contact, asAdmin, testDb)).toEqual([]);
 	});
+
+	it('breaks a name tie with the id, so the order does not depend on insertion order', async () => {
+		// Two documents that happen to share a name. Inserted with the larger id
+		// first, so a plan that just returns heap order would show it first too —
+		// only an explicit id tiebreaker guarantees the ascending id order asserted
+		// below regardless of how the rows happened to land on disk.
+		const idHigh = '11111111-1111-5111-8111-111111111112';
+		const idLow = '11111111-1111-5111-8111-111111111111';
+		const shelfId = await shelfIdByKey('household', testDb);
+		for (const id of [idHigh, idLow]) {
+			await testDb.insert(document).values({
+				id,
+				name: 'Same name',
+				shelfId,
+				type: 'other',
+				sensitivity: 'normal',
+				storedName: `${id}.pdf`,
+				ext: 'PDF',
+				addedOn: '2026-01-01'
+			});
+			await testDb.insert(documentLink).values({ documentId: id, targetId: target.person });
+		}
+
+		const docs = await documentsAbout(target.person, asAdmin, testDb);
+		expect(docs.map((d) => d.id)).toEqual([idLow, idHigh]);
+	});
+
+	it('returns nothing for a target of a kind nothing may be filed against, even if a stray link exists', async () => {
+		// A document is an entity too, so its id is a valid foreign key value —
+		// the registry, not the schema, is what says a document is not a place to
+		// file paper against. `links` here inserts the row directly, the way a
+		// stray `document_link` could exist without ever going through
+		// `attachDocument`'s own check.
+		const other = await seedDocument({ name: 'Passport' });
+		await seedDocument({ name: 'Stray receipt', links: [other] });
+		expect(await documentsAbout(other, asAdmin, testDb)).toEqual([]);
+	});
 });
 
 describe('attaching a document to a record', () => {
@@ -455,6 +492,24 @@ describe('attaching a document to a record', () => {
 		expect(refused).toEqual({ ok: false, status: 404, message: 'That document is not there.' });
 		expect(await linkedDocumentIds(target.person)).toEqual([id]);
 	});
+
+	it('refuses to detach from a record that is not there, like attaching does', async () => {
+		const id = await seedDocument({ name: 'Loan agreement' });
+		const refused = await detachDocument(rowId('dt-no-such-record'), id, asAdmin, testDb);
+		expect(refused).toEqual({ ok: false, status: 404, message: 'That record is not there.' });
+	});
+
+	it('refuses to detach from a record of a kind nothing may be filed against, like attaching does', async () => {
+		const target = await seedDocument({ name: 'Loan agreement' });
+		// `links: [target]` inserts the row directly, the way a stray
+		// `document_link` could exist without ever going through `attachDocument`.
+		const other = await seedDocument({ name: 'Passport', links: [target] });
+		const refused = await detachDocument(other, target, asAdmin, testDb);
+		expect(refused).toEqual({ ok: false, status: 404, message: 'That record is not there.' });
+		// The stray link is left alone — this refuses the call, it does not clean
+		// up data on its way past.
+		expect(await linkedDocumentIds(target)).toEqual([other]);
+	});
 });
 
 describe('what is left to attach', () => {
@@ -494,6 +549,36 @@ describe('what is left to attach', () => {
 	it('offers nothing when everything visible is already attached', async () => {
 		await seedDocument({ name: 'Loan agreement', links: [target.loan] });
 		expect(await candidateDocuments(target.loan, asAdmin, testDb)).toEqual([]);
+	});
+
+	it('breaks a name tie with the id in the candidate list too', async () => {
+		const idHigh = '22222222-2222-5222-8222-222222222222';
+		const idLow = '22222222-2222-5222-8222-222222222221';
+		const shelfId = await shelfIdByKey('household', testDb);
+		for (const id of [idHigh, idLow]) {
+			await testDb.insert(document).values({
+				id,
+				name: 'Same name',
+				shelfId,
+				type: 'other',
+				sensitivity: 'normal',
+				storedName: `${id}.pdf`,
+				ext: 'PDF',
+				addedOn: '2026-01-01'
+			});
+		}
+
+		const candidates = await candidateDocuments(target.loan, asAdmin, testDb);
+		expect(candidates.map((c) => c.id)).toEqual([idLow, idHigh]);
+	});
+
+	it('never offers a document as a place to file another document against', async () => {
+		// Without the registry check, a document's own id passes every other test
+		// this function runs (no links target it, so nothing looks "attached")
+		// and the whole visible library comes back as though it were a real record.
+		const other = await seedDocument({ name: 'Passport' });
+		await seedDocument({ name: 'Loan agreement' });
+		expect(await candidateDocuments(other, asAdmin, testDb)).toEqual([]);
 	});
 });
 
@@ -554,6 +639,20 @@ describe('candidateDocumentsFor, batched across several records', () => {
 
 	it('returns an empty map for an empty list of targets, with no query at all', async () => {
 		expect(await candidateDocumentsFor([], asAdmin, testDb)).toEqual(new Map());
+	});
+
+	it('excludes a batched target that is not a fileable kind, without affecting the others', async () => {
+		const other = await seedDocument({ name: 'Passport' });
+		const forLoan = await seedDocument({ name: 'Loan agreement' });
+
+		const byTarget = await candidateDocumentsFor([target.loan, other], asAdmin, testDb);
+		// `other` (the Passport document) is a perfectly normal candidate to
+		// attach to the loan; what is rejected is offering candidates AS IF
+		// `other` were itself a valid place to file paper.
+		expect(byTarget.get(target.loan)?.map((c) => c.id)).toEqual(
+			expect.arrayContaining([forLoan, other])
+		);
+		expect(byTarget.get(other)).toEqual([]);
 	});
 });
 

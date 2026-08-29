@@ -191,6 +191,24 @@ describe('the baseline migration', () => {
 			    or (table_name = 'tax_statement' and column_name = 'document_id'))`;
 		expect(rows.map((r) => r.detail)).toEqual([]);
 
+		// The index and foreign key that went with `document.currency` and
+		// `tax_statement.document_id`. A dropped column takes these with it
+		// automatically — asserted anyway, so a baseline regenerated from a
+		// schema file that forgot to drop the column back is caught by name
+		// rather than by the column check alone happening to still catch it.
+		const [{ n: staleIndexes }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from pg_indexes
+			where indexname in ('document_currency_idx', 'tax_statement_document_idx')`;
+		expect(staleIndexes).toBe(0);
+
+		const [{ n: staleFks }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from pg_constraint
+			where conname in (
+				'document_currency_currency_code_fk',
+				'tax_statement_document_id_document_id_fk'
+			)`;
+		expect(staleFks).toBe(0);
+
 		// `period_on` is NOT one of them: it is the month a payslip covers, and
 		// `payslipMatchingContent` matches a re-uploaded slip on it.
 		const kept = await harness.sql<{ column_name: string }[]>`

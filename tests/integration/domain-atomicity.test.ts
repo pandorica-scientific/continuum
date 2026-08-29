@@ -379,11 +379,7 @@ describe('domain replacement writes', () => {
 					addedOn: '2026-08-15',
 					expiresOn: null,
 					expiryVerb: 'expires',
-					personIds: [],
-					propertyIds: [],
-					accountIds: [],
-					transactionIds: [],
-					subjectIds: [],
+					targetIds: [],
 					newSubjectName: 'Vehicle',
 					tagNames: ['Safe', 'Explode']
 				},
@@ -750,6 +746,29 @@ describe('domain replacement writes', () => {
 			'PLN',
 			'USD'
 		]);
+	});
+
+	it('does not choke on a malformed period_month when scanning for missing rates', async () => {
+		await testDb.insert(schema.person).values({
+			id: rowId('malformed-period-person'),
+			name: 'Malformed Period Person',
+			initials: 'MP'
+		});
+		// The column has no CHECK constraint (application code validates the
+		// 'YYYY-MM' shape before writing), so a stray row — a bug elsewhere, an
+		// old fixture, a manual repair — can still reach the table. The scan casts
+		// period_month to a date; without a format guard that cast throws and
+		// takes the whole missing-rate banner down with it.
+		await testDb.insert(schema.salaryEntry).values({
+			id: rowId('malformed-period-entry'),
+			personId: rowId('malformed-period-person'),
+			periodMonth: 'not-a-month',
+			netMinor: 100n,
+			currency: 'GBP',
+			source: 'payslip'
+		});
+
+		await expect(missingRateCurrencies('CZK', testDb)).resolves.not.toThrow();
 	});
 
 	it('serializes tag deltas so a concurrent add cannot restore a removed tag', async () => {

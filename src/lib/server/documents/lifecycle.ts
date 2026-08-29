@@ -30,7 +30,7 @@ import { deleteDocumentRow, IMPORT_STATEMENT_REFUSAL } from './mutations';
 import { removeUpload } from '$lib/server/system/files';
 import { NO_SUCH_DOCUMENT, visibleDocumentPredicate, type Actor } from './visibility';
 
-export type RemoveDocumentResult = { ok: true } | { ok: false; status: 404 | 409; message: string };
+type RemoveDocumentResult = { ok: true } | { ok: false; status: 404 | 409; message: string };
 
 /**
  * Thrown to unwind the transaction with an answer attached.

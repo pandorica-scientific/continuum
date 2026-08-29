@@ -29,7 +29,7 @@ import { countryName, hueTokens } from '$lib/tax-hues';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { availableCurrencies } from '$lib/server/fx/currencies';
-import { hashBytes, removeUpload, saveUploadBytes } from '$lib/server/system/files';
+import { removeUpload, saveUploadAndHash } from '$lib/server/system/files';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -41,8 +41,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				.select({ id: person.id, name: person.name })
 				.from(person)
 				.orderBy(person.createdAt, person.id),
-			// Salary entries, not payslip documents. A document's `amountMinor` is
-			// the net-shaped figure this screen was reading as gross.
+			// Salary entries, not payslip documents: the document carries no figure
+			// of its own, so gross must come from the salary row.
 			db
 				.select({
 					personId: salaryEntry.personId,
@@ -222,18 +222,15 @@ async function takeUploads(
 
 	const attachments: StatementAttachment[] = [];
 	for (const file of files) {
-		// Read once, so the same bytes that are saved are also what gets
-		// fingerprinted — `saveUploadBytes` in place of `saveUpload` is what
-		// makes them available for the hash rather than reading the file twice.
-		const bytes = new Uint8Array(await file.arrayBuffer());
 		try {
+			const { storedName, contentHash } = await saveUploadAndHash(file);
 			attachments.push({
-				storedName: await saveUploadBytes(bytes, file.name),
+				storedName,
 				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
 				addedOn,
 				kind,
 				original: file.name,
-				contentHash: hashBytes(bytes)
+				contentHash
 			});
 		} catch (err) {
 			await discardUploads(attachments);

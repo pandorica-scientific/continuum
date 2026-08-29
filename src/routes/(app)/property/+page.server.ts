@@ -24,7 +24,7 @@ import { initialsFor } from '$lib/people';
 import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { hashBytes, removeUpload, saveUpload, saveUploadBytes } from '$lib/server/system/files';
+import { removeUpload, saveUpload, saveUploadAndHash } from '$lib/server/system/files';
 import {
 	createPropertyBill,
 	createTenancy,
@@ -673,18 +673,13 @@ export const actions: Actions = {
 		let contentHash: string | null = null;
 		const file = form.get('file');
 		if (file instanceof File && file.size > 0) {
-			// Read the bytes once so they can both be saved and fingerprinted —
-			// `saveUploadBytes` in place of `saveUpload` is what makes them
-			// available for the hash rather than being read a second time.
-			const bytes = new Uint8Array(await file.arrayBuffer());
 			try {
-				storedName = await saveUploadBytes(bytes, file.name);
+				({ storedName, contentHash } = await saveUploadAndHash(file));
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
 			documentId = uuidv7();
 			extension = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
-			contentHash = hashBytes(bytes);
 		}
 
 		await createPropertyBill({

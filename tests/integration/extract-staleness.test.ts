@@ -107,6 +107,17 @@ describe('a file replaced underneath an extraction', () => {
 		const id = await seedDocument(A);
 		// The run reads A's bytes, and the replacement lands before it commits —
 		// which is the window cancelling a queued job cannot cover.
+		//
+		// The staleness check itself is state-based, not time-based (it compares
+		// storedName/contentHash inside a transaction, not a clock reading), so
+		// there is no tolerance to widen here. What IS timing-dependent is this
+		// TEST: `reading` is started but not yet awaited, and whether its OCR
+		// pipeline reaches the staleness check before or after
+		// `replaceDocumentFile` commits depends on which finishes first — usually
+		// the replace, since it does far less work, but under full-suite CPU
+		// contention that is no longer guaranteed. Seen flaking once under load;
+		// left as is rather than adding a synchronisation point a real caller
+		// does not have, since that would test the harness more than the guard.
 		const reading = extractDocumentText(id, testDb, { provider: fakeOcr });
 		const replacement = await store(B);
 		await replaceDocumentFile(id, { ...replacement, ext: 'pdf' }, testDb);

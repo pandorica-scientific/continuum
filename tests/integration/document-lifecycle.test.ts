@@ -546,4 +546,40 @@ describe('a bulk edit that would retype a payslip', () => {
 		expect(row.type).toBe('payslip');
 		expect(row.shelfId).toBe(await shelfIdByKey('household', testDb));
 	});
+
+	it('still guards the payslip when the posted type is not a real enum value at all', async () => {
+		// The guard and the write now read the same normalised value — this pins
+		// that reading a nonsense string does not let a payslip through because
+		// the raw string happened not to equal 'payslip' literally either way.
+		await seedHousehold();
+		const slip = await payslip('2026-07', 6_840_000n);
+		const letter = await plainDocument('Letter');
+
+		const outcome = await bulkUpdate([slip.id, letter], { type: 'not-a-real-type' });
+
+		expect(outcome.skipped).toBe(1);
+		expect(await typeOf(slip.id)).toBe('payslip');
+		// The one document with nothing to protect still gets the normalised
+		// fallback, same as `updateDocument` gives a lone bad value.
+		expect(await typeOf(letter)).toBe('other');
+	});
+
+	it('leaves type alone entirely when the bulk edit does not touch it', async () => {
+		// Guards against normalising an EMPTY type into the truthy fallback
+		// 'other' and retyping everything selected as a side effect of a bulk
+		// edit that only meant to move a shelf or add a tag.
+		await seedHousehold();
+		const letter = rowId('dl-bulk-untouched');
+		await testDb.insert(document).values({
+			id: letter,
+			name: 'Untouched',
+			shelfId: await shelfIdByKey('household', testDb),
+			type: 'correspondence',
+			addedOn: '2026-08-25'
+		});
+
+		await bulkUpdate([letter], { shelf: 'household' });
+
+		expect(await typeOf(letter)).toBe('correspondence');
+	});
 });

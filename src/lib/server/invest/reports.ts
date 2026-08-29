@@ -135,11 +135,7 @@ export async function uploadBrokerReport(
 					expiresOn: null,
 					expiryVerb: 'expires',
 					contentHash,
-					personIds: [],
-					propertyIds: [],
-					accountIds: brokerageAccounts.length === 1 ? [brokerageAccounts[0].id] : [],
-					transactionIds: [],
-					subjectIds: [],
+					targetIds: brokerageAccounts.length === 1 ? [brokerageAccounts[0].id] : [],
 					tagNames: [brokerKey, reportDay.slice(0, 4)]
 				},
 				tx

@@ -57,11 +57,7 @@ async function addDocument(id: string, name: string) {
 			addedOn: '2026-07-20',
 			expiresOn: null,
 			expiryVerb: 'expires',
-			personIds: [],
-			propertyIds: [],
-			accountIds: [],
-			transactionIds: [],
-			subjectIds: [],
+			targetIds: [],
 			tagNames: []
 		},
 		testDb

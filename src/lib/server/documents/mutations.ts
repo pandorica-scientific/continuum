@@ -57,26 +57,15 @@ interface CreateDocumentInput {
 	addedOn: string;
 	expiresOn: string | null;
 	expiryVerb: EnumValue<'document.expiry_verb'>;
-	personIds: string[];
-	propertyIds: string[];
-	accountIds: string[];
 	/**
-	 * Transactions this document belongs to — a receipt against the payment it
-	 * evidences. Needs no table of its own: the far end of a document link is an
-	 * `entity`, and `transaction` is a registered kind.
+	 * Everything this document is filed against, by id, whatever kind each one
+	 * turns out to be — the far end of a document link is an `entity`, so a
+	 * person, a property, an account, a transaction and a subject all end up in
+	 * the same insert regardless. Five per-kind lists used to sit here instead,
+	 * one per caller's own vocabulary; every caller ever populated at most one
+	 * of them at a time; one list is that same call written once.
 	 */
-	transactionIds: string[];
-	subjectIds: string[];
-	/**
-	 * Anything else the document is filed against, by id.
-	 *
-	 * The five lists above are per-kind because their callers hold per-kind ids;
-	 * this one is what a form posts when the kind came off a registry rather than
-	 * out of a field name — a tenancy for a lease, a loan for a mortgage
-	 * statement. The far end of a document link is an `entity` either way, so
-	 * they all end up in the same insert.
-	 */
-	targetIds?: string[];
+	targetIds: string[];
 	newSubjectName?: string;
 	tagNames: string[];
 	/**
@@ -107,13 +96,13 @@ export async function insertDocumentAggregate(
 	input: CreateDocumentInput,
 	handle: Queryable
 ): Promise<void> {
-	const subjectIds = [...input.subjectIds];
+	const wantedTargetIds = [...input.targetIds];
 	// One reading of the case-insensitive uniqueness rule, in `subjects.ts`
 	// beside the rail's stricter `addSubject`. Typing "car" into capture when the
 	// household already has a "Car" has to find that one, not fail and not mint a
 	// second — and the lowercase comparison that decides it is now written once.
 	if (input.newSubjectName) {
-		subjectIds.push(await upsertSubjectByName(input.newSubjectName, handle));
+		wantedTargetIds.push(await upsertSubjectByName(input.newSubjectName, handle));
 	}
 
 	await handle.insert(document).values({
@@ -135,16 +124,7 @@ export async function insertDocumentAggregate(
 	// Four inserts became one. The far end of a document link is an `entity`, so
 	// what a target IS no longer decides which table the link goes in — which is
 	// what stops a new module needing a document_<thing> table of its own.
-	const targetIds = [
-		...new Set([
-			...input.personIds,
-			...input.propertyIds,
-			...input.accountIds,
-			...input.transactionIds,
-			...subjectIds,
-			...(input.targetIds ?? [])
-		])
-	];
+	const targetIds = [...new Set(wantedTargetIds)];
 	if (targetIds.length > 0) {
 		await handle
 			.insert(documentLink)

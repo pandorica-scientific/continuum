@@ -6,7 +6,8 @@ import {
 	hashStoredUpload,
 	openUpload,
 	removeUpload,
-	saveUpload
+	saveUpload,
+	saveUploadAndHash
 } from '$lib/server/system/files';
 
 const DIRECTORY = resolve('scratch-workspace/files-test');
@@ -53,5 +54,20 @@ describe('hashing an upload', () => {
 		// A document whose upload has been lost cannot be matched against, and
 		// must not stop the ones that can.
 		expect(await hashStoredUpload(name)).toBeNull();
+	});
+});
+
+describe('saveUploadAndHash', () => {
+	it('saves the file and fingerprints the same bytes it saved', async () => {
+		const file = new File(['%PDF-1.4 payslip'], 'payslip.pdf', { type: 'application/pdf' });
+		const { storedName, contentHash } = await saveUploadAndHash(file);
+		expect(await openUpload(storedName)).not.toBeNull();
+		expect(contentHash).toBe(hashBytes(new TextEncoder().encode('%PDF-1.4 payslip')));
+	});
+
+	it('propagates a broken read instead of saving anything, so a caller’s try/catch sees it', async () => {
+		const file = new File(['x'], 'broken.pdf', { type: 'application/pdf' });
+		file.arrayBuffer = () => Promise.reject(new Error('Corrupt upload.'));
+		await expect(saveUploadAndHash(file)).rejects.toThrow('Corrupt upload.');
 	});
 });

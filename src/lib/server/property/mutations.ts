@@ -59,11 +59,7 @@ export async function createPropertyBill(
 					type: 'invoice',
 					expiresOn: null,
 					expiryVerb: 'expires',
-					personIds: [],
-					propertyIds: [input.propertyId],
-					accountIds: [],
-					transactionIds: [],
-					subjectIds: [],
+					targetIds: [input.propertyId],
 					tagNames: ['bill']
 				},
 				tx
