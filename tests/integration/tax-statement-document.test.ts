@@ -12,11 +12,11 @@ import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { detachDocument } from '$lib/server/documents/targets';
 import { recordSalary } from '$lib/server/salary';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	attachDocumentsToStatement,
-	detachDocument,
 	loadStatements,
 	saveStatement,
 	statementDocumentName
@@ -46,7 +46,10 @@ const base = {
 	note: null,
 	lines: [],
 	attachments: [],
-	linkDocumentIds: []
+	linkDocumentIds: [],
+	// An admin saves these fixtures: linking now goes through the registry,
+	// which applies the read rule to the document being named.
+	actor: { id: rowId('person-a'), role: 'admin' as const }
 };
 
 const upload = {
@@ -273,7 +276,7 @@ describe('detaching', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 		const [doc] = await testDb.select().from(schema.document);
 
-		expect(await detachDocument(statement.id, doc.id, testDb)).toEqual({ ok: true });
+		expect(await detachDocument(statement.id, doc.id, base.actor, testDb)).toEqual({ ok: true });
 
 		expect(await testDb.select().from(schema.document)).toHaveLength(1);
 		expect(await attachedTo(statement.id)).toEqual([]);
@@ -284,7 +287,7 @@ describe('detaching', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 		const [doc] = await testDb.select().from(schema.document);
 
-		await detachDocument(statement.id, doc.id, testDb);
+		await detachDocument(statement.id, doc.id, base.actor, testDb);
 
 		expect(
 			await testDb
@@ -298,7 +301,10 @@ describe('detaching', () => {
 		await saveStatement({ ...base, attachments: [upload] }, testDb);
 		const [statement] = await testDb.select().from(schema.taxStatement);
 
-		expect(await detachDocument(statement.id, PERSON, testDb)).toEqual({ ok: false });
+		// A person id is not a document, so the registry answers the way it
+		// answers any document that is not there.
+		const outcome = await detachDocument(statement.id, PERSON, base.actor, testDb);
+		expect(outcome.ok).toBe(false);
 	});
 });
 

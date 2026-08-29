@@ -8,11 +8,11 @@ import { document, person, salaryEntry, taxStatement } from '$lib/server/db/sche
 import {
 	attachDocumentsToStatement,
 	deleteStatement,
-	detachDocument,
 	loadStatements,
 	saveStatement,
 	type StatementAttachment
 } from '$lib/server/tax';
+import { detachDocument } from '$lib/server/documents/targets';
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
@@ -246,7 +246,7 @@ async function discardUploads(attachments: StatementAttachment[]): Promise<void>
 }
 
 export const actions: Actions = {
-	save: async ({ request }) => {
+	save: async ({ request, locals }) => {
 		const form = await request.formData();
 		// No fixed fallback: an empty field means "the household's own currency",
 		// which is configured, not a constant this file gets to decide.
@@ -304,7 +304,9 @@ export const actions: Actions = {
 				// Optional: a document already on the shelf is linked, not re-filed.
 				linkDocumentIds: [asOptionalRowId(form.get('documentId'))].filter((id): id is string =>
 					Boolean(id)
-				)
+				),
+				// Who is linking, for the read rule the registry applies to it.
+				actor: locals.person ?? null
 			});
 		} catch (err) {
 			await discardUploads(attachments);
@@ -371,13 +373,19 @@ export const actions: Actions = {
 	 * `DocumentsCard`'s own detach form posts `targetId`, not `id` — the field
 	 * name every other screen's card already uses.
 	 */
-	detach: async ({ request }) => {
+	detach: async ({ request, locals }) => {
 		const form = await request.formData();
+		// The registry's own detach, the one every other card uses. Tax kept a
+		// local copy that checked neither who was asking nor what the target
+		// was, so a member holding a restricted document's id could unfile paper
+		// they are not allowed to know exists — and two functions of one name
+		// enforced two different things.
 		const outcome = await detachDocument(
 			asRowId(form.get('targetId')),
-			asRowId(form.get('documentId'))
+			asRowId(form.get('documentId')),
+			locals.person ?? null
 		);
-		if (!outcome.ok) return fail(404, { message: 'That document is no longer attached.' });
+		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},
 

@@ -3,7 +3,7 @@
 // in the pure module; nothing here computes what is owed.
 
 import { uuidv7 } from 'uuidv7';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	document,
@@ -13,7 +13,7 @@ import {
 	taxStatementLine
 } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
-import { documentsAbout } from '$lib/server/documents/targets';
+import { attachDocument, documentsAbout } from '$lib/server/documents/targets';
 import type { Actor } from '$lib/server/documents/visibility';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
@@ -63,9 +63,28 @@ interface StatementInput {
 	attachments: StatementAttachment[];
 	/** Documents already on the shelf, to link without filing anything new. */
 	linkDocumentIds: string[];
+	/**
+	 * Who is saving, for `linkDocumentIds`.
+	 *
+	 * Required rather than optional: a link is a write against a document, the
+	 * registry checks whether this person may know that document exists, and a
+	 * caller that forgot to say who is asking should not silently be given the
+	 * admin's answer. `null` is a member, the same reading every other read path
+	 * gives it.
+	 */
+	actor: Actor | null;
 }
 
 type TaxResult = { ok: true } | { ok: false; status: number; message: string };
+
+/**
+ * Thrown to roll a statement back when the paper it named cannot be linked.
+ *
+ * A transaction is undone by throwing and nothing else, and the refusal itself
+ * is an answer rather than an error — so the reason travels in a variable and
+ * this only carries the rollback.
+ */
+class StatementRefused extends Error {}
 
 /**
  * Every statement, with the paper this reader is allowed to know about.
@@ -171,24 +190,6 @@ export async function attachDocumentsToStatement(
 }
 
 /**
- * Unlink one document from one statement.
- *
- * The document stays on the Finance shelf, still filed against the person. Deleting
- * filed paperwork is the documents screen's job, and it asks twice first.
- */
-export async function detachDocument(
-	statementId: string,
-	documentId: string,
-	handle: Db = db
-): Promise<{ ok: boolean }> {
-	const removed = await handle
-		.delete(documentLink)
-		.where(and(eq(documentLink.targetId, statementId), eq(documentLink.documentId, documentId)))
-		.returning({ documentId: documentLink.documentId });
-	return { ok: removed.length > 0 };
-}
-
-/**
  * One statement per person per country per year: an existing one is updated in
  * place and its lines replaced wholesale — the same contract tags use.
  */
@@ -215,60 +216,80 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 	};
 
 	let filedDocumentIds: string[] = [];
-	await handle.transaction(async (tx) => {
-		// The statement goes in FIRST, which reverses what this did before
-		// v0.4.3. A document is no longer pointed at by a column on the statement
-		// — it is linked to the statement's `entity` row, and that row does not
-		// exist until the statement is inserted. Same transaction either way, so
-		// a statement that fails to save still cannot leave its paperwork filed
-		// on the shelf on its own.
-		//
-		// The unique key resolves concurrent saves of the same statement and
-		// RETURNING gives us the winning row id.
-		const saved = await tx
-			.insert(taxStatement)
-			.values({ id: uuidv7(), ...values })
-			.onConflictDoUpdate({
-				target: [taxStatement.personId, taxStatement.year, taxStatement.country],
-				set: values
-			})
-			.returning({ id: taxStatement.id });
-		const id = saved[0].id;
+	// A refusal from inside the transaction, carried out past the rollback.
+	let refusal: TaxResult | null = null;
+	try {
+		await handle.transaction(async (tx) => {
+			// The statement goes in FIRST, which reverses what this did before
+			// v0.4.3. A document is no longer pointed at by a column on the statement
+			// — it is linked to the statement's `entity` row, and that row does not
+			// exist until the statement is inserted. Same transaction either way, so
+			// a statement that fails to save still cannot leave its paperwork filed
+			// on the shelf on its own.
+			//
+			// The unique key resolves concurrent saves of the same statement and
+			// RETURNING gives us the winning row id.
+			const saved = await tx
+				.insert(taxStatement)
+				.values({ id: uuidv7(), ...values })
+				.onConflictDoUpdate({
+					target: [taxStatement.personId, taxStatement.year, taxStatement.country],
+					set: values
+				})
+				.returning({ id: taxStatement.id });
+			const id = saved[0].id;
 
-		filedDocumentIds = await attachDocumentsToStatement(
-			id,
-			input.personId,
-			input.year,
-			country,
-			input.attachments,
-			tx
-		);
-
-		// A document already on the shelf is linked, never re-filed. Filing a
-		// second copy of paper the household already has is how a shelf fills
-		// with duplicates nobody can tell apart.
-		if (input.linkDocumentIds.length > 0) {
-			await tx
-				.insert(documentLink)
-				.values(input.linkDocumentIds.map((documentId) => ({ documentId, targetId: id })))
-				.onConflictDoNothing();
-		}
-
-		// Replacing the lines in this same transaction means a failed insert can
-		// never leave an empty statement.
-		await tx.delete(taxStatementLine).where(eq(taxStatementLine.statementId, id));
-		if (input.lines.length > 0) {
-			await tx.insert(taxStatementLine).values(
-				input.lines.map((line, sort) => ({
-					id: uuidv7(),
-					statementId: id,
-					label: line.label,
-					amountMinor: line.amountMinor,
-					sort
-				}))
+			filedDocumentIds = await attachDocumentsToStatement(
+				id,
+				input.personId,
+				input.year,
+				country,
+				input.attachments,
+				tx
 			);
-		}
-	});
+
+			// A document already on the shelf is linked, never re-filed. Filing a
+			// second copy of paper the household already has is how a shelf fills
+			// with duplicates nobody can tell apart.
+			//
+			// Through the registry's `attachDocument` rather than an insert of its
+			// own: that is where "is this a record paper can be filed against" and
+			// "may this person know this document exists" are answered, and a second
+			// path into `document_link` is a second set of rules to keep in step.
+			// It is idempotent, so linking the same document twice is the same state.
+			for (const documentId of input.linkDocumentIds) {
+				const linked = await attachDocument(id, documentId, input.actor, tx);
+				if (!linked.ok) {
+					// Rolled back rather than saved without the paper that was asked
+					// for: the statement and its attachment are one act, the same way
+					// an upload is. The refusal is carried out of the transaction by
+					// hand because throwing is the only way to roll one back.
+					refusal = linked;
+					throw new StatementRefused();
+				}
+			}
+
+			// Replacing the lines in this same transaction means a failed insert can
+			// never leave an empty statement.
+			await tx.delete(taxStatementLine).where(eq(taxStatementLine.statementId, id));
+			if (input.lines.length > 0) {
+				await tx.insert(taxStatementLine).values(
+					input.lines.map((line, sort) => ({
+						id: uuidv7(),
+						statementId: id,
+						label: line.label,
+						amountMinor: line.amountMinor,
+						sort
+					}))
+				);
+			}
+		});
+	} catch (err) {
+		// Only the refusal above is turned into an answer; anything else is a real
+		// failure and belongs to the caller.
+		if (refusal && err instanceof StatementRefused) return refusal;
+		throw err;
+	}
 	// After the commit, never inside it: a queued job pointing at a document
 	// the transaction went on to roll back is work with nothing to read.
 	for (const documentId of filedDocumentIds) await enqueueExtraction(documentId, handle);

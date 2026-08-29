@@ -17,7 +17,7 @@ import { upsertTag } from '$lib/server/tags';
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { documentTargetSpec, loadPickableTargets } from '$lib/server/documents/targets';
 import { listShelves, shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
-import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
+import { assertVisibleDocument, visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -69,6 +69,11 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
+		// The load above lists only what this reviewer may see; this asks the
+		// same question of the id that actually came back, because a posted id
+		// has been through no list.
+		const readable = await assertVisibleDocument(id, locals.person ?? null);
+		if (!readable.ok) return fail(readable.status, { message: readable.message });
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		let shelfId: string;

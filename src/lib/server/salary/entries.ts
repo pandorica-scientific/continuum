@@ -389,6 +389,15 @@ const monthOf = (periodOn: string | null) => (periodOn ? periodOn.slice(0, 7) : 
  * household may rename, move or delete, and a renamed shelf must not unhook the
  * salary tracker. The same PDF filed for two people is two statements, and a
  * tax attachment is not a payslip.
+ *
+ * Deliberately blind to `sensitivity`, and the read rule must NOT be added
+ * here. A restricted slip a member cannot see is still a slip whose bytes are
+ * already on the shelf: hiding it from this match would make their upload file
+ * a second document and a second salary entry for the same month, and the
+ * month would report double pay — which is the failure content matching exists
+ * to prevent. Who may upload for whom is a question about the actor, not about
+ * the bytes, and it is answered where the actor is known: the `addPayslip` and
+ * `addPayslips` actions refuse anyone but the slip's own person or an admin.
  */
 export async function payslipMatchingContent(
 	personId: string,

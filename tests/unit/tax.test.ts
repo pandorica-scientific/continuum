@@ -177,7 +177,8 @@ describe('tax statement currency validation', () => {
 				note: null,
 				lines: [],
 				attachments: [],
-				linkDocumentIds: []
+				linkDocumentIds: [],
+				actor: null
 			})
 		).toEqual({ ok: false, status: 400, message: 'Use a three-letter currency code.' });
 	});

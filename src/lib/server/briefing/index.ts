@@ -80,6 +80,24 @@ const unreviewedImports: Source = async () => {
 	];
 };
 
+/**
+ * How far ahead each source looks, named rather than typed into its own loop.
+ *
+ * D7's suppression has to ask the same question the source asks — "would this
+ * record's own reminder actually be raised?" — and two spellings of one horizon
+ * are two numbers that will drift. The lease window being narrower than the
+ * document one is exactly the case that made the suppression lose a deadline.
+ */
+const LEASE_HORIZON_DAYS = 120;
+const FIXATION_HORIZON_MONTHS = 30;
+const DOCUMENT_HORIZON_DAYS = 210;
+/** The average month `fixationHorizon` counts in, so its horizon can be stated in days. */
+const DAYS_PER_MONTH = 30.44;
+
+/** The last date a source looking `days` ahead still reaches. */
+const remindsThrough = (days: number) =>
+	new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+
 const leaseExpiry: Source = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 	const [tenancies, properties] = await Promise.all([
@@ -90,7 +108,7 @@ const leaseExpiry: Source = async () => {
 	for (const t of tenancies) {
 		if (!t.endsOn || t.endsOn < today) continue;
 		const days = Math.ceil((new Date(t.endsOn).getTime() - Date.now()) / 86400000);
-		if (days > 120) continue;
+		if (days > LEASE_HORIZON_DAYS) continue;
 		const propertyName = properties.find((p) => p.id === t.propertyId)?.name ?? 'the flat';
 		const noticeDue = t.renewalNoticeOn && t.renewalNoticeOn >= today ? t.renewalNoticeOn : null;
 		items.push({
@@ -123,9 +141,9 @@ const fixationHorizon: Source = async () => {
 		);
 		if (!current?.endsOn) continue;
 		const months = Math.round(
-			(new Date(current.endsOn).getTime() - Date.now()) / (30.44 * 86400000)
+			(new Date(current.endsOn).getTime() - Date.now()) / (DAYS_PER_MONTH * 86400000)
 		);
-		if (months > 30) continue;
+		if (months > FIXATION_HORIZON_MONTHS) continue;
 		const end = new Date(current.endsOn);
 		const pill = `${end.toLocaleString('en', { month: 'short' })} ${end.getFullYear()}`;
 		items.push({
@@ -190,6 +208,22 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 		if (name === undefined) continue;
 		about.set(link.documentId, [...(about.get(link.documentId) ?? []), name]);
 	}
+	// What the two sources above will and will not have raised by the time this
+	// one runs. `emits: true` for both — a briefing has no rule toggles; the
+	// conditions that stop `fixationHorizon` raising anything (a paid-off loan,
+	// a loan not on a fixed period) are answered by `loadRecordDates`, which
+	// leaves such a loan out of the map entirely.
+	const ownersOnTheOverview = {
+		tenancy: { emits: true, remindsThrough: remindsThrough(LEASE_HORIZON_DAYS) },
+		loan: {
+			emits: true,
+			// Stated in days like the other, from the months its own source counts
+			// in. The boundary is approximate at the far end and never reached:
+			// this source stops at 210 days, well inside it.
+			remindsThrough: remindsThrough(Math.round(FIXATION_HORIZON_MONTHS * DAYS_PER_MONTH))
+		}
+	};
+
 	const items: BriefingItem[] = [];
 	for (const d of docs) {
 		if (!d.expiresOn || d.expiresOn < today) continue;
@@ -198,10 +232,15 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 		// loan's current fixation) is the SAME deadline `leaseExpiry` or
 		// `fixationHorizon` already surfaced above — reminding again here would
 		// be the same date twice on one Overview.
-		if (ownedByLinkedRecord(d, links, recordDates)) continue;
+		//
+		// Only where those two DID surface it, which is what the horizons say.
+		// This source looks 210 days ahead and the lease source 120, so a lease
+		// five months out has no item above to be a duplicate of and the paper is
+		// the household's only notice of it.
+		if (ownedByLinkedRecord(d, links, recordDates, ownersOnTheOverview)) continue;
 		const days = Math.ceil((new Date(d.expiresOn).getTime() - Date.now()) / 86400000);
-		if (days > 210) continue;
-		const months = Math.round(days / 30.44);
+		if (days > DOCUMENT_HORIZON_DAYS) continue;
+		const months = Math.round(days / DAYS_PER_MONTH);
 		items.push({
 			emoji: '🗂️',
 			kind: 'Document',

@@ -37,6 +37,7 @@
 ### ⬆️ Upgrading
 
 - 🆕 **Fresh install and demo only** — the documents baseline was rewritten rather than migrated, so this release is for a new instance; 0.7.0 shipped without an upgrade script and this one does not add one either
+- 🛑 **An instance that was upgraded by pulling the image refuses to serve** — the migrator has nothing new to apply to a database built before this release, so the app now checks the schema at boot and stops with the reason rather than starting and failing hours later at the first statement import
 - 🛠️ **An instance migrated by hand runs this once, after a backup** — it drops the three columns that left the schema (two on `document`, one on `tax_statement`), keys each import to the statement it read, promotes the two shelves, and leaves the list of allowed document types and the extraction queue to be re-applied from the baseline
 
 ```sql

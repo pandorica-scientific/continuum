@@ -44,6 +44,7 @@ import {
 } from '$lib/server/db/schema';
 import {
 	archiveScopePredicate,
+	assertVisibleDocument,
 	visibleDocumentPredicate,
 	NO_SUCH_DOCUMENT,
 	type Actor
@@ -420,18 +421,19 @@ export async function documentsAbout(
 	return rows.map((row) => ({ ...row, tags: tagsByDocument.get(row.id) ?? [] }));
 }
 
-/** Whether this actor may know this document exists at all. */
+/**
+ * Whether this actor may know this document exists at all.
+ *
+ * Through `assertVisibleDocument` rather than its own query: the same question
+ * is asked by the Documents screen's write actions and by the inbox review,
+ * and one answer means one place to change it.
+ */
 async function isVisible(
 	documentId: string,
 	actor: Actor | null,
 	handle: Queryable
 ): Promise<boolean> {
-	const [row] = await handle
-		.select({ id: document.id })
-		.from(document)
-		.where(and(eq(document.id, documentId), visibleDocumentPredicate(actor)))
-		.limit(1);
-	return row !== undefined;
+	return (await assertVisibleDocument(documentId, actor, handle)).ok;
 }
 
 /**

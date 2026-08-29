@@ -156,16 +156,33 @@ against the address your browser actually used.
 
 ## Upgrading
 
-Take a backup, then pull and restart. The volumes carry the data:
+**0.7.1 is a fresh-install release.** Pulling the image does **not** migrate a
+database you already have. The schema for this release was rewritten in one
+file rather than added to as a new step, so the migrator finds nothing new to
+apply and leaves an existing 0.6.2 or 0.7.0 database exactly as it was. The app
+notices at boot and refuses to serve rather than starting against a schema it
+cannot work with — you would otherwise find out at the first statement import.
+
+So there are two supported ways onto 0.7.1: start it on an empty database (or
+with `DEMO=1`, which fills a new instance with the fictional household), or
+take a backup and run the SQL in the ⬆️ Upgrading block of
+[CHANGELOG.md](../CHANGELOG.md) against your database by hand first. That
+script brings the schema up to what this release expects — it removes the three
+columns that left, gives each import the id of the statement it read, and
+promotes the two shelves the code files into — and only then is a pull and
+restart the right move.
+
+For a release that ships an ordinary migration, taking a backup and then
+pulling and restarting is all there is to it; the volumes carry the data and
+the migrations run before the app accepts requests:
 
 ```sh
 docker compose pull
 docker compose up -d
 ```
 
-Database migrations run before the app accepts requests. Release-specific data
-repairs and any manual considerations are listed at the top of
-[CHANGELOG.md](../CHANGELOG.md).
+Release-specific data repairs and any manual considerations are listed at the
+top of [CHANGELOG.md](../CHANGELOG.md).
 
 ## Troubleshooting
 

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENTITY_KINDS, ENUM_COLUMNS } from '$lib/enums';
+import { assertSchemaIsCurrent } from '$lib/server/db/migrate';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
 
 /**
@@ -253,5 +254,38 @@ describe('the baseline migration', () => {
 			insert into subject (id, name, active_from, active_to)
 			values (gen_random_uuid(), 'Backwards', '2026-06-01', '2026-01-01')`
 		).rejects.toThrow();
+	});
+});
+
+/**
+ * The boot guard, on a database this release actually built.
+ *
+ * `drizzle/0000_baseline.sql` was rewritten in place while `meta/_journal.json`
+ * kept its old `when`, so drizzle's migrator applies NOTHING to a database that
+ * already recorded the old baseline as run. An instance upgraded by pulling the
+ * image therefore boots against a 0.6.2/0.7.0 schema and 500s at the first
+ * statement import, hours later, with nothing at boot having said so.
+ *
+ * `import_file.document_id` is the cheapest true probe: it is the column this
+ * release adds, it is the one every statement import writes, and asking
+ * `information_schema` for it costs one round trip and touches no data.
+ */
+describe('the boot guard', () => {
+	it('is silent on a database built from this baseline', async () => {
+		await expect(assertSchemaIsCurrent(harness.db)).resolves.toBeUndefined();
+	});
+
+	it('refuses to serve one the release notes were never run against', async () => {
+		// Exactly what an in-place upgrade leaves behind: the schema this release
+		// needs, minus the column the migrator never added.
+		await harness.sql`alter table import_file drop column document_id`;
+		try {
+			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/release notes/i);
+		} finally {
+			await harness.sql`alter table import_file add column document_id uuid
+				references document(id) on delete restrict`;
+			await harness.sql`create index if not exists import_file_document_idx
+				on import_file(document_id)`;
+		}
 	});
 });

@@ -15,10 +15,20 @@
  * is skipped; the record's stays. A document dated differently — a lease
  * renewed on different terms, a letter filed before the actual re-fix — is
  * not a duplicate of anything and still reminds on its own.
+ *
+ * A duplicate needs an original. Every surface reads the two tracks through a
+ * different window — the Overview looks 120 days ahead for a lease and 210 for
+ * a document, the calendar lets a household switch the property rule off — so
+ * "the record owns it" is only true where the record's own reminder is
+ * actually emitted. Suppressing the document's copy of a reminder nobody is
+ * going to see deletes the deadline instead of de-duplicating it, which is why
+ * the caller has to say what its own side does (`OwnerReminder`) rather than
+ * this module assuming both sides watch the same horizon.
  */
 
+import { and, eq, gt } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
-import { loanFixationPeriod, tenancy } from '$lib/server/db/schema';
+import { loan, loanFixationPeriod, tenancy } from '$lib/server/db/schema';
 
 /** The record-side dates a document's own date is compared against. */
 interface RecordDates {
@@ -36,8 +46,38 @@ export interface DocumentLinkRow {
 }
 
 /**
+ * What the calling surface does with a record's OWN deadline — the thing the
+ * document's reminder would be a duplicate of.
+ *
+ * Both fields exist because both are ways for the original to be missing. The
+ * calendar's is a switch (a household that turned property dates off emits no
+ * lease event at all); the Overview's is a horizon (its lease source stops at
+ * 120 days while its document source runs to 210, so a lease five months out
+ * is watched by the document track alone).
+ */
+export interface OwnerReminder {
+	/** Whether this surface emits that record's own reminder at all. */
+	emits: boolean;
+	/**
+	 * The last date it still reaches, or null when it has no horizon.
+	 *
+	 * A date rather than a number of days, so this module does no clock reading
+	 * and stays a pure function of its arguments. The caller holds the horizon
+	 * in days — it is the same number its own source already stops at — and
+	 * turns it into a date once per request.
+	 */
+	remindsThrough: string | null;
+}
+
+/** One `OwnerReminder` per kind of record that can own a document's date. */
+export interface OwnerReminders {
+	tenancy: OwnerReminder;
+	loan: OwnerReminder;
+}
+
+/**
  * Whether `doc`'s date is a duplicate of a date its linked tenancy or loan
- * already owns.
+ * already owns AND is actually reminding about.
  *
  * Pure and synchronous on purpose: both the briefing and calendar surfaces
  * already load `document_link` rows and iterate documents in JavaScript, and
@@ -48,21 +88,29 @@ export interface DocumentLinkRow {
 export function ownedByLinkedRecord(
 	doc: { id: string; expiresOn: string | null },
 	links: readonly DocumentLinkRow[],
-	dates: RecordDates
+	dates: RecordDates,
+	owners: OwnerReminders
 ): boolean {
 	if (!doc.expiresOn) return false;
 	for (const link of links) {
 		if (link.documentId !== doc.id) continue;
+		if (link.kind !== 'tenancy' && link.kind !== 'loan') continue;
 		const recordEndsOn =
 			link.kind === 'tenancy'
 				? dates.tenancyEndsOn.get(link.targetId)
-				: link.kind === 'loan'
-					? dates.loanFixationEndsOn.get(link.targetId)
-					: undefined;
+				: dates.loanFixationEndsOn.get(link.targetId);
 		// A record with no date of its own (null) never counts as a match: a
 		// document dated for a tenancy that has not yet been given an end date
 		// is not a duplicate of "no date" — it is the only reminder there is.
-		if (recordEndsOn && recordEndsOn === doc.expiresOn) return true;
+		if (!recordEndsOn || recordEndsOn !== doc.expiresOn) continue;
+
+		// Same date, same record — but only a duplicate if the record's own
+		// reminder is one this surface will actually show. Out of range or
+		// switched off, the document's is the only notice the household gets.
+		const owner = owners[link.kind];
+		if (!owner.emits) continue;
+		if (owner.remindsThrough !== null && recordEndsOn > owner.remindsThrough) continue;
+		return true;
 	}
 	return false;
 }
@@ -77,6 +125,12 @@ export async function loadRecordDates(handle: Queryable = db): Promise<RecordDat
 
 	const [tenancies, periods] = await Promise.all([
 		handle.select({ id: tenancy.id, endsOn: tenancy.endsOn }).from(tenancy),
+		// Joined to the loan, and narrowed by the two conditions the briefing's
+		// fixation source applies before it raises anything: a paid-off loan and
+		// one that is not on a fixed period raise no fixation reminder, so their
+		// periods must not be here either. A date in this map suppresses a
+		// document's reminder, and suppressing one on behalf of a reminder that
+		// is never emitted loses the deadline altogether.
 		handle
 			.select({
 				loanId: loanFixationPeriod.loanId,
@@ -84,6 +138,8 @@ export async function loadRecordDates(handle: Queryable = db): Promise<RecordDat
 				endsOn: loanFixationPeriod.endsOn
 			})
 			.from(loanFixationPeriod)
+			.innerJoin(loan, eq(loan.id, loanFixationPeriod.loanId))
+			.where(and(eq(loan.regime, 'fixed_period'), gt(loan.owedMinor, 0n)))
 	]);
 
 	const tenancyEndsOn = new Map(tenancies.map((t) => [t.id, t.endsOn]));

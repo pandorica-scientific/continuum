@@ -12,6 +12,7 @@ import {
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { buildBriefing } from '$lib/server/briefing';
 import { generateEvents } from '$lib/server/calendar';
+import { setSetting } from '$lib/server/settings';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 /**
@@ -51,11 +52,20 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate account, document, person, property, loan cascade`;
+	await harness.sql`delete from settings where key = 'calendarRules'`;
 });
 
 /** Far enough out to sit inside every window the briefing and calendar watch. */
 const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 const different = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+/**
+ * Past the 120 days `leaseExpiry` looks, inside the 210 `documentExpiry` does.
+ *
+ * The window a record's own reminder watches is narrower than the document's,
+ * so between the two there is a band where suppressing the document's copy
+ * suppresses the only reminder there is.
+ */
+const beyondTheLeaseWindow = new Date(Date.now() + 150 * 86400000).toISOString().slice(0, 10);
 
 async function seedLeaseDocument(expiresOn: string, targetId: string): Promise<string> {
 	const id = uuidv7();
@@ -87,15 +97,16 @@ async function seedTenancy(endsOn: string): Promise<{ tenancyId: string; propert
 }
 
 async function seedLoanWithCurrentFixation(
-	currentFixationEndsOn: string
+	currentFixationEndsOn: string,
+	overrides: { regime?: 'fixed_period' | 'fixed_term' | 'floating'; owedMinor?: bigint } = {}
 ): Promise<{ loanId: string }> {
 	const loanId = uuidv7();
 	await testDb.insert(loan).values({
 		id: loanId,
 		name: 'Mortgage ČS',
-		regime: 'fixed_period',
+		regime: overrides.regime ?? 'fixed_period',
 		principalMinor: 9_900_000n,
-		owedMinor: 9_270_000n
+		owedMinor: overrides.owedMinor ?? 9_270_000n
 	});
 	// A past, already-superseded period, so the "current" one is not simply the
 	// only row in the table.
@@ -218,5 +229,57 @@ describe('a re-fixation letter dated differently from the loan’s current fixat
 			true
 		);
 		expect(events.some((e) => e.date === different && e.binding?.table === 'document')).toBe(true);
+	});
+});
+
+/**
+ * D7 suppresses a DUPLICATE. Where the owning reminder is never emitted there
+ * is nothing to duplicate, and skipping the document's copy deletes the
+ * household's only notice of the date.
+ */
+describe('a document whose owning record reminds about nothing', () => {
+	it('still reminds when the lease is further out than the tenancy source looks', async () => {
+		const { tenancyId } = await seedTenancy(beyondTheLeaseWindow);
+		await seedLeaseDocument(beyondTheLeaseWindow, tenancyId);
+
+		const { items } = await buildBriefing(null);
+		const leaseItems = items.filter((i) => i.kind === 'Tenancy' || i.kind === 'Document');
+		// `leaseExpiry` stops at 120 days, so there is no Tenancy item to be a
+		// duplicate of — the document is the reminder.
+		expect(leaseItems).toHaveLength(1);
+		expect(leaseItems[0].kind).toBe('Document');
+	});
+
+	it('still reminds when the loan is paid off, so no fixation item is raised', async () => {
+		const { loanId } = await seedLoanWithCurrentFixation(soon, { owedMinor: 0n });
+		await seedRefixLetter(soon, loanId);
+
+		const { items } = await buildBriefing(null);
+		const mortgageItems = items.filter((i) => i.kind === 'Mortgage' || i.kind === 'Document');
+		expect(mortgageItems).toHaveLength(1);
+		expect(mortgageItems[0].kind).toBe('Document');
+	});
+
+	it('still reminds when the loan is not on a fixed period at all', async () => {
+		const { loanId } = await seedLoanWithCurrentFixation(soon, { regime: 'floating' });
+		await seedRefixLetter(soon, loanId);
+
+		const { items } = await buildBriefing(null);
+		const mortgageItems = items.filter((i) => i.kind === 'Mortgage' || i.kind === 'Document');
+		expect(mortgageItems).toHaveLength(1);
+		expect(mortgageItems[0].kind).toBe('Document');
+	});
+
+	it('still puts the lease on the calendar when property dates are switched off', async () => {
+		// The household turned the rule off, so the tenancy emits nothing. The
+		// document's own event is not a second copy of anything.
+		await setSetting('calendarRules', { propertyDates: false }, testDb);
+		const { tenancyId } = await seedTenancy(soon);
+		await seedLeaseDocument(soon, tenancyId);
+
+		const events = await generateEvents('2020-01-01', '2099-01-01', testDb);
+		const onDate = events.filter((e) => e.date === soon);
+		expect(onDate).toHaveLength(1);
+		expect(onDate[0].binding?.table).toBe('document');
 	});
 });

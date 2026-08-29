@@ -173,6 +173,17 @@ export async function generateEvents(
 	const events: LedgerEvent[] = [];
 	const inRange = (d: string) => d >= startIso && d <= endIso;
 
+	// Which of the two record-side events this generation will actually produce,
+	// for D7 below. No horizon on either: a record's event and its document's
+	// carry the same date, so the window this run was asked for either holds
+	// both or neither, and `inRange` has already answered that. The loan's own
+	// remaining condition — a paid-off loan emits no fixation event — is
+	// answered by `loadRecordDates`, which leaves such a loan out of the map.
+	const ownersOnTheCalendar = {
+		tenancy: { emits: rules.propertyDates, remindsThrough: null },
+		loan: { emits: rules.expiry, remindsThrough: null }
+	};
+
 	for (const [y, m] of monthsIn(startIso, endIso)) {
 		if (rules.importReminder) {
 			const day = firstWorkingDay(y, m);
@@ -269,7 +280,17 @@ export async function generateEvents(
 			// as its loan's current fixation `endsOn`, is the same date the
 			// `propertyDates` and this same `expiry` rule already emit — skip the
 			// document's copy so it does not sync as a second event for one date.
-			if (d.expiresOn && inRange(d.expiresOn) && !ownedByLinkedRecord(d, links, recordDates)) {
+			//
+			// Only where the rule behind that other event is actually on. A
+			// household that switched property dates off emits no lease event, so
+			// suppressing the lease's paper too would take the date out of the
+			// calendar altogether — a rule they turned off would be silently
+			// removing events from a rule they left on.
+			if (
+				d.expiresOn &&
+				inRange(d.expiresOn) &&
+				!ownedByLinkedRecord(d, links, recordDates, ownersOnTheCalendar)
+			) {
 				const binding = { table: 'document', rowId: d.id, field: 'expiresOn' } as const;
 				events.push({
 					date: d.expiresOn,

@@ -60,7 +60,13 @@ import {
 import { linkDiff } from '$lib/document-links';
 import { deleteTag } from '$lib/server/tags';
 import { loadTagsScreen } from '$lib/server/tags/screen';
-import { archiveScopePredicate, visibleDocumentPredicate } from '$lib/server/documents/visibility';
+import {
+	archiveScopePredicate,
+	assertVisibleDocument,
+	visibleDocumentIds,
+	visibleDocumentPredicate,
+	NO_SUCH_DOCUMENT
+} from '$lib/server/documents/visibility';
 import { searchDocuments } from '$lib/server/documents/search';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { upsertTag } from '$lib/server/tags';
@@ -580,6 +586,11 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
+		// The read rule is a rule about the document, not about the list it was
+		// read from. An id posted straight at this action has been through no
+		// list at all, so the question is asked here before anything is written.
+		const readable = await assertVisibleDocument(id, locals.person ?? null);
+		if (!readable.ok) return fail(readable.status, { message: readable.message });
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		let shelfId: string | undefined;
@@ -682,7 +693,7 @@ export const actions: Actions = {
 	},
 
 	/** Put different bytes behind the same record. */
-	replaceFile: async ({ request }) => {
+	replaceFile: async ({ request, locals }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		const file = form.get('file');
@@ -690,6 +701,11 @@ export const actions: Actions = {
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { message: 'Choose a file to put in its place.' });
 		}
+		// Before the upload is saved, not after: this is the sharpest of the
+		// actions — different bytes behind a record somebody cannot see — and a
+		// refusal that had already written a file would leave litter behind it.
+		const readable = await assertVisibleDocument(id, locals.person ?? null);
+		if (!readable.ok) return fail(readable.status, { message: readable.message });
 		// `replaceDocumentFile` hashes the bytes itself (it needs them for the
 		// document's contentHash), so this can't hand off to `saveUploadAndHash`
 		// the way the other actions do — but the read still belongs inside the
@@ -722,10 +738,14 @@ export const actions: Actions = {
 	},
 
 	/** The next slice of a file that stopped at the automatic limit. */
-	continueExtraction: async ({ request }) => {
+	continueExtraction: async ({ request, locals }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
+		// Reading more of a document is a read, and the queue would put its text
+		// where search can find it.
+		const readable = await assertVisibleDocument(id, locals.person ?? null);
+		if (!readable.ok) return fail(readable.status, { message: readable.message });
 		await enqueueExtraction(id);
 		void runCpuQueue().catch(() => undefined);
 		return { ok: true };
@@ -750,8 +770,13 @@ export const actions: Actions = {
 	/** Bulk edits from the selection bar: additive for links and tags. */
 	bulkUpdate: async ({ request, locals }) => {
 		const form = await request.formData();
-		const ids = form.getAll('ids').map(String).filter(Boolean);
-		if (ids.length === 0) return fail(400, { message: 'Nothing was selected.' });
+		const selected = form.getAll('ids').map(String).filter(Boolean);
+		if (selected.length === 0) return fail(400, { message: 'Nothing was selected.' });
+		// Narrowed to what this person may act on, and the rest is simply not
+		// there. Refusing the whole bar over one id would say that id is special,
+		// which is the fact the read rule exists to keep quiet.
+		const ids = await visibleDocumentIds(selected, locals.person ?? null);
+		if (ids.length === 0) return fail(404, { message: NO_SUCH_DOCUMENT });
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		const type = String(form.get('type') ?? '');

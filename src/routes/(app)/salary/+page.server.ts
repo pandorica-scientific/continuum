@@ -137,10 +137,35 @@ function optionalAmount(
 	}
 }
 
+/** The one sentence a refused payslip upload answers with. */
+const NOT_YOUR_PAYSLIP = 'You can only file your own payslips.';
+
+/**
+ * Whose payslips this person may file: their own, or anybody's if an admin.
+ *
+ * An upload is not only an insert. `payslipMatchingContent` recognises a
+ * re-uploaded slip by its bytes and the action then RESTATES what it matched —
+ * the document's name, the month it is filed under, and the salary entry
+ * hanging off it. It matches by content hash alone, restricted slips included,
+ * so without this gate a member could rename paper they are not allowed to
+ * know exists and move somebody else's pay into another month.
+ *
+ * The check lives here and not in the match on purpose. Narrowing the match by
+ * the read rule would make a member's upload MISS the slip it is a copy of: a
+ * second document, a second salary entry, and a month reporting double pay —
+ * the exact failure content matching was added to prevent.
+ */
+function mayFilePayslipsFor(actor: App.Locals['person'], personId: string): boolean {
+	return actor?.role === 'admin' || (!!actor && actor.id === personId);
+}
+
 export const actions: Actions = {
-	addPayslip: async ({ request }) => {
+	addPayslip: async ({ request, locals }) => {
 		const form = await request.formData();
 		const personId = asRowId(form.get('personId')).trim();
+		if (!mayFilePayslipsFor(locals.person, personId)) {
+			return fail(403, { message: NOT_YOUR_PAYSLIP });
+		}
 		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
 		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
 		// The reader's learned labels stay keyed by name; the link is by id.
@@ -378,6 +403,11 @@ export const actions: Actions = {
 	addPayslips: async ({ request, locals }) => {
 		const form = await request.formData();
 		const personId = asRowId(form.get('personId')).trim();
+		// The same gate as the single upload: this action files and restates
+		// payslips too, a dozen at a time.
+		if (!mayFilePayslipsFor(locals.person, personId)) {
+			return fail(403, { message: NOT_YOUR_PAYSLIP });
+		}
 		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
 		if (!owner) return fail(400, { message: 'Pick whose payslips these are.' });
 		const subject = owner.name;
