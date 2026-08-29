@@ -12,7 +12,7 @@ import {
 import { brokerAdapters, detectBroker, type BrokerReport } from './adapter';
 import './xtb'; // adapters register themselves on import
 
-interface BrokerIngestResult {
+export interface BrokerIngestResult {
 	broker: string;
 	operationsAdded: number;
 	operationsKnown: number;
@@ -21,12 +21,19 @@ interface BrokerIngestResult {
 	replacedHoldings: boolean;
 }
 
-/** Detect which broker's report this is and ingest it. */
-export async function ingestBrokerFile(
+/**
+ * Detect which broker's report this is and parse it, without writing
+ * anything.
+ *
+ * Split out of `ingestBrokerFile` so the document filer (decision D8, Task
+ * 21) can read the broker's own key and `report.generatedAt` before deciding
+ * what to file the upload as, without parsing the workbook a second time to
+ * get at the same report `ingestReport` is about to consume.
+ */
+export function parseBrokerReport(
 	fileName: string,
-	buffer: Uint8Array,
-	handle: Db = db
-): Promise<BrokerIngestResult> {
+	buffer: Uint8Array
+): { id: string; label: string; report: BrokerReport } {
 	const adapter = detectBroker(fileName, buffer);
 	if (!adapter) {
 		const known = brokerAdapters()
@@ -34,7 +41,17 @@ export async function ingestBrokerFile(
 			.join(', ');
 		throw new Error(`Not a recognised broker report. Supported: ${known}.`);
 	}
-	return { broker: adapter.label, ...(await ingestReport(adapter.parse(buffer), handle)) };
+	return { id: adapter.id, label: adapter.label, report: adapter.parse(buffer) };
+}
+
+/** Detect which broker's report this is and ingest it. */
+export async function ingestBrokerFile(
+	fileName: string,
+	buffer: Uint8Array,
+	handle: Db = db
+): Promise<BrokerIngestResult> {
+	const { label, report } = parseBrokerReport(fileName, buffer);
+	return { broker: label, ...(await ingestReport(report, handle)) };
 }
 
 export async function ingestReport(

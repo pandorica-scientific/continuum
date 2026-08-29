@@ -2,18 +2,20 @@
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { document, person, salaryEntry, taxStatement } from '$lib/server/db/schema';
 import {
 	attachDocumentsToStatement,
 	deleteStatement,
-	detachDocument,
 	loadStatements,
 	saveStatement,
 	type StatementAttachment
 } from '$lib/server/tax';
-import { deleteDocument } from '$lib/server/documents/mutations';
+import { detachDocument } from '$lib/server/documents/targets';
+import { removeDocument } from '$lib/server/documents/lifecycle';
+import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
+import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import {
 	attachmentKind,
 	blendedRatePct,
@@ -27,20 +29,20 @@ import { countryName, hueTokens } from '$lib/tax-hues';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { availableCurrencies } from '$lib/server/fx/currencies';
-import { removeUpload, saveUpload } from '$lib/server/system/files';
+import { removeUpload, saveUploadAndHash } from '$lib/server/system/files';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const [statements, people, salaryRows, taxDocs, base, rates, currencies, prefRows] =
 		await Promise.all([
-			loadStatements(),
+			loadStatements(locals.person ?? null),
 			db
 				.select({ id: person.id, name: person.name })
 				.from(person)
 				.orderBy(person.createdAt, person.id),
-			// Salary entries, not payslip documents. A document's `amountMinor` is
-			// the net-shaped figure this screen was reading as gross.
+			// Salary entries, not payslip documents: the document carries no figure
+			// of its own, so gross must come from the salary row.
 			db
 				.select({
 					personId: salaryEntry.personId,
@@ -49,10 +51,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					currency: salaryEntry.currency
 				})
 				.from(salaryEntry),
+			// What "link an existing document" may offer. The read rule is in the
+			// where: a member offered a restricted document would have been told it
+			// exists by the list alone, before ever picking it.
 			db
 				.select({ id: document.id, name: document.name })
 				.from(document)
-				.where(eq(document.type, 'tax_document'))
+				.where(
+					and(eq(document.type, 'tax_document'), visibleDocumentPredicate(locals.person ?? null))
+				)
 				.orderBy(document.addedOn),
 			getBaseCurrency(),
 			loadRateTable(),
@@ -127,6 +134,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		people,
 		taxDocs,
 		prefillTotals,
+		// Draws the lock on a restricted attachment, on the card each statement's
+		// paperwork renders through. Never what decides which rows it is handed.
+		isAdmin: locals.person?.role === 'admin',
 		statements: statements
 			.sort((a, b) => b.year - a.year)
 			.map((s) => {
@@ -213,12 +223,14 @@ async function takeUploads(
 	const attachments: StatementAttachment[] = [];
 	for (const file of files) {
 		try {
+			const { storedName, contentHash } = await saveUploadAndHash(file);
 			attachments.push({
-				storedName: await saveUpload(file),
+				storedName,
 				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
 				addedOn,
 				kind,
-				original: file.name
+				original: file.name,
+				contentHash
 			});
 		} catch (err) {
 			await discardUploads(attachments);
@@ -234,7 +246,7 @@ async function discardUploads(attachments: StatementAttachment[]): Promise<void>
 }
 
 export const actions: Actions = {
-	save: async ({ request }) => {
+	save: async ({ request, locals }) => {
 		const form = await request.formData();
 		// No fixed fallback: an empty field means "the household's own currency",
 		// which is configured, not a constant this file gets to decide.
@@ -265,8 +277,8 @@ export const actions: Actions = {
 		}
 
 		// A statement brings its paperwork with it: every file chosen here becomes
-		// a document on the Tax shelf, filed against the same person, and linked
-		// to the statement. Before this, attaching anything meant leaving the
+		// a document on the Finance shelf, filed against the same person, and
+		// linked to the statement. Before this, attaching anything meant leaving the
 		// screen, filing the document elsewhere, and coming back — and only one
 		// document could be attached at all, though a year's filing is several.
 		const uploaded = await takeUploads(form);
@@ -292,7 +304,9 @@ export const actions: Actions = {
 				// Optional: a document already on the shelf is linked, not re-filed.
 				linkDocumentIds: [asOptionalRowId(form.get('documentId'))].filter((id): id is string =>
 					Boolean(id)
-				)
+				),
+				// Who is linking, for the read rule the registry applies to it.
+				actor: locals.person ?? null
 			});
 		} catch (err) {
 			await discardUploads(attachments);
@@ -330,8 +344,9 @@ export const actions: Actions = {
 		const { attachments } = uploaded;
 		if (attachments.length === 0) return fail(400, { message: 'Choose a file to attach.' });
 
+		let filedDocumentIds: string[];
 		try {
-			await db.transaction((tx) =>
+			filedDocumentIds = await db.transaction((tx) =>
 				attachDocumentsToStatement(
 					statementId,
 					statement.personId,
@@ -345,17 +360,32 @@ export const actions: Actions = {
 			await discardUploads(attachments);
 			throw err;
 		}
+		// After the commit, never inside it: a queued job pointing at a document
+		// the transaction went on to roll back is work with nothing to read.
+		for (const documentId of filedDocumentIds) await enqueueExtraction(documentId);
 		return { ok: true };
 	},
 
 	/**
-	 * Unlink. The document stays on the Tax shelf, still filed against the
+	 * Unlink. The document stays on the Finance shelf, still filed against the
 	 * person — only the connection to this statement goes.
+	 *
+	 * `DocumentsCard`'s own detach form posts `targetId`, not `id` — the field
+	 * name every other screen's card already uses.
 	 */
-	detach: async ({ request }) => {
+	detach: async ({ request, locals }) => {
 		const form = await request.formData();
-		const outcome = await detachDocument(asRowId(form.get('id')), asRowId(form.get('documentId')));
-		if (!outcome.ok) return fail(404, { message: 'That document is no longer attached.' });
+		// The registry's own detach, the one every other card uses. Tax kept a
+		// local copy that checked neither who was asking nor what the target
+		// was, so a member holding a restricted document's id could unfile paper
+		// they are not allowed to know exists — and two functions of one name
+		// enforced two different things.
+		const outcome = await detachDocument(
+			asRowId(form.get('targetId')),
+			asRowId(form.get('documentId')),
+			locals.person ?? null
+		);
+		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},
 
@@ -363,12 +393,16 @@ export const actions: Actions = {
 	 * Delete the document itself, and the file behind it.
 	 *
 	 * Deliberately a different action from detach: this destroys filed
-	 * paperwork, which is why the screen arms it twice before it fires.
+	 * paperwork. Routed through `removeDocument` (Task 9) rather than a plain
+	 * row delete, because a tax attachment can be a payslip — deleting one
+	 * directly would leave `salary_entry.document_id` SET NULL underneath it,
+	 * an orphaned row still counted in a year's total. `removeDocument` forgets
+	 * the payslip's contribution first, keeping only what the bank proved.
 	 */
-	deleteAttachment: async ({ request }) => {
+	deleteAttachment: async ({ request, locals }) => {
 		const form = await request.formData();
-		const outcome = await deleteDocument(asRowId(form.get('documentId')));
-		if (!outcome.ok) return fail(404, { message: 'That document is no longer there.' });
+		const outcome = await removeDocument(asRowId(form.get('documentId')), locals.person ?? null);
+		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},
 

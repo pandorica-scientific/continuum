@@ -43,7 +43,6 @@ async function slipFor(month: string, id = DOC) {
 		storedName: `${month}.pdf`,
 		ext: 'PDF',
 		addedOn: '2026-09-01',
-		currency: 'CZK',
 		periodOn: `${month}-01`
 	});
 	await testDb.insert(documentLink).values({ documentId: id, targetId: ROBERT });

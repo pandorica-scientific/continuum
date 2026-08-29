@@ -5,4 +5,3 @@
 export * from './entries';
 export * from './history';
 export * from './reader';
-export * from './backfill';

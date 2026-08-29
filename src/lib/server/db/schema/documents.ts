@@ -5,7 +5,6 @@
 
 import { sql } from 'drizzle-orm';
 import {
-	bigint,
 	boolean,
 	date,
 	index,
@@ -21,7 +20,6 @@ import {
 // Relative, not aliased: drizzle-kit loads these files outside Vite and
 // does not resolve SvelteKit's $lib.
 import type { EnumValue } from '../../../enums';
-import { currency } from './money';
 
 // ---- Documents ----
 
@@ -34,10 +32,12 @@ import { currency } from './money';
  * document must always be somewhere. Volume is answered by filtering and
  * grouping; there is no parent column and there will not be one.
  *
- * `system` marks the two rows the application refers to by key — `inbox`, where
- * capture lands, and `statements`, where an accepted import files itself. Their
- * label and emoji are the household's ("K vyřízení" is a legal name for the
- * inbox); their key and their existence are not.
+ * `system` marks the four rows the application refers to by key: `inbox`,
+ * where capture lands; `statements`, where an accepted import files itself;
+ * `finance`, where the salary tracker files payslips and tax attachments; and
+ * `property`, where bills file themselves. Their label and emoji are the
+ * household's ("K vyřízení" is a legal name for the inbox); their key and
+ * their existence are not.
  */
 export const shelf = pgTable('shelf', {
 	id: uuid('id').primaryKey(),
@@ -83,10 +83,10 @@ export const document = pgTable(
 			.$type<EnumValue<'document.expiry_verb'>>()
 			.notNull()
 			.default('expires'),
-		// money documents (payslips, bills) can carry the amount they are about
-		// and the month they cover — the salary tracker derives from these
-		amountMinor: bigint('amount_minor', { mode: 'bigint' }),
-		currency: text('currency').references(() => currency.code),
+		// The month a document is ABOUT, not the day it was filed. A payslip's own
+		// figures and currency live on `salary_entry`; what the document adds is
+		// which month the paper covers, which is how a re-uploaded slip finds its
+		// own row again — see `payslipMatchingContent`.
 		periodOn: date('period_on'),
 		// SHA-256 of the stored file's bytes, so the same file uploaded twice is
 		// recognised as the same file. A month may hold more than one payslip
@@ -97,7 +97,6 @@ export const document = pgTable(
 		contentHash: text('content_hash')
 	},
 	(table) => [
-		index('document_currency_idx').on(table.currency),
 		index('document_shelf_id_idx').on(table.shelfId),
 		index('document_type_idx').on(table.type),
 		index('document_content_hash_idx').on(table.contentHash)

@@ -2,8 +2,8 @@
 
 Every screenshot here is generated from the demo household by
 `scripts/take-screenshots.mjs` against a running `DEMO=1` instance, in both
-themes, so none of them can drift from the app. GitHub serves whichever theme
-you are reading in.
+themes, rather than drawn by hand — so what you see is the app, as of the last
+time the script was run. GitHub serves whichever theme you are reading in.
 
 To regenerate them, point the script at a running demo instance:
 

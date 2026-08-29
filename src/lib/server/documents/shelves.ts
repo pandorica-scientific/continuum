@@ -36,7 +36,13 @@ export async function shelfIdByKey(key: string, handle: Queryable = db): Promise
 	return row.id;
 }
 
-/** `inbox` and `statements` — the two rows the application refers to by name. */
+/**
+ * `inbox` and `statements` are looked up through this typed helper because
+ * their keys are spelled out directly in route code. `finance` and `property`
+ * are system shelves too (see `shelf.system`) — payslips, tax attachments,
+ * and bills file to them by key — but those writers already asked for them
+ * through the untyped `shelfIdByKey`, so they keep doing that.
+ */
 export async function systemShelfId(
 	key: 'inbox' | 'statements',
 	handle: Queryable = db
@@ -134,9 +140,11 @@ export async function documentsOnShelf(id: string, handle: Queryable = db): Prom
  * makes that "always" rather than "in the UI" — a delete that skipped the move
  * is refused by the database, not by a screen.
  *
- * A system shelf is refused outright: `inbox` and `statements` are referred to
- * by key from code, and a household that deleted the inbox would have capture
- * fail on the next upload.
+ * A system shelf is refused outright: `inbox`, `statements`, `finance`, and
+ * `property` are all referred to by key from code — capture files into inbox,
+ * an accepted import files into statements, the salary tracker files
+ * payslips and tax attachments into finance, and billing files bills into
+ * property — so deleting any of the four would break the next upload.
  */
 export async function reassignAndDelete(
 	id: string,

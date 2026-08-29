@@ -275,7 +275,9 @@ describe('tag persistence', () => {
 			insert into rule_tag (rule_id, tag_id) values ('${rowId('r1')}', '${rowId('doomed')}');
 		`);
 
-		expect(await tagUsage(testDb)).toEqual(new Map([[rowId('doomed'), { tagged: 1, rules: 1 }]]));
+		expect(await tagUsage(null, testDb)).toEqual(
+			new Map([[rowId('doomed'), { tagged: 1, rules: 1 }]])
+		);
 		expect(await deleteTag(rowId('doomed'), testDb)).toBe(true);
 
 		// Nothing had to be visited to unfile it: both link tables cascade.

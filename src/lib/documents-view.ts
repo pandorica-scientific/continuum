@@ -154,6 +154,42 @@ export function expiryTreatment(
 	return { kind: 'pill', hue: quietHue(verb), text: width === 'wide' ? `${verb} ${date}` : date };
 }
 
+/**
+ * The three hues a documents CARD can paint a row's second line.
+ *
+ * A card has one line to say everything the Documents screen says with a pill,
+ * so the four-hue vocabulary collapses to the part that changes what a person
+ * does: red for a date that has passed, yellow for one inside its window,
+ * otherwise the quiet grey every other row already has. The verb channel
+ * (blue vs purple) is not carried here — an unstyled `--fg3` line reads as one
+ * column, and two more hues on a six-row card would say a difference the card
+ * has no room to explain.
+ */
+export type ExpiryTone = 'expired' | 'soon' | 'quiet';
+
+/**
+ * How a document's expiry reads on a record's card.
+ *
+ * Deliberately a projection of `expiryTreatment` rather than a second rule.
+ * The property card used to say "anything with a date is amber, a passed date
+ * is red", which made a lease renewing in three years the same colour as one
+ * renewing next week; the Documents screen has known better since v0.7.0 and
+ * this is how a card borrows that knowledge instead of restating it.
+ *
+ * `subjectArchived` is false by design: a card belongs to ONE record and shows
+ * the paper filed against it, so there is no subject in the picture whose
+ * archiving could turn an alarm into history.
+ */
+export function documentExpiryTone(
+	doc: { expiresOn: string | null; expiryVerb: string; addedOn?: string },
+	today: string
+): ExpiryTone {
+	const treatment = expiryTreatment(doc, false, today);
+	if (treatment?.kind !== 'pill') return 'quiet';
+	if (treatment.hue === 'red') return 'expired';
+	return treatment.hue === 'yellow' ? 'soon' : 'quiet';
+}
+
 /** The labels a `document.type` code is shown under. Raw codes never surface. */
 export const TYPE_LABELS: Record<string, string> = {
 	contract: 'Contract',
@@ -161,6 +197,7 @@ export const TYPE_LABELS: Record<string, string> = {
 	receipt: 'Receipt',
 	payslip: 'Payslip',
 	bank_statement: 'Bank statement',
+	broker_report: 'Broker report',
 	insurance_policy: 'Insurance policy',
 	claim: 'Claim',
 	id_document: 'Identity document',
@@ -351,4 +388,101 @@ export function groupSummary(items: DocRow[], today: string): GroupSummary {
 		}
 	}
 	return { count: items.length, expired, soon, nextExpiry };
+}
+
+/**
+ * One choice in the "what it is about" filter.
+ *
+ * The heading travels with the option rather than being worked out from the
+ * name: which kind a record is is a fact the registry knows and a string does
+ * not, and "Alza 2026-03-04" beside "Robert" in one flat list is a filter
+ * nobody can read.
+ */
+export interface AboutOption {
+	id: string;
+	name: string;
+	/** A second line where the name alone is ambiguous — an amount, a filer. */
+	meta?: string;
+	/** Plural, from the registry: the heading this option sits under. */
+	groupLabel: string;
+	/** How many documents on the shelf in view this choice would leave. */
+	count: number;
+}
+
+export interface AboutOptionGroup<T extends { groupLabel: string }> {
+	label: string;
+	options: T[];
+}
+
+/**
+ * The filter's options, under the heading each kind belongs to.
+ *
+ * Order is taken as given rather than re-sorted here: the load emits them in
+ * registry order and then by how many documents each would leave, and a second
+ * opinion about order in the view is how two screens end up disagreeing about
+ * which record comes first.
+ */
+export function groupAboutOptions<T extends { groupLabel: string }>(
+	options: T[]
+): AboutOptionGroup<T>[] {
+	const groups: AboutOptionGroup<T>[] = [];
+	for (const option of options) {
+		const existing = groups.find((group) => group.label === option.groupLabel);
+		if (existing) existing.options.push(option);
+		else groups.push({ label: option.groupLabel, options: [option] });
+	}
+	return groups;
+}
+
+/** `Alza 2026-03-04 · −1 234,50 CZK · 2` — name, what tells it apart, count. */
+export function aboutOptionLabel(option: { name: string; meta?: string; count: number }): string {
+	return [option.name, option.meta, String(option.count)].filter(Boolean).join(' · ');
+}
+
+/**
+ * One subject as the rail draws it.
+ *
+ * `household` travels with the row rather than being worked out from the name:
+ * the seeded subject may be renamed to anything, and a view that recognised it
+ * by the word "Household" would offer to archive the household the first time
+ * a Czech household called it "Domácnost".
+ */
+export interface RailSubject {
+	id: string;
+	name: string;
+	emoji: string;
+	archived: boolean;
+	household: boolean;
+	/** How much paper is filed under it, behind the reader's own read rule. */
+	count: number;
+}
+
+/**
+ * Which subjects the rail draws, and how many it is keeping back.
+ *
+ * Archived subjects appear only under "Include archived subjects" — the same
+ * `?archived=1` that governs the list, so the rail and the documents beside it
+ * are never showing two different scopes. `hidden` is what the rail says out
+ * loud, because a subject that was archived and then vanished from the only
+ * screen that can un-archive it is a one-way door.
+ *
+ * The household leads, because it is the one subject every document may belong
+ * to; the rest are by name, folded, so "dog" and "Dog" sort together; archived
+ * ones sit last, where a dimmed row is a footnote rather than a gap in the
+ * middle of the list.
+ */
+export function railSubjects<T extends { archived: boolean; household: boolean; name: string }>(
+	subjects: T[],
+	includeArchived: boolean
+): { shown: T[]; hidden: number } {
+	const hidden = subjects.filter((s) => s.archived).length;
+	const shown = subjects
+		.filter((s) => includeArchived || !s.archived)
+		.sort(
+			(a, b) =>
+				Number(a.archived) - Number(b.archived) ||
+				Number(b.household) - Number(a.household) ||
+				a.name.localeCompare(b.name)
+		);
+	return { shown, hidden: includeArchived ? 0 : hidden };
 }

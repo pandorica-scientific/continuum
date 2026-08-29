@@ -17,10 +17,17 @@ import {
 	type ContactInput,
 	type ContactLinks
 } from '$lib/server/contacts';
+import {
+	attachDocument,
+	candidateDocumentsFor,
+	detachDocument,
+	documentsAbout
+} from '$lib/server/documents/targets';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	const query = url.searchParams.get('q') ?? '';
+	const actor = locals.person ?? null;
 
 	const [contacts, links, tenancies, properties, loans, accounts] = await Promise.all([
 		listContacts(query),
@@ -34,9 +41,33 @@ export const load: PageServerLoad = async ({ url }) => {
 		db.select({ id: account.id, name: account.name }).from(account).orderBy(account.name)
 	]);
 
+	// Every contact's own card, not just the one whose panel happens to be
+	// open: the list is already loaded whole (there is no pagination here).
+	// `documentsAbout` stays one query per contact (it is narrow), run
+	// concurrently for every contact up front. `candidateDocumentsFor` is the
+	// other half: ONE query for the whole visible library plus ONE for
+	// `document_link` across every contact, not the whole library fetched
+	// again for each contact's picker — sixty contacts times an
+	// eight-hundred-document archive is not a picker that renders for one
+	// contact at a time.
+	const contactIds = contacts.map((c) => c.id);
+	const [documentsByContactId, candidatesByContactId] = await Promise.all([
+		Promise.all(contactIds.map(async (id) => [id, await documentsAbout(id, actor)] as const)).then(
+			(pairs) => new Map(pairs)
+		),
+		candidateDocumentsFor(contactIds, actor)
+	]);
+
 	return {
 		query,
-		contacts: contacts.map((row) => ({ ...row, links: links.get(row.id) ?? emptyLinks() })),
+		isAdmin: locals.person?.role === 'admin',
+		contacts: contacts.map((row) => ({
+			...row,
+			links: links.get(row.id) ?? emptyLinks(),
+			documents: documentsByContactId.get(row.id) ?? [],
+			documentCandidates: candidatesByContactId.get(row.id) ?? [],
+			addDocumentHref: `/documents?add=1&addShelfKey=inbox&targetKind=contact&targetId=${row.id}`
+		})),
 		options: { tenancies, properties, loans, accounts }
 	};
 };
@@ -137,5 +168,34 @@ export const actions: Actions = {
 		const result = await deleteContact(id);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { deleted: true };
+	},
+
+	/**
+	 * File an existing document against a contact — the "Attach" picker on the
+	 * `DocumentsCard` inside its edit panel. Every contact's panel posts here
+	 * with its own `targetId`, so one action serves all of them.
+	 */
+	attachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
+		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Unfile a document — the link only. The document stays on its shelf, so a
+	 * mis-click costs a re-attach rather than evidence.
+	 */
+	detachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Which document?' });
+		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
 	}
 };

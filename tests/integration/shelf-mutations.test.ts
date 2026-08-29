@@ -78,11 +78,25 @@ describe('reassign-and-delete', () => {
 		expect(await shelfExists(from)).toBe(true);
 	});
 
-	it('refuses to delete a system shelf', async () => {
+	it('refuses to delete a system shelf, but not an ordinary one', async () => {
 		const inbox = await systemShelfId('inbox', testDb);
 		const household = await shelfIdByKey('household', testDb);
 		await expect(reassignAndDelete(inbox, household, testDb)).rejects.toThrow(/system/i);
 		expect(await shelfExists(inbox)).toBe(true);
+
+		// D4: finance and property joined inbox/statements as system shelves —
+		// the salary tracker files payslips and tax attachments to finance by
+		// key, so a household that deleted it would break the next payslip.
+		const finance = await shelfIdByKey('finance', testDb);
+		await expect(reassignAndDelete(finance, household, testDb)).rejects.toThrow(/system/i);
+		expect(await shelfExists(finance)).toBe(true);
+
+		// tenancy is not referred to by key from any writer, so it stays
+		// deletable — the contrast that proves the guard reads the `system`
+		// flag rather than refusing every seeded shelf.
+		const tenancy = await shelfIdByKey('tenancy', testDb);
+		await reassignAndDelete(tenancy, household, testDb);
+		expect(await shelfExists(tenancy)).toBe(false);
 	});
 
 	it('refuses to move a shelf onto itself', async () => {

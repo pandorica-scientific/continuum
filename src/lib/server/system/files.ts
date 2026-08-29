@@ -45,6 +45,24 @@ export async function saveUpload(file: File): Promise<string> {
 }
 
 /**
+ * Save a freshly-posted file and fingerprint it in the same read of its bytes.
+ *
+ * The idiom seven route actions used to repeat by hand: read once so the
+ * bytes that are saved are also what gets hashed, rather than reading the
+ * file twice. Bundling the read inside here (rather than a caller reading
+ * `file.arrayBuffer()` first) also means a broken upload — one whose bytes
+ * cannot even be read — surfaces from inside whatever `try` the caller wraps
+ * this in, as `fail(400, …)`, instead of an unhandled rejection outside it.
+ */
+export async function saveUploadAndHash(
+	file: File
+): Promise<{ storedName: string; contentHash: string }> {
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	const storedName = await saveUploadBytes(bytes, file.name);
+	return { storedName, contentHash: hashBytes(bytes) };
+}
+
+/**
  * The same, for a caller that already holds the bytes.
  *
  * Every upload path that has to look INSIDE a file — reading a payslip,

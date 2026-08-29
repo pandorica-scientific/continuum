@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { fail } from '@sveltejs/kit';
-import { asc, desc } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { brokerOperation, brokerPosition, holding, portfolioSnapshot } from '$lib/server/db/schema';
-import { ingestBrokerFile } from '$lib/server/invest/ingest';
+import {
+	account,
+	brokerOperation,
+	brokerPosition,
+	holding,
+	portfolioSnapshot
+} from '$lib/server/db/schema';
+import { brokerReports, uploadBrokerReport } from '$lib/server/invest/reports';
+import { documentsAbout } from '$lib/server/documents/targets';
 import { annualisedReturn, buildSeries } from '$lib/server/invest/series';
 import { convertMinorSync, convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getSetting, setSetting } from '$lib/server/settings';
@@ -18,19 +25,38 @@ import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	const actor = locals.person ?? null;
 	const baseCurrency = await getBaseCurrency();
-	const [holdings, operations, snapshots, positions, rates, taxPolicy] = await Promise.all([
-		db.select().from(holding).orderBy(desc(holding.valueMinor)),
-		db.select().from(brokerOperation).orderBy(asc(brokerOperation.happenedAt)),
-		db.select().from(portfolioSnapshot).orderBy(asc(portfolioSnapshot.day)),
-		db.select().from(brokerPosition),
-		loadRateTable(),
-		// How this household is taxed on what it sells. Configured rather than
-		// assumed: the rate differs by country, and the holding-period exemption
-		// below is a Czech rule that would produce wrong figures anywhere else.
-		getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY)
-	]);
+	const [holdings, operations, snapshots, positions, rates, taxPolicy, brokerageAccounts] =
+		await Promise.all([
+			db.select().from(holding).orderBy(desc(holding.valueMinor)),
+			db.select().from(brokerOperation).orderBy(asc(brokerOperation.happenedAt)),
+			db.select().from(portfolioSnapshot).orderBy(asc(portfolioSnapshot.day)),
+			db.select().from(brokerPosition),
+			loadRateTable(),
+			// How this household is taxed on what it sells. Configured rather than
+			// assumed: the rate differs by country, and the holding-period exemption
+			// below is a Czech rule that would produce wrong figures anywhere else.
+			getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY),
+			db
+				.select({ id: account.id, name: account.name })
+				.from(account)
+				.where(eq(account.kind, 'brokerage'))
+		]);
+
+	// Reports: filed against the one brokerage account when there is exactly
+	// one — the ordinary case, and the same account the accounts screen shows
+	// them on too — and read by type otherwise, since there is no single
+	// account to key a `documentsAbout` lookup off when none has been added
+	// yet or more than one exists.
+	const soleBrokerageAccount = brokerageAccounts.length === 1 ? brokerageAccounts[0] : null;
+	const reportsTarget = soleBrokerageAccount
+		? { id: soleBrokerageAccount.id, kind: 'account' as const, label: soleBrokerageAccount.name }
+		: { id: '', kind: 'account' as const, label: 'Broker reports' };
+	const reports = soleBrokerageAccount
+		? await documentsAbout(soleBrokerageAccount.id, actor)
+		: await brokerReports(actor);
 
 	const latestSnapshot = snapshots[snapshots.length - 1] ?? null;
 
@@ -205,7 +231,10 @@ export const load: PageServerLoad = async () => {
 		},
 		series,
 		donut,
-		holdings: rows
+		holdings: rows,
+		reportsTarget,
+		reports,
+		isAdmin: locals.person?.role === 'admin'
 	};
 };
 
@@ -235,7 +264,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Choose a broker report file.' });
 		}
 		try {
-			const result = await ingestBrokerFile(file.name, new Uint8Array(await file.arrayBuffer()));
+			const result = await uploadBrokerReport(file.name, new Uint8Array(await file.arrayBuffer()));
 			return { result };
 		} catch (err) {
 			return fail(400, {

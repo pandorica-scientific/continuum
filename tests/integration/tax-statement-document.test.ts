@@ -1,28 +1,39 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Filing a tax statement and the paper it came from is one save. The point of
 // these tests is the cross-link: the statement is linked to its documents, each
-// is on the Tax shelf, and each is filed against the same person — which is what
-// makes them appear in the household's own files rather than nowhere.
+// is on the Finance shelf, and each is filed against the same person — which is
+// what makes them appear in the household's own files rather than nowhere.
 //
 // A year's filing is several pieces of paper, not one, so since v0.4.3 the link
 // is a document_link row against the statement's entity rather than a column on
 // the statement. The old `document_id` column is dead and no longer read.
 import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { detachDocument } from '$lib/server/documents/targets';
+import { recordSalary } from '$lib/server/salary';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import {
 	attachDocumentsToStatement,
-	detachDocument,
 	loadStatements,
 	saveStatement,
 	statementDocumentName
 } from '$lib/server/tax';
 
+// The `deleteAttachment` suite calls the page's own action, which reaches for
+// the module-level `db` rather than a handle it was passed — so, only for
+// that suite, `db` has to resolve to this harness too.
+vi.mock('$env/dynamic/private', () => ({
+	env: new Proxy({} as Record<string, string | undefined>, {
+		get: (_target, key: string) => process.env[key]
+	})
+}));
+
 let harness: Harness;
 let testDb: TestDb;
+let previousUrl: string | undefined;
 const PERSON = rowId('person-a');
 
 const base = {
@@ -35,7 +46,10 @@ const base = {
 	note: null,
 	lines: [],
 	attachments: [],
-	linkDocumentIds: []
+	linkDocumentIds: [],
+	// An admin saves these fixtures: linking now goes through the registry,
+	// which applies the read rule to the document being named.
+	actor: { id: rowId('person-a'), role: 'admin' as const }
 };
 
 const upload = {
@@ -66,11 +80,15 @@ async function attachedTo(statementId: string): Promise<string[]> {
 beforeAll(async () => {
 	harness = await startPostgres('tax-statement-document');
 	testDb = harness.db;
+	previousUrl = process.env.DATABASE_URL;
+	process.env.DATABASE_URL = harness.url;
 	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 120_000);
 
 afterAll(async () => {
 	await harness?.stop();
+	if (previousUrl === undefined) delete process.env.DATABASE_URL;
+	else process.env.DATABASE_URL = previousUrl;
 });
 
 beforeEach(async () => {
@@ -79,7 +97,7 @@ beforeEach(async () => {
 });
 
 describe('a statement that brings its own document', () => {
-	it('files the upload on the Tax shelf and links the statement to it', async () => {
+	it('files the upload on the Finance shelf and links the statement to it', async () => {
 		expect(await saveStatement({ ...base, attachments: [upload] }, testDb)).toEqual({ ok: true });
 
 		const [statement] = await testDb.select().from(schema.taxStatement);
@@ -126,7 +144,7 @@ describe('a statement that brings its own document', () => {
 		`);
 	});
 
-	it('links a document already sitting on the Tax shelf', async () => {
+	it('links a document already sitting on the Finance shelf', async () => {
 		await saveStatement({ ...base, attachments: [upload] }, testDb);
 		const [doc] = await testDb.select().from(schema.document);
 		await harness.sql`delete from document_link where target_id in (select id from tax_statement)`;
@@ -258,7 +276,7 @@ describe('detaching', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 		const [doc] = await testDb.select().from(schema.document);
 
-		expect(await detachDocument(statement.id, doc.id, testDb)).toEqual({ ok: true });
+		expect(await detachDocument(statement.id, doc.id, base.actor, testDb)).toEqual({ ok: true });
 
 		expect(await testDb.select().from(schema.document)).toHaveLength(1);
 		expect(await attachedTo(statement.id)).toEqual([]);
@@ -269,7 +287,7 @@ describe('detaching', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 		const [doc] = await testDb.select().from(schema.document);
 
-		await detachDocument(statement.id, doc.id, testDb);
+		await detachDocument(statement.id, doc.id, base.actor, testDb);
 
 		expect(
 			await testDb
@@ -283,12 +301,15 @@ describe('detaching', () => {
 		await saveStatement({ ...base, attachments: [upload] }, testDb);
 		const [statement] = await testDb.select().from(schema.taxStatement);
 
-		expect(await detachDocument(statement.id, PERSON, testDb)).toEqual({ ok: false });
+		// A person id is not a document, so the registry answers the way it
+		// answers any document that is not there.
+		const outcome = await detachDocument(statement.id, PERSON, base.actor, testDb);
+		expect(outcome.ok).toBe(false);
 	});
 });
 
 describe('deleting the statement', () => {
-	it('leaves its documents standing on the Tax shelf', async () => {
+	it('leaves its documents standing on the Finance shelf', async () => {
 		await saveStatement({ ...base, attachments: [upload] }, testDb);
 		const [statement] = await testDb.select().from(schema.taxStatement);
 
@@ -324,7 +345,7 @@ describe('loadStatements', () => {
 			testDb
 		);
 
-		const rows = await loadStatements(testDb);
+		const rows = await loadStatements(null, testDb);
 		const y2025 = rows.find((r) => r.year === 2025)!;
 		const y2024 = rows.find((r) => r.year === 2024)!;
 
@@ -351,7 +372,88 @@ describe('loadStatements', () => {
 			.values({ documentId: rowId('loose-doc'), targetId: PERSON });
 		await saveStatement({ ...base, attachments: [upload] }, testDb);
 
-		const rows = await loadStatements(testDb);
+		const rows = await loadStatements(null, testDb);
 		expect(rows[0].attachments.map((a) => a.name)).toEqual([statementDocumentName(2025, 'CZ')]);
+	});
+});
+
+/**
+ * Task 9's semantics, on the tax screen's own action.
+ *
+ * `deleteAttachment` used to call `deleteDocument` directly: a plain row
+ * delete, with `salary_entry.document_id` SET NULL underneath it. That leaves
+ * a stale row behind — still counted in a year's total, with nothing on
+ * screen to say where it came from — for exactly the reason `removeDocument`
+ * (Task 9) exists. Switching the action to it means a payslip attached here
+ * is forgotten the same way one deleted from the Salary screen is.
+ */
+describe('deleteAttachment', () => {
+	interface Locals {
+		person: { id: string; name: string; initials: string; role: 'admin' | 'member'; theme: null };
+	}
+	const ADMIN_LOCALS: Locals = {
+		person: { id: PERSON, name: 'Person A', initials: 'PA', role: 'admin', theme: null }
+	};
+
+	async function postDeleteAttachment(documentId: string) {
+		const { actions } = await import('../../src/routes/(app)/tax/+page.server');
+		const form = new FormData();
+		form.set('documentId', documentId);
+		const request = new Request('http://localhost/tax?/deleteAttachment', {
+			method: 'POST',
+			body: form
+		});
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		return (actions.deleteAttachment as any)({ request, locals: ADMIN_LOCALS });
+	}
+
+	it('takes a payslip attachment’s salary row with it, rather than leaving it orphaned', async () => {
+		await saveStatement(base, testDb);
+		const [statement] = await testDb.select().from(schema.taxStatement);
+
+		const slipId = rowId('payslip-attachment');
+		await testDb.insert(schema.document).values({
+			id: slipId,
+			name: 'Payslip 2025-06 · Person A',
+			shelfId: await shelfIdByKey('finance', testDb),
+			type: 'payslip',
+			storedName: '22222222-2222-2222-2222-222222222222.pdf',
+			ext: 'PDF',
+			addedOn: '2026-08-23',
+			periodOn: '2025-06-01'
+		});
+		// Filed against the statement, the way a tax attachment is — not against
+		// the person, which is the usual home for a payslip.
+		await testDb.insert(schema.documentLink).values({ documentId: slipId, targetId: statement.id });
+		expect(
+			await recordSalary(
+				{
+					personId: PERSON,
+					periodMonth: '2025-06',
+					currency: 'CZK',
+					grossMinor: 6_000_000n,
+					source: 'payslip',
+					documentId: slipId
+				},
+				testDb
+			)
+		).toEqual({ ok: true });
+
+		expect(await postDeleteAttachment(slipId)).toEqual({ ok: true });
+
+		// No bank credit was ever merged into this month, so the row goes with
+		// the slip entirely — a plain document delete would instead have left it
+		// behind with `documentId` set to null and a stale gross figure.
+		expect(
+			await testDb.select().from(schema.salaryEntry).where(eq(schema.salaryEntry.personId, PERSON))
+		).toEqual([]);
+		expect(
+			await testDb.select().from(schema.document).where(eq(schema.document.id, slipId))
+		).toHaveLength(0);
+	});
+
+	it('reports a miss rather than succeeding silently, for a document that is not there', async () => {
+		const result = await postDeleteAttachment(rowId('no-such-document'));
+		expect(result).toMatchObject({ status: 404 });
 	});
 });

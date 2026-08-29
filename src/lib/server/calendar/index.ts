@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
-import { document, loan, loanFixationPeriod, property, tenancy } from '$lib/server/db/schema';
+import {
+	document,
+	documentLink,
+	entity,
+	loan,
+	loanFixationPeriod,
+	property,
+	tenancy
+} from '$lib/server/db/schema';
 import { periodForMonth } from '$lib/loans/amortise';
 import { getSetting, setSetting } from '$lib/server/settings';
 import { formatMinor } from '$lib/money';
 import { generatedKey, type OriginBinding } from '$lib/calendar/keys';
 import { decorate, markerForGenerated } from '$lib/calendar/markers';
 import { toIcsCalendar } from '$lib/server/calendar/sync/ical';
+import { archiveScopePredicate } from '$lib/server/documents/visibility';
+import { loadRecordDates, ownedByLinkedRecord } from '$lib/server/documents/deadlines';
 import { randomBytes } from 'node:crypto';
 
 // The ledger writes its own events, generated from what it already knows —
@@ -129,7 +139,7 @@ export async function generateEvents(
 	handle: Db = db
 ): Promise<LedgerEvent[]> {
 	const rules = await getCalendarRules(handle);
-	const [loans, periods, tenancies, properties, docs] = await Promise.all([
+	const [loans, periods, tenancies, properties, docs, links, recordDates] = await Promise.all([
 		handle.select().from(loan),
 		handle.select().from(loanFixationPeriod),
 		handle.select().from(tenancy),
@@ -138,12 +148,41 @@ export async function generateEvents(
 		// for an admin. This is deliberately not `visibleDocumentPredicate`: a
 		// generated event syncs to iCloud and to a published feed, where there is
 		// no session and no role to filter by, so filtering by who happened to
-		// trigger generation would be false safety.
-		handle.select().from(document).where(eq(document.sensitivity, 'normal'))
+		// trigger generation would be false safety. Archive scope applies on top:
+		// a document whose only subject is archived (a sold car's insurance) is
+		// stale rather than secret, but the same reasoning holds — nobody's
+		// calendar should carry a renewal for something that is no longer theirs.
+		handle
+			.select()
+			.from(document)
+			.where(and(eq(document.sensitivity, 'normal'), archiveScopePredicate(false))),
+		// D7: which record, if any, a document is filed against — so a lease's
+		// contract or a re-fix letter dated the same as its tenancy or loan's own
+		// deadline (below) can be told apart from one that is not.
+		handle
+			.select({
+				documentId: documentLink.documentId,
+				targetId: documentLink.targetId,
+				kind: entity.kind
+			})
+			.from(documentLink)
+			.innerJoin(entity, eq(entity.id, documentLink.targetId)),
+		loadRecordDates(handle)
 	]);
 
 	const events: LedgerEvent[] = [];
 	const inRange = (d: string) => d >= startIso && d <= endIso;
+
+	// Which of the two record-side events this generation will actually produce,
+	// for D7 below. No horizon on either: a record's event and its document's
+	// carry the same date, so the window this run was asked for either holds
+	// both or neither, and `inRange` has already answered that. The loan's own
+	// remaining condition — a paid-off loan emits no fixation event — is
+	// answered by `loadRecordDates`, which leaves such a loan out of the map.
+	const ownersOnTheCalendar = {
+		tenancy: { emits: rules.propertyDates, remindsThrough: null },
+		loan: { emits: rules.expiry, remindsThrough: null }
+	};
 
 	for (const [y, m] of monthsIn(startIso, endIso)) {
 		if (rules.importReminder) {
@@ -236,7 +275,22 @@ export async function generateEvents(
 
 	if (rules.expiry) {
 		for (const d of docs) {
-			if (d.expiresOn && inRange(d.expiresOn)) {
+			// D7: the record owns the deadline. A lease's contract dated the same
+			// as its tenancy's `endsOn` (below), or a re-fix letter dated the same
+			// as its loan's current fixation `endsOn`, is the same date the
+			// `propertyDates` and this same `expiry` rule already emit — skip the
+			// document's copy so it does not sync as a second event for one date.
+			//
+			// Only where the rule behind that other event is actually on. A
+			// household that switched property dates off emits no lease event, so
+			// suppressing the lease's paper too would take the date out of the
+			// calendar altogether — a rule they turned off would be silently
+			// removing events from a rule they left on.
+			if (
+				d.expiresOn &&
+				inRange(d.expiresOn) &&
+				!ownedByLinkedRecord(d, links, recordDates, ownersOnTheCalendar)
+			) {
 				const binding = { table: 'document', rowId: d.id, field: 'expiresOn' } as const;
 				events.push({
 					date: d.expiresOn,

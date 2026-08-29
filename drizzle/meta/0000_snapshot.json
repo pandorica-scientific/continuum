@@ -790,18 +790,6 @@
           "notNull": true,
           "default": "'expires'"
         },
-        "amount_minor": {
-          "name": "amount_minor",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "period_on": {
           "name": "period_on",
           "type": "date",
@@ -816,21 +804,6 @@
         }
       },
       "indexes": {
-        "document_currency_idx": {
-          "name": "document_currency_idx",
-          "columns": [
-            {
-              "expression": "currency",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "document_shelf_id_idx": {
           "name": "document_shelf_id_idx",
           "columns": [
@@ -889,19 +862,6 @@
             "id"
           ],
           "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "document_currency_currency_code_fk": {
-          "name": "document_currency_currency_code_fk",
-          "tableFrom": "document",
-          "tableTo": "currency",
-          "columnsFrom": [
-            "currency"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -1985,6 +1945,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "uploaded_at": {
           "name": "uploaded_at",
           "type": "timestamp with time zone",
@@ -2023,6 +1989,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "import_file_document_idx": {
+          "name": "import_file_document_idx",
+          "columns": [
+            {
+              "expression": "document_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2050,6 +2031,19 @@
             "code"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "import_file_document_id_document_id_fk": {
+          "name": "import_file_document_id_document_id_fk",
+          "tableFrom": "import_file",
+          "tableTo": "document",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -5661,12 +5655,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "document_id": {
-          "name": "document_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "note": {
           "name": "note",
           "type": "text",
@@ -5723,21 +5711,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "tax_statement_document_idx": {
-          "name": "tax_statement_document_idx",
-          "columns": [
-            {
-              "expression": "document_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -5765,19 +5738,6 @@
             "code"
           ],
           "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tax_statement_document_id_document_id_fk": {
-          "name": "tax_statement_document_id_document_id_fk",
-          "tableFrom": "tax_statement",
-          "tableTo": "document",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

@@ -81,6 +81,8 @@
 	</div>
 
 	{#if editing === 'new'}
+		<!-- No documents props: a contact that does not exist yet has nowhere to
+		     file paper against, so `ContactForm` skips its card entirely. -->
 		<ContactForm {options} values={echoFor(null)} onclose={() => (opened = null)} />
 	{/if}
 
@@ -100,6 +102,10 @@
 				{options}
 				{contact}
 				values={echoFor(contact.id)}
+				documents={contact.documents}
+				documentCandidates={contact.documentCandidates}
+				addDocumentHref={contact.addDocumentHref}
+				isAdmin={data.isAdmin}
 				onclose={() => (opened = null)}
 			/>
 		{:else}

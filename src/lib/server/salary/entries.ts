@@ -7,9 +7,9 @@
  * rather than two competing ones.
  */
 
-import { and, eq, isNotNull, isNull, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, type SQL } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { db, type Db } from '$lib/server/db';
+import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	document,
 	documentLink,
@@ -18,6 +18,8 @@ import {
 	salaryEntry
 } from '$lib/server/db/schema';
 import { hashStoredUpload } from '$lib/server/system/files';
+import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 export type SalaryResult = { ok: true } | { ok: false; status: 400 | 404; message: string };
@@ -68,9 +70,14 @@ export interface RecordSalaryInput {
  * Write what is known about one month, without discarding what is already there.
  *
  * A payslip arriving after a bank credit fills the gross column and leaves the
- * net alone, and the other way round. A figure a person corrected by hand is
- * never overwritten by a later automatic reading — that flag is the whole
- * reason a derived entry can be edited at all.
+ * net alone — it finds the credit's row because that row names no document
+ * yet. A bank credit arriving after the payslip does NOT merge into the
+ * slip's row: a transaction carries no evidence of which employer paid it, so
+ * a credit that finds no document-less row of its own opens one, and the
+ * month keeps two rows until something that knows better corrects it. A
+ * figure a person corrected by hand is never overwritten by a later automatic
+ * reading — that flag is the whole reason a derived entry can be edited at
+ * all.
  */
 export async function recordSalary(
 	input: RecordSalaryInput,
@@ -144,6 +151,8 @@ export async function recordSalary(
 		}
 
 		if (!existing) {
+			const documentId = input.documentId ?? null;
+			const transactionId = input.transactionId ?? null;
 			await tx.insert(salaryEntry).values({
 				id: uuidv7(),
 				personId: input.personId,
@@ -153,16 +162,19 @@ export async function recordSalary(
 				bonusMinor: input.bonusMinor ?? null,
 				currency: input.currency,
 				source: input.source,
-				documentId: input.documentId ?? null,
-				transactionId: input.transactionId ?? null,
+				documentId,
+				transactionId,
 				amountOverridden: input.overridden ?? false
 			});
+			await linkPayslipToCredit(documentId, transactionId, tx);
 			return { ok: true as const };
 		}
 
 		// A hand-typed figure stands. Anything automatic that arrives later adds
 		// what is missing rather than replacing what somebody decided.
 		const keep = existing.amountOverridden && !input.overridden;
+		const documentId = input.documentId ?? existing.documentId;
+		const transactionId = input.transactionId ?? existing.transactionId;
 		await tx
 			.update(salaryEntry)
 			.set({
@@ -176,13 +188,135 @@ export async function recordSalary(
 					? (existing.bonusMinor ?? input.bonusMinor ?? null)
 					: (input.bonusMinor ?? existing.bonusMinor ?? null),
 				currency: input.restateCurrency ? input.currency : existing.currency,
-				documentId: input.documentId ?? existing.documentId,
-				transactionId: input.transactionId ?? existing.transactionId,
+				documentId,
+				transactionId,
 				amountOverridden: existing.amountOverridden || (input.overridden ?? false)
 			})
 			.where(eq(salaryEntry.id, existing.id));
+		await linkPayslipToCredit(documentId, transactionId, tx);
 		return { ok: true as const };
 	});
+}
+
+/**
+ * D6: the visible cross-link between a payslip and the bank credit it merged
+ * with.
+ *
+ * Written only once a row holds BOTH ids — a slip with no credit, or a credit
+ * with no slip, links to nothing — so `forgetPayslip`'s re-record (which
+ * carries no `documentId`) naturally adds none. `onConflictDoNothing` because
+ * `recordSalary` re-runs this on every later fill of the same row: the pair
+ * that already met stays linked without a duplicate-key error. The transaction
+ * is a registered entity kind, so this needs no schema work — `document_link`
+ * already points at any of them.
+ */
+async function linkPayslipToCredit(
+	documentId: string | null,
+	transactionId: string | null,
+	tx: Queryable
+): Promise<void> {
+	if (!documentId || !transactionId) return;
+	await tx
+		.insert(documentLink)
+		.values({ documentId, targetId: transactionId })
+		.onConflictDoNothing();
+}
+
+/**
+ * Forget the salary a payslip evidenced, keeping what the bank proved.
+ *
+ * Called when the payslip DOCUMENT is being removed, and it has to run before
+ * the document row goes rather than after. `salary_entry.document_id` is
+ * ON DELETE SET NULL, and a row that loses its document becomes an unclaimed
+ * row for its month — which is either a second such row, refused outright by
+ * `salary_entry_person_month_key`, or a statement of a month with no evidence
+ * behind it at all, still counted in every total with nothing on screen to say
+ * where it came from. Neither is a state anybody chose.
+ *
+ * So the row goes with the slip. What does NOT go is a bank credit that had
+ * been merged into it: `transaction_id` on the row means the month was also
+ * evidenced by money that actually arrived, and that figure belongs to the
+ * ledger, not to the paper. It is re-recorded through `recordSalary` as the
+ * credit-only row it was before any slip claimed it, which is also why this
+ * cannot collide with either partial unique index — `recordSalary` finds the
+ * month's one unclaimed row and fills it in, or makes it when there is none.
+ *
+ * The transaction itself is never touched. Deleting paper is not deleting
+ * money.
+ *
+ * The re-recording is deliberately NOT a raw update of the row: the month may
+ * already hold an unclaimed row somebody typed into, and `recordSalary` is
+ * where "what a month already holds survives what arrives" is decided.
+ */
+export async function forgetPayslip(documentId: string, handle: Db = db): Promise<SalaryResult> {
+	const rows = await handle
+		.select()
+		.from(salaryEntry)
+		.where(eq(salaryEntry.documentId, documentId));
+	if (rows.length === 0) return { ok: true };
+
+	await handle.delete(salaryEntry).where(eq(salaryEntry.documentId, documentId));
+
+	for (const row of rows) {
+		// No credit behind it, or nothing the credit stated: there is no
+		// bank-evidenced figure to keep, and inventing one from the slip's gross
+		// would put a payslip's number back under a statement's name.
+		if (row.transactionId === null || row.netMinor === null) continue;
+		// `amountOverridden` is not carried into this call. That flag means "a
+		// person corrected what the SLIP said"; once the slip is gone the row is
+		// credit-only, its figure is just what the bank stated, and there is no
+		// slip left to re-read and overwrite it — the thing the flag guards
+		// against cannot happen to a row with no document behind it.
+		const rerecorded = await recordSalary(
+			{
+				personId: row.personId,
+				periodMonth: row.periodMonth,
+				currency: row.currency,
+				netMinor: row.netMinor,
+				source: 'statement',
+				transactionId: row.transactionId
+			},
+			handle
+		);
+		// Refused rather than swallowed. The only way this fails is a figure the
+		// month already holds that the credit contradicts, and losing the credit
+		// silently is the failure this whole function exists to prevent.
+		if (!rerecorded.ok) return rerecorded;
+	}
+	return { ok: true };
+}
+
+/**
+ * Whose salary hangs off each of these documents.
+ *
+ * The question every editor of a payslip has to ask before it writes anything:
+ * a document with an entry behind it cannot be retyped away from `payslip`, and
+ * the PERSON on that entry cannot be unticked, because either leaves a figure
+ * still counted in every total with nothing on screen to account for it.
+ *
+ * Answered here rather than in the screens, and for a LIST of documents rather
+ * than one: the inspector asks about the document in front of it and the bulk
+ * bar asks about forty at once, and two spellings of the same query are two
+ * places for the rule to drift. Documents with no entry are absent from the
+ * map — a missing key means "nothing hangs off this", which is the ordinary
+ * case and costs no row.
+ */
+export async function salaryEntryPeople(
+	documentIds: readonly string[],
+	handle: Queryable = db
+): Promise<Map<string, string[]>> {
+	if (documentIds.length === 0) return new Map();
+	const rows = await handle
+		.select({ documentId: salaryEntry.documentId, personId: salaryEntry.personId })
+		.from(salaryEntry)
+		.where(inArray(salaryEntry.documentId, [...documentIds]));
+
+	const byDocument = new Map<string, string[]>();
+	for (const row of rows) {
+		if (!row.documentId) continue;
+		byDocument.set(row.documentId, [...(byDocument.get(row.documentId) ?? []), row.personId]);
+	}
+	return byDocument;
 }
 
 /**
@@ -255,6 +389,15 @@ const monthOf = (periodOn: string | null) => (periodOn ? periodOn.slice(0, 7) : 
  * household may rename, move or delete, and a renamed shelf must not unhook the
  * salary tracker. The same PDF filed for two people is two statements, and a
  * tax attachment is not a payslip.
+ *
+ * Deliberately blind to `sensitivity`, and the read rule must NOT be added
+ * here. A restricted slip a member cannot see is still a slip whose bytes are
+ * already on the shelf: hiding it from this match would make their upload file
+ * a second document and a second salary entry for the same month, and the
+ * month would report double pay — which is the failure content matching exists
+ * to prevent. Who may upload for whom is a question about the actor, not about
+ * the bytes, and it is answered where the actor is known: the `addPayslip` and
+ * `addPayslips` actions refuse anyone but the slip's own person or an admin.
  */
 export async function payslipMatchingContent(
 	personId: string,
@@ -336,14 +479,13 @@ export async function filePayslipDocument(
 		personId: string;
 		subject: string;
 		periodMonth: string;
-		currency: string;
 		storedName: string | null;
 		contentHash: string | null;
 		existingId?: string;
 	},
 	handle: Db = db
 ): Promise<string> {
-	const { personId, subject, periodMonth, currency, storedName, contentHash } = input;
+	const { personId, subject, periodMonth, storedName, contentHash } = input;
 	const name = `Payslip ${periodMonth} · ${subject}`;
 	const periodOn = `${periodMonth}-01`;
 
@@ -351,10 +493,7 @@ export async function filePayslipDocument(
 		const existingId = input.existingId;
 		await handle.transaction(async (tx) => {
 			await restateSlipMonth(personId, existingId, periodMonth, tx);
-			await tx
-				.update(document)
-				.set({ name, currency, periodOn })
-				.where(eq(document.id, existingId));
+			await tx.update(document).set({ name, periodOn }).where(eq(document.id, existingId));
 		});
 		return existingId;
 	}
@@ -364,20 +503,33 @@ export async function filePayslipDocument(
 		// Finance is where a payslip lives now; `type` is what the tracker reads.
 		// The two are orthogonal on purpose — a household may move this document
 		// to a shelf of its own and the month still counts.
-		await tx.insert(document).values({
-			id: documentId,
-			name,
-			shelfId: await shelfIdByKey('finance', tx),
-			type: 'payslip',
-			storedName,
-			ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
-			addedOn: new Date().toISOString().slice(0, 10),
-			currency,
-			periodOn,
-			contentHash
-		});
-		await tx.insert(documentLink).values({ documentId, targetId: personId }).onConflictDoNothing();
+		//
+		// Routed through the shared aggregate rather than a hand-written insert:
+		// the name format, the shelf, `ext`, the first-of-month `periodOn` and
+		// `content_hash` used to be written by hand in three places and had
+		// already drifted. This is now the one place a payslip document is built.
+		await insertDocumentAggregate(
+			{
+				id: documentId,
+				name,
+				shelfId: await shelfIdByKey('finance', tx),
+				type: 'payslip',
+				storedName,
+				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',
+				addedOn: new Date().toISOString().slice(0, 10),
+				expiresOn: null,
+				expiryVerb: 'expires',
+				periodOn,
+				contentHash,
+				targetIds: [personId],
+				tagNames: []
+			},
+			tx
+		);
 	});
+	// After the commit, never inside it: a queued job pointing at a document
+	// the transaction went on to roll back is work with nothing to read.
+	await enqueueExtraction(documentId, handle);
 	return documentId;
 }
 

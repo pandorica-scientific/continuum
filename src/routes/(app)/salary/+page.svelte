@@ -163,7 +163,7 @@
 							<!-- The word "slip" said nothing the paperclip does not: every row
 							     in this table IS a slip. The icon is the link, and whose month
 							     it is takes the space the word had. -->
-							{#if s.fileExt}
+							{#if s.documentId && s.fileExt}
 								<a
 									href={documentFileHref(s.documentId)}
 									target="_blank"
@@ -337,12 +337,21 @@
 										class="menu menu-lower"
 									>
 										<input type="hidden" name="entryId" value={s.id} />
-										<!-- Names what is going. A month evidenced by a bank credit
-										     too loses that credit's net figure, and saying so is the
-										     difference between a decision and a surprise. -->
-										<button type="submit" class="menu-item danger">
-											Delete {s.periodMonth} — gross, net and bonus
-										</button>
+										<!-- Names what is going, and what is not. A payslip takes
+										     its own statement of the month with it; a bank credit
+										     that had been merged into it is money that arrived and
+										     stays, as the net-only row it was before the slip
+										     claimed it. A row with no slip behind it is that credit
+										     or a typed figure, and there is nothing but the row. -->
+										{#if s.documentId}
+											<button type="submit" class="menu-item danger">
+												Delete {s.periodMonth} — the payslip and its figures
+											</button>
+										{:else}
+											<button type="submit" class="menu-item danger">
+												Delete {s.periodMonth} — gross, net and bonus
+											</button>
+										{/if}
 									</form>
 								{/if}
 							</div>

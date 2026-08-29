@@ -12,24 +12,17 @@ import { and, asc, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { asEnumValue } from '$lib/enums';
 import { db } from '$lib/server/db';
-import {
-	document,
-	documentLink,
-	person,
-	property,
-	subject,
-	tag,
-	tagLink
-} from '$lib/server/db/schema';
+import { document, documentLink, tag, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
-import { deleteDocument } from '$lib/server/documents/mutations';
+import { removeDocument } from '$lib/server/documents/lifecycle';
+import { documentTargetSpec, loadPickableTargets } from '$lib/server/documents/targets';
 import { listShelves, shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
-import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
+import { assertVisibleDocument, visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const inboxId = await systemShelfId('inbox');
-	const [waiting, shelves, people, properties, subjects, tags] = await Promise.all([
+	const [waiting, shelves, targets, tags] = await Promise.all([
 		db
 			.select({
 				id: document.id,
@@ -42,9 +35,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.where(and(eq(document.shelfId, inboxId), visibleDocumentPredicate(locals.person)))
 			.orderBy(asc(document.addedOn), asc(document.id)),
 		listShelves(),
-		db.select({ id: person.id, name: person.name }).from(person).orderBy(person.name),
-		db.select({ id: property.id, name: property.name }).from(property).orderBy(property.name),
-		db.select({ id: subject.id, name: subject.name }).from(subject).orderBy(subject.name),
+		// From the registry, which is the one list. The three hand-written
+		// selects this replaces meant a reviewer could file a lease against the
+		// flat but never against the tenancy, and a mortgage statement against
+		// nobody at all — with nothing on the screen to say a kind was missing.
+		loadPickableTargets(),
 		db.select({ name: tag.name }).from(tag).orderBy(tag.name)
 	]);
 
@@ -53,11 +48,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		isAdmin: locals.person?.role === 'admin',
 		shelves: shelves.filter((s) => s.key !== 'inbox'),
 		knownTags: tags.map((t) => t.name),
-		targets: [
-			...people.map((p) => ({ ...p, kind: 'person' })),
-			...properties.map((p) => ({ ...p, kind: 'property' })),
-			...subjects.map((s) => ({ ...s, kind: 'subject' }))
-		]
+		// In registry order, each carrying the heading it belongs under. The
+		// kinds a document is filed against from their own screen are absent:
+		// a list of every transaction is a list nobody can read by eye.
+		targets: targets.map((row) => ({
+			...row,
+			groupLabel: documentTargetSpec(row.kind).groupLabel
+		}))
 	};
 };
 
@@ -72,6 +69,11 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
+		// The load above lists only what this reviewer may see; this asks the
+		// same question of the id that actually came back, because a posted id
+		// has been through no list.
+		const readable = await assertVisibleDocument(id, locals.person ?? null);
+		if (!readable.ok) return fail(readable.status, { message: readable.message });
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		let shelfId: string;
@@ -126,12 +128,12 @@ export const actions: Actions = {
 	 * Something arrived that should never have: a duplicate, a photo of the
 	 * floor. Gone with its file and its links, and the next one takes its place.
 	 */
-	remove: async ({ request }) => {
+	remove: async ({ request, locals }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		const outcome = await deleteDocument(id);
-		if (!outcome.ok) return fail(404, { message: 'That document is no longer there.' });
+		const outcome = await removeDocument(id, locals.person);
+		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true, removedId: id };
 	},
 

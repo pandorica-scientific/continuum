@@ -185,8 +185,8 @@
 		<span class="section-label">The paperwork</span>
 		<div class="grid">
 			<label>
-				<!-- Uploading files these on the Tax shelf against this person, so the
-				     documents exist because the statement does — no separate trip to
+				<!-- Uploading files these on the Finance shelf against this person, so
+				     the documents exist because the statement does — no separate trip to
 				     the documents screen first. A year's filing is several pieces of
 				     paper, so several files at once; one kind per batch, and a mixed
 				     batch is two saves. -->
@@ -208,7 +208,7 @@
 				</select>
 			</label>
 			<label>
-				<span>…or one already on the Tax shelf</span>
+				<span>…or one already on the Finance shelf</span>
 				<select name="documentId" disabled={fileNames.length > 0}>
 					<option value="">None attached</option>
 					{#each taxDocs as d (d.id)}
@@ -220,7 +220,7 @@
 		{#if fileNames.length > 0}
 			<span class="attach-note">
 				{fileNames.length}
-				{fileNames.length === 1 ? 'file' : 'files'} will be filed on the Tax shelf as “{year}
+				{fileNames.length === 1 ? 'file' : 'files'} will be filed on the Finance shelf as “{year}
 				{country.trim().toUpperCase() || '—'}
 				{ATTACHMENT_KINDS.find((k) => k.key === fileKind)?.noun}”.
 			</span>

@@ -5,6 +5,7 @@
 	import { enhance } from '$app/forms';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { tagHue } from '$lib/tag-hue';
+	import { reach } from '$lib/tags-view';
 	import type { TagsScreen } from '$lib/server/tags/screen';
 
 	let {
@@ -22,14 +23,6 @@
 		void screen.tags;
 		confirming = null;
 	});
-
-	/** What the confirmation says a delete would reach. */
-	function reach(t: { tagged: number; rules: number }): string {
-		const parts: string[] = [];
-		if (t.tagged > 0) parts.push(`untags ${t.tagged}`);
-		if (t.rules > 0) parts.push(`${t.rules} ${t.rules === 1 ? 'rule' : 'rules'} stop applying it`);
-		return parts.join(' · ');
-	}
 </script>
 
 <section class="section">
@@ -58,12 +51,24 @@
 					style:border-color="color-mix(in srgb, var({tagHue(t.name)}) 45%, transparent)"
 					>{t.name}</span
 				>
-				{#if t.documents.length || t.properties.length}
+				{#if t.documents.length || t.properties.length || t.loans.length || t.transactions > 0 || t.splitLines > 0}
 					<span class="t-linked">
 						{#each t.properties as p (p.id)}<span class="t-item">🏢 {p.name}</span>{/each}
+						{#each t.loans as l (l.id)}<span class="t-item">🏦 {l.name}</span>{/each}
 						{#each t.documents as d (d.id)}<span class="t-item">🗂️ {d.name}</span>{/each}
-						{#if t.documentsMore + t.propertiesMore > 0}
-							<span class="t-more">+{t.documentsMore + t.propertiesMore} more</span>
+						{#if t.documentsMore + t.propertiesMore + t.loansMore > 0}
+							<span class="t-more">+{t.documentsMore + t.propertiesMore + t.loansMore} more</span>
+						{/if}
+						{#if t.transactions > 0}
+							<!-- A whole tagged transaction carries no card of its own either —
+							     `setTransactionTags`, the ordinary tagging path, has no name to
+							     show beside a property or a document. -->
+							<span class="t-more">+{t.transactions} on transactions</span>
+						{/if}
+						{#if t.splitLines > 0}
+							<!-- A split line carries no card of its own to list beside the
+							     items above, but a tag used only here must not look unused. -->
+							<span class="t-more">+{t.splitLines} on transaction lines</span>
 						{/if}
 					</span>
 				{/if}
@@ -83,9 +88,18 @@
 			<a class="t-money" href="/transactions?tag={t.id}" title="Transactions carrying this tag">
 				register →
 			</a>
+			{#if t.loans.length || t.loansMore}
+				<!-- Loans have no tag filter of their own to link to, unlike the
+				     register above — this opens the screen so the loan can be found
+				     among the (usually few) cards there. -->
+				<a class="t-money" href="/loans" title="Loans carrying this tag"> loans → </a>
+			{/if}
 			{#if confirming === t.id}
 				<form method="POST" action="?/deleteTag" use:enhance class="t-confirm">
-					{#if reach(t)}<span class="t-reach">{reach(t)}</span>{/if}
+					<!-- Never gated on `t.tagged` — `reach` totals every carrier the
+					     delete removes, including a whole tagged transaction or a tagged
+					     split line, neither of which has a chip above. -->
+					<span class="t-reach">{reach(t)}</span>
 					<input type="hidden" name="id" value={t.id} />
 					<button type="submit" class="t-del confirm">Delete?</button>
 				</form>

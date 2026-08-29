@@ -20,6 +20,7 @@ import { addTagsToTransaction } from '$lib/server/tags';
 import { extname } from 'node:path';
 import { hashBytes, saveUpload } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
@@ -642,12 +643,20 @@ function statementDocumentTags(statements: ParsedStatement[]): string[] {
 	].filter((tag): tag is string => Boolean(tag));
 }
 
-/** Ingest one uploaded statement file end to end. */
+/**
+ * Ingest one uploaded statement file end to end.
+ *
+ * `handle` is `Db`, not the wider `DatabaseHandle` most of this module takes:
+ * `enqueueExtraction` below runs after `inTransaction` returns, on the
+ * strength of that having committed. A caller passing its own open
+ * transaction here would make that call still be inside it — the type is
+ * what keeps that from compiling rather than needing to be remembered.
+ */
 export async function ingestFile(
 	filename: string,
 	buffer: Uint8Array,
 	explicitAccountId?: string,
-	handle: DatabaseHandle = db,
+	handle: Db = db,
 	/**
 	 * Allow the page to be read as an image when its text layer cannot be
 	 * proven. Rasterising and recognising a statement takes seconds per page, so
@@ -760,8 +769,13 @@ export async function ingestFile(
 		storedName = null; // unexpected extension — the import still proceeds
 	}
 
+	// Set only on the path that actually files a document — never on the
+	// preflight duplicate return above the insert, and never on a path that
+	// throws, since a rollback takes the row this would point at with it.
+	let filedDocumentId: string | null = null;
+
 	try {
-		return await inTransaction(handle, async (tx) => {
+		const result = await inTransaction(handle, async (tx) => {
 			// Serialise the same body before checking the unique content hash. The
 			// second uploader then gets the normal duplicate result instead of a
 			// transaction-level unique violation.
@@ -879,9 +893,10 @@ export async function ingestFile(
 			// is clutter rather than a record. A refusal never reaches this line: it
 			// throws out of the reader long before the transaction opens.
 			if (storedName) {
+				filedDocumentId = uuidv7();
 				await insertDocumentAggregate(
 					{
-						id: uuidv7(),
+						id: filedDocumentId,
 						name: statementDocumentName(filename, statements),
 						shelfId: await systemShelfId('statements', tx),
 						type: 'bank_statement',
@@ -890,15 +905,27 @@ export async function ingestFile(
 						addedOn: new Date().toISOString().slice(0, 10),
 						expiresOn: null,
 						expiryVerb: 'expires',
-						personIds: [],
-						propertyIds: [],
-						accountIds: firstAccountId ? [firstAccountId] : [],
-						transactionIds: [],
-						subjectIds: [],
+						// The same bytes already fingerprinted for `importFile` above —
+						// the file and the document it is filed as are one upload, so
+						// they carry one hash between them.
+						contentHash,
+						targetIds: firstAccountId ? [firstAccountId] : [],
 						tagNames: statementDocumentTags(statements)
 					},
 					tx
 				);
+
+				// Tie the import to the document just filed for it, in the same
+				// transaction. Before this, the two rows shared a file with nothing
+				// keying one to the other, so deleting the document from the
+				// Documents screen deleted the import's only original underneath it.
+				// The column is ON DELETE RESTRICT: once this is set, that delete is
+				// refused rather than silently losing the evidence behind every row
+				// this import wrote (see `deleteDocument`).
+				await tx
+					.update(importFile)
+					.set({ documentId: filedDocumentId })
+					.where(eq(importFile.id, fileId));
 			}
 
 			const unresolved = outcomes.find((o) => o.needsAccount);
@@ -926,6 +953,10 @@ export async function ingestFile(
 				statements: outcomes
 			};
 		});
+		// After the commit, never inside it: a queued job pointing at a document
+		// the transaction went on to roll back is work with nothing to read.
+		if (filedDocumentId) await enqueueExtraction(filedDocumentId, handle);
+		return result;
 	} catch (error) {
 		// The transaction has rolled back, so nothing — importFile included — was
 		// written; the user can choose an account and upload the same file again.

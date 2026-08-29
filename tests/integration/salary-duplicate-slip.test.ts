@@ -86,7 +86,6 @@ async function fileOnShelf(options: {
 		storedName,
 		ext: 'PDF',
 		addedOn: '2026-08-25',
-		currency: 'CZK',
 		periodOn: `${options.month}-01`,
 		contentHash: options.withHash === false ? null : hashBytes(options.bytes)
 	});

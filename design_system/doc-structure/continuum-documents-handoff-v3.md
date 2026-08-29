@@ -241,11 +241,18 @@ Folder tree, card/thumbnail grid, drag-and-drop between shelves, AI classificati
 
 ---
 
-## 7. Open decisions — final state (v0.7.0 shipped)
+## 7. Open decisions — final state (v0.7.0 shipped, v0.7.1 amended)
 
 | Item | Status |
 |---|---|
 | Restricted semantics + enforcement | **Shipped.** `visibleDocumentPredicate` is applied by the Documents load, search, every count, the briefing, calendar generation, the ICS feed and both file routes. A null actor is a member, so the token-authenticated feed cannot leak. |
+| Restricted semantics on the module screens | **Shipped in v0.7.1**, and narrowed to D2: only the PAPER is hidden. Salary history, tax attachments and their picker, the property and loan cards, transaction receipts, the Investments reports and the Tags view (its counts included) all take an `Actor` and apply the predicate in SQL; a module's own figures — the salary a month is credited with — stay. |
+| One link seam | **Shipped in v0.7.1** as `src/lib/server/documents/targets.ts`: nine linkable kinds in one registry, with `documentsAbout`, `candidateDocuments(For)`, `attachDocument`/`detachDocument`, search Tier B and the about-filter all built from it. The five hand-written per-screen lists it replaced are gone, and `tests/integration/document-targets` holds the subtraction from `ENTITY_KINDS`. |
+| Documents on a record's screen | **Shipped in v0.7.1** as one component, `DocumentsCard` (`bare`, `confirmDetach`): property and tenancies, loans, accounts, contacts, transactions, tax statements and investments. A screen drawing its own list is now a bug. |
+| Subjects UI | **Shipped in v0.7.1.** `subject` had a lifecycle since v0.7.0 and no writer; the rail's `SUBJECTS` section now renames, changes the emoji, adds, archives and unarchives, rows filter `?entity=`, archived rows are dimmed behind `Include archived subjects`, and the household is refused archiving in `subjects.ts` rather than in the markup. There is no `removeSubject` and there will not be one. |
+| The record owns the deadline | **Shipped in v0.7.1** (D7) as `documents/deadlines.ts`: a document dated exactly as its linked tenancy's end or its loan's current fixation end reminds through the record only. A different date is not a duplicate and still reminds on its own. |
+| Payslip ↔ bank credit cross-link | **Shipped in v0.7.1** (D6) as a `document_link` row written when a slip claims a recorded credit. Credit-then-slip only: a slip filed before the statement that pays it leaves two rows and no link, which is the pre-existing matching gap and out of scope here. |
+| Upgrade path | **Not shipped, either release.** The `scripts/upgrade-documents-v2.mjs` this document expected was removed before v0.7.0 shipped, and v0.7.1 does not add one: it is fresh-install and demo only. A hand-migrated instance runs the operator SQL in the v0.7.1 plan after a backup. |
 | Mixed PDFs | **Shipped** via per-page routing: a page with ≥50 folded characters becomes a `text_layer` chunk, one without is rasterised and OCR'd. |
 | Tenancy → property shelf merge | Still deferred, and now cheap: shelves are rows, so it is a rename and a reassign rather than a migration. |
 | Property lifecycle (sold flat) | Still deferred — a separate session with the finance side. `subject.archivedAt` and the archive-scope predicate are the half of it that landed. |
@@ -257,9 +264,10 @@ Folder tree, card/thumbnail grid, drag-and-drop between shelves, AI classificati
 Two shapes departed from this document during the build, both recorded where
 they landed rather than here:
 
-- The **upgrade script lives in `scripts/`**, not beside the baseline:
+- The **upgrade script was to live in `scripts/`**, not beside the baseline —
   `drizzle/` holds exactly one file and `tests/integration/baseline-migration`
-  asserts it, so a second file there fails the suite.
+  asserts it, so a second file there fails the suite. It was then removed
+  before v0.7.0 shipped and never replaced; see the Upgrade path row above.
 - The **drag handle reuses the existing `grip` icon** rather than adding a
   third new path. Two handle glyphs that look identical is the near-duplicate
   the icon set exists to avoid.

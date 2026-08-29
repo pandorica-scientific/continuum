@@ -115,6 +115,10 @@ export const ENUMS = {
 		'receipt',
 		'payslip',
 		'bank_statement',
+		// A broker's yearly report is the paper the investments tab is built on.
+		// Filed as 'other' it was the one financial document the type filter could
+		// not name.
+		'broker_report',
 		'insurance_policy',
 		'claim',
 		'id_document',

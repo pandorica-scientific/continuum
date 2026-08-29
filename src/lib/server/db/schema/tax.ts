@@ -14,7 +14,6 @@ import {
 	uuid
 } from 'drizzle-orm/pg-core';
 import { person } from './auth';
-import { document } from './documents';
 import { currency } from './money';
 
 // What a yearly tax statement said, per person per country. Nothing here is
@@ -37,24 +36,16 @@ export const taxStatement = pgTable(
 			.references(() => currency.code),
 		grossIncomeMinor: bigint('gross_income_minor', { mode: 'bigint' }).notNull(),
 		taxPaidMinor: bigint('tax_paid_minor', { mode: 'bigint' }).notNull(),
-		/**
-		 * Superseded by `document_link` in v0.4.3, and no longer read or written.
-		 *
-		 * A statement holds many documents now — the statement itself, the
-		 * employer's income confirmation, the broker's report — and they are
-		 * linked to the statement's `entity` row like every other filing. Keeping
-		 * this as a "primary" attachment alongside those links would be two
-		 * sources of truth for one fact. The column stays only because the schema
-		 * is additive-only.
-		 */
-		documentId: uuid('document_id').references(() => document.id, { onDelete: 'set null' }),
+		// No document column here, deliberately. A statement's papers hang off its
+		// `entity` row through `document_link` — the statement itself, the
+		// employer's income confirmation, the broker's report — and a "primary"
+		// attachment beside those links was two sources of truth for one fact.
 		note: text('note'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
 		index('tax_statement_currency_idx').on(table.currency),
-		uniqueIndex('tax_statement_unique_idx').on(table.personId, table.year, table.country),
-		index('tax_statement_document_idx').on(table.documentId)
+		uniqueIndex('tax_statement_unique_idx').on(table.personId, table.year, table.country)
 	]
 );
 
