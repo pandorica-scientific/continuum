@@ -4,19 +4,17 @@ import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { eq, getTableColumns } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	contact,
 	contactLink,
 	document,
-	documentLink,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
 	property,
 	propertyBill,
-	shelf,
 	tagLink,
 	tag,
 	tenancy,
@@ -26,7 +24,7 @@ import { initialsFor } from '$lib/people';
 import { syncMeterBill } from '$lib/server/home';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { removeUpload, saveUpload } from '$lib/server/system/files';
+import { hashBytes, removeUpload, saveUpload, saveUploadBytes } from '$lib/server/system/files';
 import {
 	createPropertyBill,
 	createTenancy,
@@ -37,6 +35,13 @@ import {
 	setPropertyImage
 } from '$lib/server/property/mutations';
 import { updatePropertyTags } from '$lib/server/tags';
+import {
+	attachDocument,
+	candidateDocuments,
+	detachDocument,
+	documentsAbout
+} from '$lib/server/documents/targets';
+import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { periodForMonth } from '$lib/loans/amortise';
 import { displayCurrency, formatMinor, parseAmountToMinor, toMajorString } from '$lib/money';
 import { recordOpening, recordValuation, valuationHistory } from '$lib/server/property';
@@ -49,23 +54,30 @@ function daysUntil(date: string): number {
 	return Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
 }
 
-export const load: PageServerLoad = async ({ url }) => {
-	const [properties, tenancies, bills, loans, periods, links, docs, rates] = await Promise.all([
-		listProperties(),
-		db.select().from(tenancy),
-		db.select().from(propertyBill).orderBy(propertyBill.sort),
-		db.select().from(loan),
-		db.select().from(loanFixationPeriod),
-		db.select().from(loanProperty),
-		// The shelf's label comes from the join, not from a code list: shelves are
-		// rows a household renames, and a stale copy here would print the old name.
-		db
-			.select({ ...getTableColumns(document), shelfLabel: shelf.label })
-			.from(document)
-			.innerJoin(shelf, eq(shelf.id, document.shelfId))
-			.orderBy(document.addedOn),
-		loadRateTable()
-	]);
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const [properties, tenancies, bills, loans, periods, links, docs, rates, allTags] =
+		await Promise.all([
+			listProperties(),
+			db.select().from(tenancy),
+			db.select().from(propertyBill).orderBy(propertyBill.sort),
+			db.select().from(loan),
+			db.select().from(loanFixationPeriod),
+			db.select().from(loanProperty),
+			// Only what a BILL's row needs — whether the file behind it is one this
+			// actor may open at all. The documents card below is loaded by
+			// `documentsAbout`, which is where the shelf label and the read rule both
+			// come from. Restricted here too: a bill's scan is paper like any other,
+			// so a member sees the amount with no paperclip behind it.
+			db
+				.select({ id: document.id })
+				.from(document)
+				.where(visibleDocumentPredicate(locals.person ?? null)),
+			loadRateTable(),
+			// For the tag field's suggestion list, the same way the Loans screen
+			// offers its own known tags: typing "Renovation" here and "renovation"
+			// there should land on the one tag, not two differently-cased ones.
+			db.select().from(tag)
+		]);
 	const today = new Date().toISOString().slice(0, 10);
 	const month = today.slice(0, 7);
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
@@ -247,12 +259,15 @@ export const load: PageServerLoad = async ({ url }) => {
 		const propertyBills = bills
 			.filter((b) => b.propertyId === current.id)
 			.map((b) => {
-				const doc = b.documentId ? docs.find((d) => d.id === b.documentId) : undefined;
+				// `docs` already carries the read rule, so a restricted bill scan
+				// simply is not in it — a member gets an amount with no id behind it,
+				// never the raw column, so there is nothing to build a link out of.
+				const visible = b.documentId ? docs.some((d) => d.id === b.documentId) : false;
 				return {
 					id: b.id,
 					label: b.label,
 					value: formatMinor(b.amountMinor, current.currency),
-					file: doc?.storedName ?? null,
+					documentId: visible ? b.documentId : null,
 					fromMeter: b.source === 'meter'
 				};
 			});
@@ -275,6 +290,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				.orderBy(contact.name);
 
 			lease = {
+				id: currentTenancy.id,
 				tenantName: currentTenancy.tenantName,
 				tenantInitials: initialsFor(currentTenancy.tenantName),
 				tenantContacts,
@@ -299,7 +315,13 @@ export const load: PageServerLoad = async ({ url }) => {
 					{ label: 'Lease ends', value: currentTenancy.endsOn ?? 'open-ended' },
 					{ label: 'Since', value: currentTenancy.startsOn ?? '—' }
 				],
-				renewalNotice: currentTenancy.renewalNoticeOn
+				renewalNotice: currentTenancy.renewalNoticeOn,
+				// The lease contract is paper about the TENANCY, not the flat: a flat
+				// let out twice over the years should not show the first tenant's
+				// signed lease once the second one has moved in.
+				documents: await documentsAbout(currentTenancy.id, locals.person ?? null),
+				documentCandidates: await candidateDocuments(currentTenancy.id, locals.person ?? null),
+				addDocumentHref: `/documents?add=1&addShelfKey=tenancy&targetKind=tenancy&targetId=${currentTenancy.id}`
 			};
 		}
 
@@ -332,27 +354,14 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		}
 
-		// Documents are linked by document_property — a real key, so renaming the
-		// flat cannot orphan its contracts.
-		const today2 = new Date().toISOString().slice(0, 10);
-		const docLinks = await db
-			.select()
-			.from(documentLink)
-			.where(eq(documentLink.targetId, current.id));
-		const linkedDocIds = new Set(docLinks.map((l) => l.documentId));
-		const propertyDocs = docs
-			.filter((d) => linkedDocIds.has(d.id))
-			.sort((a, b) => (a.addedOn < b.addedOn ? 1 : -1))
-			.map((d) => ({
-				id: d.id,
-				name: d.name,
-				ext: d.ext,
-				file: d.storedName,
-				shelfLabel: d.shelfLabel,
-				meta: d.expiresOn ? `${d.expiryVerb} ${d.expiresOn}` : `added ${d.addedOn}`,
-				amber: d.expiresOn !== null,
-				expired: d.expiresOn !== null && d.expiresOn < today2
-			}));
+		// The paper filed against this flat, through the one query every documents
+		// card uses (`document_link`, not a per-module foreign key). It carries
+		// both halves of the read rule in its `where`, so this card hides exactly
+		// what the Documents screen hides. Handed to `DocumentsCard` unchanged —
+		// the card computes its own expiry tone, so no `{file, meta, expired,
+		// amber}` reshaping happens here any more.
+		const propertyDocs = await documentsAbout(current.id, locals.person ?? null);
+		const propertyDocCandidates = await candidateDocuments(current.id, locals.person ?? null);
 
 		const flatTagRows = await db
 			.select({ name: tag.name })
@@ -398,12 +407,13 @@ export const load: PageServerLoad = async ({ url }) => {
 			lease,
 			mortgage: mortgageCard,
 			documents: propertyDocs,
-			// a rented flat's paperwork lands on the Tenancy shelf by default
-			addDocumentHref: `/documents?add=1&addShelfKey=${current.kind === 'rented' ? 'tenancy' : 'property'}&propertyId=${current.id}`
+			documentCandidates: propertyDocCandidates,
+			addDocumentHref: `/documents?add=1&addShelfKey=property&targetKind=property&targetId=${current.id}`
 		};
 	}
 
 	return {
+		isAdmin: locals.person?.role === 'admin',
 		currencies: await availableCurrencies(),
 		// Names only, for the tenant field's suggestion list. Adding a tenant now
 		// files them in the address book, and seeing who is already there is what
@@ -411,6 +421,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		contactNames: (await db.select({ name: contact.name }).from(contact).orderBy(contact.name)).map(
 			(row) => row.name
 		),
+		knownTags: allTags.map((t) => ({ id: t.id, name: t.name })),
 		tabs: properties.map((p) => ({
 			id: p.id,
 			name: p.name,
@@ -659,15 +670,21 @@ export const actions: Actions = {
 		let documentId: string | null = null;
 		let storedName: string | null = null;
 		let extension = 'PDF';
+		let contentHash: string | null = null;
 		const file = form.get('file');
 		if (file instanceof File && file.size > 0) {
+			// Read the bytes once so they can both be saved and fingerprinted —
+			// `saveUploadBytes` in place of `saveUpload` is what makes them
+			// available for the hash rather than being read a second time.
+			const bytes = new Uint8Array(await file.arrayBuffer());
 			try {
-				storedName = await saveUpload(file);
+				storedName = await saveUploadBytes(bytes, file.name);
 			} catch (err) {
 				return fail(400, { message: err instanceof Error ? err.message : 'Upload failed.' });
 			}
 			documentId = uuidv7();
 			extension = extname(file.name).replace('.', '').toUpperCase() || 'PDF';
+			contentHash = hashBytes(bytes);
 		}
 
 		await createPropertyBill({
@@ -682,10 +699,41 @@ export const actions: Actions = {
 							name: `${label} · ${rows[0].name}`,
 							storedName,
 							ext: extension,
-							addedOn: new Date().toISOString().slice(0, 10)
+							addedOn: new Date().toISOString().slice(0, 10),
+							contentHash
 						}
 					: null
 		});
+		return { ok: true };
+	},
+
+	/**
+	 * File an existing document against the flat or one of its tenancies — the
+	 * "Attach" picker on either `DocumentsCard`. Both cards post here with their
+	 * own `targetId`, so one action serves both without knowing which kind it
+	 * was handed; the registry is what resolves that.
+	 */
+	attachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
+		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Unfile a document — the link only. The document stays on its shelf, so a
+	 * mis-click costs a re-attach rather than evidence.
+	 */
+	detachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Which document?' });
+		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	}
 };

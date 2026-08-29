@@ -13,6 +13,7 @@
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import FloorPlan from '$lib/components/FloorPlan.svelte';
 	import FloorPlanEditor from '$lib/components/FloorPlanEditor.svelte';
+	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	let { data, form } = $props();
@@ -165,7 +166,11 @@
 				{/each}
 				<form method="POST" action="?/tags" use:enhance>
 					<input type="hidden" name="id" value={data.detail.id} />
-					<TagInput transactionId={data.detail.id} known={[]} placeholder="Add a tag…" />
+					<TagInput
+						transactionId={data.detail.id}
+						known={data.knownTags ?? []}
+						placeholder="Add a tag…"
+					/>
 				</form>
 				<!-- A bare box reading "tag…" beside no label explained nothing about
 				     what a tag is or why this flat would want one. -->
@@ -422,6 +427,20 @@
 							<span class="quiet">Renewal notice due by {data.detail.lease.renewalNotice}.</span>
 						{/if}
 					</div>
+					<DocumentsCard
+						heading="Tenancy documents"
+						documents={data.detail.lease.documents}
+						target={{
+							id: data.detail.lease.id,
+							kind: 'tenancy',
+							label: `${data.detail.name} · ${data.detail.lease.tenantName}`
+						}}
+						emptyText="Nothing filed about this tenancy yet — the signed lease belongs here."
+						addHref={data.detail.lease.addDocumentHref}
+						attach={{ action: 'attachDocument', candidates: data.detail.lease.documentCandidates }}
+						detachAction="detachDocument"
+						isAdmin={data.isAdmin}
+					/>
 				{:else if addingTenancy}
 					<form method="POST" action="?/addTenancy" use:enhance class="card add-form">
 						<input type="hidden" name="propertyId" value={data.detail.id} />
@@ -507,9 +526,9 @@
 					<div class="bill">
 						<span class="b-label">
 							{bill.label}
-							{#if bill.file}
+							{#if bill.documentId}
 								<a
-									href="/files/{bill.file}"
+									href={documentFileHref(bill.documentId)}
 									target="_blank"
 									rel="noopener"
 									class="b-file"
@@ -597,44 +616,16 @@
 				</div>
 			{/if}
 
-			<div class="card stack">
-				<div class="eyebrow-row">
-					<Eyebrow emoji="🗂️" label="Documents" />
-					<a href="/documents?q={encodeURIComponent(data.detail.name)}" class="eyebrow-caption">
-						Open in Documents →
-					</a>
-				</div>
-				{#each data.detail.documents as d (d.id)}
-					<div class="doc">
-						<span class="mono ext">{d.ext}</span>
-						<div class="doc-names">
-							{#if d.file}
-								<a
-									href={documentFileHref(d.id)}
-									target="_blank"
-									class="doc-name"
-									data-file-ext={d.ext}>{d.name}</a
-								>
-							{:else}
-								<span class="doc-name">{d.name}</span>
-							{/if}
-							<span
-								class="doc-meta"
-								style:color={d.expired ? 'var(--red)' : d.amber ? 'var(--yellow)' : 'var(--fg3)'}
-							>
-								{d.shelfLabel} · {d.meta}
-							</span>
-						</div>
-					</div>
-				{:else}
-					<span class="quiet">
-						Nothing filed about this flat yet — the renting contract belongs here.
-					</span>
-				{/each}
-				<a href={data.detail.addDocumentHref} class="btn" style="align-self: flex-start;">
-					➕ Add a document about this flat
-				</a>
-			</div>
+			<DocumentsCard
+				documents={data.detail.documents}
+				target={{ id: data.detail.id, kind: 'property', label: data.detail.name }}
+				emptyText="Nothing filed about this flat yet — the deed or an insurance policy belongs here."
+				addHref={data.detail.addDocumentHref}
+				addLabel="Add a document about this flat"
+				attach={{ action: 'attachDocument', candidates: data.detail.documentCandidates }}
+				detachAction="detachDocument"
+				isAdmin={data.isAdmin}
+			/>
 		</div>
 	</section>
 {:else}
@@ -878,38 +869,6 @@
 		align-items: baseline;
 		gap: var(--space-6);
 		font-size: var(--text-md);
-	}
-	.doc {
-		display: grid;
-		grid-template-columns: 38px minmax(0, 1fr);
-		gap: 11px;
-		align-items: center;
-		padding: 4px 0;
-	}
-	.ext {
-		font-size: var(--text-2xs);
-		letter-spacing: 0.04em;
-		color: var(--fg3);
-		border: 1px solid var(--bd);
-		border-radius: 5px;
-		padding: 4px 0;
-		text-align: center;
-	}
-	.doc-names {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		min-width: 0;
-	}
-	.doc-name {
-		font-size: var(--text-md);
-		color: var(--fg1);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.doc-meta {
-		font-size: var(--text-xs);
 	}
 	.b-label {
 		color: var(--fg2);

@@ -86,7 +86,7 @@ export function attachmentKind(key: string): (typeof ATTACHMENT_KINDS)[number] {
 }
 
 /**
- * What a filed document is called on the Tax shelf.
+ * What a filed document is called on the Finance shelf.
  *
  * Derived from the statement and the kind, not typed again: the name a document
  * is found by should say the same thing the statement says, and a second
@@ -159,10 +159,11 @@ export interface SalaryGrossMonth {
 /**
  * What a person's salary record says they earned GROSS in a year.
  *
- * Gross, explicitly. Until v0.4.6 this summed `document.amountMinor` for the
- * payslips shelf, which the reader had filled from the slip's NET line — so the
+ * Gross, explicitly. This used to sum one untyped amount carried on the payslip
+ * DOCUMENT, which the reader had filled from the slip's NET line — so the
  * prefill understated a tax statement's gross income by everything withheld,
- * and the divergence note fired on every correctly-entered statement.
+ * and the divergence note fired on every correctly-entered statement. Salary
+ * states gross and net as two fields now, and the document carries neither.
  *
  * A month evidenced only by a bank credit has a net figure and no gross. It
  * contributes neither an amount nor a month: the count is what tells the screen

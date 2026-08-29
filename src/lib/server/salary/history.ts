@@ -5,9 +5,10 @@
 // that never read it. It is a Money question — what was earned — so it moved to
 // its own screen, and the assembly came here rather than being copied.
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { salaryStats, type SalaryYear } from '$lib/salary';
 
 export interface SalaryPersonHistory {
@@ -24,8 +25,15 @@ export interface SalaryPersonHistory {
 		 * the row it corrects, and two rows for one month need two names.
 		 */
 		id: string;
-		/** The stored file this statement was read from. */
-		documentId: string;
+		/**
+		 * The stored file this statement was read from — null when the reader may
+		 * not know it exists.
+		 *
+		 * Restricted paper is ABSENT rather than forbidden, and an id in the page
+		 * payload still says the document is there, so it leaves with the file.
+		 * What the month earned is the entry's own figure and stays either way.
+		 */
+		documentId: string | null;
 		periodMonth: string;
 		grossMinor: bigint | null;
 		netMinor: bigint | null;
@@ -59,6 +67,7 @@ export interface SalaryPersonHistory {
 export async function loadSalaryHistory(
 	baseCurrency: string,
 	convert: (amount: bigint, from: string, to: string, day: string) => bigint,
+	actor: Actor | null,
 	handle: Db = db
 ): Promise<SalaryPersonHistory[]> {
 	const [people, slipDocs, slipOwners, entries] = await Promise.all([
@@ -66,7 +75,13 @@ export async function loadSalaryHistory(
 			.select({ id: person.id, name: person.name, birthYear: person.birthYear })
 			.from(person)
 			.orderBy(person.createdAt, person.id),
-		handle.select().from(document).where(eq(document.type, 'payslip')),
+		// The read rule in the query, not a filter afterwards. A member asking for
+		// this screen gets the months and their figures; the restricted slips
+		// behind some of them are simply not in this result.
+		handle
+			.select()
+			.from(document)
+			.where(and(eq(document.type, 'payslip'), visibleDocumentPredicate(actor))),
 		// Filtered to people: document_link also holds a document's properties,
 		// accounts and subjects, and a payslip filed against a flat is not a
 		// payslip belonging to a flat.
@@ -132,9 +147,9 @@ export async function loadSalaryHistory(
 			};
 		});
 
-		// The document is the FILE, and nothing else. Its `amountMinor` is not
-		// read at all: reading it as gross while the reader picked net is the
-		// defect v0.4.6 exists to fix, and a second source is how that happened.
+		// The document is the FILE, and nothing else. Every figure below comes from
+		// the entry: a document that also carried an amount was a second source of
+		// truth, and it was read as gross while the reader had picked net.
 		const fileOf = new Map(
 			slipDocs.filter((d) => ownerOf.get(d.id) === p.id).map((d) => [d.id, d.storedName] as const)
 		);
@@ -148,21 +163,29 @@ export async function loadSalaryHistory(
 			// walking the converted list only to look each row back up meant
 			// converting three amounts per slip and discarding all of them.
 			payslips: recorded
-				.filter((e) => e.documentId !== null && fileOf.has(e.documentId))
-				.map((e) => ({
-					/** The ENTRY, not the document: a correction has to name a row. */
-					id: e.id,
-					documentId: e.documentId!,
-					periodMonth: e.periodMonth,
-					// In the currency it was recorded in. Converting here put every row
-					// in the base currency, so a household reporting in euro read its
-					// Czech payslips as euro amounts.
-					grossMinor: e.grossMinor,
-					netMinor: e.netMinor,
-					bonusMinor: e.bonusMinor,
-					currency: e.currency ?? baseCurrency,
-					file: fileOf.get(e.documentId!) ?? null
-				}))
+				.filter((e) => e.documentId !== null)
+				.map((e) => {
+					// A slip this reader may not see costs the row its PAPER and
+					// nothing else. Dropping the row instead would delete a month
+					// somebody worked from a screen that is about what they earned —
+					// the figures below are the entry's own and owe nothing to the
+					// document.
+					const paper = fileOf.has(e.documentId!);
+					return {
+						/** The ENTRY, not the document: a correction has to name a row. */
+						id: e.id,
+						documentId: paper ? e.documentId : null,
+						periodMonth: e.periodMonth,
+						// In the currency it was recorded in. Converting here put every row
+						// in the base currency, so a household reporting in euro read its
+						// Czech payslips as euro amounts.
+						grossMinor: e.grossMinor,
+						netMinor: e.netMinor,
+						bonusMinor: e.bonusMinor,
+						currency: e.currency ?? baseCurrency,
+						file: paper ? (fileOf.get(e.documentId!) ?? null) : null
+					};
+				})
 				.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1))
 		};
 	});

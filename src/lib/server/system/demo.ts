@@ -8,9 +8,12 @@
 import { uuidv7 } from 'uuidv7';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import { initialsFor } from '$lib/people';
+import { formatMinor } from '$lib/money';
+import type { EnumValue } from '$lib/enums';
 import {
 	contact,
 	contactLink,
@@ -18,8 +21,6 @@ import {
 	brokerImportState,
 	brokerOperation,
 	currencyRate,
-	document,
-	documentLink,
 	loan,
 	loanFixationPeriod,
 	loanProperty,
@@ -29,20 +30,170 @@ import {
 	property,
 	propertyBill,
 	rule,
-	salaryEntry,
 	taxStatement,
 	taxStatementLine,
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { createDocument } from '$lib/server/documents/mutations';
+import { addSubject, archiveSubject } from '$lib/server/documents/subjects';
+import { filePayslipDocument, recordSalary } from '$lib/server/salary';
+import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { saveSplits } from '$lib/server/splits';
 import { FINGERPRINT_VERSION } from '$lib/server/import/fingerprint';
 import { setTransactionTags } from '$lib/server/tags';
 import { hashPassword } from '$lib/server/auth';
-import { setSetting } from '$lib/server/settings';
+import { isSetUp, setSetting } from '$lib/server/settings';
 
 const DEMO_PASSWORD = 'demo-demo-demo';
+
+/**
+ * Every word and figure a generated demo PDF is allowed to print (decision
+ * D10).
+ *
+ * The rule is one sentence: a demo page may quote the household this file
+ * invents and nothing else — not an environment variable, not a setting, not a
+ * row belonging to whoever happens to be running the instance. Holding the
+ * strings here rather than at each call site is what makes that reviewable at a
+ * glance, and `tests/integration/demo-seed` asserts it from the other side by
+ * reading the finished pages back.
+ */
+const JANA = 'Jana Nováková';
+const PETR = 'Petr Novák';
+const DEMO_EMPLOYER = 'Zaměstnavatel s.r.o.';
+const DEMO_TENANT = 'Martin Dvořák';
+const DEMO_INSURER = 'Pojišťovna Vltava a.s.';
+const DEMO_POLICY_NUMBER = 'PV-2019-004417';
+const DEMO_ID_NUMBER = 'ID 99 812 344';
+const DEMO_BROKER = 'XTB';
+const DEMO_CAR = 'Family hatchback';
+const DEMO_DOG = 'Fík';
+/**
+ * Printed on the receipts so search-by-identifier has something to find. A
+ * Czech receipt is looked up by its variable symbol far more often than by the
+ * shop's name, and that is the search the demo could not previously show.
+ */
+const DEMO_VARIABLE_SYMBOLS = ['10078410', '20450913', '30991244'];
+
+/** A4 in PDF points, and the frame every generated page is laid out in. */
+const PAGE_WIDTH = 595.276;
+const PAGE_HEIGHT = 841.89;
+const PAGE_MARGIN = 56;
+const LINE_HEIGHT = 18;
+
+/** An amount as a demo page prints it: figure then code, never a symbol. */
+const amount = (minor: bigint, currency: string): string =>
+	`${formatMinor(minor, currency, { exact: true })} ${currency}`;
+
+/**
+ * What a standard PDF font can actually print.
+ *
+ * The built-in Helvetica is WinAnsi-encoded — Latin-1 — and pdf-lib THROWS on a
+ * character it cannot encode, so "Česká spořitelna" would fail the entire seed
+ * on the ř. Embedding a Unicode face instead means shipping a font file and a
+ * fontkit dependency for pages nobody prints, so the accents are folded off
+ * here. Nothing is lost to search: `contact_fold` folds the query the same way,
+ * so looking for "Nováková" still finds a page that says "Novakova".
+ */
+function pdfSafe(text: string): string {
+	return (
+		text
+			// The two characters `formatMinor` emits that Latin-1 has no room for:
+			// a true minus sign and a narrow no-break space. Dropping them blindly
+			// would take the minus off a negative amount.
+			.replace(/[−–—]/g, '-')
+			.replace(/[\u00a0\u2007\u2009\u202f]/g, ' ')
+			.normalize('NFD')
+			.replace(/[̀-ͯ]/g, '')
+			// Anything still outside printable Latin-1 is dropped rather than
+			// allowed to throw halfway through a seed.
+			.replace(/[^ -~¡-ÿ]/g, '')
+	);
+}
+
+/**
+ * One page of plain text as a real PDF — a title and a column of lines.
+ *
+ * Text drawn with a standard font, so the file carries a genuine TEXT LAYER:
+ * the extraction queue reads these without OCR, which is what makes
+ * search-by-contents work in demo mode on a machine with no language data
+ * installed. Each page comes out around 1–2 KB, so twenty of them cost less
+ * than one of the interior photos the demo already ships.
+ */
+async function makeDemoPdf(title: string, lines: string[]): Promise<Uint8Array> {
+	const doc = await PDFDocument.create();
+	doc.setTitle(pdfSafe(title));
+	doc.setCreator('Continuum');
+	doc.setProducer('Continuum demo seed');
+	const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+	const [heading, body] = await Promise.all([
+		doc.embedFont(StandardFonts.HelveticaBold),
+		doc.embedFont(StandardFonts.Helvetica)
+	]);
+
+	let y = PAGE_HEIGHT - PAGE_MARGIN;
+	page.drawText(pdfSafe(title), { x: PAGE_MARGIN, y, size: 15, font: heading });
+	y -= LINE_HEIGHT * 2;
+	for (const line of lines) {
+		page.drawText(pdfSafe(line), { x: PAGE_MARGIN, y, size: 10.5, font: body });
+		y -= LINE_HEIGHT;
+	}
+	return new Uint8Array(await doc.save());
+}
+
+/**
+ * A generated page, put on the data volume and filed as a document.
+ *
+ * Every piece of demo paper except the payslips goes through here (those go
+ * through `filePayslipDocument`, which is the salary tracker's own writer), so
+ * every demo document gets the three things a real upload gets: bytes under a
+ * stored name, a `content_hash` over exactly those bytes, and an extraction job
+ * queued AFTER the document's own transaction has committed. `createDocument`
+ * does the last two in that order; nothing here writes a `document` row by
+ * hand.
+ */
+async function fileDemoPdf(input: {
+	name: string;
+	shelfKey: string;
+	type: EnumValue<'document.type'>;
+	lines: string[];
+	/** Whatever the paper is about, by id — the far end of a link is an entity. */
+	targetIds?: string[];
+	tagNames?: string[];
+	note?: string;
+	sensitivity?: EnumValue<'document.sensitivity'>;
+	expiresOn?: string;
+	expiryVerb?: EnumValue<'document.expiry_verb'>;
+	periodOn?: string;
+}): Promise<string> {
+	const bytes = await makeDemoPdf(input.name, input.lines);
+	const storedName = await saveUploadBytes(bytes, 'demo.pdf');
+	const id = uuidv7();
+	await createDocument({
+		id,
+		name: input.name,
+		shelfId: await shelfIdByKey(input.shelfKey),
+		type: input.type,
+		note: input.note ?? null,
+		sensitivity: input.sensitivity ?? 'normal',
+		storedName,
+		ext: 'PDF',
+		addedOn: new Date().toISOString().slice(0, 10),
+		expiresOn: input.expiresOn ?? null,
+		expiryVerb: input.expiryVerb ?? 'expires',
+		personIds: [],
+		propertyIds: [],
+		accountIds: [],
+		transactionIds: [],
+		subjectIds: [],
+		targetIds: input.targetIds ?? [],
+		tagNames: input.tagNames ?? [],
+		contentHash: hashBytes(bytes),
+		periodOn: input.periodOn ?? null
+	});
+	return id;
+}
 
 function monthShift(base: string, offset: number): string {
 	const [y, m] = base.split('-').map(Number);
@@ -74,6 +225,14 @@ async function seedDemoPhoto(file: string): Promise<string | null> {
 }
 
 export async function seedDemo(): Promise<void> {
+	// The promise at the top of this file, enforced where it is made rather than
+	// only at the one call site that happens to check. `hooks.server.ts` asks
+	// `isSetUp()` before it calls this, but the seed WRITES FILES now as well as
+	// rows, so a second run would leave two dozen orphan PDFs on the data volume
+	// beside a duplicate household. Refusing here is what makes re-seeding a
+	// no-op instead of a mess.
+	if (await isSetUp()) return;
+
 	await setSetting('householdName', 'Novák household (demo)');
 	await setSetting('baseCurrency', 'CZK');
 
@@ -103,16 +262,16 @@ export async function seedDemo(): Promise<void> {
 	await db.insert(person).values([
 		{
 			id: jana,
-			name: 'Jana Nováková',
-			initials: initialsFor('Jana Nováková'),
+			name: JANA,
+			initials: initialsFor(JANA),
 			role: 'admin',
 			birthYear: 1990,
 			passwordHash
 		},
 		{
 			id: petr,
-			name: 'Petr Novák',
-			initials: initialsFor('Petr Novák'),
+			name: PETR,
+			initials: initialsFor(PETR),
 			role: 'member',
 			birthYear: 1988,
 			passwordHash
@@ -121,6 +280,13 @@ export async function seedDemo(): Promise<void> {
 
 	const fio = uuidv7();
 	const revolut = uuidv7();
+	// The brokerage account the portfolio actually sits in. Without it the demo
+	// showed three years of XTB deposits leaving the current account and arriving
+	// nowhere, and the broker report below had nothing to be filed against. Its
+	// balance is the uninvested cash at the broker, and net worth deliberately
+	// leaves a brokerage balance out of its cash total — the portfolio value
+	// already counts it.
+	const broker = uuidv7();
 	await db.insert(account).values([
 		{
 			id: fio,
@@ -143,34 +309,54 @@ export async function seedDemo(): Promise<void> {
 			ownerPersonId: petr,
 			balanceMinor: 310000n,
 			balanceOn: new Date().toISOString().slice(0, 10)
+		},
+		{
+			id: broker,
+			name: 'XTB portfolio',
+			emoji: '📈',
+			// `other` rather than a key of its own: `bank` is the picker's list,
+			// and a broker is not one of the banks a fresh install seeds.
+			bank: 'other',
+			kind: 'brokerage',
+			currency: 'CZK',
+			ownerPersonId: jana,
+			balanceMinor: 125000n,
+			balanceOn: new Date().toISOString().slice(0, 10)
 		}
 	]);
 
 	// Six months of categorised, review-free cash flow.
 	const thisMonth = new Date().toISOString().slice(0, 7);
 	const rows: (typeof transaction.$inferInsert)[] = [];
+	// Returns the row it pushed, so the seed can point a payslip or a receipt at
+	// one particular payment rather than looking it up again by its description.
 	const add = (
 		month: string,
 		day: string,
-		amount: bigint,
+		amountMinor: bigint,
 		categoryId: string,
 		counterparty: string
-	) =>
-		rows.push({
+	) => {
+		const row: typeof transaction.$inferInsert = {
 			id: uuidv7(),
 			accountId: fio,
 			bookedOn: `${month}-${day}`,
-			amountMinor: amount,
+			amountMinor,
 			currency: 'CZK',
 			counterparty,
 			dedupFingerprint: `demo-${rows.length}`,
 			fingerprintVersion: FINGERPRINT_VERSION,
 			categoryId,
 			reviewState: 'filed'
-		});
+		};
+		rows.push(row);
+		return row;
+	};
+	/** The salary credit of each month, for the payslips to be merged with. */
+	const salaryCredits = new Map<string, typeof transaction.$inferInsert>();
 	for (let i = 5; i >= 0; i--) {
 		const m = monthShift(thisMonth, -i);
-		add(m, '01', 6200000n, 'salary', 'Zaměstnavatel s.r.o.');
+		salaryCredits.set(m, add(m, '01', 6200000n, 'salary', DEMO_EMPLOYER));
 		add(m, '02', 1650000n, 'rent-income', 'Nájemce · Karlín');
 		add(m, '05', -5445600n, 'mortgage-main', 'Česká spořitelna · hypotéka');
 		add(m, '06', -485000n, 'svj-insurance', 'SVJ Vinohradská');
@@ -334,18 +520,22 @@ export async function seedDemo(): Promise<void> {
 	});
 
 	const tenancyB = uuidv7();
+	// Close enough that the lease and its renewal notice are live decisions. At
+	// ten months out both sat outside every window the briefing watches, so the
+	// demo's tenancy was invisible on the screen that exists to surface exactly
+	// this. Named once because the lease DOCUMENT below carries the same date —
+	// D7 recognises the duplicate by comparing the two, so the moment they drift
+	// the demo reminds twice for one lease ending.
+	const tenancyStartsOn = '2025-06-01';
+	const tenancyEndsOn = monthShift(thisMonth, 3) + '-01';
 	await db.insert(tenancy).values({
 		id: tenancyB,
 		propertyId: flatB,
-		tenantName: 'Martin Dvořák',
+		tenantName: DEMO_TENANT,
 		rentMinor: 1650000n,
 		depositMinor: 3300000n,
-		startsOn: '2025-06-01',
-		// Close enough that the lease and its renewal notice are live decisions.
-		// At ten months out both sat outside every window the briefing watches,
-		// so the demo's tenancy was invisible on the screen that exists to
-		// surface exactly this.
-		endsOn: monthShift(thisMonth, 3) + '-01',
+		startsOn: tenancyStartsOn,
+		endsOn: tenancyEndsOn,
 		renewalNoticeOn: monthShift(thisMonth, 1) + '-01'
 	});
 
@@ -356,7 +546,7 @@ export async function seedDemo(): Promise<void> {
 	await db.insert(contact).values([
 		{
 			id: tenantContactId,
-			name: 'Martin Dvořák',
+			name: DEMO_TENANT,
 			phone: '+420 777 000 111',
 			email: 'martin.dvorak@example.cz',
 			notes: 'Tenant, Flat B.'
@@ -493,20 +683,25 @@ export async function seedDemo(): Promise<void> {
 		}))
 	);
 
-	// Payslips feed the salary tracker; a contract shows document linking.
-	const today = new Date().toISOString().slice(0, 10);
-	// Shelves are rows now, so the seed resolves them by key like everything
-	// else rather than writing a string the database might not accept.
-	const financeShelf = await shelfIdByKey('finance');
-	const tenancyShelf = await shelfIdByKey('tenancy');
-	const payslips: (typeof document.$inferInsert)[] = [];
-	const salaryRows: (typeof salaryEntry.$inferInsert)[] = [];
+	// ---- Paper (decision D10) ----
+	//
+	// Everything below is a REAL file: a small PDF generated here from the
+	// constants at the top of this module, saved to the data volume, hashed, and
+	// queued for extraction like any upload. Until v0.7.1 all of this was
+	// metadata only, so the one instance built to show the viewer, search by
+	// contents, receipts, restricted paper and archived subjects showed none of
+	// them.
+	const thisYear = Number(thisMonth.slice(0, 4));
+
+	// Twelve payslips, through the salary tracker's own writer rather than a
+	// hand-written insert: the shelf, the name format, the first-of-month
+	// `period_on` and the content hash are its business, not this file's.
 	for (let i = 11; i >= 0; i--) {
 		const m = monthShift(thisMonth, -i - 1);
 		const year = Number(m.slice(0, 4));
 		// The figure the demo has always used is GROSS. Until v0.4.6 it lived on
 		// the document and was read as gross while the reader picked net, which
-		// is the defect this release fixes — so the demo now states both.
+		// is the defect that release fixed — so the demo states both.
 		const gross = 5800000n + BigInt(year - 2024) * 400000n;
 		// A December thirteenth-salary, so the base-versus-bonus split has
 		// something to draw and the year-on-year comparison has a one-off in it
@@ -516,59 +711,284 @@ export async function seedDemo(): Promise<void> {
 		// Czech withholding runs to roughly 29% of gross across tax and both
 		// insurances. Approximate on purpose: this is a demo, not a calculator.
 		const net = grossWithBonus - (grossWithBonus * 29n) / 100n;
-		const documentId = uuidv7();
-		payslips.push({
-			id: documentId,
-			name: `Payslip ${m} · Jana Nováková`,
-			shelfId: financeShelf,
-			type: 'payslip',
-			addedOn: today,
-			currency: 'CZK',
-			// The month the payslip covers, pinned to its first day.
-			periodOn: `${m}-01`
+
+		// The bank credit FIRST, for every month the demo has one. A payslip
+		// merges into the month's unclaimed row, so recording the credit before
+		// the slip is what leaves one row holding both — and D6's visible link
+		// between the slip and the payment only forms on a row that holds both
+		// ids. A slip recorded first keeps the month as two rows, by ruling.
+		const credit = salaryCredits.get(m);
+		if (credit) {
+			await recordSalary({
+				personId: jana,
+				periodMonth: m,
+				currency: 'CZK',
+				netMinor: credit.amountMinor,
+				source: 'statement',
+				transactionId: credit.id
+			});
+		}
+
+		const bytes = await makeDemoPdf(`Payslip ${m} · ${JANA}`, [
+			`Employer: ${DEMO_EMPLOYER}`,
+			`Employee: ${JANA}`,
+			`Period: ${m}`,
+			'',
+			`Gross pay: ${amount(gross, 'CZK')}`,
+			...(bonus ? [`Thirteenth salary: ${amount(bonus, 'CZK')}`] : []),
+			`Total gross: ${amount(grossWithBonus, 'CZK')}`,
+			`Tax and insurance: ${amount(grossWithBonus - net, 'CZK')}`,
+			`Net pay: ${amount(net, 'CZK')}`,
+			'',
+			'Fictional payslip, generated by the Continuum demo seed.'
+		]);
+		const documentId = await filePayslipDocument({
+			personId: jana,
+			subject: JANA,
+			periodMonth: m,
+			storedName: await saveUploadBytes(bytes, 'payslip.pdf'),
+			contentHash: hashBytes(bytes)
 		});
-		salaryRows.push({
-			id: uuidv7(),
+		// The slip states gross, and the demo's approximate withholding gives the
+		// net beside it — which is what the salary screen has always shown. The
+		// credit above keeps its own place on the row, so the month reads as one
+		// statement evidenced by both the paper and the payment.
+		await recordSalary({
 			personId: jana,
 			periodMonth: m,
+			currency: 'CZK',
 			grossMinor: grossWithBonus,
 			netMinor: net,
 			bonusMinor: bonus,
-			currency: 'CZK',
 			source: 'payslip',
 			documentId
 		});
 	}
-	const contractId = uuidv7();
-	payslips.push({
-		id: contractId,
+
+	// The lease, filed against the TENANCY — not the flat, which outlives any one
+	// lease on it. Filing it there is also what makes D7 apply: the document's
+	// date IS `tenancyEndsOn`, so the briefing and the calendar show the lease
+	// ending once, from the tenancy, rather than once from each track.
+	await fileDemoPdf({
 		name: 'Renting contract · Karlín',
-		shelfId: tenancyShelf,
+		shelfKey: 'tenancy',
 		type: 'contract',
-		addedOn: today,
-		// The same day the tenancy ends, because it IS that tenancy's contract.
-		// The two drifting apart is how a demo ends up claiming a lease document
-		// outlives the lease.
-		expiresOn: monthShift(thisMonth, 3) + '-01',
-		expiryVerb: 'expires'
+		targetIds: [tenancyB],
+		expiresOn: tenancyEndsOn,
+		// A lease that runs out is re-signed, not simply void: `renews` is the
+		// verb, and the hue says whether the date has passed.
+		expiryVerb: 'renews',
+		lines: [
+			'Flat Karlín · 2+kk · 54 m²',
+			`Tenant: ${DEMO_TENANT}`,
+			`Landlord: ${JANA} and ${PETR}`,
+			'',
+			`Term: ${tenancyStartsOn} to ${tenancyEndsOn}`,
+			`Rent: ${amount(1650000n, 'CZK')} per month`,
+			`Deposit: ${amount(3300000n, 'CZK')}`,
+			`Renewal notice due: ${monthShift(thisMonth, 1) + '-01'}`,
+			'',
+			'Fictional lease, generated by the Continuum demo seed.'
+		]
 	});
-	await db.insert(document).values(payslips);
-	// Real links, not names: payslips belong to Jana, the contract to the flat.
-	await db
-		.insert(documentLink)
-		.values(
-			payslips
-				.filter((d) => d.type === 'payslip')
-				.map((d) => ({ documentId: d.id, targetId: jana }))
-		)
-		.onConflictDoNothing();
-	await db
-		.insert(documentLink)
-		.values({ documentId: contractId, targetId: flatB })
-		.onConflictDoNothing();
-	// The figures live here, not on the document. A payslip document is the
-	// stored file, its month and whose it is — nothing more.
-	await db.insert(salaryEntry).values(salaryRows);
+
+	// One statement per current account, for the month just gone. The demo
+	// writes its transactions directly rather than running an import, so there
+	// is no `import_file` row for these to be keyed to — that column is written
+	// by ingest, and inventing an import here would be inventing evidence the
+	// household never produced.
+	const statementMonth = monthShift(thisMonth, -1);
+	const fioLines = rows
+		.filter((r) => r.accountId === fio && r.bookedOn.startsWith(statementMonth))
+		.map((r) => `${r.bookedOn}   ${r.counterparty}   ${amount(r.amountMinor, 'CZK')}`);
+	await fileDemoPdf({
+		name: `Fio běžný · ${statementMonth}`,
+		shelfKey: 'statements',
+		type: 'bank_statement',
+		targetIds: [fio],
+		tagNames: [statementMonth.slice(0, 4)],
+		lines: [
+			`Account: Fio běžný (CZK)`,
+			`Period: ${statementMonth}`,
+			'',
+			...fioLines,
+			'',
+			`Closing balance: ${amount(24350000n, 'CZK')}`
+		]
+	});
+	await fileDemoPdf({
+		name: `Revolut · ${statementMonth}`,
+		shelfKey: 'statements',
+		type: 'bank_statement',
+		targetIds: [revolut],
+		tagNames: [statementMonth.slice(0, 4)],
+		lines: [
+			'Account: Revolut (EUR)',
+			`Period: ${statementMonth}`,
+			'',
+			'No movements in this period.',
+			'',
+			`Closing balance: ${amount(310000n, 'EUR')}`
+		]
+	});
+
+	// The broker's yearly report, on the brokerage account. Dated to the last
+	// snapshot of last year, because that is the report a household attaches to
+	// a tax return — which is also what its second tag says.
+	const reportDay = `${thisYear - 1}-12-01`;
+	const reportIndex = snapshots.findIndex((s) => s.day === reportDay);
+	const asOf = reportIndex >= 0 ? snapshots[reportIndex] : snapshots[snapshots.length - 1];
+	const paidInByThen =
+		depositMinor * BigInt((reportIndex >= 0 ? reportIndex : snapshots.length - 1) + 1);
+	await fileDemoPdf({
+		name: `${DEMO_BROKER} report ${asOf.day}`,
+		shelfKey: 'statements',
+		type: 'broker_report',
+		targetIds: [broker],
+		tagNames: [DEMO_BROKER.toLowerCase(), `${thisYear - 1} return`],
+		lines: [
+			`Broker: ${DEMO_BROKER}`,
+			'Account: XTB portfolio (CZK)',
+			`Report date: ${asOf.day}`,
+			'',
+			`Portfolio value: ${amount(asOf.valueMinor, 'CZK')}`,
+			`Paid in to date: ${amount(paidInByThen, 'CZK')}`,
+			'',
+			'Positions',
+			...allocation.map((a) => `${a.ticker}   ${a.name}   ${(a.share * 100).toFixed(1)}%`),
+			'',
+			'Fictional report, generated by the Continuum demo seed.'
+		]
+	});
+
+	// Three receipts on three real payments. Two wait in the Inbox and one is
+	// already filed, so the review flow has something to show on both sides of
+	// the fence. Each prints a variable symbol, which is what a Czech receipt is
+	// actually looked up by.
+	const latestTo = (counterparty: string) =>
+		rows.filter((r) => r.counterparty === counterparty).at(-1);
+	const receipts = [
+		// The Alza purchase is also the split and tagged one, so the same payment
+		// now carries every connector the ledger has.
+		{ row: alza, shelfKey: 'household', tags: ['Renovation 2026'] },
+		{ row: latestTo('Albert'), shelfKey: 'inbox', tags: [] },
+		{ row: latestTo('Shell'), shelfKey: 'inbox', tags: [] }
+	].filter(
+		(r): r is { row: typeof transaction.$inferInsert; shelfKey: string; tags: string[] } =>
+			r.row !== undefined
+	);
+	for (const [index, receipt] of receipts.entries()) {
+		const symbol = DEMO_VARIABLE_SYMBOLS[index];
+		await fileDemoPdf({
+			name: `Receipt · ${receipt.row.counterparty} · ${receipt.row.bookedOn}`,
+			shelfKey: receipt.shelfKey,
+			type: 'receipt',
+			targetIds: [receipt.row.id],
+			tagNames: receipt.tags,
+			lines: [
+				`Merchant: ${receipt.row.counterparty}`,
+				`Date: ${receipt.row.bookedOn}`,
+				`Total: ${amount(-receipt.row.amountMinor, 'CZK')}`,
+				`VS ${symbol}`,
+				'',
+				'Fictional receipt, generated by the Continuum demo seed.'
+			]
+		});
+	}
+
+	// The insurance on the lived-in flat, renewing inside the window the
+	// briefing paints amber, so the Overview has one date that is genuinely
+	// close rather than only ones that are comfortably far off.
+	const policyRenewsOn = new Date(Date.now() + 50 * 86400000).toISOString().slice(0, 10);
+	await fileDemoPdf({
+		name: 'Home insurance · Flat Vinohrady',
+		shelfKey: 'property',
+		type: 'insurance_policy',
+		targetIds: [flatA],
+		expiresOn: policyRenewsOn,
+		expiryVerb: 'renews',
+		lines: [
+			`Insurer: ${DEMO_INSURER}`,
+			`Policy: ${DEMO_POLICY_NUMBER}`,
+			`Insured: ${JANA}`,
+			'Property: Flat Vinohrady · 3+kk · 78 m²',
+			'',
+			`Sum insured: ${amount(890000000n, 'CZK')}`,
+			`Annual premium: ${amount(742000n, 'CZK')}`,
+			`Renews: ${policyRenewsOn}`,
+			'',
+			'Fictional policy, generated by the Continuum demo seed.'
+		]
+	});
+
+	// The one restricted document, so demo mode can show what "restricted" means:
+	// an admin sees it, a member does not see it AT ALL — no row, no count, no
+	// search hint, no calendar entry, no file.
+	await fileDemoPdf({
+		name: `Identity card · ${JANA}`,
+		shelfKey: 'identity',
+		type: 'id_document',
+		sensitivity: 'restricted',
+		targetIds: [jana],
+		// Far outside every window the briefing and calendar watch: this document
+		// exists to demonstrate the read rule, not to add a reminder.
+		expiresOn: `${thisYear + 4}-03-14`,
+		lines: [
+			`Holder: ${JANA}`,
+			`Number: ${DEMO_ID_NUMBER}`,
+			`Issued: ${thisYear - 6}-03-14`,
+			`Expires: ${thisYear + 4}-03-14`,
+			'',
+			'Fictional identity record, generated by the Continuum demo seed.'
+		]
+	});
+
+	// Two subjects beside the household's own. The car was sold last year, so its
+	// paper is archived: it stays in the archive and drops out of every default
+	// list, and its long-passed warranty reads as history rather than as an
+	// expiry somebody forgot.
+	const carSubject = await addSubject('Car', '🚗');
+	await fileDemoPdf({
+		name: `Warranty · ${DEMO_CAR}`,
+		shelfKey: 'vehicles',
+		type: 'warranty',
+		targetIds: [carSubject],
+		expiresOn: `${thisYear - 1}-05-31`,
+		lines: [
+			`Vehicle: ${DEMO_CAR}`,
+			'Registration: 1AB 4471',
+			`Warranty from: ${thisYear - 6}-06-01`,
+			`Warranty to: ${thisYear - 1}-05-31`,
+			'',
+			'Fictional warranty, generated by the Continuum demo seed.'
+		]
+	});
+	// Archived AFTER its paper is filed, and dated to the day the car was sold —
+	// `active_to` is what lets the warranty above read as history.
+	await archiveSubject(carSubject, `${thisYear - 1}-09-30`);
+
+	// The dog is current, and its booster falls inside the year — a second
+	// reminder from a subject rather than from a flat or a loan, which is the
+	// case the rail's subjects exist for.
+	const dogSubject = await addSubject('Dog', '🐕');
+	const boosterDue = new Date(Date.now() + 100 * 86400000).toISOString().slice(0, 10);
+	const vaccinatedOn = new Date(Date.now() - 265 * 86400000).toISOString().slice(0, 10);
+	await fileDemoPdf({
+		name: `Vaccination certificate · ${DEMO_DOG}`,
+		shelfKey: 'health',
+		type: 'certificate',
+		targetIds: [dogSubject],
+		expiresOn: boosterDue,
+		lines: [
+			`Animal: ${DEMO_DOG}`,
+			'Species: dog',
+			'Vaccination: rabies',
+			`Given: ${vaccinatedOn}`,
+			`Booster due: ${boosterDue}`,
+			'',
+			'Fictional certificate, generated by the Continuum demo seed.'
+		]
+	});
 
 	// Tax statements: two Czech years for Jana (the payslips diverge from the
 	// declared figure on purpose — bonuses exist), one Polish year for Petr so

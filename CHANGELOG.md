@@ -2,6 +2,55 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.1 — 2026-08-29
+
+> The paper was already filed against the record; only the screens had not been told.
+
+### ✨ Added
+
+- 📎 **Every record that can hold paper now shows it** — a flat, a tenancy, a loan, an account, a contact, a transaction, a tax statement and the portfolio each carry the same documents card listing what is filed against them, with a picker for attaching paper already on a shelf on the flat, tenancy, loan, account, contact and transaction cards, and an **Add a document** button that opens capture with the record and its shelf already chosen on the flat, tenancy, loan and contact ones
+- 📈 **A broker report is kept rather than read and thrown away** — the portfolio upload was the only one in the product that retained no file, so "where did this figure come from" had nothing to go back to; it is filed on Statements now, linked to the brokerage account, tagged with the broker and the year, and the same bytes uploaded a second time are recognised rather than filed again
+- 🗂️ **Subjects are edited in the rail, the way shelves are** — the car, the dog and the household had an archive column since 0.7.0 and nothing in the application that could write it, so **SUBJECTS** now renames a subject, gives it a new emoji, adds one, archives one and brings one back, and only the household refuses to be archived because it is the one subject every document may belong to
+- 💸 **A payslip links to the bank credit it was paid by** — the slip stating the gross and the credit stating the net were merged into one salary entry and still had nothing on screen leading from either to the other
+- 📄 **The demo ships the paper it talks about** — every document the seed files is now a real generated PDF, with the lease on its tenancy, receipts carrying a variable symbol, a broker report, a restricted identity card and an archived subject, so the viewer, search-by-contents and the restricted rule all have something to show on a fresh install
+
+### 🔧 Changed
+
+- 🔒 **Restricted hides the paper and nothing else** — a salary month keeps its gross and net and loses only the paperclip, and a tax statement keeps what it declared and loses the attachment, because a module's own figures were never the document's and hiding them would answer a question nobody asked
+- 📅 **The record owns the deadline** — a lease dated exactly as its tenancy ends, or a re-fixation letter dated as its loan's fixation ends, reminded twice for one date; the record's reminder now stands alone, while a document dated differently is not a duplicate of anything and still reminds on its own
+- 🗄️ **Four system shelves instead of two** — Finance and Property join Inbox and Statements as shelves that can be renamed and given a new emoji but never deleted, because payslips, tax attachments and bills are filed into them by key and deleting one broke the next upload
+- 🗑️ **Deleting a document takes exactly what only that document was holding** — a payslip takes the month's salary entry with it and the bank credit behind it is re-recorded on its own, a bill or a receipt leaves its transaction untouched, and a bank statement behind an accepted import is refused outright
+- 🔍 **The About filter and search know every kind of record** — a document can be filed against nine kinds and the screens offering them each carried their own hand-written list of four, so paper about a tenancy, a loan or a contact could not be found under the name you were shown
+
+### 🐛 Fixed
+
+- 🔗 **Saving a document in the inspector keeps every link it was shown** — the panel offered people, flats and subjects and replaced the whole set with what it had offered, so opening a receipt and pressing Save threw away the payment it evidenced
+- 🙈 **A restricted document's name stops appearing on the screens that list it** — the property card, the salary month, the tax attachments and their picker, a transaction's receipts and the Tags view each read the archive their own way and none of them applied the rule, so paper absent from Documents was legible from every one of them
+- 🛡️ **The shelves the code files into cannot be deleted** — Finance and Property were ordinary rows a household could remove, which left the next payslip or bill with nowhere to go
+- 💥 **Deleting a payslip stops answering with an error** — the month's salary hung off the document by a key that set itself to null, so the delete either left the pay counted with nothing on screen behind it or collided with the index keeping one entry per month and returned a 500
+- 📥 **Deleting a bank statement no longer takes the import's only original with it** — the two rows shared a file with nothing keying one to the other; the import now carries the document's id, and the delete is refused rather than quietly removing the evidence behind every row that import wrote
+- 🔎 **Every filed document is fingerprinted and queued for reading, whoever filed it** — statements, tax attachments, bills and payslips are written by four different paths and only some of them hashed the bytes or asked for the text, so search-by-contents could not see paper the household had certainly filed
+- 💼 **The About picker offers every account rather than only brokerage ones** — it read a hand-written list that happened to be filtered that way, so a bank statement could not be filed against the account it came from
+- 🧹 **Capture stops reading form fields nothing posts into** — four per-kind lists were read on every upload and no screen had ever written to them, and none of them could have carried a tenancy or a loan even if one had
+- 🏷️ **The Tags view lists the loans a tag is on** — a tagged loan counted towards the headline number and then appeared on nothing, and the delete confirmation now counts everything it would untag, the transactions and split lines with no card of their own included
+
+### ⬆️ Upgrading
+
+- 🆕 **Fresh install and demo only** — the documents baseline was rewritten rather than migrated, so this release is for a new instance; 0.7.0 shipped without an upgrade script and this one does not add one either
+- 🛠️ **An instance migrated by hand runs this once, after a backup** — it drops the three columns that left the schema (two on `document`, one on `tax_statement`), keys each import to the statement it read, promotes the two shelves, and leaves the list of allowed document types and the extraction queue to be re-applied from the baseline
+
+```sql
+alter table document drop column if exists amount_minor, drop column if exists currency;
+alter table tax_statement drop column if exists document_id;
+alter table import_file add column if not exists document_id uuid references document(id) on delete restrict;
+create index if not exists import_file_document_idx on import_file(document_id);
+-- check first: select stored_name, count(*) from document where stored_name is not null group by 1 having count(*) > 1;
+update import_file f set document_id = d.id from document d
+  where d.stored_name = f.stored_name and d.type = 'bank_statement' and f.document_id is null;
+update shelf set system = true where key in ('finance','property');
+-- then re-run the enum CHECK for document.type (see baseline) and queue extraction for documents with stored_name and no document_text row.
+```
+
 ## 0.7.0 — 2026-08-28
 
 > A shelf is where a thing lives, not a word the code agreed on once.

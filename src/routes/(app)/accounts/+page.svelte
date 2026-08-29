@@ -6,6 +6,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 
 	let { data, form } = $props();
 
@@ -106,6 +107,28 @@
 						<span class="mono equivalent">{a.baseEquivalent}</span>
 					{/if}
 				</div>
+			</div>
+
+			<!-- Nested inside the shared `.card list`, so `bare` drops the
+			     card-in-card border and padding — the list's own card supplies
+			     both. `.list` has no gap of its own, so like `.row` and
+			     `.edit-form`, `.doc-block` draws its own top border: it is what
+			     separates this account's row, above, from its own documents
+			     block, below — the same rule the next account's `.row` uses to
+			     separate itself from this one. No `addHref`: an imported
+			     statement files itself, and a brokerage report is added from
+			     Investments, so this card only ever attaches what already exists. -->
+			<div class="doc-block">
+				<DocumentsCard
+					bare
+					heading="Statements and reports"
+					documents={a.documents}
+					target={{ id: a.id, kind: 'account', label: a.name }}
+					emptyText="Nothing filed for this account yet — statements arrive by importing them, and a brokerage report is added from Investments."
+					attach={{ action: 'attachDocument', candidates: a.documentCandidates }}
+					detachAction="detachDocument"
+					isAdmin={data.isAdmin}
+				/>
 			</div>
 
 			{#if editing === a.id}
@@ -311,6 +334,12 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: var(--space-6);
+		padding: var(--space-6) 0;
+		border-top: 1px solid var(--bd);
+	}
+	/* `.list` has no gap of its own — every row draws its own top border — so
+	   this block, sitting between a row and the next one, does the same. */
+	.doc-block {
 		padding: var(--space-6) 0;
 		border-top: 1px solid var(--bd);
 	}

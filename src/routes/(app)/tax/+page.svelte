@@ -112,6 +112,7 @@
 			countries={data.countries}
 			personHue={(id) => data.householdPeople.find((p) => p.id === id)?.hue ?? '--fg3'}
 			onedit={(s) => (editing = s)}
+			isAdmin={data.isAdmin}
 		/>
 	{/snippet}
 </TaxMatrix>

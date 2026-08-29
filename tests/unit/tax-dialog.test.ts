@@ -32,7 +32,7 @@ describe('the statement dialog', () => {
 		expect(body).toContain('name="fileKind"');
 	});
 
-	it('still offers a document already on the Tax shelf', () => {
+	it('still offers a document already on the Finance shelf', () => {
 		const { body } = render(TaxStatementDialog, { props });
 		expect(body).toContain('2024 CZ tax statement');
 		expect(body).toContain('name="documentId"');

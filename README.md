@@ -123,7 +123,8 @@ Continuum is for you if you…
 <sub>Accounts, import, rules, tags, salary, retirement, calendar, contacts, documents
 and the phone layouts are in the
 <a href="docs/screenshots.md">full gallery</a>. Every shot is generated from the
-demo household, so none of them can drift from the app.</sub>
+demo household rather than drawn by hand, so what you see is the app — though
+the demo has grown since the last regeneration.</sub>
 
 </div>
 
@@ -167,6 +168,7 @@ each](docs/statement-import.md)
 - **Fits two people** — separate sign-ins, passkeys, dashboards and tax statements over one shared household.
 - **Scans paper with a phone** — photograph a page and get a cropped, flattened, black-and-white PDF; several pages become one document. It runs in the browser, so no page is uploaded until the finished file is.
 - **Finds a document by what is printed inside it** — filed paper is read in the background, so a variable symbol on page two of a scan is searchable; shelves are yours to name, and a document can be restricted to administrators, which makes it absent for everyone else rather than locked.
+- **Keeps the paper beside the record it belongs to** — a flat, a tenancy, a loan, an account, a contact, a transaction, a tax statement and the portfolio each show their own documents on their own screen; most of them can also attach paper already filed elsewhere, and a flat, a tenancy, a loan and a contact can add a new document with the record and its shelf already chosen.
 
 ## Try it in one command
 
@@ -214,18 +216,18 @@ restore](docs/backups.md)
 
 ## Documentation
 
-|                                                |                                                               |
-| ---------------------------------------------- | ------------------------------------------------------------- |
-| [Statement import](docs/statement-import.md)   | how the reader works, and what it refuses                     |
-| [Documents](docs/documents.md)                 | shelves, types, expiry, search inside files, restricted paper |
-| [Install and configuration](docs/install.md)   | `.env` reference, ports, upgrading                            |
-| [Networking and passkeys](docs/networking.md)  | reaching it by name, HTTPS for the camera and passkeys        |
-| [Accounts and roles](docs/accounts.md)         | enrollment links, administrators, recovery                    |
-| [Backups and restore](docs/backups.md)         | scheduled dumps, restoring into a fresh instance              |
-| [API and Home Assistant](docs/api.md)          | read-only tokens, smart-meter billing                         |
-| [Calendar sync](docs/google-calendar-setup.md) | connecting Google, iCloud or CalDAV                           |
-| [Screenshot gallery](docs/screenshots.md)      | every screen, both themes, desktop and phone                  |
-| [Architecture](ARCHITECTURE.md)                | how the codebase is laid out                                  |
+|                                                |                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------- |
+| [Statement import](docs/statement-import.md)   | how the reader works, and what it refuses                               |
+| [Documents](docs/documents.md)                 | shelves, subjects, types, expiry, search inside files, restricted paper |
+| [Install and configuration](docs/install.md)   | `.env` reference, ports, upgrading                                      |
+| [Networking and passkeys](docs/networking.md)  | reaching it by name, HTTPS for the camera and passkeys                  |
+| [Accounts and roles](docs/accounts.md)         | enrollment links, administrators, recovery                              |
+| [Backups and restore](docs/backups.md)         | scheduled dumps, restoring into a fresh instance                        |
+| [API and Home Assistant](docs/api.md)          | read-only tokens, smart-meter billing                                   |
+| [Calendar sync](docs/google-calendar-setup.md) | connecting Google, iCloud or CalDAV                                     |
+| [Screenshot gallery](docs/screenshots.md)      | every screen, both themes, desktop and phone                            |
+| [Architecture](ARCHITECTURE.md)                | how the codebase is laid out                                            |
 
 ## Contributing
 

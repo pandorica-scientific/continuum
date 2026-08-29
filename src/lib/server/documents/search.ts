@@ -21,7 +21,28 @@
  */
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
+import { documentTargetSpec, DOCUMENT_TARGET_KINDS } from './targets';
 import type { Actor } from './visibility';
+
+/**
+ * Tier B's "what is this about" side, built from the registry rather than typed
+ * out here.
+ *
+ * The hand-written union this replaces named four kinds — person, property,
+ * subject, account — so a receipt could not be found by the shop its
+ * transaction names, a lease could not be found by its tenant, and a mortgage
+ * statement could not be found by the loan it belongs to. None of those words
+ * is anywhere on the paper, which is exactly why a person searches for them.
+ *
+ * The label expression is the one `loadTargetNames` shows in the chip, so the
+ * name a person searches for is by construction the name they were shown. A
+ * kind registered tomorrow is searchable the same day, with nothing to
+ * remember here.
+ */
+const LABELLED_TARGETS = sql.join(
+	DOCUMENT_TARGET_KINDS.map((kind) => documentTargetSpec(kind).nameSql),
+	sql` union all `
+);
 
 export type Tier = 'A' | 'B' | 'C' | 'D';
 
@@ -120,12 +141,7 @@ function candidateSql(q: string, actor: Actor | null, options: SearchOptions) {
 			select v.id, 'B', 'entity', null::int, null::text
 			from visible v
 			join document_link dl on dl.document_id = v.id
-			join (
-				select id, name from person
-				union all select id, name from property
-				union all select id, name from subject
-				union all select id, name from account
-			) labelled on labelled.id = dl.target_id
+			join (${LABELLED_TARGETS}) labelled on labelled.id = dl.target_id
 			where public.contact_fold(labelled.name) like ${like}
 
 			union all

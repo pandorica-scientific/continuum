@@ -127,8 +127,9 @@ CREATE TABLE "document" (
 	"added_on" date NOT NULL,
 	"expires_on" date,
 	"expiry_verb" text DEFAULT 'expires' NOT NULL,
-	"amount_minor" bigint,
-	"currency" text,
+	-- The month the paper is ABOUT, not the day it was filed. A payslip's own
+	-- figures and currency live on salary_entry; this is what lets a re-uploaded
+	-- slip find its own row again.
 	"period_on" date,
 	-- SHA-256 of the stored file, so the same file uploaded twice is recognised
 	-- as the same file rather than filed as a second one.
@@ -253,6 +254,10 @@ CREATE TABLE "import_file" (
 	"stated_debit_total_minor" bigint,
 	"stated_row_count" integer,
 	"reconciliation" jsonb,
+	-- The statement as it is filed on a shelf, so the ledger and the documents
+	-- screen hold one file rather than two copies of it. RESTRICT below: the
+	-- document is the evidence for every row this import wrote.
+	"document_id" uuid,
 	"uploaded_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "import_file_content_hash_unique" UNIQUE("content_hash")
 );
@@ -566,7 +571,9 @@ CREATE TABLE "tax_statement" (
 	"currency" text NOT NULL,
 	"gross_income_minor" bigint NOT NULL,
 	"tax_paid_minor" bigint NOT NULL,
-	"document_id" uuid,
+	-- No document column: a statement's papers hang off its entity row through
+	-- document_link, and a "primary" attachment beside them was a second source
+	-- of truth for one fact.
 	"note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -603,7 +610,6 @@ ALTER TABLE "webauthn_challenge" ADD CONSTRAINT "webauthn_challenge_person_id_pe
 ALTER TABLE "document" ADD CONSTRAINT "document_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "document" ADD CONSTRAINT "document_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_link" ADD CONSTRAINT "document_link_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -614,6 +620,7 @@ ALTER TABLE "account" ADD CONSTRAINT "account_currency_currency_code_fk" FOREIGN
 ALTER TABLE "account" ADD CONSTRAINT "account_owner_person_id_person_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."person"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "import_file" ADD CONSTRAINT "import_file_account_id_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."account"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "import_file" ADD CONSTRAINT "import_file_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "import_file" ADD CONSTRAINT "import_file_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "rule" ADD CONSTRAINT "rule_category_id_category_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."category"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "rule_tag" ADD CONSTRAINT "rule_tag_rule_id_rule_id_fk" FOREIGN KEY ("rule_id") REFERENCES "public"."rule"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "rule_tag" ADD CONSTRAINT "rule_tag_tag_id_tag_id_fk" FOREIGN KEY ("tag_id") REFERENCES "public"."tag"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -656,7 +663,6 @@ ALTER TABLE "calendar_event_exception" ADD CONSTRAINT "calendar_event_exception_
 ALTER TABLE "calendar_sync_link" ADD CONSTRAINT "calendar_sync_link_account_id_calendar_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."calendar_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement_line" ADD CONSTRAINT "tax_statement_line_statement_id_tax_statement_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."tax_statement"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "credential_person_idx" ON "credential" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "session_person_idx" ON "session" USING btree ("person_id");--> statement-breakpoint
@@ -664,7 +670,6 @@ CREATE INDEX "session_expires_idx" ON "session" USING btree ("expires_at");--> s
 CREATE INDEX "webauthn_challenge_expires_idx" ON "webauthn_challenge" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "webauthn_challenge_address_created_idx" ON "webauthn_challenge" USING btree ("address","created_at");--> statement-breakpoint
 CREATE INDEX "webauthn_challenge_person_idx" ON "webauthn_challenge" USING btree ("person_id");--> statement-breakpoint
-CREATE INDEX "document_currency_idx" ON "document" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "document_shelf_id_idx" ON "document" USING btree ("shelf_id");--> statement-breakpoint
 CREATE INDEX "document_type_idx" ON "document" USING btree ("type");--> statement-breakpoint
 CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_hash");--> statement-breakpoint
@@ -679,6 +684,7 @@ CREATE INDEX "account_currency_idx" ON "account" USING btree ("currency");--> st
 CREATE INDEX "account_owner_person_idx" ON "account" USING btree ("owner_person_id");--> statement-breakpoint
 CREATE INDEX "import_file_currency_idx" ON "import_file" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "import_file_account_idx" ON "import_file" USING btree ("account_id");--> statement-breakpoint
+CREATE INDEX "import_file_document_idx" ON "import_file" USING btree ("document_id");--> statement-breakpoint
 CREATE INDEX "rule_category_idx" ON "rule" USING btree ("category_id");--> statement-breakpoint
 CREATE INDEX "rule_tag_tag_idx" ON "rule_tag" USING btree ("tag_id");--> statement-breakpoint
 CREATE INDEX "transaction_currency_idx" ON "transaction" USING btree ("currency");--> statement-breakpoint
@@ -722,7 +728,6 @@ CREATE UNIQUE INDEX "calendar_event_exception_occurrence_idx" ON "calendar_event
 CREATE INDEX "calendar_sync_link_account_idx" ON "calendar_sync_link" USING btree ("account_id");--> statement-breakpoint
 CREATE INDEX "tax_statement_currency_idx" ON "tax_statement" USING btree ("currency");--> statement-breakpoint
 CREATE UNIQUE INDEX "tax_statement_unique_idx" ON "tax_statement" USING btree ("person_id","year","country");--> statement-breakpoint
-CREATE INDEX "tax_statement_document_idx" ON "tax_statement" USING btree ("document_id");--> statement-breakpoint
 CREATE INDEX "tax_statement_line_statement_idx" ON "tax_statement_line" USING btree ("statement_id");--> statement-breakpoint
 CREATE INDEX "job_claimable_idx" ON "job" USING btree ("kind","state","queued_at");--> statement-breakpoint
 CREATE INDEX "job_subject_idx" ON "job" USING btree ("subject_id");--> statement-breakpoint
@@ -1253,9 +1258,10 @@ CREATE INDEX document_name_trgm_idx ON document
 	USING gin (public.contact_fold(name) gin_trgm_ops);--> statement-breakpoint
 
 ALTER TABLE document ADD CONSTRAINT document_type_check CHECK (type in (
-	'contract', 'invoice', 'receipt', 'payslip', 'bank_statement', 'insurance_policy',
-	'claim', 'id_document', 'certificate', 'medical_record', 'tax_document',
-	'technical_plan', 'correspondence', 'warranty', 'manual', 'other'));--> statement-breakpoint
+	'contract', 'invoice', 'receipt', 'payslip', 'bank_statement', 'broker_report',
+	'insurance_policy', 'claim', 'id_document', 'certificate', 'medical_record',
+	'tax_document', 'technical_plan', 'correspondence', 'warranty', 'manual',
+	'other'));--> statement-breakpoint
 ALTER TABLE document ADD CONSTRAINT document_sensitivity_check
 	CHECK (sensitivity in ('normal', 'restricted'));--> statement-breakpoint
 ALTER TABLE document_text_chunk ADD CONSTRAINT document_text_chunk_source_check
@@ -1267,16 +1273,19 @@ ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);--> statement-breakpoint
 
 -- The ten shelves a fresh install starts with. Households edit these freely;
--- `inbox` and `statements` are the two the application refers to by key.
+-- `inbox`, `statements`, `finance`, and `property` are the four the
+-- application refers to by key — payslips and tax attachments file to
+-- finance, bills file to property, so a deleted one would break the next
+-- upload just as surely as a deleted inbox would.
 INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
 	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
 	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, false),
 	(gen_random_uuid(), 'family',     'Family',     '👶', 20, false),
 	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, false),
-	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, false),
+	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, true),
 	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
 	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
-	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, false),
+	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, true),
 	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, false),
 	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
 ON CONFLICT (key) DO NOTHING;

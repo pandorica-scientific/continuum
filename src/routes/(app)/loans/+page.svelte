@@ -10,6 +10,7 @@
 	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
 	import RepayDialog from '$lib/components/RepayDialog.svelte';
 	import RefixDialog from '$lib/components/RefixDialog.svelte';
+	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 	import { ENUMS } from '$lib/enums';
 	import { DAY_COUNTS, DAY_COUNT_LABELS } from '$lib/loans';
 
@@ -117,6 +118,19 @@
 					<TagInput transactionId={l.id} known={data.knownTags ?? []} />
 				</form>
 			</div>
+			<!-- Nested inside `.card loan`, so `bare` drops the card-in-card border
+			     and padding this component would otherwise add — the loan's own
+			     card already supplies both, and the flex gap keeps the spacing. -->
+			<DocumentsCard
+				bare
+				documents={l.documents}
+				target={{ id: l.id, kind: 'loan', label: l.name }}
+				emptyText="Nothing filed about this loan yet — the agreement and each re-fix letter belong here."
+				addHref={l.addDocumentHref}
+				attach={{ action: 'attachDocument', candidates: l.documentCandidates }}
+				detachAction="detachDocument"
+				isAdmin={data.isAdmin}
+			/>
 			<div class="facts">
 				{#each l.facts as f (f.label)}
 					<div class="fact">

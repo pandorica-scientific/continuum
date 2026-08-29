@@ -26,14 +26,12 @@ import {
 	sourceLabel
 } from '$lib/transactions/provenance';
 import { loadCategoryGroups } from '$lib/server/categorize/groups';
-import {
-	attachDocumentToTransaction,
-	detachDocumentFromTransaction,
-	loadTransactionDocuments
-} from '$lib/server/transactions/documents';
-import { createDocument, deleteDocument } from '$lib/server/documents/mutations';
+import { loadTransactionDocuments } from '$lib/server/transactions/documents';
+import { attachDocument, candidateDocuments, detachDocument } from '$lib/server/documents/targets';
+import { createDocument } from '$lib/server/documents/mutations';
+import { removeDocument } from '$lib/server/documents/lifecycle';
 import { systemShelfId } from '$lib/server/documents/shelves';
-import { saveUpload } from '$lib/server/system/files';
+import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { uuidv7 } from 'uuidv7';
 import { extname } from 'node:path';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
@@ -45,7 +43,7 @@ function monthLabel(month: string): string {
 	return `${new Date(Date.UTC(2000, index - 1, 1)).toLocaleString('en', { month: 'long' })} ${year}`;
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const baseCurrency = await getBaseCurrency();
 	const filter = parseFilter(url.searchParams, baseCurrency);
 
@@ -84,7 +82,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		loadTagsFor(rowIds),
 		loadSplitTagsFor(rowIds),
 		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
-		loadTransactionDocuments(rowIds)
+		loadTransactionDocuments(rowIds, locals.person ?? null)
 	]);
 
 	/** A link that carries every active filter forward. */
@@ -142,6 +140,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	};
 
 	return {
+		isAdmin: locals.person?.role === 'admin',
 		baseCurrency: displayCurrency(baseCurrency),
 		prevHref: pageHref(Math.max(1, filter.page - 1)),
 		nextHref: pageHref(Math.min(page?.pageCount ?? 1, filter.page + 1)),
@@ -279,16 +278,19 @@ export const actions: Actions = {
 	 * Attach a receipt to a transaction.
 	 *
 	 * Either a file, which becomes a document on the receipts shelf and is then
-	 * linked, or a document already in the household's files. No schema work
-	 * behind it: `document_link` targets any entity and a transaction is one.
+	 * linked, or a document already in the household's files — through the
+	 * same visibility-checked `attachDocument` every other documents card
+	 * posts to, so a member cannot attach a document by id that their own
+	 * query would never have offered them. No schema work behind either path:
+	 * `document_link` targets any entity and a transaction is one.
 	 */
-	attachDocument: async ({ request }) => {
+	attachDocument: async ({ request, locals }) => {
 		const form = await request.formData();
-		const id = asRowId(form.get('id'));
+		const id = asRowId(form.get('targetId'));
 		const existingId = String(form.get('documentId') ?? '').trim();
 
 		if (existingId) {
-			const linked = await attachDocumentToTransaction(id, existingId);
+			const linked = await attachDocument(id, existingId, locals.person ?? null);
 			if (!linked.ok) return fail(linked.status, { id, message: linked.message });
 			return { ok: true };
 		}
@@ -297,9 +299,13 @@ export const actions: Actions = {
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { id, message: 'Choose a file, or a document you already have.' });
 		}
+		// Read once, so the same bytes that are saved are also what gets
+		// fingerprinted — `saveUploadBytes` in place of `saveUpload` is what makes
+		// them available for the hash rather than reading the file twice.
+		const bytes = new Uint8Array(await file.arrayBuffer());
 		let storedName: string;
 		try {
-			storedName = await saveUpload(file);
+			storedName = await saveUploadBytes(bytes, file.name);
 		} catch (err) {
 			return fail(400, { id, message: err instanceof Error ? err.message : 'Upload failed.' });
 		}
@@ -318,6 +324,7 @@ export const actions: Actions = {
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn: null,
 			expiryVerb: 'expires',
+			contentHash: hashBytes(bytes),
 			personIds: [],
 			propertyIds: [],
 			accountIds: [],
@@ -325,13 +332,11 @@ export const actions: Actions = {
 			// its link commit together or not at all.
 			transactionIds: [id],
 			subjectIds: [],
-			// Also filed under a subject, and this is not decoration. The documents
-			// screen builds its columns from people, properties, accounts and
-			// subjects — a document linked only to a transaction would appear in no
-			// column at all, so a receipt you just attached would be missing from
-			// your own files. The subject is upserted by name, so they collect in
-			// one place.
-			newSubjectName: 'Receipts',
+			// No subject: that used to be how a receipt reached the Documents
+			// screen at all, filing every one of them under a subject literally
+			// called "Receipts" whether or not the household ever had such a
+			// thing. The about-filter now groups a document by the transaction
+			// it is linked to, so the link above is enough on its own.
 			tagNames: ['receipt']
 		});
 		return { ok: true };
@@ -343,23 +348,50 @@ export const actions: Actions = {
 	 * This deletes the document, not just the link. Unlinking only left the file
 	 * on the Documents shelf with no way to reach it from the row it came from
 	 * and — until now — no way to delete it there either, so every removed
-	 * receipt became litter nobody could clear.
+	 * receipt became litter nobody could clear. `detachDocument` here is the
+	 * same visibility-checked unlink every documents card uses; what makes
+	 * this one different is what runs after it.
 	 *
-	 * The control says "Delete" and asks twice, because this is not local to the
-	 * transaction: a receipt filed against something else as well goes from there
-	 * too.
+	 * The control says "Delete?" and asks twice, because this is not local to
+	 * the transaction: a receipt filed against something else as well goes
+	 * from there too.
 	 */
-	detachDocument: async ({ request }) => {
+	detachDocument: async ({ request, locals }) => {
 		const form = await request.formData();
-		const id = asRowId(form.get('id'));
+		const id = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { id, message: 'Which receipt?' });
 
 		// Unlink first: if the document is already gone, the row must still end up
 		// without a dangling reference to it.
-		await detachDocumentFromTransaction(id, documentId);
-		await deleteDocument(documentId);
+		await detachDocument(id, documentId, locals.person ?? null);
+		// The whole removal, not just the row: a receipt is rarely a payslip, but
+		// nothing stops one being filed against a transaction, and the salary
+		// month behind it must not be orphaned from here either.
+		const outcome = await removeDocument(documentId, locals.person);
+		// A 404 is "it was already gone", which is the state the unlink above was
+		// asking for anyway. A refusal is a different thing and has to be said.
+		if (!outcome.ok && outcome.status === 409) {
+			return fail(409, { id, message: outcome.message });
+		}
 		return { ok: true };
+	},
+
+	/**
+	 * What "Attach existing" may offer for one transaction — asked for only
+	 * when its receipts dialog is open, and only for that transaction.
+	 *
+	 * The register can page fifty rows. Computing this for every one of them
+	 * the way `load` does for `documents` would mean handing the page a copy
+	 * of the household's whole visible document library once per row, for the
+	 * sake of the single dialog a person might open — so it is fetched on
+	 * demand instead, the same way the categories screen checks what a leaf
+	 * holds before it lets you delete it.
+	 */
+	candidates: async ({ request, locals }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('targetId'));
+		return { candidates: await candidateDocuments(id, locals.person ?? null) };
 	},
 
 	split: async ({ request }) => {

@@ -20,6 +20,7 @@ import { addTagsToTransaction } from '$lib/server/tags';
 import { extname } from 'node:path';
 import { hashBytes, saveUpload } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { formatMinor } from '$lib/money';
 import { detectAndParseAll } from './detect';
@@ -760,8 +761,13 @@ export async function ingestFile(
 		storedName = null; // unexpected extension — the import still proceeds
 	}
 
+	// Set only on the path that actually files a document — never on the
+	// preflight duplicate return above the insert, and never on a path that
+	// throws, since a rollback takes the row this would point at with it.
+	let filedDocumentId: string | null = null;
+
 	try {
-		return await inTransaction(handle, async (tx) => {
+		const result = await inTransaction(handle, async (tx) => {
 			// Serialise the same body before checking the unique content hash. The
 			// second uploader then gets the normal duplicate result instead of a
 			// transaction-level unique violation.
@@ -879,9 +885,10 @@ export async function ingestFile(
 			// is clutter rather than a record. A refusal never reaches this line: it
 			// throws out of the reader long before the transaction opens.
 			if (storedName) {
+				filedDocumentId = uuidv7();
 				await insertDocumentAggregate(
 					{
-						id: uuidv7(),
+						id: filedDocumentId,
 						name: statementDocumentName(filename, statements),
 						shelfId: await systemShelfId('statements', tx),
 						type: 'bank_statement',
@@ -890,6 +897,10 @@ export async function ingestFile(
 						addedOn: new Date().toISOString().slice(0, 10),
 						expiresOn: null,
 						expiryVerb: 'expires',
+						// The same bytes already fingerprinted for `importFile` above —
+						// the file and the document it is filed as are one upload, so
+						// they carry one hash between them.
+						contentHash,
 						personIds: [],
 						propertyIds: [],
 						accountIds: firstAccountId ? [firstAccountId] : [],
@@ -899,6 +910,18 @@ export async function ingestFile(
 					},
 					tx
 				);
+
+				// Tie the import to the document just filed for it, in the same
+				// transaction. Before this, the two rows shared a file with nothing
+				// keying one to the other, so deleting the document from the
+				// Documents screen deleted the import's only original underneath it.
+				// The column is ON DELETE RESTRICT: once this is set, that delete is
+				// refused rather than silently losing the evidence behind every row
+				// this import wrote (see `deleteDocument`).
+				await tx
+					.update(importFile)
+					.set({ documentId: filedDocumentId })
+					.where(eq(importFile.id, fileId));
 			}
 
 			const unresolved = outcomes.find((o) => o.needsAccount);
@@ -926,6 +949,10 @@ export async function ingestFile(
 				statements: outcomes
 			};
 		});
+		// After the commit, never inside it: a queued job pointing at a document
+		// the transaction went on to roll back is work with nothing to read.
+		if (filedDocumentId) await enqueueExtraction(filedDocumentId, handle);
+		return result;
 	} catch (error) {
 		// The transaction has rolled back, so nothing — importFile included — was
 		// written; the user can choose an account and upload the same file again.

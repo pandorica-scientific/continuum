@@ -4,9 +4,10 @@
 // tax treatment belongs to the tax module, not here.
 
 import { uuidv7 } from 'uuidv7';
-import { count, eq, inArray } from 'drizzle-orm';
+import { count, eq, inArray, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
+	document,
 	loan,
 	property,
 	ruleTag,
@@ -15,6 +16,7 @@ import {
 	transaction,
 	transactionSplit
 } from '$lib/server/db/schema';
+import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { effectiveLines, type LineSource, type SplitSource } from '$lib/transactions/lines';
 
 /** Uniqueness key: trimmed, lowercased, inner whitespace collapsed. */
@@ -147,10 +149,27 @@ export async function deleteTag(tagId: string, handle: Queryable = db): Promise<
 
 /** What a tag is on, so a delete can say what it is about to untag. */
 export async function tagUsage(
+	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<Map<string, { tagged: number; rules: number }>> {
+	// A count is a leak of its own: "2 tagged" beside one document a person can
+	// open has told them the second one is there. So the link to a document this
+	// actor may not see is excluded in SQL, before it is counted — and only that
+	// link, because a tag also hangs on transactions, splits and flats, none of
+	// which this rule is about. An admin gets no subquery at all.
+	const visible = visibleDocumentPredicate(actor);
+	const countable = visible
+		? sql`not exists (
+				select 1 from ${document}
+				where ${document.id} = ${tagLink.targetId} and not (${visible})
+			)`
+		: undefined;
 	const [links, rules] = await Promise.all([
-		handle.select({ tagId: tagLink.tagId, n: count() }).from(tagLink).groupBy(tagLink.tagId),
+		handle
+			.select({ tagId: tagLink.tagId, n: count() })
+			.from(tagLink)
+			.where(countable)
+			.groupBy(tagLink.tagId),
 		handle.select({ tagId: ruleTag.tagId, n: count() }).from(ruleTag).groupBy(ruleTag.tagId)
 	]);
 	const out = new Map<string, { tagged: number; rules: number }>();

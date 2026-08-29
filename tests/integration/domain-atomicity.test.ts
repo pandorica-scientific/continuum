@@ -689,22 +689,29 @@ describe('domain replacement writes', () => {
 	 * settings key it bound is written only through setHome() now.
 	 */
 
-	it('reports every historically unconvertible document and broker currency', async () => {
+	it('reports every historically unconvertible salary and broker currency', async () => {
 		await testDb.insert(schema.currencyRate).values([
 			{ code: 'EUR', day: '2026-01-02', rate: '25' },
 			{ code: 'USD', day: '2026-01-02', rate: '23' },
 			{ code: 'PLN', day: '2026-01-02', rate: '5.8' }
 		]);
-		await testDb.insert(schema.document).values({
-			id: rowId('historical-amount-document'),
-			name: 'Historical payslip',
-			shelfId: await shelfIdByKey('finance', testDb),
-			type: 'payslip',
-			ext: 'PDF',
-			addedOn: '2026-08-15',
-			amountMinor: 100n,
+		await testDb.insert(schema.person).values({
+			id: rowId('historical-tax-person'),
+			name: 'Historical Tax Person',
+			initials: 'HT'
+		});
+		// The salary ENTRY, not the payslip document. A payslip's currency lives
+		// on the entry, and the document is the file — so a month paid in a
+		// currency this instance cannot convert has to be found here or nowhere.
+		// The month it covers is the day the rate is wanted for, which is what
+		// makes this a carry-back rather than a missing rate.
+		await testDb.insert(schema.salaryEntry).values({
+			id: rowId('historical-salary-entry'),
+			personId: rowId('historical-tax-person'),
+			periodMonth: '2020-01',
+			netMinor: 100n,
 			currency: 'EUR',
-			periodOn: '2020-01-01'
+			source: 'payslip'
 		});
 		await testDb.insert(schema.brokerOperation).values({
 			id: rowId('historical-operation'),
@@ -721,11 +728,6 @@ describe('domain replacement writes', () => {
 			currency: 'PLN',
 			openedAt: new Date('2020-01-03T00:00:00.000Z'),
 			closedAt: null
-		});
-		await testDb.insert(schema.person).values({
-			id: rowId('historical-tax-person'),
-			name: 'Historical Tax Person',
-			initials: 'HT'
 		});
 		await testDb.insert(schema.taxStatement).values({
 			id: rowId('historical-tax-statement'),

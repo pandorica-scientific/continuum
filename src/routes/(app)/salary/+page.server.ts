@@ -8,7 +8,7 @@ import { asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, person, salaryEntry } from '$lib/server/db/schema';
+import { person, salaryEntry } from '$lib/server/db/schema';
 import {
 	learnBonusLabel,
 	learnGrossLabel,
@@ -24,7 +24,7 @@ import {
 	recordSalary,
 	slipDocument
 } from '$lib/server/salary';
-import { deleteDocument } from '$lib/server/documents/mutations';
+import { removeDocument } from '$lib/server/documents/lifecycle';
 import { mergeSalaryYears, type SalaryYear } from '$lib/salary';
 import { getBaseCurrency } from '$lib/server/settings';
 import { availableCurrencies } from '$lib/server/fx/currencies';
@@ -53,7 +53,7 @@ function serialiseYear(y: SalaryYear) {
 	};
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const [baseCurrency, rates, currencies] = await Promise.all([
 		getBaseCurrency(),
 		loadRateTable(),
@@ -62,7 +62,9 @@ export const load: PageServerLoad = async ({ url }) => {
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
-	const history = await loadSalaryHistory(baseCurrency, convert);
+	// Who is asking travels into the query. A member gets every month and every
+	// figure; the slips they may not see arrive with no file behind them.
+	const history = await loadSalaryHistory(baseCurrency, convert, locals.person ?? null);
 
 	// The household series, computed here rather than in the screen: merging
 	// TOTALS is the only honest way to it, and doing that in markup invites the
@@ -303,7 +305,6 @@ export const actions: Actions = {
 			personId,
 			subject,
 			periodMonth,
-			currency,
 			storedName,
 			contentHash,
 			existingId: sameSlip?.id
@@ -374,7 +375,7 @@ export const actions: Actions = {
 	 * later re-read may still correct it and no label is learned from a number
 	 * nobody looked at.
 	 */
-	addPayslips: async ({ request }) => {
+	addPayslips: async ({ request, locals }) => {
 		const form = await request.formData();
 		const personId = asRowId(form.get('personId')).trim();
 		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
@@ -463,7 +464,6 @@ export const actions: Actions = {
 				personId,
 				subject,
 				periodMonth,
-				currency,
 				storedName,
 				contentHash
 			});
@@ -481,7 +481,11 @@ export const actions: Actions = {
 				// `overridden` stays false: nobody looked at these figures.
 			});
 			if (!recorded.ok) {
-				await deleteDocument(documentId);
+				// The document was made a moment ago and nothing was recorded
+				// against it, so this is a rollback rather than a deletion — but it
+				// goes through the same removal as any other, because a
+				// half-successful re-upload could have left a row behind.
+				await removeDocument(documentId, locals.person);
 				skipped.push({ name: file.name, reason: recorded.message.toLowerCase() });
 				continue;
 			}
@@ -582,15 +586,10 @@ export const actions: Actions = {
 		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
 		const { entry, owner } = found;
 
-		await db.transaction(async (tx) => {
-			await tx.update(salaryEntry).set({ currency }).where(eq(salaryEntry.id, entry.id));
-			// The stored slip carries a currency of its own, written from the same
-			// wrong source. Left behind it would put the old currency back the next
-			// time anything read the document rather than the entry.
-			if (entry.documentId) {
-				await tx.update(document).set({ currency }).where(eq(document.id, entry.documentId));
-			}
-		});
+		// The entry is the only place a payslip's currency lives, so the correction
+		// is one write. The stored document is the FILE and says nothing about
+		// money, which is what stops an old currency reappearing behind this.
+		await db.update(salaryEntry).set({ currency }).where(eq(salaryEntry.id, entry.id));
 
 		// A correction is the strongest statement there is about this person's
 		// pay, so it teaches the reader too — fixing one month should not leave
@@ -643,22 +642,34 @@ export const actions: Actions = {
 	/**
 	 * Remove a payslip and the month it evidenced.
 	 *
-	 * The whole entry goes, not just the payslip-side fields. A month also
-	 * evidenced by a bank credit loses that credit's net figure too — the
-	 * confirmation on the screen names what is going, and re-filing the salary
-	 * transaction rebuilds it.
+	 * The payslip's whole statement goes, not just the payslip-side fields —
+	 * but a bank credit that had been merged into it does not. That figure was
+	 * proved by money arriving, and it comes back as the credit-only row it was
+	 * before any slip claimed it; the transaction in the ledger is untouched.
+	 *
+	 * Through `removeDocument` rather than deleting the row here and the
+	 * document after: the two have to happen in one transaction, in that order,
+	 * or the foreign key's SET NULL turns the statement into a second unclaimed
+	 * row for its month and the partial unique index refuses it.
+	 *
+	 * A statement with no document is a bank credit or a hand-typed figure and
+	 * has no paper to remove, so that one is deleted here.
 	 */
-	deletePayslip: async ({ request }) => {
+	deletePayslip: async ({ request, locals }) => {
 		const form = await request.formData();
 		const found = await entryWithOwner(asRowId(form.get('entryId')));
 		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
 		const { entry } = found;
 
-		// This ONE statement of the month, and the file it was read from. A month
-		// worked twice keeps its other job: deleting by month took both, which was
-		// harmless while a month could only hold one and is not any more.
+		if (entry.documentId) {
+			// This ONE statement of the month, and the file it was read from. A
+			// month worked twice keeps its other job: the removal is keyed to the
+			// document, and deleting by month took both.
+			const outcome = await removeDocument(entry.documentId, locals.person);
+			if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
+			return { ok: true };
+		}
 		await db.delete(salaryEntry).where(eq(salaryEntry.id, entry.id));
-		if (entry.documentId) await deleteDocument(entry.documentId);
 		return { ok: true };
 	}
 };

@@ -369,8 +369,9 @@ would be exactly the near-duplicate this set exists to avoid.
 
 ### Shelf management components (v0.7.0)
 
-`ShelfRow` — handle · emoji · label · count · `System` badge or `⋯`, at a 52px
-row height on a `28px 36px minmax(0,1fr) auto 36px` grid. The only sortable row
+`ShelfRow` — handle · emoji · label · count · `System` badge or `⋯`, at a 36px
+row height on an `18px 26px minmax(0,1fr) auto minmax(24px,auto)` grid sized for
+the 218px rail it lives in. The only sortable row
 in the app, which is why it is not an extension of a data row: the dragged row
 takes `--card3` (the active rail fill) and keeps its 1px border, with **no lift,
 no shadow and no transition** — the system has none.
@@ -379,6 +380,87 @@ no shadow and no transition** — the system has none.
 field and Clear. No external picker (self-hosted, no CDN) and no OS picker (a
 Linux box may have none reachable); the field covers the twenty-fifth emoji
 without shipping an emoji database.
+
+### Subjects in the rail (v0.7.1)
+
+`SubjectRow` — emoji · name · count · `Household` badge or `⋯`, on `ShelfRow`'s
+grid **minus its handle column** (`26px minmax(0,1fr) auto minmax(24px,auto)`) at
+the same 36px height, hover fill, badge and menu. A sibling rather than a second
+set of props on `ShelfRow`, because the one thing `ShelfRow` exists for — being
+the only sortable row in the app — is the one thing a subject does not do: the
+rail sorts subjects, so there is no order to drag into and no handle to draw.
+
+The `SUBJECTS` section sits under `SHELVES` with the same eyebrow and the same
+pencil, but its own toggle: one state driving two heads would put drag handles on
+rows that cannot be dragged. A row filters the list by `?entity=<id>` — the same
+parameter the **About** dropdown writes, so the rail and the filter can never
+disagree — and pressing the active row clears it.
+
+Archived subjects are **dimmed, never hidden from their own section**: the label
+takes `--fg3` and the emoji `opacity: 0.55`, because an emoji has no colour of
+ours to quieten. They appear only while `?archived=1` is on, and the section
+carries a `Show N archived` row when it is not, so the only control that can
+bring a subject back is never behind a door with no handle. The household's row
+shows the badge instead of `⋯`, the same way a system shelf does.
+
+Archiving is a dialog, not a confirmation: it deletes nothing, so the copy is a
+sentence about how much paper moves and what brings it back.
+
+### The documents card (v0.7.1)
+
+`DocumentsCard` is the **only** way a record screen shows its paper. Property, tenancies,
+loans, accounts, contacts, transactions, tax statements and investments all render this one
+component — a screen that draws its own list of documents is a bug, because that is exactly
+how five screens ended up each knowing a different amount about expiry, unlinking and
+restricted access.
+
+A `.card` with the 🗂️ `Eyebrow` (heading defaults to `Documents`) and an
+`Open in Documents →` caption on the right, pointing at the **entity filter**
+(`/documents?entity=<record id>`) rather than a search for the record's name.
+
+Rows sit on a `38px minmax(0, 1fr) auto` grid at 11px gaps: the extension badge in mono at
+`--text-2xs` inside a 1px `--bd` box, then the name over its second line, then the detach
+control when the screen offers one. A document with a file is a link opened through
+`/documents/<id>/file` (never `/files/<stored name>`) carrying `data-file-ext` so the
+overlay knows what it is about to show; a metadata-only document is plain text. The lock
+from the icon set trails a restricted name at 13px in `--fg3`, **for admins only** — a
+member is never sent the row.
+
+The second line is `shelf label · when it falls due` — or when it arrived, for a
+document carrying no date — in one of three colours only:
+`--red` past, `--yellow` inside the window, `--fg3` otherwise. Those three come from
+`documentExpiryTone` in `$lib/documents-view`, a projection of the Documents screen's
+`expiryTreatment`, so a lease reads the same on the property card and in the files. The
+screen's four-hue pill vocabulary (blue for an obligation, purple for a plain stop) is
+**not** carried onto a card: one line has no room to explain a difference between two
+quiet states.
+
+Below the rows, in order: the **Attach existing** picker — a `<select>` whose first option
+is empty and a plain `Attach` button, rendered only when there is at least one candidate —
+and the `➕ Add a document` button, rendered only when the screen passes a capture prefill
+(`/documents?add=1&addShelfKey=…&targetKind=…&targetId=…`). Both post `targetId`; the
+picker posts `documentId` too.
+
+Either control may be absent, and its absence is the screen's answer rather than an
+omission: an account's statements arrive from an import, an investment report from
+the upload above the card, and a receipt and a tax attachment from a drop zone
+beside it. A card that offered "Add a document" there would file paper the module
+would then have to be told about.
+
+Detach is a small `✕` in `--fg3` with **no confirmation step**, because it removes the
+_link_ and not the document: the paper stays on its shelf, so a mis-click costs a
+re-attach rather than evidence. `confirmDetach` turns this into two taps instead — the
+first arms the row (no form on the page yet), the second posts and turns red — for the
+one card whose detach does not merely unlink: the transactions screen's receipts dialog
+deletes the document too (Task 9), which a mis-click cannot undo the way an ordinary
+unlink can.
+
+A `bare` prop drops the `.card` wrapper and its padding, for the screens where this card
+lands inside a card that already exists — the contacts edit panel, an account's row in the
+accounts list, a loan's own card on the Loans screen, the transactions receipts dialog
+(which already sits inside `Modal`'s own bordered box). Nesting one card's border and
+padding inside another reads as a mistake, not a feature; the host supplies both instead
+and the rows and controls are unchanged.
 
 ### Highlighting a search term
 
@@ -610,9 +692,11 @@ restart.
 Caption: *What each project has cost so far, across every category it touches.*
 
 A flat list of tags with their running totals; clicking one opens the register filtered
-to it. Each row shows the tag name, anything it is linked to (a property, a document),
-and its totals **per currency**, with a converted approximate total beneath when a tag
-spans more than one. A tag with nothing on it says so rather than showing a zero.
+to it. Each row shows the tag name, anything it is linked to (a property, a document, a
+loan, with its own link to Loans), and its totals **per currency**, with a converted
+approximate total beneath when a tag spans more than one. A tag applied only to a line
+of a transaction has no card to show, so it reads as a line count instead of vanishing.
+A tag with nothing on it says so rather than showing a zero.
 
 Tags cut across categories: *Karlín renovation* collects materials, labour and permits
 wherever they were filed.

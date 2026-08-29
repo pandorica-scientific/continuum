@@ -3,28 +3,19 @@
 	// What a year's row opens into: the statements filed that year, and the
 	// paperwork each of them brought.
 	//
-	// Every secondary or destructive action sits behind a ⋯ menu — the
-	// statement's and each attachment's alike. Twenty-six always-visible Edit
-	// and Delete buttons for records touched once a year was the old screen's
-	// worst density problem, and deleting a filed statement should not be one
-	// misclick away.
-	//
-	// The attachment row used to carry a bare ⇥ and a bare 🗑 beside a caption
-	// claiming "Delete lives behind the ⋯ menu now", which was plainly untrue
-	// with a bin two inches above it. One pattern, so the caption is unnecessary
-	// and gone.
+	// Deleting a filed STATEMENT sits behind a ⋯ menu: twenty-six always-visible
+	// Edit and Delete buttons for records touched once a year was the old
+	// screen's worst density problem, and that should not be one misclick away.
+	// Its attachments are a different concern — Task 17 moves them onto the
+	// same `DocumentsCard` every other screen files paper through, which draws
+	// its own unfile control per row rather than a second menu here.
 	import { enhance } from '$app/forms';
+	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { ATTACHMENT_KINDS } from '$lib/tax';
-	import { documentFileHref } from '$lib/ui/file-viewer';
+	import type { AboutDocument } from '$lib/server/documents/targets';
 
-	interface Attachment {
-		id: string;
-		name: string;
-		ext: string;
-		file: string | null;
-	}
 	interface Statement {
 		id: string;
 		/** Which filer this statement belongs to — the dialog needs it back. */
@@ -38,7 +29,8 @@
 		taxPaid: string;
 		ratePct: string | null;
 		lines: { label: string; amount: string }[];
-		attachments: Attachment[];
+		/** From `documentsAbout`, already filtered by the read rule. */
+		attachments: AboutDocument[];
 		note: string | null;
 		diverges: string | null;
 	}
@@ -47,7 +39,8 @@
 		statements,
 		countries,
 		personHue,
-		onedit
+		onedit,
+		isAdmin = false
 	}: {
 		statements: Statement[];
 		countries: { code: string; name: string; token: string }[];
@@ -59,24 +52,20 @@
 		 */
 		personHue: (personId: string) => string;
 		onedit: (statement: Statement) => void;
+		/** Draws the lock on a restricted attachment. Never what hides one. */
+		isAdmin?: boolean;
 	} = $props();
 
 	const tokenOf = $derived(new Map(countries.map((c) => [c.code, c.token])));
 	const nameOf = $derived(new Map(countries.map((c) => [c.code, c.name])));
 
-	// Two taps rather than a browser confirm(): this destroys a stored file, and
-	// a native dialog blocks the page while it is open. Keyed by document id.
-	let arming = $state<string | null>(null);
-
-	// One open menu at a time across the whole detail, statements and
-	// attachments together — keyed `statement:<id>` or `attachment:<id>` so the
-	// two cannot collide on a shared id.
+	// One open menu at a time across every statement on the row — keyed by
+	// statement id, which is the only thing left that opens one here.
 	let menuOpen = $state<string | null>(null);
 
 	$effect(() => {
 		// A delete reloads the page data; nothing should still be open after it.
 		void statements;
-		arming = null;
 		menuOpen = null;
 	});
 </script>
@@ -102,63 +91,19 @@
 				<span class="filed">filed in {s.currency}</span>
 
 				<div class="attachments">
-					{#each s.attachments as a (a.id)}
-						<div class="attachment">
-							<span class="mono ext">{a.ext}</span>
-							{#if a.file}
-								<a
-									href={documentFileHref(a.id)}
-									target="_blank"
-									rel="noopener"
-									class="a-name"
-									data-file-ext={a.ext}>{a.name}</a
-								>
-							{:else}
-								<span class="a-name">{a.name}</span>
-							{/if}
-
-							<div class="menu-wrap">
-								<button
-									type="button"
-									class="icon"
-									aria-label="More for {a.name}"
-									aria-expanded={menuOpen === `attachment:${a.id}`}
-									onclick={() => {
-										arming = null;
-										menuOpen = menuOpen === `attachment:${a.id}` ? null : `attachment:${a.id}`;
-									}}>⋯</button
-								>
-								{#if menuOpen === `attachment:${a.id}`}
-									<div class="menu">
-										<form method="POST" action="?/detach" use:enhance>
-											<input type="hidden" name="id" value={s.id} />
-											<input type="hidden" name="documentId" value={a.id} />
-											<button type="submit" class="menu-item">Detach — keeps the file</button>
-										</form>
-										{#if arming === a.id}
-											<form method="POST" action="?/deleteAttachment" use:enhance>
-												<input type="hidden" name="documentId" value={a.id} />
-												<button type="submit" class="menu-item danger">
-													Delete the document and its file?
-												</button>
-											</form>
-										{:else}
-											<!-- Armed in place rather than fired on the first click: this
-											     destroys a stored file, and a menu item is an easier
-											     misclick than a button was. -->
-											<button
-												type="button"
-												class="menu-item danger"
-												onclick={() => (arming = a.id)}
-											>
-												Delete document and file
-											</button>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						</div>
-					{/each}
+					<!-- `bare`: the statement's own `.card` above would double the border
+					     and padding if this card drew its own. `detachAction="detach"` is
+					     link only — a tax attachment detached stays filed on the Finance
+					     shelf, so one tap is enough and `confirmDetach` stays off. -->
+					<DocumentsCard
+						bare
+						heading="Attachments"
+						documents={s.attachments}
+						target={{ id: s.id, kind: 'tax_statement', label: `${s.year} ${s.country}` }}
+						emptyText="Nothing filed against this statement yet."
+						detachAction="detach"
+						{isAdmin}
+					/>
 
 					<form
 						method="POST"
@@ -204,7 +149,6 @@
 						aria-label="More for {s.year} {s.country}"
 						aria-expanded={menuOpen === `statement:${s.id}`}
 						onclick={() => {
-							arming = null;
 							menuOpen = menuOpen === `statement:${s.id}` ? null : `statement:${s.id}`;
 						}}>⋯</button
 					>
@@ -289,28 +233,7 @@
 	.attachments {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2);
-	}
-	.attachment {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		min-width: 0;
-	}
-	.ext {
-		font-size: var(--text-2xs);
-		letter-spacing: 0.04em;
-		color: var(--fg3);
-		border: 1px solid var(--bd);
-		border-radius: 5px;
-		padding: 2px 5px;
-		flex: none;
-	}
-	.a-name {
-		font-size: var(--text-sm);
-		color: var(--fg1);
-		min-width: 0;
-		overflow-wrap: anywhere;
+		gap: var(--space-4);
 	}
 	.icon {
 		background: none;

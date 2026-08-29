@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import { document } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
+import {
+	account,
+	document,
+	documentLink,
+	entity,
+	loan,
+	person,
+	subject,
+	transaction
+} from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
@@ -26,12 +36,53 @@ let previousUrl: string | undefined;
 const asAdmin = { person: { id: 'a', name: 'A', initials: 'A', role: 'admin', theme: null } };
 const asMember = { person: { id: 'm', name: 'M', initials: 'M', role: 'member', theme: null } };
 
+/**
+ * One record of every kind the screen has to be able to offer or name.
+ *
+ * A loan and a transaction above all: the loan is pickable and the transaction
+ * is not, and the two halves of this task are that both are still OFFERED by
+ * the about filter while only one of them is offered by a picker.
+ */
+const RECORD = {
+	person: uuidv7(),
+	account: uuidv7(),
+	transaction: uuidv7(),
+	loan: uuidv7()
+} as const;
+
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
 	harness = await startPostgres('documents-load', { max: 1 });
 	process.env.DATABASE_URL = harness.url;
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
+
+	await testDb
+		.insert(person)
+		.values({ id: RECORD.person, name: 'Robert', initials: 'R', role: 'admin' });
+	await testDb.insert(account).values({
+		id: RECORD.account,
+		name: 'Fio current',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK'
+	});
+	await testDb.insert(transaction).values({
+		id: RECORD.transaction,
+		accountId: RECORD.account,
+		bookedOn: '2026-03-04',
+		amountMinor: -123_450n,
+		currency: 'CZK',
+		counterparty: 'Alza',
+		dedupFingerprint: 'documents-load-alza'
+	});
+	await testDb.insert(loan).values({
+		id: RECORD.loan,
+		name: 'Vinohrady mortgage',
+		currency: 'CZK',
+		principalMinor: 500_000_000n,
+		owedMinor: 400_000_000n
+	});
 }, 180_000);
 
 afterAll(async () => {
@@ -63,9 +114,20 @@ async function seedShelf(key: string, counts: { normal: number; restricted: numb
 	}
 }
 
+interface AboutOption {
+	id: string;
+	name: string;
+	meta?: string;
+	kind: string;
+	groupLabel: string;
+	count: number;
+}
+
 type LoadedDocuments = {
 	shelves: { key: string; label: string; count: number }[];
 	total: number;
+	filterOptions: { entities: AboutOption[] };
+	pickableTargets: { id: string; kind: string; groupLabel: string }[];
 };
 
 async function loadDocuments(locals: unknown): Promise<LoadedDocuments> {
@@ -104,5 +166,132 @@ describe('the documents load', () => {
 		expect(data.rows).toHaveLength(1);
 		expect(data.rows.every((r) => r.restricted === false)).toBe(true);
 		expect(JSON.stringify(data.rows)).not.toMatch(/restricted 0/);
+	});
+});
+
+/**
+ * A document filed against a loan and against a transaction, which is what the
+ * about filter and the capture form each have to cope with: one kind a picker
+ * may offer, one kind it may not.
+ */
+async function fileAgainst(name: string, targetIds: readonly string[]): Promise<string> {
+	const id = uuidv7();
+	await testDb.insert(document).values({
+		id,
+		name,
+		shelfId: await shelfIdByKey('household', testDb),
+		type: 'other',
+		addedOn: '2026-01-01'
+	});
+	for (const targetId of targetIds) {
+		await testDb.insert(documentLink).values({ documentId: id, targetId });
+	}
+	return id;
+}
+
+describe('the about filter', () => {
+	it('offers every kind the paper points at, under the heading it belongs to', async () => {
+		// A loan and a transaction, neither of which the four-kind list the screen
+		// used to keep could name — so neither could be filtered by.
+		await fileAgainst('Yearly mortgage statement', [RECORD.loan, RECORD.person]);
+		await fileAgainst('Alza receipt', [RECORD.transaction]);
+
+		const { entities } = (await loadDocuments(asAdmin)).filterOptions;
+		const byKind = new Map(entities.map((e) => [e.kind, e]));
+
+		expect(byKind.get('loan')?.name).toBe('Vinohrady mortgage');
+		expect(byKind.get('loan')?.groupLabel).toBe('Loans');
+		expect(byKind.get('loan')?.count).toBe(1);
+
+		// A transaction is not pickable and is still filterable: a receipt is
+		// found on the Documents screen exactly as often as anywhere else.
+		expect(byKind.get('transaction')?.groupLabel).toBe('Transactions');
+		// The name of a card payment is a shop and a date; the amount is what
+		// tells two of them apart, in the currency's own symbol.
+		expect(byKind.get('transaction')?.meta).toMatch(/1.234[.,]50\sKč/u);
+
+		expect(byKind.get('person')?.groupLabel).toBe('People');
+	});
+
+	it('never offers a record nothing on the shelf points at', async () => {
+		await fileAgainst('Alza receipt', [RECORD.transaction]);
+		const { entities } = (await loadDocuments(asAdmin)).filterOptions;
+		expect(entities.some((e) => e.id === RECORD.loan)).toBe(false);
+	});
+});
+
+describe('capture', () => {
+	async function capture(fields: {
+		name: string;
+		linkIds?: readonly string[];
+		newSubject?: string;
+	}): Promise<{ addedIds: string[] }> {
+		const { actions } = await import('../../src/routes/(app)/documents/+page.server');
+		const form = new FormData();
+		form.set('name', fields.name);
+		form.set('shelf', 'household');
+		for (const id of fields.linkIds ?? []) form.append('linkIds', id);
+		if (fields.newSubject) form.set('newSubject', fields.newSubject);
+		const request = new Request('http://localhost/documents?/addDocument', {
+			method: 'POST',
+			body: form
+		});
+		return (await (actions.addDocument as unknown as (event: unknown) => Promise<unknown>)({
+			request,
+			locals: asAdmin
+		})) as { addedIds: string[] };
+	}
+
+	it('files the new document against every kind the form posted', async () => {
+		// One field, several kinds. The per-kind inputs the action used to read —
+		// personIds, propertyIds, accountIds, subjectIds — could not carry a loan
+		// at all, because no screen ever wrote a `loanIds` input.
+		const { addedIds } = await capture({
+			name: 'Mortgage statement',
+			linkIds: [RECORD.person, RECORD.loan, RECORD.transaction]
+		});
+		expect(addedIds).toHaveLength(1);
+
+		const links = await testDb
+			.select({ targetId: documentLink.targetId })
+			.from(documentLink)
+			.where(eq(documentLink.documentId, addedIds[0]));
+		expect(links.map((l) => l.targetId).sort()).toEqual(
+			[RECORD.person, RECORD.loan, RECORD.transaction].sort()
+		);
+	});
+
+	it('still mints a subject typed into the form beside the ids that were ticked', async () => {
+		const { addedIds } = await capture({
+			name: 'Boiler warranty',
+			linkIds: [RECORD.person],
+			newSubject: 'The boiler'
+		});
+
+		const links = await testDb
+			.select({ targetId: documentLink.targetId, kind: entity.kind })
+			.from(documentLink)
+			.innerJoin(entity, eq(entity.id, documentLink.targetId))
+			.where(eq(documentLink.documentId, addedIds[0]));
+		expect(links.map((l) => l.kind).sort()).toEqual(['person', 'subject']);
+
+		const minted = links.find((l) => l.kind === 'subject')!.targetId;
+		const [row] = await testDb.select().from(subject).where(eq(subject.id, minted));
+		expect(row.name).toBe('The boiler');
+	});
+});
+
+describe('the review screen', () => {
+	it('offers every kind a document may be filed against, and no kind it may not', async () => {
+		const { load } = await import('../../src/routes/(app)/documents/review/+page.server');
+		const data = (await (load as unknown as (event: unknown) => Promise<unknown>)({
+			locals: asAdmin
+		})) as { targets: { id: string; kind: string; groupLabel: string }[] };
+
+		expect(data.targets.find((t) => t.id === RECORD.loan)?.groupLabel).toBe('Loans');
+		expect(data.targets.some((t) => t.id === RECORD.account)).toBe(true);
+		// A list of every transaction is a list nobody can read by eye. They reach
+		// a document from their own screen instead.
+		expect(data.targets.some((t) => t.kind === 'transaction')).toBe(false);
 	});
 });

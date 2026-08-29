@@ -6,6 +6,7 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
+	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 
 	let { data, form } = $props();
 
@@ -400,6 +401,18 @@
 		{/if}
 	</section>
 </div>
+
+<!-- Read-only: no attach, no addHref. The Accounts screen already carries the
+     full attach/detach card for the brokerage account these reports are filed
+     against; this is a second, convenient place to see the same paper without
+     duplicating that management surface here. -->
+<DocumentsCard
+	heading="Reports"
+	documents={data.reports}
+	target={data.reportsTarget}
+	emptyText="No broker reports filed yet — upload one above and it appears here."
+	isAdmin={data.isAdmin}
+/>
 
 <style>
 	.tax-detail {

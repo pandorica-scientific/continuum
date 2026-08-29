@@ -15,7 +15,7 @@
 	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
-	import { TYPE_LABELS } from '$lib/documents-view';
+	import { groupAboutOptions, TYPE_LABELS } from '$lib/documents-view';
 	import {
 		counterLabel,
 		currentId,
@@ -131,21 +131,23 @@
 			<div class="field">
 				<span class="eyebrow">About</span>
 				<div class="about">
-					{#each [{ label: 'People', kind: 'person' }, { label: 'Property', kind: 'property' }, { label: 'Subjects', kind: 'subject' }] as group (group.kind)}
-						{@const items = data.targets.filter((t) => t.kind === group.kind)}
-						{#if items.length}
-							<div class="about-group">
-								<span class="mono about-kind">{group.label}</span>
-								<div class="chips">
-									{#each items as target (target.id)}
-										<label class="pick-chip">
-											<input type="checkbox" name="linkIds" value={target.id} />
-											<span>{target.name}</span>
-										</label>
-									{/each}
-								</div>
+					<!-- The registry's groups, in the registry's order. The three
+					     hand-written ones this replaces meant a reviewer could file a
+					     lease against the flat but never against the tenancy, and a
+					     mortgage statement against nobody at all — with nothing on
+					     screen to say a kind was missing. -->
+					{#each groupAboutOptions(data.targets) as group (group.label)}
+						<div class="about-group">
+							<span class="mono about-kind">{group.label}</span>
+							<div class="chips">
+								{#each group.options as target (target.id)}
+									<label class="pick-chip">
+										<input type="checkbox" name="linkIds" value={target.id} />
+										<span>{target.name}</span>
+									</label>
+								{/each}
 							</div>
-						{/if}
+						</div>
 					{/each}
 				</div>
 			</div>
@@ -309,6 +311,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-5);
+		/* Nine kinds instead of three: a household with two hundred contacts must
+		   not push File & next off the bottom of the form. The chips scroll. */
+		max-height: 224px;
+		overflow-y: auto;
 	}
 	.about-group {
 		display: flex;

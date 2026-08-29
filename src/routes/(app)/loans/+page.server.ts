@@ -24,6 +24,12 @@ import {
 import { anchorMonthFor, project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { updateLoanTags } from '$lib/server/tags';
+import {
+	attachDocument,
+	candidateDocumentsFor,
+	detachDocument,
+	documentsAbout
+} from '$lib/server/documents/targets';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace } from '$lib/server/fx';
 import {
@@ -63,7 +69,8 @@ const EVENT_LABELS: Record<string, string> = {
 	balance: 'balance statement'
 };
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	const actor = locals.person ?? null;
 	const baseCurrency = await getBaseCurrency();
 	const [loans, allPeriods, properties, links, allEvents] = await Promise.all([
 		db.select().from(loan).orderBy(loan.createdAt, loan.id),
@@ -89,6 +96,22 @@ export const load: PageServerLoad = async () => {
 		db.select().from(tag)
 	]);
 	const tagName = new Map(allTags.map((t) => [t.id, t.name]));
+
+	// The agreement and each re-fix letter, through the one query every
+	// documents card uses — `documentsAbout` stays one query per loan (it is
+	// narrow), but run concurrently for every loan up front rather than
+	// awaited one at a time inside the loop below. `candidateDocumentsFor`
+	// is the other half: ONE query for the whole visible library plus ONE for
+	// `document_link` across every loan, not the whole library fetched again
+	// for each loan's picker.
+	const loanIds = loans.map((l) => l.id);
+	const [documentsByLoan, candidatesByLoan] = await Promise.all([
+		Promise.all(loanIds.map(async (id) => [id, await documentsAbout(id, actor)] as const)).then(
+			(pairs) => new Map(pairs)
+		),
+		candidateDocumentsFor(loanIds, actor)
+	]);
+
 	const cards = [];
 	for (const l of loans) {
 		const periods: FixationPeriod[] = allPeriods
@@ -120,6 +143,9 @@ export const load: PageServerLoad = async () => {
 			.filter(Boolean);
 		const currentPeriod = periodForMonth(periods, monthNow());
 		const payment = currentPeriod?.paymentMinor ?? 0n;
+
+		const documents = documentsByLoan.get(l.id) ?? [];
+		const documentCandidates = candidatesByLoan.get(l.id) ?? [];
 
 		const owedBase = await convertOrFace(l.owedMinor, l.currency, baseCurrency);
 		const paymentBase = await convertOrFace(payment, l.currency, baseCurrency);
@@ -234,6 +260,9 @@ export const load: PageServerLoad = async () => {
 				.filter(Boolean)
 				.join(' · '),
 			events,
+			documents,
+			documentCandidates,
+			addDocumentHref: `/documents?add=1&addShelfKey=finance&targetKind=loan&targetId=${l.id}`,
 			currency: l.currency,
 			// raw inputs for the browser-side what-if engine (bigints as strings)
 			sim: {
@@ -256,6 +285,7 @@ export const load: PageServerLoad = async () => {
 
 	const unit = displayCurrency(baseCurrency);
 	return {
+		isAdmin: locals.person?.role === 'admin',
 		unit,
 		count: loans.length,
 		metrics: {
@@ -387,5 +417,34 @@ export const actions: Actions = {
 			secured
 		});
 		return result.ok ? result : fail(result.status, { message: result.message });
+	},
+
+	/**
+	 * File an existing document against a loan — the "Attach" picker on its
+	 * `DocumentsCard`. Every loan's card posts here with its own `targetId`, so
+	 * one action serves all of them; the registry resolves which loan it was.
+	 */
+	attachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
+		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Unfile a document — the link only. The document stays on its shelf, so a
+	 * mis-click costs a re-attach rather than evidence.
+	 */
+	detachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Which document?' });
+		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
 	}
 };

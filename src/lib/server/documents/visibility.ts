@@ -10,6 +10,17 @@ import { eq, sql, type SQL } from 'drizzle-orm';
 import { document, documentLink, subject } from '$lib/server/db/schema';
 
 /**
+ * Absent, not forbidden — the sentence every refusal of an unreadable document
+ * uses, here rather than typed out per caller.
+ *
+ * A member who names a restricted document is told what someone naming a
+ * deleted one is told. "You may not" would confirm it exists, which is the one
+ * fact the read rule protects, so the two answers have to be the same string
+ * and not merely two strings that currently agree.
+ */
+export const NO_SUCH_DOCUMENT = 'That document is not there.';
+
+/**
  * Archived subjects demote their paper, and only their paper.
  *
  * The expression is exactly v3 §2.3, and the shape matters: it is

@@ -12,6 +12,9 @@ import {
 	splitSnippet,
 	subLine,
 	typeLabel,
+	aboutOptionLabel,
+	groupAboutOptions,
+	type AboutOption,
 	type DocRow
 } from '$lib/documents-view';
 
@@ -302,5 +305,49 @@ describe('groupSummary', () => {
 		const summary = groupSummary([row({ expiresOn: '2026-04-18', subjectArchived: true })], TODAY);
 		expect(summary.expired).toBe(0);
 		expect(summary.nextExpiry).toBeNull();
+	});
+});
+
+/**
+ * The "what it is about" filter.
+ *
+ * A flat list of names was readable while the screen named four kinds. Now that
+ * every registered kind reaches it, "Alza 2026-03-04" sits beside "Robert" and
+ * "Vinohrady flat" with nothing to say which is which — so the options carry
+ * the heading their kind belongs to and are read under it.
+ */
+describe('the about filter', () => {
+	const option = (over: Partial<AboutOption> = {}): AboutOption => ({
+		id: over.id ?? 'e1',
+		name: over.name ?? 'Robert',
+		meta: over.meta,
+		groupLabel: over.groupLabel ?? 'People',
+		count: over.count ?? 1
+	});
+
+	it('puts each option under its own heading, in the order the registry gave them', () => {
+		const grouped = groupAboutOptions([
+			option({ id: 'p1', name: 'Robert', groupLabel: 'People' }),
+			option({ id: 'p2', name: 'Kseniya', groupLabel: 'People' }),
+			option({ id: 'l1', name: 'Vinohrady mortgage', groupLabel: 'Loans' }),
+			option({ id: 't1', name: 'Alza 2026-03-04', groupLabel: 'Transactions' })
+		]);
+		expect(grouped.map((g) => g.label)).toEqual(['People', 'Loans', 'Transactions']);
+		expect(grouped[0].options.map((o) => o.name)).toEqual(['Robert', 'Kseniya']);
+		expect(grouped[2].options.map((o) => o.id)).toEqual(['t1']);
+	});
+
+	it('offers no empty heading', () => {
+		expect(groupAboutOptions([])).toEqual([]);
+	});
+
+	it('reads a name with its count, and a transaction with its amount between them', () => {
+		// A card payment's name is a shop and a date; two of them from the same
+		// shop on the same day are told apart by the amount, which is what `meta`
+		// carries for every kind whose name alone is ambiguous.
+		expect(aboutOptionLabel(option({ name: 'Robert', count: 4 }))).toBe('Robert · 4');
+		expect(
+			aboutOptionLabel(option({ name: 'Alza 2026-03-04', meta: '−1 234,50 CZK', count: 1 }))
+		).toBe('Alza 2026-03-04 · −1 234,50 CZK · 1');
 	});
 });

@@ -57,3 +57,6 @@ tessdata/
 # root, which is how four of them entered the history once.
 *.traineddata
 *.traineddata.gz
+
+# Local execution scratch (never committed)
+.superpowers/

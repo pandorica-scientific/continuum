@@ -141,7 +141,7 @@ describe('the baseline migration', () => {
 		expect(names).toContain('document_name_trgm_idx');
 	});
 
-	it('seeds ten shelves, two of them system', async () => {
+	it('seeds ten shelves, four of them system', async () => {
 		const rows = await harness.sql<{ key: string; system: boolean }[]>`
 			select key, system from shelf order by sort_order`;
 		expect(rows.map((r) => r.key)).toEqual([
@@ -156,7 +156,14 @@ describe('the baseline migration', () => {
 			'household',
 			'statements'
 		]);
-		expect(rows.filter((r) => r.system).map((r) => r.key)).toEqual(['inbox', 'statements']);
+		// finance and property joined inbox/statements under D4: payslips, tax
+		// attachments, and bills file to them by key, same as capture and import.
+		expect(rows.filter((r) => r.system).map((r) => r.key)).toEqual([
+			'inbox',
+			'property',
+			'finance',
+			'statements'
+		]);
 	});
 
 	it('refuses to delete a shelf that still holds paper', async () => {
@@ -168,6 +175,58 @@ describe('the baseline migration', () => {
 			insert into document (id, name, shelf_id, ext, added_on, type)
 			values (gen_random_uuid(), 'Deed', ${shelfId}, 'PDF', current_date, 'other')`;
 		await expect(harness.sql`delete from shelf where id = ${shelfId}`).rejects.toThrow();
+	});
+
+	it('creates none of the columns v0.7.1 stopped writing', async () => {
+		// A payslip's figure and its currency live on `salary_entry`, and a tax
+		// statement reaches its papers through `document_link`. Each of these was
+		// still being written while nothing read it, which is how a second source
+		// of truth for one fact gets back in. A baseline that still creates them
+		// hands the next feature that choice again.
+		const rows = await harness.sql<{ detail: string }[]>`
+			select table_name || '.' || column_name as detail
+			from information_schema.columns
+			where table_schema = 'public'
+			  and ((table_name = 'document' and column_name in ('amount_minor', 'currency'))
+			    or (table_name = 'tax_statement' and column_name = 'document_id'))`;
+		expect(rows.map((r) => r.detail)).toEqual([]);
+
+		// `period_on` is NOT one of them: it is the month a payslip covers, and
+		// `payslipMatchingContent` matches a re-uploaded slip on it.
+		const kept = await harness.sql<{ column_name: string }[]>`
+			select column_name from information_schema.columns
+			where table_schema = 'public' and table_name = 'document'
+			  and column_name = 'period_on'`;
+		expect(kept.map((r) => r.column_name)).toEqual(['period_on']);
+	});
+
+	it('lets an import file name the document it was filed as, and holds on to it', async () => {
+		// RESTRICT rather than SET NULL or CASCADE: the statement document IS the
+		// evidence for the import, so deleting it has to be refused rather than
+		// quietly leaving an import that can no longer show what it read.
+		const [{ definition }] = await harness.sql<{ definition: string }[]>`
+			select pg_get_constraintdef(oid) as definition from pg_constraint
+			where conname = 'import_file_document_id_document_id_fk'`;
+		expect(definition).toMatch(/REFERENCES "?document"?\(id\) ON DELETE RESTRICT/i);
+
+		// The covering index schema-invariants demands of every foreign key.
+		const [{ n }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from pg_indexes
+			where indexname = 'import_file_document_idx'`;
+		expect(n).toBe(1);
+	});
+
+	it('accepts a broker report as a kind of paper', async () => {
+		// A broker's yearly report is the paper behind the investments tab, and
+		// filing it as 'other' is what made it unfindable. The CHECK is written by
+		// hand in the appendix, so nothing but this notices a new value missing.
+		await harness.sql`
+			insert into document (id, name, shelf_id, ext, added_on, type)
+			values (gen_random_uuid(), 'Broker report 2025',
+				(select id from shelf where key = 'finance'), 'PDF', current_date, 'broker_report')`;
+		const [{ n }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from document where type = 'broker_report'`;
+		expect(n).toBe(1);
 	});
 
 	it('refuses a subject whose active period runs backwards', async () => {

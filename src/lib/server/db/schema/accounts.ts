@@ -23,7 +23,7 @@ import {
 // does not resolve SvelteKit's $lib.
 import type { EnumValue } from '../../../enums';
 import { person } from './auth';
-import { tag } from './documents';
+import { document, tag } from './documents';
 import { currency } from './money';
 
 // ---- Accounts and transactions ----
@@ -130,11 +130,25 @@ export const importFile = pgTable(
 		statedRowCount: integer('stated_row_count'),
 		/** Each check as the evidence panel shows it: name, status, detail. */
 		reconciliation: jsonb('reconciliation').$type<ProofCheckRecord[] | null>(),
+		/**
+		 * The statement filed on a shelf, as one document among all the others.
+		 *
+		 * An import used to keep its own copy of the file and the documents screen
+		 * kept another, so the same statement existed twice with nothing tying the
+		 * two together. RESTRICT rather than SET NULL: the document IS the evidence
+		 * for every row this import wrote, so deleting it has to be refused rather
+		 * than quietly leaving an import that can no longer show what it read.
+		 *
+		 * Nullable, because an import filed before the two were joined has no
+		 * document to point at.
+		 */
+		documentId: uuid('document_id').references(() => document.id, { onDelete: 'restrict' }),
 		uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
 		index('import_file_currency_idx').on(table.currency),
-		index('import_file_account_idx').on(table.accountId)
+		index('import_file_account_idx').on(table.accountId),
+		index('import_file_document_idx').on(table.documentId)
 	]
 );
 

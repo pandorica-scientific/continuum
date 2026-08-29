@@ -66,8 +66,17 @@ DEMO=1 POSTGRES_PASSWORD=change-me docker compose up -d
 On a pristine instance this seeds a fictional household — six months of
 categorised cash flow, two flats on one shared mortgage, payslips, a portfolio.
 Sign in as Jana Nováková with `demo-demo-demo`. An instance that already has
-people is never touched, and every screenshot in the gallery comes from exactly
-this data.
+people is never touched, and the demo data behind the screenshots in the gallery
+is this seed — which has grown since they were taken, so a fresh demo has more
+paper and one more account on it than the pictures show.
+
+The paper is real: the seed generates a small PDF for every document it files —
+payslips, the lease, two bank statements, a broker report, three receipts, an
+insurance policy, a restricted identity card, and the warranty and vaccination
+certificate belonging to its two subjects — so the viewer, search by contents,
+receipts and the restricted-document rule all have something to show. Every
+figure printed on those pages comes from the demo's own fictional data and
+nothing else.
 
 ## HTTPS
 
@@ -222,7 +231,7 @@ All optional, all in `.env` next to `compose.yaml`.
 
 Each release publishes its version tag and moves `latest` onto it, for
 `linux/amd64` and `linux/arm64`. `compose.yaml` uses `kerth92/continuum:latest`;
-edit that one `image:` line to pin a version (`kerth92/continuum:0.7.0`) or to
+edit that one `image:` line to pin a version (`kerth92/continuum:0.7.1`) or to
 pull from the mirror instead.
 
 To check what is actually running:

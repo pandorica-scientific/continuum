@@ -382,7 +382,10 @@ describe('import database integrity', () => {
 		expect(waiting.waiting).toBe(1);
 		expect(waiting.recent[0]).toMatchObject({ id, filename: 'fio.csv', state: 'queued' });
 
-		expect(await runCpuQueue(testDb)).toBe(1);
+		// Two, not one: filing the statement's document queues its own text
+		// extraction, and import and extraction share the one CPU slot — so the
+		// same sweep that reads the statement goes on to read the filed copy too.
+		expect(await runCpuQueue(testDb)).toBe(2);
 
 		const after = await queueStatus(testDb);
 		expect(after.waiting).toBe(0);
@@ -391,8 +394,9 @@ describe('import database integrity', () => {
 		expect(await count('transaction')).toBe(5);
 
 		// The bytes are released once the job is finished; import_file keeps the
-		// original.
-		const [row] = await testDb.select().from(schema.job);
+		// original. Named by kind: the sweep above also leaves an extract_text job
+		// behind, and this is about the import job specifically.
+		const [row] = await testDb.select().from(schema.job).where(eq(schema.job.kind, 'import'));
 		expect(row.blob).toBeNull();
 		// The size outlives the bytes, so the upload screen can still say what it read.
 		expect(row.byteSize).toBeGreaterThan(0);
@@ -417,12 +421,14 @@ describe('import database integrity', () => {
 		expect(await runCpuQueue(testDb)).toBe(0);
 		expect(await count('transaction')).toBe(0);
 
-		// Once it has expired, the file is read rather than stranded.
+		// Once it has expired, the file is read rather than stranded. Two jobs
+		// again: the import itself, and the extraction its filed document queues
+		// in the same shared sweep.
 		await testDb
 			.update(schema.job)
 			.set({ claimedAt: new Date(Date.now() - LEASE_MS - 1000) })
 			.where(eq(schema.job.id, id));
-		expect(await runCpuQueue(testDb)).toBe(1);
+		expect(await runCpuQueue(testDb)).toBe(2);
 		expect(await count('transaction')).toBe(5);
 	}, 30_000);
 
@@ -434,13 +440,16 @@ describe('import database integrity', () => {
 		await enqueue('fio.csv', source, rowId('fio-race'), testDb);
 
 		// A second upload arriving mid-run must not start a second reader. It joins
-		// the sweep already running, so both callers see the same one job drained —
+		// the sweep already running, so both callers see the same drained count —
 		// what matters is that the statement was read once, not what the two return
 		// values add up to. Counting the sum instead measured the old behaviour,
 		// where the second caller raced the first for the NEXT job and merely
 		// happened to find none because this fixture holds a single file.
+		//
+		// Two, not one: filing the statement's document queues its own text
+		// extraction, drained in the same sweep as the import itself.
 		const [first, second] = await Promise.all([runCpuQueue(testDb), runCpuQueue(testDb)]);
-		expect(first).toBe(1);
+		expect(first).toBe(2);
 		expect(second).toBe(first);
 		expect(await count('transaction')).toBe(5);
 		expect(await count('import_file')).toBe(1);

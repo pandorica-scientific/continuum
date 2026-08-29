@@ -2,14 +2,21 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import {
+	account,
 	document,
 	documentLink,
 	documentText,
 	documentTextChunk,
 	job,
+	loan,
+	person,
+	property,
 	subject,
 	tag,
-	tagLink
+	tagLink,
+	taxStatement,
+	tenancy,
+	transaction
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { searchDocuments } from '$lib/server/documents/search';
@@ -31,10 +38,74 @@ let testDb: TestDb;
 const asAdmin = { id: 'a', role: 'admin' } as const;
 const asMember = { id: 'm', role: 'member' } as const;
 
+/**
+ * One record of every kind Tier B has to be able to name.
+ *
+ * Seeded once and never cleared: `beforeEach` throws away the paper, not the
+ * household behind it. Every name is deliberately unlike the words the rest of
+ * this suite searches for, so a hit on one of them can only have come through
+ * the entity tier.
+ */
+const HOUSEHOLD = {
+	filer: uuidv7(),
+	account: uuidv7(),
+	transaction: uuidv7(),
+	property: uuidv7(),
+	tenancy: uuidv7(),
+	loan: uuidv7(),
+	taxStatement: uuidv7()
+} as const;
+
 beforeAll(async () => {
 	harness = await startPostgres('document-search', { max: 1 });
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
+
+	await testDb.insert(person).values({
+		id: HOUSEHOLD.filer,
+		name: 'Jana Bartošová',
+		initials: 'JB'
+	});
+	await testDb.insert(account).values({
+		id: HOUSEHOLD.account,
+		name: 'Fio current',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK'
+	});
+	await testDb.insert(transaction).values({
+		id: HOUSEHOLD.transaction,
+		accountId: HOUSEHOLD.account,
+		bookedOn: '2026-03-04',
+		amountMinor: -123_450n,
+		currency: 'CZK',
+		counterparty: 'Alza',
+		dedupFingerprint: 'document-search-alza'
+	});
+	await testDb
+		.insert(property)
+		.values({ id: HOUSEHOLD.property, name: 'Vinohrady flat', kind: 'rented' });
+	await testDb.insert(tenancy).values({
+		id: HOUSEHOLD.tenancy,
+		propertyId: HOUSEHOLD.property,
+		tenantName: 'Marek Kučera'
+	});
+	await testDb.insert(loan).values({
+		id: HOUSEHOLD.loan,
+		name: 'Hypotéka na byt',
+		currency: 'CZK',
+		principalMinor: 500_000_000n,
+		owedMinor: 400_000_000n
+	});
+	await testDb.insert(taxStatement).values({
+		id: HOUSEHOLD.taxStatement,
+		personId: HOUSEHOLD.filer,
+		year: 2019,
+		country: 'Czechia',
+		currency: 'CZK',
+		grossIncomeMinor: 0n,
+		taxPaidMinor: 0n
+	});
 }, 180_000);
 
 afterAll(async () => {
@@ -56,6 +127,8 @@ async function seedDocument(options: {
 	type?: 'other' | 'invoice' | 'contract';
 	tag?: string;
 	subjectId?: string;
+	/** What the paper is filed against, by id and of any registered kind. */
+	about?: readonly string[];
 	storedName?: string | null;
 	addedOn?: string;
 }): Promise<string> {
@@ -79,6 +152,9 @@ async function seedDocument(options: {
 	}
 	if (options.subjectId) {
 		await testDb.insert(documentLink).values({ documentId: id, targetId: options.subjectId });
+	}
+	for (const targetId of options.about ?? []) {
+		await testDb.insert(documentLink).values({ documentId: id, targetId });
 	}
 	return id;
 }
@@ -159,6 +235,55 @@ describe('the candidate union', () => {
 		await seedDocument({ name: 'Insurance', shelf: 'property' });
 		const { hits } = await searchDocuments('insurance', asAdmin, { shelfKey: 'property' }, testDb);
 		expect(hits).toHaveLength(1);
+	});
+});
+
+/**
+ * Tier B over the whole registry, not over the four kinds somebody once listed.
+ *
+ * A receipt is remembered as "the Alza one" and a lease as "the Kučera lease" —
+ * neither word is anywhere on the paper, and before the union was built from
+ * `nameSql` neither found anything. Every case below matches ONLY through the
+ * record the document is filed against, so a hit can have come from nowhere
+ * else.
+ */
+describe('the entity tier, over every registry kind', () => {
+	it('finds a receipt by the counterparty of the transaction it evidences', async () => {
+		const receipt = await seedDocument({
+			name: 'Receipt 4187',
+			about: [HOUSEHOLD.transaction]
+		});
+		const { hits } = await searchDocuments('alza', asAdmin, {}, testDb);
+		expect(hits.map((h) => h.documentId)).toEqual([receipt]);
+		expect(hits[0].tier).toBe('B');
+		expect(hits[0].matchedIn).toBe('entity');
+	});
+
+	it('finds a lease by the tenant it names', async () => {
+		const lease = await seedDocument({ name: 'Lease', about: [HOUSEHOLD.tenancy] });
+		const { hits } = await searchDocuments('kučera', asAdmin, {}, testDb);
+		expect(hits.map((h) => h.documentId)).toEqual([lease]);
+		expect(hits[0].tier).toBe('B');
+	});
+
+	it('finds a mortgage statement by the name of the loan, diacritics or not', async () => {
+		const statement = await seedDocument({ name: 'Yearly statement', about: [HOUSEHOLD.loan] });
+		expect(
+			(await searchDocuments('hypoteka', asAdmin, {}, testDb)).hits.map((h) => h.documentId)
+		).toEqual([statement]);
+		expect(
+			(await searchDocuments('Hypotéka', asAdmin, {}, testDb)).hits.map((h) => h.documentId)
+		).toEqual([statement]);
+	});
+
+	it('finds a tax attachment by the year of the statement it belongs to', async () => {
+		const attachment = await seedDocument({
+			name: 'Interest certificate',
+			about: [HOUSEHOLD.taxStatement]
+		});
+		const { hits } = await searchDocuments('2019', asAdmin, {}, testDb);
+		expect(hits.map((h) => h.documentId)).toEqual([attachment]);
+		expect(hits[0].tier).toBe('B');
 	});
 });
 

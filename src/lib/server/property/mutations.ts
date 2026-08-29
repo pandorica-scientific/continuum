@@ -2,6 +2,7 @@
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { contact, contactLink, property, propertyBill, tenancy } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { tenancyRangesOverlap } from '$lib/property/tenancy';
 import { normalise } from '$lib/rules/match';
@@ -25,6 +26,8 @@ interface AttachedBillDocumentInput {
 	storedName: string;
 	ext: string;
 	addedOn: string;
+	/** SHA-256 of the bytes behind `storedName`, from `hashBytes`. */
+	contentHash?: string | null;
 }
 
 interface CreatePropertyBillInput {
@@ -75,6 +78,9 @@ export async function createPropertyBill(
 			documentId: input.document?.id ?? null
 		});
 	});
+	// After the commit, never inside it: a queued job pointing at a document
+	// the transaction went on to roll back is work with nothing to read.
+	if (input.document) await enqueueExtraction(input.document.id, handle);
 }
 
 interface CreateTenancyInput {

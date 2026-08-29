@@ -3,9 +3,9 @@
 // and remember which label each correction pointed at so the next slip for the
 // same person reads itself.
 //
-// Its own module rather than sitting in `index.ts`: `backfill.ts` needs
-// `readStoredPayslip`, and `index.ts` re-exports `backfill.ts`, so leaving it
-// there would make the two files import each other.
+// Its own module rather than sitting in `index.ts`: reading a slip is a job of
+// its own, and keeping it apart from how salary is RECORDED is what stopped the
+// two importing each other.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';

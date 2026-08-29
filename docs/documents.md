@@ -8,16 +8,37 @@ inside it, and visible only to the people who should see it.
 Four independent things describe a document. Keeping them apart is what stops
 the archive turning into a folder tree nobody can navigate.
 
-|           | What it answers                 | Shape                                    |
-| --------- | ------------------------------- | ---------------------------------------- |
-| **Shelf** | where in life it belongs        | one per document, a row you own          |
-| **Type**  | what kind of paper it is        | one per document, a fixed list           |
-| **Links** | what it concerns                | many — people, flats, accounts, subjects |
-| **Tags**  | anything else you cut across by | many, free text                          |
+|           | What it answers                 | Shape                                                                                         |
+| --------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
+| **Shelf** | where in life it belongs        | one per document, a row you own                                                               |
+| **Type**  | what kind of paper it is        | one per document, a fixed list                                                                |
+| **Links** | what it concerns                | many — a person, flat, tenancy, account, loan, contact, subject, transaction or tax statement |
+| **Tags**  | anything else you cut across by | many, free text                                                                               |
 
 A payslip lives on **Finance**, is of type **payslip**, links to **Jana**, and
 might be tagged `2025 return`. Move the shelf and nothing breaks: the salary
 tracker reads the type, never the shelf.
+
+### What a document can be about
+
+A person, a flat, a tenancy, an account, a loan, a contact, a subject — and a
+transaction or a tax statement, which are filed from their own screens rather
+than picked here: a list of every transaction in the household is a list nobody
+can read by eye. The inspector shows all of them under **About**. The first
+seven are chips you tick; the last two are chips with a `✕`, because the only
+thing to decide about them is whether they stay.
+
+A payslip that was matched to the bank credit it was paid by links to that
+transaction too, the same way a receipt links to the payment it evidences — so
+the slip stating the gross and the credit stating the net are one click apart.
+The match runs when the slip arrives after the credit, which is the ordinary
+order; a slip filed before the bank statement that pays it leaves the two rows
+side by side without the link.
+
+**Save keeps every link it was shown.** That matters because it once did not:
+the panel could offer people, flats and subjects, and saving replaced the whole
+set with what it had offered — so opening a receipt and pressing Save threw away
+the payment it evidenced. Removing a link is now something you do to a chip.
 
 ### Shelves are yours
 
@@ -35,37 +56,82 @@ documents go and does both in one transaction; the database refuses the delete
 otherwise, so there is no path — through the screen or otherwise — that leaves
 a document unfiled.
 
-**Inbox** and **Statements** are system shelves. You can rename them (_K
-vyřízení_ is a fine name for the inbox) and change their emoji, but they cannot
-be deleted: capture files into one and an accepted bank import files into the
-other.
+**Inbox**, **Statements**, **Finance**, and **Property** are system shelves.
+You can rename them (_K vyřízení_ is a fine name for the inbox) and change
+their emoji, but they cannot be deleted: capture files into Inbox, an accepted
+bank import files into Statements, payslips and tax attachments file into
+Finance, and bills file into Property.
 
 ### Types
 
-A closed list: contract, invoice, receipt, payslip, bank statement, insurance
-policy, claim, identity document, certificate, medical record, tax document,
-technical plan, correspondence, warranty, manual, other.
+A closed list: contract, invoice, receipt, payslip, bank statement, broker
+report, insurance policy, claim, identity document, certificate, medical
+record, tax document, technical plan, correspondence, warranty, manual, other.
 
 It is closed because behaviour hangs off it — the salary tracker reads
-`payslip`, statement import writes `bank_statement`, tax attachments write
-`tax_document`. Renaming those would quietly unhook a feature. For anything
-specific to your household, use **tags**: free, searchable, and nothing in the
-code depends on them.
+`payslip`, statement import writes `bank_statement`, an uploaded broker report
+writes `broker_report`, tax attachments write `tax_document`. Renaming those
+would quietly unhook a feature. For anything specific to your household, use
+**tags**: free, searchable, and nothing in the code depends on them.
+
+## Subjects
+
+A subject is a thing in the household that has paperwork but no screen of its
+own: the car, the dog, the household itself. A flat has a Property screen and a
+loan has a Loans screen, so their paper is filed against those records; a car
+has neither, and inventing a screen for it would be building a module to hold
+four documents.
+
+Subjects live in the rail, under **SUBJECTS**, and behave much like the shelves
+above them. A row filters the list to the paper about that subject without
+leaving the shelf you are on, and the pencil turns the section into its own
+settings — click a name to rename it, pick a different emoji, `⋯` to archive one
+or bring it back, `+ New subject` to add one. The one thing you cannot do is
+re-order them: they are sorted by name, so there is no order to drag into. Two
+subjects cannot share a name, and _Car_ and _car_ count as the same name.
+
+### Archiving
+
+Archive a subject — a car you have sold — and its paperwork leaves the default
+view without being deleted. Its expiry dates stop being red: they are history,
+not a problem, and a lapsed insurance policy painted red on every visit is how a
+person learns to ignore red. Archiving is the only removal a subject has, and
+the dialog says how many documents move before you agree to it: what once held
+paper is put away rather than deleted.
+
+Archived rows are dimmed rather than removed from their own section, and appear
+only while **Include archived subjects** is on. When it is off, the section
+carries a **Show N archived** row saying how many it is holding back, so a
+subject you archived is never behind a door with no handle. The search says the
+same thing in its own words: when every match sits on an archived subject, it
+offers to show them rather than reporting nothing.
+
+The household itself can be renamed and given a different emoji but never
+archived. It is the one subject every document may belong to, so archiving it
+would hide the household's own paper from the household.
 
 ## Adding paper
 
 `+ Add document` takes one file or many. Each becomes its own document named
-after its file, and every one lands in the **Inbox**. Nothing else is asked —
-no name, no shelf, no date. A document with a file and a generated name is a
-valid document.
+after its file, and every one lands in the **Inbox**. Nothing is required — no
+name, no shelf, no date. A document with a file and a generated name is a valid
+document.
 
-Filing is a separate pass, so dropping twenty scans never turns into twenty
+Under **About — optional** it offers the same chips the inspector does, grouped
+by kind, so a lease you have just scanned can be filed against the tenancy while
+you still remember whose it is. Typing into **Or a new subject** makes one on the
+spot; a name that already exists files against it rather than making a second.
+Coming from another screen, whatever sent you here is already ticked.
+
+Filing is still a separate pass, so dropping twenty scans never turns into twenty
 forms.
 
 ### Inbox review
 
 **Review inbox** deals with them one at a time: the page on the left, the
-fields on the right, `Skip` or `File & next →`. Enter files, Escape leaves.
+fields on the right, `Skip` or `File & next →`. Enter files, Escape leaves. Its
+**About** chips are the same list capture and the inspector offer — every kind a
+document can be filed against, grouped by kind.
 
 - Shelf and type **carry over** from the previous filing — a folder import is
   twenty near-identical documents — and the word `kept` beside the label says
@@ -75,6 +141,80 @@ fields on the right, `Skip` or `File & next →`. Enter files, Escape leaves.
   Inbox.
 - `Delete` is there for what should never have arrived: a duplicate, a photo of
   the floor. Two taps, and the file goes with the record.
+
+## On a record's own screen
+
+The Documents screen is not the only place paper appears. Every record with a
+screen of its own shows the same card there — a flat and its tenancy on
+Property, a loan on Loans, an account under **Statements and reports**, a
+contact in its edit panel, a transaction's **Receipts** in its dialog, a tax
+statement's **Attachments** on Tax, and broker reports under **Reports** on
+Investments. It is one card everywhere on purpose: when each screen drew its own
+list, each of them came to know a different amount about expiry dates,
+unlinking, and what a restricted document is.
+
+A row is the document itself. Its file opens in the viewer, and under the name
+sits the shelf it lives on and when it falls due — red once the date has passed,
+amber inside the window, quiet otherwise, on the same rule as the Documents
+screen. The blue and purple that say which _kind_ of deadline it is do not come
+with it: one line has no room to explain the difference between two quiet
+states. **Open in Documents →** goes to the full list filtered to that record,
+which is the same filter the rail's subject rows write.
+
+Below the rows are the two ways paper is added by hand. Either can be absent,
+and the absence is the screen's answer rather than an oversight:
+
+- A picker reading _Attach a document you already have…_, with an **Attach**
+  button beside it, files a document already on a shelf against this record too
+  — the lease you scanned into the Inbox last week, now linked to the tenancy.
+  It offers only what is not linked yet, and only what you are allowed to see.
+  A flat, a tenancy, a loan, an account, a contact and a transaction all have
+  one.
+- **➕ Add a document** opens capture with this record already ticked and its
+  shelf already chosen, so filing from the flat you were looking at costs no
+  retyping. A flat, a tenancy, a loan and a contact have it.
+
+Everywhere else, paper arrives some other way and the card lists rather than
+collects: an account's statements come from importing them, a broker report from
+the upload above the card on Investments, and a receipt and a tax attachment
+from their own drop zone beside it.
+
+Where a card offers it, the `✕` on a row removes the **link**, not the document:
+the paper stays on its shelf, so a mis-click costs one re-attach and nothing
+else. Receipts are the exception — deleting a receipt from a transaction deletes
+the document, so that one asks twice. A tax attachment you want gone rather than
+merely unhooked is deleted from the Documents screen, where every other document
+is deleted.
+
+## Deleting a document
+
+`Delete` on a document removes the row, the file and every link to it. What
+hangs off the paper decides what happens next, and the rule is the same
+wherever the delete is pressed:
+
+- **A bill or a receipt keeps its row.** The expense was recorded from the
+  ledger, not from the paper; the transaction simply loses its paperclip.
+- **A payslip takes its salary entry with it.** The month's pay was read off
+  that slip, and leaving the figure behind would count a month of pay with
+  nothing on screen to account for it. Where the bank credit for that month had
+  been merged into the same entry, the credit is re-recorded on its own — the
+  bank proved that figure, and the slip's departure does not unprove it. The
+  transaction itself is untouched.
+- **A bank statement behind an accepted import cannot be deleted.** It answers
+  _This is the statement behind an import; it stays with the import._, because
+  the import register exists to show what it read, and a file that is gone
+  cannot be re-read when a parser improves.
+
+The same reasoning stops two edits rather than deletes: a payslip that carries a
+salary entry cannot be retyped as something else, and the person it belongs to
+cannot be unticked. Both leave the figure counted and unaccounted for, so both
+are refused with _This payslip carries a salary entry; delete it from the Salary
+screen to unhook it._ — the screen where the figure is visible is the screen
+that should decide.
+
+A member who cannot see a restricted document is told it is not there rather
+than that they may not have it, for the same reason the rest of the rule works
+that way.
 
 ## Expiry dates
 
@@ -97,18 +237,22 @@ Dates use your platform's own date picker. A document with no date shows when it
 arrived instead, in an outline pill — the same shape as its neighbours, with no
 fill, because there is nothing behind it to act on.
 
-### Archived subjects
-
-Archive a subject — a sold car, a flat you no longer own — and its paperwork
-leaves the default view without being deleted. Its expiry stops being red: it is
-history, not a problem. **Include archived subjects** brings it back, and the
-search says when matches exist only there.
+File a lease against its tenancy, or a re-fixation letter against its loan, and
+give it the same date the tenancy or loan already carries — the tenancy's end,
+the loan's current fixation end — and the Overview and calendar remind you once,
+from the record, rather than twice for the same deadline. Date the document
+differently and both reminders stand; the rule only ever collapses an exact
+duplicate.
 
 ## Finding things
 
 The search field reads names, notes, tags, linked entities, shelf and type
 labels — **and the text inside the documents**.
 
+- What a document is about counts for every kind, under the name you were
+  shown: a receipt is found by the shop its transaction names, a lease by its
+  tenant, a mortgage statement by the name of the loan, a tax attachment by the
+  year. None of those words is anywhere on the paper.
 - Diacritics fold both ways: `rezim` finds `režim`, and the reverse.
 - Identifiers work: a variable symbol like `10078410` is found inside a scanned
   page, which no word-based search would do.
@@ -116,8 +260,11 @@ labels — **and the text inside the documents**.
   exactly once however many ways it matched.
 
 Below the search field: filter by **type**, by **what it is about**, and by any
-number of **tags** at once. Each offers only what is on the shelf in view, with
-the count it would leave, so no filter empties the screen. Everything lives in
+number of **tags** at once. **What it is about** offers every kind the paper on
+the shelf points at, under the heading it belongs to — a transaction carries its
+amount, because a shop and a date do not tell two payments apart. Each filter
+offers only what is on the shelf in view, with the count it would leave, so no
+filter empties the screen. Everything lives in
 the URL — a bookmark is a saved view.
 
 When the search finds nothing it says which part of the archive could not
@@ -145,6 +292,16 @@ household members rather than locked: no row, no search hit, no count, no
 briefing item, no calendar event, no file — a member cannot infer it exists from
 a number that is one too high. Administrators see a quiet lock beside the name.
 
+The rule follows the paper onto every other screen, and stops there. What a
+member loses is the row, the name, the paperclip and the file — wherever they
+would have appeared. A salary month still shows its gross and net and only loses
+the paperclip; a tax statement still shows what it declared and what was paid,
+without the attachment; the document is off the flat's card, off the loan's, off
+a transaction's receipts, off the Investments reports, and out of the Tags view
+— the tag's count included. Only the paper is hidden, because a module's own
+figures were never the document's, and hiding a salary because its slip is
+private would be answering a different question from the one that was asked.
+
 Restricted documents generate no calendar events for **anyone**, including
 administrators, because a synced event lands on a device outside the app's
 session entirely.
@@ -152,17 +309,25 @@ session entirely.
 ## Tags
 
 **Tags** in the rail lists every tag with what it is on and what it has cost,
-across documents and transactions alike. Each tag keeps one colour everywhere it
-appears, derived from its name.
+across documents, properties, loans and transactions alike — a tag applied only
+to a line of a transaction has no card to list, so it shows instead as a line
+count. Each tag keeps one colour everywhere it appears, derived from its name.
 
 Adding a tag offers the ones you already have as you type, so `renovation` is
-picked rather than retyped as `renovations`.
+picked rather than retyped as `renovations`. Deleting one says first what it
+would untag — the transactions and split lines with no card in the list
+included — and how many rules would stop applying it.
 
 ## Bulk changes
 
 `Select` puts a checkbox on each row. The bar that appears sets shelf or type
 (each document has one, so these replace), and adds links and tags (these are
 sets, so they add — a bulk edit never silently clears what it did not mention).
+
+A payslip that carries a salary entry keeps its type: retyping it would leave a
+month's pay counted with nothing on screen to account for it. Everything else in
+the same edit still applies to it, and the bar says how many were left as they
+were.
 
 ## Importing a backlog
 

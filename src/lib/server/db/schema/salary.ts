@@ -85,9 +85,14 @@ export const salaryEntry = pgTable(
 			.where(sql`document_id is not null`),
 		/**
 		 * And exactly one row per month that came from no payslip at all — the
-		 * bank credit, or a figure typed by hand. That is the old invariant,
-		 * kept: a credit and a slip for one month still fill their own column of
-		 * the same row rather than racing, as long as there is only one slip.
+		 * bank credit, or a figure typed by hand. That is the old invariant, kept.
+		 * The merge this makes possible is order-dependent, not symmetric: a slip
+		 * that arrives after the credit finds this very row and claims it,
+		 * filling gross in beside the net that is already there; a credit that
+		 * arrives after the slip has no such row to find — a transaction carries
+		 * no evidence of which employer paid it — so it opens one of its own here
+		 * instead, and the month keeps two rows until something that knows better
+		 * corrects it.
 		 */
 		uniqueIndex('salary_entry_person_month_key')
 			.on(table.personId, table.periodMonth)

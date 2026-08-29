@@ -14,9 +14,16 @@ import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
 import { accountBalanceInBase } from '$lib/accounts/balance';
 import { bankKeyFor, orderBanksForChoosing } from '$lib/banks';
+import {
+	attachDocument,
+	candidateDocumentsFor,
+	detachDocument,
+	documentsAbout
+} from '$lib/server/documents/targets';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	const actor = locals.person ?? null;
 	const baseCurrency = await getBaseCurrency();
 	const [accounts, rates, banks, people] = await Promise.all([
 		db
@@ -63,6 +70,20 @@ export const load: PageServerLoad = async () => {
 		).map((row) => [row.accountId, row.n])
 	);
 
+	// Statements and broker reports, through the one query every documents card
+	// uses. `documentsAbout` stays one query per account (it is narrow), run
+	// concurrently for every account up front rather than one at a time.
+	// `candidateDocumentsFor` is the other half: ONE query for the whole
+	// visible library plus ONE for `document_link` across every account, not
+	// the whole library fetched again for each account's picker.
+	const accountIds = accounts.map((a) => a.id);
+	const [documentsByAccountId, candidatesByAccountId] = await Promise.all([
+		Promise.all(accountIds.map(async (id) => [id, await documentsAbout(id, actor)] as const)).then(
+			(pairs) => new Map(pairs)
+		),
+		candidateDocumentsFor(accountIds, actor)
+	]);
+
 	const rows = [];
 	for (const a of accounts) {
 		const converted = accountBalanceInBase(
@@ -105,7 +126,9 @@ export const load: PageServerLoad = async () => {
 					: converted.exactMinor === null
 						? '—'
 						: `≈ ${formatMinor(converted.exactMinor, baseCurrency)} ${displayCurrency(baseCurrency)}`,
-			balanceMinorBase: converted.totalMinor
+			balanceMinorBase: converted.totalMinor,
+			documents: documentsByAccountId.get(a.id) ?? [],
+			documentCandidates: candidatesByAccountId.get(a.id) ?? []
 		});
 	}
 
@@ -164,6 +187,7 @@ export const load: PageServerLoad = async () => {
 	});
 
 	return {
+		isAdmin: locals.person?.role === 'admin',
 		currencies: await availableCurrencies(),
 		// "Other" is a fallback rather than an institution, so it goes last —
 		// just above the "add a bank" control the markup renders after this list.
@@ -253,5 +277,35 @@ export const actions: Actions = {
 
 		await db.insert(bank).values({ key, label, emoji });
 		return { ok: true, bankKey: key };
+	},
+
+	/**
+	 * File an existing document against an account — the "Attach" picker on its
+	 * `DocumentsCard`. There is no upload here: an imported statement files
+	 * itself, and a brokerage report is added from Investments, so this card
+	 * only ever attaches paper that already exists.
+	 */
+	attachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
+		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Unfile a document — the link only. The document stays on its shelf, so a
+	 * mis-click costs a re-attach rather than evidence.
+	 */
+	detachDocument: async ({ request, locals }) => {
+		const form = await request.formData();
+		const targetId = asRowId(form.get('targetId'));
+		const documentId = String(form.get('documentId') ?? '').trim();
+		if (!documentId) return fail(400, { message: 'Which document?' });
+		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
 	}
 };

@@ -12,17 +12,18 @@
 	// The two pagers are independent. MonthMatrix walks months in local state;
 	// the transactions inside the open month are paged by the URL, because they
 	// are fetched a month at a time. Paging one leaves the other where it was.
-	import { enhance } from '$app/forms';
+	import { deserialize } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Field from '$lib/components/Field.svelte';
-	import Modal from '$lib/components/Modal.svelte';
 	import MonthMatrix from '$lib/components/MonthMatrix.svelte';
+	import ReceiptsDialog from '$lib/components/ReceiptsDialog.svelte';
 	import SplitDialog from '$lib/components/SplitDialog.svelte';
 	import TransactionRow from '$lib/components/TransactionRow.svelte';
-	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { REVIEW_LABELS } from '$lib/transactions/filter';
-	import { documentFileHref } from '$lib/ui/file-viewer';
+	// Type only — erased at compile time, so the server module is never pulled
+	// into the browser bundle.
+	import type { CandidateDocument } from '$lib/server/documents/targets';
 
 	let { data, form } = $props();
 
@@ -50,16 +51,72 @@
 	// when the attach action returns, and a captured row would keep showing the
 	// attachments the page had before the upload.
 	let attachingId = $state<string | null>(null);
-	// Which receipt's delete is armed. Cleared whenever the dialog changes rows,
-	// so an armed button never carries over to a different transaction.
-	let removing = $state<string | null>(null);
 	const attaching = $derived(
 		attachingId ? (data.rows.find((r) => r.id === attachingId) ?? null) : null
 	);
+
+	// What "Attach existing" may offer, for the one transaction whose dialog is
+	// open. `load` does not compute this for every row the register is paging
+	// — up to fifty of them — because that would mean carrying the household's
+	// whole visible document library once per row for the sake of the single
+	// dialog a person might open. `?/candidates` asks for it only when there is
+	// something open to ask it for.
+	let candidates = $state<CandidateDocument[]>([]);
+	// Set on anything but a clean success — a dropped connection and a
+	// non-action response (a CSRF refusal page, a 500) both throw out of
+	// `deserialize` the same way, and a person cannot tell those apart from
+	// here either. Left as `null` is "nothing wrong", not "nothing tried yet".
+	let candidatesError = $state<string | null>(null);
+	// True only while the request above is in flight, so the dialog can say it
+	// is checking rather than showing an empty picker that then pops a list
+	// into it a moment later.
+	let loadingCandidates = $state(false);
 	$effect(() => {
-		void attachingId;
-		void data.rows;
-		removing = null;
+		const id = attachingId;
+		// Re-read whenever this row's own filed documents change too: an attach
+		// or a delete both change what is already linked, and a stale list would
+		// still offer what was just attached, or hide what was just removed.
+		void attaching?.documents;
+		if (!id) {
+			candidates = [];
+			candidatesError = null;
+			loadingCandidates = false;
+			return;
+		}
+		let cancelled = false;
+		loadingCandidates = true;
+		candidatesError = null;
+		(async () => {
+			try {
+				const body = new FormData();
+				body.set('targetId', id);
+				const response = await fetch('?/candidates', {
+					method: 'POST',
+					body,
+					headers: { 'x-sveltekit-action': 'true' }
+				});
+				if (cancelled) return;
+				const result = deserialize(await response.text());
+				if (cancelled) return;
+				if (result.type === 'success') {
+					candidates = (result.data?.candidates as CandidateDocument[] | undefined) ?? [];
+					candidatesError = null;
+				} else {
+					candidates = [];
+					candidatesError = 'Could not load the documents you could attach.';
+				}
+			} catch {
+				if (!cancelled) {
+					candidates = [];
+					candidatesError = 'Could not load the documents you could attach.';
+				}
+			} finally {
+				if (!cancelled) loadingCandidates = false;
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	const rowFrom = $derived((data.filter.page - 1) * data.pageSize + 1);
@@ -274,71 +331,15 @@
 	{/if}
 
 	{#if attaching}
-		<Modal title="Receipts" onclose={() => (attachingId = null)}>
-			<p class="modal-sub">{attaching.merchant} · {attaching.amount}</p>
-
-			{#if form?.message && form?.id === attaching.id}
-				<p class="row-error" role="alert">{form.message}</p>
-			{/if}
-
-			<div class="r-docs">
-				{#each attaching.documents as doc (doc.id)}
-					<span class="doc-chip">
-						{#if doc.storedName}
-							<a
-								href={documentFileHref(doc.id)}
-								target="_blank"
-								rel="noopener"
-								data-file-ext={doc.ext}>{doc.name}</a
-							>
-						{:else}
-							<span>{doc.name}</span>
-						{/if}
-						<!-- Deletes the document, not just this link: unlinking left the
-						     file on the Documents shelf, unreachable from the row it came
-						     from. Two taps rather than a browser confirm(), which would
-						     block the dialog it is asked from. -->
-						{#if removing === doc.id}
-							<form method="POST" action="?/detachDocument" use:enhance>
-								<input type="hidden" name="id" value={attaching.id} />
-								<input type="hidden" name="documentId" value={doc.id} />
-								<button type="submit" class="chip-del confirm">Delete?</button>
-							</form>
-						{:else}
-							<button
-								type="button"
-								class="chip-del"
-								aria-label="Remove {doc.name}"
-								onclick={() => (removing = doc.id)}
-							>
-								✕
-							</button>
-						{/if}
-					</span>
-				{:else}
-					<span class="modal-sub">Nothing filed against this row yet.</span>
-				{/each}
-			</div>
-
-			<form
-				method="POST"
-				action="?/attachDocument"
-				enctype="multipart/form-data"
-				use:enhance
-				class="attach-form"
-			>
-				<input type="hidden" name="id" value={attaching.id} />
-				<div class="attach-zone">
-					<UploadDropzone
-						name="file"
-						accept="application/pdf,image/*"
-						idleText="Drop a receipt here, or click to browse"
-						description="PDF, PNG or JPEG"
-					/>
-				</div>
-				<button type="submit" class="btn btn-primary">Attach</button>
-			</form>
-		</Modal>
+		<ReceiptsDialog
+			transaction={attaching}
+			{candidates}
+			{candidatesError}
+			{loadingCandidates}
+			formMessage={form?.message && form?.id === attaching.id ? form.message : null}
+			isAdmin={data.isAdmin}
+			onclose={() => (attachingId = null)}
+		/>
 	{/if}
 </section>
 
@@ -450,64 +451,6 @@
 	.per.active {
 		background: var(--card2);
 		color: var(--fg1);
-	}
-	.r-docs {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--space-4);
-	}
-	.modal-sub {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	.doc-chip {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-3);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-pill);
-		padding: 3px 6px 3px 11px;
-		font-size: var(--text-sm);
-		max-width: 100%;
-		min-width: 0;
-	}
-	.doc-chip button {
-		background: none;
-		border: 0;
-		color: var(--fg3);
-		cursor: pointer;
-		font-size: var(--text-xs);
-		padding: 0 3px;
-	}
-	.doc-chip .chip-del:hover,
-	.doc-chip .chip-del.confirm {
-		color: var(--red);
-	}
-	.doc-chip a,
-	.doc-chip > span {
-		overflow-wrap: anywhere;
-		min-width: 0;
-	}
-	.attach-form {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-3);
-		flex-wrap: wrap;
-		min-width: 0;
-	}
-	/* A file input's default width is far wider than its box and does not shrink,
-	   which pushed the whole register into horizontal scroll at phone width. */
-	.attach-zone {
-		max-width: 100%;
-		min-width: 0;
-		flex: 1 1 12rem;
-	}
-	.row-error {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--red);
 	}
 	.empty {
 		color: var(--fg3);

@@ -21,15 +21,19 @@
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
 	import ShelfRow from '$lib/components/ShelfRow.svelte';
+	import SubjectRow from '$lib/components/SubjectRow.svelte';
 	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
 	import {
+		aboutOptionLabel,
 		expiryTreatment,
+		groupAboutOptions,
 		groupDocuments,
 		groupSummary,
 		honestyState,
+		railSubjects,
 		readableSize,
 		rowVariant,
 		splitSnippet,
@@ -123,6 +127,29 @@
 		addingShelf = false;
 	});
 
+	// The SUBJECTS section keeps its own pencil rather than sharing the shelves'.
+	// One toggle driving two heads would mean pressing the pencil beside SHELVES
+	// put drag handles on subjects that cannot be dragged, and vice versa; what
+	// is shared is the mechanism, not the state.
+	let editingSubjects = $state(false);
+	let renamingSubject = $state<string | null>(null);
+	let subjectMenu = $state<string | null>(null);
+	let addingSubject = $state(false);
+	let newSubjectEmoji = $state('📁');
+
+	// Which subjects the rail draws, and how many the archive scope is keeping
+	// back — the decision itself lives in `$lib/documents-view`, where a test can
+	// reach it without a page.
+	const subjects = $derived(railSubjects(data.subjects, data.includeArchived));
+	const menuSubject = $derived(data.subjects.find((s) => s.id === subjectMenu) ?? null);
+
+	$effect(() => {
+		void data.subjects;
+		renamingSubject = null;
+		subjectMenu = null;
+		addingSubject = false;
+	});
+
 	function moveOver(id: string) {
 		if (!dragging || dragging === id) return;
 		const ids = railShelves.map((s) => s.id);
@@ -183,8 +210,61 @@
 		data.shelves.find((s) => s.key === captureShelf)?.label ?? 'Inbox'
 	);
 
+	// A contextual add arrives pre-addressed. The pickable half of that is a
+	// chip already ticked in the capture picker; the rest — a transaction, a tax
+	// statement — has no list to be ticked in and travels as a hidden input, so
+	// the two halves are kept apart here rather than posting the same id twice.
+	const prefilled = $derived(new Set(data.prefill.targets.map((t) => t.id)));
+	const prefillReadOnly = $derived(data.prefill.targets.filter((t) => !t.pickable));
+
 	const toggleSelected = (id: string) =>
 		(selection = selection.includes(id) ? selection.filter((s) => s !== id) : [...selection, id]);
+
+	// Read-only chips a person has taken off, until Save. They are not checkboxes
+	// — there is no list of every transaction to tick one out of — so removing
+	// one means the chip and its hidden input leave the form, and the diff on the
+	// server sees a link the form no longer names.
+	let unlinked = $state<string[]>([]);
+	$effect(() => {
+		// A fresh editor each time it opens, and on a different document: a chip
+		// somebody removed and then cancelled must not come back removed.
+		void editing;
+		void data.selected?.id;
+		unlinked = [];
+	});
+
+	/** One chip: enough to draw it and to post it. */
+	interface AboutChip {
+		id: string;
+		name: string;
+		meta?: string;
+	}
+
+	/**
+	 * Every link the open document has, under the heading its kind belongs to.
+	 *
+	 * Pickable kinds come from the registry's list, so a chip appears for a
+	 * record whether or not the document is filed against it yet. The kinds the
+	 * document side may NOT pick come from the document's own links, because
+	 * there is no list to offer — and they are here at all because a save posts
+	 * what the form holds, and a link with no chip is a link a save forgets.
+	 */
+	const aboutGroups = $derived.by(() => {
+		const groups: { label: string; pickable: boolean; items: AboutChip[] }[] = [];
+		const groupFor = (label: string, pickable: boolean) => {
+			const existing = groups.find((g) => g.label === label);
+			if (existing) return existing;
+			const fresh = { label, pickable, items: [] as AboutChip[] };
+			groups.push(fresh);
+			return fresh;
+		};
+		for (const target of data.pickableTargets) groupFor(target.groupLabel, true).items.push(target);
+		for (const link of data.selected?.links ?? []) {
+			if (link.pickable || unlinked.includes(link.id)) continue;
+			groupFor(link.groupLabel, false).items.push(link);
+		}
+		return groups.filter((g) => g.items.length > 0);
+	});
 </script>
 
 <ScreenHeader
@@ -193,7 +273,12 @@
 />
 
 {#if form?.message}
-	<div class="error" role="alert">{form.message}</div>
+	<!-- The same slot carries a refusal and a report. A bulk edit that skipped a
+	     payslip did what was asked of it everywhere else, so it is amber and
+	     announced as a status; a refusal stays red and is announced as an alert. -->
+	<div class="error" class:notice={form?.ok} role={form?.ok ? 'status' : 'alert'}>
+		{form.message}
+	</div>
 {/if}
 
 {#if form?.ok && form?.addedIds?.length}
@@ -283,28 +368,72 @@
 				capturing = false;
 			}}
 	>
-		<!-- Capture asks nothing. A file, a generated name, the Inbox — filing is
-		     a separate decision made later, or never. -->
+		<!-- Capture REQUIRES nothing. A file, a generated name, the Inbox — filing
+		     is a separate decision made later, or never. What it now offers is
+		     the same picker the inspector draws, because the person who has just
+		     scanned a lease usually knows whose lease it is, and a second pass to
+		     say so is a second pass most paper never gets. -->
 		<input type="hidden" name="shelf" value={captureShelf} />
-		{#if data.prefill.personId}<input
-				type="hidden"
-				name="personIds"
-				value={data.prefill.personId}
-			/>{/if}
-		{#if data.prefill.propertyId}<input
-				type="hidden"
-				name="propertyIds"
-				value={data.prefill.propertyId}
-			/>{/if}
+		<!-- What the screen that sent us here already knows, and could not be
+		     ticked in a list: the transaction a receipt was captured from. A
+		     hidden input and a chip that states it, since there is no list of
+		     every transaction to tick it out of. The pickable half of a prefill
+		     is a ticked chip below instead — one input per link, never two. -->
+		{#each prefillReadOnly as target (target.id)}
+			<input type="hidden" name="linkIds" value={target.id} />
+		{/each}
 		<UploadDropzone
 			name="file"
 			multiple
 			idleText="Drop files here, or click to browse"
 			description="PDF, images, text and spreadsheets — several at once is fine"
 		/>
+		<div class="sec capture-about">
+			<span class="eyebrow">About — optional</span>
+			<div class="about">
+				{#each groupAboutOptions(prefillReadOnly) as group (group.label)}
+					<div class="about-group">
+						<span class="mono about-kind">{group.label}</span>
+						<div class="chips">
+							{#each group.options as target (target.id)}
+								<span class="link-chip">
+									<span>{target.name}</span>
+									{#if target.meta}<span class="quiet chip-meta">{target.meta}</span>{/if}
+								</span>
+							{/each}
+						</div>
+					</div>
+				{/each}
+				<!-- Only the kinds the document side may pick, from the registry. A
+				     transaction is deliberately absent: a list of every payment the
+				     household has made is a list nobody can search by eye. -->
+				{#each groupAboutOptions(data.pickableTargets) as group (group.label)}
+					<div class="about-group">
+						<span class="mono about-kind">{group.label}</span>
+						<div class="chips">
+							{#each group.options as target (target.id)}
+								<label class="pick-chip">
+									<input
+										type="checkbox"
+										name="linkIds"
+										value={target.id}
+										checked={prefilled.has(target.id)}
+									/>
+									<span>{target.name}</span>
+								</label>
+							{/each}
+						</div>
+					</div>
+				{/each}
+			</div>
+			<!-- A subject nobody has made yet. The server upserts by name, so
+			     typing one that already exists files against it rather than
+			     making a second. -->
+			<input name="newSubject" placeholder="Or a new subject — the boiler, the old car…" />
+		</div>
 		<div class="capture-foot">
 			<span class="quiet">
-				They go to {captureShelfLabel} with their own names. Nothing else is asked of you.
+				They go to {captureShelfLabel} with their own names. Everything above is optional.
 			</span>
 			<button type="submit" class="btn btn-primary">Add</button>
 			<button type="button" class="btn" onclick={() => (capturing = false)}>Cancel</button>
@@ -313,7 +442,7 @@
 {/if}
 
 <section class="layout" class:with-inspector={data.selected}>
-	<nav class="rail" aria-label="Shelves">
+	<nav class="rail" aria-label="Shelves and subjects">
 		{#each data.shelves.filter((s) => s.key === 'all' || s.key === 'inbox') as s (s.key)}
 			<button
 				type="button"
@@ -408,6 +537,88 @@
 
 		<div class="rail-divider"></div>
 
+		<!-- The other axis of the same archive: a shelf says where paper lives, a
+		     subject says who or what it is about. Same eyebrow, same pencil, and
+		     the same rows — with Archive where a shelf has Delete, because a
+		     subject that once held paper is history rather than a mistake. -->
+		<div class="rail-head">
+			<span class="eyebrow">Subjects</span>
+			<button
+				type="button"
+				class="rail-tool"
+				class:active={editingSubjects}
+				aria-label={editingSubjects ? 'Done editing subjects' : 'Edit subjects'}
+				aria-pressed={editingSubjects}
+				onclick={() => {
+					editingSubjects = !editingSubjects;
+					renamingSubject = null;
+				}}
+			>
+				{#if editingSubjects}Done{:else}<Icon name="pencil" size={14} />{/if}
+			</button>
+		</div>
+
+		{#if editingSubjects}
+			<div class="rail-shelves" role="list">
+				{#each subjects.shown as s (s.id)}
+					{#if renamingSubject === s.id}
+						<form class="rail-rename" method="POST" action="?/renameSubject" use:enhance>
+							<input type="hidden" name="id" value={s.id} />
+							<EmojiPicker name="emoji" value={s.emoji} />
+							<input name="name" value={s.name} aria-label="Subject name" />
+							<button type="submit" class="btn small btn-primary">Save</button>
+							<button type="button" class="btn small" onclick={() => (renamingSubject = null)}
+								>✕</button
+							>
+						</form>
+					{:else}
+						<SubjectRow
+							subject={s}
+							onrename={() => (renamingSubject = s.id)}
+							onmenu={() => (subjectMenu = s.id)}
+						/>
+					{/if}
+				{/each}
+			</div>
+			<!-- Archived subjects are hidden, not gone, and the only control that
+			     brings one back lives on its row — so the rail says how many rows
+			     it is holding rather than leaving a one-way door. -->
+			{#if subjects.hidden > 0}
+				<button type="button" class="rail-item manage" onclick={() => navigate({ archived: '1' })}>
+					<span class="rail-label">Show {subjects.hidden} archived</span>
+				</button>
+			{/if}
+			<button type="button" class="rail-item manage" onclick={() => (addingSubject = true)}>
+				<span class="rail-label"><Icon name="plus" size={16} /> New subject</span>
+			</button>
+		{:else}
+			<div class="rail-shelves">
+				{#each subjects.shown as s (s.id)}
+					<!-- A subject narrows the list without leaving the shelf: `?entity=`
+					     is the same filter the About dropdown writes, so the rail and
+					     the filter can never disagree. Pressing the active one clears
+					     it, which is how the day filter on the calendar already reads. -->
+					<button
+						type="button"
+						class="rail-item"
+						class:active={data.view === 'list' && data.filters.entity === s.id}
+						class:dim={s.archived}
+						onclick={() =>
+							navigate({
+								entity: data.filters.entity === s.id ? null : s.id,
+								doc: null,
+								view: null
+							})}
+					>
+						<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.name}</span>
+						<span class="mono rail-count">{s.count}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
+
+		<div class="rail-divider"></div>
+
 		<!-- Tags cut across documents and money alike; a household reaches for
 		     them from the paper far more often than from the register. -->
 		<button
@@ -477,8 +688,16 @@
 						onchange={(e) => navigate({ entity: e.currentTarget.value, doc: null })}
 					>
 						<option value="">About · anything</option>
-						{#each data.filterOptions.entities as e (e.id)}
-							<option value={e.id}>{e.name} · {e.count}</option>
+						<!-- Grouped, because every registered kind reaches this list now:
+						     "Alza 2026-03-04" between "Robert" and "Vinohrady flat" says
+						     nothing about which is a person and which is a payment. The
+						     order is the load's; the view only buckets it. -->
+						{#each groupAboutOptions(data.filterOptions.entities) as group (group.label)}
+							<optgroup label={group.label}>
+								{#each group.options as e (e.id)}
+									<option value={e.id}>{aboutOptionLabel(e)}</option>
+								{/each}
+							</optgroup>
 						{/each}
 					</select>
 					<div class="tag-filter">
@@ -994,12 +1213,12 @@
 						     as its name, so a street address and a first name share one flow
 						     without a grid forcing them to the same width. -->
 						<div class="about">
-							{#each [{ label: 'People', items: data.people }, { label: 'Property', items: data.properties }, { label: 'Subjects', items: data.subjects }] as group (group.label)}
-								{#if group.items.length}
-									<div class="about-group">
-										<span class="mono about-kind">{group.label}</span>
-										<div class="chips">
-											{#each group.items as target (target.id)}
+							{#each aboutGroups as group (group.label)}
+								<div class="about-group">
+									<span class="mono about-kind">{group.label}</span>
+									<div class="chips">
+										{#each group.items as target (target.id)}
+											{#if group.pickable}
 												<label class="pick-chip">
 													<input
 														type="checkbox"
@@ -1009,10 +1228,26 @@
 													/>
 													<span>{target.name}</span>
 												</label>
-											{/each}
-										</div>
+											{:else}
+												<!-- Filed from its own screen, where the row was already in
+												     front of the person. Shown as a fact with a way out, not
+												     as one option among every transaction in the household.
+												     The hidden input is what makes Save keep it. -->
+												<span class="link-chip">
+													<input type="hidden" name="linkIds" value={target.id} />
+													<span>{target.name}</span>
+													{#if target.meta}<span class="quiet chip-meta">{target.meta}</span>{/if}
+													<button
+														type="button"
+														class="chip-x"
+														aria-label="Unlink {target.name}"
+														onclick={() => (unlinked = [...unlinked, target.id])}>✕</button
+													>
+												</span>
+											{/if}
+										{/each}
 									</div>
-								{/if}
+								</div>
 							{/each}
 						</div>
 					</div>
@@ -1118,6 +1353,61 @@
 	</Modal>
 {/if}
 
+{#if addingSubject}
+	<Modal onclose={() => (addingSubject = false)} title="New subject">
+		<form class="shelf-dialog" method="POST" action="?/addSubject" use:enhance>
+			<div class="shelf-dialog-row">
+				<span class="shelf-dialog-emoji" aria-hidden="true">{newSubjectEmoji}</span>
+				<input name="name" placeholder="Subject name" aria-label="Subject name" />
+			</div>
+			<EmojiPicker name="emoji" bind:value={newSubjectEmoji} inline />
+			<div class="modal-actions">
+				<button type="button" class="btn" onclick={() => (addingSubject = false)}>Cancel</button>
+				<button type="submit" class="btn btn-primary">Add subject</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
+<!-- Archiving is reversible and deletes nothing, so the dialog is a sentence
+     about what moves rather than a warning: the number is how much paper leaves
+     the list, and the same dialog brings it back. -->
+{#if menuSubject}
+	<Modal
+		onclose={() => (subjectMenu = null)}
+		title={menuSubject.archived
+			? `Bring “${menuSubject.name}” back?`
+			: `Archive “${menuSubject.name}”?`}
+	>
+		<form
+			class="shelf-dialog"
+			method="POST"
+			action={menuSubject.archived ? '?/unarchiveSubject' : '?/archiveSubject'}
+			use:enhance
+		>
+			<input type="hidden" name="id" value={menuSubject.id} />
+			<p class="quiet">
+				{#if menuSubject.archived}
+					Its <span class="mono">{menuSubject.count}</span>
+					{menuSubject.count === 1 ? 'document comes' : 'documents come'} back into the list, and its
+					expiry dates read as dates to act on again.
+				{:else}
+					Its <span class="mono">{menuSubject.count}</span>
+					{menuSubject.count === 1 ? 'document leaves' : 'documents leave'} the list. Nothing is deleted
+					— <strong>Include archived subjects</strong> shows them again, and their expiry dates stop being
+					alarms.
+				{/if}
+			</p>
+			<div class="modal-actions">
+				<button type="button" class="btn" onclick={() => (subjectMenu = null)}>Cancel</button>
+				<button type="submit" class="btn btn-primary"
+					>{menuSubject.archived ? 'Bring it back' : 'Archive'}</button
+				>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
 {#if deletingShelf}
 	<Modal onclose={() => (deleting = null)} title={`Delete “${deletingShelf.label}”?`}>
 		<form class="shelf-dialog" method="POST" action="?/removeShelf" use:enhance>
@@ -1148,6 +1438,13 @@
 		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
+	}
+	/* Something was left as it was, on purpose. Amber is work, not an error —
+	   the same distinction the Inbox count draws. */
+	.error.notice {
+		border-color: var(--yellow);
+		background: var(--yellow-tint);
+		color: var(--yellow);
 	}
 	.ack {
 		display: flex;
@@ -1221,6 +1518,19 @@
 		background: var(--card);
 		padding: var(--space-7);
 	}
+	/* The inspector's own About block, in the capture card. No rule under it:
+	   `.sec:last-of-type` cannot see it as last, because the foot below is a
+	   div too. */
+	.capture-about {
+		border-bottom: 0;
+		padding-bottom: 0;
+	}
+	/* A household with two hundred contacts must not push the list off the
+	   screen to offer them. The chips scroll inside the card instead. */
+	.capture-about .about {
+		max-height: 224px;
+		overflow-y: auto;
+	}
 	.capture-foot {
 		display: flex;
 		align-items: center;
@@ -1291,6 +1601,15 @@
 		margin-right: var(--space-3);
 		font-size: var(--text-lg);
 		text-align: center;
+	}
+	/* An archived subject is dimmed, never hidden from its own section: the row
+	   is how it is brought back. `--fg3` is the quiet colour in both themes, and
+	   the emoji takes opacity because it has no colour of ours to quieten. */
+	.rail-item.dim {
+		color: var(--fg3);
+	}
+	.rail-item.dim .rail-emoji {
+		opacity: 0.55;
 	}
 	.rail-count {
 		font-size: var(--text-2xs);
@@ -2039,7 +2358,8 @@
 	}
 	/* The checkbox is the control and stays in the accessibility tree; the chip
 	   is its face. Checked is a fill change, not a tint: it is a selection. */
-	.pick-chip {
+	.pick-chip,
+	.link-chip {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
@@ -2065,7 +2385,8 @@
 	.pick-chip:hover {
 		background: var(--card2);
 	}
-	.pick-chip:has(input:checked) {
+	.pick-chip:has(input:checked),
+	.link-chip {
 		background: var(--card3);
 		border-color: var(--bd2);
 		color: var(--fg1);
@@ -2073,6 +2394,31 @@
 	.pick-chip:has(input:focus-visible) {
 		outline: 2px solid var(--brand);
 		outline-offset: 1px;
+	}
+	/* A link that is already there. It reads as a checked chip because that is
+	   what it is; what differs is that the way off it is the ✕, not a tick. */
+	.link-chip {
+		gap: var(--space-3);
+		cursor: default;
+	}
+	.chip-meta {
+		font-size: var(--text-2xs);
+	}
+	.chip-x {
+		border: 0;
+		padding: 0;
+		background: none;
+		color: var(--fg3);
+		font-size: var(--text-xs);
+		line-height: 1;
+		cursor: pointer;
+	}
+	.chip-x:hover {
+		color: var(--fg1);
+	}
+	.chip-x:focus-visible {
+		outline: 2px solid var(--brand);
+		outline-offset: 2px;
 	}
 	.replace {
 		display: flex;

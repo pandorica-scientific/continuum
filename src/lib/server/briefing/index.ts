@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { groupMonthlySpending } from '$lib/briefing';
 import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
@@ -23,7 +23,12 @@ import {
 	transaction
 } from '$lib/server/db/schema';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
+import {
+	archiveScopePredicate,
+	visibleDocumentPredicate,
+	type Actor
+} from '$lib/server/documents/visibility';
+import { loadRecordDates, ownedByLinkedRecord } from '$lib/server/documents/deadlines';
 
 interface BriefingItem {
 	emoji: string;
@@ -147,10 +152,16 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		// The invariant, not a screen filter: a member must not learn a restricted
-		// document exists from a renewal date on the Overview.
-		.where(visibleDocumentPredicate(actor));
-	// What each document belongs to, by current name, for the detail line.
-	const [links, people, properties] = await Promise.all([
+		// document exists from a renewal date on the Overview. Archive scope is the
+		// second, independent question — a document whose only subject is archived
+		// (a sold car's insurance) is stale rather than secret, and drops out of the
+		// default view the same way it does everywhere else.
+		.where(and(visibleDocumentPredicate(actor), archiveScopePredicate(false)));
+	// What each document belongs to, by current name, for the detail line. The
+	// same `links` rows also answer D7 below — a second query over
+	// `document_link` per source would be the "extend the load, don't add a
+	// third" rule broken on day one.
+	const [links, people, properties, recordDates] = await Promise.all([
 		// One table for every kind of target, so the kind comes from `entity`. Only
 		// people and properties are named on the detail line; other kinds are
 		// skipped below rather than rendered as an empty string.
@@ -163,7 +174,8 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 			.from(documentLink)
 			.innerJoin(entity, eq(entity.id, documentLink.targetId)),
 		db.select().from(person),
-		db.select().from(property)
+		db.select().from(property),
+		loadRecordDates()
 	]);
 	const personName = new Map(people.map((x) => [x.id, x.name]));
 	const propertyName = new Map(properties.map((x) => [x.id, x.name]));
@@ -181,6 +193,12 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 	const items: BriefingItem[] = [];
 	for (const d of docs) {
 		if (!d.expiresOn || d.expiresOn < today) continue;
+		// D7: the record owns the deadline. A lease's contract dated the same as
+		// the tenancy's own `ends_on` (or a re-fix letter dated the same as the
+		// loan's current fixation) is the SAME deadline `leaseExpiry` or
+		// `fixationHorizon` already surfaced above — reminding again here would
+		// be the same date twice on one Overview.
+		if (ownedByLinkedRecord(d, links, recordDates)) continue;
 		const days = Math.ceil((new Date(d.expiresOn).getTime() - Date.now()) / 86400000);
 		if (days > 210) continue;
 		const months = Math.round(days / 30.44);

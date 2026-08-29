@@ -6,9 +6,9 @@ import {
 	brokerOperation,
 	brokerPosition,
 	currencyRate,
-	document as storedDocument,
 	netWorthComponent,
 	portfolioSnapshot,
+	salaryEntry,
 	settings,
 	taxStatement,
 	transaction
@@ -146,15 +146,13 @@ export async function missingRateCurrencies(
 			select currency, coalesce(valued_on, current_date) as day from ${netWorthComponent}
 			union all select currency, coalesce(value_on, booked_on) as day from ${transaction}
 			union all select currency, day from ${portfolioSnapshot}
-			union all select ${storedDocument.currency},
-				-- The month the document covers when it names one, else the day it was
-				-- filed. This used to test a 'YYYY-MM' string against a regex and cast
-				-- it, which silently skipped any value written another way; period_on
-				-- is a real date since 0052 and needs neither.
-				coalesce(${storedDocument.periodOn}, ${storedDocument.addedOn})
-			from ${storedDocument}
-			where ${storedDocument.currency} is not null
-				and ${storedDocument.amountMinor} is not null
+			-- Salary comes off the ENTRY, not off the payslip document: the document
+			-- is the file, while the figure and the currency it is stated in belong
+			-- to the month. period_month is 'YYYY-MM', so the day a rate is wanted
+			-- for is the first of the month the pay covers.
+			union all select ${salaryEntry.currency},
+				(${salaryEntry.periodMonth} || '-01')::date
+			from ${salaryEntry}
 			union all select currency, happened_at::date from ${brokerOperation}
 			union all select currency, opened_at::date from ${brokerPosition}
 			union all select currency, make_date(year, 1, 1) from ${taxStatement}

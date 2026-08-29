@@ -1,12 +1,43 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { uuidv7 } from 'uuidv7';
+import postgres from 'postgres';
 import type { EnumValue } from '$lib/enums';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { document, documentLink, documentText, tagLink, subject } from '$lib/server/db/schema';
+import { document, documentLink, documentText, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
+import { upsertSubjectByName } from './subjects';
 import { hashBytes, removeUpload } from '$lib/server/system/files';
 import { cancelQueuedExtraction, enqueueExtraction } from './extract/queue';
+
+/**
+ * Postgres codes seen for a delete blocked by a foreign key. A plain
+ * `NO ACTION` foreign key reports `23503` (foreign_key_violation), but
+ * `ON DELETE RESTRICT` — what `import_file.document_id` actually declares —
+ * reports the more specific `23001` (restrict_violation). Both are matched,
+ * together with the constraint name below, so an unrelated FK failure is
+ * never mislabeled as "this is an import's statement".
+ */
+const FOREIGN_KEY_VIOLATION_CODES = new Set(['23503', '23001']);
+
+/**
+ * True only for the RESTRICT on `import_file.document_id` — never for any
+ * other foreign key a `document` delete might trip (there is currently only
+ * this one, but matching the constraint name by name, not just the error
+ * code, keeps that true if another is ever added).
+ *
+ * Drizzle wraps the driver's own `PostgresError` in a `DrizzleQueryError`
+ * before it reaches a caller, with the original as `.cause` — so that is
+ * where the code and constraint name are read from, not off the error drizzle
+ * actually throws.
+ */
+function isImportFileRestrict(error: unknown): boolean {
+	const cause = error instanceof Error ? error.cause : undefined;
+	return (
+		cause instanceof postgres.PostgresError &&
+		FOREIGN_KEY_VIOLATION_CODES.has(cause.code) &&
+		(cause.constraint_name ?? '').includes('import_file_document_id')
+	);
+}
 
 interface CreateDocumentInput {
 	id: string;
@@ -36,8 +67,26 @@ interface CreateDocumentInput {
 	 */
 	transactionIds: string[];
 	subjectIds: string[];
+	/**
+	 * Anything else the document is filed against, by id.
+	 *
+	 * The five lists above are per-kind because their callers hold per-kind ids;
+	 * this one is what a form posts when the kind came off a registry rather than
+	 * out of a field name — a tenancy for a lease, a loan for a mortgage
+	 * statement. The far end of a document link is an `entity` either way, so
+	 * they all end up in the same insert.
+	 */
+	targetIds?: string[];
 	newSubjectName?: string;
 	tagNames: string[];
+	/**
+	 * SHA-256 of the file's own bytes, from `hashBytes` — never computed here,
+	 * because every writer already holds the bytes it just saved. Null for a
+	 * metadata-only document, which has no bytes to fingerprint.
+	 */
+	contentHash?: string | null;
+	/** The month a document is ABOUT, not the day it was filed. See `document.periodOn`. */
+	periodOn?: string | null;
 }
 
 export async function createDocument(input: CreateDocumentInput, handle: Db = db): Promise<void> {
@@ -47,22 +96,24 @@ export async function createDocument(input: CreateDocumentInput, handle: Db = db
 	if (input.storedName) await enqueueExtraction(input.id, handle);
 }
 
-/** Insert a complete document aggregate using the transaction a caller owns. */
+/**
+ * Insert a complete document aggregate using the transaction a caller owns.
+ *
+ * Enqueues nothing: a job pointing at a row this transaction goes on to roll
+ * back is work with nothing to read, so the CALLER asks for extraction once its
+ * own transaction has actually committed.
+ */
 export async function insertDocumentAggregate(
 	input: CreateDocumentInput,
 	handle: Queryable
 ): Promise<void> {
 	const subjectIds = [...input.subjectIds];
+	// One reading of the case-insensitive uniqueness rule, in `subjects.ts`
+	// beside the rail's stricter `addSubject`. Typing "car" into capture when the
+	// household already has a "Car" has to find that one, not fail and not mint a
+	// second — and the lowercase comparison that decides it is now written once.
 	if (input.newSubjectName) {
-		await handle
-			.insert(subject)
-			.values({ id: uuidv7(), name: input.newSubjectName, emoji: '📁' })
-			.onConflictDoNothing();
-		const existing = await handle
-			.select({ id: subject.id })
-			.from(subject)
-			.where(sql`lower(${subject.name}) = ${input.newSubjectName.toLowerCase()}`);
-		subjectIds.push(existing[0].id);
+		subjectIds.push(await upsertSubjectByName(input.newSubjectName, handle));
 	}
 
 	await handle.insert(document).values({
@@ -76,18 +127,23 @@ export async function insertDocumentAggregate(
 		ext: input.ext,
 		addedOn: input.addedOn,
 		expiresOn: input.expiresOn,
-		expiryVerb: input.expiryVerb
+		expiryVerb: input.expiryVerb,
+		periodOn: input.periodOn ?? null,
+		contentHash: input.contentHash ?? null
 	});
 
 	// Four inserts became one. The far end of a document link is an `entity`, so
 	// what a target IS no longer decides which table the link goes in — which is
 	// what stops a new module needing a document_<thing> table of its own.
 	const targetIds = [
-		...input.personIds,
-		...input.propertyIds,
-		...input.accountIds,
-		...input.transactionIds,
-		...subjectIds
+		...new Set([
+			...input.personIds,
+			...input.propertyIds,
+			...input.accountIds,
+			...input.transactionIds,
+			...subjectIds,
+			...(input.targetIds ?? [])
+		])
 	];
 	if (targetIds.length > 0) {
 		await handle
@@ -106,8 +162,17 @@ export async function insertDocumentAggregate(
 }
 
 /**
- * Remove a document from the household entirely: the record, everything it was
- * linked to, and the uploaded file behind it.
+ * Why the statement behind an accepted import cannot be deleted.
+ *
+ * Exported so the delete path and the removal that wraps it say one sentence
+ * rather than two that happen to match today.
+ */
+export const IMPORT_STATEMENT_REFUSAL =
+	'This is the statement behind an import; it stays with the import.';
+
+/**
+ * The DATABASE half of removing a document: the row and everything hanging off
+ * it, and the name of the file that is now nobody's.
  *
  * Only the `document` row is deleted here. The AFTER DELETE trigger on the
  * table retires its `entity` row, and every link — document_link at both ends,
@@ -115,19 +180,58 @@ export async function insertDocumentAggregate(
  * it. Enumerating them in application code would be a second, quietly
  * divergent copy of a rule the database already enforces.
  *
+ * The file is NOT unlinked here, and that is the point of the split: a caller
+ * holding a transaction has to be able to do this step inside it and unlink
+ * the bytes only once the transaction has committed. Unlinking mid-transaction
+ * would leave a record pointing at a file that is no longer there the moment
+ * anything after it rolled back.
+ *
+ * One document CANNOT be removed at all: the statement an accepted import
+ * filed for itself. `import_file.document_id` carries ON DELETE RESTRICT, so
+ * the DELETE below fails atomically — nothing is removed — and `refused: true`
+ * comes back instead. There is no "detach it first" path to offer: imports are
+ * permanent by design (acknowledging one only hides it, it never deletes), so
+ * refusing is the whole rule. The failed statement leaves the surrounding
+ * transaction unusable, which is correct: a caller that got this answer has
+ * nothing left to do but roll back.
+ */
+export async function deleteDocumentRow(
+	documentId: string,
+	handle: Queryable = db
+): Promise<{ ok: boolean; refused?: boolean; storedName: string | null }> {
+	let row: { storedName: string | null } | undefined;
+	try {
+		[row] = await handle
+			.delete(document)
+			.where(eq(document.id, documentId))
+			.returning({ storedName: document.storedName });
+	} catch (error) {
+		if (isImportFileRestrict(error)) return { ok: false, refused: true, storedName: null };
+		throw error;
+	}
+	if (!row) return { ok: false, storedName: null };
+	return { ok: true, storedName: row.storedName };
+}
+
+/**
+ * Remove a document from the household entirely: the record, everything it was
+ * linked to, and the uploaded file behind it.
+ *
  * The file is unlinked after the row is gone, not before: a delete that fails
- * must not leave a record pointing at a file that is no longer there.
+ * must not leave a record pointing at a file that is no longer there. Pass a
+ * plain handle, not a transaction — inside one the row is not committed yet,
+ * and `removeDocument` in `lifecycle.ts` is what a caller with a transaction
+ * wants.
  */
 export async function deleteDocument(
 	documentId: string,
 	handle: Db = db
-): Promise<{ ok: boolean; removedFile: boolean }> {
-	const [row] = await handle
-		.delete(document)
-		.where(eq(document.id, documentId))
-		.returning({ storedName: document.storedName });
-	if (!row) return { ok: false, removedFile: false };
-	const removedFile = row.storedName ? await removeUpload(row.storedName) : false;
+): Promise<{ ok: boolean; removedFile: boolean; refused?: boolean }> {
+	const outcome = await deleteDocumentRow(documentId, handle);
+	if (!outcome.ok) {
+		return { ok: false, removedFile: false, ...(outcome.refused ? { refused: true } : {}) };
+	}
+	const removedFile = outcome.storedName ? await removeUpload(outcome.storedName) : false;
 	return { ok: true, removedFile };
 }
 

@@ -4,6 +4,23 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render } from 'svelte/server';
 import TaxYearDetail from '$lib/components/TaxYearDetail.svelte';
+import type { AboutDocument } from '$lib/server/documents/targets';
+
+const doc = (over: Partial<AboutDocument> = {}): AboutDocument => ({
+	id: 'd1',
+	name: '2025 CZ tax statement',
+	ext: 'PDF',
+	storedName: 'abc.pdf',
+	type: 'tax_document',
+	shelfKey: 'finance',
+	shelfLabel: 'Finance',
+	expiresOn: null,
+	expiryVerb: 'expires',
+	addedOn: '2026-01-02',
+	sensitivity: 'normal',
+	tags: [],
+	...over
+});
 
 const statements = [
 	{
@@ -21,8 +38,8 @@ const statements = [
 		note: null,
 		diverges: null,
 		attachments: [
-			{ id: 'd1', name: '2025 CZ tax statement', ext: 'PDF', file: 'abc.pdf' },
-			{ id: 'd2', name: '2025 CZ broker earnings report', ext: 'PDF', file: null }
+			doc(),
+			doc({ id: 'd2', name: '2025 CZ broker earnings report', storedName: null })
 		]
 	}
 ];
@@ -31,7 +48,7 @@ const countries = [{ code: 'CZ', name: 'Czechia', token: '--series-health-soft' 
 const props = { statements, countries, personHue: () => '--series-r10', onedit: () => {} };
 
 describe('the expanded year', () => {
-	it('lists every attachment the statement holds', () => {
+	it('lists every attachment the statement holds, through the shared documents card', () => {
 		const { body } = render(TaxYearDetail, { props });
 		expect(body).toContain('2025 CZ tax statement');
 		expect(body).toContain('2025 CZ broker earnings report');
@@ -48,6 +65,41 @@ describe('the expanded year', () => {
 		expect(body).not.toContain('/files/');
 	});
 
+	it('sits its own card inside the statement card rather than nesting one', () => {
+		// DocumentsCard draws a `.card` by default; nested inside the statement's
+		// own `.card.statement` that would double the border and padding, so this
+		// card is asked for the bare form instead.
+		const { body } = render(TaxYearDetail, { props });
+		expect(body).not.toMatch(/<div class="card stack/);
+	});
+
+	it('unfiles an attachment through the plain detach action — no re-file, no confirm', () => {
+		// A tax attachment detached stays filed on the Finance shelf; only the
+		// link to this statement goes, so one tap is enough — unlike a card whose
+		// detach destroys the document.
+		const { body } = render(TaxYearDetail, { props });
+		expect(body).toContain('action="?/detach"');
+		expect(body).toContain('Unfile 2025 CZ tax statement from 2025 CZ');
+		expect(body).not.toContain('Delete?');
+	});
+
+	it('says what belongs here when a statement has nothing filed yet', () => {
+		const empty = [{ ...statements[0], attachments: [] }];
+		const { body } = render(TaxYearDetail, { props: { ...props, statements: empty } });
+		expect(body).toContain('Nothing filed against this statement yet.');
+	});
+
+	it('shows the lock on a restricted attachment only to an admin', () => {
+		const restricted = [{ ...statements[0], attachments: [doc({ sensitivity: 'restricted' })] }];
+		const asMember = render(TaxYearDetail, { props: { ...props, statements: restricted } });
+		expect(asMember.body).not.toContain('aria-label="Restricted"');
+
+		const asAdmin = render(TaxYearDetail, {
+			props: { ...props, statements: restricted, isAdmin: true }
+		});
+		expect(asAdmin.body).toContain('aria-label="Restricted"');
+	});
+
 	it('offers every attachment kind on the adder', () => {
 		const { body } = render(TaxYearDetail, { props });
 		expect(body).toContain('Employer earnings report');
@@ -60,29 +112,16 @@ describe('the expanded year', () => {
 		expect(body).toContain('multiple');
 	});
 
-	it('gives every attachment a menu rather than bare icons', () => {
-		// A bare ⇥ and a bare 🗑 used to sit on each attachment row beneath a
-		// caption claiming delete lived behind the ⋯ menu. One pattern now.
+	it('posts the attach-kind upload against this statement', () => {
 		const { body } = render(TaxYearDetail, { props });
-		expect(body.match(/aria-label="More for [^"]+"/g)).toHaveLength(3);
-		expect(body).not.toContain('⇥');
-		expect(body).not.toContain('🗑');
+		expect(body).toContain('action="?/attach"');
 	});
 
-	it('keeps detach a distinct action from deletion', () => {
-		// Detaching keeps the paperwork; deleting destroys it. Conflating them
-		// would make an unlink silently remove a filed document. Both live in the
-		// attachment's menu, which SSR never opens — so the source is the only
-		// place to assert they are two actions.
-		const source = readFileSync(resolve('src/lib/components/TaxYearDetail.svelte'), 'utf8');
-		expect(source).toContain('?/detach');
-		expect(source).toContain('?/deleteAttachment');
-		expect(source).toContain('Detach — keeps the file');
-	});
-
-	it('does not expose delete unarmed — the first tap only arms it', () => {
+	it('says nothing about where delete lives, because there is nothing to explain', () => {
+		// The caption once claimed "Delete lives behind the ⋯ menu now" while a
+		// bin sat two inches above it. Gone, and it must stay gone.
 		const { body } = render(TaxYearDetail, { props });
-		expect(body).not.toContain('Delete?');
+		expect(body).not.toContain('Delete lives behind');
 	});
 
 	it('hides statement deletion behind the menu rather than showing it always', () => {
@@ -91,14 +130,10 @@ describe('the expanded year', () => {
 		expect(body).not.toContain('Delete statement');
 	});
 
-	it('wires up the armed and menu branches SSR never reaches', () => {
-		// Deleting an attachment needs a first tap to arm, and deleting a
-		// statement needs the ⋯ menu open — neither branch renders server-side.
-		// Reading the source is the only way to assert they are wired at all, and
-		// that the statement one says "statement" so it cannot be misread as
-		// deleting a document.
+	it('wires up the statement menu SSR never opens', () => {
+		// Deleting a statement needs the ⋯ menu open, which SSR never reaches —
+		// reading the source is the only way to assert it is wired at all.
 		const source = readFileSync(resolve('src/lib/components/TaxYearDetail.svelte'), 'utf8');
-		expect(source).toContain('?/deleteAttachment');
 		expect(source).toContain('?/remove');
 		expect(source).toContain('Delete statement');
 	});
@@ -107,13 +142,6 @@ describe('the expanded year', () => {
 		const two = [statements[0], { ...statements[0], id: 's2', country: 'DE' }];
 		const { body } = render(TaxYearDetail, { props: { ...props, statements: two } });
 		expect(body).toContain('Two filings in one year is a move, not a mistake');
-	});
-
-	it('says nothing about where delete lives, because there is nothing to explain', () => {
-		// The caption claimed "Delete lives behind the ⋯ menu now" while a bin sat
-		// two inches above it. With one gesture pattern the caption is noise.
-		const { body } = render(TaxYearDetail, { props });
-		expect(body).not.toContain('Delete lives behind');
 	});
 
 	it('shows a divergence from the payslips when there is one', () => {

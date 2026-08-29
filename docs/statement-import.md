@@ -209,12 +209,19 @@ by position would instead shift every role one to the right and read plausibly.
 
 ## The file itself
 
-Every accepted statement is **filed in Documents**, on its own Statements shelf,
-tagged with the bank, the account and the year, and linked to the import that read
-it. The original file was always kept on the data volume — a parser change
-re-reads history rather than asking for seven years of exports again — but until
-this release nothing surfaced it, so the only way to look at the PDF a figure came
-from was through the filesystem.
+Every accepted statement is **filed in Documents**, on the Statements shelf,
+tagged with the bank, the account and the year, and linked to two things. The
+first is the account it was read into, so the file sits under **Statements and
+reports** on that account's own screen alongside anything else filed there. The
+second is the import that read it: the import row carries the document's id, so
+deleting the statement from Documents is refused — _This is the statement behind
+an import; it stays with the import._ — rather than leaving the import unable to
+show what it read.
+
+The original file was always kept on the data volume, so a parser change re-reads
+history rather than asking for seven years of exports again. What changed is that
+the file is now reachable from either end — the register or the account — instead
+of only through the filesystem.
 
 ---
 
