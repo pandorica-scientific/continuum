@@ -106,6 +106,15 @@ describe('the baseline migration', () => {
 			select indexdef from pg_indexes where indexname = 'property_bill_meter_property_idx'`;
 		expect(indexdef).toMatch(/where.*source.*meter/i);
 
+		// The date every window is measured on is an expression, not a column, so
+		// the plain booked_on index cannot serve a bound on it and db:generate
+		// cannot emit this one. Asserted by definition rather than by name: a
+		// regenerated baseline that replaced it with an index on booked_on alone
+		// would still be an index of that name.
+		const [{ indexdef: effective }] = await harness.sql<{ indexdef: string }[]>`
+			select indexdef from pg_indexes where indexname = 'transaction_effective_on_idx'`;
+		expect(effective).toMatch(/coalesce.*value_on.*booked_on/i);
+
 		// Built on contact_fold(), which is itself only creatable in the right
 		// order behind the unaccent extension.
 		const [{ n: search }] = await harness.sql<{ n: number }[]>`

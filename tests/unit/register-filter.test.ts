@@ -24,6 +24,7 @@ describe('parseFilter', () => {
 			to: null,
 			accountId: null,
 			categoryId: null,
+			groupKey: null,
 			direction: 'any',
 			minMinor: null,
 			maxMinor: null,
@@ -114,6 +115,22 @@ describe('parseFilter', () => {
 	it('passes account through and reads the uncategorised sentinel', () => {
 		expect(parseFilter(params('account=acc-1'), 'CZK').accountId).toBe('acc-1');
 		expect(parseFilter(params('category=none'), 'CZK').categoryId).toBe('none');
+	});
+
+	// A stage of the waterfall is a group, not a category, so clicking one has to
+	// be able to ask for every category inside it at once.
+	it('reads the group filter, and treats a blank one as absent', () => {
+		expect(parseFilter(params('group=housing'), 'CZK').groupKey).toBe('housing');
+		expect(parseFilter(params('group='), 'CZK').groupKey).toBeNull();
+		expect(parseFilter(params(''), 'CZK').groupKey).toBeNull();
+	});
+
+	// Two questions, not one asked twice: a group narrows to its categories and a
+	// category narrows within them, so both have to survive parsing together.
+	it('keeps a group and a category apart', () => {
+		const filter = parseFilter(params('group=housing&category=rent'), 'CZK');
+		expect(filter.groupKey).toBe('housing');
+		expect(filter.categoryId).toBe('rent');
 	});
 
 	it('takes page size from the URL, but only one the register offers', () => {

@@ -96,7 +96,10 @@
 
 <section class="section" style="gap: 12px;">
 	{#each data.loans as l (l.id)}
-		<div class="card loan">
+		<!-- What the Overview's fixation card links to. Without an id per loan the
+		     briefing could only offer the top of the screen, and a household with
+		     four loans had to find the right one again. -->
+		<div class="card loan" id="loan-{l.id}">
 			<div class="head">
 				<div class="names">
 					<span class="name">{l.name}</span>
@@ -447,6 +450,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-7);
+		/* Arriving at #loan-… puts the card's top edge against the viewport's,
+		   which reads as the card being cut off. */
+		scroll-margin-top: var(--space-8);
 	}
 	.head {
 		display: flex;

@@ -1,4 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+/**
+ * How many cards the strip shows before it offers the rest behind a button.
+ *
+ * Here rather than beside the sources because both readers need it and one of
+ * them is a component: the panel does the slicing, and a component may not
+ * import from `$lib/server`. Two spellings of "four" would be a caption that
+ * describes five cards while four are on screen.
+ */
+export const BRIEFING_STRIP_SIZE = 4;
+
 interface EffectiveSpendingLine {
 	day: string;
 	currency: string;

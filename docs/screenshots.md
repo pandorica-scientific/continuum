@@ -14,12 +14,12 @@ node scripts/take-screenshots.mjs
 
 ## Overview
 
-A board each person arranges for themselves, from thirteen panels.
+A board each person arranges for themselves, from eighteen panels.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/overview-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/overview-light-web.png">
-  <img src="screenshots/overview-dark-web.png" alt="Overview — A board each person arranges for themselves, from thirteen panels">
+  <img src="screenshots/overview-dark-web.png" alt="Overview — A board each person arranges for themselves, from eighteen panels">
 </picture>
 
 ## Accounts
@@ -76,7 +76,14 @@ What each project has cost so far, across every category it touches.
 
 ## Cash flow
 
-A Sankey in the order money is committed.
+A Sankey in the order money is committed. Every band opens the transactions behind
+it, and the list adds up to what the band said: both measure a month on the day the
+money moved — the value date where the bank printed one — and a mortgage payment
+recorded against a loan is two lines to both of them, its interest under the category
+it was filed with and its principal under "Loan principal". One exception, and it is
+the register's: money nobody has filed rides in the catch-all band, and a filter can
+ask for a group or for what is unfiled but not for both, so that one band opens a list
+short of its own unfiled part.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/cashflow-dark-web.png">

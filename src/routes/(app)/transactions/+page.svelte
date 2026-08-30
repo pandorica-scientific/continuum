@@ -142,6 +142,19 @@
 		{#if data.pageSize !== data.defaultPageSize}
 			<input type="hidden" name="per" value={data.pageSize} />
 		{/if}
+		<!-- Arriving from a stage of the cash-flow chart narrows the register to a
+		     category group, and nothing in the grid below carries one — so Apply
+		     would silently drop it. Stated rather than only carried, because a
+		     narrowing nobody can see is a register that looks wrong. -->
+		{#if data.filter.groupKey}
+			<input type="hidden" name="group" value={data.filter.groupKey} />
+			<div class="active-filters">
+				<span class="chip">
+					<span>Group: {data.groupLabel}</span>
+					<a class="chip-x" href={data.clearGroupHref} aria-label="Clear the group filter">✕</a>
+				</span>
+			</div>
+		{/if}
 		<div class="grid">
 			<label class="f-wide">
 				<span>Search</span>
@@ -251,6 +264,7 @@
 						<TransactionRow
 							row={r}
 							categories={data.categories}
+							loans={data.loans}
 							knownTags={data.knownTags}
 							proofLabel={r.proofClass ? data.proofLabels[r.proofClass] : null}
 							open={openRow === r.id}
@@ -387,6 +401,34 @@
 		display: flex;
 		gap: var(--space-4);
 		align-items: center;
+	}
+	/* What the register is narrowed to that no control in the grid states.
+	   Named for what it holds rather than for the state it is in: a bare `.active`
+	   also matched the selected page-size link, which has a rule of its own. */
+	.active-filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-4);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-pill);
+		background: var(--card2);
+		padding: 3px 11px;
+		font-size: var(--text-sm);
+		color: var(--fg2);
+	}
+	.chip-x {
+		color: var(--fg3);
+		line-height: 1;
+		text-decoration: none;
+	}
+	.chip-x:hover {
+		color: var(--fg1);
+		text-decoration: none;
 	}
 	/* The open month's transactions, seated inside the table rather than in
 	   cards of their own — the row above them is the thing they belong to.

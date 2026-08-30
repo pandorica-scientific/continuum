@@ -177,13 +177,22 @@ panels name one set without drifting. Do not hand-roll a pill.
 
 Inline SVG only, through `<Icon name="..." />`. One geometry: 24 viewBox, `fill: none`,
 `stroke: currentColor`, `stroke-width: 1.7`, round caps and joins. Colour from context.
-Sizes: 19px sidebar, 26px screen title (`--brand`), 16px header buttons.
+Sizes: 19px sidebar, 26px screen title (`--brand`), 16px header buttons, 14px panel and
+briefing-card eyebrows.
 
 **Never link an icon library or any CDN** — this ships self-hosted and must not call out.
 Add new glyphs to `$lib/icons` as paths.
 
-Emoji survive only at card level (briefing kinds, account rows) and as screen-title
-prefixes. Not as section markers in new UI.
+Emoji survive only on the rows that carry an emoji of their own — accounts, shelves and
+subjects, each a household-editable field over a supplied default — and as screen-title
+prefixes. Not as section markers in new UI: the Overview's panel eyebrows and the briefing
+cards each name an icon now.
+
+**Panel header.** An Overview panel's eyebrow is `<Icon size={14} />` then the title, on
+the left. On the right, a panel that summarises a screen carries a quiet `Open →` link to
+it (`--fg3`, no underline) — and only there, never at the foot of the body. While the
+board is being customised the link gives way to the move, resize and remove controls: the
+header belongs to arranging, and a link there is one more thing a stray tap can follow.
 
 Pass `Icon` a `label` **only** when it carries meaning no nearby text repeats.
 

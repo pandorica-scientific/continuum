@@ -26,7 +26,6 @@
 	{:else}
 		<span class="quiet">No transactions recorded yet.</span>
 	{/each}
-	<a href="/transactions" class="open-link">Open the register →</a>
 </div>
 
 <style>
@@ -60,10 +59,6 @@
 	}
 	.amount {
 		font-size: var(--text-sm);
-	}
-	.open-link {
-		font-size: var(--text-sm);
-		padding-top: 10px;
 	}
 	.quiet {
 		font-size: var(--text-sm);

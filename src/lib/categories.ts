@@ -115,6 +115,22 @@ export function nextFreeColorToken(taken: string[]): string | null {
 	return [...RESERVE_COLOR_TOKENS, ...named].find((token) => !used.has(token)) ?? null;
 }
 
+/**
+ * The category the principal half of a loan instalment is filed under.
+ *
+ * Named here rather than written out at each use because it is a real row that
+ * three things have to agree about: the seed below creates it, the cash-flow
+ * chart files the principal leaf under it, and the register's own SQL emits a
+ * line carrying it. Nobody files a transaction under it by hand — it exists so
+ * the half of a payment that is not a cost has a name both readers can say.
+ *
+ * A household may move it to another group or rename it, and both readers
+ * follow, because both read the row rather than assuming where it sits. Delete
+ * it and neither splits a payment at all, which is the honest answer: without
+ * it the register has no id to put the principal line under.
+ */
+export const LOAN_PRINCIPAL_CATEGORY = 'loan-principal';
+
 interface CategoryDef {
 	id: string;
 	groupKey: string;
@@ -162,5 +178,6 @@ export const CATEGORY_SEED: CategoryDef[] = [
 	{ id: 'svj-insurance', groupKey: 'housing', name: 'SVJ & insurance', sort: 2 },
 	// saved & invested
 	{ id: 'brokerage', groupKey: 'savings', name: 'Brokerage transfers', sort: 0 },
-	{ id: 'cash-buffer', groupKey: 'savings', name: 'Cash buffer', sort: 1 }
+	{ id: 'cash-buffer', groupKey: 'savings', name: 'Cash buffer', sort: 1 },
+	{ id: LOAN_PRINCIPAL_CATEGORY, groupKey: 'savings', name: 'Loan principal', sort: 2 }
 ];

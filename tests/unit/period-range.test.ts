@@ -38,4 +38,27 @@ describe('periodRange', () => {
 		const range = periodRange('month', '2024-02', TODAY);
 		expect(range.end).toBe('2024-02-29');
 	});
+
+	it('runs the trailing year to the anchor, the anchor month included', () => {
+		// Twelve months, not thirteen: a window that started in July 2025 and ran
+		// to July 2026 would compare a month against itself a year later and call
+		// the difference a trend.
+		const range = periodRange('12m', '2026-07', TODAY);
+		expect(range.start).toBe('2025-08-01');
+		expect(range.end).toBe('2026-07-31');
+		expect(range.caption).toBe('August 2025 – July 2026');
+	});
+
+	it('carries the trailing year back over a year boundary', () => {
+		const range = periodRange('12m', '2026-01', TODAY);
+		expect(range.start).toBe('2025-02-01');
+		expect(range.end).toBe('2026-01-31');
+		expect(range.caption).toBe('February 2025 – January 2026');
+	});
+
+	it('ends the trailing year on the 29th of a leap February', () => {
+		const range = periodRange('12m', '2024-02', TODAY);
+		expect(range.start).toBe('2023-03-01');
+		expect(range.end).toBe('2024-02-29');
+	});
 });

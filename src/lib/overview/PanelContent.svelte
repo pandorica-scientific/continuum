@@ -6,28 +6,31 @@
 	import AccountsPanel from './panels/AccountsPanel.svelte';
 	import ActivityPanel from './panels/ActivityPanel.svelte';
 	import BriefingPanel from './panels/BriefingPanel.svelte';
+	import BudgetPanel from './panels/BudgetPanel.svelte';
 	import CompositionPanel from './panels/CompositionPanel.svelte';
+	import DebtsPanel from './panels/DebtsPanel.svelte';
 	import EnergyPanel from './panels/EnergyPanel.svelte';
 	import EquityPanel from './panels/EquityPanel.svelte';
 	import FlowPanel from './panels/FlowPanel.svelte';
 	import InvestmentsPanel from './panels/InvestmentsPanel.svelte';
 	import NetworthPanel from './panels/NetworthPanel.svelte';
+	import PaperPanel from './panels/PaperPanel.svelte';
 	import RetirementPanel from './panels/RetirementPanel.svelte';
+	import SalaryPanel from './panels/SalaryPanel.svelte';
 	import SavingsPanel from './panels/SavingsPanel.svelte';
+	import StatementsPanel from './panels/StatementsPanel.svelte';
 	import TaxPanel from './panels/TaxPanel.svelte';
 	import UpcomingPanel from './panels/UpcomingPanel.svelte';
 
 	let {
 		panelKey,
 		data,
-		period,
 		currency
 	}: {
 		panelKey: string;
 		// Each panel validates its own shape; the board carries it untyped.
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		data: any;
-		period: string;
 		currency: string;
 	} = $props();
 </script>
@@ -40,7 +43,7 @@
 {:else if panelKey === 'briefing'}
 	<BriefingPanel {data} />
 {:else if panelKey === 'flow'}
-	<FlowPanel {data} {period} {currency} />
+	<FlowPanel {data} {currency} />
 {:else if panelKey === 'composition'}
 	<CompositionPanel {data} />
 {:else if panelKey === 'upcoming'}
@@ -63,6 +66,16 @@
 	<ActivityPanel {data} />
 {:else if panelKey === 'savings'}
 	<SavingsPanel {data} />
+{:else if panelKey === 'paper'}
+	<PaperPanel {data} />
+{:else if panelKey === 'statements'}
+	<StatementsPanel {data} />
+{:else if panelKey === 'salary'}
+	<SalaryPanel {data} />
+{:else if panelKey === 'debts'}
+	<DebtsPanel {data} />
+{:else if panelKey === 'budget'}
+	<BudgetPanel {data} />
 {/if}
 
 <style>

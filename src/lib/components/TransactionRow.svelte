@@ -29,6 +29,7 @@
 	let {
 		row,
 		categories,
+		loans,
 		knownTags,
 		proofLabel,
 		open,
@@ -42,7 +43,10 @@
 		// and a `typeof data.rows[number]` import would tie a component to a route.
 		row: {
 			id: string;
+			/** The day the money moved, which is the day the register files it under. */
 			date: string;
+			/** The day the bank booked it, when that is a different day; else null. */
+			bookedDate: string | null;
 			merchant: string;
 			detail: string | null;
 			amount: string;
@@ -52,6 +56,8 @@
 			categoryToken: string;
 			reviewState: keyof typeof REVIEW_LABELS;
 			account: string;
+			/** The transaction's own currency code, which loans are matched against. */
+			currency: string;
 			isTransfer: boolean;
 			transferKind: 'paired' | 'one-sided' | null;
 			readAs: string | null;
@@ -66,9 +72,26 @@
 			}[];
 			tags: { id: string; name: string; direct: boolean }[];
 			documents: { id: string }[];
+			/**
+			 * The loan this row has already been recorded as paying, or null — and
+			 * the two lines it counts as, where the record can divide it: the
+			 * interest under the category it is filed with, the principal under the
+			 * one that names it. Null halves means the record cannot divide it and
+			 * every total behind the row holds it whole.
+			 */
+			loanPayment: {
+				loanId: string;
+				loanName: string;
+				halves: { key: string; label: string; amount: string; negative: boolean }[] | null;
+			} | null;
 			ruleHref: string;
 		};
 		categories: Group[];
+		/**
+		 * The loans a debit can be recorded against — empty when the module is off
+		 * or nothing is still owed, which is what hides the action entirely.
+		 */
+		loans: { id: string; name: string; currency: string }[];
 		knownTags: { id: string; name: string }[];
 		/** What the row's proof class is called, when it has one. */
 		proofLabel: string | null;
@@ -86,14 +109,32 @@
 	let changing = $state(false);
 	let picked = $state<string | null>(null);
 
+	// Whether the loan-payment form has been asked for, on the same reasoning as
+	// `changing` above: most debits are not instalments, so a select and an
+	// amount box under every one of them would be a form nobody asked for.
+	let recording = $state(false);
+	// Only the loans this debit could actually have paid. The mutation refuses a
+	// payment in a currency the loan is not in rather than guessing a rate, so
+	// offering one here would be offering a refusal — and with the list down to
+	// one currency, the unit printed beside the interest box is simply the row's.
+	const payableLoans = $derived(loans.filter((l) => l.currency === row.currency));
+
 	// A row that closes must not reopen mid-correction, and a different row must
 	// never inherit this one's half-made choice.
 	$effect(() => {
 		if (!open) {
 			changing = false;
 			picked = null;
+			recording = false;
 		}
 	});
+
+	// Offered on money that left an account, when there is a loan for it to have
+	// gone to and nothing has claimed it yet. Money that arrived is not an
+	// instalment, and a row already recorded carries its chip instead.
+	const canRecordLoanPayment = $derived(
+		payableLoans.length > 0 && row.negative && row.loanPayment === null
+	);
 
 	const transferNote = $derived(
 		!row.isTransfer
@@ -106,7 +147,13 @@
 
 <div class="txn" class:open>
 	<button type="button" class="face" aria-expanded={open} onclick={ontoggle}>
-		<span class="mono t-date">{row.date}</span>
+		<!-- The date the money moved. Where the bank booked it on another day, that
+		     day is on the title rather than in a second column: the row is filed
+		     under one of them and a register that showed both would be asking
+		     somebody to work out which. -->
+		<span class="mono t-date" title={row.bookedDate ? `Booked ${row.bookedDate}` : undefined}
+			>{row.date}</span
+		>
 
 		<span class="t-name">
 			<span class="t-merchant">{row.merchant}</span>
@@ -135,6 +182,12 @@
 			{/if}
 			{#if row.isSplit}
 				<Pill hue="purple">split</Pill>
+			{/if}
+			<!-- On the face rather than in the panel: which loan a debit went to is
+			     what the row IS, and it is the answer to "have I recorded this one
+			     yet" that a person is scanning the month for. -->
+			{#if row.loanPayment}
+				<Pill hue="teal">Loan payment · {row.loanPayment.loanName}</Pill>
 			{/if}
 			{#if row.documents.length > 0}
 				<span class="clip" title="{row.documents.length} filed against this row">
@@ -205,6 +258,24 @@
 				</div>
 			{/if}
 
+			<!-- The two lines a recorded instalment counts as. Drawn with the split
+			     lines' own markup because that is what they are to every total on
+			     this screen: the footer and the month above it are summed from
+			     these two figures, and a row reading one whole debit under a footer
+			     holding half of it had nothing on it that said why. Not a
+			     transaction_split row, though — the loan link is what divides it,
+			     and the split dialog would drop it. -->
+			{#if !row.isSplit && row.loanPayment?.halves}
+				<ul class="splits">
+					{#each row.loanPayment.halves as h (h.key)}
+						<li class="split-line">
+							<span class="s-category">{h.label}</span>
+							<span class="mono s-amount" class:negative={h.negative}>{h.amount}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
 			<div class="doings">
 				<div class="tags">
 					{#each row.tags as t (t.id)}
@@ -252,12 +323,66 @@
 						📎 Receipt{#if row.documents.length > 0}<span class="count">{row.documents.length}</span
 							>{/if}
 					</button>
+					{#if canRecordLoanPayment}
+						<button type="button" class="btn" onclick={() => (recording = !recording)}>
+							Record as loan payment
+						</button>
+					{/if}
 					<!-- Carries the counterparty and the filing away with it, so the rule
 					     editor opens already describing this row rather than asking you to
 					     retype what you were just looking at. -->
 					<a class="btn" href={row.ruleHref}>Make a rule</a>
 				</div>
 			</div>
+
+			<!-- What was recorded, and the way back out of it. Recording is otherwise
+			     a one-way door: the duplicate guard refuses a second attempt, so a
+			     debit filed against the wrong mortgage stayed filed against it. The
+			     face states the same fact as a pill and this is the panel's copy —
+			     the row states what it IS on the face and what you can DO to it
+			     below, the same division the split pill and the receipt count keep. -->
+			{#if row.loanPayment}
+				<form method="POST" action="?/unlinkLoanPayment" use:enhance class="tag-chip recorded">
+					<input type="hidden" name="transactionId" value={row.id} />
+					<span>Loan payment · {row.loanPayment.loanName}</span>
+					<button type="submit" aria-label="Unlink loan payment">✕</button>
+				</form>
+			{/if}
+
+			<!-- The interest box is optional and stays that way: what the bank
+			     printed beats anything derived, but a household that only has the
+			     instalment should still be able to say the debit was one. Left
+			     blank, the cash-flow split works the month out from the schedule. -->
+			{#if canRecordLoanPayment && recording}
+				<form
+					method="POST"
+					action="?/loanPayment"
+					use:enhance={() =>
+						async ({ update, result }) => {
+							await update();
+							// Back to the chip the row now carries. Leaving the form open
+							// reads as a save that did not take.
+							if (result.type === 'success') recording = false;
+						}}
+					class="loan-form"
+				>
+					<input type="hidden" name="transactionId" value={row.id} />
+					<select name="loanId" aria-label="Loan this payment went to">
+						{#each payableLoans as l (l.id)}
+							<option value={l.id}>{l.name}</option>
+						{/each}
+					</select>
+					<input
+						class="mono interest"
+						name="interest"
+						inputmode="decimal"
+						placeholder="Interest part (optional)"
+						aria-label="Interest part of this payment"
+					/>
+					<span class="mono unit">{row.currency}</span>
+					<button type="submit" class="btn btn-primary">Save</button>
+				</form>
+			{/if}
 
 			<!-- What the statement itself said, in the statement's own words. Only
 			     rendered when there is something beyond what the face already
@@ -451,6 +576,30 @@
 		margin-left: var(--space-3);
 		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	/* One line where there is room for one, wrapping rather than shrinking the
+	   loan's name into something unreadable when there is not. */
+	.loan-form {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.loan-form .interest {
+		flex: 1 1 180px;
+		max-width: 240px;
+	}
+	.unit {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	/* A chip in a column: without this it would stretch the width of the panel.
+	   Tinted like the pill on the face, the way a tag chip is tinted by its own
+	   hue, so the two readings of the same fact look like one fact. */
+	.recorded {
+		align-self: flex-start;
+		color: var(--teal);
+		border-color: color-mix(in srgb, var(--teal) 45%, transparent);
 	}
 	/* The lines of a split, shown under the transaction they divide. */
 	.splits {

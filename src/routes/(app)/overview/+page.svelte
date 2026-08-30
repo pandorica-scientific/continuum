@@ -3,17 +3,22 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Board from '$lib/overview/Board.svelte';
 	import { panelAvailable } from '$lib/overview/panels';
+	import { monthLabel } from '$lib/cashflow/period';
 
 	let { data } = $props();
 
-	const monthName = new Date().toLocaleString('en', { month: 'long', year: 'numeric' });
+	// The month the figures are actually about, not today's. A household that
+	// imports a statement in the second week of August is looking at July, and
+	// the old caption told them it was August.
+	const caption = $derived(
+		data.dataMonth
+			? `${monthLabel(data.dataMonth)} · as of the latest statement`
+			: 'No statements yet · the panels you chose, arranged the way you left them'
+	);
 	const available = $derived((key: string) => panelAvailable(key, data.modules));
 </script>
 
-<ScreenHeader
-	title="Overview"
-	caption="{monthName} · the panels you chose, arranged the way you left them"
-/>
+<ScreenHeader title="Overview" {caption} />
 
 <!--
 	Deliberately not wrapped in {#key data.layout}: the loader builds a fresh
@@ -25,7 +30,7 @@
 <Board
 	layout={data.layout}
 	panels={data.panels}
-	period={data.period}
 	currency={data.baseCurrency}
 	{available}
+	firstRun={data.firstRun}
 />

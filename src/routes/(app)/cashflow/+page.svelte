@@ -1,10 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import MetricTile from '$lib/components/MetricTile.svelte';
-	import Segmented from '$lib/components/Segmented.svelte';
 	import FlowCard from '$lib/charts/FlowCard.svelte';
+	import PeriodControls from '$lib/charts/PeriodControls.svelte';
 	import MonthHistoryChart from '$lib/charts/MonthHistoryChart.svelte';
 	import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
 
@@ -20,17 +19,12 @@
 />
 
 <section class="section">
-	<div class="eyebrow-row">
-		<Segmented
-			options={[
-				{ value: 'ytd', label: 'Year to date' },
-				{ value: 'month', label: 'This month' }
-			]}
-			value={data.period}
-			onchange={(v) => goto(`?period=${v}`, { keepFocus: true, noScroll: true })}
-		/>
-		<span class="eyebrow-caption">{data.flow.caption} · click a period to redraw</span>
-	</div>
+	<PeriodControls
+		period={data.flow.period}
+		anchor={data.flow.anchor}
+		bounds={data.flow.bounds}
+		caption={data.flow.caption}
+	/>
 
 	<div class="tiles">
 		<MetricTile label="Money in" value={fmt(data.metrics.moneyIn)} {unit} color="var(--green)" />

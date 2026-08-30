@@ -1,45 +1,37 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-	import { goto } from '$app/navigation';
 	import FlowCard from '$lib/charts/FlowCard.svelte';
-	import Segmented from '$lib/components/Segmented.svelte';
+	import PeriodControls from '$lib/charts/PeriodControls.svelte';
 
 	let {
 		data,
-		period,
 		currency
 	}: {
 		// FlowCard owns this shape; the panel only passes it through.
 		data: Parameters<typeof FlowCard>[1]['flow'];
-		period: string;
 		currency: string;
 	} = $props();
 </script>
 
-<div class="head">
-	<span class="caption">{data.caption}</span>
-	<Segmented
-		options={[
-			{ value: 'ytd', label: 'Year to date' },
-			{ value: 'month', label: 'This month' }
-		]}
-		value={period}
-		onchange={(v) => goto(`?period=${v}`, { keepFocus: true, noScroll: true })}
+<!--
+	The window comes out of the figures rather than off a prop of its own: the
+	loader clamps the anchor against what the record holds, so the only period
+	the controls can show is the one the chart beneath them was drawn for.
+-->
+<div class="flow">
+	<PeriodControls
+		period={data.period}
+		anchor={data.anchor}
+		bounds={data.bounds}
+		caption={data.caption}
 	/>
+	<FlowCard flow={data} {currency} />
 </div>
-<FlowCard flow={data} {currency} />
 
 <style>
-	.head {
+	.flow {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
+		flex-direction: column;
 		gap: var(--space-6);
-		flex-wrap: wrap;
-		margin-bottom: 12px;
-	}
-	.caption {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

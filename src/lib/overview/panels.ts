@@ -1,19 +1,41 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The panel registry is the single source of truth for what can go on the
 // Overview board, in the same spirit as src/lib/modules/registry.ts for
-// screens. It holds no data and no arithmetic: adding a fourteenth panel is one
+// screens. It holds no data and no arithmetic: adding another panel is one
 // entry here plus one component in ./panels/, and nothing else.
 //
-// Emoji are a placeholder. Spec C of the V2 migration replaces them with the
-// inline SVG icon set across the whole app at once.
+// A panel names an icon rather than carrying a glyph of its own, so the board's
+// eyebrows are drawn from the one set the rest of the app already uses.
 
+import type { IconName } from '$lib/icons';
 import type { ModuleKey, ModuleToggles } from '$lib/modules/registry';
 import type { OverviewPlacement, PanelBounds } from './layout';
 
-interface PanelDefinition {
+export interface PanelDefinition {
 	key: string;
 	title: string;
-	emoji: string;
+	icon: IconName;
+	/**
+	 * One line saying what the panel actually draws, for the first-run picker
+	 * and nowhere else — a placed panel has its own contents to speak for it.
+	 *
+	 * The titles are written to sit above a panel somebody already chose, so
+	 * several of them ("Paper", "Statements", "Kept each month") say almost
+	 * nothing to a person meeting all eighteen at once. This is the sentence
+	 * that lets them choose. Kept short and without a full stop, like every
+	 * other caption on the board; a test holds both.
+	 */
+	description: string;
+	/**
+	 * Where the header's "Open →" goes. Absent for the three panels that answer
+	 * a question no single screen owns — the briefing, what net worth is made of
+	 * and how it moved — because a link out has to land somewhere that says more
+	 * than the panel already does.
+	 *
+	 * A destination behind a module must be one this panel is gated on, or the
+	 * board offers a link into a 404. A test holds the two together.
+	 */
+	href?: string;
 	/** Size in columns and rows when the panel is first added. */
 	defaultW: number;
 	defaultH: number;
@@ -35,7 +57,8 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'briefing',
 		title: 'Needs you',
-		emoji: '🔔',
+		description: 'Whatever needs a decision today, and a quiet line on the days nothing does',
+		icon: 'bell',
 		defaultW: 12,
 		// One row of cards, and no more. At six rows (320px of grid plus the
 		// panel's own chrome) this owned the top third of the first screen
@@ -59,7 +82,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'flow',
 		title: 'Where the money goes',
-		emoji: '💸',
+		description: "The month's income traced through to what it was actually spent on",
+		icon: 'flow',
+		href: '/cashflow',
 		defaultW: 12,
 		defaultH: 19,
 		minW: MIN_W,
@@ -69,7 +94,8 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'composition',
 		title: 'What it is made of',
-		emoji: '🧩',
+		description: 'Net worth split into cash, property and investments, against what is owed',
+		icon: 'layers',
 		defaultW: 6,
 		defaultH: 6,
 		minW: MIN_W,
@@ -79,7 +105,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'upcoming',
 		title: 'Next 30 days',
-		emoji: '📅',
+		description: 'Bills, renewals and dates the calendar is holding for the month ahead',
+		icon: 'calendar',
+		href: '/calendar',
 		defaultW: 6,
 		defaultH: 7,
 		minW: MIN_W,
@@ -92,7 +120,8 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'networth',
 		title: 'Net worth over time',
-		emoji: '📈',
+		description: 'The household total month by month, and how far it has moved',
+		icon: 'trend',
 		defaultW: 6,
 		defaultH: 5,
 		minW: MIN_W,
@@ -102,7 +131,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'accounts',
 		title: 'Where the cash sits',
-		emoji: '🏦',
+		description: 'Every account and what is in it, each as a share of the cash total',
+		icon: 'bank',
+		href: '/accounts',
 		defaultW: 6,
 		defaultH: 6,
 		minW: MIN_W,
@@ -112,7 +143,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'equity',
 		title: 'Flats against mortgages',
-		emoji: '🏢',
+		description: 'What each flat is worth against what is still owed on it',
+		icon: 'buildings',
+		href: '/property',
 		defaultW: 6,
 		defaultH: 5,
 		minW: MIN_W,
@@ -124,7 +157,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'energy',
 		title: 'Energy this month',
-		emoji: '⚡',
+		description: "A bar a day of what the meters read, against the month's own average",
+		icon: 'bolt',
+		href: '/home',
 		defaultW: 6,
 		defaultH: 5,
 		minW: MIN_W,
@@ -134,7 +169,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'investments',
 		title: 'Portfolio',
-		emoji: '📊',
+		description: 'What the portfolio is worth, what went into it, and what it has gained',
+		icon: 'chart',
+		href: '/investments',
 		defaultW: 6,
 		defaultH: 5,
 		minW: MIN_W,
@@ -144,7 +181,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'retirement',
 		title: 'Retirement outlook',
-		emoji: '🎯',
+		description: 'Whether the pension is on course, in one line and one colour',
+		icon: 'target',
+		href: '/retirement',
 		defaultW: 6,
 		defaultH: 5,
 		minW: MIN_W,
@@ -154,7 +193,9 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'tax',
 		title: 'Tax position',
-		emoji: '🧾',
+		description: 'What each filer earned and paid for the year, and at what rate',
+		icon: 'receipt',
+		href: '/tax',
 		defaultW: 6,
 		defaultH: 6,
 		minW: MIN_W,
@@ -167,7 +208,9 @@ export const PANELS: PanelDefinition[] = [
 		// definition silently won, so a panel rendered names with no figures.
 		key: 'activity',
 		title: 'Recent activity',
-		emoji: '📒',
+		description: 'The last transactions to land, newest first, with what each was filed as',
+		icon: 'ledger',
+		href: '/transactions',
 		defaultW: 6,
 		defaultH: 7,
 		minW: MIN_W,
@@ -176,10 +219,75 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'savings',
-		title: 'Saved each month',
-		emoji: '💰',
+		title: 'Kept each month',
+		description: 'What was left over each month, and what share of income that came to',
+		icon: 'coins',
+		href: '/cashflow',
 		defaultW: 6,
 		defaultH: 5,
+		minW: MIN_W,
+		minH: MIN_H,
+		modules: []
+	},
+	{
+		key: 'paper',
+		title: 'Paper',
+		description: 'What is unfiled, what lapses soon, and which shelf the rest of it is on',
+		icon: 'folders',
+		href: '/documents',
+		defaultW: 6,
+		defaultH: 6,
+		minW: MIN_W,
+		minH: MIN_H,
+		modules: ['documents']
+	},
+	{
+		key: 'statements',
+		title: 'Statements',
+		description: 'Which accounts are up to date on statements, and which have gone quiet',
+		icon: 'inbox',
+		href: '/import',
+		defaultW: 6,
+		defaultH: 6,
+		minW: MIN_W,
+		minH: MIN_H,
+		modules: ['import']
+	},
+	{
+		key: 'salary',
+		title: 'Salary',
+		description: 'The last month each person was paid for, against the month before it',
+		icon: 'wallet',
+		href: '/salary',
+		defaultW: 6,
+		defaultH: 5,
+		minW: MIN_W,
+		minH: MIN_H,
+		modules: ['salary']
+	},
+	{
+		key: 'debts',
+		title: 'Debts',
+		description: 'Every loan, what is left on it, and when its rate stops being settled',
+		icon: 'card',
+		href: '/loans',
+		defaultW: 6,
+		defaultH: 5,
+		minW: MIN_W,
+		minH: MIN_H,
+		modules: ['loans']
+	},
+	{
+		// Named for the question rather than for the noun: "Budget" promises a
+		// figure somebody set, and nobody set one. What this shows is the month
+		// against what the months before it usually cost.
+		key: 'budget',
+		title: 'Month against its average',
+		description: "This month's spending beside what the twelve months before it usually cost",
+		icon: 'bars',
+		href: '/cashflow',
+		defaultW: 6,
+		defaultH: 6,
 		minW: MIN_W,
 		minH: MIN_H,
 		modules: []
@@ -206,24 +314,26 @@ export function panelAvailable(key: string, modules: ModuleToggles): boolean {
 }
 
 /**
- * What a person sees before they ever press Customise.
+ * The board offered rather than imposed: what "Use the suggested board" on the
+ * first-run picker puts down, and what Reset goes back to.
  *
  * Briefing full width, the cash-flow chart full width, then composition and
- * upcoming side by side. The other nine panels wait in the tray: the board is
- * opt-in, and arrives when someone customises rather than when they upgrade.
+ * upcoming side by side — the four that answer the questions the app is opened
+ * for. Nobody is given it silently: a person with no stored arrangement gets
+ * the picker and an empty board, and this is one press away from there.
  *
  * Only the ARRANGEMENT lives here. Every size is read from the panel's own
  * definition, because this list used to restate them — and the moment the
  * briefing panel's default height was reduced, the definition said three rows,
- * this said six, and the screen went on drawing six. A default board that
+ * this said six, and the screen went on drawing six. A suggested board that
  * disagrees with the panels it is made of is the kind of thing that looks like
  * a rendering bug for a week.
  */
-export const DEFAULT_LAYOUT: OverviewPlacement[] = (() => {
+export const SUGGESTED_LAYOUT: OverviewPlacement[] = (() => {
 	const stack: OverviewPlacement[] = [];
 	const place = (k: string, x: number, y: number): number => {
 		const panel = panelDefinition(k);
-		if (!panel) throw new Error(`Default layout names a panel that does not exist: ${k}`);
+		if (!panel) throw new Error(`The suggested layout names a panel that does not exist: ${k}`);
 		stack.push({ k, x, y, w: panel.defaultW, h: panel.defaultH });
 		return y + panel.defaultH;
 	};

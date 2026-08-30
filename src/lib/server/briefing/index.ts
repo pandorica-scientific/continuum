@@ -1,37 +1,44 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { and, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
-import { groupMonthlySpending } from '$lib/briefing';
+import type { IconName } from '$lib/icons';
+import { BRIEFING_STRIP_SIZE } from '$lib/briefing';
 import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
-import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
-import { loadSplits } from '$lib/server/splits';
-import { effectiveLines } from '$lib/transactions/lines';
+import { expenseSpendingByMonth, type GroupMonthSpend } from '$lib/server/cashflow/spending';
 import {
 	calendarAccount,
 	calendarConflict,
-	category,
 	document,
 	documentLink,
 	entity,
+	job,
 	loan,
 	loanFixationPeriod,
-	person,
 	property,
 	shelf,
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
-import { notOwnTransfer } from '$lib/server/transactions/transfers';
 import {
 	archiveScopePredicate,
 	visibleDocumentPredicate,
 	type Actor
 } from '$lib/server/documents/visibility';
 import { loadRecordDates, ownedByLinkedRecord } from '$lib/server/documents/deadlines';
+import { systemShelfId } from '$lib/server/documents/shelves';
+import { isDocumentTargetKind, loadTargetNames } from '$lib/server/documents/targets';
+import { aboutLine, briefingCaption, countTitle, latestJobPerDocument } from './pure';
 
-interface BriefingItem {
-	emoji: string;
+/**
+ * One card on the Overview's briefing strip.
+ *
+ * Exported because the panel that draws it needs the same shape. The component
+ * used to restate it, and a second copy is a second place to remember whenever
+ * a source gains a field.
+ */
+export interface BriefingItem {
+	icon: IconName;
 	kind: string;
 	pill: string;
 	hue: 'green' | 'yellow' | 'red' | 'blue' | 'grey';
@@ -42,21 +49,42 @@ interface BriefingItem {
 	rank: number;
 }
 
-// Each source scans one domain for things that need attention. Phase 2+
-// adds lease expiry, mortgage fixation, document expiry and overspend
-// sources to this list — the strip itself never changes.
+// Each source scans one domain for things that need attention, and the strip
+// itself knows about none of them: a domain that grows a way of needing
+// somebody adds a source to `SOURCES` and changes nothing else.
+//
 // The optional handle is what lets a source be exercised against a test
 // database. Sources that do not take one still satisfy this — a function of
-// fewer parameters is assignable — so the older five are untouched.
+// fewer parameters is assignable — so the ones that read the singleton are
+// untouched.
 /**
  * A briefing source, optionally told who is reading.
  *
  * The actor arrives second so the handle stays the first argument every source
- * already took. Only `documentExpiry` uses it today, and it must: a member
- * cannot be shown a restricted document's renewal date on the Overview, and
- * "no actor" is read as a member rather than as an admin.
+ * already took. Every source that reads `document` uses it, and must: a member
+ * cannot be shown a restricted document's renewal date on the Overview, nor
+ * infer one from a backlog count that is one too high. "No actor" is read as a
+ * member rather than as an admin.
  */
-type Source = (handle?: Queryable, actor?: Actor | null) => Promise<BriefingItem[]>;
+type Source = (
+	handle?: Queryable,
+	actor?: Actor | null,
+	shared?: BriefingShared
+) => Promise<BriefingItem[]>;
+
+/**
+ * Work the caller has already done, or is about to do for something else.
+ *
+ * The Overview builds the briefing and the "month against its average" panel on
+ * the same load, and both want every expense group's spending month by month —
+ * which is the whole ledger, its splits and the rate table. Ran twice it was
+ * the most expensive thing on the screen, done identically. Optional, because
+ * every other caller (the API, a test, a screen that only wants the strip) has
+ * nothing to share and must keep working with one argument.
+ */
+export interface BriefingShared {
+	spending?: () => Promise<GroupMonthSpend[]>;
+}
 
 const unreviewedImports: Source = async () => {
 	const rows = await db
@@ -67,7 +95,7 @@ const unreviewedImports: Source = async () => {
 	if (count === 0) return [];
 	return [
 		{
-			emoji: '📥',
+			icon: 'inbox',
 			kind: 'Import',
 			pill: 'waiting',
 			hue: 'blue',
@@ -76,6 +104,47 @@ const unreviewedImports: Source = async () => {
 				'Mostly counterparties the categoriser has not seen before. Correcting them teaches it.',
 			href: '/import',
 			rank: 20
+		}
+	];
+};
+
+/**
+ * Paper that arrived and was never filed.
+ *
+ * The inbox is the one shelf whose contents are work rather than record —
+ * capture, the scanner and every upload drop a document there and it sits until
+ * somebody says what it is. Nothing else on the Overview can show it: an
+ * unfiled document has no expiry date to remind about and no record to appear
+ * beside, which is exactly why the backlog grows unnoticed.
+ */
+const inboxBacklog: Source = async (handle: Queryable = db, actor = null) => {
+	let inboxId: string;
+	try {
+		inboxId = await systemShelfId('inbox', handle);
+	} catch {
+		// `systemShelfId` throws for a household that has no such shelf, and it is
+		// right to: code that files INTO the inbox must not guess. A source that
+		// only counts has no such stake, and letting the throw out would take the
+		// whole strip down over a shelf nobody uses. Nothing to count, nothing to
+		// say.
+		return [];
+	}
+	const [row] = await handle
+		.select({ count: sql<number>`count(*)::int` })
+		.from(document)
+		.where(and(eq(document.shelfId, inboxId), visibleDocumentPredicate(actor)));
+	const waiting = row.count;
+	if (waiting === 0) return [];
+	return [
+		{
+			icon: 'inbox',
+			kind: 'Paper',
+			pill: `${waiting} waiting`,
+			hue: 'blue',
+			title: countTitle(waiting, 'document waiting to be filed', 'documents waiting to be filed'),
+			detail: 'Until they are filed, no record shows them and no expiry date is watched.',
+			href: '/documents/review',
+			rank: 25
 		}
 	];
 };
@@ -112,7 +181,7 @@ const leaseExpiry: Source = async () => {
 		const propertyName = properties.find((p) => p.id === t.propertyId)?.name ?? 'the flat';
 		const noticeDue = t.renewalNoticeOn && t.renewalNoticeOn >= today ? t.renewalNoticeOn : null;
 		items.push({
-			emoji: '🔑',
+			icon: 'key',
 			kind: 'Tenancy',
 			pill: `${days} days`,
 			hue: days <= 60 ? 'yellow' : 'grey',
@@ -120,7 +189,9 @@ const leaseExpiry: Source = async () => {
 			detail: noticeDue
 				? `${t.tenantName} is the tenant. Renewal notice is due by ${noticeDue}.`
 				: `${t.tenantName} is the tenant.`,
-			href: '/property',
+			// The flat the lease is on, not the top of the property screen: a
+			// household with three flats made the reader find the right tab again.
+			href: `/property?p=${t.propertyId}`,
 			rank: days
 		});
 	}
@@ -147,7 +218,7 @@ const fixationHorizon: Source = async () => {
 		const end = new Date(current.endsOn);
 		const pill = `${end.toLocaleString('en', { month: 'short' })} ${end.getFullYear()}`;
 		items.push({
-			emoji: '🏦',
+			icon: 'bank',
 			kind: 'Mortgage',
 			pill,
 			hue: months <= 6 ? 'yellow' : 'grey',
@@ -156,7 +227,8 @@ const fixationHorizon: Source = async () => {
 				months <= 6
 					? 'Time to collect refinancing quotes.'
 					: `Nothing to do yet. Refinancing quotes are worth collecting from ${end.getFullYear() - 1}.`,
-			href: '/loans',
+			// The loan's own card, which the screen carries an id for exactly this.
+			href: `/loans#loan-${l.id}`,
 			rank: 30 + months
 		});
 	}
@@ -179,10 +251,8 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 	// same `links` rows also answer D7 below — a second query over
 	// `document_link` per source would be the "extend the load, don't add a
 	// third" rule broken on day one.
-	const [links, people, properties, recordDates] = await Promise.all([
-		// One table for every kind of target, so the kind comes from `entity`. Only
-		// people and properties are named on the detail line; other kinds are
-		// skipped below rather than rendered as an empty string.
+	const [links, recordDates] = await Promise.all([
+		// One table for every kind of target, so the kind comes from `entity`.
 		db
 			.select({
 				documentId: documentLink.documentId,
@@ -191,20 +261,25 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 			})
 			.from(documentLink)
 			.innerJoin(entity, eq(entity.id, documentLink.targetId)),
-		db.select().from(person),
-		db.select().from(property),
 		loadRecordDates()
 	]);
-	const personName = new Map(people.map((x) => [x.id, x.name]));
-	const propertyName = new Map(properties.map((x) => [x.id, x.name]));
+	// The registry names all nine kinds a document can be filed against. The two
+	// hand-written selects this replaces knew people and flats only, so a lease
+	// filed against the tenancy it is the contract for — the commonest shape
+	// there is — said "Filed under Tenancy." and stopped.
+	//
+	// Narrowed to the ids actually linked, because one of those nine kinds is
+	// `transaction`: naming a receipt would otherwise read the entire ledger.
+	const names = await loadTargetNames(
+		undefined,
+		links.map((link) => link.targetId)
+	);
 	const about = new Map<string, string[]>();
 	for (const link of links) {
-		const name =
-			link.kind === 'person'
-				? personName.get(link.targetId)
-				: link.kind === 'property'
-					? propertyName.get(link.targetId)
-					: undefined;
+		// `entity` holds kinds a document is never filed against — a tag, another
+		// document — and a link to one of those is not something to name.
+		if (!isDocumentTargetKind(link.kind)) continue;
+		const name = names.get(link.kind)?.get(link.targetId)?.name;
 		if (name === undefined) continue;
 		about.set(link.documentId, [...(about.get(link.documentId) ?? []), name]);
 	}
@@ -242,48 +317,100 @@ const documentExpiry: Source = async (_handle, actor = null) => {
 		if (days > DOCUMENT_HORIZON_DAYS) continue;
 		const months = Math.round(days / DAYS_PER_MONTH);
 		items.push({
-			emoji: '🗂️',
+			icon: 'folders',
 			kind: 'Document',
 			pill: days <= 45 ? `${days} days` : `${months} month${months === 1 ? '' : 's'}`,
 			hue: days <= 60 ? 'yellow' : 'grey',
 			title: `${d.name} ${d.expiryVerb} ${d.expiresOn}`,
-			detail: about.get(d.id)?.length
-				? `Filed under ${d.shelfLabel}, about ${about.get(d.id)!.filter(Boolean).join(' and ')}.`
-				: `Filed under ${d.shelfLabel}.`,
-			href: '/documents',
+			detail: aboutLine(d.shelfLabel, about.get(d.id) ?? []),
+			// The paper itself, open beside the list, rather than a list to find it in.
+			href: `/documents?doc=${d.id}`,
 			rank: days + 5
 		});
 	}
 	return items;
 };
 
-const overspend: Source = async () => {
-	// A category group running well past its twelve-month average this month.
-	// Aggregated in JavaScript rather than SQL because a transaction may be
-	// split across categories, and effectiveLines is the only thing that knows.
-	const [txns, categories, rates, baseCurrency] = await Promise.all([
-		db.select().from(transaction).where(notOwnTransfer()),
-		db.select().from(category),
-		loadRateTable(),
-		getBaseCurrency()
-	]);
-	const groupByCategory = new Map(categories.map((c) => [c.id, c.groupKey]));
-	const splitsByTxn = await loadSplits(txns.map((t) => t.id));
+/** How much of a job's error fits on a card's second line. */
+const MAX_ERROR_CHARS = 90;
 
-	const rows = groupMonthlySpending(
-		txns.flatMap((t) => {
-			const day = t.valueOn ?? t.bookedOn;
-			return effectiveLines(t, splitsByTxn.get(t.id) ?? []).map((line) => ({
-				day,
-				currency: t.currency,
-				amountMinor: line.amountMinor,
-				categoryId: line.categoryId
-			}));
-		}),
-		groupByCategory,
-		baseCurrency,
-		(amount, from, to, day) => convertOrFace(rates, amount, from, to, day)
+/**
+ * Paper the reader could not get through.
+ *
+ * This is the quietest failure the product has. The document is on its shelf,
+ * its file opens, its name and dates are all correct — only its CONTENTS were
+ * never read, so a search for a phrase inside it finds nothing and looks like
+ * an answer rather than a gap. Nobody goes looking for a document they have
+ * already been told is not there, which is why it has to be said here.
+ */
+const extractionFailures: Source = async (handle: Queryable = db, actor = null) => {
+	const rows = await handle
+		.select({
+			documentId: document.id,
+			state: job.state,
+			queuedAt: job.queuedAt,
+			error: job.error
+		})
+		.from(job)
+		.innerJoin(document, eq(document.id, job.subjectId))
+		.where(
+			and(
+				eq(job.kind, 'extract_text'),
+				// The same two questions every other read of `document` asks. A
+				// member must not learn a restricted document exists from a count of
+				// what could not be read, and a sold car's paperwork failing to
+				// extract is not work anybody is going to do.
+				visibleDocumentPredicate(actor),
+				archiveScopePredicate(false)
+			)
+		)
+		.orderBy(desc(job.queuedAt));
+
+	// Attempts accumulate: a document read successfully on the second try still
+	// has its failed row, for ever. Only the newest attempt says whether the
+	// document has text today.
+	const latest = latestJobPerDocument(rows);
+	const failed = new Set(
+		[...latest].filter(([, state]) => state === 'failed').map(([documentId]) => documentId)
 	);
+	if (failed.size === 0) return [];
+
+	// Rows arrive newest first, so the first one belonging to a failed document
+	// IS that document's newest attempt — the message somebody would act on.
+	const message = rows.find((row) => failed.has(row.documentId))?.error ?? null;
+	const [only] = failed;
+
+	return [
+		{
+			icon: 'alert',
+			kind: 'Paper',
+			pill: `${failed.size} failed`,
+			hue: 'yellow',
+			title: countTitle(failed.size, 'document could not be read', 'documents could not be read'),
+			// A reader's message can run to a stack trace and the card has one
+			// line, so it is clipped rather than left to push the card open. Where
+			// the job recorded no message, saying what the failure COSTS is more
+			// use than repeating that it failed.
+			detail:
+				message === null
+					? 'Search by contents will not find them.'
+					: message.length > MAX_ERROR_CHARS
+						? `${message.slice(0, MAX_ERROR_CHARS - 1).trimEnd()}…`
+						: message,
+			href: failed.size === 1 ? `/documents?doc=${only}` : '/documents',
+			rank: 40
+		}
+	];
+};
+
+const overspend: Source = async (_handle, _actor, shared) => {
+	// A category group running well past its twelve-month average this month.
+	// The tally itself lives in `$lib/server/cashflow/spending`, shared with the
+	// Overview panel that draws the same comparison as bars — two spellings of
+	// "what Housing usually costs" are two figures that will disagree, and on
+	// the Overview it is literally the same figure computed twice.
+	const baseCurrency = await getBaseCurrency();
+	const rows = await (shared?.spending?.() ?? expenseSpendingByMonth(baseCurrency));
 
 	const thisMonth = new Date().toISOString().slice(0, 7);
 	const items: BriefingItem[] = [];
@@ -302,7 +429,7 @@ const overspend: Source = async () => {
 			continue;
 		const pct = Number(((spent - average) * 100n + average / 2n) / average);
 		items.push({
-			emoji: '📊',
+			icon: 'bars',
 			kind: 'Spending',
 			pill: `+${pct}%`,
 			hue: 'yellow',
@@ -341,7 +468,7 @@ export const calendarConflicts: Source = async (handle: Queryable = db) => {
 
 	if (wroteBack.length > 0) {
 		items.push({
-			emoji: '📆',
+			icon: 'calendar',
 			kind: 'calendar',
 			pill: wroteBack.length === 1 ? '1 change' : `${wroteBack.length} changes`,
 			// Red, not yellow: this changed ledger data, from outside the ledger.
@@ -358,7 +485,7 @@ export const calendarConflicts: Source = async (handle: Queryable = db) => {
 
 	if (discarded.length > 0) {
 		items.push({
-			emoji: '📆',
+			icon: 'calendar',
 			kind: 'calendar',
 			pill: discarded.length === 1 ? '1 edit' : `${discarded.length} edits`,
 			hue: 'yellow',
@@ -394,7 +521,7 @@ export const calendarSyncFailures: Source = async (handle: Queryable = db) => {
 
 	return [
 		{
-			emoji: '📆',
+			icon: 'calendar',
 			kind: 'calendar',
 			pill: failing.length === 1 ? '1 account' : `${failing.length} accounts`,
 			// A connection that has been broken for over a day has stopped being a
@@ -411,28 +538,58 @@ export const calendarSyncFailures: Source = async (handle: Queryable = db) => {
 	];
 };
 
+// Declaration order, not display order: `rank` decides what a person sees
+// first, and a source moved up this list must not be able to change that.
 const SOURCES: Source[] = [
 	unreviewedImports,
+	inboxBacklog,
 	leaseExpiry,
 	fixationHorizon,
 	documentExpiry,
+	extractionFailures,
 	overspend,
 	calendarConflicts,
 	calendarSyncFailures
 ];
 
+/** Everything the strip could show, ranked, and how it describes itself. */
+export interface Briefing {
+	/** All of them, most urgent first. The panel shows four and offers the rest. */
+	items: BriefingItem[];
+	/** How many there are in all — what the "+N more" button counts against. */
+	total: number;
+	caption: string;
+}
+
 export async function buildBriefing(
-	actor: Actor | null = null
-): Promise<{ items: BriefingItem[]; caption: string }> {
-	const all = (await Promise.all(SOURCES.map((s) => s(undefined, actor)))).flat();
-	all.sort((a, b) => a.rank - b.rank);
-	const items = all.slice(0, 4);
-	const urgent = items.filter((i) => i.hue === 'red').length;
-	const caption =
-		items.length === 0
-			? 'nothing needs you today'
-			: urgent > 0
-				? `${items.length} things, ${urgent} of them urgent`
-				: `${items.length === 1 ? 'one thing' : `${['', 'one', 'two', 'three', 'four'][items.length]} things`}, none of them urgent today`;
-	return { items, caption };
+	actor: Actor | null = null,
+	shared: BriefingShared = {}
+): Promise<Briefing> {
+	// Settled, not all. Nine domains are queried here and any one of them can
+	// fail on its own — a table a migration has not reached, a shelf that is not
+	// there, a rate table that would not load — and under `Promise.all` the
+	// first rejection took the whole strip with it. An Overview that says
+	// "nothing needs you today" because one query threw is worse than one that
+	// is short a card: it is the same screen a household with nothing to do
+	// sees, so nothing about it looks wrong.
+	const settled = await Promise.allSettled(
+		SOURCES.map((source) => source(undefined, actor, shared))
+	);
+	const items: BriefingItem[] = [];
+	settled.forEach((result, index) => {
+		if (result.status === 'fulfilled') {
+			items.push(...result.value);
+			return;
+		}
+		// Logged rather than swallowed. A source that has been throwing for a week
+		// is a defect, and a strip that quietly grew shorter is how it goes
+		// unnoticed for the second week.
+		console.error(`Briefing source ${SOURCES[index].name} failed:`, result.reason);
+	});
+	items.sort((a, b) => a.rank - b.rank);
+	return {
+		items,
+		total: items.length,
+		caption: briefingCaption(items.slice(0, BRIEFING_STRIP_SIZE), items.length)
+	};
 }

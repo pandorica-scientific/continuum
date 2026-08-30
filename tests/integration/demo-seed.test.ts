@@ -37,6 +37,7 @@ import {
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
+import { SUGGESTED_LAYOUT } from '$lib/overview/panels';
 import { seedBanks, seedCategories } from '$lib/server/categorize';
 import { generateEvents } from '$lib/server/calendar';
 import { listSubjects } from '$lib/server/documents/subjects';
@@ -354,6 +355,19 @@ describe('the demo seed', () => {
 		expect([...seedEnvReads].sort()).toEqual(
 			[...seedEnvReads].filter((key) => key === 'UPLOAD_DIR' || key === 'DATABASE_URL').sort()
 		);
+	});
+
+	// A person with no stored layout is treated as somebody who has never been
+	// here, and is shown the picker instead of a board. That is right for a real
+	// install and wrong for the demo: the first screenshot anybody takes would
+	// be of an empty grid asking them to choose.
+	it('hands both demo people a board rather than the first-run picker', async () => {
+		const people = await testDb.select({ layout: person.overviewLayout }).from(person);
+		expect(people).toHaveLength(2);
+		for (const who of people) {
+			expect(who.layout).toHaveLength(4);
+			expect(who.layout).toEqual(SUGGESTED_LAYOUT);
+		}
 	});
 
 	it('does nothing at all on an instance that already has people', async () => {

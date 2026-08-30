@@ -1,10 +1,13 @@
 <script lang="ts">
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import type { Snippet } from 'svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import type { IconName } from '$lib/icons';
 
 	let {
 		title,
-		emoji,
+		icon,
+		href = null,
 		customising = false,
 		dragging = false,
 		widthBadge = null,
@@ -19,7 +22,9 @@
 		children
 	}: {
 		title: string;
-		emoji: string;
+		icon: IconName;
+		/** The screen this panel is a summary of, if it has one. */
+		href?: string | null;
 		customising?: boolean;
 		dragging?: boolean;
 		widthBadge?: string | null;
@@ -37,7 +42,7 @@
 
 <section class="panel" class:customising class:dragging class:narrow>
 	<header>
-		<span class="eyebrow"><span aria-hidden="true">{emoji}</span>{title}</span>
+		<span class="eyebrow"><Icon name={icon} size={14} />{title}</span>
 		{#if customising}
 			<span class="controls">
 				{#if widthBadge}<span class="mono badge">{widthBadge}</span>{/if}
@@ -59,6 +64,18 @@
 					>✕</button
 				>
 			</span>
+		{:else if href}
+			<!--
+				The one way through to the screen behind a panel. Three panels used to
+				put a link of their own at the foot of their body instead, which meant
+				the same destination sat in a different place on every panel that had
+				one, and nowhere at all on the ten that did not.
+
+				It gives way to the customise controls rather than sitting beside them:
+				while the board is being arranged the header belongs to moving and
+				removing, and a link there is one more thing a stray tap can follow.
+			-->
+			<a class="open" {href} aria-label="Open {title}">Open →</a>
 		{/if}
 	</header>
 
@@ -134,6 +151,19 @@
 		align-items: center;
 		gap: var(--space-3);
 		flex: none;
+	}
+	/* Quiet on purpose: it is on every panel, and ten links competing with the
+	   figures they sit above would be the loudest thing on the board. The hover
+	   is the whole affordance, so the global underline is taken off it. */
+	.open {
+		flex: none;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		white-space: nowrap;
+	}
+	.open:hover {
+		color: var(--fg1);
+		text-decoration: none;
 	}
 	.badge {
 		font-size: var(--text-xs);

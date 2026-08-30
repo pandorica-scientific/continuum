@@ -12,7 +12,11 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import { initialsFor } from '$lib/people';
+import { interestForMonth } from '$lib/loans/amortise';
 import { formatMinor } from '$lib/money';
+// The panel registry is a plain data module — no server imports, nothing to
+// pull into the seed but the arrangement itself.
+import { SUGGESTED_LAYOUT } from '$lib/overview/panels';
 import type { EnumValue } from '$lib/enums';
 import {
 	contact,
@@ -22,6 +26,7 @@ import {
 	brokerOperation,
 	currencyRate,
 	loan,
+	loanEvent,
 	loanFixationPeriod,
 	loanProperty,
 	person,
@@ -254,6 +259,11 @@ export async function seedDemo(): Promise<void> {
 	const jana = uuidv7();
 	const petr = uuidv7();
 	const passwordHash = await hashPassword(DEMO_PASSWORD);
+	// A board each, rather than the null that means "has never chosen one". A
+	// real install shows that person the first-run picker, which is right for
+	// somebody arriving at their own data and wrong here: the demo exists to be
+	// looked at, and the first screen anybody sees — or screenshots — would be
+	// an empty grid asking a question instead of the Overview it is showing off.
 	await db.insert(person).values([
 		{
 			id: jana,
@@ -261,7 +271,8 @@ export async function seedDemo(): Promise<void> {
 			initials: initialsFor(JANA),
 			role: 'admin',
 			birthYear: 1990,
-			passwordHash
+			passwordHash,
+			overviewLayout: SUGGESTED_LAYOUT
 		},
 		{
 			id: petr,
@@ -269,7 +280,8 @@ export async function seedDemo(): Promise<void> {
 			initials: initialsFor(PETR),
 			role: 'member',
 			birthYear: 1988,
-			passwordHash
+			passwordHash,
+			overviewLayout: SUGGESTED_LAYOUT
 		}
 	]);
 
@@ -351,11 +363,17 @@ export async function seedDemo(): Promise<void> {
 	};
 	/** The salary credit of each month, for the payslips to be merged with. */
 	const salaryCredits = new Map<string, typeof transaction.$inferInsert>();
+	/**
+	 * The newest mortgage instalment, for the loan payment recorded against it
+	 * further down. Reassigned every month and the loop runs oldest first, so it
+	 * ends holding the current month's debit.
+	 */
+	let mortgageDebit: typeof transaction.$inferInsert | null = null;
 	for (let i = 5; i >= 0; i--) {
 		const m = monthShift(thisMonth, -i);
 		salaryCredits.set(m, add(m, '01', 6200000n, 'salary', DEMO_EMPLOYER));
 		add(m, '02', 1650000n, 'rent-income', 'Nájemce · Karlín');
-		add(m, '05', -5445600n, 'mortgage-main', 'Česká spořitelna · hypotéka');
+		mortgageDebit = add(m, '05', -5445600n, 'mortgage-main', 'Česká spořitelna · hypotéka');
 		add(m, '06', -485000n, 'svj-insurance', 'SVJ Vinohradská');
 		add(m, '08', -312000n, 'groceries', 'Albert');
 		add(m, '15', -288000n, 'groceries', 'Lidl');
@@ -482,6 +500,14 @@ export async function seedDemo(): Promise<void> {
 		}
 	]);
 	const mortgage = uuidv7();
+	// The terms, named rather than written out twice. The payment event below
+	// works this month's interest out from exactly these figures, and a rate or a
+	// balance that agreed with the loan only by coincidence would seed a demo
+	// whose cash-flow chart contradicts its own loan screen.
+	const mortgageOwedMinor = 927000000n;
+	const mortgageRatePct = 4.44;
+	const mortgageDayCount: EnumValue<'loan.day_count'> = 'act/360';
+	const mortgagePaymentDay = 18;
 	await db.insert(loan).values({
 		id: mortgage,
 		name: 'Mortgage ČS',
@@ -489,13 +515,13 @@ export async function seedDemo(): Promise<void> {
 		kind: 'mortgage',
 		currency: 'CZK',
 		principalMinor: 990000000n,
-		owedMinor: 927000000n,
+		owedMinor: mortgageOwedMinor,
 		owedOn: new Date().toISOString().slice(0, 10),
 		startsOn: '2026-02-11',
 		regime: 'fixed_period',
-		dayCount: 'act/360',
+		dayCount: mortgageDayCount,
 		accrualStyle: 'calendar',
-		paymentDay: 18,
+		paymentDay: mortgagePaymentDay,
 		interestDeductible: true
 	});
 	await db.insert(loanProperty).values([
@@ -512,9 +538,34 @@ export async function seedDemo(): Promise<void> {
 		// years out from every angle: nothing to decide, nothing to show, and the
 		// first panel on the Overview read "nothing needs a decision right now".
 		endsOn: monthShift(thisMonth, 24) + '-11',
-		annualRatePct: '4.44',
+		annualRatePct: String(mortgageRatePct),
 		paymentMinor: 5445600n
 	});
+
+	// This month's instalment, recorded as a payment on the loan and linked to the
+	// debit that carried it. Without that link the cash-flow chart has nothing to
+	// divide, and the demo showed a mortgage as one flat cost rather than as
+	// interest gone and principal moved into a flat. The interest is stated the
+	// way a statement states it — worked out on the balance at the seeded rate
+	// under the loan's own convention, not a figure picked to look right.
+	if (mortgageDebit) {
+		await db.insert(loanEvent).values({
+			id: uuidv7(),
+			loanId: mortgage,
+			happenedOn: mortgageDebit.bookedOn,
+			kind: 'payment',
+			// A magnitude, and the seeded rows carry no bank fee to net off.
+			amountMinor: -mortgageDebit.amountMinor,
+			interestMinor: interestForMonth(
+				mortgageOwedMinor,
+				mortgageRatePct,
+				thisMonth,
+				mortgageDayCount,
+				mortgagePaymentDay
+			),
+			transactionId: mortgageDebit.id
+		});
+	}
 
 	const tenancyB = uuidv7();
 	// Close enough that the lease and its renewal notice are live decisions. At

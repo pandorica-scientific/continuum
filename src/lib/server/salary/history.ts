@@ -11,6 +11,80 @@ import { document, documentLink, person, salaryEntry } from '$lib/server/db/sche
 import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { salaryStats, type SalaryYear } from '$lib/salary';
 
+/**
+ * How an amount crosses currencies. Spelled once: three callers here take the
+ * same function, and three copies of a four-argument signature drift.
+ */
+export type ConvertMinor = (amount: bigint, from: string, to: string, day: string) => bigint;
+
+/** What the fold below needs off a `salary_entry` row, and nothing more. */
+export interface SalaryEntryFigures {
+	periodMonth: string;
+	currency: string;
+	grossMinor: bigint | null;
+	netMinor: bigint | null;
+	bonusMinor: bigint | null;
+}
+
+/** One month of a person's pay, converted, with every statement of it added up. */
+export interface SalaryMonthTotal {
+	periodMonth: string;
+	grossMinor: bigint | null;
+	netMinor: bigint | null;
+	bonusMinor: bigint | null;
+}
+
+/**
+ * A person's months, oldest first, with each month's statements ADDED UP.
+ *
+ * A month can hold more than one — two jobs are two payslips — and what a
+ * person earned that month is the sum of them. Taking any single row would
+ * report one employer and silently drop the other, which is the defect that
+ * made this worth having in one place.
+ *
+ * Summed only after each row is converted, because two jobs can pay in two
+ * currencies and there is no adding those together beforehand. Conversion is at
+ * the MONTH's own date, not today's rate: a 2019 payslip restated at this
+ * morning's rate is a different number every morning.
+ *
+ * Pure and exported rather than folded into the loader, because the Overview's
+ * Salary panel wants the same months from the same rows, and two spellings of
+ * "what July earned" are two figures that will disagree.
+ */
+export function monthlyTotals(
+	entries: readonly SalaryEntryFigures[],
+	convert: ConvertMinor,
+	baseCurrency: string
+): SalaryMonthTotal[] {
+	const converted = entries.map((entry) => {
+		const at = `${entry.periodMonth}-01`;
+		const to = (amount: bigint | null) =>
+			amount === null ? null : convert(amount, entry.currency, baseCurrency, at);
+		return {
+			periodMonth: entry.periodMonth,
+			grossMinor: to(entry.grossMinor),
+			netMinor: to(entry.netMinor),
+			bonusMinor: to(entry.bonusMinor)
+		};
+	});
+
+	return [...new Set(converted.map((e) => e.periodMonth))].sort().map((periodMonth) => {
+		const rows = converted.filter((e) => e.periodMonth === periodMonth);
+		// Null is "nobody said", and stays null. Summing it as zero would turn a
+		// month with no net stated into a month that earned nothing net.
+		const total = (pick: (row: (typeof rows)[number]) => bigint | null) => {
+			const stated = rows.map(pick).filter((v) => v !== null);
+			return stated.length === 0 ? null : stated.reduce((a, b) => a + b, 0n);
+		};
+		return {
+			periodMonth,
+			grossMinor: total((r) => r.grossMinor),
+			netMinor: total((r) => r.netMinor),
+			bonusMinor: total((r) => r.bonusMinor)
+		};
+	});
+}
+
 export interface SalaryPersonHistory {
 	id: string;
 	name: string;
@@ -66,7 +140,7 @@ export interface SalaryPersonHistory {
  */
 export async function loadSalaryHistory(
 	baseCurrency: string,
-	convert: (amount: bigint, from: string, to: string, day: string) => bigint,
+	convert: ConvertMinor,
 	actor: Actor | null,
 	handle: Db = db
 ): Promise<SalaryPersonHistory[]> {
@@ -104,48 +178,10 @@ export async function loadSalaryHistory(
 	return people.map((p) => {
 		const recorded = entriesByPerson.get(p.id) ?? [];
 
-		// Converted at the MONTH's own date, not today's rate: a 2019 payslip
-		// restated at this morning's rate is a different number every morning.
-		const converted = recorded.map((entry) => {
-			const at = `${entry.periodMonth}-01`;
-			const to = (amount: bigint | null) =>
-				amount === null ? null : convert(amount, entry.currency, baseCurrency, at);
-			return {
-				id: entry.id,
-				periodMonth: entry.periodMonth,
-				grossMinor: to(entry.grossMinor),
-				netMinor: to(entry.netMinor),
-				bonusMinor: to(entry.bonusMinor),
-				documentId: entry.documentId
-			};
-		});
-
-		/**
-		 * A month's statements ADDED UP, for the year rows above.
-		 *
-		 * A month can now hold more than one — two jobs are two payslips — and
-		 * what a person earned that month is the sum of them. Taking any single
-		 * row would report one employer and silently drop the other, which is the
-		 * defect that made this worth changing.
-		 *
-		 * Summed only after each row is converted, because two jobs can pay in two
-		 * currencies and there is no adding those together beforehand.
-		 */
-		const months = [...new Set(converted.map((e) => e.periodMonth))].sort().map((periodMonth) => {
-			const rows = converted.filter((e) => e.periodMonth === periodMonth);
-			// Null is "nobody said", and stays null. Summing it as zero would turn
-			// a month with no net stated into a month that earned nothing net.
-			const total = (pick: (row: (typeof rows)[number]) => bigint | null) => {
-				const stated = rows.map(pick).filter((v) => v !== null);
-				return stated.length === 0 ? null : stated.reduce((a, b) => a + b, 0n);
-			};
-			return {
-				periodMonth,
-				grossMinor: total((r) => r.grossMinor),
-				netMinor: total((r) => r.netMinor),
-				bonusMinor: total((r) => r.bonusMinor)
-			};
-		});
+		// The one fold, shared with the Overview's Salary panel: the year rows
+		// below and the panel's latest month have to be the same arithmetic or
+		// two screens report two different Julys.
+		const months = monthlyTotals(recorded, convert, baseCurrency);
 
 		// The document is the FILE, and nothing else. Every figure below comes from
 		// the entry: a document that also carried an amount was a second source of
@@ -189,4 +225,55 @@ export async function loadSalaryHistory(
 				.sort((a, b) => (a.periodMonth < b.periodMonth ? 1 : -1))
 		};
 	});
+}
+
+/** A person's newest month on record, and the one before it to compare against. */
+export interface LatestSalary {
+	personId: string;
+	name: string;
+	latest: SalaryMonthTotal;
+	previous: SalaryMonthTotal | null;
+}
+
+/**
+ * The last month each person was paid for, and the month before it.
+ *
+ * What the Overview's Salary panel needs and nothing else: the full history
+ * assembles years, payslip rows and the paper behind each one, which is several
+ * queries and a lot of arithmetic for two months' figures.
+ *
+ * No actor, deliberately. The read rule guards PAPER — whether this reader may
+ * know a payslip document exists — and every figure here comes from
+ * `salary_entry`, which is the household's own record of what was earned. A
+ * person with no entries at all has no row rather than a row of dashes.
+ */
+export async function latestSalaryByPerson(
+	baseCurrency: string,
+	convert: ConvertMinor,
+	handle: Db = db
+): Promise<LatestSalary[]> {
+	const [people, entries] = await Promise.all([
+		handle
+			.select({ id: person.id, name: person.name })
+			.from(person)
+			.orderBy(person.createdAt, person.id),
+		handle.select().from(salaryEntry)
+	]);
+
+	const byPerson = new Map<string, typeof entries>();
+	for (const entry of entries) {
+		const list = byPerson.get(entry.personId) ?? [];
+		list.push(entry);
+		byPerson.set(entry.personId, list);
+	}
+
+	const rows: LatestSalary[] = [];
+	for (const p of people) {
+		// Oldest first, so the last two are the newest month and its predecessor.
+		const months = monthlyTotals(byPerson.get(p.id) ?? [], convert, baseCurrency);
+		const latest = months.at(-1);
+		if (!latest) continue;
+		rows.push({ personId: p.id, name: p.name, latest, previous: months.at(-2) ?? null });
+	}
+	return rows;
 }

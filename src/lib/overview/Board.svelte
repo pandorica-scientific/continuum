@@ -2,7 +2,10 @@
 	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import Icon from '$lib/components/Icon.svelte';
+	import FirstRunPicker from './FirstRunPicker.svelte';
 	import Panel from './Panel.svelte';
+	import PanelChip from './PanelChip.svelte';
 	import PanelContent from './PanelContent.svelte';
 	import {
 		COLUMNS,
@@ -12,22 +15,24 @@
 		visible,
 		type OverviewPlacement
 	} from './layout';
-	import { DEFAULT_LAYOUT, PANELS, panelDefinition } from './panels';
+	import { SUGGESTED_LAYOUT, PANELS, panelDefinition } from './panels';
 
 	let {
 		layout,
 		panels,
-		period,
 		currency,
-		available
+		available,
+		firstRun
 	}: {
 		layout: OverviewPlacement[];
 		// Panel data is keyed by panel key; each component types its own shape.
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		panels: Record<string, any>;
-		period: string;
 		currency: string;
 		available: (key: string) => boolean;
+		/** This person has never stored an arrangement, so the empty board is a
+		 *  question rather than a state they put it in. */
+		firstRun: boolean;
 	} = $props();
 
 	const ROW = 40;
@@ -39,6 +44,15 @@
 	// only the starting point, and re-reading it on every save would fight the
 	// drag in progress.
 	let working = $state<OverviewPlacement[]>(untrack(() => structuredClone(layout)));
+	// Whether the picker is still on screen. Nothing but Done takes it away —
+	// picking a panel is not an answer to "which panels do you want", and a
+	// picker that closed on the first press would put the other seventeen back
+	// behind a Customise button this person has not found yet.
+	//
+	// Untracked for the same reason `working` is: `add` invalidates, which tells
+	// the loader this person now has a stored arrangement, and the picker must
+	// not disappear underneath the panel they just chose.
+	let untouched = $state(untrack(() => firstRun));
 	let customising = $state(false);
 	let narrow = $state(false);
 	let failed = $state(false);
@@ -215,7 +229,8 @@
 	}
 
 	function reset() {
-		save(structuredClone(DEFAULT_LAYOUT)).then(() => invalidateAll());
+		untouched = false;
+		save(structuredClone(SUGGESTED_LAYOUT)).then(() => invalidateAll());
 	}
 </script>
 
@@ -226,7 +241,7 @@
 		{customising ? 'Done' : 'Customise'}
 	</button>
 	{#if customising}
-		<button type="button" onclick={reset}>Reset to default</button>
+		<button type="button" onclick={reset}>Reset to the suggested board</button>
 		{#if narrow}
 			<span class="note">
 				There is one board. Reordering here also changes how it is arranged on a wider screen.
@@ -242,11 +257,29 @@
 	<div class="tray">
 		<span class="tray-label">Add a panel</span>
 		{#each unplaced as panel (panel.key)}
-			<button type="button" onclick={() => add(panel.key)}>
-				<span aria-hidden="true">{panel.emoji}</span>
-				{panel.title}
-			</button>
+			<!-- No description here: the board behind the tray is already showing
+			     what these panels look like. -->
+			<PanelChip icon={panel.icon} title={panel.title} onclick={() => add(panel.key)} />
 		{/each}
+	</div>
+{/if}
+
+<!--
+	Above the board rather than inside its empty branch. In the branch, the first
+	chip somebody pressed filled the board and took the other seventeen off the
+	screen with it — not what "pick as many panels as you like" offers. Here the
+	board fills in underneath while the picker stands, and a panel that has been
+	placed leaves the grid on its own because it leaves `unplaced`. Customising
+	hides it: the tray above is the same offer in the mode built for it.
+-->
+{#if untouched && !customising}
+	<div class="first-run">
+		<FirstRunPicker
+			panels={unplaced}
+			onadd={add}
+			onsuggested={reset}
+			ondone={() => (untouched = false)}
+		/>
 	</div>
 {/if}
 
@@ -273,7 +306,7 @@
 				</div>
 			{:else if off}
 				<div class="reserved">
-					<span class="eyebrow">{panel.emoji} {panel.title}</span>
+					<span class="eyebrow"><Icon name={panel.icon} size={14} />{panel.title}</span>
 					<span class="reserved-note">
 						Its module is switched off. The space is held so the panel comes back where you left it.
 					</span>
@@ -282,7 +315,8 @@
 			{:else}
 				<Panel
 					title={panel.title}
-					emoji={panel.emoji}
+					icon={panel.icon}
+					href={panel.href}
 					{customising}
 					{narrow}
 					dragging={gesture?.key === placement.k && gesture.live}
@@ -297,14 +331,19 @@
 					onpointerdown={(event) => begin('move', placement.k, event)}
 					onresizestart={(event) => begin('resize', placement.k, event)}
 				>
-					<PanelContent panelKey={placement.k} data={panels[placement.k]} {period} {currency} />
+					<PanelContent panelKey={placement.k} data={panels[placement.k]} {currency} />
 				</Panel>
 			{/if}
 		</div>
 	{:else}
-		<p class="empty">
-			Your board is empty. Press Customise to add a panel, or reset to the default arrangement.
-		</p>
+		<!-- Only where the picker is not already asking. This line is for the
+		     other empty board: somebody who took every panel off, who has
+		     answered this question once and is not being asked it again. -->
+		{#if !untouched || customising}
+			<p class="empty">
+				Your board is empty. Press Customise to add a panel, or reset to the suggested board.
+			</p>
+		{/if}
 	{/each}
 </div>
 
@@ -340,6 +379,8 @@
 	.failed {
 		color: var(--yellow);
 	}
+	/* The chips inside are PanelChip's, styling and all: the tray and the
+	   first-run picker offer the same thing and used to draw it twice. */
 	.tray {
 		display: flex;
 		align-items: center;
@@ -356,21 +397,6 @@
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--fg3);
-	}
-	.tray button {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-3);
-		background: var(--card2);
-		border: 1px solid var(--bd);
-		border-radius: 20px;
-		color: var(--fg2);
-		font-size: var(--text-sm);
-		padding: 5px 12px;
-		cursor: pointer;
-	}
-	.tray button:hover {
-		background: var(--card3);
 	}
 	.board {
 		display: grid;
@@ -403,6 +429,9 @@
 		opacity: 0.7;
 	}
 	.eyebrow {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
 		font-size: var(--text-xs);
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
@@ -426,5 +455,9 @@
 		grid-column: 1 / -1;
 		font-size: var(--text-md);
 		color: var(--fg3);
+	}
+	/* Its own block above the board, spaced like the bar and the tray are. */
+	.first-run {
+		margin-bottom: 16px;
 	}
 </style>

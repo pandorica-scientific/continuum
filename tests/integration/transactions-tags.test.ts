@@ -15,6 +15,7 @@ const filter = (overrides: Partial<RegisterFilter> = {}): RegisterFilter => ({
 	to: null,
 	accountId: null,
 	categoryId: null,
+	groupKey: null,
 	direction: 'any',
 	minMinor: null,
 	maxMinor: null,

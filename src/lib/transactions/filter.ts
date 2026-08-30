@@ -19,6 +19,15 @@ export interface RegisterFilter {
 	to: string | null;
 	accountId: string | null;
 	categoryId: string | null;
+	/**
+	 * A category group key — every category filed under it, at once.
+	 *
+	 * A different question from `categoryId` rather than a shorthand for it. The
+	 * waterfall's stages are groups, so "Housing" on the chart means the housing
+	 * categories together, and the two narrow independently: both set asks for
+	 * one category, checked to be inside that group.
+	 */
+	groupKey: string | null;
 	direction: Direction;
 	/** Absolute bounds in minor units of the base currency. */
 	minMinor: bigint | null;
@@ -176,6 +185,7 @@ export function parseFilter(params: URLSearchParams, baseCurrency: string): Regi
 		to: isoDate(params, 'to'),
 		accountId: text(params, 'account'),
 		categoryId: text(params, 'category'),
+		groupKey: text(params, 'group'),
 		direction: direction && DIRECTIONS.includes(direction) ? direction : 'any',
 		minMinor: bound(params, 'min', baseCurrency),
 		maxMinor: bound(params, 'max', baseCurrency),

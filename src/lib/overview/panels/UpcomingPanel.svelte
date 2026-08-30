@@ -22,7 +22,6 @@
 	{:else}
 		<span class="quiet">Nothing on the books for the next month.</span>
 	{/each}
-	<a href="/calendar" class="open-link">Open calendar →</a>
 </div>
 
 <style>
@@ -48,10 +47,6 @@
 	}
 	.up-amount {
 		font-size: var(--text-md);
-	}
-	.open-link {
-		font-size: var(--text-sm);
-		padding-top: 10px;
 	}
 	.quiet {
 		font-size: var(--text-sm);
