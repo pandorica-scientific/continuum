@@ -2,6 +2,63 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.2 — 2026-08-30
+
+> Money put aside was never money spent, and a band that names something leads to what is behind it.
+
+### ✨ Added
+
+- 🧱 **Five more panels, bringing the board to eighteen** — Paper says what is unfiled and what lapses soon, Statements which accounts have gone quiet against their own import rhythm, Salary the last month each person was paid for, Debts what is still owed and when each rate stops being settled, and "Month against its average" the latest complete month's spending beside what the twelve before it usually cost
+- 🎛️ **A new board starts by asking rather than guessing** — the first Overview anybody opens is empty with every panel their modules allow laid out above it, each saying in one line what it draws, and "Use the suggested board" is there for anyone who would rather not decide
+- 🖱️ **Every band that names something opens what is behind it** — an income source, the trunk, a group and a category each lead to the register already narrowed to those transactions and that period, the two halves of a mortgage payment lead to the lines they became, and the residual — the cash kept, or what was drawn from reserves — is arithmetic on the rest and deliberately leads nowhere
+- 💡 **Resting on a block lights everything flowing through it** — the bands touching it come forward while the rest recede, so a flow can be followed across four columns by looking rather than by tracing, and the same lighting comes up on the keyboard because each band that leads to rows is a link
+- 📅 **Twelve months, and a way to walk back through them** — the period control gains a trailing-year window and a single month can be stepped backwards and forwards to the ends of the record, with the window written into the address so the back button and a shared link both mean what they said
+- 📊 **Every figure says what it did against the window before** — the four totals and each group in the breakdown carry a percentage against the same window one step back, offered only where the record actually reaches that far
+- 💳 **A bank debit can be recorded as the loan payment it was** — pick the loan from the transaction row and, where the bank stated it, the interest part; a ✕ on the chip takes it back, and a credit, a transfer between your own accounts, a currency the loan is not in, or a debit already recorded is refused with the reason
+- 🏦 **A mortgage instalment is split into interest and principal** — only the interest is money the household will not see again, so the principal is drawn as saved rather than spent, taken from what the bank stated or worked out from the loan's own schedule and left whole where no rate is on record
+- 📬 **Two more things the briefing knows to raise** — paper sitting unfiled in the Inbox, and documents whose contents could not be read, which is the quietest failure there is because searching inside them simply finds nothing
+- 📋 **The briefing offers everything it found** — the strip still shows four cards, and a button beneath them says how many more there are and opens them, where anything past the fourth used to be dropped before it reached the screen
+
+### 🔧 Changed
+
+- 💰 **Money put aside is counted as saved rather than as cash kept** — the chart carries four totals now, In, Out, Saved and Kept, every savings group is a stage the money passes through like rent or food, and "Kept" is only the cash none of them took
+- 📉 **A month that spent more than it earned says where the money came from** — the shortfall enters on the left as "From reserves" and the trunk reads "Income + reserves", rather than the chart reporting a negative amount of savings
+- 💸 **Taking money back out of savings counts as money coming in** — a savings group a window took more out of than it put into enters on the left in its own colour, because that drawdown is what paid for the spending, rather than being counted again as money saved
+- 🔗 **Every panel with a screen behind it says "Open →" in its header** — three panels used to put a link at the foot of their body and the other ten offered none at all, so the way through sat somewhere different on every panel that had one
+- 🎨 **Panel headings and briefing cards carry an icon rather than an emoji** — both now draw from the one set the rest of the app already uses, and emoji stay on the rows that carry one of their own: accounts, shelves and subjects, each of which a household can change
+- 🗂️ **A briefing card opens the record it is about** — the lease opens its flat, the fixation opens the loan's own card, the document opens beside the list, and the "about" line names every kind of record paper can be filed against instead of only people and flats
+- 📆 **The Overview says which month it is reporting on** — a household that imports July's statement in the second week of August was told it was looking at August, so the caption names the newest month there is data for
+- 🏷️ **"Saved each month" is now "Kept each month"** — its bars were always the cash left over once everything had gone out, saving included, and only the title said otherwise
+- 🔎 **The register can be narrowed to a whole category group** — arriving from a stage of the chart shows a chip saying which group with a ✕ to clear it, and `/api/v1/transactions` takes the same `group` parameter
+- 📡 **The cash-flow API answers for a trailing year and reports the window before** — `period=12m` and `anchor=YYYY-MM` are windows it will now draw, `previous` carries the same totals one window back, and `kept` means the cash left after saving with the amount put aside reported separately as `saved`
+
+### 🐛 Fixed
+
+- 💾 **Savings finally draw as their own band** — the last block on the chart was labelled "Saved & invested" while holding whatever the expense groups had not taken, and the savings categories listed beneath it hung off a node that did not exist, so they were named under the chart and never drawn in it
+- 🧮 **A renamed income group stops being counted as spending** — the overspend warning excluded income and savings by the names they ship with, which stopped being true the moment groups became rows a household can rename, recolour or add to
+- 🧯 **One briefing source failing no longer empties the whole strip** — a single query that threw took every card with it, leaving exactly the screen a household with nothing to do sees, so nothing about it looked wrong
+- 🌍 **A loan's fixation pill names the right month** — the date the fixation ends was read in local time, so anywhere behind UTC the pill printed the month before the one it actually runs to
+- 🖼️ **The cash-flow chart's tooltip lost its drop shadow** — a plate lifted off the page above a diagram on which nothing else is
+- 📅 **A band and the list it opens now count the same month** — the chart has always summed a card payment on the day the money moved and the register filed it under the day the bank booked it, so a payment straddling a month end was in one month's band and missing from the list that band opened
+- 🏦 **A mortgage payment is two lines in the register too** — the chart drew only the interest under Housing and the principal under savings while the list behind either band still held the whole instalment under the category it was filed with, so a band naming 35 000 opened a list adding up to 50 000
+- 🏷️ **Two names at the foot of the cash-flow chart stop landing on top of each other** — a name whose row ran past the bottom edge was pulled back inside on its own with nothing then re-checking the name above it, which the two new bands of a split mortgage payment were enough to make visible
+
+### ⬆️ Upgrading
+
+- 🆕 **Everyone is asked once which panels they want** — a person who has never customised their Overview now meets the picker over an empty board instead of the four panels that used to be chosen for them, and "Use the suggested board" puts those four back in one press
+- 🔢 **A dashboard reading `/api/v1/cashflow` should re-read `in` as well as `kept`** — `kept` used to mean everything the expense groups did not take, savings included, and now means the cash left after saving, while `in` has grown to include money drawn back out of a savings group
+- 📡 **A dashboard reading `/api/v1/transactions` should re-read what a window selects** — `from`, `to` and `month` now pick rows by the day the money moved, the value date where the bank printed one, while each row still reports `bookedAt` and only that
+- 🗂️ **One category appears that nobody added** — "Loan principal" is seeded into Saved & invested on the next start, because the half of a recorded loan payment that is not a cost has to have a name both the chart and the register can file it under
+- ✅ **Nothing that has to be run** — no schema change and no migration in this release, and the one statement below is a performance index a fresh install already creates
+- ⚡ **An existing instance can add the index the register now reads by** — its date bounds are measured on the value date where the bank printed one, which is an expression the booking-date index cannot serve, so a large ledger opens a month faster with this and is correct either way
+
+```sql
+-- CONCURRENTLY so the build does not hold up writes to the ledger; it cannot
+-- run inside a transaction block, so send it on its own.
+create index concurrently if not exists "transaction_effective_on_idx"
+	on "transaction" (coalesce("value_on", "booked_on"));
+```
+
 ## 0.7.1 — 2026-08-29
 
 > The paper was already filed against the record; only the screens had not been told.

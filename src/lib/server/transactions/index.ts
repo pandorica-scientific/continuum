@@ -4,16 +4,19 @@
 // learned rule has to be replayed by `pairAndCategorise`, and ingest already
 // imports categorize — putting it there would close a cycle.
 
-import { and, asc, desc, eq, gte, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	account,
 	category,
 	currencyRate,
+	loanEvent,
 	transaction,
 	transactionSplit,
 	tagLink
 } from '$lib/server/db/schema';
+import { LOAN_PRINCIPAL_CATEGORY } from '$lib/categories';
+import { PAYMENT_KINDS } from '$lib/loans';
 import { learnRule } from '$lib/server/categorize';
 import {
 	lockTransferPairing,
@@ -41,20 +44,99 @@ function searchable(term: string): SQL {
 	) as SQL;
 }
 
+/**
+ * The day a movement happened, which is the day every dated bound is measured
+ * on.
+ *
+ * The value date when the bank prints one, the booking date otherwise. A card
+ * payment started on the 28th and booked on the 2nd moved the money in the
+ * older month, and cash flow has always summed it there — so a register
+ * bounded on the booking date answered a different question from the chart
+ * that links into it, and a band could name rows the list it opened did not
+ * hold.
+ */
+export function effectiveDate(): SQL {
+	return sql`coalesce(${transaction.valueOn}, ${transaction.bookedOn})`;
+}
+
+/**
+ * The oldest payment event claiming a transaction, when the record says how
+ * much of it was interest.
+ *
+ * Empty for everything else, which is what makes it usable as a test as well
+ * as a source: a transaction nobody linked, a claim with no interest on record,
+ * and a record that has deleted the category the principal is filed under all
+ * yield nothing, and the payment stays one line.
+ *
+ * Oldest by `(happened_on, id)` — the same claim `loanSharesFor` and
+ * `loanPaymentByTransaction` keep, because `loan_event.transaction_id` carries
+ * no unique constraint and a debit two events reference must not be split two
+ * different ways depending on which reader asked.
+ */
+function loanSplitClaim(): SQL {
+	const kinds = sql.join(
+		PAYMENT_KINDS.map((kind) => sql`${kind}`),
+		sql`, `
+	);
+	return sql`
+		select claim.amount_minor, claim.interest_minor
+		from (
+			select
+				${loanEvent.amountMinor} as amount_minor,
+				${loanEvent.interestMinor} as interest_minor
+			from ${loanEvent}
+			where ${loanEvent.transactionId} = ${transaction.id}
+			  and ${loanEvent.kind} in (${kinds})
+			order by ${loanEvent.happenedOn}, ${loanEvent.id}
+			limit 1
+		) claim
+		where claim.interest_minor is not null
+		  and claim.amount_minor > 0
+		  and exists (
+			select 1 from ${category} principal_category
+			where principal_category.id = ${LOAN_PRINCIPAL_CATEGORY}
+		)
+	`;
+}
+
 /** One transaction's lines after split resolution and fee allocation. */
 function effectiveLineRelation(): SQL {
 	const fee = sql`coalesce(${transaction.feeMinor}, 0::bigint)`;
+	const net = sql`(${transaction.amountMinor} - ${fee})`;
+	const unsplit = sql`not exists (
+		select 1 from ${transactionSplit} any_split
+		where any_split.transaction_id = ${transaction.id}
+	)`;
+	const claim = loanSplitClaim();
+	// Rule 5 of the split, applied here as well as at record time: interest is
+	// clamped into the payment it was taken from, so a statement that disagrees
+	// with the schedule can never produce a line repaying a negative debt.
+	const stated = sql`greatest(least(claim.interest_minor, claim.amount_minor), 0::bigint)`;
+	// A share of the line rather than the event's own minor units: the two records
+	// can be in different scales — a split receipt, a fee netted off — and taking
+	// the interest as a share is what makes the two halves sum to exactly what the
+	// line was.
+	//
+	// Multiplied BEFORE it is divided, which is the whole of it. Dividing first
+	// makes the share a numeric of about twenty digits, and a payment whose exact
+	// interest lands on a half — 20 000 of a 2 400 000 event against a line of
+	// 2 402 100 is exactly 20 017.5 — then falls a hair short of it and rounds the
+	// other way from `splitPaymentLine`, which does the same arithmetic in exact
+	// bigints for the panel. The panel would sit a minor unit off the footer it
+	// exists to explain. This way both numerators are whole, the single division
+	// is the only rounding, and a tie is a tie to both.
+	const interestLine = sql`round(
+		${net}::numeric * ${stated}::numeric / claim.amount_minor::numeric
+	)::bigint`;
 	return sql`
 		select
-			(${transaction.amountMinor} - ${fee})::bigint as amount_minor,
+			${net}::bigint as amount_minor,
 			${transaction.categoryId}::text as category_id,
-			-- uuid, not text: the two union branches have to agree, and tag_link
+			-- uuid, not text: the union branches have to agree, and tag_link
 			-- .target_id is a uuid since 0053 so the comparison must be legal.
 			null::uuid as split_id
-		where not exists (
-			select 1 from ${transactionSplit} any_split
-			where any_split.transaction_id = ${transaction.id}
-		)
+		where ${unsplit}
+		  and not exists (${claim})
 		union all
 		select
 			(split.amount_minor - case
@@ -65,6 +147,37 @@ function effectiveLineRelation(): SQL {
 			split.id as split_id
 		from ${transactionSplit} split
 		where split.transaction_id = ${transaction.id}
+		union all
+		-- A claimed instalment is two movements wearing one amount. The interest
+		-- stays under the category the debit was filed with; the principal is the
+		-- remainder, filed under the category that names it, so a group total and
+		-- the chart's stage above it are the same arithmetic on the same lines.
+		select
+			(case
+				when half.is_interest then ${interestLine}
+				else ${net}::bigint - ${interestLine}
+			end)::bigint as amount_minor,
+			(case
+				when half.is_interest then ${transaction.categoryId}::text
+				else ${LOAN_PRINCIPAL_CATEGORY}::text
+			end) as category_id,
+			null::uuid as split_id
+		from (${claim}) claim
+		cross join (values (true), (false)) as half(is_interest)
+		-- A half that came to nothing is not a line. An instalment stated as all
+		-- principal, or as all interest, is one movement in one group — and the
+		-- empty half would otherwise put the transaction into the OTHER group's
+		-- list as a row contributing zero to its total.
+		--
+		-- Unless the line itself came to nothing, where both halves are zero and
+		-- dropping both would take the transaction out of the register altogether.
+		-- Nothing in the application writes a claimed movement of zero; imported
+		-- history can hold one, and a row that exists has to be listable.
+		where ${unsplit}
+		  and case
+			when half.is_interest then ${net}::bigint = 0::bigint or ${interestLine} <> 0::bigint
+			else ${net}::bigint <> ${interestLine}
+		  end
 	`;
 }
 
@@ -80,6 +193,21 @@ function selectedEffectiveLines(filter: RegisterFilter): SQL {
 	const clauses: SQL[] = [];
 	if (filter.categoryId === UNCATEGORISED) clauses.push(sql`effective_line.category_id is null`);
 	else if (filter.categoryId) clauses.push(sql`effective_line.category_id = ${filter.categoryId}`);
+
+	// A group is the unit the waterfall is drawn in, so clicking one of its
+	// stages asks for the categories inside it rather than for a category. Left
+	// to the database rather than loading the group's ids first: the membership
+	// is a column, and reading it into Node would let the register and the chart
+	// disagree about what a group holds between two queries.
+	//
+	// In the same `where` as the category clause above, so both narrow the same
+	// effective line — a split with one housing line brings that line into the
+	// total and not the whole transaction.
+	if (filter.groupKey) {
+		clauses.push(sql`effective_line.category_id in (
+			select ${category.id} from ${category} where ${category.groupKey} = ${filter.groupKey}
+		)`);
+	}
 
 	if (filter.tagId) {
 		// The id arrives from a URL parameter as a string, and tag_id is uuid since
@@ -135,7 +263,7 @@ function convertedMagnitude(filter: RegisterFilter, rowFactor?: SQL): SQL {
 	const baseCurrency = filter.baseCurrency.toUpperCase();
 	const baseFactor = (10 ** minorDigits(baseCurrency)).toString();
 	const sourceFactor = rowFactor ?? sql`${baseFactor}::numeric`;
-	const day = sql`coalesce(${transaction.valueOn}, ${transaction.bookedOn})`;
+	const day = effectiveDate();
 	const sourceRate = datedCzkRate(sql`${transaction.currency}`, day);
 	const baseRate = datedCzkRate(sql`${baseCurrency}`, day);
 	const faceValue = sql`round(
@@ -161,8 +289,12 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 	const clauses: SQL[] = [];
 
 	if (filter.search) clauses.push(searchable(filter.search));
-	if (filter.from) clauses.push(gte(transaction.bookedOn, filter.from));
-	if (filter.to) clauses.push(lte(transaction.bookedOn, filter.to));
+	// Measured on the effective date, not the booking date — see `effectiveDate`.
+	// The bounds arrive from the chart, which sums on that day, so a window that
+	// meant one thing on the chart and another here is a band whose own link
+	// disagrees with it.
+	if (filter.from) clauses.push(sql`${effectiveDate()} >= ${filter.from}`);
+	if (filter.to) clauses.push(sql`${effectiveDate()} <= ${filter.to}`);
 	if (filter.accountId) clauses.push(eq(transaction.accountId, filter.accountId));
 
 	if (filter.direction === 'in') clauses.push(sql`${transaction.amountMinor} > 0`);
@@ -181,9 +313,11 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 	// The expanded month. A half-open range rather than to_char, so it reads the
 	// same index the from/to bounds above do — a register that had to compute a
 	// string per row to find one month would scan the whole ledger to open it.
+	// On the effective date, which is also what `registerMonths` groups by, so
+	// the month row and the rows it opens hold the same transactions.
 	if (filter.month) {
-		clauses.push(gte(transaction.bookedOn, `${filter.month}-01`));
-		clauses.push(lt(transaction.bookedOn, monthAfter(filter.month)));
+		clauses.push(sql`${effectiveDate()} >= ${`${filter.month}-01`}`);
+		clauses.push(sql`${effectiveDate()} < ${monthAfter(filter.month)}`);
 	}
 
 	if (filter.reviewState) clauses.push(eq(transaction.reviewState, filter.reviewState));
@@ -206,6 +340,17 @@ function registerWhere(filter: RegisterFilter, rowFactor?: SQL): SQL {
 
 interface RegisterRow {
 	id: string;
+	/**
+	 * The day the money moved, which is the day this row is filed under — see
+	 * `effectiveDate`. What the register shows, sorts on and bounds by.
+	 */
+	effectiveAt: string;
+	/**
+	 * The day the bank booked it, which is the same day unless it printed a
+	 * value date. Carried beside the effective date rather than replaced by it:
+	 * the bank stated both, and a row filed under a day its statement does not
+	 * show would be the register hiding one of them.
+	 */
 	bookedAt: string;
 	amount: bigint;
 	currency: string;
@@ -273,6 +418,7 @@ export async function registerPage(
 		handle
 			.select({
 				id: transaction.id,
+				effectiveOn: sql<string>`${effectiveDate()}`,
 				bookedOn: transaction.bookedOn,
 				amountMinor: transaction.amountMinor,
 				currency: transaction.currency,
@@ -292,7 +438,7 @@ export async function registerPage(
 			.innerJoin(account, eq(transaction.accountId, account.id))
 			.leftJoin(category, eq(transaction.categoryId, category.id))
 			.where(where)
-			.orderBy(desc(transaction.bookedOn), asc(transaction.id))
+			.orderBy(sql`${effectiveDate()} desc`, asc(transaction.id))
 			.limit(filter.pageSize)
 			.offset((filter.page - 1) * filter.pageSize),
 		// Only one aggregate row per currency crosses the wire, regardless of
@@ -318,6 +464,7 @@ export async function registerPage(
 	return {
 		rows: rows.map((r) => ({
 			id: r.id,
+			effectiveAt: r.effectiveOn,
 			bookedAt: r.bookedOn,
 			amount: r.amountMinor,
 			currency: r.currency,
@@ -368,7 +515,10 @@ export async function registerMonths(
 	const scope: RegisterFilter = { ...filter, month: null };
 	const needsScale = scope.minMinor !== null || scope.maxMinor !== null;
 	const rowFactor = needsScale ? await currencyRowFactor(handle) : undefined;
-	const month = sql<string>`to_char(${transaction.bookedOn}, 'YYYY-MM')`;
+	// The month the money moved in, not the month the bank booked it — the same
+	// day `filter.month` narrows on above, so opening a month row lists exactly
+	// the transactions that row counted.
+	const month = sql<string>`to_char(${effectiveDate()}, 'YYYY-MM')`;
 
 	const rows = await handle
 		.select({

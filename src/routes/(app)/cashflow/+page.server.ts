@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { flowData, monthlyHistory, type Period } from '$lib/server/cashflow';
+import { flowData, monthlyHistory } from '$lib/server/cashflow';
+import { parsePeriodParams } from '$lib/cashflow/period';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
-	const period: Period = url.searchParams.get('period') === 'month' ? 'month' : 'ytd';
+	const { period, anchor } = parsePeriodParams(url.searchParams);
 	const [flow, history, baseCurrency] = await Promise.all([
-		flowData(period),
+		flowData(period, { anchor }),
 		monthlyHistory(),
 		getBaseCurrency()
 	]);
@@ -30,13 +31,12 @@ export const load: PageServerLoad = async ({ url }) => {
 			: 0;
 
 	return {
-		period,
 		flow,
 		baseCurrency,
 		metrics: {
 			moneyIn: flow.totals.in,
 			moneyOut: flow.totals.out,
-			saved: flow.totals.kept,
+			saved: flow.totals.saved,
 			biggest: biggest ?? null
 		},
 		history: {

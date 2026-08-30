@@ -21,6 +21,7 @@ import {
 	type DayCount,
 	type FixationPeriod
 } from '$lib/loans/amortise';
+import { fixationPill } from '$lib/loans/pill';
 import { anchorMonthFor, project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { updateLoanTags } from '$lib/server/tags';
@@ -42,23 +43,12 @@ import { securedPropertiesFromForm } from '$lib/loans/form';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
-function monthNow(): string {
-	return new Date().toISOString().slice(0, 7);
+function today(): string {
+	return new Date().toISOString().slice(0, 10);
 }
 
-function fixationPill(regime: string, periods: FixationPeriod[], paidOff: boolean) {
-	if (paidOff) return { label: 'paid off', hue: 'grey' as const };
-	const current = periodForMonth(periods, monthNow());
-	if (regime === 'floating') return { label: 'floating rate', hue: 'yellow' as const };
-	if (regime === 'fixed_term') return { label: 'fixed for the whole term', hue: 'teal' as const };
-	if (current?.endsOn) {
-		const end = new Date(current.endsOn);
-		const label = `fixed to ${end.toLocaleString('en', { month: 'short' })} ${end.getFullYear()}`;
-		const monthsLeft =
-			(end.getFullYear() - new Date().getFullYear()) * 12 + end.getMonth() - new Date().getMonth();
-		return { label, hue: monthsLeft <= 12 ? ('yellow' as const) : ('green' as const) };
-	}
-	return { label: 'no fixation on record', hue: 'grey' as const };
+function monthNow(): string {
+	return today().slice(0, 7);
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -238,7 +228,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			]
 				.filter(Boolean)
 				.join(' · '),
-			pill: fixationPill(l.regime, periods, l.owedMinor <= 0n),
+			pill: fixationPill(l.regime, periods, l.owedMinor <= 0n, today()),
 			facts: [
 				{ label: 'Owed', value: formatMinor(l.owedMinor, l.currency), color: 'var(--red)' },
 				{ label: 'Payment', value: formatMinor(payment, l.currency), color: 'var(--fg1)' },

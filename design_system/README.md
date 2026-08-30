@@ -503,6 +503,12 @@ Import. Present on every screen, above all content at `z-index: 30`.
 
 ### 1. Overview — a panel board the user builds
 
+> **Historical.** This section records the handoff prototype. The board that shipped has
+> grown past it: `src/lib/overview/panels.ts` is the live registry — key, title, icon,
+> the one-line description the picker shows, the screen the header's `Open →` leads to,
+> default and minimum size, and the modules a panel needs — and it is the authority
+> wherever the two disagree.
+
 Caption: *August 2026 · everything reconciled to 31 July*
 
 The Overview is **not a fixed layout**. It is a twelve-column dashboard grid the user
@@ -551,12 +557,12 @@ truncates with an ellipsis. Content taller than the box scrolls inside it. Defau
 are tuned so every panel in the default layout measures exactly its content — verify this
 after any content change; an inner scrollbar on first load is a bug.
 
-**The eight panels**, with default size in columns × rows:
+**The eighteen panels**, with default size in columns × rows:
 
 | Key | Title | Default | Content |
 |---|---|---|---|
-| `briefing` | Needs you | 12 × 6 | The generated attention cards (see *Briefing rules*) |
-| `flow` | Where the money goes | 12 × 19 | The waterfall chart, its In/Out/Kept stats, period toggle and breakdown strip |
+| `briefing` | Needs you | 12 × 4 | The generated attention cards (see *Briefing rules*) |
+| `flow` | Where the money goes | 12 × 19 | The waterfall chart, its In/Out/Saved/Kept totals, the period and month controls, and the breakdown strip |
 | `composition` | What it is made of | 6 × 6 | Net worth decomposed, each row a bar scaled to the largest component |
 | `upcoming` | Next 30 days | 6 × 7 | Dated money events, mono dates left, amounts right coloured by direction |
 | `networth` | Net worth over time | 6 × 5 | Filled sparkline, 2019 → 2026 |
@@ -567,21 +573,35 @@ after any content change; an inner scrollbar on first load is a bug.
 | `retirement` | Retirement outlook | 6 × 5 | Percentage of target covered, with the verdict line |
 | `tax` | Tax position | 6 × 6 | Effective rate per person and country |
 | `activity` | Recent activity | 6 × 7 | The last transactions, linking to the register |
-| `savings` | Saved each month | 6 × 5 | Twelve monthly bars, thin months in `--orange` |
+| `savings` | Kept each month | 6 × 5 | Twelve monthly bars, thin months in `--orange` |
+| `paper` | Paper | 6 × 6 | What is unfiled, what lapses soon, and the shelves the rest is on |
+| `statements` | Statements | 6 × 6 | One line per account: days since its last import, against that account's own rhythm |
+| `salary` | Salary | 6 × 5 | The last month each person was paid for, against the month before it |
+| `debts` | Debts | 6 × 5 | Every loan, what is left on it, and the fixation pill the Loans screen draws |
+| `budget` | Month against its average | 6 × 6 | Two bars a group: the latest complete month over what the twelve before it usually cost |
 
 **Panels are module-gated.** Each carries a list of modules that must all be on for it to
 exist: `upcoming` needs `calendar` (it links to a route that 404s otherwise), `equity`
 needs both `property` and `loans` (equity against a mortgage means nothing unless both
-halves exist), `energy` needs `home`, and the four new ones need their own. An
-unavailable panel is filtered out of both the board and the add tray.
+halves exist), `energy` needs `home`, `paper` needs `documents`, `statements` needs
+`import`, `debts` needs `loans`, and `investments`, `retirement`, `tax` and `salary` each
+need the module of the same name. The other eight — `briefing`, `flow`, `composition`,
+`networth`, `accounts`, `activity`, `savings` and `budget` — are ungated. An unavailable
+panel is filtered out of both the board and the add tray.
 
 **Minimum size is 4 × 3** for every panel, `flow` included — deliberately, since below
 about half width the waterfall's leaf labels get genuinely small. That is recorded as an
 open question, and raising `flow`'s minimum is the lever if it proves unusable.
 
 **Default layout is unchanged on upgrade.** The four-panel default reproduces the
-pre-board Overview exactly, so upgrading changes nobody's screen; the other nine wait in
-the tray. The board is opt-in — it arrives when someone customises, not when they update.
+pre-board Overview exactly, so upgrading changes nobody's screen; the other fourteen wait
+in the tray. The board is opt-in — it arrives when someone customises, not when they update.
+
+**Superseded: nobody is handed a board.** A person with no stored arrangement now gets an
+empty board under a first-run picker — every panel their modules allow, each with a line
+saying what it draws, placed as it is pressed. **Use the suggested board** lays down the
+four-panel arrangement in one press; it and **Done** are the two things that take the
+picker away, and pressing a chip does not.
 
 **A naming trap worth recording:** the panel data must not reuse a key already returned for
 another screen. `cashSplit` was defined twice — once for the Accounts donut legend

@@ -12,7 +12,7 @@ cash, and loans.
 
 ## What it does
 
-- **An Overview you build yourself** — thirteen panels you drag, resize, add and remove;
+- **An Overview you build yourself** — eighteen panels you drag, resize, add and remove;
   the arrangement belongs to your profile, so two people sharing an install do not
   share a dashboard
 - **Statement import** for Fio, Revolut, mBank (cp1250 CSV), Raiffeisenbank and

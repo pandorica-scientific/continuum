@@ -155,7 +155,57 @@ export const ICONS = {
 	// A magnifier whose handle leaves the circle at 45°, so it reads at 16px.
 	search: [{ circle: [11, 11, 6.5] }, { line: [15.8, 15.8, 20, 20] }],
 	arrowUp: [{ line: [12, 20, 12, 4] }, { path: 'M6 10l6-6 6 6' }],
-	arrowDown: [{ line: [12, 4, 12, 20] }, { path: 'M18 14l-6 6-6-6' }]
+	arrowDown: [{ line: [12, 4, 12, 20] }, { path: 'M18 14l-6 6-6-6' }],
+
+	// Overview board and briefing
+	//
+	// These sit at 14px on an uppercase eyebrow, beside the panel's own title,
+	// so each one only has to be tellable from its neighbours on the same board
+	// — it never has to be read on its own.
+	bell: [
+		{ path: 'M6.5 10a5.5 5.5 0 0 1 11 0c0 4.3 1.1 5.7 1.9 6.5H4.6c.8-.8 1.9-2.2 1.9-6.5z' },
+		{ path: 'M10 19.4a2.2 2.2 0 0 0 4 0' }
+	],
+	// Three plates, for what a total is made of.
+	layers: [
+		{ path: 'M12 3.5 21 8l-9 4.5L3 8z' },
+		{ path: 'M3 12l9 4.5L21 12' },
+		{ path: 'M3 16l9 4.5L21 16' }
+	],
+	// Two short discs leaning on each other rather than one tall drum: a single
+	// column of stacked rims is the database glyph, and that is a hard thing to
+	// unsee once someone has noticed it sitting on a savings panel.
+	coins: [
+		{ path: 'M4 7.5a6.5 2.6 0 1 0 13 0a6.5 2.6 0 1 0-13 0' },
+		{ path: 'M4 7.5v2.4a6.5 2.6 0 0 0 13 0V7.5' },
+		{ path: 'M7 14a6.5 2.6 0 1 0 13 0a6.5 2.6 0 1 0-13 0' },
+		{ path: 'M7 14v2.4a6.5 2.6 0 0 0 13 0V14' }
+	],
+	// Bars against a baseline, for one group measured against another. `chart`
+	// is the line that means a course over time; this is a comparison, which is
+	// what the overspend briefing card actually says.
+	bars: [
+		{ line: [3.5, 20.5, 20.5, 20.5] },
+		{ line: [7.5, 20.5, 7.5, 14] },
+		{ line: [12, 20.5, 12, 9] },
+		{ line: [16.5, 20.5, 16.5, 5.5] }
+	],
+	// The rising line WITHOUT `chart`'s axes. Net worth and the portfolio sit on
+	// the same board, so the two cannot both be a line in a frame.
+	trend: [{ path: 'M3 16.5 9 10.5l3.5 3.5L21 5.5' }, { path: 'M15 5.5h6v6' }],
+	key: [
+		{ circle: [7.6, 16.4, 3.9] },
+		{ line: [10.4, 13.6, 20.5, 3.5] },
+		{ line: [17.6, 6.4, 19.6, 8.4] },
+		{ line: [14.8, 9.2, 16.8, 11.2] }
+	],
+	// `info`'s stem and dot inside a triangle rather than a ring. The shape has
+	// to carry the warning by itself: hue is a second channel, not the only one.
+	alert: [
+		{ path: 'M12 4.2 21 19.8H3z' },
+		{ line: [12, 10.5, 12, 15] },
+		{ line: [12, 17.6, 12, 17.8] }
+	]
 } as const satisfies Record<string, readonly IconPrimitive[]>;
 
 export type IconName = keyof typeof ICONS;

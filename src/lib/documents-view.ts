@@ -375,7 +375,18 @@ export interface GroupSummary {
 	nextExpiry: string | null;
 }
 
-export function groupSummary(items: DocRow[], today: string): GroupSummary {
+/**
+ * The four fields the summary actually reads.
+ *
+ * A whole `DocRow` was the parameter until the Overview's Paper panel wanted
+ * the same three numbers over the whole archive: making it select eleven
+ * columns it would never look at, and invent a shelf label per row, only to
+ * satisfy a type is a cost paid for nothing. The rest of the row is the list
+ * screen's business.
+ */
+export type ExpiringRow = Pick<DocRow, 'expiresOn' | 'expiryVerb' | 'addedOn' | 'subjectArchived'>;
+
+export function groupSummary(items: ExpiringRow[], today: string): GroupSummary {
 	let expired = 0;
 	let soon = 0;
 	let nextExpiry: string | null = null;

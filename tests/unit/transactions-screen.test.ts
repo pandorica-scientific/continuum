@@ -17,6 +17,7 @@ const filter = {
 	to: null,
 	accountId: null,
 	categoryId: null,
+	groupKey: null as string | null,
 	direction: 'any' as const,
 	minMinor: '',
 	maxMinor: '',
@@ -69,6 +70,7 @@ const row = {
 	amountMajor: '135 887,00',
 	tags: [],
 	documents: [],
+	loanPayment: null,
 	isSplit: false,
 	splits: []
 };
@@ -95,7 +97,10 @@ const base = {
 	sourceMethods: [],
 	proofLabels: {},
 	accounts: [],
-	categories: [{ key: 'income', label: 'Income', items: [{ id: 'salary', name: 'Income' }] }]
+	loans: [],
+	categories: [{ key: 'income', label: 'Income', items: [{ id: 'salary', name: 'Income' }] }],
+	groupLabel: null as string | null,
+	clearGroupHref: '/transactions'
 };
 
 // The page also receives the layout's own data (theme, modules, version …),
@@ -156,6 +161,18 @@ describe('the register', () => {
 		// a chooser, a Save, a Split and a paperclip apiece is what this replaced.
 		expect(body).not.toContain('Something else');
 		expect(body).not.toContain('Make a rule');
+	});
+
+	// A stage of the waterfall narrows the register by group, and no control in
+	// the filter bar carries a group — so a GET submit would drop it silently.
+	it('carries a group filter through Apply', () => {
+		const body = draw({
+			...base,
+			filter: { ...filter, groupKey: 'housing' },
+			groupLabel: 'Housing',
+			clearGroupHref: '/transactions'
+		});
+		expect(body).toMatch(/<input type="hidden" name="group" value="housing"/);
 	});
 
 	it('says nothing matches rather than drawing an empty table', () => {

@@ -71,7 +71,7 @@ Continuum is for you if you…
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/overview-light-web.png">
     <img src="docs/screenshots/overview-dark-web.png" alt="Overview — a briefing board over the cash-flow chart">
   </picture>
-  <br><b>Overview</b><br><sub>A board each person arranges for themselves</sub>
+  <br><b>Overview</b><br><sub>A board each person builds, from eighteen panels</sub>
 </td>
 <td width="50%" align="center">
   <picture>

@@ -816,6 +816,20 @@ CREATE INDEX contact_search_idx ON contact USING gin (
 	)
 );--> statement-breakpoint
 
+-- ---- The date a movement is read on ----
+
+-- Cash flow, the month steppers and the register all measure a window on the
+-- day the money moved: the value date where the bank printed one, the booking
+-- date otherwise. That is an expression, not a column, so `transaction_booked_on
+-- _idx` above cannot serve a bound on it and a register opening one month would
+-- read the whole ledger to find it.
+--
+-- drizzle-kit models columns, so an index on an expression is carried here by
+-- hand. The booked_on index stays: import replay, deduplication and the
+-- statement-period checks still ask for the day the bank booked.
+CREATE INDEX "transaction_effective_on_idx" ON "transaction"
+	(coalesce("value_on", "booked_on"));--> statement-breakpoint
+
 -- ---- Transfer pair legs ----
 
 -- Active pair legs are claims. Keeping them in a separate relation lets one

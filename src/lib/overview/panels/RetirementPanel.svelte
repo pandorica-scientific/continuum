@@ -10,7 +10,6 @@
 	<Pill hue={data.hue}>{data.pill}</Pill>
 	<span class="headline">{data.headline}</span>
 	<span class="detail">{data.detail}</span>
-	<a href="/retirement" class="open-link">Open the projection →</a>
 </div>
 
 <style>
@@ -29,8 +28,5 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.5;
-	}
-	.open-link {
-		font-size: var(--text-sm);
 	}
 </style>

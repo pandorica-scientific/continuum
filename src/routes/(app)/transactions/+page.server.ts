@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { asOptionalRowId, asRowId } from '$lib/ids';
+import { gt } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
-import { account, tag } from '$lib/server/db/schema';
-import { getBaseCurrency } from '$lib/server/settings';
+import { account, loan, tag } from '$lib/server/db/schema';
+import { getBaseCurrency, getModules } from '$lib/server/settings';
+import { recordLinkedPayment, unlinkLoanPayment } from '$lib/server/loans/mutations';
+import { loanPaymentByTransaction } from '$lib/server/loans/payments';
 import { fileTransaction, registerMonths, registerPage } from '$lib/server/transactions';
 import { deleteSplits, loadSplits, saveSplits } from '$lib/server/splits';
 import {
@@ -44,17 +47,29 @@ function monthLabel(month: string): string {
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const baseCurrency = await getBaseCurrency();
+	// The filter needs the base currency before anything else can run; the module
+	// toggles need nothing, so they come along rather than costing a second wait.
+	const [baseCurrency, modules] = await Promise.all([getBaseCurrency(), getModules()]);
 	const filter = parseFilter(url.searchParams, baseCurrency);
 
-	const [months, categories, accounts, groups] = await Promise.all([
+	const [months, categories, accounts, groups, loans] = await Promise.all([
 		registerMonths(filter),
 		loadCategories(),
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
 			.orderBy(account.createdAt, account.id),
-		loadCategoryGroups()
+		loadCategoryGroups(),
+		// What a row can be recorded against: nothing at all when the module is
+		// off, and only loans with something left to pay — a settled mortgage is
+		// not something a debit this month went towards.
+		modules.loans
+			? db
+					.select({ id: loan.id, name: loan.name, currency: loan.currency })
+					.from(loan)
+					.where(gt(loan.owedMinor, 0n))
+					.orderBy(loan.createdAt, loan.id)
+			: Promise.resolve([])
 	]);
 
 	// Only the expanded month's transactions are read. The register lists a row
@@ -77,13 +92,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// database on an empty id list — so a collapsed register costs one query for
 	// the known tags and nothing else.
 	const rowIds = page?.rows.map((r) => r.id) ?? [];
-	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags, docsByTxn] = await Promise.all([
-		loadSplits(rowIds),
-		loadTagsFor(rowIds),
-		loadSplitTagsFor(rowIds),
-		db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
-		loadTransactionDocuments(rowIds, locals.person ?? null)
-	]);
+	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags, docsByTxn, loanPaymentByTxn] =
+		await Promise.all([
+			loadSplits(rowIds),
+			loadTagsFor(rowIds),
+			loadSplitTagsFor(rowIds),
+			db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
+			loadTransactionDocuments(rowIds, locals.person ?? null),
+			// Not gated on the module: what a row already IS stays true when the
+			// loans screens are hidden, and a chip that disappeared would read as
+			// the record having lost the link rather than as a setting.
+			loanPaymentByTransaction(rowIds)
+		]);
 
 	/** A link that carries every active filter forward. */
 	const href = (mutate: (params: URLSearchParams) => void) => {
@@ -151,6 +171,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			maxMinor: filter.maxMinor === null ? '' : formatMinor(filter.maxMinor, baseCurrency)
 		},
 		openMonth: filter.month,
+		// A stage of the waterfall narrows the register by group, and the filter
+		// bar has no control that carries one — a group is a stage of a chart
+		// rather than a field. So the screen states it as a chip with a way out.
+		// The name comes from the groups themselves rather than from the grouped
+		// category list below, which drops a group holding no categories.
+		groupLabel: filter.groupKey
+			? (groups.find((g) => g.key === filter.groupKey)?.label ?? filter.groupKey)
+			: null,
+		/** Drops the group and keeps every other narrowing in place. */
+		clearGroupHref: href((params) => params.delete('group')),
 		months: months.map((m) => ({
 			month: m.month,
 			label: monthLabel(m.month),
@@ -173,9 +203,29 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			const ruleParams = new URLSearchParams();
 			if (r.counterparty) ruleParams.set('counterparty', r.counterparty);
 			if (r.categoryId) ruleParams.set('category', r.categoryId);
+			// A claimed instalment counts as two lines in the totals above and
+			// below it — its interest under the group it is filed with, its
+			// principal under the savings one — so the row that opens has to be
+			// able to show the same two. Formatted the way a split line is,
+			// because that is what the panel draws them as.
+			const claim = loanPaymentByTxn.get(r.id) ?? null;
+			// `key` is which half it is rather than its label: two halves can be
+			// labelled the same on a record that renamed the principal's category
+			// after the debit it names, and the list that draws them is keyed.
+			const half = (key: 'interest' | 'principal', amountMinor: bigint, label: string) => ({
+				key,
+				label,
+				amount: `${formatMinor(amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
+				negative: amountMinor < 0n
+			});
 			return {
 				id: r.id,
-				date: r.bookedAt,
+				// The day the money moved, which is the day this row is filed and
+				// bounded under. The booking date is carried alongside it only when
+				// the bank printed a different one, so the row can show what it is
+				// filed under without hiding what the statement said.
+				date: r.effectiveAt,
+				bookedDate: r.bookedAt === r.effectiveAt ? null : r.bookedAt,
 				merchant: r.counterparty ?? r.description ?? '—',
 				detail: r.counterparty && r.description ? r.description : null,
 				amount: `${formatMinor(r.amount, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
@@ -203,6 +253,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				amountMajor: formatMinor(r.amount < 0n ? -r.amount : r.amount, r.currency),
 				tags: tagsByTxn.get(r.id) ?? [],
 				documents: docsByTxn.get(r.id) ?? [],
+				// The loan this row has already been recorded against, which is both
+				// what the chip says and what stops it being recorded twice — and
+				// the two lines it counts as, where the record can divide it.
+				loanPayment: claim && {
+					loanId: claim.loanId,
+					loanName: claim.loanName,
+					halves: claim.halves && [
+						half('interest', claim.halves.interestMinor, r.categoryLabel ?? 'Uncategorised'),
+						half('principal', claim.halves.principalMinor, claim.halves.principalLabel)
+					]
+				},
 				isSplit: splits.length > 0,
 				splits: splits.map((s) => ({
 					id: s.id,
@@ -252,6 +313,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		})),
 		proofLabels: PROOF_LABELS,
 		accounts,
+		loans,
 		categories: groups
 			.map((group) => ({
 				key: group.key,
@@ -449,6 +511,37 @@ export const actions: Actions = {
 	unsplit: async ({ request }) => {
 		const form = await request.formData();
 		const result = await deleteSplits(asRowId(form.get('id')));
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Record this row as an instalment paid towards a loan.
+	 *
+	 * Parsing only: which loan, which row, and whatever the statement said the
+	 * interest was. Everything that decides whether the two may be linked — a
+	 * debit, not a transfer, not already claimed — belongs to the mutation, which
+	 * holds the loan row while it decides.
+	 */
+	loanPayment: async ({ request }) => {
+		const form = await request.formData();
+		const result = await recordLinkedPayment({
+			loanId: asRowId(form.get('loanId')),
+			transactionId: asRowId(form.get('transactionId')),
+			interest: String(form.get('interest') ?? '')
+		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Take the recording back, so a row filed against the wrong loan can be
+	 * refiled. Nothing else in the app deletes a loan event, and the duplicate
+	 * guard above means without this there is no second chance at all.
+	 */
+	unlinkLoanPayment: async ({ request }) => {
+		const form = await request.formData();
+		const result = await unlinkLoanPayment(asRowId(form.get('transactionId')));
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},

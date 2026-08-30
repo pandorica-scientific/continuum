@@ -38,8 +38,9 @@ export const person = pgTable('person', {
 	deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
 	// Each person arranges their own Overview board. Plumbing attached to the
 	// profile, never a Settings entry and never in the config export. Null means
-	// "never customised" and renders DEFAULT_LAYOUT; an empty array is a person
-	// who removed every panel, which is a different and equally valid state.
+	// "never chosen" and shows the first-run picker on an empty board; an empty
+	// array is a person who removed every panel, which is a different and
+	// equally valid state, and reads as an empty board with no picker on it.
 	// validateSession selects explicit columns, so this never rides the hot path.
 	overviewLayout: jsonb('overview_layout').$type<OverviewPlacement[]>(),
 	// How this person last left the Tax screen: chart mode, display currency and

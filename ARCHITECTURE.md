@@ -25,13 +25,13 @@ approximation, never a future rate or a silent one-to-one conversion.
 | Bank statement formats | `ParsedStatement` via `detectAndParseAll` (`src/lib/server/import/detect.ts`), every reading gated by `proveStatement`/`decideImport` (`import/proof.ts`) | delimited text, XLSX, PDF (page geometry and page rhythm), page images via OCR; CAMT.053, MT940, ABO/GPC, OFX/QFX read directly; Fio, Revolut, mBank, RB and ČS have fast-path adapters that nothing depends on | a new **bank** needs no code — the generic reader works the layout out and the proof gate decides whether to trust it. A new **format** is a parser in `import/standards/` plus a rule in `import/format.ts` |
 | Broker reports         | `src/lib/server/invest/xtb.ts` parse → idempotent ingest                                                                                                  | XTB XLSX                                                                                                                                                                                                        | sibling parser + ingest wiring                                                                                                                                                                               |
 | Smart-home platforms   | `HomeProvider` (`src/lib/server/home/provider.ts`): probe / snapshot / setDevice / energyHistory                                                          | Home Assistant (REST + WebSocket), Demo                                                                                                                                                                         | `registerHomeProvider(id, label, factory)` — settings UI and the Home screen pick it up automatically                                                                                                        |
-| Briefing strip         | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing/`)                                                                                      | unreviewed imports, lease expiry, fixation horizon, document expiry, overspend                                                                                                                                  | append to `SOURCES`                                                                                                                                                                                          |
+| Briefing strip         | `Source: () => Promise<BriefingItem[]>` (`src/lib/server/briefing/`)                                                                                      | nine, gathered with `Promise.allSettled`: unreviewed imports, Inbox backlog, lease expiry, fixation horizon, document expiry, extraction failures, overspend, calendar conflicts, calendar sync failures        | append to `SOURCES`                                                                                                                                                                                          |
 | Ledger calendar events | rule generators in `src/lib/server/calendar/`, individually switchable                                                                                    | import reminder, loan payments, property dates, quarterly report, expiry                                                                                                                                        | new block in `generateEvents` + `CALENDAR_RULES` entry                                                                                                                                                       |
 | Categorisation rules   | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                                                     | counterparty/description contains, counter-account, variable symbol, amount range                                                                                                                               | new variant in `Condition` + a branch in `conditionHolds()`                                                                                                                                                  |
 | Read-only API          | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                                                         | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`                                                                                                                                    | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls                                                                                                                |
 | FX rates               | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                                                            | CNB                                                                                                                                                                                                             | replace `refreshRates`; the rate table and conversion API stay                                                                                                                                               |
 | Modules / screens      | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes                                      | 9 modules across 7 areas                                                                                                                                                                                        | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                                                                                                                     |
-| Overview panels        | registry in `src/lib/overview/panels.ts` (key, default and minimum size, required modules)                                                                | 13 panels                                                                                                                                                                                                       | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview/`                                                                                                     |
+| Overview panels        | registry in `src/lib/overview/panels.ts` (key, title, icon, one-line description, `href`, default and minimum size, required modules)                     | 18 panels                                                                                                                                                                                                       | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview/`                                                                                                     |
 | Calendar providers     | `CalendarProvider` (`src/lib/server/calendar/sync/provider.ts`): probe / listCalendars / pull / push                                                      | iCloud (CalDAV), Google Calendar                                                                                                                                                                                | `registerCalendarProvider(id, label, factory, fields, hint, oauth)` — the Settings panel renders itself from `fields`                                                                                        |
 
 ## Correctness anchors
@@ -111,6 +111,17 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   equivalent database-side effective-line relation so they do not materialise
   the whole ledger. Splitting nulls the parent category, making an omitted split
   branch fail visibly as "unfiled" instead of silently using a stale category.
+  A recorded loan payment nobody split by hand is two lines of that same
+  relation — the interest under the transaction's own category, the principal
+  under `loan-principal` — divided once at record time and read from
+  `loan_event.interest_minor` by both the chart and the register, so a band and
+  the list it opens cannot be two answers to one question.
+- **The effective date**: a window is measured on the day the money moved, which
+  is the value date where the bank printed one and the booking date otherwise.
+  Cash flow, the month steppers and the register's `from`/`to`/`month` bounds,
+  its ordering and its month rows all read that one expression, and it carries
+  an expression index of its own; the plain booking-date index stays because
+  import replay and deduplication still ask what the bank booked.
 - **Rule confidence**: a rule's standing is the Wilson lower bound on its
   accepted/corrected record — conservative at low counts, never certain. A
   learned rule starts from a prior that clears the auto-file threshold and
@@ -180,11 +191,21 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   optimistic version and a per-page-writer revision. The first prevents a stale
   browser tab overwriting another tab; the second orders an ordinary request
   against its page-exit keepalive and makes exact retries idempotent.
-- **Entity links**: a document always belongs to records — people, flats,
-  brokerage accounts, or `subject` rows (household, car, …) — through typed
-  join tables. There is no free-text subject anywhere, so a rename follows
-  every document and a typo cannot mint a phantom column; catch-all subjects
-  are case-insensitively unique.
+- **Entity links**: every record that can be tagged, filed a document against
+  or linked to a contact carries a row in the `entity` supertype, and the three
+  link tables (`document_link`, `tag_link`, `contact_link`) point at that rather
+  than at a table per pair. Registration is a BEFORE INSERT trigger on each of
+  the twelve registered tables, and each concrete table carries a generated
+  `entity_kind` column plus a composite foreign key into `(id, kind)`, which is
+  what makes a mismatched kind unrepresentable rather than merely discouraged —
+  none of which Drizzle models, so `drizzle-kit push` would build a database
+  without it. `DOCUMENT_TARGET_KINDS` (`src/lib/server/documents/targets.ts`) is
+  the one list of the nine kinds a document may be filed against — person,
+  property, tenancy, account, loan, contact, subject, transaction, tax statement
+  — and every picker, filter and "what is filed here" query reads it instead of
+  repeating four of them. There is no free-text subject anywhere, so a rename
+  follows every document and a typo cannot mint a phantom column; catch-all
+  subjects are case-insensitively unique.
 - **Calendar identity**: every event has a stable key on both sides. Authored
   events keep a UUID; generated events derive one from what produced them
   (`gen:{rule}:{table}:{row}:{field}:{month}`), because they have no row and are

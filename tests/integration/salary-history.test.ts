@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { rowId } from '../row-id';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { loadSalaryHistory } from '$lib/server/salary';
+import { latestSalaryByPerson, loadSalaryHistory } from '$lib/server/salary';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
@@ -125,5 +125,67 @@ describe('loadSalaryHistory', () => {
 		// Two months of base at the same rate, the award taken back out.
 		expect(year.baseTotalMinor).toBe(gross * 2n);
 		expect(year.netTotalMinor).toBeLessThan(year.grossTotalMinor);
+	});
+});
+
+describe('latestSalaryByPerson', () => {
+	// What the Overview's Salary panel reports: the newest month, and the month
+	// before it to compare against. Both come off the same fold the year rows
+	// use, so the panel and the Salary screen cannot disagree about what July
+	// earned — and a month evidenced by two employers is added up in both.
+	it('gives the newest month with both jobs in it, and the month before', async () => {
+		const jobA = rowId('document-slip-jul-a');
+		const jobB = rowId('document-slip-jul-b');
+		const financeShelf = await shelfIdByKey('finance', testDb);
+		await testDb.insert(document).values(
+			[jobA, jobB].map((id) => ({
+				id,
+				name: `Payslip 2026-07 · ${id}`,
+				shelfId: financeShelf,
+				type: 'payslip' as const,
+				ext: 'PDF',
+				addedOn: '2026-08-01',
+				periodOn: '2026-07-01'
+			}))
+		);
+		await testDb.insert(salaryEntry).values([
+			{
+				id: rowId('entry-latest-jun'),
+				personId: ROBERT,
+				periodMonth: '2026-06',
+				netMinor: 6800000n,
+				currency: 'CZK',
+				source: 'statement'
+			},
+			{
+				id: rowId('entry-latest-jul-a'),
+				personId: ROBERT,
+				periodMonth: '2026-07',
+				grossMinor: 6000000n,
+				netMinor: 4260000n,
+				currency: 'CZK',
+				source: 'payslip',
+				documentId: jobA
+			},
+			{
+				id: rowId('entry-latest-jul-b'),
+				personId: ROBERT,
+				periodMonth: '2026-07',
+				grossMinor: 4000000n,
+				netMinor: 2840000n,
+				currency: 'CZK',
+				source: 'payslip',
+				documentId: jobB
+			}
+		]);
+
+		const [robert] = await latestSalaryByPerson('CZK', same, testDb);
+		expect(robert.name).toBe('Robert');
+		expect(robert.latest).toMatchObject({
+			periodMonth: '2026-07',
+			grossMinor: 10000000n,
+			netMinor: 7100000n
+		});
+		expect(robert.previous).toMatchObject({ periodMonth: '2026-06', netMinor: 6800000n });
 	});
 });

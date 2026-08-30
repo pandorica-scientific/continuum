@@ -28,6 +28,15 @@ interface SankeyNodeInput {
 	 * already in the breakdown strip under the diagram.
 	 */
 	showValue?: boolean;
+	/**
+	 * Where this block leads, or null when it leads nowhere.
+	 *
+	 * The engine never reads it — where a band goes is a question about meaning,
+	 * not about geometry — but it travels through to the shaped node, so the
+	 * renderer can wrap a block in a link without holding the graph as well as
+	 * the layout.
+	 */
+	href?: string | null;
 }
 
 interface SankeyLink {
@@ -46,16 +55,25 @@ interface SankeyBox {
 	height: number;
 }
 
-interface SankeyNode extends SankeyNodeInput {
+export interface SankeyNode extends SankeyNodeInput {
 	x: number;
 	y: number;
 	w: number;
 	h: number;
 }
 
-interface SankeyRibbon {
+export interface SankeyRibbon {
 	from: string;
 	to: string;
+	/**
+	 * The link's own figure, carried through.
+	 *
+	 * Thickness cannot be read back into an amount — it is the value times a
+	 * scale nothing outside this file sees — and a band's tooltip has to state
+	 * what flowed along it. Carrying it here spares the renderer holding the
+	 * graph as well as the layout to look the same number up twice.
+	 */
+	value: number;
 	/** Left edge: the far side of the source column's label channel. */
 	x0: number;
 	y0: number;
@@ -194,7 +212,8 @@ function labelWidth(
 /**
  * Resolve vertical collisions in one column: walk the sorted positions, and
  * where consecutive entries sit closer than `minGap`, centre that colliding
- * block on its members' mean preferred position, then clamp into range.
+ * block on its members' mean preferred position, then settle the whole column
+ * into the range the box allows.
  *
  * Pool-adjacent-violators, not sweep-until-stable. A block's position is the
  * mean of its members' *preferred* positions, so recomputing block membership
@@ -202,8 +221,8 @@ function labelWidth(
  * swap forever and never settle. Merging only ever reduces the block count, so
  * this terminates in at most one merge per entry.
  *
- * Carried over intact from the waterfall engine it replaces; it is the piece
- * that took the most iterations to get right.
+ * Carried over from the waterfall engine it replaces; it is the piece that took
+ * the most iterations to get right. Only the settle at the end is new.
  */
 function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: number): number[] {
 	const order = preferred.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
@@ -226,14 +245,59 @@ function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: nu
 		}
 	}
 
-	const out = new Array<number>(preferred.length);
+	// Flatten the blocks into the column top to bottom. The blocks are in y order
+	// and so are the members within each one, so this is already the order both
+	// settling walks below read in.
+	const items: number[] = [];
+	const tops: number[] = [];
 	for (const block of blocks) {
-		let top = block.sum / block.count - ((block.count - 1) * minGap) / 2;
-		top = Math.max(minY, Math.min(maxY - (block.count - 1) * minGap, top));
+		const top = block.sum / block.count - ((block.count - 1) * minGap) / 2;
 		block.items.forEach((item, k) => {
-			out[item] = top + k * minGap;
+			items.push(item);
+			tops.push(top + k * minGap);
 		});
 	}
+	const out = new Array<number>(preferred.length);
+
+	// A column with more names than the box has rows for cannot honour both ends
+	// at once, so it is stacked from the top and allowed to run off the bottom.
+	// That is the honest outcome: what falls off the bottom is the smallest bands'
+	// names, which `room` and `fits` above have already stopped drawing, whereas
+	// pushing the overflow off the TOP would lose names the column did have room
+	// for. The count is of gaps rather than of names — `maxY` is where the LAST
+	// name may start, so n names need n − 1 gaps below `minY` to fit.
+	if ((items.length - 1) * minGap > maxY - minY) {
+		items.forEach((item, k) => {
+			out[item] = minY + k * minGap;
+		});
+		return out;
+	}
+
+	// Settle the column into the box with two ordered walks, rather than clamping
+	// each block on its own — which is what this replaces, and what drew one name
+	// on top of another. Clamping a block by itself put that block inside the box
+	// and did nothing else: a block whose natural place ran past `maxY` was pulled
+	// up to fit, and the block above it never heard about it. It had cleared the
+	// merge check against where the lower block used to be, not against where the
+	// clamp had just put it, so two blocks that did not collide before the clamp
+	// collided after it. The crowded foot of a column, where the thin bands are,
+	// is exactly where they sit close enough for that.
+	//
+	// The forward walk pushes each position down until it clears the one above;
+	// the backward walk pushes each up until it clears the one below. The second
+	// cannot undo the first, because it measures every position against a
+	// neighbour it has already settled. Both are single walks that never revisit
+	// an entry, so both terminate — the objection to sweep-until-stable above is
+	// about recomputing block membership and does not reach them.
+	for (let i = 0; i < tops.length; i++) {
+		tops[i] = Math.max(tops[i], i === 0 ? minY : tops[i - 1] + minGap);
+	}
+	for (let i = tops.length - 1; i >= 0; i--) {
+		tops[i] = Math.min(tops[i], i === tops.length - 1 ? maxY : tops[i + 1] - minGap);
+	}
+	items.forEach((item, i) => {
+		out[item] = tops[i];
+	});
 	return out;
 }
 
@@ -550,6 +614,7 @@ export function buildSankey(
 		layout.ribbons.push({
 			from: link.from,
 			to: link.to,
+			value: link.value,
 			x0,
 			y0,
 			x1,
