@@ -147,6 +147,14 @@ services:
       POSTGRES_USER: continuum
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-continuum}
       POSTGRES_DB: continuum
+      # Pinned, not defaulted. The official image changed its own default at 18
+      # — from /var/lib/postgresql/data to /var/lib/postgresql/18/docker — and a
+      # volume still mounted at the old path would then hold nothing while the
+      # database wrote to the container's writable layer. Nothing fails, nothing
+      # logs, and the data is gone the next time the container is replaced.
+      # Naming it here means the image's default can move again without moving
+      # where this household's data lives.
+      PGDATA: /var/lib/postgresql/data
     volumes:
       - continuum-db:/var/lib/postgresql/data
     healthcheck:

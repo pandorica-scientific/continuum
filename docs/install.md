@@ -289,6 +289,7 @@ docker run -d --name continuum-db --network continuum --restart unless-stopped \
   -e POSTGRES_USER=continuum \
   -e POSTGRES_PASSWORD=change-me \
   -e POSTGRES_DB=continuum \
+  -e PGDATA=/var/lib/postgresql/data \
   -v continuum-db:/var/lib/postgresql/data \
   postgres:18.6-alpine
 

@@ -14,6 +14,7 @@
 ### ⬆️ Upgrading
 
 - ⚠️ **A database major version is not something `docker compose pull` can change** — Postgres refuses to start on a data directory written by 17, so an existing instance either keeps `image: postgres:17-alpine` in its own copy of the file or moves its data across deliberately; [docs/install.md](docs/install.md#upgrading) has both routes
+- 📁 **`PGDATA` is now named in the file rather than left to the image** — the official Postgres image moved its own default at 18, from `/var/lib/postgresql/data` to `/var/lib/postgresql/18/docker`, and a volume still mounted at the old path would have held nothing while the database wrote to the container's writable layer, losing everything the next time the container was replaced without failing or logging anything; anyone running the database by hand should add `-e PGDATA=/var/lib/postgresql/data` to match
 - 🔒 **An existing instance should fix its four new system shelves** — a fresh install gets them from the seed, and the statement below is the same change for a database that already has the rows
 
 ```sql
