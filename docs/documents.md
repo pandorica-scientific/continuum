@@ -43,10 +43,11 @@ the payment it evidenced. Removing a link is now something you do to a chip.
 ### Shelves are yours
 
 Ten come with a fresh install — Inbox, Identity, Family, Health, Property,
-Tenancy, Vehicles, Finance, Household, Statements — and every one of them can
-be renamed, re-ordered, given a different emoji, or removed. Press the pencil
-beside **SHELVES** in the rail: rows become draggable, a click on a name renames
-it, `⋯` removes it, and `+ New shelf` adds one.
+Tenancy, Vehicles, Finance, Household, Statements — and every one of them can be
+renamed, re-ordered and given a different emoji. Eight of the ten cannot be
+removed; see below. Press the pencil beside **SHELVES** in the rail: rows become
+draggable, a click on a name renames it, `⋯` removes the ones that can go, and
+`+ New shelf` adds one.
 
 Shelves are one level deep and always will be. Volume is answered by filtering
 and grouping, not by nesting folders.
@@ -56,11 +57,24 @@ documents go and does both in one transaction; the database refuses the delete
 otherwise, so there is no path — through the screen or otherwise — that leaves
 a document unfiled.
 
-**Inbox**, **Statements**, **Finance**, and **Property** are system shelves.
-You can rename them (_K vyřízení_ is a fine name for the inbox) and change
-their emoji, but they cannot be deleted: capture files into Inbox, an accepted
-bank import files into Statements, payslips and tax attachments file into
-Finance, and bills file into Property.
+**Eight of the ten seeded shelves are system shelves.** You can rename them
+(_K vyřízení_ is a fine name for the inbox), re-order them and change their
+emoji, but they cannot be deleted. They carry the badge in the rail.
+
+Four because the application writes to them by name: capture files into
+**Inbox**, an accepted bank import files into **Statements**, payslips and tax
+attachments file into **Finance**, and bills file into **Property**. Deleting
+one would break the next upload.
+
+Four because they are the paper every household has: **Identity**,
+**Family**, **Health** and **Household**. Nothing files into these
+automatically, so removing one would break nothing that runs — they are fixed
+because a passport, a birth certificate, a test result and a boiler warranty
+should be findable in the same place on every instance, including one somebody
+else set up.
+
+**Tenancy** and **Vehicles** are seeded like the rest and can be removed: not
+every household rents, and not every household drives.
 
 ### Types
 

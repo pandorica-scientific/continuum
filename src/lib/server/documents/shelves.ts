@@ -140,11 +140,23 @@ export async function documentsOnShelf(id: string, handle: Queryable = db): Prom
  * makes that "always" rather than "in the UI" — a delete that skipped the move
  * is refused by the database, not by a screen.
  *
- * A system shelf is refused outright: `inbox`, `statements`, `finance`, and
- * `property` are all referred to by key from code — capture files into inbox,
- * an accepted import files into statements, the salary tracker files
- * payslips and tax attachments into finance, and billing files bills into
- * property — so deleting any of the four would break the next upload.
+ * A system shelf is refused outright. Eight of the ten seeded shelves carry the
+ * flag, for two different reasons:
+ *
+ * `inbox`, `statements`, `finance` and `property` are referred to by key from
+ * code — capture files into inbox, an accepted import files into statements,
+ * the salary tracker files payslips and tax attachments into finance, and
+ * billing files bills into property — so deleting one breaks the next upload.
+ *
+ * `identity`, `family`, `health` and `household` are not referred to by key by
+ * anything, and deleting one would break nothing that runs. They are fixed for
+ * the other reason a thing is fixed: they are the product's answer to where a
+ * passport, a birth certificate, a test result or a boiler warranty goes, and
+ * an answer a household can delete is not an answer. The guard reads the
+ * column, so it does not care which of the two reasons put the flag there.
+ *
+ * `tenancy` and `vehicles` are seeded and deletable — not every household
+ * rents, not every household drives.
  */
 export async function reassignAndDelete(
 	id: string,

@@ -5,7 +5,7 @@ Umbrel and Unraid packaging are planned.
 
 ## Before you start
 
-Continuum is two containers — the app and a PostgreSQL 17 database — and about
+Continuum is two containers — the app and a PostgreSQL 18 database — and about
 **300 MB** of memory between them, measured on a running instance: 191 MB for
 the app, 69 MB for Postgres, from a 393 MB image.
 
@@ -181,6 +181,20 @@ docker compose pull
 docker compose up -d
 ```
 
+**`compose.yaml` now pins `postgres:18.6-alpine`, and a database major version
+is not something a pull can change.** Postgres refuses to start on a data
+directory written by an older major — `database files are incompatible with
+server` — so an instance created while this file said `17-alpine` needs its data
+carried across deliberately rather than pulled over. Two ways through it:
+
+- **Stay on 17 for now.** Put `image: postgres:17-alpine` back on the `db`
+  service in your own copy of `compose.yaml`. Nothing in the application asks
+  for 18; the pin moved so that what is served matches what is tested.
+- **Move the data.** Dump, start 18.6 on a new volume, restore — the sequence is
+  in [Without Compose](#without-compose) below, with `docker compose exec db` in
+  place of `docker exec continuum-db`. Keep the old volume until the new one has
+  served for a few days.
+
 Release-specific data repairs and any manual considerations are listed at the
 top of [CHANGELOG.md](../CHANGELOG.md).
 
@@ -248,7 +262,7 @@ All optional, all in `.env` next to `compose.yaml`.
 
 Each release publishes its version tag and moves `latest` onto it, for
 `linux/amd64` and `linux/arm64`. `compose.yaml` uses `kerth92/continuum:latest`;
-edit that one `image:` line to pin a version (`kerth92/continuum:0.7.2`) or to
+edit that one `image:` line to pin a version (`kerth92/continuum:0.7.3`) or to
 pull from the mirror instead.
 
 To check what is actually running:
@@ -257,7 +271,7 @@ To check what is actually running:
 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' kerth92/continuum:latest
 ```
 
-The image needs three things: a PostgreSQL 17 database, `/data` for uploaded
+The image needs three things: a PostgreSQL 18 database, `/data` for uploaded
 files and `/backups` for backups. `compose.yaml` wires all three, which is why it
 is the shortest way in — but nothing stops you wiring them yourself.
 
@@ -276,7 +290,7 @@ docker run -d --name continuum-db --network continuum --restart unless-stopped \
   -e POSTGRES_PASSWORD=change-me \
   -e POSTGRES_DB=continuum \
   -v continuum-db:/var/lib/postgresql/data \
-  postgres:17-alpine
+  postgres:18.6-alpine
 
 docker run -d --name continuum --network continuum --restart unless-stopped \
   -p 80:3000 \
@@ -304,6 +318,32 @@ docker pull kerth92/continuum:latest
 docker rm -f continuum
 # then re-run the app container above
 ```
+
+The database container is not part of that. Postgres will not read a data
+directory written by an older major version, so pulling a new `postgres:` tag
+onto an existing volume gives a server that refuses to start —
+`database files are incompatible with server` — rather than an upgrade. An
+instance created before these instructions said `18.6-alpine` is on 17 and
+should stay there until you dump and restore deliberately:
+
+```sh
+docker stop continuum                       # stop the only writer first
+docker exec continuum-db pg_dumpall -U continuum --roles-only > globals.sql
+docker exec continuum-db pg_dump -U continuum -d continuum -Fc > continuum.dump
+docker stop continuum-db && docker rename continuum-db continuum-db-old
+# re-run the database container above on a NEW volume name, then:
+docker exec -i continuum-db psql -U continuum -d postgres < globals.sql
+docker exec -i continuum-db pg_restore -U continuum -d continuum \
+  --no-owner --clean --if-exists < continuum.dump
+docker exec continuum-db psql -U continuum -d continuum -c 'analyze;'
+docker start continuum
+```
+
+Keep the old container and its volume until the new one has served for a few
+days; nothing was written to it after the first line, so renaming it back is a
+complete rollback. `analyze` is not optional — a restore carries no planner
+statistics, and without it the first month you open is slower than the version
+you left.
 
 ### Tailscale without Compose
 

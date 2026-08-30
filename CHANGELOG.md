@@ -2,6 +2,25 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.3 — 2026-08-30
+
+> Where a passport goes should not be a decision each household makes twice.
+
+### 🔧 Changed
+
+- 🗄️ **Eight of the ten shelves a fresh install ships cannot be deleted** — Identity, Family, Health and Household join Inbox, Statements, Finance and Property, not because anything files into them by name but because a documents product whose answer to "where does the passport go" can be removed has no answer, while Tenancy and Vehicles stay removable since not every household rents or drives
+- 🐘 **`compose.yaml` pins PostgreSQL 18.6 rather than 17** — what is served now matches what the test suite has been exercising, and the pin is exact so a database major never changes underneath an instance that only meant to pull an app release
+
+### ⬆️ Upgrading
+
+- ⚠️ **A database major version is not something `docker compose pull` can change** — Postgres refuses to start on a data directory written by 17, so an existing instance either keeps `image: postgres:17-alpine` in its own copy of the file or moves its data across deliberately; [docs/install.md](docs/install.md#upgrading) has both routes
+- 🔒 **An existing instance should fix its four new system shelves** — a fresh install gets them from the seed, and the statement below is the same change for a database that already has the rows
+
+```sql
+update shelf set system = true
+where key in ('identity', 'family', 'health', 'household');
+```
+
 ## 0.7.2 — 2026-08-30
 
 > Money put aside was never money spent, and a band that names something leads to what is behind it.

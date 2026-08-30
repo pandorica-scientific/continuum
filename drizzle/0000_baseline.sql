@@ -1286,20 +1286,35 @@ ALTER TABLE document_text_chunk ADD CONSTRAINT document_text_chunk_source_check
 ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);--> statement-breakpoint
 
--- The ten shelves a fresh install starts with. Households edit these freely;
--- `inbox`, `statements`, `finance`, and `property` are the four the
--- application refers to by key — payslips and tax attachments file to
--- finance, bills file to property, so a deleted one would break the next
--- upload just as surely as a deleted inbox would.
+-- The ten shelves a fresh install starts with. Households rename, re-order and
+-- re-emoji these freely; eight of the ten cannot be removed, for two different
+-- reasons that both end at the same flag.
+--
+-- Four are keys the application writes to: capture files into `inbox`, an
+-- accepted import files into `statements`, payslips and tax attachments file
+-- into `finance`, bills file into `property`. Deleting one of those breaks the
+-- next upload.
+--
+-- Four are the paper every household has whether or not it has said so:
+-- `identity`, `family`, `health` and `household`. Nothing files into them by
+-- key, so deleting one breaks nothing today — but a documents product whose
+-- shipped answer to "where does a passport go" can be removed has no shipped
+-- answer, and the household that removes it is left re-inventing the same four
+-- shelves under different names. They are fixed so that the place a document
+-- belongs is the same place on every instance.
+--
+-- `tenancy` and `vehicles` stay removable, and are the reason the flag is a
+-- column rather than a list of every seeded key: not every household rents,
+-- and not every household drives.
 INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
 	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
-	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, false),
-	(gen_random_uuid(), 'family',     'Family',     '👶', 20, false),
-	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, false),
+	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, true),
+	(gen_random_uuid(), 'family',     'Family',     '👶', 20, true),
+	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, true),
 	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, true),
 	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
 	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
 	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, true),
-	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, false),
+	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, true),
 	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
 ON CONFLICT (key) DO NOTHING;

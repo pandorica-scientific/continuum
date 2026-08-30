@@ -92,9 +92,22 @@ describe('reassign-and-delete', () => {
 		await expect(reassignAndDelete(finance, household, testDb)).rejects.toThrow(/system/i);
 		expect(await shelfExists(finance)).toBe(true);
 
-		// tenancy is not referred to by key from any writer, so it stays
-		// deletable — the contrast that proves the guard reads the `system`
-		// flag rather than refusing every seeded shelf.
+		// identity, family, health and household carry the flag for the other
+		// reason: nothing writes to them by key, so deleting one would break
+		// nothing that runs, and they are fixed anyway so that a passport, a
+		// birth certificate, a test result and a boiler warranty are findable in
+		// the same place on every instance. Asserted here because that is
+		// exactly the kind of rule a later refactor "simplifies" back out by
+		// deriving the flag from who writes to it.
+		for (const key of ['identity', 'family', 'health', 'household']) {
+			const id = await shelfIdByKey(key, testDb);
+			await expect(reassignAndDelete(id, inbox, testDb)).rejects.toThrow(/system/i);
+			expect(await shelfExists(id)).toBe(true);
+		}
+
+		// tenancy is seeded and removable — not every household rents. The
+		// contrast that proves the guard reads the `system` flag rather than
+		// refusing every seeded shelf.
 		const tenancy = await shelfIdByKey('tenancy', testDb);
 		await reassignAndDelete(tenancy, household, testDb);
 		expect(await shelfExists(tenancy)).toBe(false);

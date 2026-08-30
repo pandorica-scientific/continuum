@@ -151,7 +151,7 @@ describe('the baseline migration', () => {
 		expect(names).toContain('document_name_trgm_idx');
 	});
 
-	it('seeds ten shelves, four of them system', async () => {
+	it('seeds ten shelves, eight of them system', async () => {
 		const rows = await harness.sql<{ key: string; system: boolean }[]>`
 			select key, system from shelf order by sort_order`;
 		expect(rows.map((r) => r.key)).toEqual([
@@ -166,12 +166,23 @@ describe('the baseline migration', () => {
 			'household',
 			'statements'
 		]);
-		// finance and property joined inbox/statements under D4: payslips, tax
-		// attachments, and bills file to them by key, same as capture and import.
+		// Eight of the ten, for two reasons the flag deliberately does not
+		// distinguish. Four are written to by key — capture files into inbox,
+		// import into statements, payslips and tax attachments into finance,
+		// bills into property. Four are the paper every household has, fixed so
+		// that a passport or a test result is in the same place on every
+		// instance: identity, family, health, household.
+		//
+		// tenancy and vehicles are the two that stay removable, and the reason
+		// this assertion is a list rather than "every seeded shelf".
 		expect(rows.filter((r) => r.system).map((r) => r.key)).toEqual([
 			'inbox',
+			'identity',
+			'family',
+			'health',
 			'property',
 			'finance',
+			'household',
 			'statements'
 		]);
 	});
