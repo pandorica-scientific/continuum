@@ -3,9 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
-import { document, documentLink, loan } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { document, documentLink } from '$lib/server/db/schema';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { asAdmin, asMember, makeDocument, makeLoan, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -30,18 +31,6 @@ let previousUrl: string | undefined;
 const LOAN = rowId('ld-loan');
 const OTHER_LOAN = rowId('ld-other-loan');
 
-/** A session as a route loader sees it, wide enough for either role. */
-interface Locals {
-	person: { id: string; name: string; initials: string; role: 'admin' | 'member'; theme: null };
-}
-
-const asAdmin: Locals = {
-	person: { id: rowId('ld-admin'), name: 'Admin', initials: 'A', role: 'admin', theme: null }
-};
-const asMember: Locals = {
-	person: { id: rowId('ld-member'), name: 'Member', initials: 'M', role: 'member', theme: null }
-};
-
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
 	harness = await startPostgres('loan-documents', { max: 1 });
@@ -58,15 +47,18 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate document, loan cascade`;
-	await testDb.insert(loan).values([
-		{
-			id: LOAN,
-			name: 'Mortgage · Karlín',
-			principalMinor: 5_000_000_00n,
-			owedMinor: 4_000_000_00n
-		},
-		{ id: OTHER_LOAN, name: 'Car loan', principalMinor: 300_000_00n, owedMinor: 100_000_00n }
-	]);
+	await makeLoan(testDb, {
+		id: LOAN,
+		name: 'Mortgage · Karlín',
+		principalMinor: 5_000_000_00n,
+		owedMinor: 4_000_000_00n
+	});
+	await makeLoan(testDb, {
+		id: OTHER_LOAN,
+		name: 'Car loan',
+		principalMinor: 300_000_00n,
+		owedMinor: 100_000_00n
+	});
 });
 
 async function seedDocument(options: {
@@ -75,10 +67,10 @@ async function seedDocument(options: {
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'other',
 		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
@@ -88,7 +80,7 @@ async function seedDocument(options: {
 	return id;
 }
 
-async function loadLoans(locals: Locals) {
+async function loadLoans(locals: SessionLocals) {
 	const { load } = await import('../../src/routes/(app)/loans/+page.server');
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return (await (load as any)({
@@ -108,7 +100,7 @@ async function loadLoans(locals: Locals) {
 async function postAction(
 	action: 'attachDocument' | 'detachDocument',
 	fields: Record<string, string>,
-	locals: Locals
+	locals: SessionLocals
 ) {
 	const { actions } = await import('../../src/routes/(app)/loans/+page.server');
 	const form = new FormData();

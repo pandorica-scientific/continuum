@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeProperty } from './fixtures';
 import { createLoan, updateLoan, type CreateLoanInput } from '$lib/server/loans/mutations';
 
 /**
@@ -88,10 +89,20 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate loan, property cascade`;
-	await testDb.insert(schema.property).values([
-		{ id: FLAT_A, name: 'Flat A', kind: 'rented', currency: 'CZK', valueMinor: 800_000_000n },
-		{ id: FLAT_B, name: 'Flat B', kind: 'lived', currency: 'CZK', valueMinor: 600_000_000n }
-	]);
+	await makeProperty(testDb, {
+		id: FLAT_A,
+		name: 'Flat A',
+		kind: 'rented',
+		currency: 'CZK',
+		valueMinor: 800_000_000n
+	});
+	await makeProperty(testDb, {
+		id: FLAT_B,
+		name: 'Flat B',
+		kind: 'lived',
+		currency: 'CZK',
+		valueMinor: 600_000_000n
+	});
 });
 
 describe('updateLoan', () => {

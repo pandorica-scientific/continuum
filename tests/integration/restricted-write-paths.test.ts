@@ -16,10 +16,11 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { document, documentLink, person, taxStatement } from '$lib/server/db/schema';
+import { document, documentLink, taxStatement } from '$lib/server/db/schema';
 import { shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
 import { NO_SUCH_DOCUMENT } from '$lib/server/documents/visibility';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -69,7 +70,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate document, person, tax_statement cascade`;
-	await testDb.insert(person).values({ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
 });
 
 async function seedDocument(
@@ -77,7 +78,7 @@ async function seedDocument(
 	sensitivity: 'normal' | 'restricted',
 	shelfKey = 'finance'
 ): Promise<void> {
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: sensitivity === 'restricted' ? 'Divorce papers' : 'Electricity bill',
 		shelfId: await shelfIdByKey(shelfKey, testDb),
@@ -258,7 +259,7 @@ describe('the selection bar', () => {
 
 describe('the inbox review flow', () => {
 	it('refuses a member filing a restricted document out of the inbox', async () => {
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id: RESTRICTED,
 			name: 'Divorce papers',
 			shelfId: await systemShelfId('inbox', testDb),

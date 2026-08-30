@@ -2,18 +2,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
-import {
-	account,
-	document,
-	documentLink,
-	entity,
-	loan,
-	person,
-	subject,
-	transaction
-} from '$lib/server/db/schema';
+import { documentLink, entity, subject } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeDocument, makeLoan, makePerson, makeTransaction } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -57,17 +49,15 @@ beforeAll(async () => {
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
 
-	await testDb
-		.insert(person)
-		.values({ id: RECORD.person, name: 'Robert', initials: 'R', role: 'admin' });
-	await testDb.insert(account).values({
+	await makePerson(testDb, { id: RECORD.person, name: 'Robert', initials: 'R', role: 'admin' });
+	await makeAccount(testDb, {
 		id: RECORD.account,
 		name: 'Fio current',
 		bank: 'fio',
 		kind: 'current',
 		currency: 'CZK'
 	});
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id: RECORD.transaction,
 		accountId: RECORD.account,
 		bookedOn: '2026-03-04',
@@ -76,7 +66,7 @@ beforeAll(async () => {
 		counterparty: 'Alza',
 		dedupFingerprint: 'documents-load-alza'
 	});
-	await testDb.insert(loan).values({
+	await makeLoan(testDb, {
 		id: RECORD.loan,
 		name: 'Vinohrady mortgage',
 		currency: 'CZK',
@@ -102,7 +92,7 @@ async function seedShelf(key: string, counts: { normal: number; restricted: numb
 		['restricted', counts.restricted]
 	] as const) {
 		for (let i = 0; i < n; i++) {
-			await testDb.insert(document).values({
+			await makeDocument(testDb, {
 				id: uuidv7(),
 				name: `${sensitivity} ${i}`,
 				shelfId,
@@ -176,10 +166,10 @@ describe('the documents load', () => {
  */
 async function fileAgainst(name: string, targetIds: readonly string[]): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		addedOn: '2026-01-01'
 	});

@@ -9,11 +9,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { documentLink, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 import { learnPayslipCurrency, loadSalaryHistory, recordSalary } from '$lib/server/salary';
 import { getSetting } from '$lib/server/settings';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -35,9 +35,7 @@ beforeEach(async () => {
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from document`;
 	await harness.sql`delete from person`;
-	await testDb
-		.insert(person)
-		.values([{ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' }]);
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
 });
 
 async function monthOf(periodMonth: string) {
@@ -133,10 +131,10 @@ describe('which currency a slip row is read in', () => {
 	};
 
 	async function czechSlip(month: string, id: string) {
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id,
 			name: `Payslip ${month} · Robert`,
-			shelfId: await shelfIdByKey('finance', testDb),
+			shelfKey: 'finance',
 			type: 'payslip',
 			storedName: `${month}.pdf`,
 			ext: 'PDF',

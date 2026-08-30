@@ -3,19 +3,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
 import {
-	account,
-	document,
 	documentLink,
-	loan,
-	person,
-	property,
 	salaryEntry,
 	tagLink,
 	taxStatement,
-	transaction,
 	transactionSplit
 } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { buildBriefing } from '$lib/server/briefing';
 import { buildIcs, generateEvents } from '$lib/server/calendar';
 import { loadSalaryHistory } from '$lib/server/salary';
@@ -24,6 +18,14 @@ import { loadTransactionDocuments } from '$lib/server/transactions/documents';
 import { upsertTag } from '$lib/server/tags';
 import { loadTagsScreen } from '$lib/server/tags/screen';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import {
+	makeAccount,
+	makeDocument,
+	makeLoan,
+	makePerson,
+	makeProperty,
+	makeTransaction
+} from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -81,10 +83,10 @@ async function seedDocument(options: {
 	storedName?: string;
 }) {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: options.type ?? 'other',
 		sensitivity: options.sensitivity,
 		storedName: options.storedName ?? null,
@@ -179,9 +181,13 @@ function localsFor(actor: { id: string; role: 'admin' | 'member' }) {
 }
 
 async function seedPerson() {
-	await testDb
-		.insert(person)
-		.values({ id: PERSON, name: 'Robert', initials: 'R', role: 'admin', birthYear: 1990 });
+	await makePerson(testDb, {
+		id: PERSON,
+		name: 'Robert',
+		initials: 'R',
+		role: 'admin',
+		birthYear: 1990
+	});
 }
 
 describe('salary history', () => {
@@ -340,9 +346,7 @@ describe('the tax document picker', () => {
 
 describe('the property page', () => {
 	async function seedFlatDocument(sensitivity: 'normal' | 'restricted') {
-		await testDb
-			.insert(property)
-			.values({ id: PROPERTY, name: 'Flat', kind: 'lived', currency: 'CZK' });
+		await makeProperty(testDb, { id: PROPERTY, name: 'Flat', kind: 'lived', currency: 'CZK' });
 		const documentId = await seedDocument({
 			name: 'Divorce settlement',
 			sensitivity,
@@ -389,9 +393,7 @@ describe('the property page', () => {
 	// "Renovation" on one screen and "renovation" on the other would have made
 	// two tags out of one project.
 	it('offers the tag field every known tag, the way the Loans screen does', async () => {
-		await testDb
-			.insert(property)
-			.values({ id: PROPERTY, name: 'Flat', kind: 'lived', currency: 'CZK' });
+		await makeProperty(testDb, { id: PROPERTY, name: 'Flat', kind: 'lived', currency: 'CZK' });
 		await upsertTag('Renovation', testDb);
 		const { knownTags } = await loadProperty(asMember);
 		expect(knownTags.map((t) => t.name)).toContain('Renovation');
@@ -403,7 +405,7 @@ describe('the investments page', () => {
 	// brokerage account when there is exactly one, and read back through the
 	// same `documentsAbout` predicate every other card in the app uses.
 	async function seedReport(sensitivity: 'normal' | 'restricted') {
-		await testDb.insert(account).values({
+		await makeAccount(testDb, {
 			id: BROKERAGE_ACCOUNT,
 			name: 'XTB',
 			bank: 'other',
@@ -452,10 +454,14 @@ describe('the investments page', () => {
 
 describe('transaction receipts', () => {
 	async function seedReceipt(sensitivity: 'normal' | 'restricted') {
-		await testDb
-			.insert(account)
-			.values({ id: ACCOUNT, name: 'Current', bank: 'fio', kind: 'current', currency: 'CZK' });
-		await testDb.insert(transaction).values({
+		await makeAccount(testDb, {
+			id: ACCOUNT,
+			name: 'Current',
+			bank: 'fio',
+			kind: 'current',
+			currency: 'CZK'
+		});
+		await makeTransaction(testDb, {
 			id: TXN,
 			accountId: ACCOUNT,
 			bookedOn: '2026-07-20',
@@ -542,7 +548,7 @@ describe('the tags view', () => {
 	it('lists a tagged loan alongside documents and properties', async () => {
 		const { id: tagId } = await upsertTag('mortgage-project', testDb);
 		const loanId = uuidv7();
-		await testDb.insert(loan).values({
+		await makeLoan(testDb, {
 			id: loanId,
 			name: 'Family mortgage',
 			principalMinor: 5_000_000n,
@@ -563,13 +569,13 @@ describe('the tags view', () => {
 		const { id: tagId } = await upsertTag('big-project', testDb);
 		const documentId = await seedDocument({ name: 'Plans', sensitivity: 'normal' });
 		const propertyId = uuidv7();
-		await testDb.insert(property).values({
+		await makeProperty(testDb, {
 			id: propertyId,
 			name: 'Vinohrady flat',
 			kind: 'lived'
 		});
 		const loanId = uuidv7();
-		await testDb.insert(loan).values({
+		await makeLoan(testDb, {
 			id: loanId,
 			name: 'Renovation loan',
 			principalMinor: 100_000n,
@@ -595,7 +601,7 @@ describe('the tags view', () => {
 	it('shows a tag applied only to a transaction split as a line count, not an empty row', async () => {
 		const { id: tagId } = await upsertTag('split-only', testDb);
 		const accountId = uuidv7();
-		await testDb.insert(account).values({
+		await makeAccount(testDb, {
 			id: accountId,
 			name: 'Current',
 			bank: 'fio',
@@ -603,7 +609,7 @@ describe('the tags view', () => {
 			currency: 'CZK'
 		});
 		const txnId = uuidv7();
-		await testDb.insert(transaction).values({
+		await makeTransaction(testDb, {
 			id: txnId,
 			accountId,
 			bookedOn: '2026-04-02',
@@ -638,7 +644,7 @@ describe('the tags view', () => {
 	it('counts a tag applied only to a whole transaction as an unlisted carrier, not a vanished one', async () => {
 		const { id: tagId } = await upsertTag('whole-txn', testDb);
 		const accountId = uuidv7();
-		await testDb.insert(account).values({
+		await makeAccount(testDb, {
 			id: accountId,
 			name: 'Current',
 			bank: 'fio',
@@ -646,7 +652,7 @@ describe('the tags view', () => {
 			currency: 'CZK'
 		});
 		const txnId = uuidv7();
-		await testDb.insert(transaction).values({
+		await makeTransaction(testDb, {
 			id: txnId,
 			accountId,
 			bookedOn: '2026-04-02',
@@ -677,7 +683,7 @@ describe('the tags view', () => {
 		const { id: tagId } = await upsertTag('mixed-carriers', testDb);
 		const documentId = await seedDocument({ name: 'Plans', sensitivity: 'normal' });
 		const accountId = uuidv7();
-		await testDb.insert(account).values({
+		await makeAccount(testDb, {
 			id: accountId,
 			name: 'Current',
 			bank: 'fio',
@@ -685,32 +691,30 @@ describe('the tags view', () => {
 			currency: 'CZK'
 		});
 		const [txn1, txn2, splitParent] = [uuidv7(), uuidv7(), uuidv7()];
-		await testDb.insert(transaction).values([
-			{
-				id: txn1,
-				accountId,
-				bookedOn: '2026-04-02',
-				amountMinor: -1000n,
-				currency: 'CZK',
-				dedupFingerprint: 'mixed-txn-1'
-			},
-			{
-				id: txn2,
-				accountId,
-				bookedOn: '2026-04-03',
-				amountMinor: -2000n,
-				currency: 'CZK',
-				dedupFingerprint: 'mixed-txn-2'
-			},
-			{
-				id: splitParent,
-				accountId,
-				bookedOn: '2026-04-04',
-				amountMinor: -500n,
-				currency: 'CZK',
-				dedupFingerprint: 'mixed-split-parent'
-			}
-		]);
+		await makeTransaction(testDb, {
+			id: txn1,
+			accountId,
+			bookedOn: '2026-04-02',
+			amountMinor: -1000n,
+			currency: 'CZK',
+			dedupFingerprint: 'mixed-txn-1'
+		});
+		await makeTransaction(testDb, {
+			id: txn2,
+			accountId,
+			bookedOn: '2026-04-03',
+			amountMinor: -2000n,
+			currency: 'CZK',
+			dedupFingerprint: 'mixed-txn-2'
+		});
+		await makeTransaction(testDb, {
+			id: splitParent,
+			accountId,
+			bookedOn: '2026-04-04',
+			amountMinor: -500n,
+			currency: 'CZK',
+			dedupFingerprint: 'mixed-split-parent'
+		});
 		const splitId = uuidv7();
 		await testDb.insert(transactionSplit).values({
 			id: splitId,

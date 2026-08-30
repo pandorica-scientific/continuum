@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import { document, documentLink, job, loan, property, tenancy } from '$lib/server/db/schema';
+import { documentLink, job, tenancy } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { buildBriefing, type BriefingItem } from '$lib/server/briefing';
 import type { Actor } from '$lib/server/documents/visibility';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makeLoan, makeProperty } from './fixtures';
 
 /**
  * The two document sources on the Overview, and the line that names what a
@@ -58,7 +59,7 @@ async function seedDocument(options: {
 	expiresOn?: string;
 }): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
 		shelfId: await shelfIdByKey(options.shelfKey, testDb),
@@ -177,7 +178,7 @@ describe('a document’s about line', () => {
 	// Tenancy." and stopped — the registry knows all nine.
 	it('names a tenancy and a loan', async () => {
 		const propertyId = uuidv7();
-		await testDb.insert(property).values({ id: propertyId, name: 'Flat Karlín', kind: 'rented' });
+		await makeProperty(testDb, { id: propertyId, name: 'Flat Karlín', kind: 'rented' });
 		const tenancyId = uuidv7();
 		await testDb.insert(tenancy).values({
 			id: tenancyId,
@@ -186,7 +187,7 @@ describe('a document’s about line', () => {
 			startsOn: '2025-06-01'
 		});
 		const loanId = uuidv7();
-		await testDb.insert(loan).values({
+		await makeLoan(testDb, {
 			id: loanId,
 			name: 'Mortgage ČS',
 			// Floating and so never a fixation reminder of its own, which keeps

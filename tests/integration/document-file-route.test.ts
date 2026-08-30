@@ -3,10 +3,11 @@ import { mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import { document } from '$lib/server/db/schema';
+
 import { saveUploadBytes } from '$lib/server/system/files';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
 // module, which is before this suite picks the directory its uploads live in.
@@ -68,10 +69,10 @@ async function seedDocumentWithFile(options: { sensitivity: 'normal' | 'restrict
 		'paper.pdf'
 	);
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: 'Paper',
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		sensitivity: options.sensitivity,
 		storedName,

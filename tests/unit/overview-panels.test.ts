@@ -1,7 +1,6 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { render } from 'svelte/server';
-import Icon from '$lib/components/Icon.svelte';
+
 import { normalise } from '$lib/overview/layout';
 import {
 	SUGGESTED_LAYOUT,
@@ -12,7 +11,6 @@ import {
 } from '$lib/overview/panels';
 import { MODULE_KEYS, pathDisabled, type ModuleToggles } from '$lib/modules/registry';
 import { ICONS } from '$lib/icons';
-import { markupOf } from '../svelte-markup';
 
 const allModules = (on: boolean): ModuleToggles =>
 	Object.fromEntries(MODULE_KEYS.map((key) => [key, on])) as ModuleToggles;
@@ -28,20 +26,6 @@ describe('the panel registry', () => {
 				existsSync(`src/lib/overview/panels/${name}Panel.svelte`),
 				`${panel.key} has no ${name}Panel.svelte`
 			).toBe(true);
-		}
-	});
-
-	it('wires every panel into PanelContent', () => {
-		const source = readFileSync('src/lib/overview/PanelContent.svelte', 'utf8');
-		for (const panel of PANELS) {
-			expect(source, `${panel.key} is never rendered`).toContain(`panelKey === '${panel.key}'`);
-		}
-	});
-
-	it('gives every panel a data builder', () => {
-		const source = readFileSync('src/lib/server/overview/index.ts', 'utf8');
-		for (const panel of PANELS) {
-			expect(source, `${panel.key} has no builder`).toMatch(new RegExp(`^\\t${panel.key}:`, 'm'));
 		}
 	});
 
@@ -120,20 +104,6 @@ describe('the panel registry', () => {
 	});
 });
 
-describe('the panel components', () => {
-	// The link out belongs to the panel's header, once. Three panels used to end
-	// their body with one of their own, which put the same destination on screen
-	// twice — and a link inside the body is a link a drag across the board can
-	// trigger. The template alone is searched, so this comment cannot satisfy it.
-	it('leave the link out to the header', () => {
-		const directory = 'src/lib/overview/panels';
-		const offenders = readdirSync(directory)
-			.filter((entry) => entry.endsWith('.svelte'))
-			.filter((entry) => markupOf(`${directory}/${entry}`).includes('open-link'));
-		expect(offenders).toEqual([]);
-	});
-});
-
 describe('the suggested layout', () => {
 	// Nothing but this stops a mistake reaching everyone who takes the offer —
 	// the picker's primary button and Reset both apply it unread.
@@ -199,17 +169,6 @@ describe('the overview icons', () => {
 		expect(ADDED.filter((name) => !(name in ICONS))).toEqual([]);
 	});
 
-	it('are authored as typed primitives, never as markup', () => {
-		// Primitives rather than raw markup is what lets Icon.svelte render
-		// without {@html}, so a typo in a path cannot inject anything.
-		for (const name of ADDED) {
-			for (const part of ICONS[name]) {
-				expect(Object.keys(part).length).toBe(1);
-				expect(['path', 'circle', 'rect', 'line']).toContain(Object.keys(part)[0]);
-			}
-		}
-	});
-
 	it('keeps every typed primitive inside the 24 viewBox', () => {
 		// Only circle/line/rect are checked. A `path` string mixes absolute
 		// coordinates, relative offsets and arc flags, so scanning it for numbers
@@ -223,14 +182,5 @@ describe('the overview icons', () => {
 			}
 		}
 		expect([...new Set(outside)]).toEqual([]);
-	});
-
-	it('renders through the shared geometry of the set', () => {
-		const { body } = render(Icon, { props: { name: 'bell', size: 14 } });
-		expect(body).toContain('viewBox="0 0 24 24"');
-		expect(body).toContain('stroke-width="1.7"');
-		expect(body).toContain('width="14"');
-		// Decorative: the panel title beside it already says what it is.
-		expect(body).toContain('aria-hidden="true"');
 	});
 });

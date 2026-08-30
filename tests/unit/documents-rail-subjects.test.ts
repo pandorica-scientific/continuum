@@ -8,8 +8,7 @@
  * for the controls a person has to be able to reach.
  */
 import { describe, expect, it } from 'vitest';
-import { render } from 'svelte/server';
-import SubjectRow from '$lib/components/SubjectRow.svelte';
+
 import { railSubjects, type RailSubject } from '$lib/documents-view';
 
 const subject = (over: Partial<RailSubject> = {}): RailSubject => ({
@@ -50,35 +49,5 @@ describe('railSubjects', () => {
 		const given = [dog, car, home];
 		railSubjects(given, false);
 		expect(given.map((s) => s.id)).toEqual(['dog', 'car', 'home']);
-	});
-});
-
-describe('SubjectRow', () => {
-	it('shows the emoji, the name and how much paper is filed under it', () => {
-		const { body } = render(SubjectRow, { props: { subject: subject({ count: 12 }) } });
-		expect(body).toContain('🚗');
-		expect(body).toContain('Car');
-		expect(body).toContain('12');
-	});
-
-	it('offers the ⋯ menu on an ordinary subject', () => {
-		const { body } = render(SubjectRow, { props: { subject: subject() } });
-		expect(body).toContain('More for Car');
-	});
-
-	it('never offers it on the household, which is not a thing you archive', () => {
-		const { body } = render(SubjectRow, {
-			props: { subject: subject({ name: 'Household', household: true }) }
-		});
-		expect(body).not.toContain('More for Household');
-		expect(body).toContain('Household</span>');
-	});
-
-	it('dims an archived subject and says so, rather than hiding what it is', () => {
-		const { body } = render(SubjectRow, {
-			props: { subject: subject({ name: 'Boat', archived: true }) }
-		});
-		expect(body).toContain('archived');
-		expect(body).toContain('Archived');
 	});
 });

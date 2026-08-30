@@ -3,6 +3,7 @@ import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makePerson } from './fixtures';
 import { disableOpenMode, enableOpenMode, isOpenMode } from '$lib/server/auth/open-mode';
 import { hashPassword } from '$lib/server/auth';
 
@@ -26,11 +27,27 @@ beforeEach(async () => {
 	await harness.sql`truncate person cascade`;
 	await harness.sql`delete from settings where key = 'openMode'`;
 	const hash = await hashPassword('correct-horse-battery');
-	await testDb.insert(schema.person).values([
-		{ id: ADMIN, name: 'Jana', initials: 'J', role: 'admin', passwordHash: hash },
-		{ id: MEMBER, name: 'Jan', initials: 'J', role: 'member', passwordHash: hash },
-		{ id: NO_PASSWORD, name: 'Pending', initials: 'P', role: 'admin', passwordHash: null }
-	]);
+	await makePerson(testDb, {
+		id: ADMIN,
+		name: 'Jana',
+		initials: 'J',
+		role: 'admin',
+		passwordHash: hash
+	});
+	await makePerson(testDb, {
+		id: MEMBER,
+		name: 'Jan',
+		initials: 'J',
+		role: 'member',
+		passwordHash: hash
+	});
+	await makePerson(testDb, {
+		id: NO_PASSWORD,
+		name: 'Pending',
+		initials: 'P',
+		role: 'admin',
+		passwordHash: null
+	});
 });
 
 describe('open mode', () => {

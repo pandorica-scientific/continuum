@@ -24,18 +24,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import {
-	account,
-	document,
-	documentLink,
-	person,
-	salaryEntry,
-	transaction
-} from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { documentLink, salaryEntry, transaction } from '$lib/server/db/schema';
+
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { recordSalary } from '$lib/server/salary';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeDocument, makePerson, makeTransaction } from './fixtures';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -66,8 +60,8 @@ beforeEach(async () => {
 	await harness.sql`delete from document`;
 	await harness.sql`delete from account`;
 	await harness.sql`delete from person`;
-	await testDb.insert(person).values({ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
-	await testDb.insert(account).values({
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
+	await makeAccount(testDb, {
 		id: ACCOUNT,
 		name: 'Current',
 		bank: 'fio',
@@ -78,7 +72,7 @@ beforeEach(async () => {
 
 /** The bank credit half: a real transaction row, and the ledger's month. */
 async function creditTxn(id: string, periodMonth: string, netMinor: bigint): Promise<void> {
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id,
 		accountId: ACCOUNT,
 		bookedOn: `${periodMonth}-05`,
@@ -91,10 +85,10 @@ async function creditTxn(id: string, periodMonth: string, netMinor: bigint): Pro
 
 /** The payslip half: a document filed on Finance, linked to Robert. */
 async function payslipDoc(id: string, periodMonth: string): Promise<void> {
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${periodMonth} · Robert`,
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'payslip',
 		storedName: null,
 		ext: 'PDF',

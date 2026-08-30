@@ -16,13 +16,14 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { account, document, job, person, property } from '$lib/server/db/schema';
+import { document, job } from '$lib/server/db/schema';
 import { ingestFile } from '$lib/server/import/ingest';
 import { saveStatement } from '$lib/server/tax';
 import { createPropertyBill } from '$lib/server/property/mutations';
 import { filePayslipDocument } from '$lib/server/salary';
 import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makePerson, makeProperty } from './fixtures';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
 // module, which is before this suite picks the directory its uploads live in.
@@ -78,7 +79,7 @@ async function queuedJobsFor(documentId: string) {
 
 describe('every writer hashes and enqueues', () => {
 	it('a bank statement ingest', async () => {
-		await testDb.insert(account).values({
+		await makeAccount(testDb, {
 			id: rowId('account-fio'),
 			name: 'Fio',
 			bank: 'fio',
@@ -97,9 +98,7 @@ describe('every writer hashes and enqueues', () => {
 	});
 
 	it('a tax statement attachment', async () => {
-		await testDb
-			.insert(person)
-			.values({ id: rowId('person-tax'), name: 'Person Tax', initials: 'PT' });
+		await makePerson(testDb, { id: rowId('person-tax'), name: 'Person Tax', initials: 'PT' });
 		const storedName = await saveUploadBytes(PDF_BYTES, 'broker.pdf');
 
 		const result = await saveStatement(
@@ -137,9 +136,12 @@ describe('every writer hashes and enqueues', () => {
 	});
 
 	it('a property bill', async () => {
-		await testDb
-			.insert(property)
-			.values({ id: rowId('property-bill'), name: 'Flat A', kind: 'lived', currency: 'CZK' });
+		await makeProperty(testDb, {
+			id: rowId('property-bill'),
+			name: 'Flat A',
+			kind: 'lived',
+			currency: 'CZK'
+		});
 		const storedName = await saveUploadBytes(PDF_BYTES, 'bill.pdf');
 		const documentId = rowId('bill-document');
 
@@ -170,9 +172,11 @@ describe('every writer hashes and enqueues', () => {
 	});
 
 	it('a payslip', async () => {
-		await testDb
-			.insert(person)
-			.values({ id: rowId('person-payslip'), name: 'Person Payslip', initials: 'PP' });
+		await makePerson(testDb, {
+			id: rowId('person-payslip'),
+			name: 'Person Payslip',
+			initials: 'PP'
+		});
 		const storedName = await saveUploadBytes(PDF_BYTES, 'payslip.pdf');
 		const contentHash = hashBytes(PDF_BYTES);
 

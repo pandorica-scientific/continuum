@@ -2,6 +2,7 @@ import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeLoan } from './fixtures';
 import {
 	createLoan,
 	recordRepayment,
@@ -13,7 +14,7 @@ let harness: Harness;
 let testDb: TestDb;
 
 async function seedLoan(id = rowId('loan-a')): Promise<void> {
-	await testDb.insert(schema.loan).values({
+	await makeLoan(testDb, {
 		id,
 		name: 'Mortgage',
 		lender: 'Bank',

@@ -6,10 +6,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { asc, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { document, documentText, documentTextChunk } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { extractDocumentText } from '$lib/server/documents/extract';
 import type { OcrProvider } from '$lib/server/documents/extract/ocr';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -76,10 +77,10 @@ async function seedDocument(options: {
 		: (options.bytes ?? new Uint8Array());
 	await writeFile(join(DIRECTORY, storedName), bytes);
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: storedName,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		ext: options.ext.toUpperCase(),
 		storedName,

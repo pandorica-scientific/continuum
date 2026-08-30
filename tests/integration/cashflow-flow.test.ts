@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import {
-	account,
-	category,
-	categoryGroup,
-	loan,
-	loanEvent,
-	transaction
-} from '$lib/server/db/schema';
+import { category, categoryGroup, loanEvent } from '$lib/server/db/schema';
 import { flowData } from '$lib/server/cashflow';
 import { registerMonths, registerPage } from '$lib/server/transactions';
 import { KEPT_COLOR, KEPT_KEY, RESERVES_KEY } from '$lib/charts/flow-graph';
@@ -16,6 +9,7 @@ import { LOAN_PRINCIPAL_CATEGORY } from '$lib/categories';
 import { parseFilter, UNCATEGORISED } from '$lib/transactions/filter';
 import { fromMajor, toMajor } from '$lib/money';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeLoan, makeTransaction } from './fixtures';
 import { rowId } from '../row-id';
 
 /**
@@ -68,7 +62,7 @@ beforeEach(async () => {
 	// The baseline seeds the groups; only a group a test added is cleared, and
 	// the truncate above has already taken the categories inside it.
 	await harness.sql`delete from category_group where key = 'pension'`;
-	await testDb.insert(account).values({
+	await makeAccount(testDb, {
 		id: ACCOUNT,
 		name: 'Current',
 		bank: 'fio',
@@ -95,7 +89,7 @@ async function record(
 	month: string = MONTH
 ): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id,
 		accountId: ACCOUNT,
 		bookedOn: `${month}-15`,
@@ -422,7 +416,7 @@ describe('flowData with a loan payment linked to it', () => {
 	async function seedInstalment(): Promise<void> {
 		await seedMonth(-30_000);
 		const paymentId = await record('mortgage', -20_000, 'rent');
-		await testDb.insert(loan).values({
+		await makeLoan(testDb, {
 			id: loanId,
 			name: 'Karlín',
 			currency: 'CZK',

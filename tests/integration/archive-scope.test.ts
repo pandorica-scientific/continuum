@@ -4,10 +4,11 @@ import { and, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { document, documentLink, subject } from '$lib/server/db/schema';
 import { archiveScopePredicate } from '$lib/server/documents/visibility';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { buildBriefing } from '$lib/server/briefing';
 import { generateEvents } from '$lib/server/calendar';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 // `documentExpiry` (the briefing source) takes no handle and always reads the
 // module-level `db` singleton, so it has to be pointed at this harness the
@@ -48,10 +49,10 @@ afterAll(async () => {
 
 async function seedDocumentLinkedTo(kinds: ('active' | 'archived')[]): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: `Document ${id}`,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		addedOn: '2026-01-01'
 	});
@@ -121,10 +122,10 @@ async function seedExpiringDocumentLinkedTo(
 	kinds: ('active' | 'archived')[]
 ): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		expiresOn: soon,
 		expiryVerb: 'expires',

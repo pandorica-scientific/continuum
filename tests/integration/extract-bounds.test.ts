@@ -5,12 +5,13 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { count, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { document, documentText, documentTextChunk } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { documentText, documentTextChunk } from '$lib/server/db/schema';
+
 import { continueExtraction, extractDocumentText } from '$lib/server/documents/extract';
 import { DEFAULT_LIMITS } from '$lib/server/documents/extract/limits';
 import type { OcrProvider } from '$lib/server/documents/extract/ocr';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -66,10 +67,10 @@ async function seedLongScan(): Promise<string> {
 		await readFile(resolve('tests/fixtures/extract/long-scan.pdf'))
 	);
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: 'A very long scan',
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'manual',
 		ext: 'PDF',
 		storedName,

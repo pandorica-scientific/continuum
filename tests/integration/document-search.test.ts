@@ -2,25 +2,27 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import {
-	account,
-	document,
 	documentLink,
 	documentText,
 	documentTextChunk,
 	job,
-	loan,
-	person,
-	property,
 	subject,
 	tag,
 	tagLink,
 	taxStatement,
-	tenancy,
-	transaction
+	tenancy
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { searchDocuments } from '$lib/server/documents/search';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import {
+	makeAccount,
+	makeDocument,
+	makeLoan,
+	makePerson,
+	makeProperty,
+	makeTransaction
+} from './fixtures';
 
 /**
  * Finding a document by whatever a person happens to remember about it.
@@ -61,19 +63,19 @@ beforeAll(async () => {
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
 
-	await testDb.insert(person).values({
+	await makePerson(testDb, {
 		id: HOUSEHOLD.filer,
 		name: 'Jana Bartošová',
 		initials: 'JB'
 	});
-	await testDb.insert(account).values({
+	await makeAccount(testDb, {
 		id: HOUSEHOLD.account,
 		name: 'Fio current',
 		bank: 'fio',
 		kind: 'current',
 		currency: 'CZK'
 	});
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id: HOUSEHOLD.transaction,
 		accountId: HOUSEHOLD.account,
 		bookedOn: '2026-03-04',
@@ -82,15 +84,13 @@ beforeAll(async () => {
 		counterparty: 'Alza',
 		dedupFingerprint: 'document-search-alza'
 	});
-	await testDb
-		.insert(property)
-		.values({ id: HOUSEHOLD.property, name: 'Vinohrady flat', kind: 'rented' });
+	await makeProperty(testDb, { id: HOUSEHOLD.property, name: 'Vinohrady flat', kind: 'rented' });
 	await testDb.insert(tenancy).values({
 		id: HOUSEHOLD.tenancy,
 		propertyId: HOUSEHOLD.property,
 		tenantName: 'Marek Kučera'
 	});
-	await testDb.insert(loan).values({
+	await makeLoan(testDb, {
 		id: HOUSEHOLD.loan,
 		name: 'Hypotéka na byt',
 		currency: 'CZK',
@@ -133,7 +133,7 @@ async function seedDocument(options: {
 	addedOn?: string;
 }): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name ?? `Document ${id}`,
 		shelfId: await shelfIdByKey(options.shelf ?? 'household', testDb),

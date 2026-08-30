@@ -3,9 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
-import { document, documentLink, property, propertyBill, tenancy } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { document, documentLink, propertyBill, tenancy } from '$lib/server/db/schema';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { asAdmin, asMember, makeDocument, makeProperty, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -31,18 +32,6 @@ let previousUrl: string | undefined;
 const PROPERTY = rowId('pd-property');
 const TENANCY = rowId('pd-tenancy');
 
-/** A session as a route loader sees it, wide enough for either role. */
-interface Locals {
-	person: { id: string; name: string; initials: string; role: 'admin' | 'member'; theme: null };
-}
-
-const asAdmin: Locals = {
-	person: { id: rowId('pd-admin'), name: 'Admin', initials: 'A', role: 'admin', theme: null }
-};
-const asMember: Locals = {
-	person: { id: rowId('pd-member'), name: 'Member', initials: 'M', role: 'member', theme: null }
-};
-
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
 	harness = await startPostgres('property-documents', { max: 1 });
@@ -59,9 +48,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate document, property_bill, tenancy, property cascade`;
-	await testDb
-		.insert(property)
-		.values({ id: PROPERTY, name: 'Flat', kind: 'rented', currency: 'CZK' });
+	await makeProperty(testDb, { id: PROPERTY, name: 'Flat', kind: 'rented', currency: 'CZK' });
 	await testDb.insert(tenancy).values({
 		id: TENANCY,
 		propertyId: PROPERTY,
@@ -77,10 +64,10 @@ async function seedDocument(options: {
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
@@ -90,7 +77,7 @@ async function seedDocument(options: {
 	return id;
 }
 
-async function loadProperty(locals: Locals) {
+async function loadProperty(locals: SessionLocals) {
 	const { load } = await import('../../src/routes/(app)/property/+page.server');
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return (await (load as any)({
@@ -115,7 +102,7 @@ async function loadProperty(locals: Locals) {
 async function postAction(
 	action: 'attachDocument' | 'detachDocument',
 	fields: Record<string, string>,
-	locals: Locals
+	locals: SessionLocals
 ) {
 	const { actions } = await import('../../src/routes/(app)/property/+page.server');
 	const form = new FormData();

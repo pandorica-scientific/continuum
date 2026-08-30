@@ -22,6 +22,7 @@ import { verifyToken } from '$lib/server/api/tokens';
 import { hashToken } from '$lib/server/auth/token-hash';
 import type { Cookies } from '@sveltejs/kit';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makePerson } from './fixtures';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -61,9 +62,7 @@ describe('authentication concurrency', () => {
 			['first-admin', 'second-admin'].map((name) =>
 				testDb.transaction(async (tx) => {
 					if (!(await claimInitialSetup(tx))) return false;
-					await tx
-						.insert(schema.person)
-						.values({ id: rowId(name), name, initials: 'A', role: 'admin' });
+					await makePerson(tx, { id: rowId(name), name, initials: 'A', role: 'admin' });
 					return true;
 				})
 			)
@@ -79,9 +78,7 @@ describe('authentication concurrency', () => {
 			['first-admin', 'second-admin'].map((name) =>
 				runInitialSetup(testDb, async (tx) => {
 					initializersRun++;
-					await tx
-						.insert(schema.person)
-						.values({ id: rowId(name), name, initials: 'A', role: 'admin' });
+					await makePerson(tx, { id: rowId(name), name, initials: 'A', role: 'admin' });
 					return name;
 				})
 			)
@@ -94,7 +91,7 @@ describe('authentication concurrency', () => {
 	});
 
 	it('leaves no session or credential when revocation races their creation', async () => {
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
@@ -125,7 +122,7 @@ describe('authentication concurrency', () => {
 	});
 
 	it('cannot finish in-flight authentication work after deactivation commits', async () => {
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
@@ -180,7 +177,7 @@ describe('authentication concurrency', () => {
 
 	it('does not consume enrollment or set a password/session for an inactive person', async () => {
 		const raw = 'inactive-person-enrollment-token';
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',
@@ -209,7 +206,7 @@ describe('authentication concurrency', () => {
 
 	it('allows one concurrent enrollment to commit password, token, and first session', async () => {
 		const raw = 'active-person-enrollment-token';
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA'
@@ -243,9 +240,7 @@ describe('authentication concurrency', () => {
 	});
 
 	it('allows one positive counter advance from the same stored counter', async () => {
-		await testDb
-			.insert(schema.person)
-			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
+		await makePerson(testDb, { id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		await testDb.insert(schema.credential).values({
 			id: 'credential-a',
 			personId: rowId('person-a'),
@@ -282,9 +277,7 @@ describe('authentication concurrency', () => {
 	});
 
 	it('binds a discoverable login challenge to the issued person generations', async () => {
-		await testDb
-			.insert(schema.person)
-			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
+		await makePerson(testDb, { id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		const cookies = testCookies();
 		await storeChallenge(cookies, 'login-challenge', {
 			address: '192.0.2.31',
@@ -302,9 +295,7 @@ describe('authentication concurrency', () => {
 	});
 
 	it('clears an invalid session cookie and prunes expired rows in bounded batches', async () => {
-		await testDb
-			.insert(schema.person)
-			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
+		await makePerson(testDb, { id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		const cookies = testCookies();
 		cookies.set('continuum_session', 'expired-token', { path: '/' });
 		await testDb.insert(schema.session).values(
@@ -323,7 +314,7 @@ describe('authentication concurrency', () => {
 	});
 
 	it('refuses and clears a session from an older authentication generation', async () => {
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('person-a'),
 			name: 'Person A',
 			initials: 'PA',

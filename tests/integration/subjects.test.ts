@@ -13,8 +13,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { document, documentLink, subject } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { documentLink, subject } from '$lib/server/db/schema';
+
 import { documentsAbout } from '$lib/server/documents/targets';
 import {
 	addSubject,
@@ -28,6 +28,7 @@ import {
 	unarchiveSubject
 } from '$lib/server/documents/subjects';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 // The Documents load reads the module-level `db` singleton, so it has to be
 // pointed at this harness the way `archive-scope` and `documents-load` do it.
@@ -80,10 +81,10 @@ async function fileUnder(
 	sensitivity: 'normal' | 'restricted' = 'normal'
 ): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		sensitivity,
 		addedOn: '2026-01-01'

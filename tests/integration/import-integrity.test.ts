@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makePerson, makeTransaction } from './fixtures';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -23,7 +24,7 @@ async function insertAccount(
 	numbers: string[] = [],
 	bank = 'fio'
 ): Promise<void> {
-	await testDb.insert(schema.account).values({
+	await makeAccount(testDb, {
 		id,
 		name: id,
 		bank,
@@ -974,7 +975,7 @@ describe('import database integrity', () => {
 	it('waits for a tag edit before pairing a newly imported opposite leg', async () => {
 		await insertAccount(rowId('tagged-out-account'), 'CZK', ['77777777/0100']);
 		await insertAccount(rowId('tagged-in-account'), 'CZK', ['88888888/0300']);
-		await testDb.insert(schema.transaction).values({
+		await makeTransaction(testDb, {
 			id: rowId('tagged-out'),
 			accountId: rowId('tagged-out-account'),
 			bookedOn: '2026-08-07',
@@ -1033,26 +1034,24 @@ describe('import database integrity', () => {
 	it('rolls back a proposal transition when either leg update fails', async () => {
 		await insertAccount(rowId('proposal-out-account'), 'CZK');
 		await insertAccount(rowId('proposal-in-account'), 'CZK');
-		await testDb.insert(schema.transaction).values([
-			{
-				id: rowId('proposal-out'),
-				accountId: rowId('proposal-out-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: -10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('proposal-out'),
-				reviewReason: 'looks like a transfer between your own accounts'
-			},
-			{
-				id: rowId('proposal-in'),
-				accountId: rowId('proposal-in-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: 10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('proposal-in'),
-				reviewReason: 'looks like a transfer between your own accounts'
-			}
-		]);
+		await makeTransaction(testDb, {
+			id: rowId('proposal-out'),
+			accountId: rowId('proposal-out-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: -10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('proposal-out'),
+			reviewReason: 'looks like a transfer between your own accounts'
+		});
+		await makeTransaction(testDb, {
+			id: rowId('proposal-in'),
+			accountId: rowId('proposal-in-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: 10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('proposal-in'),
+			reviewReason: 'looks like a transfer between your own accounts'
+		});
 		await testDb.insert(schema.transferPair).values({
 			id: rowId('proposal'),
 			outTransactionId: rowId('proposal-out'),
@@ -1097,26 +1096,24 @@ describe('import database integrity', () => {
 	it('rolls back rejection when recategorising a released leg fails', async () => {
 		await insertAccount(rowId('reject-out-account'), 'CZK');
 		await insertAccount(rowId('reject-in-account'), 'CZK');
-		await testDb.insert(schema.transaction).values([
-			{
-				id: rowId('reject-out'),
-				accountId: rowId('reject-out-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: -10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('reject-out'),
-				reviewReason: 'looks like a transfer between your own accounts'
-			},
-			{
-				id: rowId('reject-in'),
-				accountId: rowId('reject-in-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: 10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('reject-in'),
-				reviewReason: 'looks like a transfer between your own accounts'
-			}
-		]);
+		await makeTransaction(testDb, {
+			id: rowId('reject-out'),
+			accountId: rowId('reject-out-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: -10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('reject-out'),
+			reviewReason: 'looks like a transfer between your own accounts'
+		});
+		await makeTransaction(testDb, {
+			id: rowId('reject-in'),
+			accountId: rowId('reject-in-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: 10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('reject-in'),
+			reviewReason: 'looks like a transfer between your own accounts'
+		});
 		await testDb.insert(schema.transferPair).values({
 			id: rowId('reject-pair'),
 			outTransactionId: rowId('reject-out'),
@@ -1161,24 +1158,22 @@ describe('import database integrity', () => {
 	it('allows only one concurrent decision on a proposed transfer', async () => {
 		await insertAccount(rowId('decision-out-account'), 'CZK');
 		await insertAccount(rowId('decision-in-account'), 'CZK');
-		await testDb.insert(schema.transaction).values([
-			{
-				id: rowId('decision-out'),
-				accountId: rowId('decision-out-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: -10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('decision-out')
-			},
-			{
-				id: rowId('decision-in'),
-				accountId: rowId('decision-in-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: 10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('decision-in')
-			}
-		]);
+		await makeTransaction(testDb, {
+			id: rowId('decision-out'),
+			accountId: rowId('decision-out-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: -10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('decision-out')
+		});
+		await makeTransaction(testDb, {
+			id: rowId('decision-in'),
+			accountId: rowId('decision-in-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: 10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('decision-in')
+		});
 		await testDb.insert(schema.transferPair).values({
 			id: rowId('decision-pair'),
 			outTransactionId: rowId('decision-out'),
@@ -1225,25 +1220,23 @@ describe('import database integrity', () => {
 	it('lets concurrent pairing claim each transaction leg at most once', async () => {
 		await insertAccount(rowId('out-account'), 'CZK', ['11111111/0100']);
 		await insertAccount(rowId('in-account'), 'CZK', ['22222222/0300']);
-		await testDb.insert(schema.transaction).values([
-			{
-				id: rowId('out-leg'),
-				accountId: rowId('out-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: -10000n,
-				currency: 'CZK',
-				counterpartyAccount: '22222222/0300',
-				dedupFingerprint: rowId('out-leg')
-			},
-			{
-				id: rowId('in-leg'),
-				accountId: rowId('in-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: 10000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('in-leg')
-			}
-		]);
+		await makeTransaction(testDb, {
+			id: rowId('out-leg'),
+			accountId: rowId('out-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: -10000n,
+			currency: 'CZK',
+			counterpartyAccount: '22222222/0300',
+			dedupFingerprint: rowId('out-leg')
+		});
+		await makeTransaction(testDb, {
+			id: rowId('in-leg'),
+			accountId: rowId('in-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: 10000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('in-leg')
+		});
 		await harness.sql.unsafe(`
 			create function task1_delay_pair_insert() returns trigger language plpgsql as $$
 			begin
@@ -1279,40 +1272,38 @@ describe('import database integrity', () => {
 	});
 
 	it('serialises pairing before any concurrent categorisation pass', async () => {
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('pairing-person'),
 			name: 'Robert Kiewisz',
 			initials: 'RK',
 			passwordHash: 'not-used'
 		});
-		await testDb.insert(schema.account).values([
-			{
-				id: rowId('locked-auto-out-account'),
-				name: 'Auto out',
-				bank: 'fio',
-				currency: 'CZK',
-				numbers: ['11111111/0100']
-			},
-			{
-				id: rowId('locked-auto-in-account'),
-				name: 'Auto in',
-				bank: 'fio',
-				currency: 'CZK',
-				numbers: ['22222222/0300']
-			},
-			{
-				id: rowId('locked-review-out-account'),
-				name: 'Review out',
-				bank: 'revolut',
-				currency: 'CZK'
-			},
-			{
-				id: rowId('locked-review-in-account'),
-				name: 'Review in',
-				bank: 'rb',
-				currency: 'CZK'
-			}
-		]);
+		await makeAccount(testDb, {
+			id: rowId('locked-auto-out-account'),
+			name: 'Auto out',
+			bank: 'fio',
+			currency: 'CZK',
+			numbers: ['11111111/0100']
+		});
+		await makeAccount(testDb, {
+			id: rowId('locked-auto-in-account'),
+			name: 'Auto in',
+			bank: 'fio',
+			currency: 'CZK',
+			numbers: ['22222222/0300']
+		});
+		await makeAccount(testDb, {
+			id: rowId('locked-review-out-account'),
+			name: 'Review out',
+			bank: 'revolut',
+			currency: 'CZK'
+		});
+		await makeAccount(testDb, {
+			id: rowId('locked-review-in-account'),
+			name: 'Review in',
+			bank: 'rb',
+			currency: 'CZK'
+		});
 		await testDb.insert(schema.category).values({
 			id: rowId('locked-rule-category'),
 			groupKey: 'living',
@@ -1336,42 +1327,40 @@ describe('import database integrity', () => {
 			acceptedCount: 6,
 			correctedCount: 0
 		});
-		await testDb.insert(schema.transaction).values([
-			{
-				id: rowId('locked-auto-out'),
-				accountId: rowId('locked-auto-out-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: -10_000n,
-				currency: 'CZK',
-				counterpartyAccount: '22222222/0300',
-				dedupFingerprint: rowId('locked-auto-out')
-			},
-			{
-				id: rowId('locked-auto-in'),
-				accountId: rowId('locked-auto-in-account'),
-				bookedOn: '2026-08-01',
-				amountMinor: 10_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('locked-auto-in')
-			},
-			{
-				id: rowId('locked-review-out'),
-				accountId: rowId('locked-review-out-account'),
-				bookedOn: '2026-08-02',
-				amountMinor: -20_000n,
-				currency: 'CZK',
-				counterparty: 'Robert Kiewisz',
-				dedupFingerprint: rowId('locked-review-out')
-			},
-			{
-				id: rowId('locked-review-in'),
-				accountId: rowId('locked-review-in-account'),
-				bookedOn: '2026-08-02',
-				amountMinor: 20_000n,
-				currency: 'CZK',
-				dedupFingerprint: rowId('locked-review-in')
-			}
-		]);
+		await makeTransaction(testDb, {
+			id: rowId('locked-auto-out'),
+			accountId: rowId('locked-auto-out-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: -10_000n,
+			currency: 'CZK',
+			counterpartyAccount: '22222222/0300',
+			dedupFingerprint: rowId('locked-auto-out')
+		});
+		await makeTransaction(testDb, {
+			id: rowId('locked-auto-in'),
+			accountId: rowId('locked-auto-in-account'),
+			bookedOn: '2026-08-01',
+			amountMinor: 10_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('locked-auto-in')
+		});
+		await makeTransaction(testDb, {
+			id: rowId('locked-review-out'),
+			accountId: rowId('locked-review-out-account'),
+			bookedOn: '2026-08-02',
+			amountMinor: -20_000n,
+			currency: 'CZK',
+			counterparty: 'Robert Kiewisz',
+			dedupFingerprint: rowId('locked-review-out')
+		});
+		await makeTransaction(testDb, {
+			id: rowId('locked-review-in'),
+			accountId: rowId('locked-review-in-account'),
+			bookedOn: '2026-08-02',
+			amountMinor: 20_000n,
+			currency: 'CZK',
+			dedupFingerprint: rowId('locked-review-in')
+		});
 		await harness.sql.unsafe(`
 			create function task1_delay_pair_insert() returns trigger language plpgsql as $$
 			begin
@@ -1460,7 +1449,7 @@ describe('import database integrity', () => {
 			acceptedCount: 6,
 			correctedCount: 0
 		});
-		await testDb.insert(schema.transaction).values({
+		await makeTransaction(testDb, {
 			id: rowId('rule-transaction'),
 			accountId: rowId('rule-account'),
 			bookedOn: '2026-08-01',

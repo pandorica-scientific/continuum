@@ -5,8 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { asc, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { document, documentTextChunk, job } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { documentTextChunk, job } from '$lib/server/db/schema';
+
 import { extractDocumentText } from '$lib/server/documents/extract';
 import {
 	backfillExtraction,
@@ -16,6 +16,7 @@ import {
 import { replaceDocumentFile } from '$lib/server/documents/mutations';
 import { hashBytes } from '$lib/server/system/files';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -70,10 +71,10 @@ async function store(path: string): Promise<{ storedName: string; bytes: Uint8Ar
 async function seedDocument(path: string): Promise<string> {
 	const { storedName, bytes } = await store(path);
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: 'Invoice',
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'invoice',
 		ext: 'PDF',
 		storedName,
@@ -157,10 +158,10 @@ describe('a file replaced underneath an extraction', () => {
 describe('what gets queued', () => {
 	it('queues nothing for a document with no file, or a format nothing reads', async () => {
 		const id = uuidv7();
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id,
 			name: 'Metadata only',
-			shelfId: await shelfIdByKey('household', testDb),
+			shelfKey: 'household',
 			type: 'other',
 			addedOn: '2026-01-01'
 		});

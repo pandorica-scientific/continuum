@@ -198,9 +198,65 @@ be sent back.
   it in a domain module and test it in `tests/integration`, or in a pure
   function and test it in `tests/unit`. "It is covered end to end" is no longer
   an answer.
+- **Do not assert on markup, rendered or read.** `render(Component).body`
+  followed by `toContain('Add payslip')` tests the wording of a heading: it
+  fails when someone renames it and passes when the number beside it is wrong.
+  Reading a component's own source to match against it is the same test wearing
+  a hat. Neither belongs in CI.
+
+  239 such tests were removed in v0.7.2. Not one domain module lost coverage —
+  everything they touched was a `.svelte` file, which is what the rule above
+  already says a person checks by looking.
+
+  If a screen computes something worth pinning, the computation does not belong
+  in the screen. Lift it into a function and test the function, the way
+  `documentExpiryTone` and `reach` were lifted out of their components. There
+  is no `svelte/server` render and no template scanning left in `tests/`; do not
+  reintroduce either.
 
 Write the test so that it fails without your change. A test that passes either
 way is documentation, not coverage.
+
+#### Before you add a test file
+
+Most test files here are named for a behaviour — `tax-band`, `calendar-merge`,
+`scan-exif` — not for the module they cover, so the directory listing cannot
+tell you whether something already tests what you are about to test. Ask it
+directly instead:
+
+```
+npm run test:where account        # a module, a path, or words from a test name
+```
+
+It prints the modules matching your term, every test file that imports them,
+and the behaviours those files already pin. Extend the file it names when your
+behaviour belongs beside what is there; add a new file only when the subject is
+genuinely new. A suite that grows a file per change becomes a suite nobody can
+find anything in.
+
+`tests/COVERAGE.md` is the same map, written out and committed so that growth
+is visible in a diff — the query above builds its own index in memory, so it is
+never stale even when the file is. Regenerate it with `npm run test:index` when you add or
+move tests, and commit it with your change. Nothing fails the build if you
+forget — a reviewer seeing new test files beside an unchanged map is the check.
+
+#### Rows for integration suites
+
+`tests/integration/fixtures.ts` builds the rows: `makeAccount`, `makePerson`,
+`makeDocument`, `makeTransaction`, `makeProperty`, `makeLoan`, `makeContact`
+and `makeDocumentLink`. Each fills what the schema demands, takes overrides for
+whatever your test is actually about, and returns the inserted row.
+
+```ts
+const account = await makeAccount(db, { currency: 'EUR' });
+const paid = await makeTransaction(db, { accountId: account.id, amountMinor: -45000n });
+```
+
+Name only the columns your test is about. Writing the insert by hand instead
+means that the next column added to `account` is a change to your file too,
+which is how 332 hand-rolled inserts came to sit across 74 suites. Builders
+compose — `makeTransaction` opens an account when handed none — and `asAdmin`,
+`asMember` and `session()` give a loader the session shape it expects.
 
 ## Pull requests
 

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { account, loan, loanEvent, loanFixationPeriod, transaction } from '$lib/server/db/schema';
+import { loan, loanEvent, loanFixationPeriod } from '$lib/server/db/schema';
 import { recordLinkedPayment, unlinkLoanPayment } from '$lib/server/loans/mutations';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeLoan, makeTransaction } from './fixtures';
 import { rowId } from '../row-id';
 
 /**
@@ -45,11 +46,21 @@ beforeEach(async () => {
 	// `loan` is separate because the cascade from `account` reaches loan_event
 	// through the transactions it links, but never the loan itself.
 	await harness.sql`truncate account, loan cascade`;
-	await testDb.insert(account).values([
-		{ id: ACCOUNT, name: 'Current', bank: 'fio', kind: 'current', currency: 'CZK' },
-		{ id: ACCOUNT_EUR, name: 'Revolut', bank: 'revolut', kind: 'current', currency: 'EUR' }
-	]);
-	await testDb.insert(loan).values({
+	await makeAccount(testDb, {
+		id: ACCOUNT,
+		name: 'Current',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK'
+	});
+	await makeAccount(testDb, {
+		id: ACCOUNT_EUR,
+		name: 'Revolut',
+		bank: 'revolut',
+		kind: 'current',
+		currency: 'EUR'
+	});
+	await makeLoan(testDb, {
 		id: LOAN,
 		name: 'Mortgage ČS',
 		lender: 'Česká spořitelna',
@@ -65,40 +76,38 @@ beforeEach(async () => {
 		paymentDay: 18,
 		interestDeductible: true
 	});
-	await testDb.insert(transaction).values([
-		{
-			id: DEBIT,
-			accountId: ACCOUNT,
-			// The value date differs from the booked one on purpose: the event has
-			// to happen on the day the money moved, which is the date every other
-			// money screen reads.
-			bookedOn: '2026-08-05',
-			valueOn: '2026-08-06',
-			amountMinor: -5_445_600n,
-			feeMinor: 4_000n,
-			currency: 'CZK',
-			counterparty: 'Česká spořitelna · hypotéka',
-			dedupFingerprint: 'loan-payment-debit'
-		},
-		{
-			id: CREDIT,
-			accountId: ACCOUNT,
-			bookedOn: '2026-08-02',
-			amountMinor: 1_650_000n,
-			currency: 'CZK',
-			counterparty: 'Nájemce · Karlín',
-			dedupFingerprint: 'loan-payment-credit'
-		},
-		{
-			id: FOREIGN,
-			accountId: ACCOUNT_EUR,
-			bookedOn: '2026-08-05',
-			amountMinor: -20_000n,
-			currency: 'EUR',
-			counterparty: 'Česká spořitelna · hypotéka',
-			dedupFingerprint: 'loan-payment-foreign'
-		}
-	]);
+	await makeTransaction(testDb, {
+		id: DEBIT,
+		accountId: ACCOUNT,
+		// The value date differs from the booked one on purpose: the event has
+		// to happen on the day the money moved, which is the date every other
+		// money screen reads.
+		bookedOn: '2026-08-05',
+		valueOn: '2026-08-06',
+		amountMinor: -5_445_600n,
+		feeMinor: 4_000n,
+		currency: 'CZK',
+		counterparty: 'Česká spořitelna · hypotéka',
+		dedupFingerprint: 'loan-payment-debit'
+	});
+	await makeTransaction(testDb, {
+		id: CREDIT,
+		accountId: ACCOUNT,
+		bookedOn: '2026-08-02',
+		amountMinor: 1_650_000n,
+		currency: 'CZK',
+		counterparty: 'Nájemce · Karlín',
+		dedupFingerprint: 'loan-payment-credit'
+	});
+	await makeTransaction(testDb, {
+		id: FOREIGN,
+		accountId: ACCOUNT_EUR,
+		bookedOn: '2026-08-05',
+		amountMinor: -20_000n,
+		currency: 'EUR',
+		counterparty: 'Česká spořitelna · hypotéka',
+		dedupFingerprint: 'loan-payment-foreign'
+	});
 });
 
 describe('recordLinkedPayment', () => {

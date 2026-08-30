@@ -4,9 +4,10 @@ import { resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
-import { account, document, documentLink } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { document, documentLink } from '$lib/server/db/schema';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { asAdmin, asMember, makeAccount, makeDocument, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -31,18 +32,6 @@ let previousUploadDir: string | undefined;
 const ACCOUNT = rowId('ad-account');
 const OTHER_ACCOUNT = rowId('ad-other-account');
 
-/** A session as a route loader sees it, wide enough for either role. */
-interface Locals {
-	person: { id: string; name: string; initials: string; role: 'admin' | 'member'; theme: null };
-}
-
-const asAdmin: Locals = {
-	person: { id: rowId('ad-admin'), name: 'Admin', initials: 'A', role: 'admin', theme: null }
-};
-const asMember: Locals = {
-	person: { id: rowId('ad-member'), name: 'Member', initials: 'M', role: 'member', theme: null }
-};
-
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
 	previousUploadDir = process.env.UPLOAD_DIR;
@@ -63,10 +52,20 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate document, transaction, import_file, account cascade`;
-	await testDb.insert(account).values([
-		{ id: ACCOUNT, name: 'Fio joint', bank: 'fio', currency: 'CZK', numbers: [] },
-		{ id: OTHER_ACCOUNT, name: 'Savings', bank: 'fio', currency: 'CZK', numbers: [] }
-	]);
+	await makeAccount(testDb, {
+		id: ACCOUNT,
+		name: 'Fio joint',
+		bank: 'fio',
+		currency: 'CZK',
+		numbers: []
+	});
+	await makeAccount(testDb, {
+		id: OTHER_ACCOUNT,
+		name: 'Savings',
+		bank: 'fio',
+		currency: 'CZK',
+		numbers: []
+	});
 });
 
 async function seedDocument(options: {
@@ -75,10 +74,10 @@ async function seedDocument(options: {
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfId: await shelfIdByKey('statements', testDb),
+		shelfKey: 'statements',
 		type: 'bank_statement',
 		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
@@ -88,7 +87,7 @@ async function seedDocument(options: {
 	return id;
 }
 
-async function loadAccounts(locals: Locals) {
+async function loadAccounts(locals: SessionLocals) {
 	const { load } = await import('../../src/routes/(app)/accounts/+page.server');
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return (await (load as any)({ locals })) as {
@@ -104,7 +103,7 @@ async function loadAccounts(locals: Locals) {
 async function postAction(
 	action: 'attachDocument' | 'detachDocument',
 	fields: Record<string, string>,
-	locals: Locals
+	locals: SessionLocals
 ) {
 	const { actions } = await import('../../src/routes/(app)/accounts/+page.server');
 	const form = new FormData();

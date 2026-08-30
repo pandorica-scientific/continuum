@@ -7,10 +7,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { documentLink, salaryEntry } from '$lib/server/db/schema';
 import { loadSalaryHistory, recordSalary } from '$lib/server/salary';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -33,16 +34,14 @@ beforeEach(async () => {
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from document`;
 	await harness.sql`delete from person`;
-	await testDb
-		.insert(person)
-		.values([{ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' }]);
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
 });
 
 async function slip(id: string, month: string) {
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${month} · Robert`,
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'payslip',
 		storedName: `${id}.pdf`,
 		ext: 'PDF',

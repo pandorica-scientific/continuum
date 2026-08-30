@@ -27,6 +27,7 @@ import { updateLoanTags, updatePropertyTags, updateTransactionTags } from '$lib/
 import { saveStatement } from '$lib/server/tax';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeLoan, makePerson, makeProperty, makeTransaction } from './fixtures';
 
 let harness: Harness;
 let testDb: TestDb;
@@ -151,10 +152,18 @@ beforeEach(async () => {
 
 describe('home meter sync freshness', () => {
 	async function seedMeterHomes(): Promise<void> {
-		await testDb.insert(schema.property).values([
-			{ id: rowId('old-home'), name: 'Old home', kind: 'lived', currency: 'CZK' },
-			{ id: rowId('new-home'), name: 'New home', kind: 'lived', currency: 'CZK' }
-		]);
+		await makeProperty(testDb, {
+			id: rowId('old-home'),
+			name: 'Old home',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+		await makeProperty(testDb, {
+			id: rowId('new-home'),
+			name: 'New home',
+			kind: 'lived',
+			currency: 'CZK'
+		});
 		await testDb.insert(schema.propertyBill).values([
 			{
 				id: rowId('old-meter-bill'),
@@ -238,13 +247,13 @@ afterAll(async () => {
 
 describe('domain replacement writes', () => {
 	async function seedSplit(): Promise<void> {
-		await testDb.insert(schema.account).values({
+		await makeAccount(testDb, {
 			id: rowId('account-split'),
 			name: 'Split account',
 			bank: 'other',
 			currency: 'CZK'
 		});
-		await testDb.insert(schema.transaction).values({
+		await makeTransaction(testDb, {
 			id: rowId('transaction-split'),
 			accountId: rowId('account-split'),
 			bookedOn: '2026-08-15',
@@ -400,7 +409,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('rolls an attached bill document and links back when the property bill insert fails', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-a'),
 			name: 'Flat A',
 			kind: 'lived',
@@ -449,7 +458,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('serializes overlapping tenancy inserts on their property', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-tenancy'),
 			name: 'Rental flat',
 			kind: 'rented',
@@ -475,7 +484,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('rejects a tenancy whose end precedes its start', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-invalid-tenancy'),
 			name: 'Rental flat',
 			kind: 'rented',
@@ -501,7 +510,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('merges concurrent property image and drawing updates after locking the row', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-images'),
 			name: 'Photo flat',
 			kind: 'lived',
@@ -535,7 +544,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('preserves both photos when concurrent requests append to the same stale slot', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-photo-appends'),
 			name: 'Photo flat',
 			kind: 'lived',
@@ -564,7 +573,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('rejects a property image slot beyond the next append position', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-image-slot'),
 			name: 'Photo flat',
 			kind: 'lived',
@@ -587,7 +596,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('serializes meter-source switches and enforces one meter bill in the database', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-meter'),
 			name: 'Meter flat',
 			kind: 'lived',
@@ -624,7 +633,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('reselects the meter bill after a concurrent source switch', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-meter-sync'),
 			name: 'Meter sync flat',
 			kind: 'lived',
@@ -691,7 +700,7 @@ describe('domain replacement writes', () => {
 			{ code: 'USD', day: '2026-01-02', rate: '23' },
 			{ code: 'PLN', day: '2026-01-02', rate: '5.8' }
 		]);
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('historical-tax-person'),
 			name: 'Historical Tax Person',
 			initials: 'HT'
@@ -749,7 +758,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('does not choke on a malformed period_month when scanning for missing rates', async () => {
-		await testDb.insert(schema.person).values({
+		await makePerson(testDb, {
 			id: rowId('malformed-period-person'),
 			name: 'Malformed Period Person',
 			initials: 'MP'
@@ -772,13 +781,13 @@ describe('domain replacement writes', () => {
 	});
 
 	it('serializes tag deltas so a concurrent add cannot restore a removed tag', async () => {
-		await testDb.insert(schema.account).values({
+		await makeAccount(testDb, {
 			id: rowId('account-tags'),
 			name: 'Tag account',
 			bank: 'other',
 			currency: 'CZK'
 		});
-		await testDb.insert(schema.transaction).values({
+		await makeTransaction(testDb, {
 			id: rowId('transaction-tags'),
 			accountId: rowId('account-tags'),
 			bookedOn: '2026-08-15',
@@ -820,7 +829,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('applies the shared delta mutation to property tags', async () => {
-		await testDb.insert(schema.property).values({
+		await makeProperty(testDb, {
 			id: rowId('property-tags'),
 			name: 'Tagged flat',
 			kind: 'lived',
@@ -838,7 +847,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('applies the shared delta mutation to loan tags', async () => {
-		await testDb.insert(schema.loan).values({
+		await makeLoan(testDb, {
 			id: rowId('loan-tags'),
 			name: 'Tagged loan',
 			principalMinor: 10000n,
@@ -856,9 +865,7 @@ describe('domain replacement writes', () => {
 	});
 
 	it('keeps the prior tax statement and lines when replacement line insertion fails', async () => {
-		await testDb
-			.insert(schema.person)
-			.values({ id: rowId('person-a'), name: 'Person A', initials: 'PA' });
+		await makePerson(testDb, { id: rowId('person-a'), name: 'Person A', initials: 'PA' });
 		const base = {
 			personId: rowId('person-a'),
 			year: 2025,

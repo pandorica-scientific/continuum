@@ -3,9 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
-import { contact, document, documentLink } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { document, documentLink } from '$lib/server/db/schema';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { asAdmin, asMember, makeContact, makeDocument, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -28,18 +29,6 @@ let previousUrl: string | undefined;
 const CONTACT = rowId('cd-contact');
 const OTHER_CONTACT = rowId('cd-other-contact');
 
-/** A session as a route loader sees it, wide enough for either role. */
-interface Locals {
-	person: { id: string; name: string; initials: string; role: 'admin' | 'member'; theme: null };
-}
-
-const asAdmin: Locals = {
-	person: { id: rowId('cd-admin'), name: 'Admin', initials: 'A', role: 'admin', theme: null }
-};
-const asMember: Locals = {
-	person: { id: rowId('cd-member'), name: 'Member', initials: 'M', role: 'member', theme: null }
-};
-
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
 	harness = await startPostgres('contact-documents', { max: 1 });
@@ -56,10 +45,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate document, contact cascade`;
-	await testDb.insert(contact).values([
-		{ id: CONTACT, name: 'Jana Nováková' },
-		{ id: OTHER_CONTACT, name: 'Petr Svoboda' }
-	]);
+	await makeContact(testDb, { id: CONTACT, name: 'Jana Nováková' });
+	await makeContact(testDb, { id: OTHER_CONTACT, name: 'Petr Svoboda' });
 });
 
 async function seedDocument(options: {
@@ -68,10 +55,10 @@ async function seedDocument(options: {
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfId: await shelfIdByKey('inbox', testDb),
+		shelfKey: 'inbox',
 		type: 'other',
 		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
@@ -81,7 +68,7 @@ async function seedDocument(options: {
 	return id;
 }
 
-async function loadContacts(locals: Locals) {
+async function loadContacts(locals: SessionLocals) {
 	const { load } = await import('../../src/routes/(app)/contacts/+page.server');
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return (await (load as any)({
@@ -101,7 +88,7 @@ async function loadContacts(locals: Locals) {
 async function postAction(
 	action: 'attachDocument' | 'detachDocument',
 	fields: Record<string, string>,
-	locals: Locals
+	locals: SessionLocals
 ) {
 	const { actions } = await import('../../src/routes/(app)/contacts/+page.server');
 	const form = new FormData();

@@ -7,71 +7,8 @@
  * unused.
  */
 import { describe, expect, it } from 'vitest';
-import { render } from 'svelte/server';
-import TagsPanel from '$lib/components/TagsPanel.svelte';
+
 import { reach } from '$lib/tags-view';
-import type { TagsScreen } from '$lib/server/tags/screen';
-
-type TagRow = TagsScreen['tags'][number];
-
-const tag = (over: Partial<TagRow> = {}): TagRow => ({
-	id: 't1',
-	name: 'Renovation',
-	tagged: 0,
-	rules: 0,
-	transactions: 0,
-	splitLines: 0,
-	documents: [],
-	documentsMore: 0,
-	properties: [],
-	propertiesMore: 0,
-	loans: [],
-	loansMore: 0,
-	parts: [],
-	converted: '0.00 CZK',
-	mixed: false,
-	empty: true,
-	...over
-});
-
-const screen = (tags: TagRow[]): TagsScreen => ({ baseCurrency: 'CZK', tags });
-
-describe('the tags panel', () => {
-	it('lists a tagged loan with a link to the loans screen', () => {
-		const { body } = render(TagsPanel, {
-			props: {
-				screen: screen([tag({ loans: [{ id: 'l1', name: 'Family mortgage' }], tagged: 1 })])
-			}
-		});
-		expect(body).toContain('Family mortgage');
-		expect(body).toContain('href="/loans"');
-	});
-
-	it('shows a split-only tag as a line count rather than an empty row', () => {
-		const { body } = render(TagsPanel, {
-			props: { screen: screen([tag({ splitLines: 3 })]) }
-		});
-		expect(body).toContain('+3 on transaction lines');
-	});
-
-	it('says nothing about loans or split lines when there are none', () => {
-		const { body } = render(TagsPanel, {
-			props: { screen: screen([tag()]) }
-		});
-		expect(body).not.toContain('href="/loans"');
-		expect(body).not.toContain('on transaction lines');
-	});
-
-	// A tag applied only to whole transactions has no card in the item list
-	// either — the same reason a split-only tag gets "+n on transaction lines"
-	// rather than vanishing.
-	it('shows a hint for tags carried only by whole transactions', () => {
-		const { body } = render(TagsPanel, {
-			props: { screen: screen([tag({ transactions: 2 })]) }
-		});
-		expect(body).toContain('+2 on transactions');
-	});
-});
 
 // `reach` is what the delete confirmation renders ("untags N · M rules stop
 // applying it"). Pulled out as a pure function, the way `documentExpiryTone`

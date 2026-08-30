@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeTransaction } from './fixtures';
 import { latestMonthWithData } from '$lib/server/cashflow';
 
 let harness: Harness;
@@ -15,7 +15,7 @@ async function addTransaction(fields: {
 	transferPairId?: string | null;
 }): Promise<void> {
 	const key = `txn-${fields.bookedOn}-${fields.valueOn ?? 'none'}`;
-	await testDb.insert(schema.transaction).values({
+	await makeTransaction(testDb, {
 		id: rowId(key),
 		accountId: ACCOUNT,
 		bookedOn: fields.bookedOn,
@@ -41,7 +41,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate account cascade`;
-	await testDb.insert(schema.account).values({
+	await makeAccount(testDb, {
 		id: ACCOUNT,
 		name: 'Current',
 		bank: 'fio',

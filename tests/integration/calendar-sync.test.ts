@@ -9,6 +9,7 @@ import type { EventSeries } from '$lib/server/calendar/series';
 import { toRemoteId } from '$lib/calendar/keys';
 import { calendarConflicts, calendarSyncFailures } from '$lib/server/briefing';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeLoan } from './fixtures';
 import { FakeCalendarProvider } from './fake-calendar-provider';
 
 const ACCOUNT = rowId('acct-1');
@@ -272,7 +273,7 @@ describe('write-back into the ledger', () => {
 	async function seedLoan(paymentDay: number) {
 		const id = randomUUID();
 		const today = new Date().toISOString().slice(0, 10);
-		await testDb.insert(schema.loan).values({
+		await makeLoan(testDb, {
 			id,
 			name: 'Mortgage ČS',
 			lender: 'Česká spořitelna',

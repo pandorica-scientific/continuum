@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import * as schema from '$lib/server/db/schema';
 import { CATEGORY_GROUP_SEED } from '$lib/categories';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeTransaction } from './fixtures';
 import {
 	createCategory,
 	createCategoryGroup,
@@ -157,10 +158,14 @@ describe('deleteCategory', () => {
 		expect(vet.ok && food.ok).toBe(true);
 
 		const account = '11111111-1111-4111-8111-111111111111';
-		await testDb
-			.insert(schema.account)
-			.values({ id: account, name: 'Current', bank: 'fio', kind: 'current', currency: 'CZK' });
-		await testDb.insert(schema.transaction).values({
+		await makeAccount(testDb, {
+			id: account,
+			name: 'Current',
+			bank: 'fio',
+			kind: 'current',
+			currency: 'CZK'
+		});
+		await makeTransaction(testDb, {
 			id: '22222222-2222-4222-8222-222222222222',
 			accountId: account,
 			bookedOn: '2026-07-01',

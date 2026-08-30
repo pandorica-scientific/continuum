@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import { document } from '$lib/server/db/schema';
+
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { computeNetWorth } from '$lib/server/networth';
 import { loadRateTable } from '$lib/server/fx/table';
 import { expenseSpendingByMonth } from '$lib/server/cashflow/spending';
 import { panelData } from '$lib/server/overview';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 /**
  * The Paper panel counts, and a count is exactly where the read rule leaks.
@@ -61,7 +62,7 @@ async function seed(options: {
 	expiresOn?: string;
 	addedOn?: string;
 }): Promise<void> {
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id: uuidv7(),
 		name: options.name,
 		shelfId: await shelfIdByKey(options.shelf, testDb),

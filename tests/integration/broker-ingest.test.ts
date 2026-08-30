@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { rowId } from '../row-id';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount } from './fixtures';
 import { ingestReport } from '$lib/server/invest/ingest';
 import { brokerReports, uploadBrokerReport } from '$lib/server/invest/reports';
 import { hashBytes, readUpload } from '$lib/server/system/files';
@@ -169,7 +170,7 @@ describe('broker ingest', () => {
 describe('the broker report upload becomes a document (decision D8)', () => {
 	it('stores the file and files one broker_report document on Statements, linked to the sole brokerage account', async () => {
 		const accountId = rowId('xtb-account');
-		await testDb.insert(schema.account).values({
+		await makeAccount(testDb, {
 			id: accountId,
 			name: 'XTB',
 			bank: 'other',
@@ -269,22 +270,20 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 		expect(adminDocs[0].id).toBe(doc.id);
 	});
 	it('leaves the account link empty when there is more than one brokerage account', async () => {
-		await testDb.insert(schema.account).values([
-			{
-				id: rowId('xtb-account-a'),
-				name: 'XTB A',
-				bank: 'other',
-				kind: 'brokerage',
-				currency: 'EUR'
-			},
-			{
-				id: rowId('xtb-account-b'),
-				name: 'XTB B',
-				bank: 'other',
-				kind: 'brokerage',
-				currency: 'EUR'
-			}
-		]);
+		await makeAccount(testDb, {
+			id: rowId('xtb-account-a'),
+			name: 'XTB A',
+			bank: 'other',
+			kind: 'brokerage',
+			currency: 'EUR'
+		});
+		await makeAccount(testDb, {
+			id: rowId('xtb-account-b'),
+			name: 'XTB B',
+			bank: 'other',
+			kind: 'brokerage',
+			currency: 'EUR'
+		});
 		const bytes = makeXtbWorkbook('2026-07-12 10:00:00');
 		await uploadBrokerReport('account_statement.xlsx', bytes, testDb);
 

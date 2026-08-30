@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeTransaction } from './fixtures';
 import { clearOneSidedTransfer, markOneSidedTransfer } from '$lib/server/import/transfer-decisions';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 import { pairAndCategorise } from '$lib/server/import/ingest';
@@ -26,13 +27,21 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate account cascade`;
-	await testDb.insert(schema.account).values([
-		{ id: CURRENT, name: 'Current', bank: 'fio', kind: 'current', currency: 'CZK' },
-		// Recorded so transfers can name it, with no statement ever imported —
-		// which is the whole point of the feature.
-		{ id: SAVINGS, name: 'Savings', bank: 'fio', kind: 'savings', currency: 'CZK' }
-	]);
-	await testDb.insert(schema.transaction).values({
+	await makeAccount(testDb, {
+		id: CURRENT,
+		name: 'Current',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK'
+	});
+	await makeAccount(testDb, {
+		id: SAVINGS,
+		name: 'Savings',
+		bank: 'fio',
+		kind: 'savings',
+		currency: 'CZK'
+	});
+	await makeTransaction(testDb, {
 		id: MOVE,
 		accountId: CURRENT,
 		bookedOn: '2026-07-15',
@@ -82,7 +91,7 @@ describe('markOneSidedTransfer', () => {
 	it('refuses a row that already has a matching leg', async () => {
 		// Two statements agreeing is stronger evidence than one person's claim.
 		const other = rowId('txn-other');
-		await testDb.insert(schema.transaction).values({
+		await makeTransaction(testDb, {
 			id: other,
 			accountId: SAVINGS,
 			bookedOn: '2026-07-15',

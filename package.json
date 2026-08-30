@@ -19,6 +19,8 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"test:unit": "vitest run",
+		"test:index": "node scripts/test-index.mjs",
+		"test:where": "node scripts/test-where.mjs",
 		"fetch:tessdata": "node scripts/fetch-tessdata.mjs",
 		"scan:unused": "node scripts/unused-exports.mjs",
 		"version:sync": "node scripts/sync-version.mjs",

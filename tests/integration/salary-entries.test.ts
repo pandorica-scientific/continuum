@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { rowId } from '../row-id';
-import { account, document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { document, documentLink, salaryEntry } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makePerson } from './fixtures';
 import {
 	attributeSalary,
 	attributionKey,
@@ -37,21 +38,23 @@ beforeEach(async () => {
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from account`;
 	await harness.sql`delete from person`;
-	await testDb.insert(person).values([
-		{ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' },
-		{ id: KSENIYA, name: 'Kseniya', initials: 'K', role: 'member' }
-	]);
-	await testDb.insert(account).values([
-		{ id: JOINT, name: 'Joint', bank: 'fio', kind: 'current', currency: 'CZK' },
-		{
-			id: HERS,
-			name: 'Hers',
-			bank: 'fio',
-			kind: 'current',
-			currency: 'CZK',
-			ownerPersonId: KSENIYA
-		}
-	]);
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
+	await makePerson(testDb, { id: KSENIYA, name: 'Kseniya', initials: 'K', role: 'member' });
+	await makeAccount(testDb, {
+		id: JOINT,
+		name: 'Joint',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK'
+	});
+	await makeAccount(testDb, {
+		id: HERS,
+		name: 'Hers',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK',
+		ownerPersonId: KSENIYA
+	});
 });
 
 const month = async () =>

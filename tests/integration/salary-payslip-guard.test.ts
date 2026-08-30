@@ -15,11 +15,12 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { document, documentLink, salaryEntry } from '$lib/server/db/schema';
 import { recordSalary } from '$lib/server/salary';
 import { hashBytes } from '$lib/server/system/files';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
 // module, which is before this suite picks its database and upload directory.
@@ -74,19 +75,17 @@ beforeEach(async () => {
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from document`;
 	await harness.sql`delete from person`;
-	await testDb.insert(person).values([
-		{ id: ADMIN, name: 'Admin', initials: 'A', role: 'admin' },
-		{ id: PETRA, name: 'Petra', initials: 'P', role: 'member' },
-		{ id: ROBERT, name: 'Robert', initials: 'R', role: 'member' }
-	]);
+	await makePerson(testDb, { id: ADMIN, name: 'Admin', initials: 'A', role: 'admin' });
+	await makePerson(testDb, { id: PETRA, name: 'Petra', initials: 'P', role: 'member' });
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'member' });
 });
 
 /** Petra's July payslip, restricted, with the salary month it evidences. */
 async function seedRestrictedSlip(): Promise<void> {
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id: SLIP,
 		name: 'Payslip 2026-07 · Petra',
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'payslip',
 		storedName: 'petra-july.pdf',
 		ext: 'PDF',

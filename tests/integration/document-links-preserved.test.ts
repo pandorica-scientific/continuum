@@ -2,17 +2,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import {
-	account,
-	document,
-	documentLink,
-	person,
-	property,
-	taxStatement,
-	transaction
-} from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { documentLink, taxStatement } from '$lib/server/db/schema';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeDocument, makePerson, makeProperty, makeTransaction } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -58,24 +51,20 @@ beforeAll(async () => {
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
 
-	await testDb.insert(person).values([
-		{ id: target.person, name: 'Jana Nováková', initials: 'JN' },
-		{ id: target.otherPerson, name: 'Petr Novák', initials: 'PN' }
-	]);
-	await testDb
-		.insert(property)
-		.values({ id: target.property, name: 'Vinohrady flat', kind: 'lived' });
+	await makePerson(testDb, { id: target.person, name: 'Jana Nováková', initials: 'JN' });
+	await makePerson(testDb, { id: target.otherPerson, name: 'Petr Novák', initials: 'PN' });
+	await makeProperty(testDb, { id: target.property, name: 'Vinohrady flat', kind: 'lived' });
 	// A CURRENT account, deliberately: the Documents screen used to load
 	// brokerage accounts only, so a bank statement's own account had no name and
 	// no chip — which is exactly how its link got thrown away.
-	await testDb.insert(account).values({
+	await makeAccount(testDb, {
 		id: target.account,
 		name: 'Current account',
 		bank: 'other',
 		kind: 'current',
 		currency: 'CZK'
 	});
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id: target.transaction,
 		accountId: target.account,
 		bookedOn: '2026-03-04',
@@ -108,10 +97,10 @@ beforeEach(async () => {
 const DOC = rowId('dlp-doc');
 
 async function seedDocument(name: string, links: string[]): Promise<string> {
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id: DOC,
 		name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		storedName: `${DOC}.pdf`,
 		ext: 'PDF',
@@ -314,10 +303,10 @@ describe('saving a document', () => {
 		// one, so it is never on the form; the diff must not read that silence as
 		// a removal. Same failure as the receipt's transaction, different key.
 		const other = rowId('dlp-other-doc');
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id: other,
 			name: 'Something else',
-			shelfId: await shelfIdByKey('household', testDb),
+			shelfKey: 'household',
 			type: 'other',
 			addedOn: '2026-01-01'
 		});

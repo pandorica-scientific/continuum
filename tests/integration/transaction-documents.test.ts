@@ -5,6 +5,7 @@ import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeTransaction } from './fixtures';
 import { loadTransactionDocuments } from '$lib/server/transactions/documents';
 import { createDocument } from '$lib/server/documents/mutations';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
@@ -100,27 +101,29 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate account, document, subject cascade`;
-	await testDb
-		.insert(schema.account)
-		.values({ id: ACCOUNT, name: 'Current', bank: 'fio', kind: 'current', currency: 'CZK' });
-	await testDb.insert(schema.transaction).values([
-		{
-			id: TXN,
-			accountId: ACCOUNT,
-			bookedOn: '2026-07-20',
-			amountMinor: -45000n,
-			currency: 'CZK',
-			dedupFingerprint: 'td-txn-a'
-		},
-		{
-			id: OTHER_TXN,
-			accountId: ACCOUNT,
-			bookedOn: '2026-07-21',
-			amountMinor: -12000n,
-			currency: 'CZK',
-			dedupFingerprint: 'td-txn-b'
-		}
-	]);
+	await makeAccount(testDb, {
+		id: ACCOUNT,
+		name: 'Current',
+		bank: 'fio',
+		kind: 'current',
+		currency: 'CZK'
+	});
+	await makeTransaction(testDb, {
+		id: TXN,
+		accountId: ACCOUNT,
+		bookedOn: '2026-07-20',
+		amountMinor: -45000n,
+		currency: 'CZK',
+		dedupFingerprint: 'td-txn-a'
+	});
+	await makeTransaction(testDb, {
+		id: OTHER_TXN,
+		accountId: ACCOUNT,
+		bookedOn: '2026-07-21',
+		amountMinor: -12000n,
+		currency: 'CZK',
+		dedupFingerprint: 'td-txn-b'
+	});
 	await addDocument(DOC, 'Vet receipt');
 });
 

@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { property, propertyOpening } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeProperty } from './fixtures';
 import {
 	moneyInFromOpening,
 	recordOpening,
@@ -29,7 +30,7 @@ beforeEach(async () => {
 	await harness.sql`delete from property_valuation`;
 	await harness.sql`delete from property_opening`;
 	await harness.sql`delete from property`;
-	await testDb.insert(property).values({
+	await makeProperty(testDb, {
 		id: FLAT,
 		name: 'Karlín',
 		kind: 'lived',

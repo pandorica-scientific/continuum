@@ -2,7 +2,8 @@ import { rowId } from '../row-id';
 import { asc } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startPostgres, type Harness, type TestDb } from './harness';
-import { person, property } from '$lib/server/db/schema';
+import { makePerson, makeProperty } from './fixtures';
+import { person } from '$lib/server/db/schema';
 import { listProperties } from '$lib/server/property/queries';
 
 // Rows created in one statement share a created_at to the microsecond, and
@@ -29,10 +30,20 @@ describe('lists ordered by creation time', () => {
 	it('keeps properties in the same order after one of them is edited', async () => {
 		// One statement, so both rows carry the same created_at — exactly what the
 		// setup wizard and the demo seed produce.
-		await db.insert(property).values([
-			{ id: rowId('p-first'), name: 'First', sizeLabel: '2+kk', kind: 'lived', currency: 'CZK' },
-			{ id: rowId('p-second'), name: 'Second', sizeLabel: '3+kk', kind: 'rented', currency: 'CZK' }
-		]);
+		await makeProperty(db, {
+			id: rowId('p-first'),
+			name: 'First',
+			sizeLabel: '2+kk',
+			kind: 'lived',
+			currency: 'CZK'
+		});
+		await makeProperty(db, {
+			id: rowId('p-second'),
+			name: 'Second',
+			sizeLabel: '3+kk',
+			kind: 'rented',
+			currency: 'CZK'
+		});
 
 		// The loader's own query, so this cannot pass while production drifts.
 		const read = async () => (await listProperties(db)).map((p) => p.id);
@@ -47,10 +58,8 @@ describe('lists ordered by creation time', () => {
 	});
 
 	it('keeps person one and person two the same people after an edit', async () => {
-		await db.insert(person).values([
-			{ id: rowId('q-one'), name: 'One', initials: 'O', birthYear: 1988 },
-			{ id: rowId('q-two'), name: 'Two', initials: 'T', birthYear: 1990 }
-		]);
+		await makePerson(db, { id: rowId('q-one'), name: 'One', initials: 'O', birthYear: 1988 });
+		await makePerson(db, { id: rowId('q-two'), name: 'Two', initials: 'T', birthYear: 1990 });
 
 		const read = async () =>
 			(await db.select().from(person).orderBy(asc(person.createdAt), asc(person.id))).map(

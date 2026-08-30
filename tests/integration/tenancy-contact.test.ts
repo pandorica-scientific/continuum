@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeContact, makeProperty } from './fixtures';
 import { createTenancy, setPropertyFigure } from '$lib/server/property/mutations';
 
 let harness: Harness;
@@ -59,7 +60,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate property, contact cascade`;
-	await testDb.insert(schema.property).values({
+	await makeProperty(testDb, {
 		id: PROPERTY,
 		name: 'Flat A',
 		kind: 'rented',
@@ -80,7 +81,7 @@ describe('createTenancy', () => {
 	});
 
 	it('reuses an existing contact rather than creating a second one', async () => {
-		await testDb.insert(schema.contact).values({
+		await makeContact(testDb, {
 			id: rowId('contact-martin'),
 			name: 'Martin Dvořák',
 			phone: '+420 111 222 333'
@@ -96,7 +97,7 @@ describe('createTenancy', () => {
 	});
 
 	it('matches an existing contact whose name differs only by diacritics or case', async () => {
-		await testDb.insert(schema.contact).values({
+		await makeContact(testDb, {
 			id: rowId('contact-martin'),
 			name: 'Martin Dvořák'
 		});

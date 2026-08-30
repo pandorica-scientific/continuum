@@ -34,23 +34,6 @@ describe('the scan tokens', () => {
 		expect(required.filter((token) => !css.includes(`${token}:`))).toEqual([]);
 	});
 
-	it('declares the motion beats the design specifies but nothing has built yet', () => {
-		// Kept apart from the list above on purpose. Every token there is read by
-		// a rule somewhere; these three are read by nothing, and never have been.
-		// They belong to the design's capture collapse — the outline travelling
-		// into the thumbnail — which is specified and not implemented.
-		//
-		// Asserting them alongside the live tokens made a green suite look like
-		// the motion design was delivered. Listed separately, the split is the
-		// documentation: values measured and agreed, beats not built. Move one up
-		// when a rule starts reading it, and delete this test when the list is
-		// empty.
-		const reserved = ['--motion-snap', '--motion-capture', '--motion-settle'];
-		expect(reserved.filter((token) => !css.includes(`${token}:`))).toEqual([]);
-		const stylesheets = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
-		expect(reserved.filter((token) => stylesheets.includes(`var(${token})`))).toEqual([]);
-	});
-
 	it('pins the four scrim tokens across both themes', () => {
 		// A camera frame is not a themed surface: its luminance is unknown and
 		// changes every frame. `--plate`'s light override is near-white, correct

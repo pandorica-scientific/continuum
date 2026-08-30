@@ -13,8 +13,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rowId } from '../row-id';
 import * as schema from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
 // module, which happens before this suite picks its port. A live getter is the
@@ -89,7 +90,7 @@ async function restore(dump: string): Promise<void> {
 
 describe('dumpDatabase', () => {
 	it('never names a generated column in a COPY header', async () => {
-		await testDb.insert(schema.person).values({ id: PERSON, name: 'Person A', initials: 'PA' });
+		await makePerson(testDb, { id: PERSON, name: 'Person A', initials: 'PA' });
 
 		const dump = await dumpDatabase();
 
@@ -123,10 +124,10 @@ describe('dumpDatabase', () => {
 
 	it('reloads every row it wrote out', async () => {
 		await testDb.insert(schema.subject).values({ id: SUBJECT, name: 'Car', emoji: '🚗' });
-		await testDb.insert(schema.document).values({
+		await makeDocument(testDb, {
 			id: DOCUMENT,
 			name: 'Passport · Person A',
-			shelfId: await shelfIdByKey('identity', testDb),
+			shelfKey: 'identity',
 			type: 'id_document',
 			ext: 'PDF',
 			addedOn: '2026-08-23'

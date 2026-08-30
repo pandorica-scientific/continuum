@@ -22,11 +22,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import {
-	account,
 	document,
 	documentLink,
 	importFile,
-	person,
 	salaryEntry,
 	transaction
 } from '$lib/server/db/schema';
@@ -37,6 +35,7 @@ import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { recordSalary } from '$lib/server/salary';
 import { saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makeDocument, makePerson, makeTransaction } from './fixtures';
 
 // $env/dynamic/private snapshots process.env when Vite builds the virtual
 // module, which is before this suite picks the directory its uploads live in.
@@ -93,7 +92,7 @@ async function ingestOneStatement(
 	accountId: string,
 	label = 'fio'
 ): Promise<{ importFileId: string; documentId: string; storedName: string }> {
-	await testDb.insert(account).values({
+	await makeAccount(testDb, {
 		id: accountId,
 		name: 'Fio',
 		bank: 'fio',
@@ -168,11 +167,9 @@ const CARRIES_AN_ENTRY =
 	'This payslip carries a salary entry; delete it from the Salary screen to unhook it.';
 
 async function seedHousehold(): Promise<void> {
-	await testDb.insert(person).values([
-		{ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' },
-		{ id: KSENIYA, name: 'Kseniya', initials: 'K', role: 'member' }
-	]);
-	await testDb.insert(account).values({
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
+	await makePerson(testDb, { id: KSENIYA, name: 'Kseniya', initials: 'K', role: 'member' });
+	await makeAccount(testDb, {
 		id: ACCOUNT,
 		name: 'Current',
 		bank: 'fio',
@@ -189,7 +186,7 @@ async function seedHousehold(): Promise<void> {
  * in rather than opening a second row beside it.
  */
 async function bankCredit(periodMonth: string, netMinor: bigint): Promise<void> {
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id: CREDIT,
 		accountId: ACCOUNT,
 		bookedOn: `${periodMonth}-05`,
@@ -220,10 +217,10 @@ async function payslip(
 	id = SLIP
 ): Promise<{ id: string; storedName: string }> {
 	const storedName = await saveUploadBytes(PAYSLIP_BYTES, 'payslip.pdf');
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${periodMonth} · Robert`,
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'payslip',
 		storedName,
 		ext: 'PDF',
@@ -462,10 +459,10 @@ describe('a bulk edit that would retype a payslip', () => {
 
 	async function plainDocument(name: string): Promise<string> {
 		const id = rowId(`dl-bulk-${name}`);
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id,
 			name,
-			shelfId: await shelfIdByKey('household', testDb),
+			shelfKey: 'household',
 			type: 'other',
 			addedOn: '2026-08-25'
 		});
@@ -570,10 +567,10 @@ describe('a bulk edit that would retype a payslip', () => {
 		// edit that only meant to move a shelf or add a tag.
 		await seedHousehold();
 		const letter = rowId('dl-bulk-untouched');
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id: letter,
 			name: 'Untouched',
-			shelfId: await shelfIdByKey('household', testDb),
+			shelfKey: 'household',
 			type: 'correspondence',
 			addedOn: '2026-08-25'
 		});

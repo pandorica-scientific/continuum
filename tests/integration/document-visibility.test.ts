@@ -7,6 +7,7 @@ import { document } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 /**
  * Restricted is an invariant, not a screen filter.
@@ -43,7 +44,7 @@ async function seedDocuments(counts: { normal: number; restricted: number }): Pr
 		for (let i = 0; i < n; i++) {
 			const id = uuidv7();
 			ids.push(id);
-			await testDb.insert(document).values({
+			await makeDocument(testDb, {
 				id,
 				name: `${sensitivity} ${i}`,
 				shelfId,

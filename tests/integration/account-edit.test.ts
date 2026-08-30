@@ -3,8 +3,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
-import { account, bank, person, transaction } from '$lib/server/db/schema';
+import { account, bank, transaction } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount, makePerson } from './fixtures';
 import { parseAccountNumbers, updateAccount } from '$lib/server/accounts';
 
 let harness: Harness;
@@ -30,8 +31,8 @@ beforeEach(async () => {
 		.insert(bank)
 		.values({ key: 'fio', label: 'Fio banka', emoji: '🏦' })
 		.onConflictDoNothing();
-	await testDb.insert(person).values({ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
-	await testDb.insert(account).values({
+	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
+	await makeAccount(testDb, {
 		id: ACCOUNT,
 		name: 'Currnet',
 		bank: 'fio',

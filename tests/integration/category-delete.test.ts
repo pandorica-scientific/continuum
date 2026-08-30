@@ -3,8 +3,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { rowId } from '../row-id';
-import { account, category, categoryGroup, rule, transaction } from '$lib/server/db/schema';
+import { category, categoryGroup, rule, transaction } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeAccount } from './fixtures';
 import { countCategoryDependants, deleteCategory } from '$lib/server/categorize/taxonomy';
 
 let harness: Harness;
@@ -44,7 +45,7 @@ beforeEach(async () => {
 			isCatchAll: true
 		}
 	]);
-	await testDb.insert(account).values({
+	await makeAccount(testDb, {
 		id: ACCOUNT,
 		name: 'Current',
 		bank: 'fio',

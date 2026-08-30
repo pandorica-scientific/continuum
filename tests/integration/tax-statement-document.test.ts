@@ -15,6 +15,7 @@ import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { detachDocument } from '$lib/server/documents/targets';
 import { recordSalary } from '$lib/server/salary';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 import {
 	attachDocumentsToStatement,
 	loadStatements,
@@ -93,7 +94,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`truncate table entity, person, document, tax_statement restart identity cascade`;
-	await testDb.insert(schema.person).values({ id: PERSON, name: 'Person A', initials: 'PA' });
+	await makePerson(testDb, { id: PERSON, name: 'Person A', initials: 'PA' });
 });
 
 describe('a statement that brings its own document', () => {
@@ -359,10 +360,10 @@ describe('loadStatements', () => {
 	it('does not mistake a document filed against a person for an attachment', async () => {
 		// The far end of a document_link is any entity. A bare join would sweep
 		// in every document filed against a person, a flat or a transaction.
-		await testDb.insert(schema.document).values({
+		await makeDocument(testDb, {
 			id: rowId('loose-doc'),
 			name: 'Passport · Person A',
-			shelfId: await shelfIdByKey('identity', testDb),
+			shelfKey: 'identity',
 			type: 'id_document',
 			ext: 'PDF',
 			addedOn: '2026-08-23'
@@ -412,10 +413,10 @@ describe('deleteAttachment', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 
 		const slipId = rowId('payslip-attachment');
-		await testDb.insert(schema.document).values({
+		await makeDocument(testDb, {
 			id: slipId,
 			name: 'Payslip 2025-06 · Person A',
-			shelfId: await shelfIdByKey('finance', testDb),
+			shelfKey: 'finance',
 			type: 'payslip',
 			storedName: '22222222-2222-2222-2222-222222222222.pdf',
 			ext: 'PDF',

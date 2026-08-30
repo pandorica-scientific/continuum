@@ -5,18 +5,12 @@ import { rowId } from '../row-id';
 import { ENTITY_KINDS } from '$lib/enums';
 import { displayCurrency } from '$lib/money';
 import {
-	account,
-	contact,
 	document,
 	documentLink,
-	loan,
-	person,
-	property,
 	subject,
 	tagLink,
 	taxStatement,
-	tenancy,
-	transaction
+	tenancy
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { upsertTag } from '$lib/server/tags';
@@ -32,6 +26,15 @@ import {
 	loadTargetNames
 } from '$lib/server/documents/targets';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import {
+	makeAccount,
+	makeContact,
+	makeDocument,
+	makeLoan,
+	makePerson,
+	makeProperty,
+	makeTransaction
+} from './fixtures';
 
 /**
  * The one place that knows what a document can be filed against.
@@ -72,34 +75,32 @@ beforeAll(async () => {
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
 
-	await testDb.insert(person).values({ id: target.person, name: 'Jana Nováková', initials: 'JN' });
-	await testDb
-		.insert(property)
-		.values({ id: target.property, name: 'Vinohrady flat', kind: 'lived' });
+	await makePerson(testDb, { id: target.person, name: 'Jana Nováková', initials: 'JN' });
+	await makeProperty(testDb, { id: target.property, name: 'Vinohrady flat', kind: 'lived' });
 	await testDb
 		.insert(tenancy)
 		.values({ id: target.tenancy, propertyId: target.property, tenantName: 'Petr Nájemník' });
 	// A current account, deliberately: the name expression covers every kind,
 	// where the Documents screen used to offer brokerage accounts only.
-	await testDb.insert(account).values({
+	await makeAccount(testDb, {
 		id: target.account,
 		name: 'Current account',
 		bank: 'other',
 		kind: 'current',
 		currency: 'CZK'
 	});
-	await testDb.insert(loan).values({
+	await makeLoan(testDb, {
 		id: target.loan,
 		name: 'Flat mortgage',
 		principalMinor: 1_000_000n,
 		owedMinor: 900_000n
 	});
-	await testDb.insert(contact).values({ id: target.contact, name: 'Plumber' });
+	await makeContact(testDb, { id: target.contact, name: 'Plumber' });
 	await testDb.insert(subject).values({ id: target.subject, name: 'The car' });
 	await testDb
 		.insert(subject)
 		.values({ id: archivedSubject, name: 'The old car', archivedAt: new Date() });
-	await testDb.insert(transaction).values({
+	await makeTransaction(testDb, {
 		id: target.transaction,
 		accountId: target.account,
 		bookedOn: '2026-03-04',
@@ -138,10 +139,10 @@ interface SeedOptions {
 
 async function seedDocument(options: SeedOptions): Promise<string> {
 	const id = rowId(`dt-doc-${options.name}`);
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfId: await shelfIdByKey('household', testDb),
+		shelfKey: 'household',
 		type: 'other',
 		sensitivity: options.sensitivity ?? 'normal',
 		storedName: `${id}.pdf`,
@@ -402,7 +403,7 @@ describe('the documents about a record', () => {
 		const idLow = '11111111-1111-5111-8111-111111111111';
 		const shelfId = await shelfIdByKey('household', testDb);
 		for (const id of [idHigh, idLow]) {
-			await testDb.insert(document).values({
+			await makeDocument(testDb, {
 				id,
 				name: 'Same name',
 				shelfId,
@@ -556,7 +557,7 @@ describe('what is left to attach', () => {
 		const idLow = '22222222-2222-5222-8222-222222222221';
 		const shelfId = await shelfIdByKey('household', testDb);
 		for (const id of [idHigh, idLow]) {
-			await testDb.insert(document).values({
+			await makeDocument(testDb, {
 				id,
 				name: 'Same name',
 				shelfId,

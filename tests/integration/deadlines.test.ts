@@ -1,19 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import {
-	document,
-	documentLink,
-	loan,
-	loanFixationPeriod,
-	property,
-	tenancy
-} from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { documentLink, loanFixationPeriod, tenancy } from '$lib/server/db/schema';
+
 import { buildBriefing } from '$lib/server/briefing';
 import { generateEvents } from '$lib/server/calendar';
 import { setSetting } from '$lib/server/settings';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makeLoan, makeProperty } from './fixtures';
 
 /**
  * D7: the record owns the deadline.
@@ -69,10 +63,10 @@ const beyondTheLeaseWindow = new Date(Date.now() + 150 * 86400000).toISOString()
 
 async function seedLeaseDocument(expiresOn: string, targetId: string): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: 'Renting contract · Karlín',
-		shelfId: await shelfIdByKey('tenancy', testDb),
+		shelfKey: 'tenancy',
 		type: 'contract',
 		addedOn: '2026-01-01',
 		expiresOn,
@@ -84,7 +78,7 @@ async function seedLeaseDocument(expiresOn: string, targetId: string): Promise<s
 
 async function seedTenancy(endsOn: string): Promise<{ tenancyId: string; propertyId: string }> {
 	const propertyId = uuidv7();
-	await testDb.insert(property).values({ id: propertyId, name: 'Flat Karlín', kind: 'rented' });
+	await makeProperty(testDb, { id: propertyId, name: 'Flat Karlín', kind: 'rented' });
 	const tenancyId = uuidv7();
 	await testDb.insert(tenancy).values({
 		id: tenancyId,
@@ -101,7 +95,7 @@ async function seedLoanWithCurrentFixation(
 	overrides: { regime?: 'fixed_period' | 'fixed_term' | 'floating'; owedMinor?: bigint } = {}
 ): Promise<{ loanId: string }> {
 	const loanId = uuidv7();
-	await testDb.insert(loan).values({
+	await makeLoan(testDb, {
 		id: loanId,
 		name: 'Mortgage ČS',
 		regime: overrides.regime ?? 'fixed_period',
@@ -133,10 +127,10 @@ async function seedLoanWithCurrentFixation(
 
 async function seedRefixLetter(expiresOn: string, loanId: string): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(document).values({
+	await makeDocument(testDb, {
 		id,
 		name: 'Mortgage re-fixation letter',
-		shelfId: await shelfIdByKey('finance', testDb),
+		shelfKey: 'finance',
 		type: 'contract',
 		addedOn: '2026-01-01',
 		expiresOn,

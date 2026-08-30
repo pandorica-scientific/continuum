@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { rowId } from '../row-id';
-import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
+import { document, documentLink, salaryEntry } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument, makePerson } from './fixtures';
 import { latestSalaryByPerson, loadSalaryHistory } from '$lib/server/salary';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 
@@ -30,9 +31,13 @@ beforeEach(async () => {
 	await harness.sql`delete from salary_entry`;
 	await harness.sql`delete from document`;
 	await harness.sql`delete from person`;
-	await testDb
-		.insert(person)
-		.values([{ id: ROBERT, name: 'Robert', initials: 'R', role: 'admin', birthYear: 1990 }]);
+	await makePerson(testDb, {
+		id: ROBERT,
+		name: 'Robert',
+		initials: 'R',
+		role: 'admin',
+		birthYear: 1990
+	});
 });
 
 describe('loadSalaryHistory', () => {
@@ -40,10 +45,10 @@ describe('loadSalaryHistory', () => {
 		// The document is the FILE: it names the month it covers and nothing about
 		// money. A payslip that also carried an amount was read as gross while the
 		// reader had picked net, which is why the column is gone.
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id: DOC,
 			name: 'Payslip 2026-08 · Robert',
-			shelfId: await shelfIdByKey('finance', testDb),
+			shelfKey: 'finance',
 			type: 'payslip',
 			storedName: 'slip-aug.pdf',
 			ext: 'PDF',

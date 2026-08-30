@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { count, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { document, shelf } from '$lib/server/db/schema';
+import { shelf } from '$lib/server/db/schema';
 import {
 	addShelf,
 	documentsOnShelf,
@@ -14,6 +14,7 @@ import {
 	systemShelfId
 } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
+import { makeDocument } from './fixtures';
 
 /**
  * A shelf is a row a household owns, and deleting one is never a delete.
@@ -43,7 +44,7 @@ beforeEach(async () => {
 
 async function seedDocuments(shelfId: string, n: number): Promise<void> {
 	for (let i = 0; i < n; i++) {
-		await testDb.insert(document).values({
+		await makeDocument(testDb, {
 			id: uuidv7(),
 			name: `Document ${i}`,
 			shelfId,
