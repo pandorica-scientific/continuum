@@ -257,3 +257,8 @@ The one condition: if you modify Continuum and let other people use your version
 — whether you hand them the files or they reach it over a network — you owe them
 the source of your version under the same licence. Running it at home, changing
 it for yourself and sending patches back all sit comfortably inside that.
+
+Contributions are accepted under a [Contributor Licence Agreement](CLA.md): you
+keep the copyright in what you write, and grant permission to license it onward,
+including under terms other than the AGPL. A commercial licence, for
+organisations that cannot accept copyleft terms, is available on request.

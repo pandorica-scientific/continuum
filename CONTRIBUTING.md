@@ -324,10 +324,32 @@ Dedup and fingerprinting are handled centrally — prefer the bank's own
 reference when the statement carries one, and let `FINGERPRINT_VERSION` do the
 rest.
 
-## License
+## Licence, and the agreement that comes with contributing
 
 Continuum is licensed under the [GNU Affero General Public License v3.0 or
-later](LICENSE). By contributing you agree that your contribution is licensed
-under the same terms, and that you have the right to submit it. There is no
-separate CLA, and there will not be one — nothing here is kept back for a
-commercial edition.
+later](LICENSE), and the intent is that it stays that way. It is free to run,
+study, modify and share, for any purpose, on the one condition the AGPL states.
+
+**Contributions are accepted under a Contributor Licence Agreement**
+([`CLA.md`](CLA.md) for an individual, [`CLA-ENTITY.md`](CLA-ENTITY.md) for an
+organisation whose employees contribute at work). You keep the copyright in what
+you write — it is a licence, not an assignment — and you may reuse your own work
+anywhere else on any terms. What you grant is permission to license your
+contribution onward, including under terms that are not the AGPL.
+
+That last clause is the whole point of the agreement, so it is worth saying
+plainly rather than burying it. Continuum is also the basis of commercial work:
+native applications, and paid licences for organisations that cannot accept
+copyleft terms. Without this permission a single outside patch would make that
+impossible without tracking its author down for consent, possibly years later.
+
+An earlier version of this file said there would never be a CLA. That was
+written before there was a plan for any of the above, and it was wrong to
+promise. It is reversed here rather than quietly dropped, and it is being
+reversed at the only moment when it costs nobody anything: no contribution has
+yet been made under it. If you had read that line and were relying on it, say
+so — that is a fair objection and worth hearing.
+
+A bot asks for your agreement on your first pull request; later ones pass
+without asking. Bug reports, reproductions and design discussion need no
+agreement at all.
