@@ -2,6 +2,52 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.4 — 2026-08-31
+
+> A shelf that knows what it holds can show it as the thing it is.
+
+### ✨ Added
+
+- 🪪 **The Identity shelf opens as a wallet rather than as a list** — one card per document, sectioned by whose it is with anything nobody is named on last, and `Wallet`/`List` in the toolbar switches between them with the choice written into the address
+- 🎨 **Thirty countries of card artwork, in four kinds** — a card face is drawn art and never the scan, because seven photographs of seven cards on white A4 look identical at card size, which is the failure a wallet exists to avoid, and a country nobody has drawn yet still gets a card
+- 👤 **Each wallet section is the person's own tag, in the colour they carry everywhere else** — the same hue as on Salary and Tax, because a colour that changes from screen to screen is decoration rather than a tag
+- 🇪🇺 **A card from a member state carries the code inside the Union's ring** — twelve stars and `CZ` in the middle, the way an EU passport, licence and number plate already write it, with everywhere else keeping the plain two letters beside its flag
+- 🧾 **An identity document can say what is on its face** — kind, country, number, issued on and issuer, all optional and all typed by hand, with the number shown only in the inspector and masked until it is clicked
+- 📇 **Every shelf a fresh install ships now records what it is for** — what it expects, what organises it and how it draws, in one place the empty state, the type filter and the inbox review all read from
+
+### 🐛 Fixed
+
+- 📷 **Documents can be scanned and photographed again** — every upload on the screen offered a file browser and nothing else, because the capture buttons are decided from what an upload says it accepts and these four said nothing; a phone can now scan straight into Add document, Attach file and Replace file, and the list the picker offers is the same one the server will actually store
+- 🖼️ **The inspector's preview keeps its height instead of being squeezed** — the panel is a column bounded by the viewport, so on a short screen the preview gave up its space first and a photograph became an 87-pixel sliver that read as a failed load; the sections scroll now, as they were always meant to
+
+### 🔧 Changed
+
+- 📂 **A shelf's list is grouped the way that shelf is read** — Finance by year because payslips and tax papers are looked up by the year they concern, the Inbox by type because nothing in it is linked yet, and the control still says otherwise whenever you want it to
+- 🔤 **A shelf's type filter offers what the shelf expects first** — opening Identity's starts at Identity document rather than at whatever happens to be most numerous, and every type on the shelf is still there
+- 💡 **Picking a shelf during inbox review proposes that shelf's type** — marked `suggested` rather than `kept`, cleared the moment the field is touched, and never overwriting an answer somebody already gave
+- 🔍 **A search shows the list on every shelf** — a match is explained by the line it was found in, and a card face has nowhere to put one
+
+### ⬆️ Upgrading
+
+- 🗄️ **One new table, and an instance migrated by hand runs this once after a backup** — it holds what an identity document says on its face and nothing else reads it
+
+```sql
+create table if not exists document_identity (
+  document_id uuid primary key references document(id) on delete cascade,
+  kind text not null default 'other',
+  country text,
+  number text,
+  issued_on date,
+  issuer text,
+  constraint document_identity_kind_check
+    check (kind in ('passport','id_card','driving_licence','residence_permit','other')),
+  constraint document_identity_country_check
+    check (country is null or country ~ '^[A-Z]{2}$')
+);
+```
+
+- 🛑 **The boot check now asks for `document_identity.document_id`** — the column it probed before belongs to the release before this one, so an instance that pulled the image without running the statement above is refused at start with the reason rather than failing later at somebody's passport
+
 ## 0.7.3 — 2026-08-30
 
 > Where a passport goes should not be a decision each household makes twice.

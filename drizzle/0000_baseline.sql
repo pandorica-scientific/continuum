@@ -151,6 +151,22 @@ CREATE TABLE "document_text" (
 	"pages_extracted" integer
 );
 --> statement-breakpoint
+-- What an identity document says on its face, for type = 'id_document'.
+-- Entered by hand: extraction reads text into chunks and never writes a
+-- record's fields, and a passport number filled in wrong by a recogniser is
+-- worse than an empty box because it is believed. Expiry stays on document,
+-- where the briefing and the calendar already read it.
+CREATE TABLE "document_identity" (
+	"document_id" uuid PRIMARY KEY NOT NULL,
+	"kind" text DEFAULT 'other' NOT NULL,
+	-- ISO 3166-1 alpha-2, upper case; see the CHECK in the appendix.
+	"country" text,
+	-- Shown in the inspector, never on a card face, and never searched.
+	"number" text,
+	"issued_on" date,
+	"issuer" text
+);
+--> statement-breakpoint
 -- One PDF page, one image, or a ≤100 KB slice of a plain-text file. Every
 -- content index lives here and nowhere else.
 CREATE TABLE "document_text_chunk" (
@@ -609,6 +625,7 @@ ALTER TABLE "session" ADD CONSTRAINT "session_person_id_person_id_fk" FOREIGN KE
 ALTER TABLE "webauthn_challenge" ADD CONSTRAINT "webauthn_challenge_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document" ADD CONSTRAINT "document_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_identity" ADD CONSTRAINT "document_identity_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1280,6 +1297,13 @@ ALTER TABLE document ADD CONSTRAINT document_sensitivity_check
 	CHECK (sensitivity in ('normal', 'restricted'));--> statement-breakpoint
 ALTER TABLE document_text_chunk ADD CONSTRAINT document_text_chunk_source_check
 	CHECK (source in ('text_layer', 'ocr', 'plain'));--> statement-breakpoint
+ALTER TABLE document_identity ADD CONSTRAINT document_identity_kind_check
+	CHECK (kind in ('passport', 'id_card', 'driving_licence', 'residence_permit', 'other'));--> statement-breakpoint
+-- Two upper-case letters or nothing. The field is a picker, so this is not
+-- defending against a typist; it is what keeps the artwork lookup and the flag
+-- from being handed 'Czechia' by a future importer and drawing nothing.
+ALTER TABLE document_identity ADD CONSTRAINT document_identity_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');--> statement-breakpoint
 
 -- A period that ends before it starts is not a period. NULLs are legal on both
 -- sides: a subject that is simply current has neither.

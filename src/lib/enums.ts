@@ -147,6 +147,15 @@ export const ENUMS = {
 	// picker nobody can answer; the upgrade folds it into `expires`.
 	'document.expiry_verb': ['expires', 'renews', 'due'],
 
+	// What an identity document IS, which `document.type` cannot say: every one
+	// of these files as `type: 'id_document'`, and a wallet that cannot tell a
+	// passport from a driving licence is a wallet nobody recognises their own
+	// cards in. Hand-entered, always — nothing reads a document to fill it.
+	// `residence_permit` shares the generic artwork rather than getting a
+	// drawing of its own, because it looks different in every country that
+	// issues one.
+	'document_identity.kind': ['passport', 'id_card', 'driving_licence', 'residence_permit', 'other'],
+
 	'calendar_account.provider': ['icloud', 'google'],
 	'calendar_conflict.resolution': ['local-won', 'remote-won', 'wrote-back'],
 
@@ -193,6 +202,7 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'document', column: 'sensitivity', enum: 'document.sensitivity' },
 	{ table: 'document_text_chunk', column: 'source', enum: 'document_text_chunk.source' },
 	{ table: 'document', column: 'expiry_verb', enum: 'document.expiry_verb' },
+	{ table: 'document_identity', column: 'kind', enum: 'document_identity.kind' },
 	{ table: 'calendar_account', column: 'provider', enum: 'calendar_account.provider' },
 	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' },
 	{ table: 'entity', column: 'kind', enum: 'entity.kind' }

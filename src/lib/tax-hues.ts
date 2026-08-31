@@ -31,21 +31,7 @@ export function hueTokens(countries: string[]): Map<string, string> {
 	return new Map(sorted.map((code, i) => [code, PALETTE[i % PALETTE.length]]));
 }
 
-/**
- * A jurisdiction's readable name.
- *
- * Codes are what the statement stores, but a header row is read once and a name
- * costs nothing. An unrecognised code shows as itself rather than as a blank —
- * `country` is free text on the statement, so it is not guaranteed to be ISO.
- */
-export function countryName(code: string): string {
-	const trimmed = code.trim().toUpperCase();
-	// Intl only knows two-letter regions; anything else is a name already, or a
-	// typo the household can see and fix.
-	if (!/^[A-Z]{2}$/.test(trimmed)) return code.trim();
-	try {
-		return new Intl.DisplayNames(['en'], { type: 'region' }).of(trimmed) ?? trimmed;
-	} catch {
-		return trimmed;
-	}
-}
+// A jurisdiction's readable name, from the one place countries are named.
+// Re-exported rather than moved outright: the tax screen asks a hue module for
+// the name beside the hue, and both of its callers read it from here.
+export { countryName } from './countries';

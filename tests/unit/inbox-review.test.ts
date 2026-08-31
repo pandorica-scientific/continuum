@@ -5,6 +5,7 @@ import {
 	currentId,
 	fileAndNext,
 	keptFields,
+	proposeType,
 	setField,
 	skip,
 	startSession
@@ -72,5 +73,49 @@ describe('the review session', () => {
 		expect(s.done).toBe(true);
 		expect(counterLabel(s)).toBe('Inbox is clear');
 		expect(currentId(s)).toBeNull();
+	});
+});
+
+describe('a shelf proposing a type', () => {
+	it('fills a type nobody has decided yet', () => {
+		const session = proposeType(startSession(['a', 'b']), 'id_document');
+
+		expect(session.sticky.type).toBe('id_document');
+		expect(session.suggested).toEqual(['type']);
+		// A proposal is not something the person chose, so it never claims to be.
+		expect(session.kept).not.toContain('type');
+	});
+
+	it('fills over the `other` a fresh session starts on', () => {
+		const started = setField(startSession(['a']), 'type', 'other');
+		expect(proposeType(started, 'id_document').sticky.type).toBe('id_document');
+	});
+
+	it('never overwrites an answer somebody gave', () => {
+		// Picking Identity for the second of twenty certificates must not retype
+		// the answer given for the first.
+		const chosen = setField(startSession(['a']), 'type', 'certificate');
+		const after = proposeType(chosen, 'id_document');
+
+		expect(after.sticky.type).toBe('certificate');
+		expect(after.suggested).toEqual([]);
+	});
+
+	it('does nothing for a shelf that expects nothing', () => {
+		const session = startSession(['a']);
+		expect(proposeType(session, undefined)).toBe(session);
+	});
+
+	it('is cleared by touching the field', () => {
+		const proposed = proposeType(startSession(['a']), 'id_document');
+		expect(setField(proposed, 'type', 'passport').suggested).toEqual([]);
+	});
+
+	it('is cleared by filing, because what carries forward was chosen', () => {
+		const proposed = proposeType(startSession(['a', 'b']), 'id_document');
+		const filed = fileAndNext(proposed, { shelfKey: 'identity', type: 'id_document' });
+
+		expect(filed.suggested).toEqual([]);
+		expect(filed.kept).toContain('type');
 	});
 });

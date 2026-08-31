@@ -9,8 +9,8 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2566 static tests across 242 files, covering 201 modules.
-144 modules under `src/lib` are imported by no test.
+2625 static tests across 247 files, covering 205 modules.
+146 modules under `src/lib` are imported by no test.
 
 ## Modules
 
@@ -130,9 +130,21 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/contact-fold.test.ts` (integration, 2 tests)
 - `tests/unit/contacts.test.ts` (unit, 18 tests)
 
+### `src/lib/countries.ts`
+
+- `tests/unit/countries.test.ts` (unit, 8 tests)
+
+### `src/lib/document-art.ts`
+
+- `tests/unit/document-art.test.ts` (unit, 6 tests)
+
 ### `src/lib/document-links.ts`
 
 - `tests/unit/document-links.test.ts` (unit, 9 tests)
+
+### `src/lib/documents-layouts.ts`
+
+- `tests/unit/documents-layouts.test.ts` (unit, 7 tests)
 
 ### `src/lib/documents-view.ts`
 
@@ -146,11 +158,13 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/enums.ts`
 
-- `tests/integration/baseline-migration.test.ts` (integration, 14 tests)
+- `tests/integration/baseline-migration.test.ts` (integration, 15 tests)
 - `tests/integration/document-targets.test.ts` (integration, 42 tests)
 - `tests/integration/entity-supertype.test.ts` (integration, 11 tests)
 - `tests/integration/schema-invariants.test.ts` (integration, 6 tests)
+- `tests/unit/document-art.test.ts` (unit, 6 tests)
 - `tests/unit/enums.test.ts` (unit, 11 tests)
+- `tests/unit/shelf-profiles.test.ts` (unit, 11 tests)
 
 ### `src/lib/errors/artwork.ts`
 
@@ -173,7 +187,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/inbox-review.ts`
 
-- `tests/unit/inbox-review.test.ts` (unit, 7 tests)
+- `tests/unit/inbox-review.test.ts` (unit, 13 tests)
 
 ### `src/lib/invest/gains.ts`
 
@@ -240,7 +254,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/overview/panels.ts`
 
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
 - `tests/unit/overview-panels.test.ts` (unit, 15 tests)
 
 ### `src/lib/password-policy.ts`
@@ -447,7 +461,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/integration/archive-scope.test.ts` (integration, 5 tests)
 - `tests/integration/deadlines.test.ts` (integration, 12 tests)
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
 - `tests/integration/restricted-read-paths.test.ts` (integration, 33 tests)
 - `tests/unit/calendar-ics.test.ts` (unit, 4 tests)
 
@@ -513,7 +527,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/categorize/index.ts`
 
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
 
 ### `src/lib/server/categorize/leaves.ts`
 
@@ -535,7 +549,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/db/migrate.ts`
 
-- `tests/integration/baseline-migration.test.ts` (integration, 14 tests)
+- `tests/integration/baseline-migration.test.ts` (integration, 15 tests)
 
 ### `src/lib/server/db/schema/index.ts`
 
@@ -555,13 +569,14 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/category-taxonomy.test.ts` (integration, 15 tests)
 - `tests/integration/contact-documents.test.ts` (integration, 6 tests)
 - `tests/integration/deadlines.test.ts` (integration, 12 tests)
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
+- `tests/integration/document-identity.test.ts` (integration, 9 tests)
 - `tests/integration/document-lifecycle.test.ts` (integration, 17 tests)
 - `tests/integration/document-links-preserved.test.ts` (integration, 13 tests)
 - `tests/integration/document-search.test.ts` (integration, 17 tests)
 - `tests/integration/document-targets.test.ts` (integration, 42 tests)
 - `tests/integration/document-visibility.test.ts` (integration, 5 tests)
-- `tests/integration/documents-load.test.ts` (integration, 9 tests)
+- `tests/integration/documents-load.test.ts` (integration, 18 tests)
 - `tests/integration/domain-atomicity.test.ts` (integration, 28 tests)
 - `tests/integration/extract-bounds.test.ts` (integration, 4 tests)
 - `tests/integration/extract-enqueue-writers.test.ts` (integration, 4 tests)
@@ -645,11 +660,12 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/server/documents/shelves.ts`
 
 - `tests/integration/briefing-documents.test.ts` (integration, 8 tests)
+- `tests/integration/document-identity.test.ts` (integration, 9 tests)
 - `tests/integration/document-lifecycle.test.ts` (integration, 17 tests)
 - `tests/integration/document-search.test.ts` (integration, 17 tests)
 - `tests/integration/document-targets.test.ts` (integration, 42 tests)
 - `tests/integration/document-visibility.test.ts` (integration, 5 tests)
-- `tests/integration/documents-load.test.ts` (integration, 9 tests)
+- `tests/integration/documents-load.test.ts` (integration, 18 tests)
 - `tests/integration/domain-atomicity.test.ts` (integration, 28 tests)
 - `tests/integration/overview-paper.test.ts` (integration, 3 tests)
 - `tests/integration/restricted-write-paths.test.ts` (integration, 11 tests)
@@ -662,7 +678,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/documents/subjects.ts`
 
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
 - `tests/integration/subjects.test.ts` (integration, 16 tests)
 
 ### `src/lib/server/documents/targets.ts`
@@ -676,7 +692,8 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/integration/archive-scope.test.ts` (integration, 5 tests)
 - `tests/integration/briefing-documents.test.ts` (integration, 8 tests)
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
+- `tests/integration/document-identity.test.ts` (integration, 9 tests)
 - `tests/integration/document-visibility.test.ts` (integration, 5 tests)
 - `tests/integration/restricted-write-paths.test.ts` (integration, 11 tests)
 
@@ -977,12 +994,12 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/system/demo.ts`
 
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
 
 ### `src/lib/server/system/files.ts`
 
 - `tests/integration/broker-ingest.test.ts` (integration, 9 tests)
-- `tests/integration/demo-seed.test.ts` (integration, 15 tests)
+- `tests/integration/demo-seed.test.ts` (integration, 17 tests)
 - `tests/integration/document-file-route.test.ts` (integration, 5 tests)
 - `tests/integration/document-lifecycle.test.ts` (integration, 17 tests)
 - `tests/integration/extract-enqueue-writers.test.ts` (integration, 4 tests)
@@ -1030,6 +1047,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/server/transactions/transfers.ts`
 
 - `tests/integration/one-sided-transfer.test.ts` (integration, 8 tests)
+
+### `src/lib/shelf-profiles.ts`
+
+- `tests/unit/shelf-profiles.test.ts` (unit, 11 tests)
 
 ### `src/lib/statements/cadence.ts`
 
@@ -1144,6 +1165,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/components/TransactionRow.svelte`
 - `src/lib/components/UploadDropzone.svelte`
 - `src/lib/currencies.ts`
+- `src/lib/documents/WalletView.svelte`
 - `src/lib/ids.ts`
 - `src/lib/index.ts`
 - `src/lib/overview/Board.svelte`
@@ -1205,6 +1227,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/server/db/schema/salary.ts`
 - `src/lib/server/db/schema/tax.ts`
 - `src/lib/server/documents/files.ts`
+- `src/lib/server/documents/identity.ts`
 - `src/lib/server/documents/index.ts`
 - `src/lib/server/fx/currencies.ts`
 - `src/lib/server/home/demo.ts`

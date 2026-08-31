@@ -1,0 +1,281 @@
+{
+	"canvas": { "width": 1712, "height": 1080 },
+	"countries": [
+		{
+			"code": "AT",
+			"name": "Austria",
+			"animal": "Alpine ibex",
+			"eu": true,
+			"id": ["#071A44", "#1D6BB5", "#9DD8F5"],
+			"driving": ["#D71920", "#FF6B6B", "#6D28D9"],
+			"passport": ["#351018", "#7A1725", "#C7A566"]
+		},
+		{
+			"code": "BE",
+			"name": "Belgium",
+			"animal": "Belgian draft horse",
+			"eu": true,
+			"id": ["#071A2F", "#174A70", "#DBB63B"],
+			"driving": ["#101820", "#F2C230", "#D92332"],
+			"passport": ["#18120B", "#4D3520", "#D2B15A"]
+		},
+		{
+			"code": "BG",
+			"name": "Bulgaria",
+			"animal": "brown bear",
+			"eu": true,
+			"id": ["#083D4B", "#1E7A75", "#D7F0E5"],
+			"driving": ["#159A6B", "#EAF7EF", "#D7474B"],
+			"passport": ["#4A1025", "#7B193C", "#D2A55B"]
+		},
+		{
+			"code": "HR",
+			"name": "Croatia",
+			"animal": "European pine marten",
+			"eu": true,
+			"id": ["#062A5E", "#1C67B1", "#B8DDF6"],
+			"driving": ["#E31D3B", "#4B65D6", "#7C2BBE"],
+			"passport": ["#151F4A", "#253B78", "#C9A95F"]
+		},
+		{
+			"code": "CY",
+			"name": "Cyprus",
+			"animal": "Cyprus mouflon",
+			"eu": true,
+			"id": ["#0C4160", "#2488A8", "#D9F0EA"],
+			"driving": ["#D38A20", "#42A47A", "#245CB5"],
+			"passport": ["#24453D", "#386D5E", "#D2AF67"]
+		},
+		{
+			"code": "CZ",
+			"name": "Czechia",
+			"animal": "Eurasian lynx",
+			"eu": true,
+			"id": ["#09255A", "#255CA8", "#BEDAF4"],
+			"driving": ["#E43A4C", "#3858C8", "#7B2CBF"],
+			"passport": ["#25123D", "#4D2369", "#C6A365"]
+		},
+		{
+			"code": "DK",
+			"name": "Denmark",
+			"animal": "mute swan",
+			"eu": true,
+			"id": ["#102A5A", "#356CA7", "#C6E3F4"],
+			"driving": ["#D5163C", "#FF5B72", "#6C2DB8"],
+			"passport": ["#4A1020", "#791A31", "#D0AC67"]
+		},
+		{
+			"code": "EE",
+			"name": "Estonia",
+			"animal": "barn swallow",
+			"eu": true,
+			"id": ["#06192F", "#1876A4", "#B8E1F2"],
+			"driving": ["#1B8DBA", "#202A44", "#7E55D7"],
+			"passport": ["#102337", "#1D445C", "#A9C6D0"]
+		},
+		{
+			"code": "FI",
+			"name": "Finland",
+			"animal": "brown bear",
+			"eu": true,
+			"id": ["#082B55", "#1F6FB2", "#DCEFFC"],
+			"driving": ["#135CB1", "#2CA6CE", "#6E36C8"],
+			"passport": ["#151B44", "#29356F", "#B6C5E0"]
+		},
+		{
+			"code": "FR",
+			"name": "France",
+			"animal": "Gallic rooster",
+			"eu": true,
+			"id": ["#071B4A", "#2358A5", "#BDD7F4"],
+			"driving": ["#1856D8", "#F04B68", "#7B2FB7"],
+			"passport": ["#14284D", "#203E72", "#C5A35F"]
+		},
+		{
+			"code": "DE",
+			"name": "Germany",
+			"animal": "red deer",
+			"eu": true,
+			"id": ["#071928", "#285271", "#D4C67A"],
+			"driving": ["#161616", "#D84535", "#F0B52D"],
+			"passport": ["#1F1611", "#493226", "#C4A45E"]
+		},
+		{
+			"code": "GR",
+			"name": "Greece",
+			"animal": "bottlenose dolphin",
+			"eu": true,
+			"id": ["#052B62", "#1685C7", "#C4EBFA"],
+			"driving": ["#1D73C7", "#42B7D4", "#7044C2"],
+			"passport": ["#133B4A", "#1F6570", "#C6AB68"]
+		},
+		{
+			"code": "HU",
+			"name": "Hungary",
+			"animal": "Hungarian grey cattle",
+			"eu": true,
+			"id": ["#0A3346", "#16706F", "#CBE6DC"],
+			"driving": ["#CC2D47", "#45A56A", "#7046C3"],
+			"passport": ["#3D1224", "#6D223D", "#C7A45E"]
+		},
+		{
+			"code": "IE",
+			"name": "Ireland",
+			"animal": "Irish hare",
+			"eu": true,
+			"id": ["#073F46", "#168B88", "#C7EFE0"],
+			"driving": ["#159A69", "#F5A33B", "#6E43CB"],
+			"passport": ["#0F3D2D", "#1C654B", "#C7AD63"]
+		},
+		{
+			"code": "IT",
+			"name": "Italy",
+			"animal": "Italian wolf",
+			"eu": true,
+			"id": ["#073E50", "#1C7C84", "#C9E8DF"],
+			"driving": ["#159A68", "#E83D55", "#5B42C8"],
+			"passport": ["#3C1530", "#6E2751", "#C9A967"]
+		},
+		{
+			"code": "LV",
+			"name": "Latvia",
+			"animal": "white wagtail",
+			"eu": true,
+			"id": ["#12324C", "#386482", "#D1E5EF"],
+			"driving": ["#8F2345", "#DA4B6B", "#5632B5"],
+			"passport": ["#3D1424", "#6E213A", "#C5A35E"]
+		},
+		{
+			"code": "LT",
+			"name": "Lithuania",
+			"animal": "white stork",
+			"eu": true,
+			"id": ["#0A3B50", "#247A83", "#D8E8C5"],
+			"driving": ["#F0B72B", "#2D9B62", "#D9424B"],
+			"passport": ["#243C2C", "#3F6948", "#C9A85F"]
+		},
+		{
+			"code": "LU",
+			"name": "Luxembourg",
+			"animal": "red deer",
+			"eu": true,
+			"id": ["#082B56", "#2F86C1", "#C9ECF7"],
+			"driving": ["#E9475A", "#3BA6D5", "#7750CE"],
+			"passport": ["#1A2C55", "#2D4F80", "#C7AA69"]
+		},
+		{
+			"code": "MT",
+			"name": "Malta",
+			"animal": "Pharaoh hound",
+			"eu": true,
+			"id": ["#173349", "#597187", "#E2E8EC"],
+			"driving": ["#C92E45", "#E98A5A", "#6843C8"],
+			"passport": ["#39152A", "#69243F", "#C9A761"]
+		},
+		{
+			"code": "NL",
+			"name": "Netherlands",
+			"animal": "Friesian horse",
+			"eu": true,
+			"id": ["#082958", "#2563A8", "#C8E0F4"],
+			"driving": ["#ED5A28", "#E94056", "#6045C6"],
+			"passport": ["#261542", "#4B266C", "#C6A561"]
+		},
+		{
+			"code": "PL",
+			"name": "Poland",
+			"animal": "white-tailed eagle",
+			"eu": true,
+			"id": ["#061F5B", "#1675D1", "#BFE7FF"],
+			"driving": ["#D4164D", "#D92D8A", "#6C2BC2"],
+			"passport": ["#3E1235", "#741D58", "#CDAE70"]
+		},
+		{
+			"code": "PT",
+			"name": "Portugal",
+			"animal": "Iberian wolf",
+			"eu": true,
+			"id": ["#073B4D", "#187879", "#CEEAD9"],
+			"driving": ["#15965D", "#E54048", "#7040C4"],
+			"passport": ["#173E32", "#276149", "#C7A75E"]
+		},
+		{
+			"code": "RO",
+			"name": "Romania",
+			"animal": "Carpathian lynx",
+			"eu": true,
+			"id": ["#08285A", "#285EA8", "#D6D997"],
+			"driving": ["#2156B5", "#F0B82E", "#D94A4B"],
+			"passport": ["#231641", "#46306B", "#C7A55E"]
+		},
+		{
+			"code": "SK",
+			"name": "Slovakia",
+			"animal": "Tatra chamois",
+			"eu": true,
+			"id": ["#082B5B", "#2A68B0", "#C4DFF3"],
+			"driving": ["#E34252", "#3468C8", "#7041BD"],
+			"passport": ["#2E173F", "#532765", "#C7A461"]
+		},
+		{
+			"code": "SI",
+			"name": "Slovenia",
+			"animal": "Carniolan honey bee",
+			"eu": true,
+			"id": ["#083353", "#2579A6", "#CBE6E8"],
+			"driving": ["#2670C8", "#44A47A", "#D94B55"],
+			"passport": ["#193A39", "#2B625B", "#C7A963"]
+		},
+		{
+			"code": "ES",
+			"name": "Spain",
+			"animal": "Iberian lynx",
+			"eu": true,
+			"id": ["#102A5B", "#315E98", "#E3CD89"],
+			"driving": ["#E53236", "#F2B72F", "#8B35B5"],
+			"passport": ["#4B1326", "#7A2038", "#D0AC65"]
+		},
+		{
+			"code": "SE",
+			"name": "Sweden",
+			"animal": "moose",
+			"eu": true,
+			"id": ["#052E62", "#1479B8", "#C8EAF6"],
+			"driving": ["#1775C5", "#F1C437", "#6750C8"],
+			"passport": ["#17385B", "#245D85", "#CFB661"]
+		},
+		{
+			"code": "UA",
+			"name": "Ukraine",
+			"animal": "nightingale",
+			"eu": false,
+			"id": ["#062C68", "#167BC4", "#C9EAF7"],
+			"driving": ["#167BC4", "#F4C430", "#6B48C9"],
+			"passport": ["#153B62", "#23618B", "#D1B65E"]
+		},
+		{
+			"code": "US",
+			"name": "United States",
+			"animal": "bald eagle",
+			"eu": false,
+			"id": ["#071D49", "#24569A", "#C5DDF3"],
+			"driving": ["#2459B5", "#D94555", "#7040C8"],
+			"passport": ["#102851", "#1E4779", "#C8A760"]
+		},
+		{
+			"code": "CA",
+			"name": "Canada",
+			"animal": "beaver",
+			"eu": false,
+			"id": ["#15314F", "#4A6E8E", "#DCE8EE"],
+			"driving": ["#D82F45", "#E15B6E", "#6C3FBE"],
+			"passport": ["#3A1626", "#69253C", "#C8A663"]
+		}
+	],
+	"documents": [
+		{ "key": "identity-card", "label": "IDENTITY CARD", "paletteKey": "id" },
+		{ "key": "generic-id", "label": "IDENTITY DOCUMENT", "paletteKey": "id" },
+		{ "key": "driving-licence", "label": "DRIVING LICENCE", "paletteKey": "driving" },
+		{ "key": "passport", "label": "PASSPORT", "paletteKey": "passport" }
+	]
+}

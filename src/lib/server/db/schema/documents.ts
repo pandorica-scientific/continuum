@@ -128,6 +128,35 @@ export const documentText = pgTable('document_text', {
 });
 
 /**
+ * What an identity document says on its face, entered by hand.
+ *
+ * One row per document, and only for `type = 'id_document'`. Nothing extracts
+ * these: `documents/extract` reads text into chunks and is forbidden from
+ * writing a record's fields, and a passport number filled in wrong by a
+ * recogniser is worse than an empty box, because it is believed.
+ *
+ * Expiry is NOT here. It stays on `document.expires_on`, where the briefing,
+ * the calendar feed and the wallet card all already read it — a second date
+ * column would be a second answer to when the passport runs out.
+ *
+ * The row survives a change of type. A document retyped away from
+ * `id_document` stops showing these fields and keeps them; retyping back
+ * restores what was entered rather than asking for it again.
+ */
+export const documentIdentity = pgTable('document_identity', {
+	documentId: uuid('document_id')
+		.primaryKey()
+		.references(() => document.id, { onDelete: 'cascade' }),
+	kind: text('kind').$type<EnumValue<'document_identity.kind'>>().notNull().default('other'),
+	/** ISO 3166-1 alpha-2, upper case; the shape is a CHECK in the appendix. */
+	country: text('country'),
+	/** Shown in the inspector, never on a card face, and never searched. */
+	number: text('number'),
+	issuedOn: date('issued_on'),
+	issuer: text('issuer')
+});
+
+/**
  * One PDF page, one image, or a ≤100 KB slice of a plain-text file.
  *
  * Every content index lives here and nowhere else. The two GIN indexes are

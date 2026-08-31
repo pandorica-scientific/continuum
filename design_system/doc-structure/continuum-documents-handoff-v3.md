@@ -195,6 +195,9 @@ Empty: "No match in names, entities, tags, notes or searchable contents · N doc
 
 Restraint rules apply throughout: no animation, quiet hover/fill, sentence case, row-based density, no thumbnails in lists (preview lives in the inspector).
 
+> **Amended in v0.7.4.** "No thumbnails in lists" still holds for the list, which has none. It does not hold for a shelf drawing its own layout: the Identity shelf opens as a wallet of ID-1 cards, and a card has a face. That face is generated country artwork rather than the scan — see §6.11.
+
+
 ### 6.1 Documents (main)
 
 Keep the ~218px shelf rail + one vertically scannable result list; **a document appears once** (the current subject-derived column duplication goes). Rail: `Everything`, `Inbox` (amber count only when non-zero — work waiting, not an error), divider, shelves by `sortOrder`, `Manage shelves` at bottom. Rail counts respect visibility + archive scope, never search/filter state. Inbox strip above the canvas when non-empty: "6 documents are waiting in Inbox — Review inbox →", framed as unfiled, not invalid.
@@ -237,7 +240,13 @@ Indexed = nothing shown. Processing: "Preparing contents for search…". Failure
 
 ### 6.11 Explicitly not built
 
-Folder tree, card/thumbnail grid, drag-and-drop between shelves, AI classification, saved-view management, separate advanced-search screen, permanent OCR column, upload wizard, metrics dashboard. A very good filing cabinet with excellent search — not a DMS.
+Folder tree, ~~card/thumbnail grid~~, drag-and-drop between shelves, AI classification, saved-view management, separate advanced-search screen, permanent OCR column, upload wizard, metrics dashboard. A very good filing cabinet with excellent search — not a DMS.
+
+> **Reversed in v0.7.4, for one shelf.** The card grid is built, on Identity only, and the reasoning that ruled it out was about the wrong shelf: a grid of thumbnails is a worse list of invoices, and it is a better wallet. What made it worth building is what the cards show. The face is drawn artwork picked by country and kind, never the scan — seven photographs of seven cards on white A4 are seven identical pale rectangles, which is slower to read than the list. Everything written over it comes from the record, so a card cannot state something the document does not.
+>
+> The list is unchanged, still has no thumbnails, and is one click away on every shelf; a search returns to it everywhere. Family, Health and Household have layouts specified and not yet built. Property, Finance, Statements and Inbox stay lists permanently: a layout is earned when the paper has a shape a person already pictures, and a mortgage agreement has none.
+>
+> The rest of this line stands. This is still a filing cabinet.
 
 ---
 

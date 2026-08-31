@@ -24,6 +24,24 @@ export default defineConfig({
 			csrf: { trustedOrigins: ['*'] }
 		})
 	],
+	build: {
+		/**
+		 * The card artwork is always a file, never inlined.
+		 *
+		 * Vite inlines any asset under 4 kB as a base64 data URI. At the size
+		 * these are encoded now none of them is anywhere near it, but they were
+		 * once: 70 of the 121 faces went into the Documents page's own chunk, 424
+		 * kB of JavaScript that a household downloaded in full to draw the two
+		 * cards it owns. The rule stays because it is about what these files ARE
+		 * — one is fetched when a card needs it and cached by its own hash — not
+		 * about what they currently weigh.
+		 *
+		 * `undefined` for everything else, so the default still applies to the
+		 * favicon and anything small that genuinely belongs in the bundle.
+		 */
+		assetsInlineLimit: (filePath: string) =>
+			filePath.includes('doc-placeholders') ? false : undefined
+	},
 	test: {
 		include: [
 			'src/**/*.test.ts',

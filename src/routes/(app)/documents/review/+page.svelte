@@ -21,11 +21,14 @@
 		currentId,
 		fileAndNext,
 		keptFields,
+		proposeType,
 		setField,
 		skip,
 		startSession,
+		suggestedFields,
 		type ReviewSession
 	} from '$lib/inbox-review';
+	import { shelfProfile } from '$lib/shelf-profiles';
 
 	let { data, form } = $props();
 
@@ -36,6 +39,7 @@
 
 	const current = $derived(data.waiting.find((d) => d.id === currentId(session)) ?? null);
 	const kept = $derived(keptFields(session));
+	const suggested = $derived(suggestedFields(session));
 	let confirmingDelete = $state(false);
 	$effect(() => {
 		void current?.id;
@@ -107,7 +111,13 @@
 				<select
 					name="shelf"
 					value={session.sticky.shelf ?? data.shelves[0]?.key}
-					onchange={(e) => (session = setField(session, 'shelf', e.currentTarget.value))}
+					onchange={(e) => {
+						// The shelf knows what it holds, so picking one answers the next
+						// question too — unless that question already has an answer
+						// somebody gave, which a proposal never overwrites.
+						const key = e.currentTarget.value;
+						session = proposeType(setField(session, 'shelf', key), shelfProfile(key)?.expects[0]);
+					}}
 				>
 					{#each data.shelves as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
 				</select>
@@ -115,7 +125,14 @@
 
 			<label>
 				<span class="eyebrow">
-					Type {#if kept.includes('type')}<span class="kept">kept</span>{/if}
+					Type
+					{#if kept.includes('type')}
+						<span class="kept">kept</span>
+					{:else if suggested.includes('type')}
+						<!-- A different claim from `kept`, in the same slot: one says you
+						     chose this before, the other says the shelf expects it. -->
+						<span class="kept">suggested</span>
+					{/if}
 				</span>
 				<select
 					name="type"

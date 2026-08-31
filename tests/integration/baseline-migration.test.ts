@@ -268,6 +268,40 @@ describe('the baseline migration', () => {
 		expect(n).toBe(1);
 	});
 
+	it('carries the identity detail table, its cascade and both its CHECKs', async () => {
+		// Hand-written in the appendix, like every CHECK: nothing but this notices
+		// if the table arrives without the constraints that keep the country in a
+		// shape the flag and the card artwork can read.
+		const [{ id: documentId }] = await harness.sql<{ id: string }[]>`
+			insert into document (id, name, shelf_id, ext, added_on, type)
+			values (gen_random_uuid(), 'Passport',
+				(select id from shelf where key = 'identity'), 'PDF', current_date, 'id_document')
+			returning id`;
+		await harness.sql`
+			insert into document_identity (document_id, kind, country, number, issued_on)
+			values (${documentId}, 'passport', 'CZ', '12345678', '2022-05-02')`;
+
+		await expect(
+			harness.sql`update document_identity set kind = 'visa' where document_id = ${documentId}`
+		).rejects.toThrow(/document_identity_kind_check/);
+		await expect(
+			harness.sql`update document_identity set country = 'cz' where document_id = ${documentId}`
+		).rejects.toThrow(/document_identity_country_check/);
+		await expect(
+			harness.sql`update document_identity set country = 'Czechia' where document_id = ${documentId}`
+		).rejects.toThrow(/document_identity_country_check/);
+
+		// A country of nothing is a document whose face does not say one.
+		await harness.sql`update document_identity set country = null where document_id = ${documentId}`;
+
+		// Cascade, not restrict: these fields are a property of the paper, and
+		// paper that is gone has no face to read them off.
+		await harness.sql`delete from document where id = ${documentId}`;
+		const [{ n }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from document_identity where document_id = ${documentId}`;
+		expect(n).toBe(0);
+	});
+
 	it('refuses a subject whose active period runs backwards', async () => {
 		await expect(
 			harness.sql`
@@ -297,15 +331,25 @@ describe('the boot guard', () => {
 
 	it('refuses to serve one the release notes were never run against', async () => {
 		// Exactly what an in-place upgrade leaves behind: the schema this release
-		// needs, minus the column the migrator never added.
-		await harness.sql`alter table import_file drop column document_id`;
+		// needs, minus the table the migrator never created.
+		await harness.sql`drop table document_identity`;
 		try {
 			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/release notes/i);
 		} finally {
-			await harness.sql`alter table import_file add column document_id uuid
-				references document(id) on delete restrict`;
-			await harness.sql`create index if not exists import_file_document_idx
-				on import_file(document_id)`;
+			// The release notes' own SQL, which is what an operator would run.
+			await harness.sql`
+				create table if not exists document_identity (
+					document_id uuid primary key references document(id) on delete cascade,
+					kind text not null default 'other',
+					country text,
+					number text,
+					issued_on date,
+					issuer text,
+					constraint document_identity_kind_check
+						check (kind in ('passport', 'id_card', 'driving_licence', 'residence_permit', 'other')),
+					constraint document_identity_country_check
+						check (country is null or country ~ '^[A-Z]{2}$')
+				)`;
 		}
 	});
 });
