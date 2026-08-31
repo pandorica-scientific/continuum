@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { onMount } from 'svelte';
 	import { ERROR_STATES, NOTES, huesFor, isGenericMessage, stateFor } from '$lib/errors/states';
 	import { ARTWORK_SIZE, artworkFor } from '$lib/errors/artwork';

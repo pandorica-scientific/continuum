@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The kinds of paper a household files.
  *
@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { ENUMS } from '$lib/enums';
-import { typeLabel, typeLabels, TYPE_LABELS } from '$lib/documents-view';
+import { typeLabel, typeLabels, TYPE_LABELS } from '$lib/documents/view';
 import { shelfType } from '$lib/server/db/schema';
 import {
 	addDocumentType,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Every tag, what it is on, and what it has cost — in the Documents centre
 	// column, where the rail stays put beside it.
 	import { enhance } from '$app/forms';
@@ -180,7 +180,7 @@
 		color: var(--fg3);
 		cursor: pointer;
 		font-size: var(--text-sm);
-		padding: 2px 4px;
+		padding: var(--space-1) var(--space-2);
 		flex: none;
 	}
 	.t-del:hover,

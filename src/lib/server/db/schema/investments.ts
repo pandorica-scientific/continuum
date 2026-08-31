@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The broker feed, the positions it reports, and net worth over time.
  */
@@ -117,8 +117,9 @@ export const brokerImportState = pgTable(
  * Every valued thing the household owns or owes, one row each, with the sign
  * already applied: a loan arrives negative.
  *
- * Read-only, created by migration 0055 and declared here only so queries are
- * typed — `.existing()` keeps drizzle-kit from trying to generate it.
+ * Read-only, created by the net-worth section of `schema/baseline.ts` and
+ * declared here only so queries are typed — `.existing()` keeps drizzle-kit
+ * from trying to generate it.
  *
  * `computeNetWorth` reads this and nothing else for its components, so a new
  * asset type reaches net worth by adding a UNION branch to the migration. It
@@ -152,3 +153,13 @@ export const netWorthSnapshot = pgTable(
 	},
 	(table) => [index('net_worth_snapshot_currency_idx').on(table.currency)]
 );
+
+// ---- SQL drizzle-kit cannot model ----
+
+/**
+ * The broker import high-water mark is per-install, not per-row.
+ */
+export const investmentsSql = `
+ALTER TABLE broker_import_state ADD CONSTRAINT broker_import_state_singleton
+	CHECK (id = 'global');
+`;

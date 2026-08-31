@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Reading a failed fetch's message. SvelteKit's error() responses carry
 // { message }, so the server's own wording — "try again in 3 minutes", "sign in
 // again" — reaches the person instead of a generic sentence written at the call

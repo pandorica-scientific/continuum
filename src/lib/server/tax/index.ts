@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Database side of tax statements: load, upsert, delete. All arithmetic lives
 // in the pure module; nothing here computes what is owed.
 

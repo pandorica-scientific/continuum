@@ -2,6 +2,14 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.5 — 2026-08-31
+
+> Software that promises your data never leaves your machine has to let you read what it does with it.
+
+### 🔧 Changed
+
+- ⚖️ **Continuum is licensed under the GNU AGPL v3 instead of PolyForm Noncommercial** — it is open source in the OSI sense now, free to run, study, modify and share for any purpose including a commercial one, on the single condition that a modified version other people use offers them its own source under the same terms
+
 ## 0.7.4 — 2026-08-31
 
 > A shelf that knows what it holds can show it as the thing it is.

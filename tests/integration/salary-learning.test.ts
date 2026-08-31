@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // What the reader remembers across two employers.
 //
 // Until v0.5.2 it kept one learned wording per person. A person with two jobs

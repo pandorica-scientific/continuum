@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // RFC 5545 recurrence, expanded over a window.
 //
 // Pure and client-safe: no database, no clock, no network. The calendar screen

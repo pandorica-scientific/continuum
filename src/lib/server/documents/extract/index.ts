@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Reading the words out of a filed document, so they can be searched.
  *
@@ -19,14 +19,12 @@ import { db, type Db } from '$lib/server/db';
 import { document, documentText, documentTextChunk } from '$lib/server/db/schema';
 import { hashBytes, readUpload } from '$lib/server/system/files';
 import { getSetting } from '$lib/server/settings';
+import { RENDER_DPI, pageToPng } from '$lib/server/ocr';
 import { DEFAULT_LIMITS, MAX_CHUNK_BYTES, type ExtractionLimits } from './limits';
 import { tesseractProvider, type OcrProvider } from './ocr';
 
 /** A page with fewer folded characters than this was not really typed. */
 const TEXT_LAYER_MIN_CHARS = 50;
-
-/** Rendered at the DPI the statement reader measured as reliable. */
-const RENDER_DPI = 300;
 
 export interface ExtractedChunk {
 	ordinal: number;
@@ -166,14 +164,8 @@ async function extractFromBytes(
 		const bounds = loaded.getBounds();
 		const wide = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]);
 		const scale = Math.min(RENDER_DPI / 72, limits.maxPageDim / Math.max(wide, 1));
-		const pixmap = loaded.toPixmap(
-			mupdf.Matrix.scale(scale, scale),
-			mupdf.ColorSpace.DeviceGray,
-			false,
-			true
-		);
-		const png = pixmap.asPNG();
-		pixmap.destroy?.();
+		// Grey rather than colour: a third of the bytes for the same words.
+		const png = pageToPng(mupdf, loaded, scale, 'grey');
 		const read = await provider.recognise(png, options.languages);
 		if (read.meanConfidence !== null) confidences.push(read.meanConfidence);
 		chunks.push({ ordinal: page, pageNo: page + 1, source: 'ocr', text: read.text });

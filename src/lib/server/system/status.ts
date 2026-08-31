@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Live facts about this installation for the Settings → Self-hosting panel:
 // version, database, storage locations and their health. Everything is read
 // fresh on each load — this is the screen someone opens when something

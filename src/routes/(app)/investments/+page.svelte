@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import { enhance } from '$app/forms';
@@ -471,7 +471,7 @@
 		cursor: pointer;
 		font-size: var(--text-lg);
 		line-height: 1;
-		padding: 2px 4px;
+		padding: var(--space-1) var(--space-2);
 	}
 	.tiles {
 		display: grid;
@@ -628,7 +628,7 @@
 	.h-row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) repeat(4, minmax(84px, auto));
-		gap: 10px 14px;
+		gap: var(--space-5) var(--space-7);
 		align-items: baseline;
 	}
 	.h-head {
@@ -661,10 +661,6 @@
 		font-size: var(--text-md);
 	}
 	.muted {
-		color: var(--fg3);
-	}
-	.quiet {
-		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	:global(.dropzone) {

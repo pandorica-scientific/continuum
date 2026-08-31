@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pulling a rough quad onto the page's real edges.
 //
 // The quad this is handed is the convex hull of everything Otsu called bright,

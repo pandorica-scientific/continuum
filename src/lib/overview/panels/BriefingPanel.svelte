@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import Icon from '$lib/components/Icon.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import { BRIEFING_STRIP_SIZE } from '$lib/briefing';
@@ -126,9 +126,5 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		line-height: 1.5;
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

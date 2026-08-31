@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 // `detect.ts` imports opencv for its TYPE only, which is erased — so this pulls
 // no WASM and runs like any other unit test. `detectOnce` itself needs a real

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Currencies and their exchange rates: what every `*_minor` column is denominated in.
  */
@@ -36,3 +36,16 @@ export const currencyRate = pgTable(
 	},
 	(table) => [primaryKey({ columns: [table.code, table.day] })]
 );
+
+// ---- SQL drizzle-kit cannot model ----
+
+/**
+ * Enough currency for the fourteen foreign keys pointing here to be satisfiable
+ * before anything is imported. `refreshCurrencies` replaces and extends this
+ * from CLDR on the next boot, so this is a floor, not the list.
+ */
+export const moneySeedSql = `
+INSERT INTO currency (code, exponent, name)
+VALUES ('CZK', 2, 'Czech Koruna'), ('EUR', 2, 'Euro')
+ON CONFLICT (code) DO NOTHING;
+`;

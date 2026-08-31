@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	interface Row {
 		id: string;
 		name: string;
@@ -43,7 +43,7 @@
 	.row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 4px 12px;
+		gap: var(--space-2) var(--space-6);
 	}
 	.label {
 		font-size: var(--text-md);
@@ -75,9 +75,5 @@
 		padding-top: 12px;
 		font-size: var(--text-md);
 		font-weight: 600;
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // How much of a loan payment was interest, and how much was principal.
 //
 // A mortgage instalment is not one cost. The interest is money the household
@@ -39,11 +39,11 @@ import {
 	interestForMonth,
 	periodForMonth,
 	rateForMonth,
-	type DayCount,
 	type FixationPeriod,
 	type LoanTerms,
 	type MonthRow
 } from './amortise';
+import type { DayCount } from '$lib/loans';
 import { anchorMonthFor } from './simulate';
 
 /** How a split was arrived at, worst case last. */

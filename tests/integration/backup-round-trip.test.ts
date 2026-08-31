@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // A dump nobody has ever read back is a dump nobody knows restores.
 //
 // The unit suite covers ordering, the schedule policy and the directory guard —

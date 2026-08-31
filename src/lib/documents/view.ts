@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The decisions the Documents screen makes, taken out of the markup.
  *
@@ -8,6 +8,7 @@
  * functions with a test each, and the component that uses them is thin enough
  * to verify by looking at it.
  */
+import { daysBetween } from '$lib/dates';
 
 /**
  * How an expiry reads on a row.
@@ -76,12 +77,6 @@ export function readableDate(iso: string): string {
 	const [y, m, d] = iso.split('-');
 	const month = MONTHS[Number(m) - 1];
 	return month ? `${Number(d)} ${month} ${y}` : iso;
-}
-
-function daysBetween(from: string, to: string): number {
-	const a = Date.parse(`${from}T00:00:00Z`);
-	const b = Date.parse(`${to}T00:00:00Z`);
-	return Math.round((b - a) / 86_400_000);
 }
 
 /** The channel a verb is on: an obligation stands behind the date, or not. */

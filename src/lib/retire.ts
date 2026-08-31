@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The retirement projection. Pure and client-safe so every control on the
 // screen recomputes it live. All figures are in today's money: returns are
 // real, after inflation.

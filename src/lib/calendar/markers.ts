@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // What a calendar event looks like once it leaves Continuum.
 //
 // In Google or iCloud a ledger event sits in the same grid as "dentist, 3pm",

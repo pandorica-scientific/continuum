@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Every closed set of values a column may hold, and the only place they live.
  *
@@ -102,8 +102,8 @@ export const ENUMS = {
 	'import_profile.source': ['delimited', 'xlsx'],
 	'import_profile.origin': ['builtin', 'user', 'imported'],
 
-	// 'seeded' existed while a fresh install shipped 42 starter rules; migration
-	// 0033 retired it and nothing writes it now.
+	// 'seeded' existed while a fresh install shipped 42 starter rules; it was
+	// retired before the v0.3.10 squash and nothing writes it now.
 	'rule.provenance': ['learned', 'manual'],
 
 	// What KIND of paper this is — orthogonal to where it is filed. Behaviour

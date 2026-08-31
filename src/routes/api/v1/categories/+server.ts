@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { db } from '$lib/server/db';
 import { category } from '$lib/server/db/schema';
 import { json } from '$lib/server/api/respond';

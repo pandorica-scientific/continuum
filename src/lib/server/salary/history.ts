@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Salary history, assembled from the two places salary is evidenced.
 //
 // Lived on the Retirement screen until v0.4.4, where it sat beside a projection

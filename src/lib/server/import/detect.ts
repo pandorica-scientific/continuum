@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import iconv from 'iconv-lite';
 import { parseFio } from './adapters/fio';
 import { parseRevolut } from './adapters/revolut';
@@ -32,7 +32,8 @@ import type { DateOrder, DecimalMark } from './tabular/determinacy';
 import { gridsFromPdfLines } from './tabular/frompdf';
 import { gridsFromRhythm } from './tabular/rhythm';
 import { looksLikeHoldings } from './holdings';
-import { OCR_LANGUAGES, languagesFor, ocrAvailable, ocrImage, ocrPdf } from './ocr';
+import { OCR_LANGUAGES, missingLanguageDataMessage, ocrAvailable } from '$lib/server/ocr';
+import { languagesFor, ocrImage, ocrPdf } from './ocr';
 import { FORMAT_LABEL, sniffFormat, type StatementFormat } from './format';
 import { formatMinor, isCurrencyCode } from '$lib/money';
 import { assertSafeToParse } from './safety';
@@ -429,9 +430,7 @@ async function parseByFormat(
 			);
 		}
 		if (!ocrAvailable()) {
-			throw new Error(
-				'Reading statements from photographs needs the OCR language data. Run "npm run fetch:tessdata" once, or rebuild the image.'
-			);
+			throw new Error(missingLanguageDataMessage('Reading statements from photographs'));
 		}
 		const scanned = await ocrImage(buffer, OCR_LANGUAGES);
 		const fromPixels = await readGenerically(

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The SUBJECTS section of the Documents rail.
  *
@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { railSubjects, type RailSubject } from '$lib/documents-view';
+import { railSubjects, type RailSubject } from '$lib/documents/view';
 
 const subject = (over: Partial<RailSubject> = {}): RailSubject => ({
 	id: over.id ?? 's1',

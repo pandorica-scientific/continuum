@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// The paper filed against one record, on every screen that has records.
 	//
@@ -17,7 +17,7 @@
 	import { enhance } from '$app/forms';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { documentExpiryTone, expiryTreatment, type ExpiryTone } from '$lib/documents-view';
+	import { documentExpiryTone, expiryTreatment, type ExpiryTone } from '$lib/documents/view';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	// Type only — erased at compile time, so the server module is never pulled
 	// into the browser bundle. The shape of a filed document is defined once,
@@ -215,8 +215,6 @@
 		gap: var(--space-7);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		line-height: 1.55;
 	}
 	/* The badge column is fixed so a card of mixed formats reads as a column;

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -7,7 +7,7 @@ import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harn
 import { makeAccount, makeTransaction } from './fixtures';
 import { clearOneSidedTransfer, markOneSidedTransfer } from '$lib/server/import/transfer-decisions';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
-import { pairAndCategorise } from '$lib/server/import/ingest';
+import { pairAndCategorise } from '$lib/server/import/pairing-run';
 
 let harness: Harness;
 let testDb: TestDb;

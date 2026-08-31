@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { linkDiff } from '$lib/document-links';
+import { linkDiff } from '$lib/documents/links';
 
 /**
  * The arithmetic behind a save that must not destroy what it could not see.

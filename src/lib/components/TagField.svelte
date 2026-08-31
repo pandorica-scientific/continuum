@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// Several tags on one record: the ones it has as chips, and one field to add
 	// another. Typing offers every tag the household already has, so
@@ -8,8 +8,12 @@
 	// matches nothing still creates a tag; a settings screen first would be a
 	// second decision.
 	//
-	// The server folds case and whitespace (`normaliseTagName`), so the list
-	// here folds the same way when it refuses a duplicate.
+	// The server folds case and whitespace the same way, from the same function:
+	// `foldTagName` is in `$lib/tags-view` precisely because this control cannot
+	// reach server code and a fold that differs by a hair makes two tags out of
+	// one without erroring.
+	import { foldTagName } from '$lib/tags-view';
+
 	let {
 		tags = $bindable([]),
 		known = [],
@@ -32,16 +36,17 @@
 	let draft = $state('');
 	const listId = `tag-field-${Math.random().toString(36).slice(2, 8)}`;
 
-	const fold = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
-	const suggestions = $derived(known.filter((k) => !tags.some((t) => fold(t) === fold(k))));
+	const suggestions = $derived(
+		known.filter((k) => !tags.some((t) => foldTagName(t) === foldTagName(k)))
+	);
 
 	function add(raw: string) {
 		const value = raw.trim();
 		if (!value) return;
 		// Prefer the household's own spelling when the fold matches one it has.
-		const existing = known.find((k) => fold(k) === fold(value));
+		const existing = known.find((k) => foldTagName(k) === foldTagName(value));
 		const chosen = existing ?? value;
-		if (!tags.some((t) => fold(t) === fold(chosen))) {
+		if (!tags.some((t) => foldTagName(t) === foldTagName(chosen))) {
 			tags = [...tags, chosen];
 			onchange?.(tags);
 		}

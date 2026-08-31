@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	let {
 		data
 	}: {
@@ -68,9 +68,5 @@
 		justify-content: space-between;
 		font-size: var(--text-md);
 		color: var(--fg2);
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

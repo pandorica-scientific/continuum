@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	interface Group {
 		label: string;
 		asset: string | null;
@@ -71,7 +71,7 @@
 	.comp {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 4px 12px;
+		gap: var(--space-2) var(--space-6);
 	}
 	.c-label {
 		font-size: var(--text-md);
@@ -113,7 +113,7 @@
 	.net-line {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 4px 12px;
+		gap: var(--space-2) var(--space-6);
 		border-top: 1px solid var(--bd);
 		padding-top: 12px;
 	}

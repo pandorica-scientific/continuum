@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
-import { account, importFile, transaction, transferPair } from '$lib/server/db/schema';
+import { account, importFile, person, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
 import { dismissJob, enqueue, jobBytes, queueStatus } from '$lib/server/import/queue';
 import { runCpuQueue } from '$lib/server/jobs';
@@ -13,7 +13,6 @@ import { confirmMapping } from '$lib/server/import/wizard';
 import { loadProfiles } from '$lib/server/import/profiles';
 import type { ColumnRole } from '$lib/server/import/tabular/vocabulary';
 import type { DateOrder, DecimalMark } from '$lib/server/import/tabular/determinacy';
-import * as schema from '$lib/server/db/schema';
 import { PROOF_LABELS, sourceLabel } from '$lib/transactions/provenance';
 import {
 	confirmTransferProposal,
@@ -117,10 +116,10 @@ export const load: PageServerLoad = async () => {
 		loadCategoryGroups(),
 		// For the "whose salary is this?" sub-select on a joint account.
 		db
-			.select({ id: schema.person.id, name: schema.person.name })
-			.from(schema.person)
-			.where(isNull(schema.person.deactivatedAt))
-			.orderBy(schema.person.name)
+			.select({ id: person.id, name: person.name })
+			.from(person)
+			.where(isNull(person.deactivatedAt))
+			.orderBy(person.name)
 	]);
 
 	const total = readAgg[0].count;
@@ -242,10 +241,7 @@ export const actions: Actions = {
 	acknowledgeImport: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('fileId'));
-		await db
-			.update(schema.importFile)
-			.set({ acknowledgedAt: new Date() })
-			.where(eq(schema.importFile.id, id));
+		await db.update(importFile).set({ acknowledgedAt: new Date() }).where(eq(importFile.id, id));
 		return { ok: true };
 	},
 
@@ -255,11 +251,11 @@ export const actions: Actions = {
 		const file = await jobBytes(jobId);
 		if (!file) return fail(404, { message: 'That file is no longer waiting to be read.' });
 
-		const account = file.accountId
-			? (await db.select().from(schema.account).where(eq(schema.account.id, file.accountId)))[0]
+		const into = file.accountId
+			? (await db.select().from(account).where(eq(account.id, file.accountId)))[0]
 			: undefined;
 		const preview = await previewLayout(file.bytes, {
-			currency: account?.currency,
+			currency: into?.currency,
 			// Needed for drift: a layout we nearly know should arrive pre-filled.
 			profiles: () => loadProfiles(db)
 		});

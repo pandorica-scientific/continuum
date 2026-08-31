@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The one card that every record screen files its paper through.
  *
@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { documentExpiryTone } from '$lib/documents-view';
+import { documentExpiryTone } from '$lib/documents/view';
 import type { AboutDocument } from '$lib/server/documents/targets';
 
 const TODAY = '2026-08-28';

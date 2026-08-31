@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Where every mark in the cash-flow history chart goes.
 //
 // Pulled out of the component for the same reason as the tax and salary chart
@@ -7,18 +7,14 @@
 // in markup and are obvious in a test.
 
 import { historyTicks } from '$lib/charts/ticks';
+import { X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
 
 /** The viewBox the chart draws into. */
-export const VIEW_W = 1000;
 export const VIEW_H = 260;
 
 /** The bars live between these. */
 export const TOP = 18;
 export const BOTTOM = 208;
-
-/** The plot's horizontal extent. Everything left of X_LEFT is axis gutter. */
-export const X_LEFT = 56;
-export const X_RIGHT = 992;
 
 /** Where the month labels sit, beneath the baseline. */
 export const AXIS_Y = 230;
@@ -47,12 +43,6 @@ export interface Bar {
 	y: number;
 	width: number;
 	height: number;
-}
-
-/** The x centre of a month's slot. */
-export function slotFor(index: number, count: number): number {
-	const slot = (X_RIGHT - X_LEFT) / count;
-	return X_LEFT + slot * index + slot / 2;
 }
 
 /**

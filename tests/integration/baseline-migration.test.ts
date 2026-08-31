@@ -338,9 +338,13 @@ describe('the baseline migration', () => {
  * image therefore boots against a 0.6.2/0.7.0 schema and 500s at the first
  * statement import, hours later, with nothing at boot having said so.
  *
- * `import_file.document_id` is the cheapest true probe: it is the column this
- * release adds, it is the one every statement import writes, and asking
- * `information_schema` for it costs one round trip and touches no data.
+ * What the guard demands is DERIVED from the Drizzle schema — every table and
+ * column it declares — rather than being one hand-picked column a developer had
+ * to re-point every release. That is what makes this suite worth running: the
+ * old form was tautological here, because the database was built from the same
+ * baseline that defined the column being looked for. Asking
+ * `information_schema` for the whole column list costs one round trip and
+ * touches no data.
  */
 describe('the boot guard', () => {
 	it('is silent on a database built from this baseline', async () => {
@@ -351,11 +355,14 @@ describe('the boot guard', () => {
 		// Exactly what an in-place upgrade leaves behind: the schema this release
 		// needs, minus the tables the migrator never created. Both by name —
 		// `cascade` on the parent drops the child's foreign key and leaves the
-		// child standing, which would leave the probe's own table in place.
+		// child standing, which would leave one of the two in place.
 		await harness.sql`drop table document_identity_number`;
 		await harness.sql`drop table document_identity`;
 		try {
 			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/release notes/i);
+			// And it says WHICH object is missing, so the operator is not left
+			// diffing two schemas to find out what the release notes are for.
+			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/document_identity/);
 		} finally {
 			// The release notes' own SQL, which is what an operator would run.
 			await harness.sql`

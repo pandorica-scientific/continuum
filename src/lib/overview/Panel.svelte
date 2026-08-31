@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import type { Snippet } from 'svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import type { IconName } from '$lib/icons';
@@ -111,7 +111,7 @@
 		background: var(--card);
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
-		padding: 14px 16px;
+		padding: var(--space-7) var(--space-8);
 		height: 100%;
 		min-height: 0;
 		overflow: hidden;

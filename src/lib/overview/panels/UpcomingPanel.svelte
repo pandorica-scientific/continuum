@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	interface Event {
 		date: string;
 		label: string;
@@ -47,9 +47,5 @@
 	}
 	.up-amount {
 		font-size: var(--text-md);
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

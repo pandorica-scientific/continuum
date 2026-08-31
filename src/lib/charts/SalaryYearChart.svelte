@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Salary by year, in the Tax screen's visual language.
 	//
 	// The two tabs sit next to each other, so the panel geometry, the hatching,
@@ -22,9 +22,6 @@
 		RATE_TITLE_PCT,
 		TALL_TITLE_PCT,
 		VIEW_H,
-		VIEW_W,
-		X_LEFT,
-		X_RIGHT,
 		barValues,
 		barWidth,
 		bars,
@@ -34,10 +31,10 @@
 		changeSpan,
 		changeY,
 		netTickY,
-		slotFor,
 		type SalaryMode,
 		type SerialisedSalaryYear
 	} from '$lib/charts/salary-chart-geometry';
+	import { VIEW_W, X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
 
 	let {
 		years,
@@ -504,8 +501,8 @@
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-		padding: 10px 12px;
+		box-shadow: var(--shadow-float);
+		padding: var(--space-5) var(--space-6);
 		pointer-events: none;
 		display: flex;
 		flex-direction: column;

@@ -68,33 +68,44 @@ even when the tests pass.
 
 ### Database changes
 
-Schema lives in `src/lib/server/db/schema/`, split by domain with `index.ts` as
-the only import site. After editing it:
+Schema lives in `src/lib/server/db/schema/`, split by domain, with `index.ts` as
+the one import site. After editing it:
 
 ```sh
-npm run db:generate    # writes a new migration into drizzle/
-npm run db:migrate     # applies it locally
+npm run db:baseline    # rewrites drizzle/0000_baseline.sql from the schema
 ```
 
-**The schema is additive-only.** `drizzle/0000_baseline.sql` is the whole schema
-as of 0.4.0; everything after it adds. Dropping or renaming a column means
-writing the migration that carries the data across, because households are
-running the previous release.
+**`drizzle/0000_baseline.sql` is a generated file — never edit it by hand.**
+`drizzle/` holds ONE migration describing the current schema rather than a chain
+describing how it got here. Continuum has no installed base to migrate, so a
+chain would be history nobody can replay; the file is rewritten in place instead,
+and `tests/integration/baseline-migration.test.ts` asserts there is exactly one.
+`tests/unit/baseline-composition.test.ts` fails if the committed file and the
+schema modules have drifted apart.
 
-Commit the generated SQL and the snapshot together with the schema change.
-Migrations are forward-only and run automatically on container start, so a
-migration that cannot apply to an existing household's database is a breaking
-change — call it out in the pull request. Keep `drizzle/meta/_journal.json` in
-sync for a hand-written migration, and run `npx drizzle-kit check`; the
-migration-metadata regression also verifies that the current snapshot matches
-the TypeScript schema so the next generated migration cannot recreate objects
-that already exist.
+drizzle-kit writes tables, columns, indexes and foreign keys and nothing else.
+Triggers, generated columns, CHECK constraints, expression indexes, the
+net-worth view and the seed rows a foreign key needs are invisible to it — so
+they are exported from the schema module that owns the tables they constrain
+(`authSql`, `contactsSql`, `documentsSeedSql`, …), assembled in order by
+`src/lib/server/db/schema/baseline.ts`, and folded into the file by
+`scripts/compose-baseline.mjs`. Put a new one beside the tables it belongs to;
+that is what keeps the two halves of the schema from becoming two sources of
+truth.
 
-`db:generate` writes tables, columns, indexes and foreign keys and nothing else.
-Triggers, generated columns, CHECK constraints, expression indexes, views and
-seed rows have to be written by hand — the appendix at the foot of the baseline
-is the worked example, and `tests/integration/baseline-migration.test.ts` is what
-notices when one goes missing.
+Two lists are GENERATED rather than written: the enum CHECK constraints come
+from `ENUM_COLUMNS` in `src/lib/enums.ts`, and the entity supertype's loop from
+`ENTITY_KINDS`. Adding a value or a kind is one edit in one language.
+
+Because the baseline is rewritten rather than added to, `migrate()` does nothing
+to a database that already recorded it — so an instance upgraded by pulling the
+image would silently run against the old schema. `assertSchemaIsCurrent` in
+`src/lib/server/db/migrate.ts` refuses to serve one, comparing every table and
+column the Drizzle schema declares against `information_schema` at boot. It is
+derived, so there is nothing to remember. **A release that changes the schema
+needs an `Upgrading` block in `CHANGELOG.md` carrying the SQL an operator runs
+against a backed-up copy** — that is the migration path, and it is a breaking
+change worth calling out in the pull request.
 
 ### Conventions the tests enforce
 
@@ -106,10 +117,12 @@ than review:
   column has a CHECK matching its list in `src/lib/enums.ts`. See
   `tests/integration/schema-invariants.test.ts`.
 - **Module boundaries.** Nothing loose in `src/lib/server` — a domain is a
-  directory with an `index.ts`, and cross-cutting plumbing lives in `system/`.
-  See `tests/unit/module-boundaries.test.ts`.
-- **Licence headers.** Every file under `src/` starts with
-  `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0`. An ESLint rule adds
+  directory, and cross-cutting plumbing lives in `system/`. A directory may have
+  an `index.ts`, and must not have one nothing imports: seven barrels once
+  existed only because a test demanded them while every caller reached past them
+  into submodules. See `tests/unit/module-boundaries.test.ts`.
+- **Licence headers.** Every `.ts` and `.svelte` file under `src/` starts with
+  `// SPDX-License-Identifier: AGPL-3.0-or-later`. An ESLint rule adds
   it with `--fix` and fails without it.
 
 ### Cutting a release
@@ -169,9 +182,10 @@ them:
    setting — day-count conventions per loan, currencies from the FX table,
    module toggles, calendar rules.
 2. **Capabilities live behind seams.** Screens talk to interfaces; formats and
-   platforms are pluggable implementations. Adding a bank means writing an
-   adapter in `src/lib/server/import/adapters/` plus a sniff rule in
-   `detect.ts`, never touching the import screen.
+   platforms are pluggable implementations. Adding a FORMAT means writing a
+   parser in `src/lib/server/import/standards/` plus a rule in `format.ts`,
+   never touching the import screen. Adding a BANK usually means no code at all
+   — see below.
 
 ### Money
 
@@ -186,8 +200,10 @@ be sent back.
 - Parsers, pairing, categorisation, loan schedules and chart layout are pure
   functions with unit tests — add one with your change.
 - A parser must reproduce each statement's own `opening + rows = closing`. The
-  synthetic corpus in `tests/fixtures/synthetic` enforces this on 355 committed
-  files across 24 locales and 20 currencies, and runs everywhere.
+  synthetic corpus in `tests/fixtures/synthetic` enforces this on 60 statements
+  across 24 locales and 20 currencies, each emitted in up to ten formats — 294
+  statement files, beside a 60-file `expected/` answer key — and runs
+  everywhere.
 - Multi-row and concurrent behavior belongs in `tests/integration`, whose
   suites start isolated embedded PostgreSQL instances. Use an injectable
   database handle in the domain mutation so the test can force rollback and
@@ -274,25 +290,44 @@ obvious from the diff. No format is enforced.
 
 ## Adding a bank statement format
 
-The most common contribution, so the path is written out:
+Routing is format-first, and that changes what this recipe is. A reader works
+out what a file IS — CSV, MT940, CAMT.053, OFX, QIF, ODS, a PDF text layer — and
+a generic reader infers the layout from the file itself, then checks the result
+against the statement's own `opening + rows = closing`. So:
 
-1. Put the real export in `bank_data_examples_do_not_share/`.
-2. Write the adapter in `src/lib/server/import/adapters/`, returning a
-   `ParsedStatement`.
-3. Register a sniff rule in `src/lib/server/import/detect.ts` — detection must
-   be positive evidence (a header, a title, a BIC), never "whatever is left".
-4. Add an anonymised fixture under `tests/fixtures/` and a unit test covering
-   the awkward rows: negative amounts, foreign currency, a card transaction with
-   no counterparty, a date that looks like a symbol.
-5. Check reconciliation: opening + rows = closing, to the minor unit.
-6. Add the bank to the README table.
+**A new BANK is usually no code.** Drop the export in and see whether the
+generic reader takes it. Five hand-written adapters survive in
+`src/lib/server/import/adapters/` as a fast path, and
+[docs/statement-import.md](docs/statement-import.md) is explicit that none of
+them is load-bearing any more. Write one only when the generic path demonstrably
+cannot read the file, and say in the pull request what it could not do.
+
+**A new FORMAT is the real contribution:**
+
+1. Put the real export in `bank_data_examples_do_not_share/`, which is
+   gitignored.
+2. Write the parser in `src/lib/server/import/standards/`, returning the same
+   line or grid model every other reader produces.
+3. Register the format in `src/lib/server/import/format.ts` — recognition must
+   be positive evidence (a magic number, a header record, a declared schema),
+   never "whatever is left".
+4. Add a synthetic fixture under `tests/fixtures/synthetic/` and a unit test
+   covering the awkward rows: negative amounts, foreign currency, a card
+   transaction with no counterparty, a date that looks like a symbol.
+5. Check reconciliation: opening + rows = closing, to the minor unit. A reading
+   that cannot be proved is refused rather than imported — that is the whole
+   contract, and `src/lib/server/import/proof.ts` is where it lives.
+6. Add the format to the table in `README.md`, which is keyed by format and
+   deliberately names no bank.
 
 Dedup and fingerprinting are handled centrally — prefer the bank's own
-reference when the statement carries one, and let `fingerprintVersion` do the
+reference when the statement carries one, and let `FINGERPRINT_VERSION` do the
 rest.
 
 ## License
 
-Continuum is licensed under [PolyForm Noncommercial 1.0.0](LICENSE.md). By
-contributing you agree that your contribution is licensed under the same terms,
-and that you have the right to submit it. There is no separate CLA.
+Continuum is licensed under the [GNU Affero General Public License v3.0 or
+later](LICENSE). By contributing you agree that your contribution is licensed
+under the same terms, and that you have the right to submit it. There is no
+separate CLA, and there will not be one — nothing here is kept back for a
+commercial edition.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * A small XML reader, scoped to machine-generated financial messages.
  *
@@ -68,9 +68,26 @@ function parseAttrs(raw: string): Record<string, string> {
 /** Parse a document into a tree. Throws on anything structurally wrong. */
 export function parseXml(source: string): XmlNode {
 	// Declarations, comments and processing instructions carry nothing we need.
-	const text = source
-		.replace(/<\?[\s\S]*?\?>/g, '')
-		.replace(/<!--[\s\S]*?-->/g, '')
+	//
+	// Comments are removed to a FIXED POINT; everything else is one pass. A
+	// single pass leaves the opener behind on input the removal itself creates —
+	// `<!--<!-- -->` loses the inner comment and keeps a bare `<!--`, and the tag
+	// scanner below then reads the rest of the document as one unterminated
+	// element. Such a file is not valid XML, but this parser is handed whatever a
+	// bank exports, and the failure is silent: a statement that reads as empty
+	// rather than as broken.
+	//
+	// Only the comments loop, because comments are the only one of the four
+	// whose own removal can produce a fresh opener. Re-running the whole chain
+	// would additionally re-scan whatever a CDATA section unwrapped into, which
+	// is a behaviour change nothing here needs.
+	let text = source.replace(/<\?[\s\S]*?\?>/g, '');
+	for (;;) {
+		const stripped = text.replace(/<!--[\s\S]*?-->/g, '');
+		if (stripped === text) break;
+		text = stripped;
+	}
+	text = text
 		.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (_, inner: string) => inner)
 		.replace(/<!DOCTYPE[^>]*>/gi, '');
 

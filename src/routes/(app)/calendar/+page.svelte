@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { selectedDayForMonth } from '$lib/ui/state';
@@ -648,8 +648,6 @@
 		font-size: var(--text-xs);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		line-height: 1.55;
 	}
 </style>

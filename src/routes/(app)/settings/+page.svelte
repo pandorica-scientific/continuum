@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
 	import {
 		messageFromActionResult,
@@ -1002,7 +1002,7 @@
 		/* Lifted rather than faded: it is being carried, and the chips around it
 		   are already rearranging to show where it will land. */
 		background: var(--card2);
-		box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+		box-shadow: var(--shadow-raise);
 	}
 	.tx-leaf:focus-visible {
 		outline: 2px solid var(--blue);
@@ -1205,7 +1205,7 @@
 	.cc-fields {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 10px 14px;
+		gap: var(--space-5) var(--space-7);
 	}
 
 	.marker-row {

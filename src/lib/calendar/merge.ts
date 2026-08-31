@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The three-way merge. This is where sync correctness lives.
 //
 // Pure by design: no network, no database, no clock, no imports beyond a type.

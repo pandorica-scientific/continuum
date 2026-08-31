@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Client-safe currency helpers. The selectable list itself is derived
 // server-side from the FX rate table (see $lib/server/fx/currencies), so any
 // currency the rate source quotes is usable without a code change.

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The one place that maps a panel key to its component. Content components
 	// know nothing about the grid, and the board knows nothing about content —
 	// this is the seam between them.

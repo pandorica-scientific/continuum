@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure pairing logic, separated from the database so it can be unit tested
 // hard — transfer mistakes silently corrupt income and spending figures.
 //

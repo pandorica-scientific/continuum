@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The last month each person was paid for, against the month before it.
 	//
 	// The arrow is drawn here rather than through charts/Delta.svelte because
@@ -107,9 +107,5 @@
 		font-size: var(--text-xs);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

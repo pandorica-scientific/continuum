@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The panel registry is the single source of truth for what can go on the
 // Overview board, in the same spirit as src/lib/modules/registry.ts for
 // screens. It holds no data and no arithmetic: adding another panel is one

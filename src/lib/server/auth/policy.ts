@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Permission rules, kept as pure functions so every guard is testable without
 // a database and so the same rule cannot drift between two call sites.
 //

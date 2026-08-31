@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The wordings a payslip prints, in the languages a household is likely to be
 // paid in. Learning covers any language after one correction; these decide
 // whether the FIRST slip from a new employer reads itself.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Which colour a tag is, everywhere it appears.
  *
@@ -10,12 +10,9 @@
  * traffic light: green, amber and red mean state in this system, and a tag is
  * a data series — the same class of thing a category is.
  */
-const RESERVE = 10;
+import { foldTagName } from '$lib/tags-view';
 
-/** Folded the way the server folds a tag name, so `Renovation` and `renovation` share a hue. */
-function fold(name: string): string {
-	return name.trim().toLowerCase().replace(/\s+/g, ' ');
-}
+const RESERVE = 10;
 
 /** FNV-1a: small, stable across runtimes, and evenly spread over ten buckets. */
 function hash(value: string): number {
@@ -29,5 +26,5 @@ function hash(value: string): number {
 
 /** The CSS token for this tag's hue, e.g. `--series-r4`. */
 export function tagHue(name: string): string {
-	return `--series-r${(hash(fold(name)) % RESERVE) + 1}`;
+	return `--series-r${(hash(foldTagName(name)) % RESERVE) + 1}`;
 }

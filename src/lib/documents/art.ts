@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Which face a wallet card is drawn on.
 import type { EnumValue } from '$lib/enums';
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Band of filters, chart, table — the Tax screen's shape, applied to what was
 	// earned rather than what was paid on it.
 	//
@@ -514,7 +514,7 @@
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+		box-shadow: var(--shadow-float);
 		overflow: hidden;
 	}
 	.menu-item {
@@ -523,7 +523,7 @@
 		background: none;
 		border: 0;
 		cursor: pointer;
-		padding: 8px 14px;
+		padding: var(--space-4) var(--space-7);
 		font-size: var(--text-sm);
 		text-align: left;
 		white-space: nowrap;
@@ -544,7 +544,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		padding: 6px 8px;
+		padding: var(--space-3) var(--space-4);
 	}
 	.menu-label {
 		font-size: var(--text-xs);
@@ -561,7 +561,7 @@
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 4px 6px;
+		gap: var(--space-2) var(--space-3);
 		font-size: var(--text-sm);
 		color: var(--fg2);
 		min-width: 0;

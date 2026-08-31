@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { isCurrencyCode } from '$lib/money';
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
@@ -13,7 +13,7 @@ import {
 	taxStatement,
 	transaction
 } from '$lib/server/db/schema';
-import { convertMinorSync, faceValueMinor, loadRateTable, missingRateCodes } from './table';
+import { loadRateTable, missingRateCodes } from './table';
 
 // The Czech National Bank publishes a daily fixing of ~30 currencies against
 // CZK — free, no API key. All rates are stored as CZK per one unit; rates
@@ -90,33 +90,6 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
 		console.warn(`FX: ignored ${dropped.length} unrecognised code(s): ${dropped.join(', ')}`);
 	}
 	return known.length;
-}
-
-/**
- * Convert an amount in minor units between currencies at the day's rate.
- * Returns null when no rate is known yet (e.g. before the first fetch).
- */
-async function convertMinor(
-	amountMinor: bigint,
-	from: string,
-	to: string,
-	day: string = new Date().toISOString().slice(0, 10)
-): Promise<bigint | null> {
-	return convertMinorSync(await loadRateTable(), amountMinor, from, to, day);
-}
-
-/**
- * Convert, or fall back to the amount's face value when no rate is known.
- * The async twin of `convertOrFace` in ./table — see its comment for why a
- * null rate must never be coalesced into an identity conversion.
- */
-export async function convertOrFace(
-	amountMinor: bigint,
-	from: string,
-	to: string,
-	day?: string
-): Promise<bigint> {
-	return (await convertMinor(amountMinor, from, to, day)) ?? faceValueMinor(amountMinor, from, to);
 }
 
 /**

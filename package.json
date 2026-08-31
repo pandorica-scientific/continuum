@@ -1,8 +1,8 @@
 {
 	"name": "continuum",
 	"private": true,
-	"version": "0.7.4",
-	"license": "PolyForm-Noncommercial-1.0.0",
+	"version": "0.7.5",
+	"license": "AGPL-3.0-or-later",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -15,7 +15,7 @@
 		"format": "prettier --write .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"db:generate": "drizzle-kit generate",
+		"db:baseline": "node scripts/compose-baseline.mjs",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"test:unit": "vitest run",

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // One-time enrollment links. A person created by an administrator has no
 // password until they open their link and choose one, so the administrator
 // never knows it. Only the hash is stored — the raw token is shown once, the

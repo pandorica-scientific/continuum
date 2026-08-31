@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
 	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import TagInput from '$lib/components/TagInput.svelte';
@@ -736,7 +736,7 @@
 		background: var(--card);
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
-		padding: 12px 14px;
+		padding: var(--space-6) var(--space-7);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
@@ -919,8 +919,6 @@
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		line-height: 1.55;
 	}
 	.track {

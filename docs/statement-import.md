@@ -341,12 +341,18 @@ Recorded so they are not retried.
 | Header vocabulary                   | `tabular/vocabulary.ts`             |
 | Saved layouts                       | `profiles.ts`, `tabular/profile.ts` |
 | The mapping wizard                  | `wizard.ts`                         |
-| Reading from pixels                 | `ocr.ts`                            |
+| Reading from pixels                 | `ocr.ts`, over `$lib/server/ocr`    |
 | Background reading                  | `queue.ts`                          |
-| Accounts, dedup, pairing            | `ingest.ts`                         |
+| Which account a statement is for    | `account-resolution.ts`             |
+| Dedup and filing                    | `ingest.ts`                         |
+| Pairing transfers, categorising     | `pairing-run.ts`                    |
 
-Acceptance suites: `tests/acceptance/corpus.test.ts` (the private real samples,
-skipped where absent) and `tests/acceptance/synthetic-corpus.test.ts` (the committed
-294-file corpus). Both name every file and what it must do; the synthetic one fails
-in **both** directions, so a gap that starts working breaks the build until its
-recorded reason is corrected.
+Acceptance suite: `tests/acceptance/synthetic-corpus.test.ts`, over the committed
+294-file corpus. It names every file and what it must do, and fails in **both**
+directions — so a gap that starts working breaks the build until its recorded reason
+is corrected.
+
+There is no automated suite over the private real samples. The figures for them in
+this document were measured by hand against
+`bank_data_examples_do_not_share/`, which is gitignored and present on one machine;
+treat them as a recorded measurement rather than a check that runs.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Geometry comes from the scale in app.css, not from a number somebody picked.
 //
 // Written here rather than pulled in as a plugin, following the licence rule
@@ -44,7 +44,7 @@ export default {
 		schema: [],
 		messages: {
 			rawGeometry:
-				'{{prop}}: {{value}} has a name — use var({{token}}). Raw values beside tokens are how the two drift apart. If this one is deliberately off the scale, mark it /* geometry-exempt: why */.',
+				'{{prop}}: {{value}} has a name — use {{token}}. Raw values beside tokens are how the two drift apart. If this one is deliberately off the scale, mark it /* geometry-exempt: why */.',
 			exemptionNeedsReason: 'A geometry exemption must say why: /* geometry-exempt: the reason */.'
 		}
 	},
@@ -81,17 +81,29 @@ export default {
 						const match = line.match(new RegExp(`(?<![-\\w])${prop}\\s*:\\s*([^;]+);`));
 						if (!match) continue;
 						const value = match[1].trim();
-						// A token, a keyword, zero or a relative unit is fine.
-						const px = value.match(/^(\d+)px$/);
-						if (!px) continue;
-						const n = Number(px[1]);
-						const token =
-							prop === 'border-radius'
+						// EVERY part of a shorthand, not just a lone value. The rule
+						// matched `^(\d+)px$` for a long time, so `gap: 8px` was caught and
+						// `gap: 8px 14px` went straight through — with both numbers on the
+						// scale. Twenty files carried one, which is the failure mode a
+						// mechanical rule exists to prevent: it looked enforced.
+						//
+						// A shorthand is only reported when EVERY part is a raw pixel value
+						// the scale names. Mixing a token with a number — `var(--space-4) 3px`
+						// — is a deliberate choice about one axis and not a drifted number.
+						const parts = value.split(/\s+/);
+						const pixels = parts.map((part) => /^(\d+)px$/.exec(part)?.[1]);
+						if (pixels.some((digits) => digits === undefined)) continue;
+						const tokens = pixels.map((digits) => {
+							const n = Number(digits);
+							return prop === 'border-radius'
 								? RADIUS[n] && `--radius-${RADIUS[n]}`
 								: SPACE[n] && `--space-${SPACE[n]}`;
-						// No token for this number: the scale does not claim to cover every
-						// value, and inventing one here would restyle the product.
-						if (!token) continue;
+						});
+						// No token for one of these numbers: the scale does not claim to
+						// cover every value, and inventing one here would restyle the
+						// product.
+						if (tokens.some((token) => !token)) continue;
+						const token = tokens.map((name) => `var(${name})`).join(' ');
 						context.report({ node, messageId: 'rawGeometry', data: { prop, value, token } });
 					}
 				}

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // One data builder per Overview panel.
 //
 // The board only computes what it is actually showing. Eighteen panels' worth
@@ -37,7 +37,7 @@ import {
 	type Actor
 } from '$lib/server/documents/visibility';
 import { systemShelfId } from '$lib/server/documents/shelves';
-import { groupSummary } from '$lib/documents-view';
+import { groupSummary } from '$lib/documents/view';
 import { statementStatus } from '$lib/statements/cadence';
 import { latestSalaryByPerson } from '$lib/server/salary/history';
 import { deltaPct, deltaTone } from '$lib/charts/delta';

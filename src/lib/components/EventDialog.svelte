@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { untrack } from 'svelte';
 	import RecurrenceEditor from '$lib/components/RecurrenceEditor.svelte';
 
@@ -181,7 +181,7 @@
 	.grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 10px 14px;
+		gap: var(--space-5) var(--space-7);
 	}
 
 	.wide {
@@ -207,10 +207,10 @@
 	.scope {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 8px 14px;
+		gap: var(--space-4) var(--space-7);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		padding: 10px 12px;
+		padding: var(--space-5) var(--space-6);
 	}
 
 	legend {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // iPhones shoot HEIC by default and the upload path runs the pipeline on
 // dropped files, so this is a real share of input.
 //

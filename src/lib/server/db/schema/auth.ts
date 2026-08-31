@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Who can sign in, how, and what the household has set.
  */
@@ -165,3 +165,16 @@ export const settings = pgTable('settings', {
 	key: text('key').primaryKey(),
 	value: jsonb('value').notNull()
 });
+
+// ---- SQL drizzle-kit cannot model ----
+
+/**
+ * Carried here rather than in the migration file, because it is a fact about
+ * these tables and belongs beside them. `scripts/compose-baseline.mjs` collects
+ * every block like this one into `drizzle/0000_baseline.sql`; nothing edits that
+ * file by hand.
+ */
+export const authSql = `
+-- One row, ever: the wizard is claimed or it is not.
+ALTER TABLE setup_claim ADD CONSTRAINT setup_claim_singleton CHECK (claimed = true);
+`;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import Icon from '$lib/components/Icon.svelte';
 	import type { Snippet } from 'svelte';
 
@@ -102,7 +102,7 @@
 		z-index: 20;
 		width: max-content;
 		max-width: 340px;
-		padding: 10px 12px;
+		padding: var(--space-5) var(--space-6);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
 		/* --bg2, not --card. In the dark theme --card is rgba(255,255,255,0.03) —
@@ -116,7 +116,7 @@
 		line-height: 1.5;
 		/* Heavier than a card's shadow: this floats above the page and needs to
 		   read as detached rather than as part of what is under it. */
-		box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+		box-shadow: var(--shadow-float);
 		text-align: left;
 		white-space: normal;
 	}

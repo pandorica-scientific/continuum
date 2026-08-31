@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
@@ -311,7 +311,7 @@
 		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px 16px;
+		gap: var(--space-5) var(--space-8);
 	}
 	.rule-row.off {
 		opacity: 0.55;

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The Salary screen's actions need a Request, which the harness cannot build,
 // so these exercise the functions the actions are composed of.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

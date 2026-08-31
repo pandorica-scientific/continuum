@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// What a year's row opens into: the statements filed that year, and the
 	// paperwork each of them brought.
 	//
@@ -278,7 +278,7 @@
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+		box-shadow: var(--shadow-float);
 		overflow: hidden;
 		z-index: 2;
 	}
@@ -289,7 +289,7 @@
 		border: 0;
 		color: var(--fg1);
 		cursor: pointer;
-		padding: 8px 14px;
+		padding: var(--space-4) var(--space-7);
 		font-size: var(--text-sm);
 		text-align: left;
 		white-space: nowrap;

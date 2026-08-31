@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // What the documents screen and its form share that is not shelf-shaped.
 //
 // `SHELVES` used to live here: ten keys and labels the screen, the form and the

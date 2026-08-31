@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { asRowId } from '$lib/ids';
 import { uuidv7 } from 'uuidv7';
 import { fail } from '@sveltejs/kit';

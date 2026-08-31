@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	interface Day {
 		day: string;
 		kwh: string;
@@ -64,10 +64,6 @@
 	}
 	.day {
 		font-size: var(--text-2xs);
-		color: var(--fg3);
-	}
-	.quiet {
-		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

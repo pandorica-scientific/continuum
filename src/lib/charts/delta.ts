@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // What a figure did against the window before it.
 //
 // Pure and shared, beside `tone.ts`, because the arithmetic and the colour are

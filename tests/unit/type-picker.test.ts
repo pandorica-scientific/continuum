@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { ALL_TYPES, mayProposeType, typeOptionsFor } from '$lib/documents';
-import { TYPE_LABELS } from '$lib/documents-view';
+import { TYPE_LABELS } from '$lib/documents/view';
 
 describe('mayProposeType', () => {
 	it('fills a field nobody has answered', () => {

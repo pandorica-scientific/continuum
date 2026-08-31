@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// One shelf in Settings → Shelves: handle, emoji, label, System badge, menu.
 	//
@@ -147,7 +147,7 @@
 		color: var(--fg3);
 		background: var(--grey-tint);
 		border-radius: var(--radius-xl);
-		padding: 2px 8px;
+		padding: var(--space-1) var(--space-4);
 		white-space: nowrap;
 	}
 	.menu {

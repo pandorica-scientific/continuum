@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Adding a payslip, in the same dialog the Tax screen files a statement in.
 	//
 	// It was an inline card that pushed the whole table down when open, and a
@@ -389,7 +389,7 @@
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-		gap: 10px 12px;
+		gap: var(--space-5) var(--space-6);
 		/* Controls line up along their BOTTOM edge: a label that wraps to two
 		   lines would otherwise push its input a line below the ones beside it,
 		   and a row of controls that no longer lines up stops reading as a row. */

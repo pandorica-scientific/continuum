@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { FixationPeriod } from '$lib/loans/amortise';
 import { splitLoanPayment, type LoanPaymentEvent, type SplitLoan } from '$lib/loans/payment-split';

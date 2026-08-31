@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
@@ -14,13 +14,12 @@ import {
 } from '$lib/server/db/schema';
 import {
 	amortise,
-	DAY_COUNTS,
 	debtFreeYear,
 	interestForYear,
 	periodForMonth,
-	type DayCount,
 	type FixationPeriod
 } from '$lib/loans/amortise';
+import { DAY_COUNTS, type DayCount } from '$lib/loans';
 import { fixationPill } from '$lib/loans/pill';
 import { anchorMonthFor, project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
@@ -32,7 +31,7 @@ import {
 	documentsAbout
 } from '$lib/server/documents/targets';
 import { getBaseCurrency } from '$lib/server/settings';
-import { convertOrFace } from '$lib/server/fx';
+import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import {
 	createLoan,
 	recordRepayment,
@@ -62,12 +61,17 @@ const EVENT_LABELS: Record<string, string> = {
 export const load: PageServerLoad = async ({ locals }) => {
 	const actor = locals.person ?? null;
 	const baseCurrency = await getBaseCurrency();
-	const [loans, allPeriods, properties, links, allEvents] = await Promise.all([
+	// The rate table is loaded once for the whole screen rather than per loan.
+	// Converting inside the loop below meant three awaited round trips for every
+	// loan on the page; every other screen preloads, and this one now does too.
+	const todayIso = today();
+	const [loans, allPeriods, properties, links, allEvents, rates] = await Promise.all([
 		db.select().from(loan).orderBy(loan.createdAt, loan.id),
 		db.select().from(loanFixationPeriod),
 		db.select({ id: property.id, name: property.name }).from(property),
 		db.select().from(loanProperty),
-		db.select().from(loanEvent).orderBy(loanEvent.happenedOn)
+		db.select().from(loanEvent).orderBy(loanEvent.happenedOn),
+		loadRateTable()
 	]);
 
 	const year = new Date().getFullYear();
@@ -137,14 +141,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const documents = documentsByLoan.get(l.id) ?? [];
 		const documentCandidates = candidatesByLoan.get(l.id) ?? [];
 
-		const owedBase = await convertOrFace(l.owedMinor, l.currency, baseCurrency);
-		const paymentBase = await convertOrFace(payment, l.currency, baseCurrency);
+		const owedBase = convertOrFace(rates, l.owedMinor, l.currency, baseCurrency, todayIso);
+		const paymentBase = convertOrFace(rates, payment, l.currency, baseCurrency, todayIso);
 		totalOwedBase += owedBase;
 		totalPaymentBase += l.owedMinor > 0n ? paymentBase : 0n;
 
 		const interest = interestForYear(terms, periods, year);
 		if (interest) {
-			const interestBase = await convertOrFace(interest.interestMinor, l.currency, baseCurrency);
+			const interestBase = convertOrFace(
+				rates,
+				interest.interestMinor,
+				l.currency,
+				baseCurrency,
+				todayIso
+			);
 			interestYearBase += interestBase;
 			if (
 				interest.fromMonth !== `${year}-01` &&

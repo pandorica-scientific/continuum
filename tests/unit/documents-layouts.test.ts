@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { NOBODY, sectionsByPerson, type AboutLink, type LayoutRow } from '$lib/documents-layouts';
+import { NOBODY, sectionsByPerson, type AboutLink, type LayoutRow } from '$lib/documents/layouts';
 
 const ROBERT: AboutLink = { id: 'p1', kind: 'person', name: 'Robert' };
 const JANA: AboutLink = { id: 'p2', kind: 'person', name: 'Jana' };

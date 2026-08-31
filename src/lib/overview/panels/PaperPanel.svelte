@@ -1,9 +1,9 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Three figures and where the paper sits. The figures are the ones that
 	// change what somebody does today — what is unfiled, what is about to lapse,
 	// what already has — and the shelves below them are only navigation.
-	import { readableDate } from '$lib/documents-view';
+	import { readableDate } from '$lib/documents/view';
 
 	interface Shelf {
 		key: string;
@@ -137,10 +137,6 @@
 	.n {
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
-		color: var(--fg3);
-	}
-	.quiet {
-		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// One panel, offered rather than placed: the icon and title the board draws
 	// as an eyebrow, on a button that adds it.
 	//
@@ -67,7 +67,7 @@
 		align-items: flex-start;
 		gap: var(--space-2);
 		border-radius: var(--radius-lg);
-		padding: 10px 12px;
+		padding: var(--space-5) var(--space-6);
 		width: 100%;
 		height: 100%;
 	}

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // pdf-lib, one page per scan page, image drawn edge to edge.
 //
 // Output is a plain PDF, not PDF/A: conformance needs XMP metadata, an

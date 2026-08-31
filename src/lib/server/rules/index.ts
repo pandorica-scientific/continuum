@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Database side of the rules engine. All matching happens in the pure module;
 // this loads rules, records evidence, and previews matches without writing.
 

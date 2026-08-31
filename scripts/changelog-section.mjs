@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Print the CHANGELOG.md section for a version — the release notes, read from
 // the one place they are written.
 //

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	interface Row {
 		id: string;
 		personName: string;
@@ -69,10 +69,6 @@
 		color: var(--red);
 	}
 	.rate {
-		color: var(--fg3);
-	}
-	.quiet {
-		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 </style>

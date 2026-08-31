@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The projection's inputs, gathered from every corner of the household: cash,
 // portfolio, property, mortgages and rent.
 //
@@ -20,7 +20,8 @@ import {
 } from '$lib/server/db/schema';
 import { monthlyHistory } from '$lib/server/cashflow';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { amortise, DAY_COUNTS, type DayCount } from '$lib/loans/amortise';
+import { amortise } from '$lib/loans/amortise';
+import { DAY_COUNTS, type DayCount } from '$lib/loans';
 import { anchorMonthFor } from '$lib/loans/simulate';
 import { activeTenanciesByProperty } from '$lib/property/tenancy';
 import { toMajor } from '$lib/money';

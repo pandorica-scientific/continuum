@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import type { ActionOutcome } from '$lib/actions/result';
 	import Icon from '$lib/components/Icon.svelte';
 	import { admitsImages, admitsPdf, isImageFile } from '$lib/scan/core/accept';

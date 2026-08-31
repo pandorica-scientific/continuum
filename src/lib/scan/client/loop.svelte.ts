@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Stability, and the words the user reads while aiming.
 //
 // Both exist to help someone FRAME a page, and nothing more: the viewfinder no

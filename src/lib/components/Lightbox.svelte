@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Full-size image viewer: X, Escape, or a click outside the image closes it.
 	import { overlayFocus } from '$lib/actions/overlay';
 	let { image, alt, onclose }: { image: string; alt: string; onclose: () => void } = $props();

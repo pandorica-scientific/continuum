@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // What "this event / this and following / all events" actually means to the data.
 //
 // Pure: given a scope, a rule and which occurrence was touched, it returns the

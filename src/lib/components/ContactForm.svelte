@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 	import type { AboutDocument, CandidateDocument } from '$lib/server/documents/targets';
 
@@ -205,7 +205,7 @@
 	.grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 10px 14px;
+		gap: var(--space-5) var(--space-7);
 	}
 
 	.wide {
@@ -238,7 +238,7 @@
 	.belong-groups {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 8px 14px;
+		gap: var(--space-4) var(--space-7);
 		align-items: center;
 	}
 

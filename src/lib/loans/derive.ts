@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Filling in the other half of a re-fixation offer.
 //
 // A bank quotes a rate and a payment together. The dialog asked for both and

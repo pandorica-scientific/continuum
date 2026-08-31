@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// A 36px button showing the chosen emoji, and behind it a fixed grid of the
 	// emoji a household actually files things under plus a two-character field

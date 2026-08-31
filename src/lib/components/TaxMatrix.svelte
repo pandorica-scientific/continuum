@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Year down, jurisdiction across.
 	//
 	// This replaces a list grouped by person·country, which is the axis the rows

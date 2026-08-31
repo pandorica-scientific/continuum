@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The engine's vocabulary. No behaviour lives here.
 
 export type Point = { x: number; y: number };

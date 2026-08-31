@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import BrandMark from './BrandMark.svelte';
@@ -216,7 +216,7 @@
 		letter-spacing: -0.01em;
 	}
 	.networth {
-		padding: 10px 12px;
+		padding: var(--space-5) var(--space-6);
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
 		background: var(--card);
@@ -248,7 +248,7 @@
 		grid-template-columns: 20px minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--space-5);
-		padding: 8px 10px;
+		padding: var(--space-4) var(--space-5);
 		border-radius: var(--radius-md);
 		color: var(--fg2);
 		font-size: var(--text-md);

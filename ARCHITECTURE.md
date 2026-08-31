@@ -30,7 +30,7 @@ approximation, never a future rate or a silent one-to-one conversion.
 | Categorisation rules   | `Condition` types + pure `decideWithRules` (`src/lib/rules/match.ts`)                                                                                     | counterparty/description contains, counter-account, variable symbol, amount range                                                                                                                               | new variant in `Condition` + a branch in `conditionHolds()`                                                                                                                                                  |
 | Read-only API          | `requireToken` + `json()` (`src/lib/server/api/respond.ts`); endpoints reuse the screens' queries                                                         | accounts, transactions, categories, tags, networth, cashflow under `/api/v1`                                                                                                                                    | new `+server.ts` under `src/routes/api/v1/` calling the same server function its screen calls                                                                                                                |
 | FX rates               | `src/lib/server/fx` (currently CNB daily fixing, CZK-anchored)                                                                                            | CNB                                                                                                                                                                                                             | replace `refreshRates`; the rate table and conversion API stay                                                                                                                                               |
-| Modules / screens      | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes                                      | 9 modules across 7 areas                                                                                                                                                                                        | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                                                                                                                     |
+| Modules / screens      | registry in `src/lib/modules/registry.ts`: `AREAS` drives the sidebar and sub-tabs, `pathDisabled` guards the routes                                      | 11 modules across 7 areas                                                                                                                                                                                       | add a screen to an area + a module key; Settings toggle and sub-tab appear automatically                                                                                                                     |
 | Overview panels        | registry in `src/lib/overview/panels.ts` (key, title, icon, one-line description, `href`, default and minimum size, required modules)                     | 18 panels                                                                                                                                                                                                       | one registry entry + a component in `src/lib/overview/panels/` + a builder in `src/lib/server/overview/`                                                                                                     |
 | Calendar providers     | `CalendarProvider` (`src/lib/server/calendar/sync/provider.ts`): probe / listCalendars / pull / push                                                      | iCloud (CalDAV), Google Calendar                                                                                                                                                                                | `registerCalendarProvider(id, label, factory, fields, hint, oauth)` — the Settings panel renders itself from `fields`                                                                                        |
 
@@ -75,9 +75,10 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   lift one nothing could check at all. The decision is taken per FILE — a
   region or sheet that read and then failed refuses the whole file, because
   filing the rest records the content hash and the corrected re-upload is then
-  refused as a duplicate. The acceptance suite enforces reconciliation against
-  real files when they are present locally (never in CI); a 294-file synthetic
-  corpus across 24 locales and 20 currencies runs in CI.
+  refused as a duplicate. `tests/acceptance/synthetic-corpus.test.ts` enforces
+  reconciliation over a 294-file synthetic corpus across 24 locales and 20
+  currencies, and runs in CI. The private real samples are measured by hand and
+  have no suite — `docs/statement-import.md` says which figures came from where.
 - **Account identity is the account's, not the document's**: a statement is
   imported into an account whose bank and currency the user stated, and that
   metadata is authoritative. A reading is labelled with the format it was read
@@ -353,18 +354,45 @@ active. Everything downstream — the session cookie, `validateSession`,
 - `drizzle/` — ONE file, describing the schema as it is now rather than how it
   got here, run automatically at boot. Continuum has no users, so there is
   nothing to migrate from: a schema change is folded into the baseline and any
-  live instance is migrated by hand. `tests/integration/baseline-migration`
-  enforces that there is exactly one file, and is where that decision gets
-  revisited the day somebody else is running this. What drizzle-kit cannot
-  generate — triggers, generated columns, CHECKs, the `net_worth_component`
-  view, seed rows — is written by hand in the appendix at the foot of the file.
-  After editing it, run `drizzle-kit generate`, fold anything it proposes into
-  the baseline, and promote its snapshot so `meta/` still describes the schema
-- `docs/superpowers/` — the specs and implementation plans each feature was
-  built from, including what was deliberately deferred
+  live instance is migrated by hand from the `Upgrading` block in the
+  changelog. `tests/integration/baseline-migration` enforces that there is
+  exactly one file, and is where that decision gets revisited the day somebody
+  else is running this.
+  **`0000_baseline.sql` is generated — never edit it.** `npm run db:baseline`
+  writes it from `src/lib/server/db/schema/`: drizzle-kit's tables, columns,
+  indexes and foreign keys, plus everything it cannot model — triggers,
+  generated columns, CHECKs, expression indexes, the `net_worth_component` view
+  and seed rows — exported from the schema module that owns the tables each one
+  constrains and assembled by `schema/baseline.ts`.
+  `tests/unit/baseline-composition` fails when the file and the modules drift
+  apart, and `assertSchemaIsCurrent` refuses at boot to serve a database missing
+  any column the Drizzle schema declares
+- `src/lib/scan/` — the document scanner, and the one part of this repository
+  written to be lifted into another app: `core/` is pure and runs under node
+  (edge detection, EXIF, HEIC, PDF assembly), `client/` is the camera, the
+  capture surface and the review flow. It reaches for `Icon` and the tokens in
+  `app.css` and for nothing else — no database, no server, no `$app` module —
+  and `tests/unit/scan-boundaries` is what holds that
+- `src/lib/server/jobs/` — the background runner both statement import and text
+  extraction sit on: one worker, one advisory lock, work taken in the order it
+  arrived
+- `src/lib/server/documents/extract/` — reading the words out of a filed
+  document so they can be searched, per page rather than per file, behind an
+  OCR provider seam. It writes text into chunks and never touches a record's
+  own fields
+- `src/lib/server/ocr/` — what both readers need to recognise pixels at all:
+  where the models are, which are on disk, and how a PDF page becomes an image.
+  The statement reader and document extraction want different things back —
+  word boxes and prose — and share everything before that
+- `src/lib/documents/` — the archive's client-side logic and its wallet layout,
+  beside `shelf-profiles.ts`, which is the registry of what each shelf is for
+  and where its type list starts
+- `src/routes/(app)/files/` — the one route that serves a filed document's
+  bytes, behind the same read rule as everything else in the archive
 - `tests/unit` — pure logic; `tests/acceptance` — the committed synthetic
   statement corpus; `tests/integration` — isolated embedded-PostgreSQL rollback
-  and concurrency cases. There is no browser suite: the interface is verified by
-  looking at it, so everything automation is asked to hold has to be reachable
-  without a page — which is what keeps behaviour in domain modules rather than
-  in a component
+  and concurrency cases. A handful of unit tests live beside the module they
+  cover as `src/**/*.test.ts`, which `vite.config.ts` also runs. There is no
+  browser suite: the interface is verified by looking at it, so everything
+  automation is asked to hold has to be reachable without a page — which is what
+  keeps behaviour in domain modules rather than in a component

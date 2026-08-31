@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -73,9 +73,28 @@ describe('the scan engine', () => {
 		expect(offenders).toEqual([]);
 	});
 
-	it('gives each half an entry point', () => {
-		for (const half of ['core', 'client']) {
-			expect(readdirSync(join(ROOT, half))).toContain('index.ts');
-		}
+	it('has no entry point nothing enters through', () => {
+		// This used to demand an `index.ts` in each half, and both halves grew one
+		// that nothing ever imported: every caller reaches for the module it
+		// actually wants — `core/accept`, `client/camera.svelte` — which for an
+		// engine meant to be lifted whole is the RIGHT shape, since a barrel over
+		// `core` would drag the HEIC and OpenCV paths into a caller that only
+		// wanted `admitsPdf`.
+		//
+		// What portability actually rests on is the four import rules above. An
+		// unused barrel adds a second way in that nobody takes, so the rule is
+		// now that one must not exist unless it is used.
+		const sources = files('src').concat(files('tests'));
+		const text = sources.map((path) => readFileSync(path, 'utf8')).join('\n');
+		// Both spellings count. Inside the engine the halves reach each other by
+		// relative path — `../core/index.ts`, which is what keeps `core` portable
+		// — and only code outside it uses the alias.
+		const unused = ['core', 'client'].filter(
+			(half) =>
+				readdirSync(join(ROOT, half)).includes('index.ts') &&
+				!text.includes(`$lib/scan/${half}'`) &&
+				!text.includes(`${half}/index`)
+		);
+		expect(unused, 'delete these, or import the half through them').toEqual([]);
 	});
 });

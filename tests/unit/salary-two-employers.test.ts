@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // A person with two jobs in a year has two payroll systems printing two
 // different wordings for the same figure. Until v0.5.2 the reader kept one
 // learned wording per person, so each correction wiped the other employer's:

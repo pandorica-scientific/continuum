@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { tick, untrack } from 'svelte';
 
 	// A category chooser that opens where there is room for it.
@@ -301,7 +301,7 @@
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+		box-shadow: var(--shadow-float);
 	}
 	/* The whole point: when there is no room beneath, it opens upwards instead of
 	   expanding past the bottom of the page. */

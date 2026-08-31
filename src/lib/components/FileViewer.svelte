@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// An uploaded file, shown over the screen that linked to it. X, Escape or a
 	// click on the backdrop closes it and puts focus back on the link.
 	//
@@ -105,7 +105,7 @@
 		text-decoration: none;
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		padding: 4px 10px;
+		padding: var(--space-2) var(--space-5);
 	}
 	.act:hover {
 		color: var(--fg1);
@@ -158,7 +158,7 @@
 			border-radius: 0;
 		}
 		.head {
-			padding: 10px 10px 10px 14px;
+			padding: var(--space-5) var(--space-5) var(--space-5) var(--space-7);
 			gap: var(--space-3);
 		}
 	}

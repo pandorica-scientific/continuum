@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The category tree a fresh instance starts with: nine groups in waterfall
 // order, and the leaves that hang off them.
 //

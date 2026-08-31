@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The Tags panel, rendered to a string the way `documents-card.test.ts` does —
  * there is no browser suite here, so what is asserted is what a screen depends

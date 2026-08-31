@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { exportConfig, importConfig } from '$lib/server/system/config-file';
-import { lockTransferPairing } from '$lib/server/import/ingest';
+import { lockTransferPairing } from '$lib/server/import/pairing-run';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
 import { getRevisionedSetting, setRevisionedSetting } from '$lib/server/settings';
 

@@ -3,8 +3,10 @@ import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import noRawGeometry from './eslint-rules/no-raw-geometry.js';
+import noRawShadow from './eslint-rules/no-raw-shadow.js';
+import opaqueFloatingSurface from './eslint-rules/opaque-floating-surface.js';
 
-const LICENCE_HEADER = '// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0';
+const LICENCE_HEADER = '// SPDX-License-Identifier: AGPL-3.0-or-later';
 
 // Written here rather than pulled in as a plugin: it is twenty lines, and a
 // dependency that stamps a comment is a dependency to audit, pin and update
@@ -92,8 +94,20 @@ export default ts.config(
 		// stepping outside the scale is a decision somebody can find later rather
 		// than a number that drifted in.
 		files: ['src/**/*.svelte'],
-		plugins: { design: { rules: { 'no-raw-geometry': noRawGeometry } } },
-		rules: { 'design/no-raw-geometry': 'error' }
+		plugins: {
+			design: {
+				rules: {
+					'no-raw-geometry': noRawGeometry,
+					'no-raw-shadow': noRawShadow,
+					'opaque-floating-surface': opaqueFloatingSurface
+				}
+			}
+		},
+		rules: {
+			'design/no-raw-geometry': 'error',
+			'design/no-raw-shadow': 'error',
+			'design/opaque-floating-surface': 'error'
+		}
 	},
 	{
 		ignores: [
@@ -102,17 +116,12 @@ export default ts.config(
 			'node_modules/',
 			'drizzle/',
 			'design_system/',
-			'design_system_V2/',
-			'design_system_V3/',
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
 			// Generated at build time out of node_modules by
 			// scripts/prepare-opencv.mjs — vendor output, not source.
 			'static/opencv/',
-			'.remember/',
-			// Design handoffs are references, not source: their prototype runtimes
-			// are scaffolding the README says outright is nothing to port.
-			'docs/superpowers/specs/**/*.js'
+			'.remember/'
 		]
 	}
 );

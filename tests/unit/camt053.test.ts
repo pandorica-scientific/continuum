@@ -81,6 +81,16 @@ describe('minimal XML reader', () => {
 		);
 	});
 
+	it('strips a comment whose removal would leave another opener behind', () => {
+		// One pass over `<!--<!-- -->` removes the inner comment and keeps a bare
+		// `<!--`, and the tag scanner then reads the rest of the document as one
+		// unterminated element — so the statement comes back empty rather than
+		// broken. Not valid XML, but this reader is handed whatever a bank
+		// exports, and CodeQL is right that a single pass does not sanitise.
+		const doc = parseXml('<a><!--<!-- --><b>kept</b></a>');
+		expect(textAt(doc, 'a', 'b')).toBe('kept');
+	});
+
 	it('refuses a file with no elements at all', () => {
 		expect(() => parseXml('just text')).toThrow(/no XML elements/);
 	});

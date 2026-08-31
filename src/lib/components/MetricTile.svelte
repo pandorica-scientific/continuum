@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	let {
 		label,
 		value,
@@ -22,7 +22,7 @@
 		background: var(--card);
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
-		padding: 12px 14px;
+		padding: var(--space-6) var(--space-7);
 		display: flex;
 		flex-direction: column;
 		gap: 3px;

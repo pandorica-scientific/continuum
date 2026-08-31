@@ -1,7 +1,8 @@
 # The synthetic statement corpus
 
 60 statements, 24 locales, 20 currencies, 16 layout archetypes, each emitted in up to
-ten formats — 354 files in about 1.5 MB. Entirely synthetic: no real financial data,
+ten formats — 294 statement files in about 1.5 MB, beside the 60-file `expected/`
+answer key. Entirely synthetic: no real financial data,
 which is why this lives in the repository and runs in CI, while the real samples in
 `bank_data_examples_do_not_share/` cannot.
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Refining a rough quadrilateral onto the straight edges actually in the image.
 //
 // A page's corners taken from a polygon approximation of a thresholded mask are

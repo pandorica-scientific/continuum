@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Household security policy, read from the environment so a self-hoster can
 // disagree with our defaults without editing code. Both are deployment-wide
 // rather than per-person, which is why they are environment variables and not

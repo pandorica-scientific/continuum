@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // What someone has to do at the provider's end before connecting.
 //
 // The registry's `hint` is one line under the form; this is the walkthrough

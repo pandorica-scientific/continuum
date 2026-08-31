@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The home module's front door: providers register themselves on import, and
 // the configured one is built from settings. Screens import from here only.
 
@@ -117,9 +117,10 @@ export async function syncMeterBill(handle: Db = db): Promise<string | null> {
 		if (!livedIn) return null;
 
 		// The price is in minor units of the currency it was typed in; the bill is
-		// denominated in the property's. Migration 0031 binds legacy prices to the
-		// base currency in force at upgrade, so malformed unbound configs fail
-		// closed above instead of being silently redenominated.
+		// denominated in the property's. A price stored before the currency was
+		// recorded is bound to the base currency in force when it was written, so a
+		// malformed unbound config fails closed above instead of being silently
+		// redenominated.
 		const inPriceCurrency = BigInt(Math.round(monthKwh * price));
 		const amountMinor = convertOrFace(
 			await loadRateTable(tx),

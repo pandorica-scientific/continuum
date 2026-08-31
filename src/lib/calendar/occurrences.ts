@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Turning a stored series into the occurrences a screen draws.
 //
 // Pure: rows in, occurrences out. The month grid and the sync engine both go

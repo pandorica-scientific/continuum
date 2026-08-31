@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The banks a fresh instance starts with, and nothing more.
 //
 // These used to be a hardcoded <option> list on the accounts screen plus a

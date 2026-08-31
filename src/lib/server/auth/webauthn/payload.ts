@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Both verify endpoints take a JSON body straight from the browser, and the
 // sign-in one takes it without a session at all. Parsing defensively here is
 // what keeps a malformed payload a 400 instead of an unhandled TypeError

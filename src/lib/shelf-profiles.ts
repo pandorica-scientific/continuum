@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * What each shelf a fresh install ships is FOR.
  *
@@ -17,7 +17,7 @@
  * ships, and a shelf somebody made is theirs to use as they like.
  */
 import type { EnumValue } from '$lib/enums';
-import type { GroupKey } from '$lib/documents-view';
+import type { GroupKey } from '$lib/documents/view';
 
 /**
  * How a shelf draws its contents.
@@ -32,8 +32,17 @@ import type { GroupKey } from '$lib/documents-view';
  * not yet built, so the shelves that will use them are `list` until they are.
  * Naming them here rather than when they arrive is deliberate: the table below
  * is the plan, and a plan that lives in a commit message is not one.
+ *
+ * They are two types rather than one for the same reason. As a single union,
+ * every `switch` on a shelf's layout carried three branches that no shelf could
+ * reach and no reader could tell apart from the two that mattered — the plan
+ * cost the working code its shape. Split, `ShelfLayout` is exactly what draws,
+ * and the plan is still named, still typed, and still here.
  */
-export type ShelfLayout = 'wallet' | 'gallery' | 'timeline' | 'kit' | 'list';
+export type ShelfLayout = 'wallet' | 'list';
+
+/** Specified and not yet built. Promoted into `ShelfLayout` when one is drawn. */
+export type PlannedShelfLayout = 'gallery' | 'timeline' | 'kit';
 
 /** The keys the baseline seeds. Custom shelves are not in this union. */
 export type SystemShelfKey =
@@ -163,8 +172,13 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 	}
 };
 
-/** What each layout is called where a person picks it. */
-export const LAYOUT_LABELS: Record<ShelfLayout, string> = {
+/**
+ * What each layout is called where a person picks it.
+ *
+ * Covers the planned ones too: the label is part of the specification, and it
+ * is the piece most likely to be argued over rather than invented.
+ */
+export const LAYOUT_LABELS: Record<ShelfLayout | PlannedShelfLayout, string> = {
 	wallet: 'Wallet',
 	gallery: 'Gallery',
 	timeline: 'Timeline',

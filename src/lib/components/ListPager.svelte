@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The ‹ › nav, shared by every screen that pages a long list — the Tax and
 	// Salary tables and the Rules list — so they cannot drift apart. The size
 	// control is `PageSize`, and sits ABOVE the rows rather than beside this.
@@ -77,7 +77,7 @@
 		cursor: pointer;
 		font-size: var(--text-md);
 		line-height: 1;
-		padding: 4px 10px;
+		padding: var(--space-2) var(--space-5);
 	}
 	.page-step:hover:not(:disabled) {
 		border-color: var(--blue);

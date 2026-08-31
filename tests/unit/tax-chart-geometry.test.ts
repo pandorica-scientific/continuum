@@ -1,18 +1,16 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
 	MONEY_BOTTOM,
 	MONEY_TOP,
 	RATE_TOP_PCT,
-	X_LEFT,
-	X_RIGHT,
 	barWidth,
 	maxGross,
 	rateRuns,
 	rateY,
-	segments,
-	slotFor
+	segments
 } from '$lib/charts/tax-chart-geometry';
+import { X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
 
 const hues = new Map([
 	['CZ', '--series-health-soft'],

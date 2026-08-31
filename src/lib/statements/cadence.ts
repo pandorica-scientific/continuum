@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * When an account's statements are overdue.
  *
@@ -13,6 +13,7 @@
  * part worth holding by test — there is no browser suite here, and a rule this
  * quiet is exactly the kind that drifts unnoticed.
  */
+import { daysBetween } from '$lib/dates';
 
 /**
  * The window an account with no readable rhythm gets.
@@ -38,15 +39,6 @@ export const MIN_IMPORTS_FOR_CADENCE = 3;
  * that as a problem every month.
  */
 export const CADENCE_SLACK = 1.5;
-
-const MS_PER_DAY = 86_400_000;
-
-/** Whole days from one ISO date to another, read in UTC so no timezone shifts it. */
-function daysBetween(from: string, to: string): number {
-	const a = Date.parse(`${from}T00:00:00Z`);
-	const b = Date.parse(`${to}T00:00:00Z`);
-	return Math.round((b - a) / MS_PER_DAY);
-}
 
 /** The middle value, or the mean of the two middle ones. */
 function median(values: number[]): number {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
 	import { submitAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -230,8 +230,6 @@
 		gap: var(--space-4);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		line-height: 1.55;
 		margin: 0;
 	}

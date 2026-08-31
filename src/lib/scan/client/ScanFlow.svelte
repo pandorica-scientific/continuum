@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The one component a call site mounts. It owns which screen is showing.
 	//
 	// The render happens immediately after capture, while the user is looking at

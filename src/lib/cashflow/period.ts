@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The cash-flow period: which window a screen is looking at, how a URL says so,
 // and the way back from a figure in the window to the rows it came from.
 //

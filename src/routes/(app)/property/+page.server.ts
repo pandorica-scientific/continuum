@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
@@ -9,15 +9,9 @@ import { db } from '$lib/server/db';
 import {
 	contact,
 	contactLink,
-	document,
-	loan,
-	loanFixationPeriod,
-	loanProperty,
 	property,
-	propertyBill,
 	tagLink,
 	tag,
-	tenancy,
 	propertyOpening
 } from '$lib/server/db/schema';
 import { initialsFor } from '$lib/people';
@@ -41,13 +35,12 @@ import {
 	detachDocument,
 	documentsAbout
 } from '$lib/server/documents/targets';
-import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { periodForMonth } from '$lib/loans/amortise';
 import { displayCurrency, formatMinor, parseAmountToMinor, toMajorString } from '$lib/money';
 import { recordOpening, recordValuation, valuationHistory } from '$lib/server/property';
 import { propertyFinancials, sharesForLoan } from '$lib/property/finance';
 import { activeTenanciesByProperty } from '$lib/property/tenancy';
-import { listProperties } from '$lib/server/property/queries';
+import { readPropertyScreen } from '$lib/server/property/queries';
 import type { Actions, PageServerLoad } from './$types';
 
 function daysUntil(date: string): number {
@@ -55,29 +48,8 @@ function daysUntil(date: string): number {
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const [properties, tenancies, bills, loans, periods, links, docs, rates, allTags] =
-		await Promise.all([
-			listProperties(),
-			db.select().from(tenancy),
-			db.select().from(propertyBill).orderBy(propertyBill.sort),
-			db.select().from(loan),
-			db.select().from(loanFixationPeriod),
-			db.select().from(loanProperty),
-			// Only what a BILL's row needs — whether the file behind it is one this
-			// actor may open at all. The documents card below is loaded by
-			// `documentsAbout`, which is where the shelf label and the read rule both
-			// come from. Restricted here too: a bill's scan is paper like any other,
-			// so a member sees the amount with no paperclip behind it.
-			db
-				.select({ id: document.id })
-				.from(document)
-				.where(visibleDocumentPredicate(locals.person ?? null)),
-			loadRateTable(),
-			// For the tag field's suggestion list, the same way the Loans screen
-			// offers its own known tags: typing "Renovation" here and "renovation"
-			// there should land on the one tag, not two differently-cased ones.
-			db.select().from(tag)
-		]);
+	const [{ properties, tenancies, bills, loans, periods, links, docs, allTags }, rates] =
+		await Promise.all([readPropertyScreen(locals.person ?? null), loadRateTable()]);
 	const today = new Date().toISOString().slice(0, 10);
 	const month = today.slice(0, 7);
 	const convert = (amount: bigint, from: string, to: string, day: string) =>

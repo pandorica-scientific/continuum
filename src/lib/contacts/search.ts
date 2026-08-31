@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Contact search folds diacritics so a Czech or Polish name is findable from an
 // ASCII keyboard. Pure and client-safe: the same function normalises the term
 // the browser sends and the term the SQL predicate compares against, so the two

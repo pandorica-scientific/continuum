@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * From a chosen grid to a statement — or to a precise question.
  *
@@ -11,6 +11,7 @@
  * Where the file does not settle something, this returns the open question
  * rather than a guess. That is what the single-question resolver asks about.
  */
+import { escapeRegExp } from '$lib/regex';
 import { isCurrencyCode, minorDigits } from '$lib/money';
 import type { ParsedRow, ParsedStatement } from '../types';
 import {
@@ -211,7 +212,7 @@ export function readEvidence(regions: Region[]): Evidence {
 						// `1 234,56 Kč`, `500 zł` and `12 500 Ft` are all invisible to
 						// it, which is to say most of the continent. A 140-row euro
 						// statement imported as koruna on the strength of this.
-						const glyph = symbol.replace(/[$]/g, '\\$');
+						const glyph = escapeRegExp(symbol);
 						const before = `${glyph}\\s*-?\\(?\\d`;
 						const after = `\\d[\\d\\s.,'\\u00A0]*\\s*${glyph}`;
 						if (new RegExp(`${before}|${after}`).test(text)) {

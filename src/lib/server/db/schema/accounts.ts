@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The ledger: accounts, the statements read into them, and the transactions,
  * splits, transfers and rules that come out.
@@ -216,23 +216,30 @@ export const categoryGroup = pgTable('category_group', {
 	sort: integer('sort').notNull().default(0)
 });
 
-export const category = pgTable('category', {
-	id: text('id').primaryKey(),
-	groupKey: text('group_key')
-		.notNull()
-		.references(() => categoryGroup.key),
-	name: text('name').notNull(),
-	sort: integer('sort').notNull().default(0),
-	/**
-	 * A catch-all: "Everything else", "Other income". Always last inside its
-	 * group, whatever `sort` says, and not draggable.
-	 *
-	 * A flag rather than a name match, so a household that renames "Everything
-	 * else" to "Odds and ends" keeps the behaviour. Whether a category is a
-	 * catch-all is a fact about how the household thinks, not about the seed.
-	 */
-	isCatchAll: boolean('is_catch_all').notNull().default(false)
-});
+export const category = pgTable(
+	'category',
+	{
+		id: text('id').primaryKey(),
+		groupKey: text('group_key')
+			.notNull()
+			.references(() => categoryGroup.key),
+		name: text('name').notNull(),
+		sort: integer('sort').notNull().default(0),
+		/**
+		 * A catch-all: "Everything else", "Other income". Always last inside its
+		 * group, whatever `sort` says, and not draggable.
+		 *
+		 * A flag rather than a name match, so a household that renames "Everything
+		 * else" to "Odds and ends" keeps the behaviour. Whether a category is a
+		 * catch-all is a fact about how the household thinks, not about the seed.
+		 */
+		isCatchAll: boolean('is_catch_all').notNull().default(false)
+	},
+	// The foreign key into category_group needs its own index: deleting a group
+	// otherwise scans every category to find out whether it may go. Every
+	// foreign key carries one, and schema-invariants.test.ts holds it to that.
+	(table) => [index('category_group_key_idx').on(table.groupKey)]
+);
 
 export const transaction = pgTable(
 	'transaction',
@@ -366,9 +373,9 @@ export const transferPair = pgTable(
 );
 
 // A transaction can be claimed by only one active pair, regardless of whether
-// it is the outgoing or incoming leg. Migration 0027 maintains this normalized
-// relation from transfer_pair with a trigger so one primary key covers the
-// cross-column uniqueness that two ordinary indexes cannot express.
+// it is the outgoing or incoming leg. `transferPairSql` below maintains this
+// normalised relation from transfer_pair with a trigger so one primary key
+// covers the cross-column uniqueness that two ordinary indexes cannot express.
 //
 // The rows are written by the maintain_transfer_pair_legs() trigger, never by
 // application code. Drizzle models tables, not triggers: this declaration
@@ -387,12 +394,6 @@ export const transferPairLeg = pgTable(
 	},
 	(table) => [index('transfer_pair_leg_pair_idx').on(table.pairId)]
 );
-
-export const markTransferRule = pgTable('mark_transfer_rule', {
-	id: text('id').primaryKey(),
-	counterpartyAccount: text('counterparty_account').notNull().unique(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
 
 // ---- Splits and tags ----
 
@@ -430,7 +431,7 @@ export const rule = pgTable(
 		name: text('name').notNull(),
 		enabled: boolean('enabled').notNull().default(true),
 		// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
-		// rules; migration 0033 retired it and no code writes it any more.
+		// rules; it was retired before the v0.3.10 squash and nothing writes it now.
 		provenance: text('provenance')
 			.$type<EnumValue<'rule.provenance'>>()
 			.notNull()
@@ -461,3 +462,79 @@ export const ruleTag = pgTable(
 		index('rule_tag_tag_idx').on(table.tagId)
 	]
 );
+
+// ---- SQL drizzle-kit cannot model ----
+
+/**
+ * The date a movement is read on.
+ *
+ * Cash flow, the month steppers and the register all measure a window on the
+ * day the money moved: the value date where the bank printed one, the booking
+ * date otherwise. That is an expression, not a column, so
+ * `transaction_booked_on_idx` cannot serve a bound on it and a register opening
+ * one month would read the whole ledger to find it. The booked_on index stays:
+ * import replay, deduplication and the statement-period checks still ask for the
+ * day the bank booked.
+ */
+export const transactionEffectiveOnSql = `
+CREATE INDEX "transaction_effective_on_idx" ON "transaction"
+	(coalesce("value_on", "booked_on"));
+`;
+
+/**
+ * Active pair legs are claims.
+ *
+ * Keeping them in a separate relation lets one unique constraint cover both the
+ * outgoing and incoming columns, including the cross-column collision ordinary
+ * indexes cannot prevent. The table itself is a Drizzle declaration above; what
+ * cannot be is the trigger that keeps it in step, so a pair can never be active
+ * without its two legs claimed.
+ */
+export const transferPairSql = `
+CREATE FUNCTION maintain_transfer_pair_legs() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+	IF TG_OP = 'UPDATE' AND OLD.state IN ('auto', 'proposed', 'confirmed') THEN
+		DELETE FROM transfer_pair_leg WHERE pair_id = OLD.id;
+	END IF;
+
+	IF NEW.state IN ('auto', 'proposed', 'confirmed') THEN
+		INSERT INTO transfer_pair_leg (transaction_id, pair_id)
+		VALUES (NEW.out_transaction_id, NEW.id), (NEW.in_transaction_id, NEW.id);
+	END IF;
+	RETURN NEW;
+END
+$$;
+--> statement-breakpoint
+CREATE TRIGGER transfer_pair_leg_claims
+AFTER INSERT OR UPDATE OF state, out_transaction_id, in_transaction_id ON transfer_pair
+FOR EACH ROW EXECUTE FUNCTION maintain_transfer_pair_legs();
+`;
+
+/**
+ * The reference rows a foreign key points at, so an empty table does not refuse
+ * every insert that follows. `seedBanks()` and `seedCategories()` rewrite them
+ * idempotently on every boot, so this is a floor rather than a source of truth.
+ */
+export const accountsSeedSql = `
+INSERT INTO "category_group" ("key", "label", "color_token", "role", "sort") VALUES
+	('income',        'Income',            '--series-income',        'income',  0),
+	('taxes',         'Taxes & fees',      '--series-taxes',         'expense', 1),
+	('bills',         'Bills & utilities', '--series-bills',         'expense', 2),
+	('subscriptions', 'Subscriptions',     '--series-subscriptions', 'expense', 3),
+	('health',        'Health & care',     '--series-health',        'expense', 4),
+	('transport',     'Transport',         '--series-transport',     'expense', 5),
+	('living',        'Food & lifestyle',  '--series-living',        'expense', 6),
+	('housing',       'Housing',           '--series-housing',       'expense', 7),
+	('savings',       'Saved & invested',  '--series-savings',       'savings', 8)
+ON CONFLICT ("key") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "bank" ("key", "label", "emoji") VALUES
+	('fio', 'Fio banka', '🏦'),
+	('revolut', 'Revolut', '💠'),
+	('mbank', 'mBank', '🅜'),
+	('rb', 'Raiffeisenbank', '🟡'),
+	('cs', 'Česká spořitelna', '🔵'),
+	('other', 'Other', '💼')
+ON CONFLICT ("key") DO NOTHING;
+`;
