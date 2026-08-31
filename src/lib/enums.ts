@@ -108,7 +108,12 @@ export const ENUMS = {
 
 	// What KIND of paper this is — orthogonal to where it is filed. Behaviour
 	// hangs off type (the salary tracker reads `type='payslip'`), never off the
-	// shelf, which is now a row a household may rename or delete.
+	// shelf, which is a row a household may rename or delete.
+	//
+	// NOT a CHECK any more: `document_type` is a table, seeded with these and
+	// grown by the household, and `document.type` is a foreign key into it. This
+	// list is what the app SHIPS and what code may refer to by name — every
+	// value here exists on every instance, which is what makes reading one safe.
 	'document.type': [
 		'contract',
 		'invoice',
@@ -170,6 +175,15 @@ type EnumKey = keyof typeof ENUMS;
 export type EnumValue<K extends EnumKey> = (typeof ENUMS)[K][number];
 
 /**
+ * A document type: one the app ships, or one the household added.
+ *
+ * `string & {}` keeps the seventeen as suggestions while allowing any key —
+ * which is what the column holds now that `document_type` is a table. Written
+ * once so the columns and the code that reads them say the same thing.
+ */
+export type DocumentTypeKey = EnumValue<'document.type'> | (string & {});
+
+/**
  * Which column each list constrains.
  *
  * Separate from `ENUMS` because three of the lists are shared by more than one
@@ -198,7 +212,6 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'import_profile', column: 'origin', enum: 'import_profile.origin' },
 	{ table: 'import_file', column: 'proof_class', enum: 'proof_class' },
 	{ table: 'rule', column: 'provenance', enum: 'rule.provenance' },
-	{ table: 'document', column: 'type', enum: 'document.type' },
 	{ table: 'document', column: 'sensitivity', enum: 'document.sensitivity' },
 	{ table: 'document_text_chunk', column: 'source', enum: 'document_text_chunk.source' },
 	{ table: 'document', column: 'expiry_verb', enum: 'document.expiry_verb' },

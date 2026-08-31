@@ -42,12 +42,20 @@ import {
 	SALARY_ENTRY_REFUSAL
 } from '$lib/server/documents/lifecycle';
 import {
+	addDocumentType,
+	asDocumentType,
+	listDocumentTypes,
+	removeDocumentType
+} from '$lib/server/documents/types';
+import {
 	addShelf,
 	listShelves,
 	reassignAndDelete,
 	renameShelf,
 	reorderShelves,
-	shelfIdByKey
+	setShelfTypes,
+	shelfIdByKey,
+	shelfTypesByKey
 } from '$lib/server/documents/shelves';
 import {
 	addSubject,
@@ -142,7 +150,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		tags,
 		texts,
 		pending,
-		identities
+		identities,
+		shelfTypes,
+		documentTypes
 	] = await Promise.all([
 		listShelves(),
 		// Behind the same read rule as everything else on this screen: a member
@@ -209,7 +219,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// rather than by id: there is one per identity document and a household
 		// has a handful, which is cheaper than a second round trip once the
 		// selected document turns out to be one of them.
-		db.select().from(documentIdentity)
+		db.select().from(documentIdentity),
+		shelfTypesByKey(),
+		listDocumentTypes()
 	]);
 
 	/** One record a document is filed against, ready to draw as a chip. */
@@ -383,7 +395,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// document rather than with whatever happens to be most numerous.
 		types: orderTypeOptions(
 			[...typeCounts.entries()].map(([code, n]) => ({ code, count: n })),
-			profile?.expects ?? []
+			// The household's own list, which the registry only seeded.
+			shelfTypes.get(shelf) ?? []
 		),
 		// Registry order first, so the groups the screen draws come out in the
 		// same order as the chips under About; then by how many documents each
@@ -476,6 +489,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// would have done on its own.
 		group: url.searchParams.get('group') ?? profile?.group ?? 'type',
 		defaultGroup: profile?.group ?? 'type',
+		// Every kind of paper this household files, built-in and its own. Drawn
+		// from here rather than from the enum, which is only what ships.
+		documentTypes,
 		/** The layout being drawn, or null whenever the centre column is the list. */
 		layout: view === 'shelf' ? (profile?.layout ?? null) : null,
 		/** What this shelf COULD draw, so the toolbar can offer the switch. */
@@ -493,7 +509,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				// Filed paper only. The Inbox has its own row and its own number.
 				count: readableTotal - (shelfCounts.get(inboxKey) ?? 0),
 				system: true,
-				emoji: ''
+				emoji: '',
+				// Everything is a view of all the shelves rather than one of them,
+				// so it has no list of its own to offer or to edit.
+				types: []
 			},
 			...shelves.map((s) => ({
 				id: s.id,
@@ -501,7 +520,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				label: s.label,
 				emoji: s.emoji,
 				system: s.system,
-				count: shelfCounts.get(s.key) ?? 0
+				count: shelfCounts.get(s.key) ?? 0,
+				// The rail's type editor reads this; the filter above uses the same
+				// rows, so what a shelf offers is stated once.
+				types: shelfTypes.get(s.key) ?? []
 			}))
 		],
 		// The rail's SUBJECTS section. Archived ones travel too, and the view
@@ -567,6 +589,10 @@ async function readTags(form: FormData): Promise<string[]> {
 		.filter(Boolean);
 }
 
+/** The keys a posted type may be, read fresh: the household can add one. */
+const knownTypeKeys = async (): Promise<string[]> =>
+	(await listDocumentTypes()).map((row) => row.key);
+
 export const actions: Actions = {
 	/**
 	 * Capture: a file, a generated name, and the Inbox.
@@ -595,7 +621,7 @@ export const actions: Actions = {
 
 		const shared = {
 			shelfId,
-			type: asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other'),
+			type: asDocumentType(form.get('type'), await knownTypeKeys()),
 			note: String(form.get('note') ?? '').trim() || null,
 			sensitivity: asEnumValue(
 				'document.sensitivity',
@@ -677,7 +703,7 @@ export const actions: Actions = {
 			}
 		}
 
-		const type = asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other');
+		const type = asDocumentType(form.get('type'), await knownTypeKeys());
 		const wanted = form.getAll('linkIds').map(String).filter(Boolean);
 
 		// Two edits would quietly orphan the salary a month is credited with —
@@ -878,7 +904,7 @@ export const actions: Actions = {
 		// both, the same way the inspector's does. Empty stays empty — asEnumValue
 		// would otherwise fall back to the truthy 'other' and turn "no type was
 		// selected" into "retype everything to Other".
-		const normalisedType = type ? asEnumValue('document.type', type, 'other') : '';
+		const normalisedType = type ? asDocumentType(type, await knownTypeKeys()) : '';
 		const sensitivity = String(form.get('sensitivity') ?? '');
 		const addTags = await readTags(form);
 		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
@@ -960,6 +986,61 @@ export const actions: Actions = {
 		const label = String(form.get('label') ?? '').trim();
 		if (!id || !label) return fail(400, { message: 'A shelf needs a name.' });
 		await renameShelf(id, { label, emoji: String(form.get('emoji') ?? '') }, db);
+		return { ok: true };
+	},
+
+	/**
+	 * Which types a shelf offers first.
+	 *
+	 * A list, never a rule: the picker gets shorter and nothing gets refused, so
+	 * an unticked type is still filed the moment somebody chooses it. Allowed on
+	 * a system shelf too — what Identity holds cannot be deleted, and what it
+	 * suggests is the household's business.
+	 */
+	setShelfTypes: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		if (!id) return fail(400, { message: 'Which shelf?' });
+		// Filtered against what this household HAS, not against what the app
+		// ships: filtering on the enum silently dropped every type the household
+		// had added — the checkbox ticked, the form posted it, and the shelf came
+		// back without it. The foreign key would otherwise refuse the write with
+		// a constraint name nobody should have to read.
+		const known = new Set((await listDocumentTypes()).map((row) => row.key));
+		const types = form
+			.getAll('types')
+			.map(String)
+			.filter((code) => known.has(code));
+		await setShelfTypes(id, types, db);
+		return { ok: true };
+	},
+
+	/**
+	 * A kind of paper this household files that the app did not ship.
+	 *
+	 * Idempotent by key, so adding one that already exists selects it rather
+	 * than refusing: two people naming the same thing have agreed.
+	 */
+	addDocumentType: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await addDocumentType(String(form.get('label') ?? ''), db);
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
+		return { ok: true };
+	},
+
+	/** Only one the household added, and only while nothing is filed as it. */
+	removeDocumentType: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await removeDocumentType(String(form.get('key') ?? ''), db);
+		} catch (error) {
+			return fail(409, {
+				message: error instanceof Error ? error.message : 'Could not remove it.'
+			});
+		}
 		return { ok: true };
 	},
 

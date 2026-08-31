@@ -14,6 +14,8 @@
 - 🇪🇺 **A card from a member state carries the code inside the Union's ring** — twelve stars and `CZ` in the middle, the way an EU passport, licence and number plate already write it, with everywhere else keeping the plain two letters beside its flag
 - 🔢 **A document can carry as many numbers as it actually has** — a residence permit with a card number beside a personal number, each named by whoever typed it, added a row at a time under the issuer and gone again when the row is cleared
 - 🧾 **An identity document can say what is on its face** — kind, country, number, issued on and issuer, all optional and all typed by hand, with the number shown only in the inspector and masked until it is clicked
+- ➕ **A household names its own kinds of paper** — the shelf's type dialog gains a field for one the app never shipped, and it behaves like any other afterwards: filed, filtered, grouped, offered by a shelf; the seventeen built in stay, because the salary tracker reads `payslip`, an import writes `bank_statement` and the wallet reads `id_document`, and a type nothing is filed as can be removed again
+- 🏷️ **Each shelf carries its own list of the types it usually holds, and the household edits it** — the tag beside a shelf in the rail opens it, on a system shelf as much as any other, and it shortens the picker without ever refusing a document: any type can still be filed anywhere
 - 📇 **Every shelf a fresh install ships now records what it is for** — what it expects, what organises it and how it draws, in one place the empty state, the type filter and the inbox review all read from
 
 ### 🐛 Fixed
@@ -21,12 +23,15 @@
 - 📷 **Documents can be scanned and photographed again** — every upload on the screen offered a file browser and nothing else, because the capture buttons are decided from what an upload says it accepts and these four said nothing; a phone can now scan straight into Add document, Attach file and Replace file, and the list the picker offers is the same one the server will actually store
 - 📥 **Filing from Inbox review actually files** — the screen said "Inbox is clear" while the document sat exactly where it started, because the queue advanced before the browser had sent the form and unmounted the form it was sending; the shelf and type carried forward now survive the filing too, which is what `kept` was always meant to mean
 - 🗂️ **A document opened from the Inbox offers to file itself** — the same edit form, one press away, rather than a trip back through Everything to reach Review inbox
+- 📚 **Revealing archived subjects while editing the rail no longer changes what the list shows** — the link wrote the same `archived=1` the centre column reads, so bringing a sold car's row back to rename it unhid its paper everywhere and pressing Done did not undo it; it is a state of the rail's edit mode now, and `Include archived subjects` above the list is still the control for the list
 - 🖼️ **The inspector's preview keeps its height instead of being squeezed** — the panel is a column bounded by the viewport, so on a short screen the preview gave up its space first and a photograph became an 87-pixel sliver that read as a failed load; the sections scroll now, as they were always meant to
 
 ### 🔧 Changed
 
 - 📂 **A shelf's list is grouped the way that shelf is read** — Finance by year because payslips and tax papers are looked up by the year they concern, the Inbox by type because nothing in it is linked yet, and the control still says otherwise whenever you want it to
 - 🔤 **A shelf's type filter offers what the shelf expects first** — opening Identity's starts at Identity document rather than at whatever happens to be most numerous, and every type on the shelf is still there
+- 🗂️ **Filing from the inspector behaves as filing from review does** — the shelf shortens the type list and fills in its first there too, so "File it" on an Inbox document is the same act done in a different place rather than a second, plainer form
+- 🗃️ **Inbox review offers the shelf's own types rather than all seventeen** — picking Identity leaves four in the list with the first already chosen, and `Show all types…` opens the rest for the document that does not fit
 - 💡 **Picking a shelf during inbox review proposes that shelf's type** — marked `suggested` rather than `kept`, cleared the moment the field is touched, and never overwriting an answer somebody already gave
 - 🔍 **A search shows the list on every shelf** — a match is explained by the line it was found in, and a card face has nowhere to put one
 
@@ -47,6 +52,33 @@ create table if not exists document_identity (
   constraint document_identity_country_check
     check (country is null or country ~ '^[A-Z]{2}$')
 );
+
+create table if not exists document_type (
+  key text primary key,
+  label text not null,
+  builtin boolean not null default false,
+  sort_order integer not null default 0
+);
+insert into document_type (key, label, builtin, sort_order)
+select type, initcap(replace(type, '_', ' ')), true, 0 from (
+  select unnest(array['contract','invoice','receipt','payslip','bank_statement',
+    'broker_report','insurance_policy','claim','id_document','certificate',
+    'medical_record','tax_document','technical_plan','correspondence','warranty',
+    'manual','other']) as type) t
+on conflict (key) do nothing;
+alter table document drop constraint if exists document_type_check;
+alter table document add constraint document_type_document_type_key_fk
+  foreign key (type) references document_type(key) on delete restrict;
+
+create table if not exists shelf_type (
+  shelf_id uuid not null references shelf(id) on delete cascade,
+  type text not null,
+  ordinal integer not null,
+  primary key (shelf_id, type),
+  constraint shelf_type_type_document_type_key_fk
+    foreign key (type) references document_type(key) on delete cascade
+);
+create index if not exists shelf_type_type_idx on shelf_type(type);
 
 create table if not exists document_identity_number (
   document_id uuid not null references document_identity(document_id) on delete cascade,

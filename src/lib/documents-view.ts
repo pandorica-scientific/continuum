@@ -190,7 +190,14 @@ export function documentExpiryTone(
 	return treatment.hue === 'yellow' ? 'soon' : 'quiet';
 }
 
-/** The labels a `document.type` code is shown under. Raw codes never surface. */
+/**
+ * The labels the SHIPPED types are shown under. Raw codes never surface.
+ *
+ * A household's own types are not here — they are rows, loaded per screen — so
+ * anything drawing a type takes the loaded labels and falls back to these. The
+ * fallback matters: a type removed while a page was open would otherwise draw
+ * its raw key at the one moment somebody is looking at it.
+ */
 export const TYPE_LABELS: Record<string, string> = {
 	contract: 'Contract',
 	invoice: 'Invoice',
@@ -211,7 +218,15 @@ export const TYPE_LABELS: Record<string, string> = {
 	other: 'Other'
 };
 
-export const typeLabel = (code: string): string => TYPE_LABELS[code] ?? TYPE_LABELS.other;
+export const typeLabel = (code: string, labels: Record<string, string> = TYPE_LABELS): string =>
+	labels[code] ?? TYPE_LABELS[code] ?? TYPE_LABELS.other;
+
+/** The label map a screen draws with: what it loaded, over what ships. */
+export function typeLabels(
+	rows: readonly { key: string; label: string }[]
+): Record<string, string> {
+	return { ...TYPE_LABELS, ...Object.fromEntries(rows.map((r) => [r.key, r.label])) };
+}
 
 /** Which expiry bucket a document falls in. Presentation only. */
 function expiryBucket(doc: DocRow, today: string): { key: string; label: string } {

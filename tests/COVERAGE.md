@@ -9,7 +9,7 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2635 static tests across 248 files, covering 206 modules.
+2645 static tests across 249 files, covering 206 modules.
 147 modules under `src/lib` are imported by no test.
 
 ## Modules
@@ -158,7 +158,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/enums.ts`
 
-- `tests/integration/baseline-migration.test.ts` (integration, 15 tests)
+- `tests/integration/baseline-migration.test.ts` (integration, 16 tests)
 - `tests/integration/document-targets.test.ts` (integration, 42 tests)
 - `tests/integration/entity-supertype.test.ts` (integration, 11 tests)
 - `tests/integration/schema-invariants.test.ts` (integration, 6 tests)
@@ -187,7 +187,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/inbox-review.ts`
 
-- `tests/unit/inbox-review.test.ts` (unit, 13 tests)
+- `tests/unit/inbox-review.test.ts` (unit, 14 tests)
 
 ### `src/lib/invest/gains.ts`
 
@@ -550,7 +550,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/db/migrate.ts`
 
-- `tests/integration/baseline-migration.test.ts` (integration, 15 tests)
+- `tests/integration/baseline-migration.test.ts` (integration, 16 tests)
 
 ### `src/lib/server/db/schema/index.ts`
 
@@ -608,6 +608,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/salary-transaction-link.test.ts` (integration, 6 tests)
 - `tests/integration/salary-two-jobs.test.ts` (integration, 7 tests)
 - `tests/integration/shelf-mutations.test.ts` (integration, 9 tests)
+- `tests/integration/shelf-types.test.ts` (integration, 8 tests)
 - `tests/integration/subjects.test.ts` (integration, 16 tests)
 - `tests/integration/tax-statement-document.test.ts` (integration, 17 tests)
 - `tests/integration/tenancy-contact.test.ts` (integration, 10 tests)
@@ -674,6 +675,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/salary-history.test.ts` (integration, 4 tests)
 - `tests/integration/shelf-helpers.test.ts` (integration, 3 tests)
 - `tests/integration/shelf-mutations.test.ts` (integration, 9 tests)
+- `tests/integration/shelf-types.test.ts` (integration, 8 tests)
 - `tests/integration/tax-statement-document.test.ts` (integration, 17 tests)
 - `tests/integration/transaction-documents.test.ts` (integration, 12 tests)
 
@@ -1051,6 +1053,8 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/shelf-profiles.ts`
 
+- `tests/integration/baseline-migration.test.ts` (integration, 16 tests)
+- `tests/integration/shelf-types.test.ts` (integration, 8 tests)
 - `tests/unit/shelf-profiles.test.ts` (unit, 11 tests)
 
 ### `src/lib/statements/cadence.ts`

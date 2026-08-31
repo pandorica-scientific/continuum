@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENTITY_KINDS, ENUM_COLUMNS } from '$lib/enums';
+import { SHELF_PROFILES } from '$lib/shelf-profiles';
 import { assertSchemaIsCurrent } from '$lib/server/db/migrate';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
 
@@ -300,6 +301,23 @@ describe('the baseline migration', () => {
 		const [{ n }] = await harness.sql<{ n: number }[]>`
 			select count(*)::int as n from document_identity where document_id = ${documentId}`;
 		expect(n).toBe(0);
+	});
+
+	it('seeds every shelf with the type list its profile names', async () => {
+		// Two places hold the same fact — the registry the app reads and the seed
+		// the baseline writes — and the household edits the second afterwards. On
+		// a fresh install they have to agree, or a shelf opens offering something
+		// nobody chose.
+		const rows = await harness.sql<{ key: string; type: string; ordinal: number }[]>`
+			select s.key, t.type, t.ordinal from shelf_type t
+			join shelf s on s.id = t.shelf_id
+			order by s.key, t.ordinal`;
+		const seeded = new Map<string, string[]>();
+		for (const row of rows) seeded.set(row.key, [...(seeded.get(row.key) ?? []), row.type]);
+
+		for (const [key, profile] of Object.entries(SHELF_PROFILES)) {
+			expect(seeded.get(key) ?? []).toEqual([...profile.expects]);
+		}
 	});
 
 	it('refuses a subject whose active period runs backwards', async () => {

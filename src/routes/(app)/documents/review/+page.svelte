@@ -14,8 +14,8 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
-	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
-	import { groupAboutOptions, TYPE_LABELS } from '$lib/documents-view';
+	import { ALL_TYPES, EXPIRY_VERBS, EXPIRY_VERB_MEANINGS, typeOptionsFor } from '$lib/documents';
+	import { groupAboutOptions, typeLabels } from '$lib/documents-view';
 	import {
 		counterLabel,
 		currentId,
@@ -28,7 +28,6 @@
 		suggestedFields,
 		type ReviewSession
 	} from '$lib/inbox-review';
-	import { shelfProfile } from '$lib/shelf-profiles';
 
 	let { data, form } = $props();
 
@@ -45,6 +44,19 @@
 		sticky: {},
 		kept: [],
 		suggested: []
+	});
+
+	// Widening is remembered for the session: somebody who needed all seventeen
+	// once usually needs them again on the next document.
+	let allTypes = $state(false);
+
+	/** What this household calls each type: the built-ins, plus its own. */
+	const labels = $derived(typeLabels(data.documentTypes));
+
+	const typeOptions = $derived.by(() => {
+		const shelfKey = session.sticky.shelf ?? data.shelves[0]?.key;
+		const offered = shelfKey ? (data.shelfTypes[shelfKey] ?? []) : [];
+		return typeOptionsFor(offered, session.sticky.type, labels, allTypes);
 	});
 
 	/** Keep only the three fields that outlive a load; the queue is the server's. */
@@ -152,7 +164,9 @@
 						// question too — unless that question already has an answer
 						// somebody gave, which a proposal never overwrites.
 						const key = e.currentTarget.value;
-						remember(proposeType(setField(session, 'shelf', key), shelfProfile(key)?.expects[0]));
+						// The shelf's own list, as the household has it — not the
+						// registry's, which is only where that list started.
+						remember(proposeType(setField(session, 'shelf', key), data.shelfTypes[key]?.[0]));
 					}}
 				>
 					{#each data.shelves as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
@@ -173,11 +187,24 @@
 				<select
 					name="type"
 					value={session.sticky.type ?? 'other'}
-					onchange={(e) => remember(setField(session, 'type', e.currentTarget.value))}
+					onchange={(e) => {
+						// "Show all types" is a view control wearing an option's clothes:
+						// it widens the list rather than choosing anything, so the type
+						// that was selected stays selected.
+						if (e.currentTarget.value === ALL_TYPES) {
+							allTypes = true;
+							e.currentTarget.value = session.sticky.type ?? 'other';
+							return;
+						}
+						remember(setField(session, 'type', e.currentTarget.value));
+					}}
 				>
-					{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+					{#each typeOptions as [code, label] (code)}
 						<option value={code}>{label}</option>
 					{/each}
+					{#if !allTypes && typeOptions.length < Object.keys(labels).length}
+						<option value={ALL_TYPES}>Show all types…</option>
+					{/if}
 				</select>
 			</label>
 

@@ -28,11 +28,14 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import {
+		ALL_TYPES,
 		EXPIRY_VERBS,
 		EXPIRY_VERB_MEANINGS,
 		IDENTITY_KINDS,
 		IDENTITY_KIND_LABELS,
-		identityKindLabel
+		identityKindLabel,
+		mayProposeType,
+		typeOptionsFor
 	} from '$lib/documents';
 	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
 	import { LAYOUT_LABELS } from '$lib/shelf-profiles';
@@ -51,7 +54,7 @@
 		sortDocuments,
 		subLine,
 		typeLabel,
-		TYPE_LABELS,
+		typeLabels,
 		type GroupKey,
 		type SortKey
 	} from '$lib/documents-view';
@@ -125,6 +128,7 @@
 			: data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox')) as typeof data.shelves
 	);
 	const deletingShelf = $derived(data.shelves.find((s) => s.id === deleting) ?? null);
+	const shelfBeingTyped = $derived(data.shelves.find((s) => s.id === typingShelf) ?? null);
 	const elsewhere = $derived(
 		data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox' && s.id !== deleting)
 	);
@@ -150,7 +154,22 @@
 	// Which subjects the rail draws, and how many the archive scope is keeping
 	// back — the decision itself lives in `$lib/documents-view`, where a test can
 	// reach it without a page.
+	/**
+	 * Archived subjects revealed for editing, which is not the same question as
+	 * the list's archive scope.
+	 *
+	 * This used to write `?archived=1` — the parameter that also unhides archived
+	 * paper in the centre column — so bringing a sold car's row back to rename it
+	 * changed what the whole screen was showing, and pressing Done did not undo
+	 * it because a URL is not edit-mode state. `Include archived subjects` above
+	 * the list is still the control for the list.
+	 */
+	let revealArchived = $state(false);
 	const subjects = $derived(railSubjects(data.subjects, data.includeArchived));
+	/** The rail's editing list, which may show archived rows the list does not. */
+	const editableSubjects = $derived(
+		railSubjects(data.subjects, data.includeArchived || revealArchived)
+	);
 	const menuSubject = $derived(data.subjects.find((s) => s.id === subjectMenu) ?? null);
 
 	$effect(() => {
@@ -169,11 +188,29 @@
 		ids.splice(to, 0, ids.splice(from, 1)[0]);
 		railOrder = ids;
 	}
+	/** Which shelf's type list is open, if any. */
+	let typingShelf = $state<string | null>(null);
 	let confirmingDelete = $state(false);
 	let replacing = $state(false);
 	/** The type the FORM currently holds, which is what decides whether the
 	    Identity fields are on screen — `data.selected.type` is what was saved. */
 	let editType = $state('other');
+	/** The shelf the FORM holds, which decides what the type picker offers. */
+	let editShelf = $state('');
+	/** Whether the type in the form was put there by a shelf rather than chosen. */
+	let typeProposed = $state(false);
+	/** Widened past the shelf's own list, for as long as the inspector is open. */
+	let allTypes = $state(false);
+	/** What this household calls each type: the built-ins, plus its own. */
+	const labels = $derived(typeLabels(data.documentTypes));
+	const editTypeOptions = $derived(
+		typeOptionsFor(
+			data.shelves.find((s) => s.key === editShelf)?.types ?? [],
+			editType,
+			labels,
+			allTypes
+		)
+	);
 	let numberShown = $state(false);
 	/**
 	 * The extra-number rows the form is currently showing.
@@ -213,6 +250,9 @@
 		// A number revealed on one document must not be revealed on the next.
 		numberShown = false;
 		editType = selected?.type ?? 'other';
+		editShelf = selected?.shelfKey ?? '';
+		typeProposed = false;
+		allTypes = false;
 		extraNumbers = (selected?.identityNumbers ?? []).map((n) => ({ ...n }));
 	});
 
@@ -569,6 +609,7 @@
 								if (railOrder.length) reorderForm?.requestSubmit();
 							}}
 							onrename={() => (renaming = s.id)}
+							ontypes={() => (typingShelf = s.id)}
 							ondelete={() => {
 								deleting = s.id;
 								reassignTo = elsewhere[0]?.id ?? '';
@@ -616,6 +657,9 @@
 				onclick={() => {
 					editingSubjects = !editingSubjects;
 					renamingSubject = null;
+					// Done puts the archived rows away again; the list's own scope is
+					// untouched either way.
+					revealArchived = false;
 				}}
 			>
 				{#if editingSubjects}Done{:else}<Icon name="pencil" size={14} />{/if}
@@ -624,7 +668,7 @@
 
 		{#if editingSubjects}
 			<div class="rail-shelves" role="list">
-				{#each subjects.shown as s (s.id)}
+				{#each editableSubjects.shown as s (s.id)}
 					{#if renamingSubject === s.id}
 						<form class="rail-rename" method="POST" action="?/renameSubject" use:enhance>
 							<input type="hidden" name="id" value={s.id} />
@@ -647,9 +691,9 @@
 			<!-- Archived subjects are hidden, not gone, and the only control that
 			     brings one back lives on its row — so the rail says how many rows
 			     it is holding rather than leaving a one-way door. -->
-			{#if subjects.hidden > 0}
-				<button type="button" class="rail-item manage" onclick={() => navigate({ archived: '1' })}>
-					<span class="rail-label">Show {subjects.hidden} archived</span>
+			{#if editableSubjects.hidden > 0}
+				<button type="button" class="rail-item manage" onclick={() => (revealArchived = true)}>
+					<span class="rail-label">Show {editableSubjects.hidden} archived</span>
 				</button>
 			{/if}
 			<button type="button" class="rail-item manage" onclick={() => (addingSubject = true)}>
@@ -796,7 +840,7 @@
 					</select>
 					<select name="type" aria-label="Set type">
 						<option value="">Type…</option>
-						{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+						{#each Object.entries(labels) as [code, label] (code)}
 							<option value={code}>{label}</option>
 						{/each}
 					</select>
@@ -1293,7 +1337,22 @@
 					</div>
 					<div class="sec">
 						<span class="eyebrow">Shelf</span>
-						<select name="shelf" value={d.shelfKey}>
+						<!-- Bound, because the shelf decides what the Type picker below
+						     offers — the same behaviour the inbox review screen has, so
+						     filing from here and filing from there are one thing done in
+						     two places rather than two things. -->
+						<select
+							name="shelf"
+							value={editShelf}
+							onchange={(e) => {
+								editShelf = e.currentTarget.value;
+								const first = data.shelves.find((s) => s.key === editShelf)?.types?.[0];
+								if (first && mayProposeType(editType, typeProposed)) {
+									editType = first;
+									typeProposed = true;
+								}
+							}}
+						>
 							{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
 								<option value={s.key}>{s.label}</option>
 							{/each}
@@ -1304,10 +1363,26 @@
 						<!-- Bound rather than set once: the Identity fields below appear
 						     the moment the type says they apply, so somebody filing a
 						     passport does not save, reopen and edit again to reach them. -->
-						<select name="type" bind:value={editType}>
-							{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+						<select
+							name="type"
+							value={editType}
+							onchange={(e) => {
+								if (e.currentTarget.value === ALL_TYPES) {
+									allTypes = true;
+									e.currentTarget.value = editType;
+									return;
+								}
+								editType = e.currentTarget.value;
+								// Chosen, so no shelf may overwrite it from here on.
+								typeProposed = false;
+							}}
+						>
+							{#each editTypeOptions as [code, label] (code)}
 								<option value={code}>{label}</option>
 							{/each}
+							{#if !allTypes && editTypeOptions.length < Object.keys(labels).length}
+								<option value={ALL_TYPES}>Show all types…</option>
+							{/if}
 						</select>
 					</div>
 					{#if editType === 'id_document'}
@@ -1635,6 +1710,69 @@
 					>{menuSubject.archived ? 'Bring it back' : 'Archive'}</button
 				>
 			</div>
+		</form>
+	</Modal>
+{/if}
+
+{#if shelfBeingTyped}
+	<Modal onclose={() => (typingShelf = null)} title={`What ${shelfBeingTyped.label} usually holds`}>
+		<form
+			class="shelf-dialog"
+			method="POST"
+			action="?/setShelfTypes"
+			use:enhance={() =>
+				async ({ update }) => {
+					await update();
+					typingShelf = null;
+				}}
+		>
+			<input type="hidden" name="id" value={shelfBeingTyped.id} />
+			<p class="quiet">
+				These are offered first when filing to this shelf, and one is proposed during inbox review.
+				Nothing is refused: any document can be filed here whatever its type.
+			</p>
+			<div class="type-picker">
+				{#each data.documentTypes as t (t.key)}
+					<label class="pick-chip">
+						<input
+							type="checkbox"
+							name="types"
+							value={t.key}
+							checked={(shelfBeingTyped.types as string[]).includes(t.key)}
+						/>
+						<span>{t.label}</span>
+					</label>
+				{/each}
+			</div>
+			<div class="dialog-actions">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<button type="button" class="btn" onclick={() => (typingShelf = null)}>Cancel</button>
+			</div>
+		</form>
+
+		<!-- Its own form, because it posts to a different action and must not
+		     carry the checkboxes above with it. A type added here is added to the
+		     household, not to this shelf: tick it afterwards to put it on the
+		     shelf, which is the same two steps a new tag takes. -->
+		<form
+			class="new-type"
+			method="POST"
+			action="?/addDocumentType"
+			use:enhance={() =>
+				async ({ update }) => {
+					await update({ reset: true });
+				}}
+		>
+			<span class="eyebrow">A kind of paper this list is missing</span>
+			<div class="new-type-row">
+				<input name="label" placeholder="Vaccination book, lease annex…" />
+				<button type="submit" class="btn">Add type</button>
+			</div>
+			<p class="quiet">
+				Yours to name. The seventeen the app ships with cannot be removed — the salary tracker, the
+				importer and the wallet each read one by name — but anything you add here is only a label,
+				and can go again while nothing is filed as it.
+			</p>
 		</form>
 	</Modal>
 {/if}
@@ -2581,6 +2719,36 @@
 	}
 	.id-field.wide {
 		grid-column: 1 / -1;
+	}
+	/* Seventeen chips in a scrollable block: a column of seventeen rows is a
+	   dialog taller than the screen it opens on. */
+	.type-picker {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		max-height: 40vh;
+		overflow-y: auto;
+	}
+	.new-type {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-top: var(--space-7);
+		padding-top: var(--space-7);
+		border-top: 1px solid var(--bd);
+	}
+	.new-type-row {
+		display: flex;
+		flex-direction: row;
+		gap: var(--space-4);
+	}
+	.new-type-row input {
+		flex: 1;
+	}
+	.dialog-actions {
+		display: flex;
+		flex-direction: row;
+		gap: var(--space-5);
 	}
 	.id-extra {
 		display: flex;

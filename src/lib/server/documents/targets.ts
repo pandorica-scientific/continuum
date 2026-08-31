@@ -24,7 +24,7 @@
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { displayCurrency, formatMinor } from '$lib/money';
-import type { EnumValue } from '$lib/enums';
+import type { DocumentTypeKey, EnumValue } from '$lib/enums';
 import {
 	account,
 	contact,
@@ -128,7 +128,7 @@ export interface AboutDocument {
 	name: string;
 	ext: string;
 	storedName: string | null;
-	type: EnumValue<'document.type'>;
+	type: DocumentTypeKey;
 	shelfKey: string;
 	shelfLabel: string;
 	expiresOn: string | null;

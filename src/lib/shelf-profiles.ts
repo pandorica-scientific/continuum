@@ -51,7 +51,14 @@ export type SystemShelfKey =
 export interface ShelfProfile {
 	key: SystemShelfKey;
 	layout: ShelfLayout;
-	/** Offered first by the type filter and proposed during inbox review. */
+	/**
+	 * Where a shelf's type list STARTS, and nothing more.
+	 *
+	 * The list itself lives in `shelf_type`, seeded from these and owned by the
+	 * household afterwards — editing this array changes what a fresh install
+	 * begins with and has no effect on an instance that is already running.
+	 * `tests/integration/shelf-types` holds the two to the same values.
+	 */
 	expects: readonly EnumValue<'document.type'>[];
 	/**
 	 * What a layout groups by — a person, a subject, or either.

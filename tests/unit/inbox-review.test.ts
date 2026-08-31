@@ -101,6 +101,16 @@ describe('a shelf proposing a type', () => {
 		expect(after.suggested).toEqual([]);
 	});
 
+	it('re-proposes over a value it proposed itself', () => {
+		// Picking Identity and then Statements must not leave a bank statement
+		// typed as an identity document: nobody chose that, this function did.
+		const first = proposeType(startSession(['a']), 'id_document');
+		const second = proposeType(first, 'bank_statement');
+
+		expect(second.sticky.type).toBe('bank_statement');
+		expect(second.suggested).toEqual(['type']);
+	});
+
 	it('does nothing for a shelf that expects nothing', () => {
 		const session = startSession(['a']);
 		expect(proposeType(session, undefined)).toBe(session);

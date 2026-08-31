@@ -12,6 +12,8 @@
  * speed, which is the whole cadence this screen is built for.
  */
 
+import { mayProposeType } from '$lib/documents';
+
 /** The fields that carry over from the previous `File & next`. */
 export type StickyField = 'shelf' | 'type';
 
@@ -130,8 +132,10 @@ export function setField(session: ReviewSession, field: StickyField, value: stri
  */
 export function proposeType(session: ReviewSession, type: string | undefined): ReviewSession {
 	if (!type) return session;
-	const current = session.sticky.type;
-	if (current !== undefined && current !== 'other') return session;
+	// The rule itself lives in `$lib/documents`, because the inspector's own
+	// shelf picker has to follow it too and two spellings of "may I fill this
+	// in" is two places for it to drift.
+	if (!mayProposeType(session.sticky.type, session.suggested.includes('type'))) return session;
 	return {
 		...session,
 		sticky: { ...session.sticky, type },

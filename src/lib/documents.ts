@@ -47,3 +47,45 @@ export const identityKindLabel = (code: string | null | undefined): string | nul
 	code && code !== 'other'
 		? (IDENTITY_KIND_LABELS[code as (typeof IDENTITY_KINDS)[number]] ?? null)
 		: null;
+
+/**
+ * A sentinel option that widens a shortened type list rather than choosing.
+ *
+ * An option rather than a control beside the select: the list is short because
+ * a shelf said so, and the person who needs all seventeen needs them at the
+ * moment they are looking at the list.
+ */
+export const ALL_TYPES = '__all__';
+
+/**
+ * May a shelf's own list fill the type field, or has somebody answered already?
+ *
+ * The one rule, read by the inbox review screen and the inspector alike: an
+ * empty field or the `other` a form starts on is fair game, and so is a value
+ * this rule put there a moment ago — picking Identity and then Statements must
+ * not leave a bank statement typed as an identity document. A value somebody
+ * CHOSE is never overwritten, which is the whole distinction `proposed` keeps.
+ */
+export function mayProposeType(current: string | undefined, proposed: boolean): boolean {
+	return current === undefined || current === 'other' || proposed;
+}
+
+/**
+ * What a type picker offers: the shelf's own list, or everything.
+ *
+ * Never a restriction — every caller posts whatever is chosen and the server
+ * takes any type — so a shelf with no list is a full picker rather than a
+ * refusal. The type already chosen stays in the list even when the shelf does
+ * not name it, or changing shelf would silently retype the document.
+ */
+export function typeOptionsFor(
+	offered: readonly string[],
+	chosen: string | undefined,
+	labels: Record<string, string>,
+	all = false
+): [string, string][] {
+	const own = offered.filter((code) => code in labels);
+	if (all || own.length === 0) return Object.entries(labels);
+	const codes = chosen && !own.includes(chosen) ? [...own, chosen] : own;
+	return codes.map((code) => [code, labels[code]]);
+}

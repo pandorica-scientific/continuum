@@ -11,18 +11,24 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { asEnumValue } from '$lib/enums';
+import { asDocumentType, listDocumentTypes } from '$lib/server/documents/types';
 import { db } from '$lib/server/db';
 import { document, documentLink, tag, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { documentTargetSpec, loadPickableTargets } from '$lib/server/documents/targets';
-import { listShelves, shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
+import {
+	listShelves,
+	shelfIdByKey,
+	shelfTypesByKey,
+	systemShelfId
+} from '$lib/server/documents/shelves';
 import { assertVisibleDocument, visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const inboxId = await systemShelfId('inbox');
-	const [waiting, shelves, targets, tags] = await Promise.all([
+	const [waiting, shelves, targets, tags, shelfTypes, documentTypes] = await Promise.all([
 		db
 			.select({
 				id: document.id,
@@ -40,13 +46,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// flat but never against the tenancy, and a mortgage statement against
 		// nobody at all — with nothing on the screen to say a kind was missing.
 		loadPickableTargets(),
-		db.select({ name: tag.name }).from(tag).orderBy(tag.name)
+		db.select({ name: tag.name }).from(tag).orderBy(tag.name),
+		shelfTypesByKey(),
+		listDocumentTypes()
 	]);
 
 	return {
 		waiting,
 		isAdmin: locals.person?.role === 'admin',
 		shelves: shelves.filter((s) => s.key !== 'inbox'),
+		// What each shelf offers first, so the picker is as short as the shelf
+		// makes it. Never a restriction: the form still accepts any type, and the
+		// screen keeps a way to reach all seventeen.
+		shelfTypes: Object.fromEntries(shelfTypesByKeyEntries(shelfTypes)),
+		// Built-in and household alike; the picker draws from this, not the enum.
+		documentTypes,
 		knownTags: tags.map((t) => t.name),
 		// In registry order, each carrying the heading it belongs under. The
 		// kinds a document is filed against from their own screen are absent:
@@ -89,7 +103,10 @@ export const actions: Actions = {
 				.set({
 					name: String(form.get('name') ?? '').trim() || 'Document',
 					shelfId,
-					type: asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other'),
+					type: asDocumentType(
+						form.get('type'),
+						(await listDocumentTypes()).map((row) => row.key)
+					),
 					note: String(form.get('note') ?? '').trim() || null,
 					expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
 					expiryVerb: asEnumValue(
@@ -140,3 +157,8 @@ export const actions: Actions = {
 	/** Leaving the flow is a navigation, and everything unfiled stays unfiled. */
 	leave: async () => redirect(303, '/documents')
 };
+
+/** Plain entries, because a Map does not survive the load's serialisation. */
+function shelfTypesByKeyEntries(byKey: Map<string, string[]>): [string, string[]][] {
+	return [...byKey.entries()];
+}

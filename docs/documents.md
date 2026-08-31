@@ -120,9 +120,22 @@ already pictures. A mortgage agreement is not a card in a wallet.
 
 Every shelf, list or not, now knows what it is for: an empty one says what
 belongs on it, its type filter offers those kinds first, and picking a shelf
-during inbox review proposes the type that shelf expects — marked _suggested_,
-cleared the moment you touch the field, and never overwriting an answer you gave
-already.
+during inbox review shortens the type list to that shelf's own and chooses the
+first — marked _suggested_, cleared the moment you touch the field, and never
+overwriting an answer you gave already. `Show all types…` opens the full list
+for the document that does not fit.
+
+The inspector's own Shelf and Type fields work the same way, so filing a
+document from the Inbox is the same act as filing it from review — and a
+document that already has a type keeps it: a shelf fills the field in only when
+nobody has answered it yet.
+
+**That list is yours.** Press the pencil beside **SHELVES** in the rail and each
+row gains a tag button: it opens every type with the shelf's own ticked. It
+works on a system shelf as much as on one you made — Identity cannot be deleted,
+but what it suggests is your business. Nothing is ever refused by it: a shelf
+takes any document of any type, and the list only decides what is offered
+first.
 
 ### Identity details
 
@@ -142,15 +155,24 @@ keeps them. Change it back and what you typed is still there.
 
 ### Types
 
-A closed list: contract, invoice, receipt, payslip, bank statement, broker
-report, insurance policy, claim, identity document, certificate, medical
-record, tax document, technical plan, correspondence, warranty, manual, other.
+Seventeen come with the app: contract, invoice, receipt, payslip, bank
+statement, broker report, insurance policy, claim, identity document,
+certificate, medical record, tax document, technical plan, correspondence,
+warranty, manual, other.
 
-It is closed because behaviour hangs off it — the salary tracker reads
-`payslip`, statement import writes `bank_statement`, an uploaded broker report
-writes `broker_report`, tax attachments write `tax_document`. Renaming those
-would quietly unhook a feature. For anything specific to your household, use
-**tags**: free, searchable, and nothing in the code depends on them.
+**You can add your own.** Open a shelf's type list from the rail and name one —
+a vaccination book, a lease annex. It behaves like any other type from then on:
+filed, filtered, grouped, offered first by whichever shelves you tick it onto.
+
+The seventeen cannot be removed, because behaviour hangs off them — the salary
+tracker reads `payslip`, statement import writes `bank_statement`, an uploaded
+broker report writes `broker_report`, tax attachments write `tax_document`, and
+the Identity wallet reads `id_document`. Removing one would quietly unhook a
+feature. Yours carry no behaviour at all, which is what makes them safe to
+invent, and one that nothing is filed as can be removed again.
+
+For something that cuts across types — a renovation, a holiday — use **tags**
+instead: free, searchable, and nothing in the code depends on them either.
 
 ## Subjects
 

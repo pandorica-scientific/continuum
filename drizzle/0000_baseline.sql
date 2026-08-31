@@ -151,6 +151,30 @@ CREATE TABLE "document_text" (
 	"pages_extracted" integer
 );
 --> statement-breakpoint
+-- What kinds of paper this household files: seventeen built in, plus whatever
+-- it adds. Rows rather than a CHECK, because a constraint is not something a
+-- person can add a value to. A built-in may be relabelled and never removed —
+-- the salary tracker reads 'payslip', an accepted import writes
+-- 'bank_statement', the wallet reads 'id_document'.
+CREATE TABLE "document_type" (
+	"key" text PRIMARY KEY NOT NULL,
+	"label" text NOT NULL,
+	"builtin" boolean DEFAULT false NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL
+);
+--> statement-breakpoint
+-- The types a shelf offers first. Seeded below from the same lists the shelf
+-- registry ships and then owned by the household: the registry's guess at what
+-- belongs on Health is a good one and still a guess. It orders and shortens the
+-- picker and never restricts — a shelf takes any type, because behaviour hangs
+-- off type and never off shelf.
+CREATE TABLE "shelf_type" (
+	"shelf_id" uuid NOT NULL,
+	"type" text NOT NULL,
+	"ordinal" integer NOT NULL,
+	CONSTRAINT "shelf_type_shelf_id_type_pk" PRIMARY KEY("shelf_id","type")
+);
+--> statement-breakpoint
 -- What an identity document says on its face, for type = 'id_document'.
 -- Entered by hand: extraction reads text into chunks and never writes a
 -- record's fields, and a passport number filled in wrong by a recogniser is
@@ -639,6 +663,13 @@ ALTER TABLE "webauthn_challenge" ADD CONSTRAINT "webauthn_challenge_person_id_pe
 ALTER TABLE "document" ADD CONSTRAINT "document_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_identity" ADD CONSTRAINT "document_identity_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+-- RESTRICT, not cascade: a type still on a document is not a type to delete,
+-- and the refusal is the whole protection for the built-ins code reads by name.
+ALTER TABLE "document" ADD CONSTRAINT "document_type_document_type_key_fk" FOREIGN KEY ("type") REFERENCES "public"."document_type"("key") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+-- Cascade here: a shelf's list is a preference, so a type that goes takes its
+-- mention with it rather than blocking the delete.
+ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_type_document_type_key_fk" FOREIGN KEY ("type") REFERENCES "public"."document_type"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_identity_number" ADD CONSTRAINT "document_identity_number_document_id_document_identity_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_identity"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1299,14 +1330,13 @@ CREATE INDEX dtc_fts_idx ON document_text_chunk
 	USING gin (to_tsvector('simple', public.contact_fold(text)));--> statement-breakpoint
 CREATE INDEX dtc_trgm_idx ON document_text_chunk
 	USING gin (public.contact_fold(text) gin_trgm_ops);--> statement-breakpoint
+-- The FK on shelf_type(type) needs its own index: the primary key leads with
+-- shelf_id, so it does not cover a lookup by type alone — which is what
+-- deleting a household's own type does.
+CREATE INDEX shelf_type_type_idx ON shelf_type(type);--> statement-breakpoint
 CREATE INDEX document_name_trgm_idx ON document
 	USING gin (public.contact_fold(name) gin_trgm_ops);--> statement-breakpoint
 
-ALTER TABLE document ADD CONSTRAINT document_type_check CHECK (type in (
-	'contract', 'invoice', 'receipt', 'payslip', 'bank_statement', 'broker_report',
-	'insurance_policy', 'claim', 'id_document', 'certificate', 'medical_record',
-	'tax_document', 'technical_plan', 'correspondence', 'warranty', 'manual',
-	'other'));--> statement-breakpoint
 ALTER TABLE document ADD CONSTRAINT document_sensitivity_check
 	CHECK (sensitivity in ('normal', 'restricted'));--> statement-breakpoint
 ALTER TABLE document_text_chunk ADD CONSTRAINT document_text_chunk_source_check
@@ -1323,6 +1353,28 @@ ALTER TABLE document_identity ADD CONSTRAINT document_identity_country_check
 -- sides: a subject that is simply current has neither.
 ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);--> statement-breakpoint
+
+-- The seventeen types the app ships with. A household adds its own beside
+-- them; these are the ones code reads by name, so they are marked and kept.
+INSERT INTO document_type (key, label, builtin, sort_order) VALUES
+	('contract', 'Contract', true, 0),
+	('invoice', 'Invoice', true, 10),
+	('receipt', 'Receipt', true, 20),
+	('payslip', 'Payslip', true, 30),
+	('bank_statement', 'Bank statement', true, 40),
+	('broker_report', 'Broker report', true, 50),
+	('insurance_policy', 'Insurance policy', true, 60),
+	('claim', 'Claim', true, 70),
+	('id_document', 'Identity document', true, 80),
+	('certificate', 'Certificate', true, 90),
+	('medical_record', 'Medical record', true, 100),
+	('tax_document', 'Tax document', true, 110),
+	('technical_plan', 'Technical plan', true, 120),
+	('correspondence', 'Correspondence', true, 130),
+	('warranty', 'Warranty', true, 140),
+	('manual', 'Manual', true, 150),
+	('other', 'Other', true, 160)
+ON CONFLICT (key) DO NOTHING;--> statement-breakpoint
 
 -- The ten shelves a fresh install starts with. Households rename, re-order and
 -- re-emoji these freely; eight of the ten cannot be removed, for two different
@@ -1356,3 +1408,39 @@ INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
 	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, true),
 	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
 ON CONFLICT (key) DO NOTHING;
+
+-- What each of those shelves offers first in a type picker. The household edits
+-- these from the rail; the list here is only where they start.
+INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
+	((SELECT id FROM shelf WHERE key = 'identity'), 'id_document', 0),
+	((SELECT id FROM shelf WHERE key = 'identity'), 'certificate', 1),
+	((SELECT id FROM shelf WHERE key = 'family'), 'certificate', 0),
+	((SELECT id FROM shelf WHERE key = 'family'), 'contract', 1),
+	((SELECT id FROM shelf WHERE key = 'family'), 'correspondence', 2),
+	((SELECT id FROM shelf WHERE key = 'health'), 'medical_record', 0),
+	((SELECT id FROM shelf WHERE key = 'health'), 'certificate', 1),
+	((SELECT id FROM shelf WHERE key = 'health'), 'insurance_policy', 2),
+	((SELECT id FROM shelf WHERE key = 'health'), 'invoice', 3),
+	((SELECT id FROM shelf WHERE key = 'property'), 'insurance_policy', 0),
+	((SELECT id FROM shelf WHERE key = 'property'), 'technical_plan', 1),
+	((SELECT id FROM shelf WHERE key = 'property'), 'contract', 2),
+	((SELECT id FROM shelf WHERE key = 'property'), 'invoice', 3),
+	((SELECT id FROM shelf WHERE key = 'tenancy'), 'contract', 0),
+	((SELECT id FROM shelf WHERE key = 'tenancy'), 'invoice', 1),
+	((SELECT id FROM shelf WHERE key = 'tenancy'), 'correspondence', 2),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'warranty', 0),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'insurance_policy', 1),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 3),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'payslip', 0),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'tax_document', 1),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 3),
+	((SELECT id FROM shelf WHERE key = 'household'), 'warranty', 0),
+	((SELECT id FROM shelf WHERE key = 'household'), 'manual', 1),
+	((SELECT id FROM shelf WHERE key = 'household'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'household'), 'receipt', 3),
+	((SELECT id FROM shelf WHERE key = 'household'), 'contract', 4),
+	((SELECT id FROM shelf WHERE key = 'statements'), 'bank_statement', 0),
+	((SELECT id FROM shelf WHERE key = 'statements'), 'broker_report', 1)
+ON CONFLICT (shelf_id, type) DO NOTHING;
