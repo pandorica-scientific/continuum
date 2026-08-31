@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Interest vs principal per year, stacked: green is what leaves the debt,
 	// orange is what the bank keeps. Bars only reach as far as known rates.
 	interface YearBar {

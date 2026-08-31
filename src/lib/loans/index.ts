@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Day-count conventions a loan can accrue interest under. Shared between the
 // server amortisation engine and the loan form.
 

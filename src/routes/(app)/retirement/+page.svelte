@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { onDestroy } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { createSerializedAutosave } from '$lib/actions/autosave';

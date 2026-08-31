@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Salary: what was earned each month, and the payslips it was read from.
 //
 // Moved out of Retirement in v0.4.4. It sat beside a projection that never read

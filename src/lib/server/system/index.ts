@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The machinery every domain uses and none of them owns: what a password must
 // look like, where an uploaded file lives, what the instance reports about
 // itself, how settings travel in and out, and the demo household.

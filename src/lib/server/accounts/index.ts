@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The account domain: what an account is, and how it may be corrected.
 export {
 	parseAccountNumbers,

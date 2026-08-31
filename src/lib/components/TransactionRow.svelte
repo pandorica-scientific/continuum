@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tagHue } from '$lib/tag-hue';
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// One transaction, collapsed to a line and expanded to everything.
 	//
 	// The register used to put every control a row has on the row itself — a

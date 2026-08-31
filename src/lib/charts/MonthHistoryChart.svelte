@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Every month on record, earned against spent.
 	//
 	// It used to be a row of CSS divs with a `title` attribute on each pair: no

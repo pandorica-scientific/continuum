@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/arch-amd64%20%C2%B7%20arm64-555?style=flat-square" alt="amd64 and arm64">
   <img src="https://img.shields.io/badge/passkeys-supported-5A0FC8?style=flat-square" alt="Passkeys supported">
   <img src="https://img.shields.io/badge/trackers-0-2ea44f?style=flat-square" alt="Zero trackers">
-  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue?style=flat-square" alt="PolyForm Noncommercial"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="GNU AGPL v3"></a>
 </p>
 
 <picture>
@@ -248,5 +248,10 @@ Found a security problem? Do not open an issue —
 
 ## License
 
-[PolyForm Noncommercial](LICENSE.md) — free to self-host and modify for personal,
-noncommercial use.
+[GNU Affero General Public License v3.0 or later](LICENSE) — free to run, study,
+modify and share, for any purpose. Copyright © 2026 Robert Kiewisz.
+
+The one condition: if you modify Continuum and let other people use your version
+— whether you hand them the files or they reach it over a network — you owe them
+the source of your version under the same licence. Running it at home, changing
+it for yourself and sending patches back all sit comfortably inside that.

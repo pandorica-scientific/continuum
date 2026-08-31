@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Changing your own password. Every other way in is revoked on success —
 // changing a password after a scare should actually eject the other device,
 // which is the entire point of changing it.

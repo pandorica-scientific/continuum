@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Derivations shared by every path that creates a person — the setup wizard,
 // an administrator adding someone, and the demo seeder. Keeping them here is
 // what stops the same person getting different initials depending on which

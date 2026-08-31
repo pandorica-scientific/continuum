@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // How money crosses the wire: an integer of minor units and a currency code.
 //
 // Never a float — that would lose the precision the whole ledger is built to

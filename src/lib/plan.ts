@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // A drawn floor plan with physical scale: rooms are sets of grid cells (any
 // rectilinear shape — L, U, T — emerges from painting cells), and one setting
 // gives the grid its physical meaning: the cell size in centimetres. Areas

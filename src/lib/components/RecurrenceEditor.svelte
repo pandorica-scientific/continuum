@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { untrack } from 'svelte';
 	import { formatRrule, parseRrule } from '$lib/calendar/rrule';
 	import Field from '$lib/components/Field.svelte';

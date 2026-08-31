@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loan, loanEvent, loanFixationPeriod } from '$lib/server/db/schema';
 import { recordLinkedPayment, unlinkLoanPayment } from '$lib/server/loans/mutations';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure backup policy: when a backup is due, what a backup file is called,
 // which old ones to prune, and how a destination folder reads as a label.
 // Everything variable is a setting; only format facts and arithmetic live here.

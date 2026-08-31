@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// Several tags on one record: the ones it has as chips, and one field to add
 	// another. Typing offers every tag the household already has, so

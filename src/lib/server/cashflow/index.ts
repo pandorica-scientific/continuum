@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { category, loan, loanEvent, transaction } from '$lib/server/db/schema';

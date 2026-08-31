@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // WebAuthn challenges are server-issued, single-use, short-lived and bounded.
 
 import { createHash } from 'node:crypto';

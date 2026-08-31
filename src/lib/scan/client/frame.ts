@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Every canvas call in the engine, in one file.
 //
 // `core` is canvas-free so that its arithmetic can be tested without a DOM;

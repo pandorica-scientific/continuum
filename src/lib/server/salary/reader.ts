@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pull the text out of an uploaded payslip PDF, pick its gross, net and bonus,
 // and remember which label each correction pointed at so the next slip for the
 // same person reads itself.

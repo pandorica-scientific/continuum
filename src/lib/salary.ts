@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Salary tracking derived from payslips. Pure functions: amount and period
 // detection over extracted text lines, and the year-by-year statistics. The
 // keyword lists are format facts of real payslips (Czech and English), the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Stable identity for calendar events, on both sides of a sync.
 //
 // Two-way sync needs an id that survives everything: a restart, a rebuilt link

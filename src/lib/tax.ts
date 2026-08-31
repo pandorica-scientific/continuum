@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure arithmetic for the tax-statements screen. Nothing here computes what is
 // owed — no brackets, no allowances, no residency. The only calculation is a
 // ratio of two figures the user recorded, and grouping them into chart series.

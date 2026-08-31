@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The accepted statement filed on the Statements shelf and the import that
  * produced it used to share one file on disk with nothing keying one row to

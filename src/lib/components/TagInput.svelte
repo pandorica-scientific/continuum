@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Adds a tag to a transaction. Typing a name that does not exist yet creates
 	// it, so a project can be started without visiting a settings screen first.
 	let {

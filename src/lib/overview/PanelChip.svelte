@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// One panel, offered rather than placed: the icon and title the board draws
 	// as an eyebrow, on a button that adds it.
 	//

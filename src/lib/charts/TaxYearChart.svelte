@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// One chart for the whole record, replacing six per-currency panels.
 	//
 	// Two modes over one x axis. In `stack`, each bar's full height IS that

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Three figures and where the paper sits. The figures are the ones that
 	// change what somebody does today — what is unfiled, what is about to lapse,
 	// what already has — and the shelves below them are only navigation.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The same payslip uploaded twice.
 //
 // A month has held more than one payslip since v0.5.5, which removed the only

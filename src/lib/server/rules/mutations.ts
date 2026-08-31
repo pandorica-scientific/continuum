@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { rule, ruleTag } from '$lib/server/db/schema';

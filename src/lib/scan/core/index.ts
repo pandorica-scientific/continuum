@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The isomorphic half of the scan engine: everything that needs no DOM.
 //
 // Nothing here may import a canvas, a File, or anything else the browser owns —

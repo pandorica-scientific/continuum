@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Which capture buttons a file input should offer, decided from `accept`.
 //
 // No extra prop for this: every call site already says what it takes, and the

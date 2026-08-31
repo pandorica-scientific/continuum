@@ -88,5 +88,5 @@ configured in the app and stored in your own database. Nothing calls home.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](https://github.com/pandorica-scientific/continuum/blob/main/LICENSE.md) —
-free for personal self-hosting; commercial use needs a separate licence.
+[GNU AGPL v3.0 or later](https://github.com/pandorica-scientific/continuum/blob/main/LICENSE) —
+free to run, modify and share; a modified version other people use must offer them its source.

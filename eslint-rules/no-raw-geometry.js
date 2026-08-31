@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Geometry comes from the scale in app.css, not from a number somebody picked.
 //
 // Written here rather than pulled in as a plugin, following the licence rule

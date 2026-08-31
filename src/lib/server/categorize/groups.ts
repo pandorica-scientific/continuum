@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { asc } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { categoryGroup } from '$lib/server/db/schema';

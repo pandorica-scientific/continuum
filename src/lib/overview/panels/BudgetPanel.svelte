@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Two bars a row: what the month cost, in the group's own colour, over what
 	// it usually costs, in the quiet foreground. Paired rather than one bar with
 	// a marker on it, because the question is "how far apart are these two", and

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Which devices are offered the camera and scan buttons.
 //
 // The rule lives in a media query, so the question it answers — "is this a

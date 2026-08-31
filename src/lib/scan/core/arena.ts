@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Manual memory management, because a cv.Mat is not a JavaScript object.
 //
 // A Mat is a handle of a few dozen bytes pointing into the WASM linear heap,

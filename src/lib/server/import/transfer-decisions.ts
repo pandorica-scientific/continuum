@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, transaction, transferPair } from '$lib/server/db/schema';

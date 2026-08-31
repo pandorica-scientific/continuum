@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Matching and deciding, kept pure so the same code answers both "what would
 // this rule file?" during ingest and "what would this rule match?" in the
 // editor's preview. There is deliberately no SQL translation of these rules —

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Output dimensions come from the corners the detector found, never from a
 // constant somebody picked. The two constants here are format facts — the A4
 // ratio, and 300 DPI across 210 mm — not preferences.

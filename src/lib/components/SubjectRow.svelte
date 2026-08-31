@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// One subject in the Documents rail's pencil mode: emoji, name, count, and
 	// either the `Household` badge or the `⋯` that archives it.

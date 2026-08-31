@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Canvas `drawImage` ignores EXIF, so a portrait photo from certain Androids
 // lands sideways unless the tag is read and applied by hand. HEIC carries the
 // same tag and libheif does not apply it either, so both paths come through

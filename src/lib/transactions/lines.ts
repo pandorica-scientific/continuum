@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The one place that knows a transaction may be split. Every consumer — cash
 // flow, the briefing, the register, tag totals — resolves through here, so the
 // branch exists once and is testable without a database.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Load OpenCV from the app's own origin, as a script rather than a bundle.
 //
 // `@techstark/opencv-js` ships a single 10.4 MB file with 7.6 MB of WebAssembly

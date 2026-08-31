@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The currency a month is recorded in.
 //
 // It was taken from the household's base currency until v0.5.1, which is right

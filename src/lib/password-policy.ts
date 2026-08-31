@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Household policy that another self-hoster may reasonably set differently, so
 // both values are configurable — `PASSWORD_MIN_LENGTH` and
 // `ENROLLMENT_LINK_DAYS` in the environment, read server-side by

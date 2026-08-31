@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The easter egg: clicking the mark on an error screen replaces the Continuum
 // rings with a drawing made for that status.
 //

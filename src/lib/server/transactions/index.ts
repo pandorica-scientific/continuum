@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Server-side transaction operations shared by the register and the import
 // review queue. Filing lives here rather than in `categorize` because the
 // learned rule has to be replayed by `pairAndCategorise`, and ingest already

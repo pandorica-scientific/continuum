@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // WebAuthn refuses to run outside a secure context, and the relying-party ID
 // must match the origin exactly. Deriving the ID from ORIGIN rather than
 // configuring it separately makes the classic mismatch impossible.

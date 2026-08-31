@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// What the whole record adds up to, before any of it is broken down.
 	//
 	// Household-wide always. The person filter sits BELOW this band and governs

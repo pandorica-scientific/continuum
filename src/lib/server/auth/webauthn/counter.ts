@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Signature counters detect cloned authenticators — but only some hardware
 // reports them. Synced passkeys (iCloud Keychain, and most platform
 // authenticators) always send 0, so a clone is detectable only when both the

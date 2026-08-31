@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Money is always integer minor units + a currency code. Formatting follows
 // the design: space-grouped thousands, decimals only when they carry
 // information, and every number set in the mono face by the caller.

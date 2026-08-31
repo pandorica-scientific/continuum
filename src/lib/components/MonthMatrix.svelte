@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Month down, what the month came to across.
 	//
 	// The register used to be a flat run of cards, one per transaction, ten to a

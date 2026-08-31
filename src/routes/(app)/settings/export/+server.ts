@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { exportConfig } from '$lib/server/system/config-file';
 import { requireAdmin } from '$lib/server/auth/policy';
 import type { RequestHandler } from './$types';

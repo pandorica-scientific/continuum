@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Settings export/import as ledger.config.json — configuration only, never
 // data or secrets. The whitelist is the contract: an imported file can touch
 // exactly these keys and nothing else.

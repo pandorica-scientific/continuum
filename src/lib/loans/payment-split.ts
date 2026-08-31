@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // How much of a loan payment was interest, and how much was principal.
 //
 // A mortgage instalment is not one cost. The interest is money the household

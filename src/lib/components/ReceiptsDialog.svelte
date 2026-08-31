@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
 	// The receipts dialog for one transaction — split out of the register's own
 	// `+page.svelte` so its states (an attach-candidates fetch that can fail, a

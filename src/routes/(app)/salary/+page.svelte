@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Band of filters, chart, table — the Tax screen's shape, applied to what was
 	// earned rather than what was paid on it.
 	//

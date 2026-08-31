@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Every writer that files a document already holds the bytes behind it, so
  * every one of them can fingerprint the file and ask for its text to be read.

@@ -109,7 +109,7 @@ than review:
   directory with an `index.ts`, and cross-cutting plumbing lives in `system/`.
   See `tests/unit/module-boundaries.test.ts`.
 - **Licence headers.** Every file under `src/` starts with
-  `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0`. An ESLint rule adds
+  `// SPDX-License-Identifier: AGPL-3.0-or-later`. An ESLint rule adds
   it with `--fix` and fails without it.
 
 ### Cutting a release
@@ -293,6 +293,8 @@ rest.
 
 ## License
 
-Continuum is licensed under [PolyForm Noncommercial 1.0.0](LICENSE.md). By
-contributing you agree that your contribution is licensed under the same terms,
-and that you have the right to submit it. There is no separate CLA.
+Continuum is licensed under the [GNU Affero General Public License v3.0 or
+later](LICENSE). By contributing you agree that your contribution is licensed
+under the same terms, and that you have the right to submit it. There is no
+separate CLA, and there will not be one — nothing here is kept back for a
+commercial edition.

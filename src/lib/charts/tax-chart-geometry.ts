@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Where every mark in the tax chart goes.
 //
 // Pulled out of the component so it can be tested without rendering. The rules

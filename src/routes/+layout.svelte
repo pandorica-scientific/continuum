@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import '@fontsource-variable/inter';
 	import '@fontsource/source-code-pro/400.css';
 	import '@fontsource/source-code-pro/500.css';

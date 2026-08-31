@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { apiError, json } from '$lib/server/api/respond';
 import { flowData } from '$lib/server/cashflow';
 import { parsePeriodParams, PERIODS, type Period } from '$lib/cashflow/period';

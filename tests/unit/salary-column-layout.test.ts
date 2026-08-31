@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Payslips that are a real table: a row of headings, and the figures on the
 // line beneath. `extractCandidates` reads a line at a time and sees only
 // "40:00 111 222 80 111" — three numbers labelled by other numbers — so a whole

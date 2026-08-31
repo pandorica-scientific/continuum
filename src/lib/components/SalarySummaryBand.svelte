@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// What the whole salary record adds up to, before any of it is broken down.
 	//
 	// Unlike TaxSummaryBand this one ANSWERS to the person filter beneath it.

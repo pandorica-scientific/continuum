@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Filing a tax statement and the paper it came from is one save. The point of
 // these tests is the cross-link: the statement is linked to its documents, each
 // is on the Finance shelf, and each is filed against the same person — which is

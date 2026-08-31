@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The ledger: accounts, the statements read into them, and the transactions,
  * splits, transfers and rules that come out.

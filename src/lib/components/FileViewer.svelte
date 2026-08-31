@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// An uploaded file, shown over the screen that linked to it. X, Escape or a
 	// click on the backdrop closes it and puts focus back on the link.
 	//

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Adding a payslip, in the same dialog the Tax screen files a statement in.
 	//
 	// It was an inline card that pushed the whole table down when open, and a

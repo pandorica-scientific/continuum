@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Four stacked sections, each more specific than the one above it: the band
 	// answers "how much, overall", the chart answers "what is the shape", the
 	// matrix answers "which year, which country", and the expanded row answers

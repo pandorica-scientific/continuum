@@ -28,6 +28,7 @@
 
 ### 🔧 Changed
 
+- ⚖️ **Continuum is licensed under the GNU AGPL v3 instead of PolyForm Noncommercial** — it is open source in the OSI sense now, free to run, study, modify and share for any purpose including a commercial one, on the single condition that a modified version other people use offers them its own source under the same terms
 - 📂 **A shelf's list is grouped the way that shelf is read** — Finance by year because payslips and tax papers are looked up by the year they concern, the Inbox by type because nothing in it is linked yet, and the control still says otherwise whenever you want it to
 - 🔤 **A shelf's type filter offers what the shelf expects first** — opening Identity's starts at Identity document rather than at whatever happens to be most numerous, and every type on the shelf is still there
 - 🗂️ **Filing from the inspector behaves as filing from review does** — the shelf shortens the type list and fills in its first there too, so "File it" on an Inbox document is the same act done in a different place rather than a second, plainer form

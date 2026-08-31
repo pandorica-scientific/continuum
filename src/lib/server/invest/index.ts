@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The broker feed: the report format, what is ingested from it, and the value
 // curve reconstructed afterwards.
 export * from './adapter';

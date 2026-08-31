@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { registerMonths, registerPage } from '$lib/server/transactions';

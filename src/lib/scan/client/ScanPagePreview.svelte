@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Two answers, not an editor.
 	//
 	// There are no corner handles, by decision: dragging four handles on a phone

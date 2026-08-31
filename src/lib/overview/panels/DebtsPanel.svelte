@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// What is still owed, loan by loan, with the fixation pill the Loans screen
 	// draws — from the same function, so the two cannot disagree about when a
 	// rate stops being settled.

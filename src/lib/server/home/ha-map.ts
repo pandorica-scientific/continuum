@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure mapping from Home Assistant API payloads to the HomeProvider shapes.
 // No fetch, no WebSocket — unit tests feed canned payloads.
 

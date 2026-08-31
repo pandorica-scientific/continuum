@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Salary by year, in the Tax screen's visual language.
 	//
 	// The two tabs sit next to each other, so the panel geometry, the hatching,

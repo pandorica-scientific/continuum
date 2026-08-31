@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The reader's entry point: a file arrives, something works out what it is, and
 // what it says becomes rows.
 //

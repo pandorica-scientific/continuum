@@ -4,7 +4,7 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import noRawGeometry from './eslint-rules/no-raw-geometry.js';
 
-const LICENCE_HEADER = '// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0';
+const LICENCE_HEADER = '// SPDX-License-Identifier: AGPL-3.0-or-later';
 
 // Written here rather than pulled in as a plugin: it is twenty lines, and a
 // dependency that stamps a comment is a dependency to audit, pin and update

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The demo provider: the design handoff's fixture household, served through
 // the same HomeProvider seam as a real platform. Proves the interface and
 // powers demo mode. Device toggles mutate in-memory state so the screen

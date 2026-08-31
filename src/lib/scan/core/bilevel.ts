@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // A binarized A4 page is 8.7 million pixels. At one byte each that is 8.7 MB
 // before compression; at one BIT each it is 1.1 MB, and deflate takes a typical
 // page to well under 150 KB.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // libheif-js ships no types. Declared here rather than pulled from DefinitelyTyped
 // so the engine stays self-contained, and narrowly: only the three calls the
 // decoder actually makes, so a wrong assumption shows up as a type error rather

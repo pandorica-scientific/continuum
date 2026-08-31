@@ -1,5 +1,5 @@
 <script lang="ts">
-	// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// One line per account: how long since its last statement was read in, and
 	// whether that is longer than this account's own rhythm allows. The
 	// threshold is per account and lives in $lib/statements/cadence — a current

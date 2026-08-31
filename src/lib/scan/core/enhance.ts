@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Warp, then enhance.
 //
 // Every allocation goes through the arena. One page here is roughly 118 MB of

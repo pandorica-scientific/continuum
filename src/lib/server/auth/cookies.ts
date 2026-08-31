@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // One place decides whether an auth cookie locks itself to HTTPS. Home servers
 // commonly run plain HTTP on the LAN; when the instance is served over HTTPS
 // (reverse proxy, Tailscale cert) every auth cookie follows automatically.

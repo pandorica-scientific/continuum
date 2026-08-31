@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { SecuredPropertyInput } from '$lib/server/loans/mutations';
 
 /** Preserve blank shares as automatic allocation and every nonblank share for

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Amortisation with fixation periods. Pure functions over minor units so the
 // bookkeeping rule — interest is booked per fixation period, a re-fix never
 // rewrites history — is enforceable by unit tests.

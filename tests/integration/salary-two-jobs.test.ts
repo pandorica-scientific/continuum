@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // A month worked at two jobs.
 //
 // A salary entry was one row per person per month, so a second employer's

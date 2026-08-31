@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // The pages of one scan, in the order they will appear in the document.
 //
 // One PDF means the order of the tiles IS the order of the pages — getting it
