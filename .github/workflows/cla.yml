@@ -1,0 +1,68 @@
+# Contributions are accepted under a Contributor Licence Agreement, and this is
+# what makes that a fact rather than a sentence in CONTRIBUTING.md.
+#
+# It asks for AFFIRMATIVE agreement — the contributor writes the sentence below
+# as a comment on their first pull request — rather than inferring it from the
+# act of opening one. That distinction is the whole value of the thing. An
+# agreement nobody was shown and nobody accepted ("by contributing you agree…")
+# is the weakest form there is, and since the point of this CLA is to underwrite
+# commercial licensing, a weak one is worse than none: it produces confidence
+# without protection.
+#
+# Automatic where it can be. Signatures are recorded once per person, in
+# signatures/cla.json on this branch, and every later pull request from that
+# account passes without asking again. Nobody has to chase anyone.
+name: CLA
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check or record the contributor's agreement
+        # Skipped for the maintainer's own pull requests: the copyright holder
+        # has nothing to license to themselves.
+        if: |
+          (github.event.issue.pull_request
+            && contains(github.event.comment.body, 'I have read the Continuum Contributor Licence Agreement'))
+          || github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          branch: main
+          path-to-document: https://github.com/pandorica-scientific/continuum/blob/main/CLA.md
+          path-to-signatures: signatures/cla.json
+
+          # The exact sentence a contributor writes to agree, and the one that
+          # gets recorded against their account.
+          custom-pr-sign-comment: 'I have read the Continuum Contributor Licence Agreement and I agree to it.'
+          custom-notsigned-prcomment: |
+            Thank you for this.
+
+            Continuum accepts contributions under a [Contributor Licence Agreement](https://github.com/pandorica-scientific/continuum/blob/main/CLA.md). Please read it and, if you agree, leave a comment on this pull request containing exactly:
+
+            > I have read the Continuum Contributor Licence Agreement and I agree to it.
+
+            **The short version:** you keep the copyright in what you write and may reuse it anywhere, on any terms. What you grant is permission to license your contribution onward, including under terms other than the AGPL — which is what lets Continuum ship native applications and offer commercial licences without having to find every past contributor for consent.
+
+            You only do this once. Later pull requests pass without asking.
+
+            If you contribute as part of your job, your employer probably owns the work, and the [entity agreement](https://github.com/pandorica-scientific/continuum/blob/main/CLA-ENTITY.md) is the right form instead — say so here and we will sort it out.
+
+            If you would rather not agree, that is a fair choice and no hard feelings. Bug reports, reproductions and design discussion need no agreement at all.
+          custom-allsigned-prcomment: 'Agreement on file — thank you. Later pull requests will not ask again.'
+
+          # The maintainer holds the copyright; bots author nothing.
+          allowlist: RRobert92,dependabot[bot],github-actions[bot]
