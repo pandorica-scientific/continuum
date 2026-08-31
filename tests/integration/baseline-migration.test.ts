@@ -331,7 +331,10 @@ describe('the boot guard', () => {
 
 	it('refuses to serve one the release notes were never run against', async () => {
 		// Exactly what an in-place upgrade leaves behind: the schema this release
-		// needs, minus the table the migrator never created.
+		// needs, minus the tables the migrator never created. Both by name —
+		// `cascade` on the parent drops the child's foreign key and leaves the
+		// child standing, which would leave the probe's own table in place.
+		await harness.sql`drop table document_identity_number`;
 		await harness.sql`drop table document_identity`;
 		try {
 			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/release notes/i);
@@ -349,6 +352,14 @@ describe('the boot guard', () => {
 						check (kind in ('passport', 'id_card', 'driving_licence', 'residence_permit', 'other')),
 					constraint document_identity_country_check
 						check (country is null or country ~ '^[A-Z]{2}$')
+				)`;
+			await harness.sql`
+				create table if not exists document_identity_number (
+					document_id uuid not null references document_identity(document_id) on delete cascade,
+					ordinal integer not null,
+					label text not null,
+					value text not null,
+					primary key (document_id, ordinal)
 				)`;
 		}
 	});

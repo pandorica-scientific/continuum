@@ -1012,6 +1012,65 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.document_identity_number": {
+      "name": "document_identity_number",
+      "schema": "",
+      "columns": {
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "document_identity_number_document_id_document_identity_document_id_fk": {
+          "name": "document_identity_number_document_id_document_identity_document_id_fk",
+          "tableFrom": "document_identity_number",
+          "tableTo": "document_identity",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "document_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "document_identity_number_document_id_ordinal_pk": {
+          "name": "document_identity_number_document_id_ordinal_pk",
+          "columns": [
+            "document_id",
+            "ordinal"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.document_text_chunk": {
       "name": "document_text_chunk",
       "schema": "",

@@ -32,10 +32,34 @@
 
 	let { data, form } = $props();
 
-	// A fresh load is a fresh session: the queue is whatever is in the Inbox now,
-	// and a document filed from another tab is simply no longer offered. Writable
-	// because Skip and File & next advance it between loads.
-	let session = $derived<ReviewSession>(startSession(data.waiting.map((d) => d.id)));
+	/**
+	 * What a filing leaves behind for the next document.
+	 *
+	 * The queue itself comes from the server on every load — a document filed in
+	 * another tab is simply no longer offered — but the shelf and type carried
+	 * forward must not: rebuilding the whole session from `data.waiting` after
+	 * each filing reset them, so "kept" could never appear on the second
+	 * document of a folder import, which is the case it exists for.
+	 */
+	let carried = $state<Pick<ReviewSession, 'sticky' | 'kept' | 'suggested'>>({
+		sticky: {},
+		kept: [],
+		suggested: []
+	});
+
+	/** Keep only the three fields that outlive a load; the queue is the server's. */
+	function remember(next: ReviewSession) {
+		carried = { sticky: next.sticky, kept: next.kept, suggested: next.suggested };
+	}
+
+	// The queue is whatever is in the Inbox now; everything else is carried.
+	// Writable because Skip advances it between loads.
+	let session = $derived<ReviewSession>({
+		...startSession(data.waiting.map((d) => d.id)),
+		sticky: carried.sticky,
+		kept: carried.kept,
+		suggested: carried.suggested
+	});
 
 	const current = $derived(data.waiting.find((d) => d.id === currentId(session)) ?? null);
 	const kept = $derived(keptFields(session));
@@ -91,11 +115,23 @@
 			class="fields"
 			method="POST"
 			action="?/file"
-			use:enhance={() =>
-				async ({ update }) => {
+			use:enhance={({ formData }) => {
+				// Read off the form rather than off `session.sticky`: what carries
+				// forward has to be what was filed, and the two differ the moment
+				// somebody changes a field without the change reaching state.
+				const filed = {
+					shelfKey: String(formData.get('shelf') ?? ''),
+					type: String(formData.get('type') ?? '')
+				};
+				return async ({ result, update }) => {
 					await update({ reset: false });
+					// Only a filing that happened advances anything. A refusal — a
+					// document somebody else deleted, a shelf that has gone — leaves
+					// the reviewer on the document they were looking at.
+					if (result.type === 'success') remember(fileAndNext(session, filed));
 					await invalidateAll();
-				}}
+				};
+			}}
 		>
 			<input type="hidden" name="id" value={current.id} />
 
@@ -116,7 +152,7 @@
 						// question too — unless that question already has an answer
 						// somebody gave, which a proposal never overwrites.
 						const key = e.currentTarget.value;
-						session = proposeType(setField(session, 'shelf', key), shelfProfile(key)?.expects[0]);
+						remember(proposeType(setField(session, 'shelf', key), shelfProfile(key)?.expects[0]));
 					}}
 				>
 					{#each data.shelves as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
@@ -137,7 +173,7 @@
 				<select
 					name="type"
 					value={session.sticky.type ?? 'other'}
-					onchange={(e) => (session = setField(session, 'type', e.currentTarget.value))}
+					onchange={(e) => remember(setField(session, 'type', e.currentTarget.value))}
 				>
 					{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
 						<option value={code}>{label}</option>
@@ -216,13 +252,12 @@
 				<button type="button" class="btn skip" onclick={() => (session = skip(session))}>
 					Skip
 				</button>
-				<button
-					type="submit"
-					class="btn btn-primary file"
-					onclick={() => (session = fileAndNext(session, {}))}
-				>
-					File &amp; next →
-				</button>
+				<!-- No `onclick`. Advancing the queue here moved the document out of
+				     `current` before the browser had dispatched the submit, which
+				     unmounted the form it was submitting: the screen said "Inbox is
+				     clear" and the server was never asked to file anything. The
+				     queue moves on when the filing comes back, below. -->
+				<button type="submit" class="btn btn-primary file">File &amp; next →</button>
 			</div>
 			<div class="hints">
 				<span class="mono counter">{counterLabel(session)}</span>

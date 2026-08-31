@@ -167,6 +167,19 @@ CREATE TABLE "document_identity" (
 	"issuer" text
 );
 --> statement-breakpoint
+-- The other numbers on an identity document, named by whoever typed them: a
+-- residence permit with a card number and a personal number, a licence with a
+-- national identifier beside it. Rows rather than more columns, because there
+-- is no ceiling to guess, and the label is theirs because numbering schemes
+-- differ by country and by document.
+CREATE TABLE "document_identity_number" (
+	"document_id" uuid NOT NULL,
+	"ordinal" integer NOT NULL,
+	"label" text NOT NULL,
+	"value" text NOT NULL,
+	CONSTRAINT "document_identity_number_document_id_ordinal_pk" PRIMARY KEY("document_id","ordinal")
+);
+--> statement-breakpoint
 -- One PDF page, one image, or a ≤100 KB slice of a plain-text file. Every
 -- content index lives here and nowhere else.
 CREATE TABLE "document_text_chunk" (
@@ -626,6 +639,7 @@ ALTER TABLE "webauthn_challenge" ADD CONSTRAINT "webauthn_challenge_person_id_pe
 ALTER TABLE "document" ADD CONSTRAINT "document_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_identity" ADD CONSTRAINT "document_identity_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "document_identity_number" ADD CONSTRAINT "document_identity_number_document_id_document_identity_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_identity"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

@@ -13,7 +13,7 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { documentIdentity } from '$lib/server/db/schema';
+import { documentIdentity, documentIdentityNumber } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { NO_SUCH_DOCUMENT } from '$lib/server/documents/visibility';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
@@ -85,12 +85,15 @@ beforeEach(async () => {
 type ActionResult = { status?: number; data?: { message?: string }; ok?: boolean };
 
 async function save(
-	fields: Record<string, string>,
+	fields: Record<string, string | string[]>,
 	locals: typeof asAdmin | typeof asMember = asAdmin
 ): Promise<ActionResult> {
 	const { actions } = await import('../../src/routes/(app)/documents/+page.server');
 	const form = new FormData();
-	for (const [key, value] of Object.entries(fields)) form.set(key, value);
+	for (const [key, value] of Object.entries(fields)) {
+		if (Array.isArray(value)) for (const one of value) form.append(key, one);
+		else form.set(key, value);
+	}
 	const request = new Request('http://localhost/documents?/updateDocument', {
 		method: 'POST',
 		body: form
@@ -204,5 +207,87 @@ describe('the identity row', () => {
 		await harness.sql`delete from document where id = ${PASSPORT}`;
 
 		expect(await identityOf(PASSPORT)).toBeUndefined();
+	});
+});
+
+const numbersOf = async (id: string) =>
+	testDb
+		.select({
+			ordinal: documentIdentityNumber.ordinal,
+			label: documentIdentityNumber.label,
+			value: documentIdentityNumber.value
+		})
+		.from(documentIdentityNumber)
+		.where(eq(documentIdentityNumber.documentId, id))
+		.orderBy(documentIdentityNumber.ordinal);
+
+describe('the other numbers a document carries', () => {
+	it('keeps as many as were typed, in the order they were typed', async () => {
+		// A residence permit really does carry a card number and a personal
+		// number, and there is no ceiling worth guessing at.
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Card number', 'Personal number'],
+			identityExtraValue: ['CZ-8891', '905612/3344']
+		});
+
+		expect(await numbersOf(PASSPORT)).toEqual([
+			{ ordinal: 0, label: 'Card number', value: 'CZ-8891' },
+			{ ordinal: 1, label: 'Personal number', value: '905612/3344' }
+		]);
+	});
+
+	it('replaces the set rather than adding to it', async () => {
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Card number', 'Personal number'],
+			identityExtraValue: ['CZ-8891', '905612/3344']
+		});
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Personal number'],
+			identityExtraValue: ['905612/3344']
+		});
+
+		// Re-numbered from the form's order, so removing the first of two leaves
+		// 0 rather than a gap the next insert would collide with.
+		expect(await numbersOf(PASSPORT)).toEqual([
+			{ ordinal: 0, label: 'Personal number', value: '905612/3344' }
+		]);
+	});
+
+	it('drops a row with only one half filled in', async () => {
+		// A label naming nothing, or a number nobody can read back.
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Card number', '', 'Personal number'],
+			identityExtraValue: ['CZ-8891', '77', '']
+		});
+
+		expect(await numbersOf(PASSPORT)).toEqual([
+			{ ordinal: 0, label: 'Card number', value: 'CZ-8891' }
+		]);
+	});
+
+	it('clears them when every row is emptied', async () => {
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Card number'],
+			identityExtraValue: ['CZ-8891']
+		});
+		await save({ ...PASSPORT_FIELDS, identityExtraLabel: [''], identityExtraValue: [''] });
+
+		expect(await numbersOf(PASSPORT)).toEqual([]);
+	});
+
+	it('goes when the document goes', async () => {
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Card number'],
+			identityExtraValue: ['CZ-8891']
+		});
+		await harness.sql`delete from document where id = ${PASSPORT}`;
+
+		expect(await numbersOf(PASSPORT)).toEqual([]);
 	});
 });

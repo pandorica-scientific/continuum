@@ -15,9 +15,16 @@
  * not throw away five things somebody typed.
  */
 import { isCountryCode } from '$lib/countries';
+import { eq } from 'drizzle-orm';
 import { asEnumValue, type EnumValue } from '$lib/enums';
 import { db, type Queryable } from '$lib/server/db';
-import { documentIdentity } from '$lib/server/db/schema';
+import { documentIdentity, documentIdentityNumber } from '$lib/server/db/schema';
+
+/** One more number the document carries, named by whoever typed it. */
+export interface IdentityNumber {
+	label: string;
+	value: string;
+}
 
 export interface IdentityFields {
 	kind: EnumValue<'document_identity.kind'>;
@@ -52,6 +59,26 @@ export function readIdentityFields(form: FormData): IdentityFields {
 }
 
 /**
+ * The extra numbers, in the order the form posted them.
+ *
+ * A row survives only if BOTH halves were filled: a label with no number names
+ * nothing and a number with no label cannot be read back. An emptied row is
+ * how one is deleted, which is why the write below replaces the set rather
+ * than merging into it.
+ */
+export function readIdentityNumbers(form: FormData): IdentityNumber[] {
+	const labels = form.getAll('identityExtraLabel').map((v) => String(v).trim());
+	const values = form.getAll('identityExtraValue').map((v) => String(v).trim());
+	const rows: IdentityNumber[] = [];
+	for (let i = 0; i < Math.max(labels.length, values.length); i++) {
+		const label = labels[i] ?? '';
+		const value = values[i] ?? '';
+		if (label && value) rows.push({ label, value });
+	}
+	return rows;
+}
+
+/**
  * Write the fields, whether or not the document had them before.
  *
  * An upsert rather than an insert-or-update pair: the caller is inside the same
@@ -67,4 +94,40 @@ export async function upsertIdentity(
 		.insert(documentIdentity)
 		.values({ documentId, ...fields })
 		.onConflictDoUpdate({ target: documentIdentity.documentId, set: fields });
+}
+
+/**
+ * Replace the extra numbers with exactly what the form holds.
+ *
+ * A replacement, not a merge: the form shows every row the document has, so
+ * what comes back IS the intended set and a row that is missing from it was
+ * cleared on purpose. The same rule the tags field follows two screens over.
+ *
+ * Ordinals are re-issued from the form's order, so removing the first of three
+ * leaves 0 and 1 rather than a gap the next insert would collide with.
+ */
+export async function replaceIdentityNumbers(
+	documentId: string,
+	numbers: IdentityNumber[],
+	handle: Queryable = db
+): Promise<void> {
+	await handle
+		.delete(documentIdentityNumber)
+		.where(eq(documentIdentityNumber.documentId, documentId));
+	if (numbers.length === 0) return;
+	await handle
+		.insert(documentIdentityNumber)
+		.values(numbers.map((row, ordinal) => ({ documentId, ordinal, ...row })));
+}
+
+/** A document's extra numbers, in the order they were typed. */
+export async function identityNumbersFor(
+	documentId: string,
+	handle: Queryable = db
+): Promise<IdentityNumber[]> {
+	return handle
+		.select({ label: documentIdentityNumber.label, value: documentIdentityNumber.value })
+		.from(documentIdentityNumber)
+		.where(eq(documentIdentityNumber.documentId, documentId))
+		.orderBy(documentIdentityNumber.ordinal);
 }

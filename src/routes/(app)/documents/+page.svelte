@@ -175,6 +175,15 @@
 	    Identity fields are on screen — `data.selected.type` is what was saved. */
 	let editType = $state('other');
 	let numberShown = $state(false);
+	/**
+	 * The extra-number rows the form is currently showing.
+	 *
+	 * Local state rather than `$derived`, because the form is being edited: rows
+	 * are added and removed before anything is saved, and a derived list would
+	 * discard them on the next load. Seeded from the record whenever the
+	 * inspector opens on a different document.
+	 */
+	let extraNumbers = $state<{ label: string; value: string }[]>([]);
 	/** The identity fields of the open document, whatever its type says now. */
 	const identity = $derived(data.selected?.identityDetail ?? null);
 	/**
@@ -204,6 +213,7 @@
 		// A number revealed on one document must not be revealed on the next.
 		numberShown = false;
 		editType = selected?.type ?? 'other';
+		extraNumbers = (selected?.identityNumbers ?? []).map((n) => ({ ...n }));
 	});
 
 	const today = new Date().toISOString().slice(0, 10);
@@ -1223,9 +1233,21 @@
 			     Edit. Download stays in the menu for a person who wants the bytes. -->
 			{#if !editing}
 				<div class="ins-primary">
-					<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
-						Edit
-					</button>
+					{#if d.shelfKey === 'inbox'}
+						<!-- Unfiled paper opened from the Inbox: the one thing anybody
+						     wants here is to file it, and sending them back to Everything
+						     to press Review inbox is three navigations to reach a shelf
+						     picker that is already two fields down this panel. Same edit
+						     form, opened at the question being asked. -->
+						<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
+							File it
+						</button>
+						<a class="btn" href="/documents/review">Review inbox →</a>
+					{:else}
+						<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
+							Edit
+						</button>
+					{/if}
 				</div>
 			{/if}
 
@@ -1324,6 +1346,44 @@
 									<span class="quiet">Issuer</span>
 									<input name="identityIssuer" value={identity?.issuer ?? ''} />
 								</label>
+							</div>
+
+							<!-- One document really can carry several numbers — a residence
+							     permit with a card number and a personal number, a licence
+							     with a national identifier beside it — and there is no
+							     sensible ceiling to guess at, so the household adds as many
+							     as it has. Clearing both halves of a row is how one goes:
+							     Save writes exactly what the form holds. -->
+							<div class="id-extra">
+								{#each extraNumbers as extra, i (i)}
+									<div class="id-extra-row">
+										<input
+											name="identityExtraLabel"
+											placeholder="What it is called"
+											value={extra.label}
+										/>
+										<input
+											class="mono"
+											name="identityExtraValue"
+											placeholder="Number"
+											value={extra.value}
+										/>
+										<button
+											type="button"
+											class="chip-x"
+											aria-label="Remove {extra.label || 'this number'}"
+											onclick={() => (extraNumbers = extraNumbers.filter((_, at) => at !== i))}
+											>✕</button
+										>
+									</div>
+								{/each}
+								<button
+									type="button"
+									class="link id-add"
+									onclick={() => (extraNumbers = [...extraNumbers, { label: '', value: '' }])}
+								>
+									+ Add another number
+								</button>
 							</div>
 						</div>
 					{/if}
@@ -1434,7 +1494,9 @@
 										<span>{countryName(identity.country)}</span>
 										<span class="quiet">·</span>
 									{/if}
-									<span>{identityKindLabel(identity?.kind)}</span>
+									<!-- The type already says "Identity document" two rows up, so
+									     a kind of `other` adds nothing here and is left out. -->
+									<span>{identityKindLabel(identity?.kind) ?? typeLabel(d.type)}</span>
 								</span>
 								{#if identity?.number}
 									<!-- Masked until asked for. The inspector is the only place
@@ -1449,6 +1511,19 @@
 										{numberShown ? identity.number : '•'.repeat(identity.number.length)}
 									</button>
 								{/if}
+								{#each data.selected?.identityNumbers ?? [] as extra (extra.label + extra.value)}
+									<span class="id-line">
+										<span class="quiet id-sub">{extra.label}</span>
+										<button
+											type="button"
+											class="id-number mono"
+											aria-label={numberShown ? 'Hide document number' : 'Show document number'}
+											onclick={() => (numberShown = !numberShown)}
+										>
+											{numberShown ? extra.value : '•'.repeat(extra.value.length)}
+										</button>
+									</span>
+								{/each}
 								{#if identity?.issuedOn}
 									<span class="quiet id-sub">
 										Issued <span class="mono">{readableDate(identity.issuedOn)}</span>
@@ -2506,6 +2581,24 @@
 	}
 	.id-field.wide {
 		grid-column: 1 / -1;
+	}
+	.id-extra {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-top: var(--space-4);
+	}
+	/* Name and number on one line, with the way to remove it at the end: the
+	   pair is one fact, and stacking them would read as two. */
+	.id-extra-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.id-add {
+		align-self: flex-start;
+		font-size: var(--text-xs);
 	}
 	.id-read {
 		flex-direction: column;

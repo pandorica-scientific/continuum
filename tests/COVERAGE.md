@@ -9,8 +9,8 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2625 static tests across 247 files, covering 205 modules.
-146 modules under `src/lib` are imported by no test.
+2635 static tests across 248 files, covering 206 modules.
+147 modules under `src/lib` are imported by no test.
 
 ## Modules
 
@@ -132,7 +132,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/countries.ts`
 
-- `tests/unit/countries.test.ts` (unit, 8 tests)
+- `tests/unit/countries.test.ts` (unit, 11 tests)
 
 ### `src/lib/document-art.ts`
 
@@ -144,7 +144,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/documents-layouts.ts`
 
-- `tests/unit/documents-layouts.test.ts` (unit, 7 tests)
+- `tests/unit/documents-layouts.test.ts` (unit, 5 tests)
 
 ### `src/lib/documents-view.ts`
 
@@ -319,6 +319,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/unit/scan-exif.test.ts` (unit, 36 tests)
 - `tests/unit/scan-upload-path.test.ts` (unit, 10 tests)
+- `tests/unit/uploads.test.ts` (unit, 3 tests)
 
 ### `src/lib/scan/core/arena.ts`
 
@@ -570,13 +571,13 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/contact-documents.test.ts` (integration, 6 tests)
 - `tests/integration/deadlines.test.ts` (integration, 12 tests)
 - `tests/integration/demo-seed.test.ts` (integration, 17 tests)
-- `tests/integration/document-identity.test.ts` (integration, 9 tests)
+- `tests/integration/document-identity.test.ts` (integration, 14 tests)
 - `tests/integration/document-lifecycle.test.ts` (integration, 17 tests)
 - `tests/integration/document-links-preserved.test.ts` (integration, 13 tests)
 - `tests/integration/document-search.test.ts` (integration, 17 tests)
 - `tests/integration/document-targets.test.ts` (integration, 42 tests)
 - `tests/integration/document-visibility.test.ts` (integration, 5 tests)
-- `tests/integration/documents-load.test.ts` (integration, 18 tests)
+- `tests/integration/documents-load.test.ts` (integration, 19 tests)
 - `tests/integration/domain-atomicity.test.ts` (integration, 28 tests)
 - `tests/integration/extract-bounds.test.ts` (integration, 4 tests)
 - `tests/integration/extract-enqueue-writers.test.ts` (integration, 4 tests)
@@ -660,12 +661,12 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/server/documents/shelves.ts`
 
 - `tests/integration/briefing-documents.test.ts` (integration, 8 tests)
-- `tests/integration/document-identity.test.ts` (integration, 9 tests)
+- `tests/integration/document-identity.test.ts` (integration, 14 tests)
 - `tests/integration/document-lifecycle.test.ts` (integration, 17 tests)
 - `tests/integration/document-search.test.ts` (integration, 17 tests)
 - `tests/integration/document-targets.test.ts` (integration, 42 tests)
 - `tests/integration/document-visibility.test.ts` (integration, 5 tests)
-- `tests/integration/documents-load.test.ts` (integration, 18 tests)
+- `tests/integration/documents-load.test.ts` (integration, 19 tests)
 - `tests/integration/domain-atomicity.test.ts` (integration, 28 tests)
 - `tests/integration/overview-paper.test.ts` (integration, 3 tests)
 - `tests/integration/restricted-write-paths.test.ts` (integration, 11 tests)
@@ -693,7 +694,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/archive-scope.test.ts` (integration, 5 tests)
 - `tests/integration/briefing-documents.test.ts` (integration, 8 tests)
 - `tests/integration/demo-seed.test.ts` (integration, 17 tests)
-- `tests/integration/document-identity.test.ts` (integration, 9 tests)
+- `tests/integration/document-identity.test.ts` (integration, 14 tests)
 - `tests/integration/document-visibility.test.ts` (integration, 5 tests)
 - `tests/integration/restricted-write-paths.test.ts` (integration, 11 tests)
 
@@ -1100,6 +1101,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/unit/ui-state.test.ts` (unit, 7 tests)
 
+### `src/lib/uploads.ts`
+
+- `tests/unit/uploads.test.ts` (unit, 3 tests)
+
 ## Modules imported by no test
 
 - `src/lib/actions/file-preview.ts`
@@ -1121,6 +1126,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/components/DocumentsCard.svelte`
 - `src/lib/components/EmojiPicker.svelte`
 - `src/lib/components/ErrorScreen.svelte`
+- `src/lib/components/EuMark.svelte`
 - `src/lib/components/EventDialog.svelte`
 - `src/lib/components/Eyebrow.svelte`
 - `src/lib/components/Field.svelte`

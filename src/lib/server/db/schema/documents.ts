@@ -157,6 +157,32 @@ export const documentIdentity = pgTable('document_identity', {
 });
 
 /**
+ * The other numbers on an identity document, named by whoever typed them.
+ *
+ * One document really can carry several: a residence permit with a card number
+ * and a personal number, a driving licence with a licence number beside a
+ * national identifier. Rows rather than more columns, because there is no
+ * ceiling to guess — a fifth column would be right until the household files
+ * something with six.
+ *
+ * The LABEL is theirs too. Numbering schemes differ by country and by document
+ * and a fixed list of names would be wrong somewhere on the first day.
+ */
+export const documentIdentityNumber = pgTable(
+	'document_identity_number',
+	{
+		documentId: uuid('document_id')
+			.notNull()
+			.references(() => documentIdentity.documentId, { onDelete: 'cascade' }),
+		/** Position in the form, which is the order they were typed in. */
+		ordinal: integer('ordinal').notNull(),
+		label: text('label').notNull(),
+		value: text('value').notNull()
+	},
+	(table) => [primaryKey({ columns: [table.documentId, table.ordinal] })]
+);
+
+/**
  * One PDF page, one image, or a ≤100 KB slice of a plain-text file.
  *
  * Every content index lives here and nowhere else. The two GIN indexes are

@@ -87,7 +87,12 @@
 	 * still names itself.
 	 */
 	function cardTitle(row: LayoutRow): string {
-		return row.type === 'id_document' ? identityKindLabel(row.identity?.kind) : typeLabel(row.type);
+		// The kind when it names one — Passport, Driving licence. An identity
+		// document whose kind is `other` falls back to its type, which reads
+		// "Identity document": true, and better on a card than the word the
+		// picker uses for that same choice.
+		const kind = row.type === 'id_document' ? identityKindLabel(row.identity?.kind) : null;
+		return kind ?? typeLabel(row.type);
 	}
 
 	/**

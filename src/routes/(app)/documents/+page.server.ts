@@ -29,7 +29,13 @@ import {
 } from '$lib/server/db/schema';
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
-import { readIdentityFields, upsertIdentity } from '$lib/server/documents/identity';
+import {
+	identityNumbersFor,
+	readIdentityFields,
+	readIdentityNumbers,
+	replaceIdentityNumbers,
+	upsertIdentity
+} from '$lib/server/documents/identity';
 import {
 	removeDocument,
 	salaryGuardedDocuments,
@@ -526,6 +532,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					// `id_document` keeps its fields, and the screen decides whether
 					// to draw them from the type it is currently showing.
 					identityDetail: identityByDoc.get(selected.id) ?? null,
+					// Inspector-only, like the number they sit beside: a card face
+					// never shows one, so no row on the shelf needs to carry them.
+					identityNumbers: await identityNumbersFor(selected.id),
 					links: targetsByDoc.get(selected.id) ?? [],
 					sensitivity: selected.sensitivity
 				}
@@ -756,6 +765,10 @@ export const actions: Actions = {
 			// identity document any more" means here.
 			if (type === 'id_document') {
 				await upsertIdentity(id, readIdentityFields(form), tx);
+				// After the upsert, never before: the rows hang off the identity
+				// record, so writing them first would have nothing to hang from on a
+				// document being given its identity fields for the first time.
+				await replaceIdentityNumbers(id, readIdentityNumbers(form), tx);
 			}
 
 			// Tags are replaced with what the form holds: the field shows every tag

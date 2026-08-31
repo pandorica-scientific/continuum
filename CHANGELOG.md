@@ -12,12 +12,15 @@
 - 🎨 **Thirty countries of card artwork, in four kinds** — a card face is drawn art and never the scan, because seven photographs of seven cards on white A4 look identical at card size, which is the failure a wallet exists to avoid, and a country nobody has drawn yet still gets a card
 - 👤 **Each wallet section is the person's own tag, in the colour they carry everywhere else** — the same hue as on Salary and Tax, because a colour that changes from screen to screen is decoration rather than a tag
 - 🇪🇺 **A card from a member state carries the code inside the Union's ring** — twelve stars and `CZ` in the middle, the way an EU passport, licence and number plate already write it, with everywhere else keeping the plain two letters beside its flag
+- 🔢 **A document can carry as many numbers as it actually has** — a residence permit with a card number beside a personal number, each named by whoever typed it, added a row at a time under the issuer and gone again when the row is cleared
 - 🧾 **An identity document can say what is on its face** — kind, country, number, issued on and issuer, all optional and all typed by hand, with the number shown only in the inspector and masked until it is clicked
 - 📇 **Every shelf a fresh install ships now records what it is for** — what it expects, what organises it and how it draws, in one place the empty state, the type filter and the inbox review all read from
 
 ### 🐛 Fixed
 
 - 📷 **Documents can be scanned and photographed again** — every upload on the screen offered a file browser and nothing else, because the capture buttons are decided from what an upload says it accepts and these four said nothing; a phone can now scan straight into Add document, Attach file and Replace file, and the list the picker offers is the same one the server will actually store
+- 📥 **Filing from Inbox review actually files** — the screen said "Inbox is clear" while the document sat exactly where it started, because the queue advanced before the browser had sent the form and unmounted the form it was sending; the shelf and type carried forward now survive the filing too, which is what `kept` was always meant to mean
+- 🗂️ **A document opened from the Inbox offers to file itself** — the same edit form, one press away, rather than a trip back through Everything to reach Review inbox
 - 🖼️ **The inspector's preview keeps its height instead of being squeezed** — the panel is a column bounded by the viewport, so on a short screen the preview gave up its space first and a photograph became an 87-pixel sliver that read as a failed load; the sections scroll now, as they were always meant to
 
 ### 🔧 Changed
@@ -44,9 +47,17 @@ create table if not exists document_identity (
   constraint document_identity_country_check
     check (country is null or country ~ '^[A-Z]{2}$')
 );
+
+create table if not exists document_identity_number (
+  document_id uuid not null references document_identity(document_id) on delete cascade,
+  ordinal integer not null,
+  label text not null,
+  value text not null,
+  primary key (document_id, ordinal)
+);
 ```
 
-- 🛑 **The boot check now asks for `document_identity.document_id`** — the column it probed before belongs to the release before this one, so an instance that pulled the image without running the statement above is refused at start with the reason rather than failing later at somebody's passport
+- 🛑 **The boot check now asks for `document_identity_number.document_id`** — the column it probed before belongs to the release before this one, so an instance that pulled the image without running the statement above is refused at start with the reason rather than failing later at somebody's passport
 
 ## 0.7.3 — 2026-08-30
 

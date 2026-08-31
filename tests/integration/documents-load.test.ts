@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
-import { documentLink, entity, subject } from '$lib/server/db/schema';
+import { document, documentLink, entity, subject } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeAccount, makeDocument, makeLoan, makePerson, makeTransaction } from './fixtures';
@@ -403,5 +403,47 @@ describe('the review screen', () => {
 		// A list of every transaction is a list nobody can read by eye. They reach
 		// a document from their own screen instead.
 		expect(data.targets.some((t) => t.kind === 'transaction')).toBe(false);
+	});
+
+	it('takes a document off the Inbox when it is filed', async () => {
+		// The screen once said "Inbox is clear" while the document sat exactly
+		// where it started: the button advanced the queue before the browser had
+		// dispatched the submit, which unmounted the form mid-submission. The
+		// client half of that cannot be tested here — there is no browser suite —
+		// but this holds the half that has to be true for the fix to mean
+		// anything: a filing moves the paper.
+		const id = uuidv7();
+		await makeDocument(testDb, {
+			id,
+			name: 'Something unfiled',
+			shelfKey: 'inbox',
+			type: 'other',
+			addedOn: '2026-01-01'
+		});
+
+		const { actions } = await import('../../src/routes/(app)/documents/review/+page.server');
+		const form = new FormData();
+		form.set('id', id);
+		form.set('name', 'A boiler service');
+		form.set('shelf', 'household');
+		form.set('type', 'invoice');
+		const request = new Request('http://localhost/documents/review?/file', {
+			method: 'POST',
+			body: form
+		});
+		const result = (await (actions.file as (event: unknown) => Promise<unknown>)({
+			request,
+			locals: asAdmin
+		})) as { ok?: boolean };
+		expect(result.ok).toBe(true);
+
+		const [row] = await testDb
+			.select({ shelfId: document.shelfId, name: document.name, type: document.type })
+			.from(document)
+			.where(eq(document.id, id));
+		expect(row.shelfId).not.toBe(await shelfIdByKey('inbox', testDb));
+		expect(row.shelfId).toBe(await shelfIdByKey('household', testDb));
+		expect(row.name).toBe('A boiler service');
+		expect(row.type).toBe('invoice');
 	});
 });
