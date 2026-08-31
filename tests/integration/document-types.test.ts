@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { ENUMS } from '$lib/enums';
-import { TYPE_LABELS } from '$lib/documents-view';
+import { typeLabel, typeLabels, TYPE_LABELS } from '$lib/documents-view';
 import { shelfType } from '$lib/server/db/schema';
 import {
 	addDocumentType,
@@ -148,6 +148,21 @@ describe('removing a type', () => {
 
 		const left = await testDb.select().from(shelfType).where(eq(shelfType.shelfId, health));
 		expect(left.map((r) => r.type)).toEqual(['medical_record']);
+	});
+});
+
+describe('a household type in the rest of the app', () => {
+	it('heads its own group and labels its own rows', async () => {
+		// `typeLabel` falls back to the shipped labels, so a household type read
+		// through the fallback alone came out as "Other" everywhere except the
+		// picker that had just named it.
+		await addDocumentType('Vaccination book', testDb);
+		const labels = typeLabels(await listDocumentTypes(testDb));
+
+		expect(typeLabel('vaccination_book', labels)).toBe('Vaccination book');
+		expect(typeLabel('payslip', labels)).toBe('Payslip');
+		// Without the household's labels it is unknown, which is the fallback.
+		expect(typeLabel('vaccination_book')).toBe(TYPE_LABELS.other);
 	});
 });
 

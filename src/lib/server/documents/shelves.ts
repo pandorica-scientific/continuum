@@ -216,9 +216,15 @@ export async function shelfTypesByKey(
 export async function setShelfTypes(
 	shelfId: string,
 	types: DocumentTypeKey[],
-	handle: Queryable = db
+	handle: Db = db
 ): Promise<void> {
-	await handle.delete(shelfType).where(eq(shelfType.shelfId, shelfId));
-	if (types.length === 0) return;
-	await handle.insert(shelfType).values(types.map((type, ordinal) => ({ shelfId, type, ordinal })));
+	// Both halves or neither. As two loose statements, a failure between them —
+	// a type somebody else removed a moment earlier — left the shelf with an
+	// empty list rather than the one it had, which reads as data loss for what
+	// was only a refused edit.
+	await handle.transaction(async (tx) => {
+		await tx.delete(shelfType).where(eq(shelfType.shelfId, shelfId));
+		if (types.length === 0) return;
+		await tx.insert(shelfType).values(types.map((type, ordinal) => ({ shelfId, type, ordinal })));
+	});
 }

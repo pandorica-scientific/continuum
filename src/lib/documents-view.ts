@@ -247,7 +247,9 @@ function expiryBucket(doc: DocRow, today: string): { key: string; label: string 
 export function groupDocuments<T extends DocRow>(
 	docs: T[],
 	group: GroupKey,
-	today: string
+	today: string,
+	/** This household's labels, so a type it added heads its own group by name. */
+	labels: Record<string, string> = TYPE_LABELS
 ): DocGroup<T>[] {
 	if (group === 'none') return [{ key: 'all', label: '', items: docs }];
 
@@ -255,7 +257,7 @@ export function groupDocuments<T extends DocRow>(
 	for (const doc of docs) {
 		const { key, label } =
 			group === 'type'
-				? { key: doc.type, label: typeLabel(doc.type) }
+				? { key: doc.type, label: typeLabel(doc.type, labels) }
 				: group === 'entity'
 					? doc.entities.length > 0
 						? { key: doc.entities[0], label: doc.entities[0] }

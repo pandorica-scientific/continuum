@@ -151,9 +151,6 @@
 	let addingSubject = $state(false);
 	let newSubjectEmoji = $state('📁');
 
-	// Which subjects the rail draws, and how many the archive scope is keeping
-	// back — the decision itself lives in `$lib/documents-view`, where a test can
-	// reach it without a page.
 	/**
 	 * Archived subjects revealed for editing, which is not the same question as
 	 * the list's archive scope.
@@ -165,6 +162,9 @@
 	 * the list is still the control for the list.
 	 */
 	let revealArchived = $state(false);
+	// Which subjects the rail draws, and how many the archive scope is keeping
+	// back — the decision itself lives in `$lib/documents-view`, where a test can
+	// reach it without a page.
 	const subjects = $derived(railSubjects(data.subjects, data.includeArchived));
 	/** The rail's editing list, which may show archived rows the list does not. */
 	const editableSubjects = $derived(
@@ -190,10 +190,14 @@
 	}
 	/** Which shelf's type list is open, if any. */
 	let typingShelf = $state<string | null>(null);
+	/** A household type about to be removed, asked once because it cannot come back. */
+	let removingType = $state<string | null>(null);
 	let confirmingDelete = $state(false);
 	let replacing = $state(false);
-	/** The type the FORM currently holds, which is what decides whether the
-	    Identity fields are on screen — `data.selected.type` is what was saved. */
+	/**
+	 * The type the FORM currently holds, which is what decides whether the
+	 * Identity fields are on screen — `data.selected.type` is what was saved.
+	 */
 	let editType = $state('other');
 	/** The shelf the FORM holds, which decides what the type picker offers. */
 	let editShelf = $state('');
@@ -274,7 +278,12 @@
 	}
 
 	const groups = $derived(
-		groupDocuments(sortDocuments(data.rows, data.sort as SortKey), data.group as GroupKey, today)
+		groupDocuments(
+			sortDocuments(data.rows, data.sort as SortKey),
+			data.group as GroupKey,
+			today,
+			labels
+		)
 	);
 	const groupHeading = $derived(
 		{ type: 'Type', entity: 'About', year: 'Year', expiry: 'Expiry', none: '' }[
@@ -786,7 +795,7 @@
 					>
 						<option value="">Type · any</option>
 						{#each data.filterOptions.types as t (t.code)}
-							<option value={t.code}>{typeLabel(t.code)} · {t.count}</option>
+							<option value={t.code}>{typeLabel(t.code, labels)} · {t.count}</option>
 						{/each}
 					</select>
 					<select
@@ -958,6 +967,7 @@
 				<WalletView
 					rows={data.rows}
 					people={data.householdPeople}
+					{labels}
 					{today}
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
@@ -1557,9 +1567,24 @@
 						<span class="eyebrow">Filed in</span><span class="val">{d.shelfLabel}</span>
 					</div>
 					<div class="sec">
-						<span class="eyebrow">Type</span><span class="val">{typeLabel(d.type)}</span>
+						<span class="eyebrow">Type</span><span class="val">{typeLabel(d.type, labels)}</span>
 					</div>
 					{#if d.type === 'id_document'}
+						<!-- Masked until asked for, and the same button whether it is the
+						     document's own number or one of the extra ones beside it. The
+						     inspector is the only place a number appears at all, and it is
+						     read across a room as often as it is read by the person who
+						     opened it — so one reveal, one mask, written once. -->
+						{#snippet maskedNumber(value: string)}
+							<button
+								type="button"
+								class="id-number mono"
+								aria-label={numberShown ? 'Hide document number' : 'Show document number'}
+								onclick={() => (numberShown = !numberShown)}
+							>
+								{numberShown ? value : '•'.repeat(value.length)}
+							</button>
+						{/snippet}
 						<div class="sec">
 							<span class="eyebrow">Identity</span>
 							<span class="val id-read">
@@ -1571,32 +1596,15 @@
 									{/if}
 									<!-- The type already says "Identity document" two rows up, so
 									     a kind of `other` adds nothing here and is left out. -->
-									<span>{identityKindLabel(identity?.kind) ?? typeLabel(d.type)}</span>
+									<span>{identityKindLabel(identity?.kind) ?? typeLabel(d.type, labels)}</span>
 								</span>
 								{#if identity?.number}
-									<!-- Masked until asked for. The inspector is the only place
-									     the number appears at all, and it is read across a room
-									     as often as it is read by the person who opened it. -->
-									<button
-										type="button"
-										class="id-number mono"
-										aria-label={numberShown ? 'Hide document number' : 'Show document number'}
-										onclick={() => (numberShown = !numberShown)}
-									>
-										{numberShown ? identity.number : '•'.repeat(identity.number.length)}
-									</button>
+									{@render maskedNumber(identity.number)}
 								{/if}
 								{#each data.selected?.identityNumbers ?? [] as extra (extra.label + extra.value)}
 									<span class="id-line">
 										<span class="quiet id-sub">{extra.label}</span>
-										<button
-											type="button"
-											class="id-number mono"
-											aria-label={numberShown ? 'Hide document number' : 'Show document number'}
-											onclick={() => (numberShown = !numberShown)}
-										>
-											{numberShown ? extra.value : '•'.repeat(extra.value.length)}
-										</button>
+										{@render maskedNumber(extra.value)}
 									</span>
 								{/each}
 								{#if identity?.issuedOn}
@@ -1733,15 +1741,30 @@
 			</p>
 			<div class="type-picker">
 				{#each data.documentTypes as t (t.key)}
-					<label class="pick-chip">
-						<input
-							type="checkbox"
-							name="types"
-							value={t.key}
-							checked={(shelfBeingTyped.types as string[]).includes(t.key)}
-						/>
-						<span>{t.label}</span>
-					</label>
+					<span class="type-chip">
+						<label class="pick-chip">
+							<input
+								type="checkbox"
+								name="types"
+								value={t.key}
+								checked={shelfBeingTyped.types.includes(t.key)}
+							/>
+							<span>{t.label}</span>
+						</label>
+						{#if !t.builtin}
+							<!-- Only on a type this household added, and only the ✕: the
+							     seventeen the app ships are read by name by the salary
+							     tracker, the importer and the wallet, so there is nothing
+							     here to press for them. A type that is on a document is
+							     refused with the reason rather than hidden. -->
+							<button
+								type="button"
+								class="chip-x"
+								aria-label="Remove the type {t.label}"
+								onclick={() => (removingType = t.key)}>✕</button
+							>
+						{/if}
+					</span>
 				{/each}
 			</div>
 			<div class="dialog-actions">
@@ -1749,6 +1772,29 @@
 				<button type="button" class="btn" onclick={() => (typingShelf = null)}>Cancel</button>
 			</div>
 		</form>
+
+		{#if removingType}
+			<form
+				class="remove-type"
+				method="POST"
+				action="?/removeDocumentType"
+				use:enhance={() =>
+					async ({ update }) => {
+						await update();
+						removingType = null;
+					}}
+			>
+				<input type="hidden" name="key" value={removingType} />
+				<span class="quiet">
+					Remove “{data.documentTypes.find((t) => t.key === removingType)?.label}” from this
+					household?
+				</span>
+				<button type="submit" class="btn small danger">Remove</button>
+				<button type="button" class="btn small" onclick={() => (removingType = null)}>
+					Keep it
+				</button>
+			</form>
+		{/if}
 
 		<!-- Its own form, because it posts to a different action and must not
 		     carry the checkboxes above with it. A type added here is added to the
@@ -2728,6 +2774,22 @@
 		gap: var(--space-4);
 		max-height: 40vh;
 		overflow-y: auto;
+	}
+	/* The chip and its ✕ travel together, so the ✕ never wraps onto its own
+	   line away from the type it belongs to. */
+	.type-chip {
+		display: inline-flex;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.remove-type {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		margin-top: var(--space-5);
 	}
 	.new-type {
 		display: flex;

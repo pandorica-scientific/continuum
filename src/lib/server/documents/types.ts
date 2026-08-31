@@ -32,6 +32,17 @@ export async function listDocumentTypes(handle: Queryable = db): Promise<Documen
 		.orderBy(asc(documentType.sortOrder), asc(documentType.label));
 }
 
+/**
+ * Just the keys, which is all validating a posted type needs.
+ *
+ * Read fresh inside each action rather than carried down from the load: a type
+ * added in another tab a second ago is a key this one has never seen, and the
+ * only question `asDocumentType` asks is whether the key exists now.
+ */
+export async function documentTypeKeys(handle: Queryable = db): Promise<string[]> {
+	return (await listDocumentTypes(handle)).map((row) => row.key);
+}
+
 /** `Vaccination book` → `vaccination_book`, which is what a document stores. */
 export function typeKeyFor(label: string): string {
 	return label

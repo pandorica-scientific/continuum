@@ -10,7 +10,7 @@
  * to a screen.
  */
 import { uuidv7 } from 'uuidv7';
-import { asEnumValue } from '$lib/enums';
+import { asEnumValue, type DocumentTypeKey } from '$lib/enums';
 import { orderTypeOptions, shelfProfile, type ShelfLayout } from '$lib/shelf-profiles';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
@@ -44,6 +44,7 @@ import {
 import {
 	addDocumentType,
 	asDocumentType,
+	documentTypeKeys,
 	listDocumentTypes,
 	removeDocumentType
 } from '$lib/server/documents/types';
@@ -511,8 +512,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				system: true,
 				emoji: '',
 				// Everything is a view of all the shelves rather than one of them,
-				// so it has no list of its own to offer or to edit.
-				types: []
+				// so it has no list of its own to offer or to edit. Typed, so the
+				// rail's editor sees one shape of `types` across every shelf.
+				types: [] as DocumentTypeKey[]
 			},
 			...shelves.map((s) => ({
 				id: s.id,
@@ -589,10 +591,6 @@ async function readTags(form: FormData): Promise<string[]> {
 		.filter(Boolean);
 }
 
-/** The keys a posted type may be, read fresh: the household can add one. */
-const knownTypeKeys = async (): Promise<string[]> =>
-	(await listDocumentTypes()).map((row) => row.key);
-
 export const actions: Actions = {
 	/**
 	 * Capture: a file, a generated name, and the Inbox.
@@ -621,7 +619,7 @@ export const actions: Actions = {
 
 		const shared = {
 			shelfId,
-			type: asDocumentType(form.get('type'), await knownTypeKeys()),
+			type: asDocumentType(form.get('type'), await documentTypeKeys()),
 			note: String(form.get('note') ?? '').trim() || null,
 			sensitivity: asEnumValue(
 				'document.sensitivity',
@@ -703,7 +701,7 @@ export const actions: Actions = {
 			}
 		}
 
-		const type = asDocumentType(form.get('type'), await knownTypeKeys());
+		const type = asDocumentType(form.get('type'), await documentTypeKeys());
 		const wanted = form.getAll('linkIds').map(String).filter(Boolean);
 
 		// Two edits would quietly orphan the salary a month is credited with —
@@ -904,7 +902,7 @@ export const actions: Actions = {
 		// both, the same way the inspector's does. Empty stays empty — asEnumValue
 		// would otherwise fall back to the truthy 'other' and turn "no type was
 		// selected" into "retype everything to Other".
-		const normalisedType = type ? asDocumentType(type, await knownTypeKeys()) : '';
+		const normalisedType = type ? asDocumentType(type, await documentTypeKeys()) : '';
 		const sensitivity = String(form.get('sensitivity') ?? '');
 		const addTags = await readTags(form);
 		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
@@ -1006,7 +1004,7 @@ export const actions: Actions = {
 		// had added — the checkbox ticked, the form posted it, and the shelf came
 		// back without it. The foreign key would otherwise refuse the write with
 		// a constraint name nobody should have to read.
-		const known = new Set((await listDocumentTypes()).map((row) => row.key));
+		const known = new Set(await documentTypeKeys());
 		const types = form
 			.getAll('types')
 			.map(String)

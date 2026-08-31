@@ -11,7 +11,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { asEnumValue } from '$lib/enums';
-import { asDocumentType, listDocumentTypes } from '$lib/server/documents/types';
+import { asDocumentType, documentTypeKeys, listDocumentTypes } from '$lib/server/documents/types';
 import { db } from '$lib/server/db';
 import { document, documentLink, tag, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
@@ -57,8 +57,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		shelves: shelves.filter((s) => s.key !== 'inbox'),
 		// What each shelf offers first, so the picker is as short as the shelf
 		// makes it. Never a restriction: the form still accepts any type, and the
-		// screen keeps a way to reach all seventeen.
-		shelfTypes: Object.fromEntries(shelfTypesByKeyEntries(shelfTypes)),
+		// screen keeps a way to reach all seventeen. A plain object rather than
+		// the Map it arrives as, which does not survive the load's serialisation.
+		shelfTypes: Object.fromEntries(shelfTypes),
 		// Built-in and household alike; the picker draws from this, not the enum.
 		documentTypes,
 		knownTags: tags.map((t) => t.name),
@@ -103,10 +104,7 @@ export const actions: Actions = {
 				.set({
 					name: String(form.get('name') ?? '').trim() || 'Document',
 					shelfId,
-					type: asDocumentType(
-						form.get('type'),
-						(await listDocumentTypes()).map((row) => row.key)
-					),
+					type: asDocumentType(form.get('type'), await documentTypeKeys()),
 					note: String(form.get('note') ?? '').trim() || null,
 					expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
 					expiryVerb: asEnumValue(
@@ -157,8 +155,3 @@ export const actions: Actions = {
 	/** Leaving the flow is a navigation, and everything unfiled stays unfiled. */
 	leave: async () => redirect(303, '/documents')
 };
-
-/** Plain entries, because a Map does not survive the load's serialisation. */
-function shelfTypesByKeyEntries(byKey: Map<string, string[]>): [string, string[]][] {
-	return [...byKey.entries()];
-}

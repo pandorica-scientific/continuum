@@ -33,6 +33,7 @@
 	let {
 		rows,
 		people,
+		labels,
 		today,
 		selectedId,
 		onopen
@@ -40,6 +41,8 @@
 		rows: LayoutRow[];
 		/** `householdPeople` from the layout: the colour is the household's. */
 		people: { id: string; name: string; hue: string }[];
+		/** What this household calls each type, including the ones it added. */
+		labels: Record<string, string>;
 		today: string;
 		selectedId?: string;
 		onopen: (id: string) => void;
@@ -92,7 +95,7 @@
 		// "Identity document": true, and better on a card than the word the
 		// picker uses for that same choice.
 		const kind = row.type === 'id_document' ? identityKindLabel(row.identity?.kind) : null;
-		return kind ?? typeLabel(row.type);
+		return kind ?? typeLabel(row.type, labels);
 	}
 
 	/**
