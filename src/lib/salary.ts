@@ -5,6 +5,7 @@
 // same way bank statement markers are; everything person-specific is learned
 // from corrections, never hard-coded.
 
+import { escapeRegExp } from '$lib/regex';
 import { minorDigits } from '$lib/money';
 
 export interface AmountCandidate {
@@ -964,14 +965,10 @@ const CURRENCY_MARKS: Record<string, readonly string[]> = {
 	CHF: ['chf']
 };
 
-function escapeRe(text: string): string {
-	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /** How often a mark appears, as a whole word where the mark is made of letters. */
 function markHits(text: string, mark: string): number {
 	const letters = /\p{L}/u.test(mark);
-	const pattern = letters ? `(?<!\\p{L})${escapeRe(mark)}(?!\\p{L})` : escapeRe(mark);
+	const pattern = letters ? `(?<!\\p{L})${escapeRegExp(mark)}(?!\\p{L})` : escapeRegExp(mark);
 	return text.match(new RegExp(pattern, 'gu'))?.length ?? 0;
 }
 

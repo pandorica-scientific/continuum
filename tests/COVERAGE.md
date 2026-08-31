@@ -9,7 +9,7 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2686 static tests across 252 files, covering 211 modules.
+2690 static tests across 253 files, covering 212 modules.
 144 modules under `src/lib` are imported by no test.
 
 ## Modules
@@ -287,6 +287,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/property/tenancy.ts`
 
 - `tests/unit/property-tenancy.test.ts` (unit, 4 tests)
+
+### `src/lib/regex.ts`
+
+- `tests/unit/regex.test.ts` (unit, 3 tests)
 
 ### `src/lib/retire.ts`
 
@@ -837,7 +841,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/import/standards/camt053.ts`
 
-- `tests/unit/camt053.test.ts` (unit, 13 tests)
+- `tests/unit/camt053.test.ts` (unit, 14 tests)
 
 ### `src/lib/server/import/standards/mt940.ts`
 
@@ -849,7 +853,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/import/standards/xml.ts`
 
-- `tests/unit/camt053.test.ts` (unit, 13 tests)
+- `tests/unit/camt053.test.ts` (unit, 14 tests)
 
 ### `src/lib/server/import/tabular/determinacy.ts`
 
