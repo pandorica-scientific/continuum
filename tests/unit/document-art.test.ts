@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ART_KEYS, GENERIC_ART, documentArtUrl } from '$lib/document-art';
+import { ART_KEYS, GENERIC_ART, documentArtUrl } from '$lib/documents/art';
 import { ENUMS } from '$lib/enums';
 
 /**

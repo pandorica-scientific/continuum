@@ -180,7 +180,7 @@
 		color: var(--fg3);
 		cursor: pointer;
 		font-size: var(--text-sm);
-		padding: 2px 4px;
+		padding: var(--space-1) var(--space-2);
 		flex: none;
 	}
 	.t-del:hover,

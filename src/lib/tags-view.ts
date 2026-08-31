@@ -8,6 +8,19 @@
  * with its own test rather than something only reachable through a page.
  */
 
+/**
+ * Uniqueness key for a tag name: trimmed, lowercased, inner whitespace collapsed.
+ *
+ * Client-side too, and that is the whole reason it lives here. `Renovation` and
+ * `renovation` are one tag, and three places needed to agree on that: the server
+ * when it writes, the field when it filters what it offers, and the hue picker
+ * when it colours. Each had its own copy of the same three calls, and a fold
+ * that differs by a hair does not error — it silently makes two tags out of one.
+ */
+export function foldTagName(raw: string): string {
+	return raw.trim().toLowerCase().replace(/\s+/gu, ' ');
+}
+
 interface TagReach {
 	/** Documents, properties and loans — exactly what the item list shows. */
 	tagged: number;

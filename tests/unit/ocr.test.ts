@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ocrAvailable, ocrPdf, renderPdfPages } from '$lib/server/import/ocr';
+import { ocrAvailable, renderPdfPages } from '$lib/server/ocr';
+import { ocrPdf } from '$lib/server/import/ocr';
 import { gridsFromRhythm } from '$lib/server/import/tabular/rhythm';
 import { chooseGrid, detectRegions } from '$lib/server/import/tabular/regions';
 import { readTabular } from '$lib/server/import/tabular/statement';

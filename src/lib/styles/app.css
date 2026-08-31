@@ -40,11 +40,13 @@
 	--purple-tint: rgba(189, 133, 211, 0.18);
 	--orange-tint: rgba(230, 126, 34, 0.18);
 	--indigo-tint: rgba(123, 140, 232, 0.18);
-	--brand-tint: rgba(74, 134, 200, 0.18);
 	--grey-tint: rgba(138, 150, 166, 0.16);
 
 	/* One step below a tint: tile and card grounds that carry a hue without
-	   becoming a pill. */
+	   becoming a pill.
+	   Complete by design. Both families cover the same hues so a component can
+	   step between them, and a wash nothing happens to reference today is a gap
+	   in the palette rather than dead code — do not "clean" one out. */
 	--green-wash: rgba(46, 204, 113, 0.07);
 	--yellow-wash: rgba(241, 196, 15, 0.07);
 	--red-wash: rgba(239, 106, 92, 0.07);
@@ -53,7 +55,6 @@
 	--purple-wash: rgba(189, 133, 211, 0.07);
 	--orange-wash: rgba(230, 126, 34, 0.07);
 	--indigo-wash: rgba(123, 140, 232, 0.07);
-	--brand-wash: rgba(74, 134, 200, 0.07);
 
 	/* ── Category series colours ──────────────────────────────────────────────
 	 * Generated in OKLCH and validated, not chosen by eye. Every pair was
@@ -191,7 +192,6 @@
 	--scan-plate: rgba(14, 17, 23, 0.72);
 	--scan-plate-edge: rgba(14, 17, 23, 0.86);
 	--scan-ink: #e6e9ef;
-	--scan-ink-2: #c5ccd6;
 
 	/* Detection state. The primary signal is stroke WEIGHT and DASH; colour only
 	 * reinforces it, so the four states stay separable in greyscale and over an
@@ -201,11 +201,12 @@
 	--detect-found: var(--blue);
 	--detect-stable: var(--green);
 	--detect-rejected: var(--yellow);
-	--detect-w-searching: 1.5px;
 	--detect-w-found: 2px;
 	--detect-w-stable: 3px;
-	--detect-dash-searching: 7 9;
 	--detect-dash-rejected: 4 4;
+	/* `searching` has a colour but no weight or dash, because it draws no
+	   outline: no page found means no box, since a speculative outline is a
+	   claim the detector has not made. See OUTLINE in ScanCapture.svelte. */
 
 	/* Safe area. The home indicator sits exactly where the shutter wants to be.
 	 * Left and right matter too — a landscape phone has insets on the long
@@ -239,6 +240,100 @@
 	--motion-capture: 700ms;
 	--motion-settle: 220ms;
 	--ease-out: cubic-bezier(0.2, 0, 0.2, 1);
+
+	/* ── Elevation ────────────────────────────────────────────────────────────
+	 * Two, and only two, because a page with five depths has none.
+	 *
+	 * In the document flow nothing is raised: a card is separated by its ground
+	 * and its 1px border, and a shadow there is decoration standing in for a
+	 * boundary that already exists. What DOES float — a tooltip, a picker, a menu
+	 * — is a different case: it sits over unpredictable content, and without a
+	 * shadow its edge is the only thing telling a reader where the page stopped
+	 * and the overlay began. That is information, not styling.
+	 *
+	 * Both are near-black rather than a tinted colour: a shadow tinted in one
+	 * theme reads as a glow in the other, and these are the only two colour
+	 * values in the system deliberately not drawn from a hue token. */
+	--shadow-float: 0 10px 30px rgb(0 0 0 / 0.55);
+	--shadow-raise: 0 4px 14px rgb(0 0 0 / 0.35);
+}
+
+/* ── Shared marks ──────────────────────────────────────────────────────────
+ * Small idioms that were re-declared per component until they were the
+ * codebase's own stated most common defect: `.quiet` was written out
+ * identically in twenty-five files, and the chip vocabulary in three. A copy
+ * that drifts here does not error — it just looks slightly wrong on one screen.
+ * A component may still override any of these locally; Svelte's scoping makes
+ * the local rule win. */
+
+/* Secondary text: an aside, a count's unit, a sentence under a control. */
+.quiet {
+	color: var(--fg3);
+	font-size: var(--text-sm);
+}
+
+/* A row of chips. As wide as their names, so a street address and a first name
+   share one flow without a grid forcing them to the same width. */
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+
+/* The checkbox is the control and stays in the accessibility tree; the chip is
+   its face. Checked is a fill change, not a tint: it is a selection. */
+.pick-chip {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	height: 28px;
+	padding: 0 var(--space-6);
+	border: 1px solid var(--bd);
+	border-radius: var(--radius-chip);
+	background: var(--card);
+	color: var(--fg2);
+	font-size: var(--text-sm);
+	cursor: pointer;
+	white-space: nowrap;
+}
+.pick-chip input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	margin: 0;
+	height: auto;
+	padding: 0;
+	cursor: pointer;
+}
+.pick-chip:hover {
+	background: var(--card2);
+}
+.pick-chip:has(input:checked) {
+	background: var(--card3);
+	border-color: var(--bd2);
+	color: var(--fg1);
+}
+.pick-chip:has(input:focus-visible) {
+	outline: 2px solid var(--brand);
+	outline-offset: 1px;
+}
+
+/* The way off a chip. A bare ✕, never a button that looks like one. */
+.chip-x {
+	border: 0;
+	padding: 0;
+	background: none;
+	color: var(--fg3);
+	font-size: var(--text-xs);
+	line-height: 1;
+	cursor: pointer;
+}
+.chip-x:hover {
+	color: var(--fg1);
+}
+.chip-x:focus-visible {
+	outline: 2px solid var(--brand);
+	outline-offset: 2px;
 }
 
 html[data-ledger-theme='light'] {
@@ -286,7 +381,6 @@ html[data-ledger-theme='light'] {
 	--purple-tint: rgba(165, 101, 196, 0.13);
 	--orange-tint: rgba(224, 123, 30, 0.14);
 	--indigo-tint: rgba(112, 128, 224, 0.14);
-	--brand-tint: rgba(63, 124, 191, 0.13);
 	--grey-tint: rgba(120, 130, 145, 0.13);
 
 	/* The same bright values, one step lighter again. */
@@ -298,7 +392,6 @@ html[data-ledger-theme='light'] {
 	--purple-wash: rgba(165, 101, 196, 0.06);
 	--orange-wash: rgba(224, 123, 30, 0.06);
 	--indigo-wash: rgba(112, 128, 224, 0.06);
-	--brand-wash: rgba(63, 124, 191, 0.06);
 
 	/* Category series, light theme. Its own steps from the same hues — not the
 	 * dark values lightened, which would fail contrast against a white card. */

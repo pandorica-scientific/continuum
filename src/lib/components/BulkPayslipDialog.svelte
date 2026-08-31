@@ -168,7 +168,7 @@
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 10px 12px;
+		gap: var(--space-5) var(--space-6);
 		/* Controls line up along their BOTTOM edge: a label that wraps to two
 		   lines would otherwise push its input a line below the ones beside it,
 		   and a row of controls that no longer lines up stops reading as a row. */

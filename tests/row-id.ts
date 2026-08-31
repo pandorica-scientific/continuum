@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 /**
  * A stable uuid for a readable label.
  *
- * Ids became `uuid` in migration 0053, so a fixture can no longer say
+ * Ids became `uuid` in the v0.3.9 schema lock, so a fixture can no longer say
  * `id: 'person-a'`. Writing raw hex instead would cost every test its
  * legibility — `'11111111-1111-…'` says nothing about what the row is — so
  * fixtures keep their names and this turns each one into the same uuid every

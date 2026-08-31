@@ -56,6 +56,14 @@ the reverse, unless the code is the thing that drifted.
 3. **Reuse before you create.** Check `src/lib/components/` first. Drift between two
    near-identical cards is this codebase's most common defect.
 
+**Where a new component goes**, since both places are in use and neither was written
+down: `src/lib/components/` is the default and holds most of them, including ones only
+one screen uses today. A component moves into a feature directory —
+`src/lib/charts/`, `src/lib/overview/`, `src/lib/scan/`, `src/lib/documents/` — only
+when it ships with its own logic layer and would travel with it. The question is not
+"how many screens use this", it is "does this component belong to a subsystem that has
+modules of its own".
+
 ---
 
 ## Themes
@@ -137,8 +145,10 @@ opacity.
 **Radius and gap come from the scale**: `--radius-xs/sm/md/lg/xl/2xl/pill` (4 · 6 · 8 · 10 ·
 12 · 16 · 999) and `--space-1…8` (2 · 4 · 6 · 8 · 10 · 12 · 14 · 16). `design/no-raw-geometry`
 fails the build on a raw px value for `border-radius` or any `gap` **when the scale already
-names that number** — the escape hatch is `/* geometry-exempt: why */`, deliberate and
-greppable. Padding is deliberately not policed: 51 distinct pairs, dominated by odd
+names that number** — including every part of a shorthand, so `gap: 8px 14px` is caught as
+surely as `gap: 8px`. A shorthand that already names one axis (`var(--space-4) 3px`) is left
+alone: that is a decision about one side, not a number that drifted in. The escape hatch is
+`/* geometry-exempt: why */`, deliberate and greppable. Padding is deliberately not policed: 51 distinct pairs, dominated by odd
 horizontal values, so a scale there would be a restyle rather than a description.
 
 **One control height.** `--control-h` (36px) is the floor for every input, select, textarea
@@ -152,9 +162,22 @@ about the others.
 - Grid gaps: `12px` metric rows, `16px` card grids.
 - Radii: `8px` buttons and inputs · `9–10px` cards and tiles · `12px` pills · `20px` chips ·
   `999px` avatars.
-- Borders are **always 1px**. `--bd` cards, `--bd2` inputs and emphasis.
+- Borders are **1px** unless the width is carrying meaning: a panel's active edge (2px), the
+  app's current-area marker (3px), and a dashed legend swatch are the whole list. `--bd`
+  cards, `--bd2` inputs and emphasis.
 - **Coloured borders only on traffic-light pills.** Nowhere else.
-- **No shadows anywhere.** The only halo is the text outline on chart labels.
+- **Nothing in the document flow is raised.** A card is separated by its ground and its
+  border; a shadow there is decoration standing in for a boundary that already exists.
+- **What floats gets `--shadow-float`**; a subtle lift is `--shadow-raise`. Those two are the
+  whole set, and `design/no-raw-shadow` fails the build on any other value. A tooltip, a
+  picker or a menu sits over unpredictable content, and its shadow is the only thing telling
+  a reader where the page stopped — that is information, not styling.
+- **`inset` is not a shadow.** `box-shadow: inset 3px 0 0 var(--teal)` is a left rail marker,
+  drawn with the one property that paints inside a cell without taking layout space.
+- **A floating element is painted with an opaque token** — `--bg` or `--bg2`, never `--card`,
+  `--card2` or `--card3`. Those three are translucent in the dark theme and opaque hex in the
+  light one, so a tooltip painted with them looks right until somebody switches themes.
+  `design/opaque-floating-surface` fails the build on it.
 
 Lay out sibling groups with flex or grid and `gap`, not per-element margins.
 
@@ -237,7 +260,8 @@ rare enough to notice.
 - [ ] Every figure is mono.
 - [ ] Checked both themes — toggle `data-ledger-theme` on `<html>`, don't assume.
 - [ ] Reused an existing component, or can say why a new one was needed.
-- [ ] Borders 1px; no shadows; coloured border only on a pill.
+- [ ] Borders 1px unless the width means something; elevation from a token; coloured
+      border only on a pill.
 - [ ] Pill hue means state, not decoration.
 - [ ] Keyboard focus visible; `prefers-reduced-motion` respected if anything animates.
 - [ ] Wide content scrolls in its own `overflow-x: auto` container — the body never scrolls

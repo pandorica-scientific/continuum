@@ -65,7 +65,15 @@ export const document = pgTable(
 		// shelf could silently unhook a feature.
 		// A foreign key into `document_type`, not a CHECK: the household grows the
 		// list, so what is valid is a row rather than a constant.
-		type: text('type').$type<DocumentTypeKey>().notNull().default('other'),
+		// RESTRICT, not cascade: deleting a type the household still files under
+		// must be refused, never allowed to take the paper with it. The key is a
+		// row rather than a CHECK because a household invents its own types, and a
+		// constraint is not something a person can add a value to.
+		type: text('type')
+			.$type<DocumentTypeKey>()
+			.notNull()
+			.default('other')
+			.references(() => documentType.key, { onDelete: 'restrict' }),
 		// The one user-authored phrase field, ranked above contents in search.
 		note: text('note'),
 		// Absent for members everywhere — list, search, counts, briefing,
@@ -168,7 +176,13 @@ export const shelfType = pgTable(
 		shelfId: uuid('shelf_id')
 			.notNull()
 			.references(() => shelf.id, { onDelete: 'cascade' }),
-		type: text('type').$type<DocumentTypeKey>().notNull(),
+		// CASCADE here, unlike on `document`: a deleted type should take its
+		// mention in a shelf's picker with it, since a picker offering a type that
+		// no longer exists is the one thing worse than a shorter picker.
+		type: text('type')
+			.$type<DocumentTypeKey>()
+			.notNull()
+			.references(() => documentType.key, { onDelete: 'cascade' }),
 		/** The order they are offered in, which is the order they were ticked. */
 		ordinal: integer('ordinal').notNull()
 	},
@@ -296,3 +310,145 @@ export const subject = pgTable(
 	// would be the phantom-column problem sneaking back in.
 	(table) => [uniqueIndex('subject_name_ci_idx').on(sql`lower(${table.name})`)]
 );
+
+// ---- SQL drizzle-kit cannot model ----
+
+/**
+ * Shapes a CHECK can state and a column type cannot.
+ */
+export const documentsCheckSql = `
+-- period_on means "the month this document covers", so a mid-month day is either
+-- a different fact or a mistake.
+ALTER TABLE document ADD CONSTRAINT document_period_first_of_month
+	CHECK (period_on IS NULL OR extract(day from period_on) = 1);
+--> statement-breakpoint
+-- Two upper-case letters or nothing. The field is a picker, so this is not
+-- defending against a typist; it is what keeps the artwork lookup and the flag
+-- from being handed 'Czechia' by a future importer and drawing nothing.
+ALTER TABLE document_identity ADD CONSTRAINT document_identity_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- A period that ends before it starts is not a period. NULLs are legal on both
+-- sides: a subject that is simply current has neither.
+ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
+	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);
+`;
+
+/**
+ * Search indexes over expressions, which drizzle-kit models no more than it
+ * models a trigger.
+ *
+ * Trigram matching is for identifiers: a variable symbol like 10078410 is not a
+ * word to any text-search configuration, so full-text search alone never finds
+ * it. Both indexes fold with the SAME expression the query uses — `contact_fold`
+ * is IMMUTABLE and PARALLEL SAFE, which is what makes it indexable at all — and
+ * it is schema-qualified in every reference, as unaccent already is, because
+ * search_path is not something a migration should depend on.
+ */
+export const documentsIndexSql = `
+CREATE INDEX dtc_fts_idx ON document_text_chunk
+	USING gin (to_tsvector('simple', public.contact_fold(text)));
+--> statement-breakpoint
+CREATE INDEX dtc_trgm_idx ON document_text_chunk
+	USING gin (public.contact_fold(text) gin_trgm_ops);
+--> statement-breakpoint
+CREATE INDEX document_name_trgm_idx ON document
+	USING gin (public.contact_fold(name) gin_trgm_ops);
+`;
+
+/**
+ * The seventeen types the app ships with, the ten shelves a fresh install
+ * starts with, and what each shelf offers first in a type picker.
+ *
+ * Data rather than schema, and the one part of the baseline `db:generate` will
+ * never re-emit: a regenerated file that dropped them would take a foreign key's
+ * only satisfiable value with it, and the first symptom is a screen with a
+ * control missing rather than an error.
+ *
+ * A household adds its own types beside the built-ins; these are the ones code
+ * reads by name, so they are marked and kept. Households likewise rename,
+ * re-order and re-emoji the shelves freely — eight of the ten cannot be removed,
+ * for two different reasons that both end at the same flag. Four are keys the
+ * application writes to: capture files into `inbox`, an accepted import files
+ * into `statements`, payslips and tax attachments file into `finance`, bills
+ * file into `property`. Deleting one of those breaks the next upload. Four are
+ * the paper every household has whether or not it has said so: `identity`,
+ * `family`, `health` and `household`. Nothing files into them by key, so
+ * deleting one breaks nothing today — but a documents product whose shipped
+ * answer to "where does a passport go" can be removed has no shipped answer.
+ * `tenancy` and `vehicles` stay removable, and are the reason the flag is a
+ * column rather than a list of every seeded key: not every household rents, and
+ * not every household drives.
+ */
+export const documentsSeedSql = `
+-- One place for a document to always belong: the household. The documents
+-- screen offers it as a tick beside the people, and nothing else creates it.
+INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '🏠');
+--> statement-breakpoint
+INSERT INTO document_type (key, label, builtin, sort_order) VALUES
+	('contract', 'Contract', true, 0),
+	('invoice', 'Invoice', true, 10),
+	('receipt', 'Receipt', true, 20),
+	('payslip', 'Payslip', true, 30),
+	('bank_statement', 'Bank statement', true, 40),
+	('broker_report', 'Broker report', true, 50),
+	('insurance_policy', 'Insurance policy', true, 60),
+	('claim', 'Claim', true, 70),
+	('id_document', 'Identity document', true, 80),
+	('certificate', 'Certificate', true, 90),
+	('medical_record', 'Medical record', true, 100),
+	('tax_document', 'Tax document', true, 110),
+	('technical_plan', 'Technical plan', true, 120),
+	('correspondence', 'Correspondence', true, 130),
+	('warranty', 'Warranty', true, 140),
+	('manual', 'Manual', true, 150),
+	('other', 'Other', true, 160)
+ON CONFLICT (key) DO NOTHING;
+--> statement-breakpoint
+INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
+	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
+	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, true),
+	(gen_random_uuid(), 'family',     'Family',     '👶', 20, true),
+	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, true),
+	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, true),
+	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
+	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
+	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, true),
+	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, true),
+	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
+ON CONFLICT (key) DO NOTHING;
+--> statement-breakpoint
+INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
+	((SELECT id FROM shelf WHERE key = 'identity'), 'id_document', 0),
+	((SELECT id FROM shelf WHERE key = 'identity'), 'certificate', 1),
+	((SELECT id FROM shelf WHERE key = 'family'), 'certificate', 0),
+	((SELECT id FROM shelf WHERE key = 'family'), 'contract', 1),
+	((SELECT id FROM shelf WHERE key = 'family'), 'correspondence', 2),
+	((SELECT id FROM shelf WHERE key = 'health'), 'medical_record', 0),
+	((SELECT id FROM shelf WHERE key = 'health'), 'certificate', 1),
+	((SELECT id FROM shelf WHERE key = 'health'), 'insurance_policy', 2),
+	((SELECT id FROM shelf WHERE key = 'health'), 'invoice', 3),
+	((SELECT id FROM shelf WHERE key = 'property'), 'insurance_policy', 0),
+	((SELECT id FROM shelf WHERE key = 'property'), 'technical_plan', 1),
+	((SELECT id FROM shelf WHERE key = 'property'), 'contract', 2),
+	((SELECT id FROM shelf WHERE key = 'property'), 'invoice', 3),
+	((SELECT id FROM shelf WHERE key = 'tenancy'), 'contract', 0),
+	((SELECT id FROM shelf WHERE key = 'tenancy'), 'invoice', 1),
+	((SELECT id FROM shelf WHERE key = 'tenancy'), 'correspondence', 2),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'warranty', 0),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'insurance_policy', 1),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 3),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'payslip', 0),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'tax_document', 1),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 3),
+	((SELECT id FROM shelf WHERE key = 'household'), 'warranty', 0),
+	((SELECT id FROM shelf WHERE key = 'household'), 'manual', 1),
+	((SELECT id FROM shelf WHERE key = 'household'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'household'), 'receipt', 3),
+	((SELECT id FROM shelf WHERE key = 'household'), 'contract', 4),
+	((SELECT id FROM shelf WHERE key = 'statements'), 'bank_statement', 0),
+	((SELECT id FROM shelf WHERE key = 'statements'), 'broker_report', 1)
+ON CONFLICT (shelf_id, type) DO NOTHING;
+`;

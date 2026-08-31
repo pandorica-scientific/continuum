@@ -69,8 +69,4 @@
 		font-size: var(--text-md);
 		color: var(--fg2);
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

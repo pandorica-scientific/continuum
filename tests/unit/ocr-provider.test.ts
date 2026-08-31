@@ -2,14 +2,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { renderPdfPages } from '$lib/server/import/ocr';
 import {
+	OCR_LANGUAGES,
 	availableLanguages,
 	narrowLanguages,
 	ocrAvailable,
-	tesseractProvider,
+	renderPdfPages,
 	usableLanguages
-} from '$lib/server/documents/extract/ocr';
+} from '$lib/server/ocr';
+import { tesseractProvider } from '$lib/server/documents/extract/ocr';
 
 // `tessdata/` is fetched at build time and is not in the repository, so CI has
 // none. The RULE is tested against a fixed list either way; the two cases that
@@ -33,6 +34,17 @@ describe('the OCR provider seam', () => {
 		expect(provider.engineVersion).toMatch(/^\d/);
 	});
 
+	it('names exactly the languages the fetch script vendors', () => {
+		// A code named here that nobody fetches fails inside the worker, seconds
+		// in, with a message about a file path. The list and the script that fills
+		// the directory are one fact, so they are checked against each other
+		// rather than both being maintained by hand.
+		const script = readFileSync(resolve('scripts/fetch-tessdata.mjs'), 'utf8');
+		const declared = script.match(/const LANGUAGES = \[([^\]]*)\]/)?.[1] ?? '';
+		const fetched = [...declared.matchAll(/'([a-z]{3})'/g)].map((m) => m[1]);
+		expect([...OCR_LANGUAGES].sort()).toEqual(fetched.sort());
+	});
+
 	it('keeps only the languages that are present', () => {
 		expect(narrowLanguages('ces+eng', VENDORED)).toBe('ces+eng');
 		expect(narrowLanguages('ces+klingon', VENDORED)).toBe('ces');
@@ -46,7 +58,11 @@ describe('the OCR provider seam', () => {
 		expect(narrowLanguages('ces+eng', [])).toBeNull();
 	});
 
-	it('says whether OCR can run at all', () => {
+	it('says whether OCR can run at all, from the models rather than the directory', () => {
+		// There were two answers to this and they disagreed: one asked whether
+		// `tessdata/` exists, which an empty directory satisfies, and the statement
+		// reader held that weaker one. A half-fetched install then reported OCR
+		// available and failed seconds later inside the worker.
 		expect(ocrAvailable()).toBe(availableLanguages().length > 0);
 	});
 

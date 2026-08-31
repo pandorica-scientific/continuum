@@ -6,8 +6,9 @@
 // broken rate run — are the kind that regress silently in markup and are
 // obvious in a test.
 
+import { X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
+
 /** The viewBox the chart draws into. */
-export const VIEW_W = 1000;
 export const VIEW_H = 322;
 
 /** The money panel: stacked bars live between these. */
@@ -17,10 +18,6 @@ export const MONEY_BOTTOM = 222;
 /** The rate strip, sharing the money panel's x axis rather than taking a second y. */
 export const RATE_TOP_Y = 242;
 export const RATE_BOTTOM_Y = 292;
-
-/** The plot's horizontal extent. */
-export const X_LEFT = 56;
-export const X_RIGHT = 992;
 
 /** The rate strip's ceiling, as a percentage. */
 export const RATE_TOP_PCT = 25;
@@ -73,12 +70,6 @@ export interface Segment {
 	hatched: boolean;
 	/** Whether this segment is thick enough to carry a border. */
 	stroked: boolean;
-}
-
-/** The x centre of a year's slot. */
-export function slotFor(index: number, count: number): number {
-	const slot = (X_RIGHT - X_LEFT) / count;
-	return X_LEFT + slot * index + slot / 2;
 }
 
 /** Bar width, capped so two years do not read as one block. */
@@ -139,17 +130,6 @@ export function segments(
 		place(c.country, scale(kept > 0n ? kept : 0n), false);
 	}
 	return out;
-}
-
-/** Where the household's blended rate sits in the rate strip, per year. */
-export function ratePoints(rows: SerialisedYear[]): { x: number; y: number }[] {
-	return rows
-		.map((row, i) => ({ row, i }))
-		.filter(({ row }) => row.ratePct !== null)
-		.map(({ row, i }) => ({
-			x: slotFor(i, rows.length),
-			y: rateY(row.ratePct!)
-		}));
 }
 
 /**

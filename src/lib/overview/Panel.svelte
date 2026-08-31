@@ -111,7 +111,7 @@
 		background: var(--card);
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
-		padding: 14px 16px;
+		padding: var(--space-7) var(--space-8);
 		height: 100%;
 		min-height: 0;
 		overflow: hidden;

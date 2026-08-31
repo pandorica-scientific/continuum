@@ -127,8 +127,4 @@
 		color: var(--fg3);
 		line-height: 1.5;
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

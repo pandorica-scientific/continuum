@@ -5,7 +5,7 @@
 
 import { uuidv7 } from 'uuidv7';
 import { count, eq, inArray, sql } from 'drizzle-orm';
-import { db, type Db, type Queryable } from '$lib/server/db';
+import { db, inTransaction, type Queryable } from '$lib/server/db';
 import {
 	document,
 	loan,
@@ -18,11 +18,16 @@ import {
 } from '$lib/server/db/schema';
 import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { effectiveLines, type LineSource, type SplitSource } from '$lib/transactions/lines';
+import { foldTagName } from '$lib/tags-view';
 
-/** Uniqueness key: trimmed, lowercased, inner whitespace collapsed. */
-export function normaliseTagName(raw: string): string {
-	return raw.trim().toLowerCase().replace(/\s+/gu, ' ');
-}
+/**
+ * Uniqueness key: trimmed, lowercased, inner whitespace collapsed.
+ *
+ * The rule itself is in `$lib/tags-view`, because the tag field and the hue
+ * picker fold too and cannot reach server code. Re-exported under the server's
+ * own name so the call sites below read as what they are.
+ */
+export const normaliseTagName = foldTagName;
 
 interface TagRefs {
 	transactionTags: { transactionId: string; tagId: string }[];
@@ -231,16 +236,6 @@ async function replaceTagSet(
 	if (resolved.length > 0) await insert(resolved.map((item) => item.id));
 }
 
-async function withinTransaction<T>(
-	handle: Queryable,
-	operation: (tx: Queryable) => Promise<T>
-): Promise<T> {
-	const transactional = handle as Db;
-	return typeof transactional.transaction === 'function'
-		? transactional.transaction((tx) => operation(tx))
-		: operation(handle);
-}
-
 interface TagDeltaOperations {
 	lockOwner: (handle: Queryable) => Promise<unknown>;
 	loadNames: (handle: Queryable) => Promise<{ name: string }[]>;
@@ -254,7 +249,7 @@ async function updateTagRelation(
 	handle: Queryable,
 	operations: TagDeltaOperations
 ): Promise<void> {
-	await withinTransaction(handle, async (tx) => {
+	await inTransaction(handle, async (tx) => {
 		await operations.lockOwner(tx);
 		const existing = await operations.loadNames(tx);
 		await replaceTagSet(
@@ -275,7 +270,7 @@ export async function setTransactionTags(
 	names: string[],
 	handle: Queryable = db
 ): Promise<void> {
-	await withinTransaction(handle, (tx) =>
+	await inTransaction(handle, (tx) =>
 		replaceTagSet(
 			names,
 			tx,
@@ -404,7 +399,7 @@ export async function setSplitTagSets(
 	sets: { splitId: string; names: string[] }[],
 	handle: Queryable = db
 ): Promise<void> {
-	await withinTransaction(handle, async (tx) => {
+	await inTransaction(handle, async (tx) => {
 		for (const set of sets) await replaceSplitTags(set.splitId, set.names, tx);
 	});
 }

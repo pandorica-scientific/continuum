@@ -112,7 +112,7 @@
 		color: var(--fg3);
 		background: var(--grey-tint);
 		border-radius: var(--radius-xl);
-		padding: 2px 8px;
+		padding: var(--space-1) var(--space-4);
 		white-space: nowrap;
 	}
 	.menu {

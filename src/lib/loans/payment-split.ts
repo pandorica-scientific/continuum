@@ -39,11 +39,11 @@ import {
 	interestForMonth,
 	periodForMonth,
 	rateForMonth,
-	type DayCount,
 	type FixationPeriod,
 	type LoanTerms,
 	type MonthRow
 } from './amortise';
+import type { DayCount } from '$lib/loans';
 import { anchorMonthFor } from './simulate';
 
 /** How a split was arrived at, worst case last. */

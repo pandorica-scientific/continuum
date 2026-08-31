@@ -67,7 +67,7 @@
 		align-items: flex-start;
 		gap: var(--space-2);
 		border-radius: var(--radius-lg);
-		padding: 10px 12px;
+		padding: var(--space-5) var(--space-6);
 		width: 100%;
 		height: 100%;
 	}

@@ -87,8 +87,4 @@
 		font-size: var(--text-md);
 		font-weight: 600;
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

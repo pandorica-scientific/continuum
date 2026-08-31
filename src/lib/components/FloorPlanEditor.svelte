@@ -344,7 +344,7 @@
 		background: transparent;
 		color: var(--fg3);
 		border-radius: var(--radius-sm);
-		padding: 6px 12px;
+		padding: var(--space-3) var(--space-6);
 		font-size: var(--text-sm);
 		cursor: pointer;
 	}
@@ -461,10 +461,6 @@
 		border-radius: var(--radius-md);
 		padding: 7px 11px;
 		font-size: var(--text-md);
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 	.spacer {
 		flex: 1;

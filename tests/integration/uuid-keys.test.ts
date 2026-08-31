@@ -43,7 +43,6 @@ const STAYS_TEXT = new Set([
 	'settings',
 	'setup_claim',
 	'currency',
-	'mark_transfer_rule',
 	'import_profile',
 	'job'
 ]);

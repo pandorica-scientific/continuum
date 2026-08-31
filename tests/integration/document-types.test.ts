@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { ENUMS } from '$lib/enums';
-import { typeLabel, typeLabels, TYPE_LABELS } from '$lib/documents-view';
+import { typeLabel, typeLabels, TYPE_LABELS } from '$lib/documents/view';
 import { shelfType } from '$lib/server/db/schema';
 import {
 	addDocumentType,

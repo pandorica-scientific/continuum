@@ -1,22 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { and, eq, inArray, or } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, inTransaction, type Queryable } from '$lib/server/db';
 import { account, transaction, transferPair } from '$lib/server/db/schema';
-import {
-	inTransaction,
-	lockTransferPairing,
-	pairAndCategorise,
-	type DatabaseHandle
-} from './ingest';
+import { lockTransferPairing, pairAndCategorise } from './pairing-run';
 
 type TransferDecisionResult =
 	{ ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
 
-async function transitionProposal(
-	id: string,
-	state: 'confirmed' | 'rejected',
-	handle: DatabaseHandle
-) {
+async function transitionProposal(id: string, state: 'confirmed' | 'rejected', handle: Queryable) {
 	const [pair] = await handle
 		.update(transferPair)
 		.set({ state })
@@ -32,7 +23,7 @@ async function transitionProposal(
 
 export async function confirmTransferProposal(
 	id: string,
-	handle: DatabaseHandle = db
+	handle: Queryable = db
 ): Promise<TransferDecisionResult> {
 	return inTransaction(handle, async (tx) => {
 		const pair = await transitionProposal(id, 'confirmed', tx);
@@ -53,7 +44,7 @@ export async function confirmTransferProposal(
 
 export async function rejectTransferProposal(
 	id: string,
-	handle: DatabaseHandle = db
+	handle: Queryable = db
 ): Promise<TransferDecisionResult> {
 	return inTransaction(handle, async (tx) => {
 		// pairAndCategorise waits on transaction rows. Take its global lock before
@@ -89,7 +80,7 @@ export async function rejectTransferProposal(
 export async function markOneSidedTransfer(
 	id: string,
 	toAccountId: string,
-	handle: DatabaseHandle = db
+	handle: Queryable = db
 ): Promise<TransferDecisionResult> {
 	return inTransaction(handle, async (tx) => {
 		const [row] = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');
@@ -124,7 +115,7 @@ export async function markOneSidedTransfer(
 /** Undo the above: the row goes back to needing a category. */
 export async function clearOneSidedTransfer(
 	id: string,
-	handle: DatabaseHandle = db
+	handle: Queryable = db
 ): Promise<TransferDecisionResult> {
 	return inTransaction(handle, async (tx) => {
 		const [row] = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');

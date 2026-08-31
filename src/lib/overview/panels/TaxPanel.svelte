@@ -71,8 +71,4 @@
 	.rate {
 		color: var(--fg3);
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

@@ -15,7 +15,7 @@
 	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import { ALL_TYPES, EXPIRY_VERBS, EXPIRY_VERB_MEANINGS, typeOptionsFor } from '$lib/documents';
-	import { groupAboutOptions, typeLabels } from '$lib/documents-view';
+	import { groupAboutOptions, typeLabels } from '$lib/documents/view';
 	import {
 		counterLabel,
 		currentId,
@@ -376,7 +376,7 @@
 	.fields textarea {
 		height: auto;
 		min-height: calc(var(--control-h) * 2);
-		padding: 8px 10px;
+		padding: var(--space-4) var(--space-5);
 		font-family: inherit;
 	}
 	.kept {
@@ -504,8 +504,6 @@
 		color: var(--fg3);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		margin: 0;
 	}
 

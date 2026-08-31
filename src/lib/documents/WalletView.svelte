@@ -19,11 +19,11 @@
 	import EuMark from '$lib/components/EuMark.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
-	import { documentArtUrl } from '$lib/document-art';
+	import { documentArtUrl } from '$lib/documents/art';
 	import { flagEmoji, isEuCountry } from '$lib/countries';
 	import { identityKindLabel } from '$lib/documents';
-	import { expiryTreatment, readableDate, typeLabel } from '$lib/documents-view';
-	import { sectionsByPerson, type LayoutRow } from '$lib/documents-layouts';
+	import { expiryTreatment, readableDate, typeLabel } from '$lib/documents/view';
+	import { sectionsByPerson, type LayoutRow } from '$lib/documents/layouts';
 
 	// No `isAdmin`. The lock is drawn on `restricted` alone, exactly as the list
 	// row and the inspector draw it, because a member never receives a

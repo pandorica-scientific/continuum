@@ -8,7 +8,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
-import { credential, person, session } from '$lib/server/db/schema';
+import { calendarAccount, credential, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
@@ -57,7 +57,6 @@ import {
 	runSync
 } from '$lib/server/calendar/sync';
 import { startAuth } from '$lib/server/calendar/sync/google-oauth';
-import { calendarAccount } from '$lib/server/db/schema';
 import { serverStatus } from '$lib/server/system/status';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';

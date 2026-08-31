@@ -230,8 +230,6 @@
 		gap: var(--space-4);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		line-height: 1.55;
 		margin: 0;
 	}

@@ -18,16 +18,13 @@
 		GRID_FRACTIONS,
 		TOP,
 		VIEW_H,
-		VIEW_W,
-		X_LEFT,
-		X_RIGHT,
 		axisTicks,
 		barsFor,
 		ceilingFor,
 		keptPct,
-		slotFor,
 		type MonthBar
 	} from '$lib/charts/month-history-geometry';
+	import { VIEW_W, X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
 
 	let {
 		months,
@@ -334,8 +331,8 @@
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		box-shadow: 0 10px 30px rgb(0 0 0 / 0.55);
-		padding: 10px 12px;
+		box-shadow: var(--shadow-float);
+		padding: var(--space-5) var(--space-6);
 		pointer-events: none;
 		display: flex;
 		flex-direction: column;

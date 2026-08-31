@@ -386,7 +386,7 @@
 		align-items: center;
 		gap: var(--space-4);
 		flex-wrap: wrap;
-		padding: 12px 14px;
+		padding: var(--space-6) var(--space-7);
 		margin-bottom: 16px;
 		background: var(--card);
 		border: 1px solid var(--bd);
@@ -423,7 +423,7 @@
 		align-items: flex-start;
 		gap: var(--space-4);
 		height: 100%;
-		padding: 14px 16px;
+		padding: var(--space-7) var(--space-8);
 		border: 1px dashed var(--bd2);
 		border-radius: var(--radius-lg);
 		opacity: 0.7;

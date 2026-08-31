@@ -648,8 +648,6 @@
 		font-size: var(--text-xs);
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		line-height: 1.55;
 	}
 </style>

@@ -7,7 +7,7 @@ import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
 import { rule, ruleTag, tag } from '$lib/server/db/schema';
 import { autoThreshold, previewMatches } from '$lib/server/rules';
-import { pairAndCategorise } from '$lib/server/import/ingest';
+import { pairAndCategorise } from '$lib/server/import/pairing-run';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
 import { confidence } from '$lib/rules/confidence';
 import { DEFAULT_RULE_PRIOR, normalise, type Condition } from '$lib/rules/match';

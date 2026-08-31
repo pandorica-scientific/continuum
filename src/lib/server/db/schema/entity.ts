@@ -14,7 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 // Relative, not aliased: drizzle-kit loads these files outside Vite and
 // does not resolve SvelteKit's $lib.
-import type { EntityKind } from '../../../enums';
+import { ENTITY_KINDS, type EntityKind } from '../../../enums';
 import { contact } from './contacts';
 import { document, tag } from './documents';
 
@@ -118,3 +118,99 @@ export const contactLink = pgTable(
 		index('contact_link_target_idx').on(t.targetId)
 	]
 );
+
+// ---- SQL drizzle-kit cannot model ----
+
+/**
+ * The supertype's own constraint and the machinery that registers into it.
+ *
+ * Three decisions worth stating, because each one is load-bearing.
+ *
+ * 1. `UNIQUE (id, kind)` exists so a concrete table can reference the PAIR. Each
+ *    table carries a generated `entity_kind` column fixed to its own kind, so a
+ *    `tag` row can only ever point at an entity registered as a tag. Without it
+ *    a link table would happily accept an id belonging to a different kind of
+ *    record, and the resulting row would read as perfectly valid.
+ *
+ * 2. Registration is a BEFORE INSERT trigger, not something callers remember.
+ *    That is what makes this safe across every kind at once: no insert path
+ *    above the database changes, and an insert that "forgot" to register cannot
+ *    exist. A helper would have been one more thing to omit, and the composite
+ *    foreign key would then have turned the omission into a failed write at some
+ *    unrelated call site.
+ *
+ * 3. Deletion works in both directions. Removing the entity cascades to the
+ *    record; removing the record retires the entity through an AFTER DELETE
+ *    trigger. Only the first is a foreign key, so without the second the
+ *    supertype would fill with orphans that a later link could still attach to.
+ *    The two do not recurse: by the time either trigger runs, the row it would
+ *    delete is already gone.
+ *
+ * Written as a loop over `ENTITY_KINDS` rather than a copy per kind — twelve
+ * copies of the same four statements is twelve chances for one to differ by
+ * accident — and the list is read from `$lib/enums` rather than repeated, so
+ * adding a kind is one edit in one language.
+ */
+export const entitySql = `
+DO $outer$
+DECLARE
+\tt text;
+\thas_created_at boolean;
+BEGIN
+\tFOREACH t IN ARRAY ARRAY[${ENTITY_KINDS.map((kind) => `'${kind}'`).join(', ')}]
+\tLOOP
+\t\tEXECUTE format(
+\t\t\t'ALTER TABLE %I ADD COLUMN entity_kind text GENERATED ALWAYS AS (%L) STORED', t, t);
+
+\t\tEXECUTE format(
+\t\t\t'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (id, entity_kind)
+\t\t\t\tREFERENCES entity (id, kind) ON DELETE CASCADE',
+\t\t\tt, t || '_entity_fk');
+
+\t\t-- A table that records its own creation time hands it to the entity, so
+\t\t-- the two never disagree. The demo seed inserts rows dated years back;
+\t\t-- stamping now() here would have given those records an entity younger
+\t\t-- than the record itself, which is the divergence that makes a shared
+\t\t-- audit column worth having in the first place.
+\t\tSELECT EXISTS (
+\t\t\tSELECT 1 FROM information_schema.columns
+\t\t\tWHERE table_schema = 'public' AND table_name = t AND column_name = 'created_at'
+\t\t) INTO has_created_at;
+
+\t\tIF has_created_at THEN
+\t\t\tEXECUTE format($f$
+\t\t\t\tCREATE FUNCTION %I() RETURNS trigger LANGUAGE plpgsql AS $b$
+\t\t\t\tBEGIN
+\t\t\t\t\tINSERT INTO entity (id, kind, created_at)
+\t\t\t\t\t\tVALUES (NEW.id, %L, COALESCE(NEW.created_at, now()))
+\t\t\t\t\t\tON CONFLICT (id) DO NOTHING;
+\t\t\t\t\tRETURN NEW;
+\t\t\t\tEND $b$;
+\t\t\t$f$, t || '_register_entity', t);
+\t\tELSE
+\t\t\tEXECUTE format($f$
+\t\t\t\tCREATE FUNCTION %I() RETURNS trigger LANGUAGE plpgsql AS $b$
+\t\t\t\tBEGIN
+\t\t\t\t\tINSERT INTO entity (id, kind) VALUES (NEW.id, %L)
+\t\t\t\t\t\tON CONFLICT (id) DO NOTHING;
+\t\t\t\t\tRETURN NEW;
+\t\t\t\tEND $b$;
+\t\t\t$f$, t || '_register_entity', t);
+\t\tEND IF;
+\t\tEXECUTE format(
+\t\t\t'CREATE TRIGGER %I BEFORE INSERT ON %I FOR EACH ROW EXECUTE FUNCTION %I()',
+\t\t\tt || '_register_entity_trg', t, t || '_register_entity');
+
+\t\tEXECUTE format($f$
+\t\t\tCREATE FUNCTION %I() RETURNS trigger LANGUAGE plpgsql AS $b$
+\t\t\tBEGIN
+\t\t\t\tDELETE FROM entity WHERE id = OLD.id;
+\t\t\t\tRETURN OLD;
+\t\t\tEND $b$;
+\t\t$f$, t || '_retire_entity');
+\t\tEXECUTE format(
+\t\t\t'CREATE TRIGGER %I AFTER DELETE ON %I FOR EACH ROW EXECUTE FUNCTION %I()',
+\t\t\tt || '_retire_entity_trg', t, t || '_retire_entity');
+\tEND LOOP;
+END $outer$;
+`;

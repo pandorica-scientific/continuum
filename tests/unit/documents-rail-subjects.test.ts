@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { railSubjects, type RailSubject } from '$lib/documents-view';
+import { railSubjects, type RailSubject } from '$lib/documents/view';
 
 const subject = (over: Partial<RailSubject> = {}): RailSubject => ({
 	id: over.id ?? 's1',

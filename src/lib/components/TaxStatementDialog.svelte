@@ -248,7 +248,7 @@
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-		gap: 10px 12px;
+		gap: var(--space-5) var(--space-6);
 		/* Controls line up along their BOTTOM edge, not their top.
 		   "Gross income · from 12 payslips" wraps to two lines where "Whose" and
 		   "Year" take one, and with the fields stretched from the top that pushed

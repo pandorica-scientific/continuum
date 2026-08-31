@@ -14,20 +14,11 @@ import { asEnumValue, type DocumentTypeKey } from '$lib/enums';
 import { orderTypeOptions, shelfProfile, type ShelfLayout } from '$lib/shelf-profiles';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { and, count, eq, getTableColumns, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import {
-	document,
-	documentIdentity,
-	documentLink,
-	documentText,
-	entity,
-	job,
-	shelf as shelfTable,
-	tag,
-	tagLink
-} from '$lib/server/db/schema';
+import { document, documentLink, documentText, entity, tagLink } from '$lib/server/db/schema';
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
+import { readDocumentsScreen } from '$lib/server/documents/screen';
 import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
 import {
 	identityNumbersFor,
@@ -75,8 +66,8 @@ import {
 	type DocumentTargetKind,
 	type TargetRow
 } from '$lib/server/documents/targets';
-import { linkDiff } from '$lib/document-links';
-import { deleteTag } from '$lib/server/tags';
+import { linkDiff } from '$lib/documents/links';
+import { deleteTag, upsertTag } from '$lib/server/tags';
 import { loadTagsScreen } from '$lib/server/tags/screen';
 import {
 	archiveScopePredicate,
@@ -87,7 +78,6 @@ import {
 } from '$lib/server/documents/visibility';
 import { searchDocuments } from '$lib/server/documents/search';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
-import { upsertTag } from '$lib/server/tags';
 import { runCpuQueue } from '$lib/server/jobs';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -140,49 +130,20 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const readableEverywhere = visibleDocumentPredicate(locals.person);
 
 	const [
+		{ docs, railCounts, everywhereCount, docLinks, docTags, tags, texts, pending, identities },
 		shelves,
 		subjects,
-		docs,
-		railCounts,
-		everywhereCount,
 		pickableTargets,
-		docLinks,
-		docTags,
-		tags,
-		texts,
-		pending,
-		identities,
 		shelfTypes,
 		documentTypes
 	] = await Promise.all([
+		readDocumentsScreen({ readable, readableEverywhere }),
 		listShelves(),
 		// Behind the same read rule as everything else on this screen: a member
 		// seeing "3" beside the car has been told about a document they cannot
 		// open. The archive scope is deliberately NOT applied to these counts —
 		// see `listSubjects`.
 		listSubjects(db, locals.person),
-		// The shelf key travels with the row: the rail filters by key and the
-		// label is the household's to change, so neither may be a code list.
-		db
-			.select({
-				...getTableColumns(document),
-				shelfKey: shelfTable.key,
-				shelfLabel: shelfTable.label
-			})
-			.from(document)
-			.innerJoin(shelfTable, eq(shelfTable.id, document.shelfId))
-			.where(readable)
-			.orderBy(document.addedOn),
-		// Rail counts are computed in SQL, after the read rule and nothing else.
-		// They deliberately ignore the search term and the active tag: a rail
-		// whose numbers move as you type cannot be used to navigate.
-		db
-			.select({ key: shelfTable.key, n: count() })
-			.from(document)
-			.innerJoin(shelfTable, eq(shelfTable.id, document.shelfId))
-			.where(readable)
-			.groupBy(shelfTable.key),
-		db.select({ n: count() }).from(document).where(readableEverywhere),
 		// The kinds the document side may pick, from the registry — which is the
 		// one list. Whole, because a picker is a list of what could be chosen.
 		// The four hand-written selects this replaces were the reason a receipt's
@@ -190,37 +151,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// them asked for brokerage accounts only, because one screen once did.
 		// (Names for what the documents point at are read below, by id.)
 		loadPickableTargets(),
-		// One select for every kind of target; the kind comes from `entity`.
-		db
-			.select({
-				documentId: documentLink.documentId,
-				targetId: documentLink.targetId,
-				kind: entity.kind
-			})
-			.from(documentLink)
-			.innerJoin(entity, eq(entity.id, documentLink.targetId)),
-		db.select({ documentId: tagLink.targetId, tagId: tagLink.tagId }).from(tagLink),
-		db.select({ id: tag.id, name: tag.name }).from(tag),
-		db
-			.select({
-				documentId: documentText.documentId,
-				complete: documentText.complete,
-				pagesExtracted: documentText.pagesExtracted,
-				engine: documentText.engine,
-				engineVersion: documentText.engineVersion,
-				meanConfidence: documentText.meanConfidence,
-				languages: documentText.languages
-			})
-			.from(documentText),
-		db
-			.select({ documentId: job.subjectId })
-			.from(job)
-			.where(and(eq(job.kind, 'extract_text'), inArray(job.state, ['queued', 'running']))),
-		// Every identity row the archive holds, keyed by document below. Whole
-		// rather than by id: there is one per identity document and a household
-		// has a handful, which is cheaper than a second round trip once the
-		// selected document turns out to be one of them.
-		db.select().from(documentIdentity),
 		shelfTypesByKey(),
 		listDocumentTypes()
 	]);

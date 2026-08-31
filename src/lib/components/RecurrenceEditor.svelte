@@ -226,7 +226,7 @@
 
 	.wrap {
 		flex-wrap: wrap;
-		gap: 8px 14px;
+		gap: var(--space-4) var(--space-7);
 	}
 
 	.tick {

@@ -22,7 +22,7 @@ import {
 	lockTransferPairing,
 	pairAndCategorise,
 	pairingWindowAround
-} from '$lib/server/import/ingest';
+} from '$lib/server/import/pairing-run';
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';

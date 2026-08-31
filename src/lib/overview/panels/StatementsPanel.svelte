@@ -7,7 +7,7 @@
 	// date, and one number for both would be wrong for one of them.
 	import Pill from '$lib/components/Pill.svelte';
 	import type { Hue } from '$lib/ui/hue';
-	import { readableDate } from '$lib/documents-view';
+	import { readableDate } from '$lib/documents/view';
 
 	interface Row {
 		id: string;
@@ -76,9 +76,5 @@
 	}
 	.state {
 		justify-self: end;
-	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 </style>

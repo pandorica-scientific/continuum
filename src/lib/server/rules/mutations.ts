@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { rule, ruleTag } from '$lib/server/db/schema';
-import { lockTransferPairing } from '$lib/server/import/ingest';
+import { lockTransferPairing } from '$lib/server/import/pairing-run';
 import { upsertTag } from '$lib/server/tags';
 import type { Condition } from '$lib/rules/match';
 

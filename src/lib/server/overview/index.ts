@@ -37,7 +37,7 @@ import {
 	type Actor
 } from '$lib/server/documents/visibility';
 import { systemShelfId } from '$lib/server/documents/shelves';
-import { groupSummary } from '$lib/documents-view';
+import { groupSummary } from '$lib/documents/view';
 import { statementStatus } from '$lib/statements/cadence';
 import { latestSalaryByPerson } from '$lib/server/salary/history';
 import { deltaPct, deltaTone } from '$lib/charts/delta';

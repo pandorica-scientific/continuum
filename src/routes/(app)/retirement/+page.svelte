@@ -486,7 +486,7 @@
 		background: transparent;
 		color: var(--fg2);
 		border-radius: var(--radius-md);
-		padding: 8px 6px;
+		padding: var(--space-4) var(--space-3);
 		font-size: var(--text-sm);
 		cursor: pointer;
 		white-space: nowrap;
@@ -496,10 +496,6 @@
 		background: var(--blue);
 		color: var(--fg-inverse);
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 	.table {
 		display: flex;
 		flex-direction: column;
@@ -508,7 +504,7 @@
 	.t-row {
 		display: grid;
 		grid-template-columns: minmax(80px, 1fr) repeat(5, minmax(90px, auto));
-		gap: 10px 14px;
+		gap: var(--space-5) var(--space-7);
 		align-items: baseline;
 	}
 	.t-head {

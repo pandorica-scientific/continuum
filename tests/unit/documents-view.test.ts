@@ -16,7 +16,7 @@ import {
 	groupAboutOptions,
 	type AboutOption,
 	type DocRow
-} from '$lib/documents-view';
+} from '$lib/documents/view';
 
 const TODAY = '2026-08-28';
 

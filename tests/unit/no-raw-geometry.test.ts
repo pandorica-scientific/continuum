@@ -33,6 +33,33 @@ describe('design/no-raw-geometry', () => {
 		).not.toThrow();
 	});
 
+	it('reads every part of a shorthand, not only a lone value', () => {
+		// The rule matched `^(\\d+)px$` for a long time, so `gap: 8px` was caught
+		// and `gap: 8px 14px` went straight through with both numbers on the
+		// scale. Twenty files carried one. A rule that looks enforced and is not
+		// is worse than no rule, because nobody looks again.
+		expect(() =>
+			run(
+				[],
+				[
+					{
+						code: 'const c = `<style>.a{gap:8px 14px;}</style>`;',
+						errors: [{ messageId: 'rawGeometry' }]
+					}
+				]
+			)
+		).not.toThrow();
+	});
+
+	it('leaves a shorthand that already names one axis alone', () => {
+		// Mixing a token with a number is a deliberate choice about one axis, not
+		// a number that drifted in — and there is nothing to suggest replacing it
+		// with.
+		expect(() =>
+			run([{ code: 'const c = `<style>.a{gap:var(--space-4) 3px;}</style>`;' }], [])
+		).not.toThrow();
+	});
+
 	it('accepts zero and relative units, which are not geometry choices', () => {
 		expect(() =>
 			run(

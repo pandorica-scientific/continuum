@@ -60,3 +60,6 @@ tessdata/
 
 # Local execution scratch (never committed)
 .superpowers/
+
+# Transient bundle written while composing the baseline.
+drizzle/.compose/

@@ -53,56 +53,23 @@
  * Reachable since the queue exists: `ingestFile` takes an `ocr` option and only
  * the queue passes it, because seconds per page is fine in the background and
  * never on a request.
- */
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import type { PdfLine } from './types';
-
-/** Where `npm run fetch:tessdata` puts the models. */
-const TESSDATA = resolve('tessdata');
-
-/**
- * Language per statement language. English is always included: card schemes,
- * merchant names and SWIFT text are English inside every statement we have.
- */
-type OcrLanguage = 'eng' | 'ces' | 'pol' | 'deu' | 'spa';
-export const OCR_LANGUAGES: OcrLanguage[] = ['eng', 'ces', 'pol', 'deu', 'spa'];
-
-/** 300 dpi: measured as the point where a rendered page reconciles reliably. */
-const RENDER_DPI = 300;
-
-export const ocrAvailable = (): boolean => existsSync(TESSDATA);
-
-/**
- * Render every page of a PDF to a PNG.
  *
- * mupdf is WASM — no native addon, so the Alpine image needs no build tools and
- * a developer's machine behaves the same as the container.
+ * Whether this machine can recognise anything at all, which languages it has,
+ * and how a PDF page becomes pixels are NOT decided here — they are the same
+ * questions document extraction asks, and they used to be answered differently
+ * in the two places. `$lib/server/ocr` answers them once. What stays here is
+ * the only thing that is genuinely this reader's: turning recognised words back
+ * into the line-and-cell model a statement is read from.
  */
-export async function renderPdfPages(
-	data: Uint8Array,
-	dpi = RENDER_DPI,
-	maxPages = 20
-): Promise<Uint8Array[]> {
-	const mupdf = await import('mupdf');
-	const document = mupdf.Document.openDocument(data, 'application/pdf');
-	const scale = dpi / 72;
-	const pages: Uint8Array[] = [];
-
-	const count = Math.min(document.countPages(), maxPages);
-	for (let index = 0; index < count; index++) {
-		const page = document.loadPage(index);
-		const pixmap = page.toPixmap(
-			mupdf.Matrix.scale(scale, scale),
-			mupdf.ColorSpace.DeviceRGB,
-			false,
-			true
-		);
-		pages.push(pixmap.asPNG());
-		pixmap.destroy?.();
-	}
-	return pages;
-}
+import {
+	RENDER_DPI,
+	TESSDATA,
+	missingLanguageDataMessage,
+	ocrAvailable,
+	renderPdfPages,
+	type OcrLanguage
+} from '$lib/server/ocr';
+import type { PdfLine } from './types';
 
 interface Word {
 	text: string;
@@ -215,9 +182,7 @@ export async function ocrPdf(
 	options: { dpi?: number; maxPages?: number } = {}
 ): Promise<PdfLine[]> {
 	if (!ocrAvailable()) {
-		throw new Error(
-			'Reading scanned statements needs the OCR language data. Run "npm run fetch:tessdata" once, or rebuild the image.'
-		);
+		throw new Error(missingLanguageDataMessage('Reading scanned statements'));
 	}
 
 	const { createWorker } = await import('tesseract.js');
@@ -274,9 +239,7 @@ export async function ocrImage(
 	languages: OcrLanguage[] = ['eng']
 ): Promise<PdfLine[]> {
 	if (!ocrAvailable()) {
-		throw new Error(
-			'Reading statements from photographs needs the OCR language data. Run "npm run fetch:tessdata" once, or rebuild the image.'
-		);
+		throw new Error(missingLanguageDataMessage('Reading statements from photographs'));
 	}
 	const { createWorker } = await import('tesseract.js');
 	const worker = await createWorker(languages.join('+'), 1, {

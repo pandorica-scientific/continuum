@@ -48,8 +48,4 @@
 	.up-amount {
 		font-size: var(--text-md);
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

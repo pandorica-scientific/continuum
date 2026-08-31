@@ -1246,7 +1246,7 @@ describe('import database integrity', () => {
 			create trigger task1_delay_pair_insert before insert on transfer_pair
 			for each row execute function task1_delay_pair_insert();
 		`);
-		const { pairAndCategorise } = await import('$lib/server/import/ingest');
+		const { pairAndCategorise } = await import('$lib/server/import/pairing-run');
 
 		await Promise.all([pairAndCategorise(testDb), pairAndCategorise(testDb)]);
 
@@ -1370,7 +1370,7 @@ describe('import database integrity', () => {
 			create trigger task1_delay_pair_insert before insert on transfer_pair
 			for each row execute function task1_delay_pair_insert();
 		`);
-		const { pairAndCategorise } = await import('$lib/server/import/ingest');
+		const { pairAndCategorise } = await import('$lib/server/import/pairing-run');
 
 		const firstPass = pairAndCategorise(testDb);
 		await new Promise((resolveDelay) => setTimeout(resolveDelay, 40));
@@ -1483,7 +1483,7 @@ describe('import database integrity', () => {
 				await autoThreshold(testDb)
 			)
 		).toMatchObject({ kind: 'auto', categoryId: rowId('rule-category') });
-		const { pairAndCategorise } = await import('$lib/server/import/ingest');
+		const { pairAndCategorise } = await import('$lib/server/import/pairing-run');
 
 		await pairAndCategorise(testDb);
 
@@ -1500,7 +1500,7 @@ describe('import database integrity', () => {
 	// The window bounds that to the changed row's neighbourhood; unlike the
 	// today-anchored horizon it replaces, it does not care how old the row is.
 	it('bounds a pairing pass to the neighbourhood of what changed', async () => {
-		const { pairingWindowAround } = await import('$lib/server/import/ingest');
+		const { pairingWindowAround } = await import('$lib/server/import/pairing-run');
 
 		expect(pairingWindowAround(['2021-03-10'])).toEqual({
 			from: '2021-03-03',

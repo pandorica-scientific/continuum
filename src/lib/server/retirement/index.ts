@@ -20,7 +20,8 @@ import {
 } from '$lib/server/db/schema';
 import { monthlyHistory } from '$lib/server/cashflow';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { amortise, DAY_COUNTS, type DayCount } from '$lib/loans/amortise';
+import { amortise } from '$lib/loans/amortise';
+import { DAY_COUNTS, type DayCount } from '$lib/loans';
 import { anchorMonthFor } from '$lib/loans/simulate';
 import { activeTenanciesByProperty } from '$lib/property/tenancy';
 import { toMajor } from '$lib/money';

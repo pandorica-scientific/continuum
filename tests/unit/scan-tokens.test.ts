@@ -13,15 +13,12 @@ describe('the scan tokens', () => {
 			'--scan-plate',
 			'--scan-plate-edge',
 			'--scan-ink',
-			'--scan-ink-2',
 			'--detect-searching',
 			'--detect-found',
 			'--detect-stable',
 			'--detect-rejected',
-			'--detect-w-searching',
 			'--detect-w-found',
 			'--detect-w-stable',
-			'--detect-dash-searching',
 			'--detect-dash-rejected',
 			'--safe-top',
 			'--safe-bottom',
@@ -40,22 +37,23 @@ describe('the scan tokens', () => {
 		// over a light page and unreadable over a dark kitchen at night — which
 		// is the primary usage context. Overriding these is a real regression
 		// that looks like a consistency fix, so it is tested.
-		for (const token of ['--scan-plate', '--scan-plate-edge', '--scan-ink', '--scan-ink-2']) {
+		for (const token of ['--scan-plate', '--scan-plate-edge', '--scan-ink']) {
 			expect(light).not.toContain(`${token}:`);
 		}
 	});
 
 	it('carries detection state in weight and dash, not colour alone', () => {
-		// The four states must be separable in greyscale, and the backdrop is
-		// unpredictable regardless.
-		expect(css).toMatch(/--detect-w-searching:\s*1\.5px/);
+		// Three states are DRAWN — found, stable, rejected — and they must be
+		// separable in greyscale, because the backdrop is a camera frame and its
+		// luminance is unknown. `searching` draws nothing at all, deliberately: no
+		// page found means no outline, since a speculative box is a claim the
+		// detector has not made (see OUTLINE in ScanCapture.svelte). It therefore
+		// has a colour token and no weight or dash, and this test used to pin two
+		// tokens nothing could ever read.
 		expect(css).toMatch(/--detect-w-found:\s*2px/);
 		expect(css).toMatch(/--detect-w-stable:\s*3px/);
-	});
-
-	it('dashes rejected tighter than searching — a different rhythm, not a hue', () => {
-		const gap = (name: string) => Number(css.match(new RegExp(`${name}:\\s*\\d+ (\\d+)`))?.[1]);
-		expect(gap('--detect-dash-rejected')).toBeLessThan(gap('--detect-dash-searching'));
+		// Found and rejected share a weight, so the dash is what separates them.
+		expect(css).toMatch(/--detect-dash-rejected:\s*\d+ \d+/);
 	});
 
 	it('reads the safe area from env() rather than a guessed constant', () => {

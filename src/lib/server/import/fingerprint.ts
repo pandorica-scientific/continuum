@@ -10,8 +10,8 @@ import type { ParsedRow } from './types';
  * v3: minorDigits stopped assuming two minor units for every currency, so
  *     parseAmountToMinor yields a different amountMinor — and therefore a
  *     different hash — for HUF, JPY, KRW, ISK, IDR, VND, CLP, COP, KWD, BHD,
- *     OMR, JOD and TND. Migration 0023 rescales the stored rows to match;
- *     without the bump, an overlapping statement in one of those currencies
+ *     OMR, JOD and TND. The stored rows were rescaled to match when the bump
+ *     shipped; without it, an overlapping statement in one of those currencies
  *     would hash differently from the row already in the ledger and import a
  *     second copy of every movement, with nothing reported as a duplicate.
  */

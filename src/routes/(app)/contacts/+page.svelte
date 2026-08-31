@@ -160,7 +160,7 @@
 		display: grid;
 		grid-template-columns: auto 1fr auto auto;
 		align-items: center;
-		gap: 10px 14px;
+		gap: var(--space-5) var(--space-7);
 	}
 
 	/* The avatar is decorative: the name beside it is the label, so an empty alt
@@ -214,7 +214,7 @@
 		color: var(--fg3);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-pill);
-		padding: 2px 8px;
+		padding: var(--space-1) var(--space-4);
 	}
 
 	@media (max-width: 40rem) {

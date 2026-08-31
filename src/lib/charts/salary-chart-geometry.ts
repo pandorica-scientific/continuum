@@ -14,11 +14,9 @@ import {
 	TALL_TITLE_PCT,
 	RATE_BOTTOM_Y,
 	RATE_TOP_Y,
-	X_LEFT,
-	X_RIGHT,
-	barWidth,
-	slotFor
+	barWidth
 } from './tax-chart-geometry';
+import { slotFor } from '$lib/charts/plot';
 
 export {
 	MONEY_BOTTOM,
@@ -28,13 +26,8 @@ export {
 	RATE_TITLE_PCT,
 	RATE_TOP_Y,
 	TALL_TITLE_PCT,
-	X_LEFT,
-	X_RIGHT,
-	barWidth,
-	slotFor
+	barWidth
 };
-
-export const VIEW_W = 1000;
 export const VIEW_H = 322;
 
 /** Below this height a segment gets no stroke — see `bars`. */

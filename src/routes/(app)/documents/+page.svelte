@@ -22,10 +22,7 @@
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
-	import ShelfRow from '$lib/components/ShelfRow.svelte';
-	import SubjectRow from '$lib/components/SubjectRow.svelte';
-	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
-	import Modal from '$lib/components/Modal.svelte';
+	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import {
 		ALL_TYPES,
@@ -46,7 +43,6 @@
 		groupDocuments,
 		groupSummary,
 		honestyState,
-		railSubjects,
 		readableSize,
 		rowVariant,
 		splitSnippet,
@@ -57,7 +53,7 @@
 		typeLabels,
 		type GroupKey,
 		type SortKey
-	} from '$lib/documents-view';
+	} from '$lib/documents/view';
 	import { navigating } from '$app/state';
 	import { tagHue } from '$lib/tag-hue';
 	import { fitChips } from '$lib/actions/fit-chips';
@@ -112,86 +108,6 @@
 		}
 	}
 
-	let editingRail = $state(false);
-	let railOrder = $state<string[]>([]);
-	let dragging = $state<string | null>(null);
-	let renaming = $state<string | null>(null);
-	let deleting = $state<string | null>(null);
-	let reassignTo = $state('');
-	let addingShelf = $state(false);
-	let newEmoji = $state('🗂️');
-	let reorderForm = $state<HTMLFormElement | null>(null);
-
-	const railShelves = $derived(
-		(railOrder.length
-			? railOrder.map((id) => data.shelves.find((s) => s.id === id)).filter(Boolean)
-			: data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox')) as typeof data.shelves
-	);
-	const deletingShelf = $derived(data.shelves.find((s) => s.id === deleting) ?? null);
-	const shelfBeingTyped = $derived(data.shelves.find((s) => s.id === typingShelf) ?? null);
-	const elsewhere = $derived(
-		data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox' && s.id !== deleting)
-	);
-
-	$effect(() => {
-		void data.shelves;
-		railOrder = [];
-		renaming = null;
-		deleting = null;
-		addingShelf = false;
-	});
-
-	// The SUBJECTS section keeps its own pencil rather than sharing the shelves'.
-	// One toggle driving two heads would mean pressing the pencil beside SHELVES
-	// put drag handles on subjects that cannot be dragged, and vice versa; what
-	// is shared is the mechanism, not the state.
-	let editingSubjects = $state(false);
-	let renamingSubject = $state<string | null>(null);
-	let subjectMenu = $state<string | null>(null);
-	let addingSubject = $state(false);
-	let newSubjectEmoji = $state('📁');
-
-	/**
-	 * Archived subjects revealed for editing, which is not the same question as
-	 * the list's archive scope.
-	 *
-	 * This used to write `?archived=1` — the parameter that also unhides archived
-	 * paper in the centre column — so bringing a sold car's row back to rename it
-	 * changed what the whole screen was showing, and pressing Done did not undo
-	 * it because a URL is not edit-mode state. `Include archived subjects` above
-	 * the list is still the control for the list.
-	 */
-	let revealArchived = $state(false);
-	// Which subjects the rail draws, and how many the archive scope is keeping
-	// back — the decision itself lives in `$lib/documents-view`, where a test can
-	// reach it without a page.
-	const subjects = $derived(railSubjects(data.subjects, data.includeArchived));
-	/** The rail's editing list, which may show archived rows the list does not. */
-	const editableSubjects = $derived(
-		railSubjects(data.subjects, data.includeArchived || revealArchived)
-	);
-	const menuSubject = $derived(data.subjects.find((s) => s.id === subjectMenu) ?? null);
-
-	$effect(() => {
-		void data.subjects;
-		renamingSubject = null;
-		subjectMenu = null;
-		addingSubject = false;
-	});
-
-	function moveOver(id: string) {
-		if (!dragging || dragging === id) return;
-		const ids = railShelves.map((s) => s.id);
-		const from = ids.indexOf(dragging);
-		const to = ids.indexOf(id);
-		if (from < 0 || to < 0) return;
-		ids.splice(to, 0, ids.splice(from, 1)[0]);
-		railOrder = ids;
-	}
-	/** Which shelf's type list is open, if any. */
-	let typingShelf = $state<string | null>(null);
-	/** A household type about to be removed, asked once because it cannot come back. */
-	let removingType = $state<string | null>(null);
 	let confirmingDelete = $state(false);
 	let replacing = $state(false);
 	/**
@@ -555,199 +471,7 @@
 {/if}
 
 <section class="layout" class:with-inspector={data.selected}>
-	<nav class="rail" aria-label="Shelves and subjects">
-		{#each data.shelves.filter((s) => s.key === 'all' || s.key === 'inbox') as s (s.key)}
-			<button
-				type="button"
-				class="rail-item"
-				class:active={data.view !== 'tags' && data.shelf === s.key}
-				onclick={() => navigate({ shelf: s.key === 'all' ? null : s.key, doc: null, view: null })}
-			>
-				<span class="rail-label"
-					>{#if s.emoji}<span class="rail-emoji">{s.emoji}</span>{/if}{s.label}</span
-				>
-				<!-- Amber only when there is something waiting: work, not an error. -->
-				<span class="mono rail-count" class:waiting={s.key === 'inbox' && s.count > 0}>
-					{s.count}
-				</span>
-			</button>
-		{/each}
-
-		<div class="rail-divider"></div>
-
-		<!-- The pencil turns the rail into its own settings: drag to reorder,
-		     click a name to rename, ⋯ to remove. Done puts it back. -->
-		<div class="rail-head">
-			<span class="eyebrow">Shelves</span>
-			<button
-				type="button"
-				class="rail-tool"
-				class:active={editingRail}
-				aria-label={editingRail ? 'Done editing shelves' : 'Edit shelves'}
-				aria-pressed={editingRail}
-				onclick={() => {
-					editingRail = !editingRail;
-					renaming = null;
-					railOrder = [];
-				}}
-			>
-				{#if editingRail}Done{:else}<Icon name="pencil" size={14} />{/if}
-			</button>
-		</div>
-
-		{#if editingRail}
-			<div class="rail-shelves" role="list">
-				{#each railShelves as s (s.id)}
-					{#if renaming === s.id}
-						<form class="rail-rename" method="POST" action="?/renameShelf" use:enhance>
-							<input type="hidden" name="id" value={s.id} />
-							<EmojiPicker name="emoji" value={s.emoji} />
-							<input name="label" value={s.label} aria-label="Shelf name" />
-							<button type="submit" class="btn small btn-primary">Save</button>
-							<button type="button" class="btn small" onclick={() => (renaming = null)}>✕</button>
-						</form>
-					{:else}
-						<ShelfRow
-							shelf={s}
-							dragging={dragging === s.id}
-							ondragstart={() => (dragging = s.id)}
-							ondragover={() => moveOver(s.id)}
-							ondrop={() => {
-								dragging = null;
-								// Saved as soon as the row lands; nothing to press afterwards.
-								if (railOrder.length) reorderForm?.requestSubmit();
-							}}
-							onrename={() => (renaming = s.id)}
-							ontypes={() => (typingShelf = s.id)}
-							ondelete={() => {
-								deleting = s.id;
-								reassignTo = elsewhere[0]?.id ?? '';
-							}}
-						/>
-					{/if}
-				{/each}
-			</div>
-			<form method="POST" action="?/reorderShelves" use:enhance bind:this={reorderForm} hidden>
-				<input type="hidden" name="order" value={railOrder.join(',')} />
-			</form>
-			<button type="button" class="rail-item manage" onclick={() => (addingShelf = true)}>
-				<span class="rail-label"><Icon name="plus" size={16} /> New shelf</span>
-			</button>
-		{:else}
-			<div class="rail-shelves">
-				{#each railShelves as s (s.key)}
-					<button
-						type="button"
-						class="rail-item"
-						class:active={data.view !== 'tags' && data.shelf === s.key}
-						onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
-					>
-						<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
-						<span class="mono rail-count">{s.count}</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
-
-		<div class="rail-divider"></div>
-
-		<!-- The other axis of the same archive: a shelf says where paper lives, a
-		     subject says who or what it is about. Same eyebrow, same pencil, and
-		     the same rows — with Archive where a shelf has Delete, because a
-		     subject that once held paper is history rather than a mistake. -->
-		<div class="rail-head">
-			<span class="eyebrow">Subjects</span>
-			<button
-				type="button"
-				class="rail-tool"
-				class:active={editingSubjects}
-				aria-label={editingSubjects ? 'Done editing subjects' : 'Edit subjects'}
-				aria-pressed={editingSubjects}
-				onclick={() => {
-					editingSubjects = !editingSubjects;
-					renamingSubject = null;
-					// Done puts the archived rows away again; the list's own scope is
-					// untouched either way.
-					revealArchived = false;
-				}}
-			>
-				{#if editingSubjects}Done{:else}<Icon name="pencil" size={14} />{/if}
-			</button>
-		</div>
-
-		{#if editingSubjects}
-			<div class="rail-shelves" role="list">
-				{#each editableSubjects.shown as s (s.id)}
-					{#if renamingSubject === s.id}
-						<form class="rail-rename" method="POST" action="?/renameSubject" use:enhance>
-							<input type="hidden" name="id" value={s.id} />
-							<EmojiPicker name="emoji" value={s.emoji} />
-							<input name="name" value={s.name} aria-label="Subject name" />
-							<button type="submit" class="btn small btn-primary">Save</button>
-							<button type="button" class="btn small" onclick={() => (renamingSubject = null)}
-								>✕</button
-							>
-						</form>
-					{:else}
-						<SubjectRow
-							subject={s}
-							onrename={() => (renamingSubject = s.id)}
-							onmenu={() => (subjectMenu = s.id)}
-						/>
-					{/if}
-				{/each}
-			</div>
-			<!-- Archived subjects are hidden, not gone, and the only control that
-			     brings one back lives on its row — so the rail says how many rows
-			     it is holding rather than leaving a one-way door. -->
-			{#if editableSubjects.hidden > 0}
-				<button type="button" class="rail-item manage" onclick={() => (revealArchived = true)}>
-					<span class="rail-label">Show {editableSubjects.hidden} archived</span>
-				</button>
-			{/if}
-			<button type="button" class="rail-item manage" onclick={() => (addingSubject = true)}>
-				<span class="rail-label"><Icon name="plus" size={16} /> New subject</span>
-			</button>
-		{:else}
-			<div class="rail-shelves">
-				{#each subjects.shown as s (s.id)}
-					<!-- A subject narrows the list without leaving the shelf: `?entity=`
-					     is the same filter the About dropdown writes, so the rail and
-					     the filter can never disagree. Pressing the active one clears
-					     it, which is how the day filter on the calendar already reads. -->
-					<button
-						type="button"
-						class="rail-item"
-						class:active={data.view !== 'tags' && data.filters.entity === s.id}
-						class:dim={s.archived}
-						onclick={() =>
-							navigate({
-								entity: data.filters.entity === s.id ? null : s.id,
-								doc: null,
-								view: null
-							})}
-					>
-						<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.name}</span>
-						<span class="mono rail-count">{s.count}</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
-
-		<div class="rail-divider"></div>
-
-		<!-- Tags cut across documents and money alike; a household reaches for
-		     them from the paper far more often than from the register. -->
-		<button
-			type="button"
-			class="rail-item"
-			class:active={data.view === 'tags'}
-			onclick={() => navigate({ view: 'tags', doc: null })}
-		>
-			<span class="rail-label"><span class="rail-emoji">🏷️</span>Tags</span>
-			<span class="mono rail-count">{data.knownTags.length}</span>
-		</button>
-	</nav>
+	<DocumentsRail {data} {navigate} />
 
 	<div class="area">
 		{#if data.view === 'tags' && data.tagsScreen}
@@ -1651,200 +1375,6 @@
 	{/if}
 </section>
 
-{#if addingShelf}
-	<Modal onclose={() => (addingShelf = false)} title="New shelf">
-		<form class="shelf-dialog" method="POST" action="?/addShelf" use:enhance>
-			<div class="shelf-dialog-row">
-				<span class="shelf-dialog-emoji" aria-hidden="true">{newEmoji}</span>
-				<input name="label" placeholder="Shelf name" aria-label="Shelf name" />
-			</div>
-			<EmojiPicker name="emoji" bind:value={newEmoji} inline />
-			<div class="modal-actions">
-				<button type="button" class="btn" onclick={() => (addingShelf = false)}>Cancel</button>
-				<button type="submit" class="btn btn-primary">Add shelf</button>
-			</div>
-		</form>
-	</Modal>
-{/if}
-
-{#if addingSubject}
-	<Modal onclose={() => (addingSubject = false)} title="New subject">
-		<form class="shelf-dialog" method="POST" action="?/addSubject" use:enhance>
-			<div class="shelf-dialog-row">
-				<span class="shelf-dialog-emoji" aria-hidden="true">{newSubjectEmoji}</span>
-				<input name="name" placeholder="Subject name" aria-label="Subject name" />
-			</div>
-			<EmojiPicker name="emoji" bind:value={newSubjectEmoji} inline />
-			<div class="modal-actions">
-				<button type="button" class="btn" onclick={() => (addingSubject = false)}>Cancel</button>
-				<button type="submit" class="btn btn-primary">Add subject</button>
-			</div>
-		</form>
-	</Modal>
-{/if}
-
-<!-- Archiving is reversible and deletes nothing, so the dialog is a sentence
-     about what moves rather than a warning: the number is how much paper leaves
-     the list, and the same dialog brings it back. -->
-{#if menuSubject}
-	<Modal
-		onclose={() => (subjectMenu = null)}
-		title={menuSubject.archived
-			? `Bring “${menuSubject.name}” back?`
-			: `Archive “${menuSubject.name}”?`}
-	>
-		<form
-			class="shelf-dialog"
-			method="POST"
-			action={menuSubject.archived ? '?/unarchiveSubject' : '?/archiveSubject'}
-			use:enhance
-		>
-			<input type="hidden" name="id" value={menuSubject.id} />
-			<p class="quiet">
-				{#if menuSubject.archived}
-					Its <span class="mono">{menuSubject.count}</span>
-					{menuSubject.count === 1 ? 'document comes' : 'documents come'} back into the list, and its
-					expiry dates read as dates to act on again.
-				{:else}
-					Its <span class="mono">{menuSubject.count}</span>
-					{menuSubject.count === 1 ? 'document leaves' : 'documents leave'} the list. Nothing is deleted
-					— <strong>Include archived subjects</strong> shows them again, and their expiry dates stop being
-					alarms.
-				{/if}
-			</p>
-			<div class="modal-actions">
-				<button type="button" class="btn" onclick={() => (subjectMenu = null)}>Cancel</button>
-				<button type="submit" class="btn btn-primary"
-					>{menuSubject.archived ? 'Bring it back' : 'Archive'}</button
-				>
-			</div>
-		</form>
-	</Modal>
-{/if}
-
-{#if shelfBeingTyped}
-	<Modal onclose={() => (typingShelf = null)} title={`What ${shelfBeingTyped.label} usually holds`}>
-		<form
-			class="shelf-dialog"
-			method="POST"
-			action="?/setShelfTypes"
-			use:enhance={() =>
-				async ({ update }) => {
-					await update();
-					typingShelf = null;
-				}}
-		>
-			<input type="hidden" name="id" value={shelfBeingTyped.id} />
-			<p class="quiet">
-				These are offered first when filing to this shelf, and one is proposed during inbox review.
-				Nothing is refused: any document can be filed here whatever its type.
-			</p>
-			<div class="type-picker">
-				{#each data.documentTypes as t (t.key)}
-					<span class="type-chip">
-						<label class="pick-chip">
-							<input
-								type="checkbox"
-								name="types"
-								value={t.key}
-								checked={shelfBeingTyped.types.includes(t.key)}
-							/>
-							<span>{t.label}</span>
-						</label>
-						{#if !t.builtin}
-							<!-- Only on a type this household added, and only the ✕: the
-							     seventeen the app ships are read by name by the salary
-							     tracker, the importer and the wallet, so there is nothing
-							     here to press for them. A type that is on a document is
-							     refused with the reason rather than hidden. -->
-							<button
-								type="button"
-								class="chip-x"
-								aria-label="Remove the type {t.label}"
-								onclick={() => (removingType = t.key)}>✕</button
-							>
-						{/if}
-					</span>
-				{/each}
-			</div>
-			<div class="dialog-actions">
-				<button type="submit" class="btn btn-primary">Save</button>
-				<button type="button" class="btn" onclick={() => (typingShelf = null)}>Cancel</button>
-			</div>
-		</form>
-
-		{#if removingType}
-			<form
-				class="remove-type"
-				method="POST"
-				action="?/removeDocumentType"
-				use:enhance={() =>
-					async ({ update }) => {
-						await update();
-						removingType = null;
-					}}
-			>
-				<input type="hidden" name="key" value={removingType} />
-				<span class="quiet">
-					Remove “{data.documentTypes.find((t) => t.key === removingType)?.label}” from this
-					household?
-				</span>
-				<button type="submit" class="btn small danger">Remove</button>
-				<button type="button" class="btn small" onclick={() => (removingType = null)}>
-					Keep it
-				</button>
-			</form>
-		{/if}
-
-		<!-- Its own form, because it posts to a different action and must not
-		     carry the checkboxes above with it. A type added here is added to the
-		     household, not to this shelf: tick it afterwards to put it on the
-		     shelf, which is the same two steps a new tag takes. -->
-		<form
-			class="new-type"
-			method="POST"
-			action="?/addDocumentType"
-			use:enhance={() =>
-				async ({ update }) => {
-					await update({ reset: true });
-				}}
-		>
-			<span class="eyebrow">A kind of paper this list is missing</span>
-			<div class="new-type-row">
-				<input name="label" placeholder="Vaccination book, lease annex…" />
-				<button type="submit" class="btn">Add type</button>
-			</div>
-			<p class="quiet">
-				Yours to name. The seventeen the app ships with cannot be removed — the salary tracker, the
-				importer and the wallet each read one by name — but anything you add here is only a label,
-				and can go again while nothing is filed as it.
-			</p>
-		</form>
-	</Modal>
-{/if}
-
-{#if deletingShelf}
-	<Modal onclose={() => (deleting = null)} title={`Delete “${deletingShelf.label}”?`}>
-		<form class="shelf-dialog" method="POST" action="?/removeShelf" use:enhance>
-			<input type="hidden" name="id" value={deletingShelf.id} />
-			<p class="quiet">
-				<span class="mono">{deletingShelf.count}</span>
-				{deletingShelf.count === 1 ? 'document needs' : 'documents need'} another shelf first.
-			</p>
-			<label class="shelf-dialog-field">
-				<span class="eyebrow">Move them to</span>
-				<select name="reassignTo" bind:value={reassignTo}>
-					{#each elsewhere as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
-				</select>
-			</label>
-			<div class="modal-actions">
-				<button type="button" class="btn" onclick={() => (deleting = null)}>Cancel</button>
-				<button type="submit" class="btn btn-primary">Move &amp; delete</button>
-			</div>
-		</form>
-	</Modal>
-{/if}
-
 <style>
 	.error {
 		border: 1px solid var(--red);
@@ -1913,7 +1443,7 @@
 		height: auto;
 		min-height: 72px;
 		resize: vertical;
-		padding: 8px 10px;
+		padding: var(--space-4) var(--space-5);
 		font-family: inherit;
 	}
 	.select-toggle {
@@ -1962,190 +1492,6 @@
 	}
 	.layout.with-inspector {
 		grid-template-columns: 218px minmax(0, 1fr) 460px;
-	}
-	.rail {
-		position: sticky;
-		top: 14px;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		/* A1: the shelf list uses the viewport it has rather than a fixed height
-		   that scrolls while the page still has room. */
-		max-height: calc(100vh - 120px);
-		min-height: 0;
-	}
-	.rail-shelves {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		min-height: 0;
-		overflow-y: auto;
-	}
-	.rail-item {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: center;
-		gap: var(--space-5);
-		padding: 8px 10px;
-		border: 0;
-		border-radius: var(--radius-md);
-		background: transparent;
-		color: var(--fg2);
-		font-size: var(--text-md);
-		text-align: left;
-		text-decoration: none;
-		cursor: pointer;
-	}
-	.rail-item:hover {
-		background: var(--card2);
-	}
-	.rail-item.active {
-		background: var(--card3);
-		color: var(--fg1);
-	}
-	.rail-label {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	/* The shelf's own emoji, at the row level where emoji are allowed to live.
-	   The design pass resolved this off; the household asked for it on. */
-	.rail-emoji {
-		display: inline-block;
-		width: 22px;
-		margin-right: var(--space-3);
-		font-size: var(--text-lg);
-		text-align: center;
-	}
-	/* An archived subject is dimmed, never hidden from its own section: the row
-	   is how it is brought back. `--fg3` is the quiet colour in both themes, and
-	   the emoji takes opacity because it has no colour of ours to quieten. */
-	.rail-item.dim {
-		color: var(--fg3);
-	}
-	.rail-item.dim .rail-emoji {
-		opacity: 0.55;
-	}
-	.rail-count {
-		font-size: var(--text-2xs);
-		color: var(--fg3);
-		font-variant-numeric: tabular-nums;
-	}
-	.rail-count.waiting {
-		color: var(--yellow);
-	}
-	.rail-divider {
-		height: 1px;
-		background: var(--bd);
-		margin: var(--space-3) 0;
-	}
-	.rail-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0 10px;
-		min-height: 24px;
-	}
-	.rail-tool {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 24px;
-		height: 24px;
-		padding: 0 var(--space-3);
-		border: 1px solid transparent;
-		border-radius: var(--radius-sm);
-		background: transparent;
-		color: var(--fg3);
-		font-size: var(--text-xs);
-		cursor: pointer;
-	}
-	.rail-tool:hover {
-		color: var(--fg1);
-		background: var(--card2);
-	}
-	.rail-tool.active {
-		color: var(--fg1);
-		border-color: var(--bd);
-		background: var(--card3);
-	}
-	.rail-rename {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		height: 36px;
-		padding: 0 var(--space-3);
-	}
-	.rail-rename input {
-		flex: 1;
-		min-width: 0;
-		height: 28px;
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-sm);
-		background: var(--card);
-		color: var(--fg1);
-		padding: 0 var(--space-3);
-		font-size: var(--text-md);
-	}
-	.rail-rename :global(.trigger) {
-		width: 28px;
-		height: 28px;
-	}
-	.shelf-dialog {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
-	}
-	.shelf-dialog-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-4);
-	}
-	.shelf-dialog-emoji {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: var(--control-h);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-md);
-		background: var(--card2);
-		font-size: var(--text-xl);
-		line-height: 1;
-		flex: none;
-	}
-	.shelf-dialog-row input,
-	.shelf-dialog select {
-		flex: 1;
-		height: var(--control-h);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		background: var(--card);
-		color: var(--fg1);
-		padding: 0 10px;
-		font-size: var(--text-md);
-	}
-	.shelf-dialog-field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-	.modal-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-4);
-	}
-	.manage {
-		color: var(--fg3);
-		cursor: pointer;
-	}
-	.manage .rail-label {
-		display: flex;
-		align-items: center;
-		gap: var(--space-4);
-	}
-	.manage:hover {
-		color: var(--fg2);
 	}
 	.area {
 		display: flex;
@@ -2202,7 +1548,7 @@
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
 		background: var(--card);
-		padding: 10px 14px;
+		padding: var(--space-5) var(--space-7);
 	}
 	.matrix {
 		border: 1px solid var(--bd);
@@ -2437,7 +1783,7 @@
 		display: inline-block;
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-xl);
-		padding: 2px 10px;
+		padding: var(--space-1) var(--space-5);
 		font-size: var(--text-xs);
 		line-height: 1.2;
 		color: var(--fg3);
@@ -2506,8 +1852,6 @@
 		margin: 0;
 	}
 	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
 		margin: 0;
 	}
 	.link {
@@ -2766,52 +2110,6 @@
 	.id-field.wide {
 		grid-column: 1 / -1;
 	}
-	/* Seventeen chips in a scrollable block: a column of seventeen rows is a
-	   dialog taller than the screen it opens on. */
-	.type-picker {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-4);
-		max-height: 40vh;
-		overflow-y: auto;
-	}
-	/* The chip and its ✕ travel together, so the ✕ never wraps onto its own
-	   line away from the type it belongs to. */
-	.type-chip {
-		display: inline-flex;
-		flex-direction: row;
-		align-items: center;
-		gap: var(--space-3);
-	}
-	.remove-type {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-4);
-		margin-top: var(--space-5);
-	}
-	.new-type {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-		margin-top: var(--space-7);
-		padding-top: var(--space-7);
-		border-top: 1px solid var(--bd);
-	}
-	.new-type-row {
-		display: flex;
-		flex-direction: row;
-		gap: var(--space-4);
-	}
-	.new-type-row input {
-		flex: 1;
-	}
-	.dialog-actions {
-		display: flex;
-		flex-direction: row;
-		gap: var(--space-5);
-	}
 	.id-extra {
 		display: flex;
 		flex-direction: column;
@@ -2890,74 +2188,25 @@
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 	}
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-	}
-	/* The checkbox is the control and stays in the accessibility tree; the chip
-	   is its face. Checked is a fill change, not a tint: it is a selection. */
-	.pick-chip,
+	/* A link that is already there. It reads as a CHECKED `.pick-chip` — the
+	   shared mark in app.css — because that is what it is; what differs is that
+	   the way off it is the ✕, not a tick, so it is not a control. */
 	.link-chip {
-		position: relative;
 		display: inline-flex;
 		align-items: center;
+		gap: var(--space-3);
 		height: 28px;
 		padding: 0 var(--space-6);
-		border: 1px solid var(--bd);
+		border: 1px solid var(--bd2);
 		border-radius: var(--radius-chip);
-		background: var(--card);
-		color: var(--fg2);
-		font-size: var(--text-sm);
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.pick-chip input {
-		position: absolute;
-		inset: 0;
-		opacity: 0;
-		margin: 0;
-		height: auto;
-		padding: 0;
-		cursor: pointer;
-	}
-	.pick-chip:hover {
-		background: var(--card2);
-	}
-	.pick-chip:has(input:checked),
-	.link-chip {
 		background: var(--card3);
-		border-color: var(--bd2);
 		color: var(--fg1);
-	}
-	.pick-chip:has(input:focus-visible) {
-		outline: 2px solid var(--brand);
-		outline-offset: 1px;
-	}
-	/* A link that is already there. It reads as a checked chip because that is
-	   what it is; what differs is that the way off it is the ✕, not a tick. */
-	.link-chip {
-		gap: var(--space-3);
+		font-size: var(--text-sm);
 		cursor: default;
+		white-space: nowrap;
 	}
 	.chip-meta {
 		font-size: var(--text-2xs);
-	}
-	.chip-x {
-		border: 0;
-		padding: 0;
-		background: none;
-		color: var(--fg3);
-		font-size: var(--text-xs);
-		line-height: 1;
-		cursor: pointer;
-	}
-	.chip-x:hover {
-		color: var(--fg1);
-	}
-	.chip-x:focus-visible {
-		outline: 2px solid var(--brand);
-		outline-offset: 2px;
 	}
 	.replace {
 		display: flex;
@@ -2999,20 +2248,6 @@
 		.layout,
 		.layout.with-inspector {
 			grid-template-columns: minmax(0, 1fr);
-		}
-		.rail {
-			position: static;
-			flex-direction: row;
-			flex-wrap: wrap;
-			max-height: none;
-		}
-		.rail-shelves {
-			flex-direction: row;
-			flex-wrap: wrap;
-			overflow: visible;
-		}
-		.rail-divider {
-			display: none;
 		}
 	}
 	@media (max-width: 640px) {

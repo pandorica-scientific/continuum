@@ -77,7 +77,7 @@
 		cursor: pointer;
 		font-size: var(--text-md);
 		line-height: 1;
-		padding: 4px 10px;
+		padding: var(--space-2) var(--space-5);
 	}
 	.page-step:hover:not(:disabled) {
 		border-color: var(--blue);

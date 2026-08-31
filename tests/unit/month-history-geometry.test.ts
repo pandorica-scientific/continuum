@@ -3,16 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
 	BOTTOM,
 	TOP,
-	X_LEFT,
-	X_RIGHT,
 	axisTicks,
 	barWidth,
 	barsFor,
 	ceilingFor,
 	keptPct,
-	slotFor,
 	type MonthBar
 } from '$lib/charts/month-history-geometry';
+import { X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
 
 function span(start: string, count: number): string[] {
 	const [y, m] = start.split('-').map(Number);

@@ -108,8 +108,4 @@
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

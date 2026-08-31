@@ -11,7 +11,7 @@
  * Health's timeline and Household's kit are specified and will add their own
  * beside it rather than growing this one into a switch.
  */
-import type { DocRow } from '$lib/documents-view';
+import type { DocRow } from '$lib/documents/view';
 import type { EntityKind, EnumValue } from '$lib/enums';
 
 /** One record a document is filed against: the id and kind a layout groups by. */

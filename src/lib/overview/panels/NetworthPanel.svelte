@@ -65,8 +65,4 @@
 		min-height: 60px;
 		width: 100%;
 	}
-	.quiet {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
 </style>

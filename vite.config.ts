@@ -13,7 +13,7 @@ export default defineConfig({
 
 			adapter: adapter(),
 
-			// Turned off because src/lib/server/csrf.ts replaces it, NOT because the
+			// Turned off because src/lib/server/auth/csrf.ts replaces it, NOT because the
 			// protection is unwanted. SvelteKit's version compares Origin against
 			// url.origin, which adapter-node pins to the ORIGIN environment variable —
 			// one address — so every other address the server answers on had its form

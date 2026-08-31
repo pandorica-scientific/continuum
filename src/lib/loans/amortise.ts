@@ -13,10 +13,7 @@
 // with a known payment reuse that payment and are estimates, not bookings —
 // actual history belongs in loan_event rows.
 
-import { DAY_COUNTS, type DayCount } from '$lib/loans';
-
-export { DAY_COUNTS, type DayCount };
-void DAY_COUNTS; // re-exported for server callers
+import type { DayCount } from '$lib/loans';
 
 export interface FixationPeriod {
 	startsOn: string; // ISO date

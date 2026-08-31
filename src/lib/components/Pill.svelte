@@ -17,7 +17,7 @@
 		display: inline-block;
 		border: 1px solid;
 		border-radius: var(--radius-xl);
-		padding: 2px 10px;
+		padding: var(--space-1) var(--space-5);
 		font-size: var(--text-xs);
 		font-weight: 600;
 		line-height: 1.2;

@@ -311,7 +311,7 @@
 		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px 16px;
+		gap: var(--space-5) var(--space-8);
 	}
 	.rule-row.off {
 		opacity: 0.55;

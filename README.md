@@ -140,10 +140,12 @@ Upload what your bank actually gives you:
 | CAMT.053, MT940, ABO/GPC, OFX/QFX | read directly — these declare their own shape |
 | A photo or scan of a printout     | read from the page image, in the background   |
 
-**Measured, not asserted.** Across a 294-file corpus spanning 24 locales and 20
-currencies, plus real statements from ten institutions in four countries: every
-real statement is read without knowing which bank wrote it, and 274 of the 294
-are read exactly.
+**Measured, not asserted.** Across a 294-file synthetic corpus spanning 24 locales
+and 20 currencies, 274 of the 294 are read exactly, and
+`tests/acceptance/synthetic-corpus.test.ts` holds that in CI in both directions. The
+real statements — ten institutions in four countries — are read without knowing which
+bank wrote them; that one was measured by hand rather than by a suite, because the
+files cannot be committed.
 
 It earns that by refusing. A statement is filed only once it agrees with its own
 arithmetic — the printed opening and closing balances, the running balance, the

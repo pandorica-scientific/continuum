@@ -63,12 +63,12 @@ describe('foreign keys', () => {
 		// index's columns — a lookup by (a) is served by an index on (a, b), but
 		// not by one on (b, a).
 		//
-		// The converse also counts, when the shorter index is UNIQUE. Each of the
-		// eleven `(id, entity_kind)` keys added by migration 0049 leads with the
-		// table's own primary key, so the primary-key index already narrows the
-		// lookup to at most one row and `entity_kind` is a stored constant. An
-		// index on the pair would be dead weight, and demanding one here would have
-		// bought eleven of them.
+		// The converse also counts, when the shorter index is UNIQUE. Every
+		// `(id, entity_kind)` key the supertype adds — one per ENTITY_KINDS entry —
+		// leads with the table's own primary key, so the primary-key index already
+		// narrows the lookup to at most one row and `entity_kind` is a stored
+		// constant. An index on the pair would be dead weight, and demanding one
+		// here would have bought a dozen of them.
 		const covered = (fk: ColumnSet) =>
 			indexes.some(
 				(ix) =>

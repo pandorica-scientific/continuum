@@ -12,6 +12,29 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 /** Whichever of the two a caller happens to hold. */
 export type Queryable = Db | Tx;
 
+/**
+ * Run an operation in a transaction, unless one is already open.
+ *
+ * Every write that spans more than one statement wants this, and a caller
+ * cannot know whether the handle it was given is the connection or an open
+ * transaction — nesting `db.transaction` inside one would be a savepoint, which
+ * is not what "make these two writes atomic" means. Asking the handle whether it
+ * can start one is the whole trick.
+ *
+ * There were two copies of this, in `import/ingest.ts` and `tags/index.ts`,
+ * neither of which is where transaction plumbing belongs.
+ */
+export async function inTransaction<T>(
+	handle: Queryable,
+	operation: (tx: Queryable) => Promise<T>
+): Promise<T> {
+	const candidate = handle as Db;
+	if (typeof candidate.transaction === 'function') {
+		return candidate.transaction((tx) => operation(tx));
+	}
+	return operation(handle);
+}
+
 // Lazy so that importing server modules at build time (when DATABASE_URL is
 // not set) does not open a connection or throw.
 let instance: Db | null = null;

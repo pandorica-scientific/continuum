@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { documentExpiryTone } from '$lib/documents-view';
+import { documentExpiryTone } from '$lib/documents/view';
 import type { AboutDocument } from '$lib/server/documents/targets';
 
 const TODAY = '2026-08-28';
