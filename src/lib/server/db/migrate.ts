@@ -10,7 +10,11 @@ import { installFacts } from '$lib/server/system/status';
  * Named once, because the boot check below and the sentence it throws have to
  * be talking about the same column.
  */
-const RELEASE_COLUMN = { table: 'import_file', column: 'document_id' } as const;
+// The LAST object the release adds, not the first: a database carrying this one
+// necessarily carries the rest, because it holds a foreign key into them.
+// Pointed at the first, an instance that ran half the release-notes SQL booted
+// happily and failed later at somebody's passport instead.
+const RELEASE_COLUMN = { table: 'document_identity_number', column: 'document_id' } as const;
 
 /**
  * Does this database actually carry the schema this build was written against?
@@ -19,10 +23,9 @@ const RELEASE_COLUMN = { table: 'import_file', column: 'document_id' } as const;
  * holds a single baseline that is rewritten in place rather than added to, and
  * a database that already recorded the old baseline as applied is left
  * untouched by `migrate()` — no error, nothing to see in the log. The app then
- * runs against a schema that has no `import_file.document_id`, still has the
- * columns this release dropped, and still refuses `broker_report`; the first
- * sign of it is a 500 on somebody's statement import, long after the restart
- * that caused it.
+ * runs against a schema that has no identity tables at all, so opening any
+ * identity document fails; the first sign of it is a 500 on somebody's
+ * passport, long after the restart that caused it.
  *
  * `information_schema` is the cheapest true probe there is: one round trip, no
  * data read, and it asks about the schema itself rather than about a symptom.

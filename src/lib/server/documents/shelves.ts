@@ -12,10 +12,11 @@
  * looks and nothing would say so; a key this repo asks for and the database does
  * not have is a defect in this repo.
  */
-import { count, eq, sql } from 'drizzle-orm';
+import { asc, count, eq, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
+import type { DocumentTypeKey } from '$lib/enums';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { document, shelf } from '$lib/server/db/schema';
+import { document, shelf, shelfType } from '$lib/server/db/schema';
 
 export interface ShelfRow {
 	id: string;
@@ -182,5 +183,48 @@ export async function reassignAndDelete(
 
 		await tx.update(document).set({ shelfId: reassignTo }).where(eq(document.shelfId, id));
 		await tx.delete(shelf).where(eq(shelf.id, id));
+	});
+}
+
+/**
+ * The types each shelf offers first, by shelf key.
+ *
+ * Read whole: there are ten shelves and a handful of types each, and the two
+ * screens that want this — the review form and the documents type filter —
+ * both want every shelf's list at once.
+ */
+export async function shelfTypesByKey(
+	handle: Queryable = db
+): Promise<Map<string, DocumentTypeKey[]>> {
+	const rows = await handle
+		.select({ key: shelf.key, type: shelfType.type, ordinal: shelfType.ordinal })
+		.from(shelfType)
+		.innerJoin(shelf, eq(shelf.id, shelfType.shelfId))
+		.orderBy(asc(shelfType.ordinal));
+	const byKey = new Map<string, DocumentTypeKey[]>();
+	for (const row of rows) byKey.set(row.key, [...(byKey.get(row.key) ?? []), row.type]);
+	return byKey;
+}
+
+/**
+ * Replace a shelf's list with exactly what was chosen.
+ *
+ * A replacement, not a merge: the picker shows every type with the shelf's own
+ * ticked, so what comes back IS the intended list and an unticked one was
+ * unticked on purpose. Ordinals are re-issued so the order is the order given.
+ */
+export async function setShelfTypes(
+	shelfId: string,
+	types: DocumentTypeKey[],
+	handle: Db = db
+): Promise<void> {
+	// Both halves or neither. As two loose statements, a failure between them —
+	// a type somebody else removed a moment earlier — left the shelf with an
+	// empty list rather than the one it had, which reads as data loss for what
+	// was only a refused edit.
+	await handle.transaction(async (tx) => {
+		await tx.delete(shelfType).where(eq(shelfType.shelfId, shelfId));
+		if (types.length === 0) return;
+		await tx.insert(shelfType).values(types.map((type, ordinal) => ({ shelfId, type, ordinal })));
 	});
 }

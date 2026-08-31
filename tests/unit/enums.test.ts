@@ -63,6 +63,17 @@ describe('narrowing at a boundary', () => {
 });
 
 describe('the documents-v2 registry', () => {
+	it('still names the types the app ships, and no longer constrains the column', () => {
+		// `document_type` is a table now — a household adds its own — so this list
+		// is what SHIPS rather than what is allowed. It stays because code reads
+		// these keys by name; the column is a foreign key, not a CHECK.
+		expect(ENUMS['document.type']).toContain('payslip');
+		expect(ENUMS['document.type']).toContain('bank_statement');
+		expect(ENUMS['document.type']).toContain('other');
+		expect(ENUM_COLUMNS.some((c) => c.table === 'document' && c.column === 'type')).toBe(false);
+		expect(ENUM_COLUMNS.some((c) => c.table === 'shelf_type')).toBe(false);
+	});
+
 	it('no longer knows about a shelf', () => {
 		// Shelves became rows. A closed set here would be a migration every time
 		// a household added one, which is the cost this file exists to avoid.
@@ -70,14 +81,10 @@ describe('the documents-v2 registry', () => {
 		expect(ENUM_COLUMNS.some((c) => c.table === 'document' && c.column === 'shelf')).toBe(false);
 	});
 
-	it('constrains type, sensitivity and chunk source', () => {
-		expect(ENUMS['document.type']).toContain('payslip');
-		expect(ENUMS['document.type']).toContain('bank_statement');
-		expect(ENUMS['document.type']).toContain('other');
+	it('constrains sensitivity and chunk source', () => {
 		expect(ENUMS['document.sensitivity']).toEqual(['normal', 'restricted']);
 		expect(ENUMS['document_text_chunk.source']).toEqual(['text_layer', 'ocr', 'plain']);
 		for (const [table, column, key] of [
-			['document', 'type', 'document.type'],
 			['document', 'sensitivity', 'document.sensitivity'],
 			['document_text_chunk', 'source', 'document_text_chunk.source']
 		] as const) {

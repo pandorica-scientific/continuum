@@ -10,13 +10,15 @@
  * to a screen.
  */
 import { uuidv7 } from 'uuidv7';
-import { asEnumValue } from '$lib/enums';
+import { asEnumValue, type DocumentTypeKey } from '$lib/enums';
+import { orderTypeOptions, shelfProfile, type ShelfLayout } from '$lib/shelf-profiles';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { and, count, eq, getTableColumns, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	document,
+	documentIdentity,
 	documentLink,
 	documentText,
 	entity,
@@ -28,17 +30,33 @@ import {
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
 import {
+	identityNumbersFor,
+	readIdentityFields,
+	readIdentityNumbers,
+	replaceIdentityNumbers,
+	upsertIdentity
+} from '$lib/server/documents/identity';
+import {
 	removeDocument,
 	salaryGuardedDocuments,
 	SALARY_ENTRY_REFUSAL
 } from '$lib/server/documents/lifecycle';
+import {
+	addDocumentType,
+	asDocumentType,
+	documentTypeKeys,
+	listDocumentTypes,
+	removeDocumentType
+} from '$lib/server/documents/types';
 import {
 	addShelf,
 	listShelves,
 	reassignAndDelete,
 	renameShelf,
 	reorderShelves,
-	shelfIdByKey
+	setShelfTypes,
+	shelfIdByKey,
+	shelfTypesByKey
 } from '$lib/server/documents/shelves';
 import {
 	addSubject,
@@ -73,6 +91,27 @@ import { upsertTag } from '$lib/server/tags';
 import { runCpuQueue } from '$lib/server/jobs';
 import type { Actions, PageServerLoad } from './$types';
 
+/**
+ * What the centre column draws: the list, the shelf's own layout, or Tags.
+ *
+ * The rail stays put whichever it is — a view is a thing the rail opens, not a
+ * screen of its own.
+ *
+ * A SEARCH always falls back to the list: snippets are where a match is
+ * explained, and a card face has nowhere to put a matched line of contents.
+ * `?view=list` forces the list on any shelf, and is what the toolbar's own
+ * switch writes, so the choice survives a reload and a shared link.
+ */
+function centreView(
+	asked: string | null,
+	query: string,
+	layout: ShelfLayout | null
+): 'tags' | 'list' | 'shelf' {
+	if (asked === 'tags') return 'tags';
+	if (asked === 'list' || query) return 'list';
+	return layout && layout !== 'list' ? 'shelf' : 'list';
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const shelf = url.searchParams.get('shelf') ?? 'all';
 	const query = url.searchParams.get('q') ?? '';
@@ -83,9 +122,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const entityFilter = url.searchParams.get('entity') ?? '';
 	const includeArchived = url.searchParams.get('archived') === '1';
 	const openDocumentId = url.searchParams.get('doc') ?? '';
-	// The centre column shows the list, or the Tags view. The rail stays put
-	// either way — a view is a thing the rail opens, not a screen of its own.
-	const view = url.searchParams.get('view') === 'tags' ? 'tags' : 'list';
+	const profile = shelfProfile(shelf);
+	const view = centreView(url.searchParams.get('view'), query, profile?.layout ?? null);
 	const isAdmin = locals.person?.role === 'admin';
 
 	// Other screens open capture pre-addressed by id, never by name:
@@ -112,7 +150,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		docTags,
 		tags,
 		texts,
-		pending
+		pending,
+		identities,
+		shelfTypes,
+		documentTypes
 	] = await Promise.all([
 		listShelves(),
 		// Behind the same read rule as everything else on this screen: a member
@@ -174,7 +215,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		db
 			.select({ documentId: job.subjectId })
 			.from(job)
-			.where(and(eq(job.kind, 'extract_text'), inArray(job.state, ['queued', 'running'])))
+			.where(and(eq(job.kind, 'extract_text'), inArray(job.state, ['queued', 'running']))),
+		// Every identity row the archive holds, keyed by document below. Whole
+		// rather than by id: there is one per identity document and a household
+		// has a handful, which is cheaper than a second round trip once the
+		// selected document turns out to be one of them.
+		db.select().from(documentIdentity),
+		shelfTypesByKey(),
+		listDocumentTypes()
 	]);
 
 	/** One record a document is filed against, ready to draw as a chip. */
@@ -275,6 +323,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	const textByDoc = new Map(texts.map((t) => [t.documentId, t]));
 	const pendingDocs = new Set(pending.map((p) => p.documentId).filter(Boolean) as string[]);
+	const identityByDoc = new Map(identities.map((row) => [row.documentId, row]));
+
+	/** The two identity fields a row may show, or null when it has none. */
+	const identityFor = (documentId: string) => {
+		const row = identityByDoc.get(documentId);
+		return row ? { kind: row.kind, country: row.country } : null;
+	};
 
 	// Searching happens in SQL, not over the loaded array: the tiers are what
 	// make a name match outrank a mention on page forty.
@@ -336,9 +391,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		tags: [...tagCounts.entries()]
 			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 			.map(([name, n]) => ({ name, count: n })),
-		types: [...typeCounts.entries()]
-			.sort((a, b) => b[1] - a[1])
-			.map(([code, n]) => ({ code, count: n })),
+		// What the shelf expects first, then by how many documents each would
+		// leave: opening Identity's type filter should start with Identity
+		// document rather than with whatever happens to be most numerous.
+		types: orderTypeOptions(
+			[...typeCounts.entries()].map(([code, n]) => ({ code, count: n })),
+			// The household's own list, which the registry only seeded.
+			shelfTypes.get(shelf) ?? []
+		),
 		// Registry order first, so the groups the screen draws come out in the
 		// same order as the chips under About; then by how many documents each
 		// would leave. The view groups on `groupLabel` and never re-sorts, which
@@ -370,12 +430,23 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			shelfKey: d.shelfKey,
 			shelfLabel: d.shelfLabel,
 			entities: entitiesByDoc.get(d.id) ?? [],
+			// The same links the row already carries by name, with the id and the
+			// kind a layout groups by. Named separately from `entities` because
+			// that one is a sub-line and this one is a section header: the list
+			// wants "Robert, Vinohrady flat" and the wallet wants to know which of
+			// those two is the person.
+			about: (targetsByDoc.get(d.id) ?? []).map(({ id, kind, name }) => ({ id, kind, name })),
 			tags: tagsByDoc.get(d.id) ?? [],
 			addedOn: d.addedOn,
 			periodOn: d.periodOn,
 			expiresOn: d.expiresOn,
 			expiryVerb: d.expiryVerb,
 			subjectArchived: archivedByDoc.has(d.id),
+			// What a wallet card draws: the kind it calls itself and the country
+			// whose artwork it is on. The document NUMBER is deliberately absent —
+			// a card face is glanced at with other people in the room, and a field
+			// that never reaches the browser cannot be read off a screen.
+			identity: identityFor(d.id),
 			ext: d.ext,
 			hasFile: d.storedName !== null,
 			note: d.note,
@@ -414,7 +485,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		filterOptions,
 		includeArchived,
 		isAdmin,
-		group: url.searchParams.get('group') ?? 'type',
+		// The shelf's own default, so Finance opens by year and Identity by who it
+		// is about; the control still nulls the parameter at whatever the shelf
+		// would have done on its own.
+		group: url.searchParams.get('group') ?? profile?.group ?? 'type',
+		defaultGroup: profile?.group ?? 'type',
+		// Every kind of paper this household files, built-in and its own. Drawn
+		// from here rather than from the enum, which is only what ships.
+		documentTypes,
+		/** The layout being drawn, or null whenever the centre column is the list. */
+		layout: view === 'shelf' ? (profile?.layout ?? null) : null,
+		/** What this shelf COULD draw, so the toolbar can offer the switch. */
+		shelfLayout: profile?.layout ?? null,
+		emptyHint: profile?.emptyHint ?? null,
 		sort: url.searchParams.get('sort') ?? 'newest',
 		// What the screen is allowed to say about what it could not find.
 		honesty: search?.honesty ?? null,
@@ -427,7 +510,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				// Filed paper only. The Inbox has its own row and its own number.
 				count: readableTotal - (shelfCounts.get(inboxKey) ?? 0),
 				system: true,
-				emoji: ''
+				emoji: '',
+				// Everything is a view of all the shelves rather than one of them,
+				// so it has no list of its own to offer or to edit. Typed, so the
+				// rail's editor sees one shape of `types` across every shelf.
+				types: [] as DocumentTypeKey[]
 			},
 			...shelves.map((s) => ({
 				id: s.id,
@@ -435,7 +522,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				label: s.label,
 				emoji: s.emoji,
 				system: s.system,
-				count: shelfCounts.get(s.key) ?? 0
+				count: shelfCounts.get(s.key) ?? 0,
+				// The rail's type editor reads this; the filter above uses the same
+				// rows, so what a shelf offers is stated once.
+				types: shelfTypes.get(s.key) ?? []
 			}))
 		],
 		// The rail's SUBJECTS section. Archived ones travel too, and the view
@@ -460,6 +550,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					...rowOf(selected),
 					// `PDF · 412 kB · added 2026-02-11` — the header's own sub-line.
 					fileSize: selected.storedName ? await uploadSize(selected.storedName) : null,
+					// The inspector is the one place the number is shown, and it is
+					// masked there until asked for. Sent for every selected document,
+					// not only for identity ones: a document retyped away from
+					// `id_document` keeps its fields, and the screen decides whether
+					// to draw them from the type it is currently showing.
+					identityDetail: identityByDoc.get(selected.id) ?? null,
+					// Inspector-only, like the number they sit beside: a card face
+					// never shows one, so no row on the shelf needs to carry them.
+					identityNumbers: await identityNumbersFor(selected.id),
 					links: targetsByDoc.get(selected.id) ?? [],
 					sensitivity: selected.sensitivity
 				}
@@ -520,7 +619,7 @@ export const actions: Actions = {
 
 		const shared = {
 			shelfId,
-			type: asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other'),
+			type: asDocumentType(form.get('type'), await documentTypeKeys()),
 			note: String(form.get('note') ?? '').trim() || null,
 			sensitivity: asEnumValue(
 				'document.sensitivity',
@@ -602,7 +701,7 @@ export const actions: Actions = {
 			}
 		}
 
-		const type = asEnumValue('document.type', String(form.get('type') ?? 'other'), 'other');
+		const type = asDocumentType(form.get('type'), await documentTypeKeys());
 		const wanted = form.getAll('linkIds').map(String).filter(Boolean);
 
 		// Two edits would quietly orphan the salary a month is credited with —
@@ -679,6 +778,21 @@ export const actions: Actions = {
 					.insert(documentLink)
 					.values(add.map((targetId) => ({ documentId: id, targetId })))
 					.onConflictDoNothing();
+			}
+
+			// The identity fields, when this is the kind of paper that has them.
+			//
+			// Written only for `id_document`, and never cleared for anything else:
+			// a document retyped to Other keeps what somebody typed off its face,
+			// so a mis-set dropdown costs a click rather than five fields. The
+			// screen stops showing them, which is the whole of what "not an
+			// identity document any more" means here.
+			if (type === 'id_document') {
+				await upsertIdentity(id, readIdentityFields(form), tx);
+				// After the upsert, never before: the rows hang off the identity
+				// record, so writing them first would have nothing to hang from on a
+				// document being given its identity fields for the first time.
+				await replaceIdentityNumbers(id, readIdentityNumbers(form), tx);
 			}
 
 			// Tags are replaced with what the form holds: the field shows every tag
@@ -788,7 +902,7 @@ export const actions: Actions = {
 		// both, the same way the inspector's does. Empty stays empty — asEnumValue
 		// would otherwise fall back to the truthy 'other' and turn "no type was
 		// selected" into "retype everything to Other".
-		const normalisedType = type ? asEnumValue('document.type', type, 'other') : '';
+		const normalisedType = type ? asDocumentType(type, await documentTypeKeys()) : '';
 		const sensitivity = String(form.get('sensitivity') ?? '');
 		const addTags = await readTags(form);
 		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
@@ -870,6 +984,61 @@ export const actions: Actions = {
 		const label = String(form.get('label') ?? '').trim();
 		if (!id || !label) return fail(400, { message: 'A shelf needs a name.' });
 		await renameShelf(id, { label, emoji: String(form.get('emoji') ?? '') }, db);
+		return { ok: true };
+	},
+
+	/**
+	 * Which types a shelf offers first.
+	 *
+	 * A list, never a rule: the picker gets shorter and nothing gets refused, so
+	 * an unticked type is still filed the moment somebody chooses it. Allowed on
+	 * a system shelf too — what Identity holds cannot be deleted, and what it
+	 * suggests is the household's business.
+	 */
+	setShelfTypes: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		if (!id) return fail(400, { message: 'Which shelf?' });
+		// Filtered against what this household HAS, not against what the app
+		// ships: filtering on the enum silently dropped every type the household
+		// had added — the checkbox ticked, the form posted it, and the shelf came
+		// back without it. The foreign key would otherwise refuse the write with
+		// a constraint name nobody should have to read.
+		const known = new Set(await documentTypeKeys());
+		const types = form
+			.getAll('types')
+			.map(String)
+			.filter((code) => known.has(code));
+		await setShelfTypes(id, types, db);
+		return { ok: true };
+	},
+
+	/**
+	 * A kind of paper this household files that the app did not ship.
+	 *
+	 * Idempotent by key, so adding one that already exists selects it rather
+	 * than refusing: two people naming the same thing have agreed.
+	 */
+	addDocumentType: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await addDocumentType(String(form.get('label') ?? ''), db);
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
+		return { ok: true };
+	},
+
+	/** Only one the household added, and only while nothing is filed as it. */
+	removeDocumentType: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await removeDocumentType(String(form.get('key') ?? ''), db);
+		} catch (error) {
+			return fail(409, {
+				message: error instanceof Error ? error.message : 'Could not remove it.'
+			});
+		}
 		return { ok: true };
 	},
 

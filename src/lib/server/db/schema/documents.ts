@@ -19,7 +19,7 @@ import {
 } from 'drizzle-orm/pg-core';
 // Relative, not aliased: drizzle-kit loads these files outside Vite and
 // does not resolve SvelteKit's $lib.
-import type { EnumValue } from '../../../enums';
+import type { DocumentTypeKey, EnumValue } from '../../../enums';
 
 // ---- Documents ----
 
@@ -63,7 +63,9 @@ export const document = pgTable(
 		// What kind of paper this is, independent of where it sits. The salary
 		// tracker reads this; it used to read the shelf, which meant renaming a
 		// shelf could silently unhook a feature.
-		type: text('type').$type<EnumValue<'document.type'>>().notNull().default('other'),
+		// A foreign key into `document_type`, not a CHECK: the household grows the
+		// list, so what is valid is a row rather than a constant.
+		type: text('type').$type<DocumentTypeKey>().notNull().default('other'),
 		// The one user-authored phrase field, ranked above contents in search.
 		note: text('note'),
 		// Absent for members everywhere — list, search, counts, briefing,
@@ -126,6 +128,112 @@ export const documentText = pgTable('document_text', {
 	complete: boolean('complete').notNull().default(true),
 	pagesExtracted: integer('pages_extracted')
 });
+
+/**
+ * What kinds of paper this household files.
+ *
+ * Seventeen ship as built-ins and a household adds its own — a vaccination
+ * book, a lease annex. Rows rather than a CHECK because the list is theirs to
+ * grow, and a constraint is not something a person can add a value to.
+ *
+ * A built-in may be RELABELLED and never removed: `payslip` is what the salary
+ * tracker reads, `bank_statement` what an accepted import writes, `id_document`
+ * what puts the identity fields on a document. The key is the contract, the
+ * label is the household's. Their own types carry no behaviour at all, which is
+ * exactly why they are safe to invent.
+ */
+export const documentType = pgTable('document_type', {
+	/** The value stored on a document. Immutable, and what code refers to. */
+	key: text('key').primaryKey(),
+	label: text('label').notNull(),
+	/** True for the seventeen the app ships and reads by name. */
+	builtin: boolean('builtin').notNull().default(false),
+	sortOrder: integer('sort_order').notNull().default(0)
+});
+
+/**
+ * The types a shelf offers first, which the household may change.
+ *
+ * Seeded from `SHELF_PROFILES` and then owned by whoever is filing: the
+ * registry's guess at what belongs on Health is a good one and it is still a
+ * guess, and the household filing the paper knows better by the second week.
+ *
+ * It ORDERS and shortens the picker; it never restricts. A shelf still takes
+ * any type — behaviour hangs off type and never off shelf — so a car insurance
+ * policy filed under Identity is filed, not refused.
+ */
+export const shelfType = pgTable(
+	'shelf_type',
+	{
+		shelfId: uuid('shelf_id')
+			.notNull()
+			.references(() => shelf.id, { onDelete: 'cascade' }),
+		type: text('type').$type<DocumentTypeKey>().notNull(),
+		/** The order they are offered in, which is the order they were ticked. */
+		ordinal: integer('ordinal').notNull()
+	},
+	(table) => [
+		primaryKey({ columns: [table.shelfId, table.type] }),
+		// The primary key leads with `shelfId`, so it does not cover a lookup by
+		// type alone — which is what deleting a household's own type does.
+		index('shelf_type_type_idx').on(table.type)
+	]
+);
+
+/**
+ * What an identity document says on its face, entered by hand.
+ *
+ * One row per document, and only for `type = 'id_document'`. Nothing extracts
+ * these: `documents/extract` reads text into chunks and is forbidden from
+ * writing a record's fields, and a passport number filled in wrong by a
+ * recogniser is worse than an empty box, because it is believed.
+ *
+ * Expiry is NOT here. It stays on `document.expires_on`, where the briefing,
+ * the calendar feed and the wallet card all already read it — a second date
+ * column would be a second answer to when the passport runs out.
+ *
+ * The row survives a change of type. A document retyped away from
+ * `id_document` stops showing these fields and keeps them; retyping back
+ * restores what was entered rather than asking for it again.
+ */
+export const documentIdentity = pgTable('document_identity', {
+	documentId: uuid('document_id')
+		.primaryKey()
+		.references(() => document.id, { onDelete: 'cascade' }),
+	kind: text('kind').$type<EnumValue<'document_identity.kind'>>().notNull().default('other'),
+	/** ISO 3166-1 alpha-2, upper case; the shape is a CHECK in the appendix. */
+	country: text('country'),
+	/** Shown in the inspector, never on a card face, and never searched. */
+	number: text('number'),
+	issuedOn: date('issued_on'),
+	issuer: text('issuer')
+});
+
+/**
+ * The other numbers on an identity document, named by whoever typed them.
+ *
+ * One document really can carry several: a residence permit with a card number
+ * and a personal number, a driving licence with a licence number beside a
+ * national identifier. Rows rather than more columns, because there is no
+ * ceiling to guess — a fifth column would be right until the household files
+ * something with six.
+ *
+ * The LABEL is theirs too. Numbering schemes differ by country and by document
+ * and a fixed list of names would be wrong somewhere on the first day.
+ */
+export const documentIdentityNumber = pgTable(
+	'document_identity_number',
+	{
+		documentId: uuid('document_id')
+			.notNull()
+			.references(() => documentIdentity.documentId, { onDelete: 'cascade' }),
+		/** Position in the form, which is the order they were typed in. */
+		ordinal: integer('ordinal').notNull(),
+		label: text('label').notNull(),
+		value: text('value').notNull()
+	},
+	(table) => [primaryKey({ columns: [table.documentId, table.ordinal] })]
+);
 
 /**
  * One PDF page, one image, or a ≤100 KB slice of a plain-text file.

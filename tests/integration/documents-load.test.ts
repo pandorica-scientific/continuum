@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
-import { documentLink, entity, subject } from '$lib/server/db/schema';
+import { document, documentLink, entity, subject } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeAccount, makeDocument, makeLoan, makePerson, makeTransaction } from './fixtures';
@@ -116,15 +116,21 @@ interface AboutOption {
 type LoadedDocuments = {
 	shelves: { key: string; label: string; count: number }[];
 	total: number;
-	filterOptions: { entities: AboutOption[] };
+	view: 'list' | 'shelf' | 'tags';
+	layout: string | null;
+	shelfLayout: string | null;
+	group: string;
+	defaultGroup: string;
+	emptyHint: string | null;
+	filterOptions: { entities: AboutOption[]; types: { code: string; count: number }[] };
 	pickableTargets: { id: string; kind: string; groupLabel: string }[];
 };
 
-async function loadDocuments(locals: unknown): Promise<LoadedDocuments> {
+async function loadDocuments(locals: unknown, search = ''): Promise<LoadedDocuments> {
 	const { load } = await import('../../src/routes/(app)/documents/+page.server');
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return (await (load as any)({
-		url: new URL('http://localhost/documents'),
+		url: new URL(`http://localhost/documents${search}`),
 		locals
 	})) as LoadedDocuments;
 }
@@ -156,6 +162,99 @@ describe('the documents load', () => {
 		expect(data.rows).toHaveLength(1);
 		expect(data.rows.every((r) => r.restricted === false)).toBe(true);
 		expect(JSON.stringify(data.rows)).not.toMatch(/restricted 0/);
+	});
+});
+
+/**
+ * Which view the centre column draws.
+ *
+ * All of it is URL state, so a bookmark is a saved view and the back button
+ * means what it said. The one rule worth stating out loud is that a search
+ * always falls back to the list: a match is explained by a snippet, and a card
+ * face has nowhere to put one.
+ */
+describe('the view a shelf opens in', () => {
+	it('draws the wallet on Identity', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=identity');
+		expect(data.view).toBe('shelf');
+		expect(data.layout).toBe('wallet');
+	});
+
+	it('gives back the list when asked, and says the wallet is still there', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=identity&view=list');
+		expect(data.view).toBe('list');
+		expect(data.layout).toBeNull();
+		// The toolbar needs to keep offering the switch it was just used to leave.
+		expect(data.shelfLayout).toBe('wallet');
+	});
+
+	it('falls back to the list for a search', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=identity&q=passport');
+		expect(data.view).toBe('list');
+		expect(data.layout).toBeNull();
+	});
+
+	it('leaves every other shelf on the list', async () => {
+		for (const shelf of ['family', 'health', 'household', 'finance', 'statements']) {
+			const data = await loadDocuments(asAdmin, `?shelf=${shelf}`);
+			expect(data.view).toBe('list');
+			expect(data.layout).toBeNull();
+			expect(data.shelfLayout).toBe('list');
+		}
+	});
+
+	it('has no layout for Everything, or for a shelf a household made', async () => {
+		for (const search of ['', '?shelf=all', '?shelf=boat']) {
+			const data = await loadDocuments(asAdmin, search);
+			expect(data.view).toBe('list');
+			expect(data.shelfLayout).toBeNull();
+			expect(data.emptyHint).toBeNull();
+		}
+	});
+});
+
+describe('what a shelf brings with it', () => {
+	it('groups the list the way the shelf is read', async () => {
+		// Finance by year, because a shelf of payslips and tax papers is read by
+		// which year it concerns; Identity by who it is about.
+		expect((await loadDocuments(asAdmin, '?shelf=finance')).group).toBe('year');
+		expect((await loadDocuments(asAdmin, '?shelf=identity&view=list')).group).toBe('entity');
+		expect((await loadDocuments(asAdmin, '?shelf=inbox')).group).toBe('type');
+	});
+
+	it('still lets the control say otherwise', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=finance&group=type');
+		expect(data.group).toBe('type');
+		expect(data.defaultGroup).toBe('year');
+	});
+
+	it('says what belongs on the shelf, for an empty one to show', async () => {
+		expect(await loadDocuments(asAdmin, '?shelf=identity')).toHaveProperty(
+			'emptyHint',
+			expect.stringContaining('Passports')
+		);
+	});
+
+	it('offers the types the shelf expects first', async () => {
+		// Two invoices and one identity document on Identity: the filter still
+		// offers both, and starts with the one the shelf is for rather than with
+		// whatever happens to be most numerous.
+		for (const [name, type] of [
+			['Passport', 'id_document'],
+			['Invoice one', 'invoice'],
+			['Invoice two', 'invoice']
+		] as const) {
+			await makeDocument(testDb, {
+				id: uuidv7(),
+				name,
+				shelfKey: 'identity',
+				type,
+				addedOn: '2026-01-01'
+			});
+		}
+
+		const data = await loadDocuments(asAdmin, '?shelf=identity&view=list');
+		expect(data.filterOptions.types.map((t) => t.code)).toEqual(['id_document', 'invoice']);
 	});
 });
 
@@ -304,5 +403,47 @@ describe('the review screen', () => {
 		// A list of every transaction is a list nobody can read by eye. They reach
 		// a document from their own screen instead.
 		expect(data.targets.some((t) => t.kind === 'transaction')).toBe(false);
+	});
+
+	it('takes a document off the Inbox when it is filed', async () => {
+		// The screen once said "Inbox is clear" while the document sat exactly
+		// where it started: the button advanced the queue before the browser had
+		// dispatched the submit, which unmounted the form mid-submission. The
+		// client half of that cannot be tested here — there is no browser suite —
+		// but this holds the half that has to be true for the fix to mean
+		// anything: a filing moves the paper.
+		const id = uuidv7();
+		await makeDocument(testDb, {
+			id,
+			name: 'Something unfiled',
+			shelfKey: 'inbox',
+			type: 'other',
+			addedOn: '2026-01-01'
+		});
+
+		const { actions } = await import('../../src/routes/(app)/documents/review/+page.server');
+		const form = new FormData();
+		form.set('id', id);
+		form.set('name', 'A boiler service');
+		form.set('shelf', 'household');
+		form.set('type', 'invoice');
+		const request = new Request('http://localhost/documents/review?/file', {
+			method: 'POST',
+			body: form
+		});
+		const result = (await (actions.file as (event: unknown) => Promise<unknown>)({
+			request,
+			locals: asAdmin
+		})) as { ok?: boolean };
+		expect(result.ok).toBe(true);
+
+		const [row] = await testDb
+			.select({ shelfId: document.shelfId, name: document.name, type: document.type })
+			.from(document)
+			.where(eq(document.id, id));
+		expect(row.shelfId).not.toBe(await shelfIdByKey('inbox', testDb));
+		expect(row.shelfId).toBe(await shelfIdByKey('household', testDb));
+		expect(row.name).toBe('A boiler service');
+		expect(row.type).toBe('invoice');
 	});
 });

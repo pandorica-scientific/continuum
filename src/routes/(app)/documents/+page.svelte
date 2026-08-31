@@ -18,14 +18,27 @@
 	import Segmented from '$lib/components/Segmented.svelte';
 	import SnippetMark from '$lib/components/SnippetMark.svelte';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import { DOCUMENT_ACCEPT } from '$lib/uploads';
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
+	import WalletView from '$lib/documents/WalletView.svelte';
 	import ShelfRow from '$lib/components/ShelfRow.svelte';
 	import SubjectRow from '$lib/components/SubjectRow.svelte';
 	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
-	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
+	import {
+		ALL_TYPES,
+		EXPIRY_VERBS,
+		EXPIRY_VERB_MEANINGS,
+		IDENTITY_KINDS,
+		IDENTITY_KIND_LABELS,
+		identityKindLabel,
+		mayProposeType,
+		typeOptionsFor
+	} from '$lib/documents';
+	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
+	import { LAYOUT_LABELS } from '$lib/shelf-profiles';
 	import {
 		aboutOptionLabel,
 		expiryTreatment,
@@ -41,7 +54,7 @@
 		sortDocuments,
 		subLine,
 		typeLabel,
-		TYPE_LABELS,
+		typeLabels,
 		type GroupKey,
 		type SortKey
 	} from '$lib/documents-view';
@@ -115,6 +128,7 @@
 			: data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox')) as typeof data.shelves
 	);
 	const deletingShelf = $derived(data.shelves.find((s) => s.id === deleting) ?? null);
+	const shelfBeingTyped = $derived(data.shelves.find((s) => s.id === typingShelf) ?? null);
 	const elsewhere = $derived(
 		data.shelves.filter((s) => s.key !== 'all' && s.key !== 'inbox' && s.id !== deleting)
 	);
@@ -137,10 +151,25 @@
 	let addingSubject = $state(false);
 	let newSubjectEmoji = $state('📁');
 
+	/**
+	 * Archived subjects revealed for editing, which is not the same question as
+	 * the list's archive scope.
+	 *
+	 * This used to write `?archived=1` — the parameter that also unhides archived
+	 * paper in the centre column — so bringing a sold car's row back to rename it
+	 * changed what the whole screen was showing, and pressing Done did not undo
+	 * it because a URL is not edit-mode state. `Include archived subjects` above
+	 * the list is still the control for the list.
+	 */
+	let revealArchived = $state(false);
 	// Which subjects the rail draws, and how many the archive scope is keeping
 	// back — the decision itself lives in `$lib/documents-view`, where a test can
 	// reach it without a page.
 	const subjects = $derived(railSubjects(data.subjects, data.includeArchived));
+	/** The rail's editing list, which may show archived rows the list does not. */
+	const editableSubjects = $derived(
+		railSubjects(data.subjects, data.includeArchived || revealArchived)
+	);
 	const menuSubject = $derived(data.subjects.find((s) => s.id === subjectMenu) ?? null);
 
 	$effect(() => {
@@ -159,8 +188,55 @@
 		ids.splice(to, 0, ids.splice(from, 1)[0]);
 		railOrder = ids;
 	}
+	/** Which shelf's type list is open, if any. */
+	let typingShelf = $state<string | null>(null);
+	/** A household type about to be removed, asked once because it cannot come back. */
+	let removingType = $state<string | null>(null);
 	let confirmingDelete = $state(false);
 	let replacing = $state(false);
+	/**
+	 * The type the FORM currently holds, which is what decides whether the
+	 * Identity fields are on screen — `data.selected.type` is what was saved.
+	 */
+	let editType = $state('other');
+	/** The shelf the FORM holds, which decides what the type picker offers. */
+	let editShelf = $state('');
+	/** Whether the type in the form was put there by a shelf rather than chosen. */
+	let typeProposed = $state(false);
+	/** Widened past the shelf's own list, for as long as the inspector is open. */
+	let allTypes = $state(false);
+	/** What this household calls each type: the built-ins, plus its own. */
+	const labels = $derived(typeLabels(data.documentTypes));
+	const editTypeOptions = $derived(
+		typeOptionsFor(
+			data.shelves.find((s) => s.key === editShelf)?.types ?? [],
+			editType,
+			labels,
+			allTypes
+		)
+	);
+	let numberShown = $state(false);
+	/**
+	 * The extra-number rows the form is currently showing.
+	 *
+	 * Local state rather than `$derived`, because the form is being edited: rows
+	 * are added and removed before anything is saved, and a derived list would
+	 * discard them on the next load. Seeded from the record whenever the
+	 * inspector opens on a different document.
+	 */
+	let extraNumbers = $state<{ label: string; value: string }[]>([]);
+	/** The identity fields of the open document, whatever its type says now. */
+	const identity = $derived(data.selected?.identityDetail ?? null);
+	/**
+	 * The layout this shelf offers, or null when there is nothing to switch to.
+	 *
+	 * `data.shelfLayout` says what the shelf CAN draw and `data.view` says what
+	 * it IS drawing. Null while searching, because a search forces the list —
+	 * offering the switch there would be a control that undoes itself.
+	 */
+	const layoutSwitch = $derived(
+		!data.query && data.shelfLayout && data.shelfLayout !== 'list' ? data.shelfLayout : null
+	);
 
 	$effect(() => {
 		// A navigation is what carries new data in; nothing stays armed across it.
@@ -171,10 +247,17 @@
 	});
 	$effect(() => {
 		// The inspector opens read-only, whichever document it opens on.
-		void data.selected?.id;
+		const selected = data.selected;
 		editing = false;
 		replacing = false;
 		overflowOpen = false;
+		// A number revealed on one document must not be revealed on the next.
+		numberShown = false;
+		editType = selected?.type ?? 'other';
+		editShelf = selected?.shelfKey ?? '';
+		typeProposed = false;
+		allTypes = false;
+		extraNumbers = (selected?.identityNumbers ?? []).map((n) => ({ ...n }));
 	});
 
 	const today = new Date().toISOString().slice(0, 10);
@@ -195,7 +278,12 @@
 	}
 
 	const groups = $derived(
-		groupDocuments(sortDocuments(data.rows, data.sort as SortKey), data.group as GroupKey, today)
+		groupDocuments(
+			sortDocuments(data.rows, data.sort as SortKey),
+			data.group as GroupKey,
+			today,
+			labels
+		)
 	);
 	const groupHeading = $derived(
 		{ type: 'Type', entity: 'About', year: 'Year', expiry: 'Expiry', none: '' }[
@@ -313,44 +401,64 @@
 		/>
 	</div>
 
-	<span class="eyebrow group-label">Group</span>
-	<Segmented
-		options={[
-			{ value: 'type', label: 'Type' },
-			{ value: 'entity', label: 'Entity' },
-			{ value: 'year', label: 'Year' },
-			{ value: 'expiry', label: 'Expiry' },
-			{ value: 'none', label: 'None' }
-		]}
-		value={data.group}
-		onchange={(value) => navigate({ group: value === 'type' ? null : value })}
-	/>
+	{#if layoutSwitch}
+		<!-- Two segments and no third state: the shelf's own layout, or the list
+		     it would otherwise be. A search removes this control rather than
+		     disabling it, because a search always renders the list. -->
+		<Segmented
+			options={[
+				{ value: 'shelf', label: LAYOUT_LABELS[layoutSwitch] },
+				{ value: 'list', label: LAYOUT_LABELS.list }
+			]}
+			value={data.view === 'shelf' ? 'shelf' : 'list'}
+			onchange={(value) => navigate({ view: value === 'list' ? 'list' : null })}
+		/>
+	{/if}
 
-	<!-- Group is not sort. Two questions, two controls. -->
-	<select
-		class="sort"
-		aria-label="Sort documents"
-		value={data.sort}
-		onchange={(e) =>
-			navigate({ sort: e.currentTarget.value === 'newest' ? null : e.currentTarget.value })}
-	>
-		<option value="newest">Sort · Newest first</option>
-		<option value="oldest">Sort · Oldest first</option>
-		<option value="name">Sort · Name A–Z</option>
-		<option value="expiry">Sort · Expiry soonest</option>
-	</select>
+	<!-- Absent while a layout is showing, not disabled. None of the three has a
+	     meaning against a wallet: the layout already decided the grouping and
+	     the order, and bulk selection is a list gesture. They come back with
+	     the list, one click away. -->
+	{#if data.view !== 'shelf'}
+		<span class="eyebrow group-label">Group</span>
+		<Segmented
+			options={[
+				{ value: 'type', label: 'Type' },
+				{ value: 'entity', label: 'Entity' },
+				{ value: 'year', label: 'Year' },
+				{ value: 'expiry', label: 'Expiry' },
+				{ value: 'none', label: 'None' }
+			]}
+			value={data.group}
+			onchange={(value) => navigate({ group: value === data.defaultGroup ? null : value })}
+		/>
 
-	<button
-		type="button"
-		class="btn select-toggle"
-		class:active={selecting}
-		onclick={() => {
-			selecting = !selecting;
-			if (!selecting) selection = [];
-		}}
-	>
-		Select
-	</button>
+		<!-- Group is not sort. Two questions, two controls. -->
+		<select
+			class="sort"
+			aria-label="Sort documents"
+			value={data.sort}
+			onchange={(e) =>
+				navigate({ sort: e.currentTarget.value === 'newest' ? null : e.currentTarget.value })}
+		>
+			<option value="newest">Sort · Newest first</option>
+			<option value="oldest">Sort · Oldest first</option>
+			<option value="name">Sort · Name A–Z</option>
+			<option value="expiry">Sort · Expiry soonest</option>
+		</select>
+
+		<button
+			type="button"
+			class="btn select-toggle"
+			class:active={selecting}
+			onclick={() => {
+				selecting = !selecting;
+				if (!selecting) selection = [];
+			}}
+		>
+			Select
+		</button>
+	{/if}
 	<button type="button" class="btn btn-primary" onclick={() => (capturing = !capturing)}>
 		Add document
 	</button>
@@ -384,6 +492,7 @@
 		{/each}
 		<UploadDropzone
 			name="file"
+			accept={DOCUMENT_ACCEPT}
 			multiple
 			idleText="Drop files here, or click to browse"
 			description="PDF, images, text and spreadsheets — several at once is fine"
@@ -451,7 +560,7 @@
 			<button
 				type="button"
 				class="rail-item"
-				class:active={data.view === 'list' && data.shelf === s.key}
+				class:active={data.view !== 'tags' && data.shelf === s.key}
 				onclick={() => navigate({ shelf: s.key === 'all' ? null : s.key, doc: null, view: null })}
 			>
 				<span class="rail-label"
@@ -509,6 +618,7 @@
 								if (railOrder.length) reorderForm?.requestSubmit();
 							}}
 							onrename={() => (renaming = s.id)}
+							ontypes={() => (typingShelf = s.id)}
 							ondelete={() => {
 								deleting = s.id;
 								reassignTo = elsewhere[0]?.id ?? '';
@@ -529,7 +639,7 @@
 					<button
 						type="button"
 						class="rail-item"
-						class:active={data.view === 'list' && data.shelf === s.key}
+						class:active={data.view !== 'tags' && data.shelf === s.key}
 						onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
 					>
 						<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
@@ -556,6 +666,9 @@
 				onclick={() => {
 					editingSubjects = !editingSubjects;
 					renamingSubject = null;
+					// Done puts the archived rows away again; the list's own scope is
+					// untouched either way.
+					revealArchived = false;
 				}}
 			>
 				{#if editingSubjects}Done{:else}<Icon name="pencil" size={14} />{/if}
@@ -564,7 +677,7 @@
 
 		{#if editingSubjects}
 			<div class="rail-shelves" role="list">
-				{#each subjects.shown as s (s.id)}
+				{#each editableSubjects.shown as s (s.id)}
 					{#if renamingSubject === s.id}
 						<form class="rail-rename" method="POST" action="?/renameSubject" use:enhance>
 							<input type="hidden" name="id" value={s.id} />
@@ -587,9 +700,9 @@
 			<!-- Archived subjects are hidden, not gone, and the only control that
 			     brings one back lives on its row — so the rail says how many rows
 			     it is holding rather than leaving a one-way door. -->
-			{#if subjects.hidden > 0}
-				<button type="button" class="rail-item manage" onclick={() => navigate({ archived: '1' })}>
-					<span class="rail-label">Show {subjects.hidden} archived</span>
+			{#if editableSubjects.hidden > 0}
+				<button type="button" class="rail-item manage" onclick={() => (revealArchived = true)}>
+					<span class="rail-label">Show {editableSubjects.hidden} archived</span>
 				</button>
 			{/if}
 			<button type="button" class="rail-item manage" onclick={() => (addingSubject = true)}>
@@ -605,7 +718,7 @@
 					<button
 						type="button"
 						class="rail-item"
-						class:active={data.view === 'list' && data.filters.entity === s.id}
+						class:active={data.view !== 'tags' && data.filters.entity === s.id}
 						class:dim={s.archived}
 						onclick={() =>
 							navigate({
@@ -682,7 +795,7 @@
 					>
 						<option value="">Type · any</option>
 						{#each data.filterOptions.types as t (t.code)}
-							<option value={t.code}>{typeLabel(t.code)} · {t.count}</option>
+							<option value={t.code}>{typeLabel(t.code, labels)} · {t.count}</option>
 						{/each}
 					</select>
 					<select
@@ -736,7 +849,7 @@
 					</select>
 					<select name="type" aria-label="Set type">
 						<option value="">Type…</option>
-						{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+						{#each Object.entries(labels) as [code, label] (code)}
 							<option value={code}>{label}</option>
 						{/each}
 					</select>
@@ -827,17 +940,38 @@
 							Drop files here, or click to browse. A name is generated and they go to the Inbox —
 							nothing else is asked of you.
 						</p>
-						<UploadDropzone name="file" multiple idleText="Drop files here, or click to browse" />
+						<UploadDropzone
+							name="file"
+							accept={DOCUMENT_ACCEPT}
+							multiple
+							idleText="Drop files here, or click to browse"
+						/>
 						<button type="submit" class="btn btn-primary">Add</button>
 					</form>
 				{:else}
 					<div class="empty">
 						<p class="empty-title">Nothing on {shelfLabel} yet.</p>
+						{#if data.emptyHint}
+							<!-- What the shelf is for, in its own words: an empty shelf is the
+							     one moment somebody is asking what belongs on it. -->
+							<p class="quiet">{data.emptyHint}</p>
+						{/if}
 						<p class="quiet">
 							Add a document from the toolbar and it lands in the Inbox — file it here from there.
 						</p>
 					</div>
 				{/if}
+			{:else if data.view === 'shelf' && data.layout === 'wallet'}
+				<!-- Same rows, same inspector: a card is another way into the document
+				     the list would have opened, not another screen. -->
+				<WalletView
+					rows={data.rows}
+					people={data.householdPeople}
+					{labels}
+					{today}
+					selectedId={data.selected?.id}
+					onopen={(id) => navigate({ doc: id })}
+				/>
 			{:else}
 				{#if honestyState(data.query, data.rows.length, data.honesty) === 'not-searchable'}
 					<p class="quiet">
@@ -1116,7 +1250,7 @@
 				>
 					<input type="hidden" name="id" value={d.id} />
 					<span class="quiet">No file attached</span>
-					<UploadDropzone name="file" idleText="Attach file" />
+					<UploadDropzone name="file" accept={DOCUMENT_ACCEPT} idleText="Attach file" />
 					<button type="submit" class="btn">Attach</button>
 				</form>
 			{/if}
@@ -1134,7 +1268,11 @@
 						}}
 				>
 					<input type="hidden" name="id" value={d.id} />
-					<UploadDropzone name="file" idleText="Drop the replacement here, or click to browse" />
+					<UploadDropzone
+						name="file"
+						accept={DOCUMENT_ACCEPT}
+						idleText="Drop the replacement here, or click to browse"
+					/>
 					<div class="ins-actions">
 						<button type="submit" class="btn btn-primary">Replace</button>
 						<button type="button" class="btn" onclick={() => (replacing = false)}>Cancel</button>
@@ -1149,9 +1287,21 @@
 			     Edit. Download stays in the menu for a person who wants the bytes. -->
 			{#if !editing}
 				<div class="ins-primary">
-					<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
-						Edit
-					</button>
+					{#if d.shelfKey === 'inbox'}
+						<!-- Unfiled paper opened from the Inbox: the one thing anybody
+						     wants here is to file it, and sending them back to Everything
+						     to press Review inbox is three navigations to reach a shelf
+						     picker that is already two fields down this panel. Same edit
+						     form, opened at the question being asked. -->
+						<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
+							File it
+						</button>
+						<a class="btn" href="/documents/review">Review inbox →</a>
+					{:else}
+						<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
+							Edit
+						</button>
+					{/if}
 				</div>
 			{/if}
 
@@ -1197,7 +1347,22 @@
 					</div>
 					<div class="sec">
 						<span class="eyebrow">Shelf</span>
-						<select name="shelf" value={d.shelfKey}>
+						<!-- Bound, because the shelf decides what the Type picker below
+						     offers — the same behaviour the inbox review screen has, so
+						     filing from here and filing from there are one thing done in
+						     two places rather than two things. -->
+						<select
+							name="shelf"
+							value={editShelf}
+							onchange={(e) => {
+								editShelf = e.currentTarget.value;
+								const first = data.shelves.find((s) => s.key === editShelf)?.types?.[0];
+								if (first && mayProposeType(editType, typeProposed)) {
+									editType = first;
+									typeProposed = true;
+								}
+							}}
+						>
 							{#each data.shelves.filter((s) => s.key !== 'all') as s (s.key)}
 								<option value={s.key}>{s.label}</option>
 							{/each}
@@ -1205,12 +1370,108 @@
 					</div>
 					<div class="sec">
 						<span class="eyebrow">Type</span>
-						<select name="type" value={d.type}>
-							{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+						<!-- Bound rather than set once: the Identity fields below appear
+						     the moment the type says they apply, so somebody filing a
+						     passport does not save, reopen and edit again to reach them. -->
+						<select
+							name="type"
+							value={editType}
+							onchange={(e) => {
+								if (e.currentTarget.value === ALL_TYPES) {
+									allTypes = true;
+									e.currentTarget.value = editType;
+									return;
+								}
+								editType = e.currentTarget.value;
+								// Chosen, so no shelf may overwrite it from here on.
+								typeProposed = false;
+							}}
+						>
+							{#each editTypeOptions as [code, label] (code)}
 								<option value={code}>{label}</option>
 							{/each}
+							{#if !allTypes && editTypeOptions.length < Object.keys(labels).length}
+								<option value={ALL_TYPES}>Show all types…</option>
+							{/if}
 						</select>
 					</div>
+					{#if editType === 'id_document'}
+						<div class="sec">
+							<span class="eyebrow">Identity</span>
+							<!-- Typed by hand, every field optional. Nothing reads the
+							     document to fill these in: a number a recogniser guessed
+							     wrong is worse than an empty box, because it is believed. -->
+							<div class="id-grid">
+								<label class="id-field">
+									<span class="quiet">Kind</span>
+									<select name="identityKind" value={identity?.kind ?? 'other'}>
+										{#each IDENTITY_KINDS as kind (kind)}
+											<option value={kind}>{IDENTITY_KIND_LABELS[kind]}</option>
+										{/each}
+									</select>
+								</label>
+								<label class="id-field">
+									<span class="quiet">Country</span>
+									<select name="identityCountry" value={identity?.country ?? ''}>
+										<option value="">—</option>
+										{#each countryOptions() as c (c.code)}
+											<option value={c.code}>{c.name}</option>
+										{/each}
+									</select>
+								</label>
+								<label class="id-field">
+									<span class="quiet">Number</span>
+									<input class="mono" name="identityNumber" value={identity?.number ?? ''} />
+								</label>
+								<label class="id-field">
+									<span class="quiet">Issued on</span>
+									<input type="date" name="identityIssuedOn" value={identity?.issuedOn ?? ''} />
+								</label>
+								<label class="id-field wide">
+									<span class="quiet">Issuer</span>
+									<input name="identityIssuer" value={identity?.issuer ?? ''} />
+								</label>
+							</div>
+
+							<!-- One document really can carry several numbers — a residence
+							     permit with a card number and a personal number, a licence
+							     with a national identifier beside it — and there is no
+							     sensible ceiling to guess at, so the household adds as many
+							     as it has. Clearing both halves of a row is how one goes:
+							     Save writes exactly what the form holds. -->
+							<div class="id-extra">
+								{#each extraNumbers as extra, i (i)}
+									<div class="id-extra-row">
+										<input
+											name="identityExtraLabel"
+											placeholder="What it is called"
+											value={extra.label}
+										/>
+										<input
+											class="mono"
+											name="identityExtraValue"
+											placeholder="Number"
+											value={extra.value}
+										/>
+										<button
+											type="button"
+											class="chip-x"
+											aria-label="Remove {extra.label || 'this number'}"
+											onclick={() => (extraNumbers = extraNumbers.filter((_, at) => at !== i))}
+											>✕</button
+										>
+									</div>
+								{/each}
+								<button
+									type="button"
+									class="link id-add"
+									onclick={() => (extraNumbers = [...extraNumbers, { label: '', value: '' }])}
+								>
+									+ Add another number
+								</button>
+							</div>
+						</div>
+					{/if}
 					<div class="sec">
 						<span class="eyebrow">About</span>
 						<!-- Chips, grouped by what kind of thing they are. A chip is as wide
@@ -1306,8 +1567,57 @@
 						<span class="eyebrow">Filed in</span><span class="val">{d.shelfLabel}</span>
 					</div>
 					<div class="sec">
-						<span class="eyebrow">Type</span><span class="val">{typeLabel(d.type)}</span>
+						<span class="eyebrow">Type</span><span class="val">{typeLabel(d.type, labels)}</span>
 					</div>
+					{#if d.type === 'id_document'}
+						<!-- Masked until asked for, and the same button whether it is the
+						     document's own number or one of the extra ones beside it. The
+						     inspector is the only place a number appears at all, and it is
+						     read across a room as often as it is read by the person who
+						     opened it — so one reveal, one mask, written once. -->
+						{#snippet maskedNumber(value: string)}
+							<button
+								type="button"
+								class="id-number mono"
+								aria-label={numberShown ? 'Hide document number' : 'Show document number'}
+								onclick={() => (numberShown = !numberShown)}
+							>
+								{numberShown ? value : '•'.repeat(value.length)}
+							</button>
+						{/snippet}
+						<div class="sec">
+							<span class="eyebrow">Identity</span>
+							<span class="val id-read">
+								<span class="id-line">
+									{#if identity?.country}
+										<span class="id-flag">{flagEmoji(identity.country)}</span>
+										<span>{countryName(identity.country)}</span>
+										<span class="quiet">·</span>
+									{/if}
+									<!-- The type already says "Identity document" two rows up, so
+									     a kind of `other` adds nothing here and is left out. -->
+									<span>{identityKindLabel(identity?.kind) ?? typeLabel(d.type, labels)}</span>
+								</span>
+								{#if identity?.number}
+									{@render maskedNumber(identity.number)}
+								{/if}
+								{#each data.selected?.identityNumbers ?? [] as extra (extra.label + extra.value)}
+									<span class="id-line">
+										<span class="quiet id-sub">{extra.label}</span>
+										{@render maskedNumber(extra.value)}
+									</span>
+								{/each}
+								{#if identity?.issuedOn}
+									<span class="quiet id-sub">
+										Issued <span class="mono">{readableDate(identity.issuedOn)}</span>
+										{#if identity.issuer}· {identity.issuer}{/if}
+									</span>
+								{:else if identity?.issuer}
+									<span class="quiet id-sub">{identity.issuer}</span>
+								{/if}
+							</span>
+						</div>
+					{/if}
 					<div class="sec">
 						<span class="eyebrow">About</span>
 						<span class="val">{d.entities.length ? d.entities.join(', ') : '—'}</span>
@@ -1408,6 +1718,107 @@
 					>{menuSubject.archived ? 'Bring it back' : 'Archive'}</button
 				>
 			</div>
+		</form>
+	</Modal>
+{/if}
+
+{#if shelfBeingTyped}
+	<Modal onclose={() => (typingShelf = null)} title={`What ${shelfBeingTyped.label} usually holds`}>
+		<form
+			class="shelf-dialog"
+			method="POST"
+			action="?/setShelfTypes"
+			use:enhance={() =>
+				async ({ update }) => {
+					await update();
+					typingShelf = null;
+				}}
+		>
+			<input type="hidden" name="id" value={shelfBeingTyped.id} />
+			<p class="quiet">
+				These are offered first when filing to this shelf, and one is proposed during inbox review.
+				Nothing is refused: any document can be filed here whatever its type.
+			</p>
+			<div class="type-picker">
+				{#each data.documentTypes as t (t.key)}
+					<span class="type-chip">
+						<label class="pick-chip">
+							<input
+								type="checkbox"
+								name="types"
+								value={t.key}
+								checked={shelfBeingTyped.types.includes(t.key)}
+							/>
+							<span>{t.label}</span>
+						</label>
+						{#if !t.builtin}
+							<!-- Only on a type this household added, and only the ✕: the
+							     seventeen the app ships are read by name by the salary
+							     tracker, the importer and the wallet, so there is nothing
+							     here to press for them. A type that is on a document is
+							     refused with the reason rather than hidden. -->
+							<button
+								type="button"
+								class="chip-x"
+								aria-label="Remove the type {t.label}"
+								onclick={() => (removingType = t.key)}>✕</button
+							>
+						{/if}
+					</span>
+				{/each}
+			</div>
+			<div class="dialog-actions">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<button type="button" class="btn" onclick={() => (typingShelf = null)}>Cancel</button>
+			</div>
+		</form>
+
+		{#if removingType}
+			<form
+				class="remove-type"
+				method="POST"
+				action="?/removeDocumentType"
+				use:enhance={() =>
+					async ({ update }) => {
+						await update();
+						removingType = null;
+					}}
+			>
+				<input type="hidden" name="key" value={removingType} />
+				<span class="quiet">
+					Remove “{data.documentTypes.find((t) => t.key === removingType)?.label}” from this
+					household?
+				</span>
+				<button type="submit" class="btn small danger">Remove</button>
+				<button type="button" class="btn small" onclick={() => (removingType = null)}>
+					Keep it
+				</button>
+			</form>
+		{/if}
+
+		<!-- Its own form, because it posts to a different action and must not
+		     carry the checkboxes above with it. A type added here is added to the
+		     household, not to this shelf: tick it afterwards to put it on the
+		     shelf, which is the same two steps a new tag takes. -->
+		<form
+			class="new-type"
+			method="POST"
+			action="?/addDocumentType"
+			use:enhance={() =>
+				async ({ update }) => {
+					await update({ reset: true });
+				}}
+		>
+			<span class="eyebrow">A kind of paper this list is missing</span>
+			<div class="new-type-row">
+				<input name="label" placeholder="Vaccination book, lease annex…" />
+				<button type="submit" class="btn">Add type</button>
+			</div>
+			<p class="quiet">
+				Yours to name. The seventeen the app ships with cannot be removed — the salary tracker, the
+				importer and the wallet each read one by name — but anything you add here is only a label,
+				and can go again while nothing is filed as it.
+			</p>
 		</form>
 	</Modal>
 {/if}
@@ -2222,6 +2633,14 @@
 	}
 	.ins-preview {
 		margin: 0 var(--space-8);
+		/* Never shrunk to make room for what is below it. The panel is a flex
+		   column with a viewport-bounded height, so every item in it is
+		   shrinkable by default: on a short screen — or once a document carries
+		   enough sections — the preview gave up its height first and became an
+		   87px sliver of a photograph, which reads as a failed load rather than
+		   as a full panel. The sections scroll instead, which is what
+		   `overflow-y: auto` on the panel is for. */
+		flex: none;
 		max-height: 260px;
 		display: flex;
 		align-items: center;
@@ -2330,6 +2749,122 @@
 		display: grid;
 		grid-template-columns: 108px minmax(0, 1fr);
 		gap: var(--space-4);
+	}
+	/* Five fields in two columns, the issuer across both: a kind, a country and
+	   a date are all short, and an issuing authority is a sentence. */
+	.id-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-4);
+	}
+	.id-field {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		font-size: var(--text-xs);
+	}
+	.id-field.wide {
+		grid-column: 1 / -1;
+	}
+	/* Seventeen chips in a scrollable block: a column of seventeen rows is a
+	   dialog taller than the screen it opens on. */
+	.type-picker {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		max-height: 40vh;
+		overflow-y: auto;
+	}
+	/* The chip and its ✕ travel together, so the ✕ never wraps onto its own
+	   line away from the type it belongs to. */
+	.type-chip {
+		display: inline-flex;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.remove-type {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		margin-top: var(--space-5);
+	}
+	.new-type {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-top: var(--space-7);
+		padding-top: var(--space-7);
+		border-top: 1px solid var(--bd);
+	}
+	.new-type-row {
+		display: flex;
+		flex-direction: row;
+		gap: var(--space-4);
+	}
+	.new-type-row input {
+		flex: 1;
+	}
+	.dialog-actions {
+		display: flex;
+		flex-direction: row;
+		gap: var(--space-5);
+	}
+	.id-extra {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-top: var(--space-4);
+	}
+	/* Name and number on one line, with the way to remove it at the end: the
+	   pair is one fact, and stacking them would read as two. */
+	.id-extra-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.id-add {
+		align-self: flex-start;
+		font-size: var(--text-xs);
+	}
+	.id-read {
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+		gap: 3px;
+		padding-top: var(--space-4);
+		padding-bottom: var(--space-4);
+	}
+	.id-line {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.id-flag {
+		font-size: var(--text-xl);
+		line-height: 1;
+	}
+	/* A button because it does something, styled as the value it hides: the
+	   dots are the number's own length, so revealing it moves nothing. */
+	.id-number {
+		min-height: auto;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--fg2);
+		font-size: var(--text-md);
+		letter-spacing: 0.04em;
+		cursor: pointer;
+	}
+	.id-number:hover {
+		color: var(--fg1);
+	}
+	.id-sub {
+		font-size: var(--text-xs);
 	}
 	.ins-actions {
 		display: flex;

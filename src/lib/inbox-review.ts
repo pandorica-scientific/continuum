@@ -12,6 +12,8 @@
  * speed, which is the whole cadence this screen is built for.
  */
 
+import { mayProposeType } from '$lib/documents';
+
 /** The fields that carry over from the previous `File & next`. */
 export type StickyField = 'shelf' | 'type';
 
@@ -26,12 +28,22 @@ export interface ReviewSession {
 	sticky: Partial<Record<StickyField, string>>;
 	/** Which sticky values are still untouched, so the `kept` mark is honest. */
 	kept: StickyField[];
+	/** Which values the SHELF proposed rather than a person choosing them. */
+	suggested: StickyField[];
 	/** True once there is nothing left but documents already skipped. */
 	done: boolean;
 }
 
 export function startSession(ids: string[]): ReviewSession {
-	return { queue: [...ids], skipped: [], filed: [], sticky: {}, kept: [], done: ids.length === 0 };
+	return {
+		queue: [...ids],
+		skipped: [],
+		filed: [],
+		sticky: {},
+		kept: [],
+		suggested: [],
+		done: ids.length === 0
+	};
 }
 
 export const currentId = (session: ReviewSession): string | null => session.queue[0] ?? null;
@@ -90,6 +102,9 @@ export function fileAndNext(
 		filed: [...session.filed, id],
 		sticky,
 		kept,
+		// A filing is a choice made; nothing carried into the next document was
+		// proposed by a shelf.
+		suggested: [],
 		done: queue.length === 0 && session.skipped.length === 0
 	};
 }
@@ -99,9 +114,37 @@ export function setField(session: ReviewSession, field: StickyField, value: stri
 	return {
 		...session,
 		sticky: { ...session.sticky, [field]: value },
-		kept: session.kept.filter((f) => f !== field)
+		kept: session.kept.filter((f) => f !== field),
+		suggested: session.suggested.filter((f) => f !== field)
 	};
 }
+
+/**
+ * The type the chosen shelf expects, offered rather than imposed.
+ *
+ * Only fills a type nobody has decided yet — unset, or the `other` a fresh
+ * session starts on. A value carried from the last filing is a choice somebody
+ * made, and a shelf must not overwrite it: picking Identity for the second of
+ * twenty certificates should not retype the first one's answer.
+ *
+ * Marked `suggested` rather than `kept`, because those are different claims:
+ * one says "you chose this before", the other says "the shelf thinks so".
+ */
+export function proposeType(session: ReviewSession, type: string | undefined): ReviewSession {
+	if (!type) return session;
+	// The rule itself lives in `$lib/documents`, because the inspector's own
+	// shelf picker has to follow it too and two spellings of "may I fill this
+	// in" is two places for it to drift.
+	if (!mayProposeType(session.sticky.type, session.suggested.includes('type'))) return session;
+	return {
+		...session,
+		sticky: { ...session.sticky, type },
+		kept: session.kept.filter((f) => f !== 'type'),
+		suggested: [...session.suggested.filter((f) => f !== 'type'), 'type']
+	};
+}
+
+export const suggestedFields = (session: ReviewSession): StickyField[] => session.suggested;
 
 export const keptFields = (session: ReviewSession): StickyField[] => session.kept;
 

@@ -5,32 +5,16 @@ import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { env } from '$env/dynamic/private';
+import { UPLOAD_EXTENSIONS } from '$lib/uploads';
 
 // User uploads (floor plans, photos, later documents) live on the data volume
 // (`/data` in Docker, `./data` in development) and are served through an
 // authenticated route — never from `static/`.
 
-const ALLOWED_EXT = new Set([
-	'.png',
-	'.jpg',
-	'.jpeg',
-	'.webp',
-	'.gif',
-	'.svg',
-	// An iPhone photographs in HEIC, so the camera button hands one over
-	// directly. Refusing it fails the upload outright with "File type .heic is
-	// not allowed", which is a dead end at the moment someone has just taken a
-	// picture.
-	'.heic',
-	'.heif',
-	'.pdf',
-	// original statement files, kept for re-parsing
-	'.csv',
-	'.xml',
-	'.ofx',
-	'.abo',
-	'.xlsx'
-]);
+// Built from the shared list rather than restated here: the file picker on
+// every upload screen offers exactly what this will accept, and a second copy
+// of the list would drift into refusing something a picker had just offered.
+const ALLOWED_EXT = new Set<string>(UPLOAD_EXTENSIONS);
 
 function uploadDir(): string {
 	return env.UPLOAD_DIR || 'data';

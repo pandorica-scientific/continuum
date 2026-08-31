@@ -14,28 +14,68 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
-	import { EXPIRY_VERBS, EXPIRY_VERB_MEANINGS } from '$lib/documents';
-	import { groupAboutOptions, TYPE_LABELS } from '$lib/documents-view';
+	import { ALL_TYPES, EXPIRY_VERBS, EXPIRY_VERB_MEANINGS, typeOptionsFor } from '$lib/documents';
+	import { groupAboutOptions, typeLabels } from '$lib/documents-view';
 	import {
 		counterLabel,
 		currentId,
 		fileAndNext,
 		keptFields,
+		proposeType,
 		setField,
 		skip,
 		startSession,
+		suggestedFields,
 		type ReviewSession
 	} from '$lib/inbox-review';
 
 	let { data, form } = $props();
 
-	// A fresh load is a fresh session: the queue is whatever is in the Inbox now,
-	// and a document filed from another tab is simply no longer offered. Writable
-	// because Skip and File & next advance it between loads.
-	let session = $derived<ReviewSession>(startSession(data.waiting.map((d) => d.id)));
+	/**
+	 * What a filing leaves behind for the next document.
+	 *
+	 * The queue itself comes from the server on every load — a document filed in
+	 * another tab is simply no longer offered — but the shelf and type carried
+	 * forward must not: rebuilding the whole session from `data.waiting` after
+	 * each filing reset them, so "kept" could never appear on the second
+	 * document of a folder import, which is the case it exists for.
+	 */
+	let carried = $state<Pick<ReviewSession, 'sticky' | 'kept' | 'suggested'>>({
+		sticky: {},
+		kept: [],
+		suggested: []
+	});
+
+	// Widening is remembered for the session: somebody who needed all seventeen
+	// once usually needs them again on the next document.
+	let allTypes = $state(false);
+
+	/** What this household calls each type: the built-ins, plus its own. */
+	const labels = $derived(typeLabels(data.documentTypes));
+
+	const typeOptions = $derived.by(() => {
+		const shelfKey = session.sticky.shelf ?? data.shelves[0]?.key;
+		const offered = shelfKey ? (data.shelfTypes[shelfKey] ?? []) : [];
+		return typeOptionsFor(offered, session.sticky.type, labels, allTypes);
+	});
+
+	/** Keep only the three fields that outlive a load; the queue is the server's. */
+	function remember(next: ReviewSession) {
+		carried = { sticky: next.sticky, kept: next.kept, suggested: next.suggested };
+	}
+
+	// The queue is whatever is in the Inbox now; everything else is carried.
+	// Writable because Skip advances it between loads.
+	let session = $derived<ReviewSession>({
+		...startSession(data.waiting.map((d) => d.id)),
+		sticky: carried.sticky,
+		kept: carried.kept,
+		suggested: carried.suggested
+	});
 
 	const current = $derived(data.waiting.find((d) => d.id === currentId(session)) ?? null);
 	const kept = $derived(keptFields(session));
+	const suggested = $derived(suggestedFields(session));
 	let confirmingDelete = $state(false);
 	$effect(() => {
 		void current?.id;
@@ -87,11 +127,23 @@
 			class="fields"
 			method="POST"
 			action="?/file"
-			use:enhance={() =>
-				async ({ update }) => {
+			use:enhance={({ formData }) => {
+				// Read off the form rather than off `session.sticky`: what carries
+				// forward has to be what was filed, and the two differ the moment
+				// somebody changes a field without the change reaching state.
+				const filed = {
+					shelfKey: String(formData.get('shelf') ?? ''),
+					type: String(formData.get('type') ?? '')
+				};
+				return async ({ result, update }) => {
 					await update({ reset: false });
+					// Only a filing that happened advances anything. A refusal — a
+					// document somebody else deleted, a shelf that has gone — leaves
+					// the reviewer on the document they were looking at.
+					if (result.type === 'success') remember(fileAndNext(session, filed));
 					await invalidateAll();
-				}}
+				};
+			}}
 		>
 			<input type="hidden" name="id" value={current.id} />
 
@@ -107,7 +159,15 @@
 				<select
 					name="shelf"
 					value={session.sticky.shelf ?? data.shelves[0]?.key}
-					onchange={(e) => (session = setField(session, 'shelf', e.currentTarget.value))}
+					onchange={(e) => {
+						// The shelf knows what it holds, so picking one answers the next
+						// question too — unless that question already has an answer
+						// somebody gave, which a proposal never overwrites.
+						const key = e.currentTarget.value;
+						// The shelf's own list, as the household has it — not the
+						// registry's, which is only where that list started.
+						remember(proposeType(setField(session, 'shelf', key), data.shelfTypes[key]?.[0]));
+					}}
 				>
 					{#each data.shelves as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
 				</select>
@@ -115,16 +175,36 @@
 
 			<label>
 				<span class="eyebrow">
-					Type {#if kept.includes('type')}<span class="kept">kept</span>{/if}
+					Type
+					{#if kept.includes('type')}
+						<span class="kept">kept</span>
+					{:else if suggested.includes('type')}
+						<!-- A different claim from `kept`, in the same slot: one says you
+						     chose this before, the other says the shelf expects it. -->
+						<span class="kept">suggested</span>
+					{/if}
 				</span>
 				<select
 					name="type"
 					value={session.sticky.type ?? 'other'}
-					onchange={(e) => (session = setField(session, 'type', e.currentTarget.value))}
+					onchange={(e) => {
+						// "Show all types" is a view control wearing an option's clothes:
+						// it widens the list rather than choosing anything, so the type
+						// that was selected stays selected.
+						if (e.currentTarget.value === ALL_TYPES) {
+							allTypes = true;
+							e.currentTarget.value = session.sticky.type ?? 'other';
+							return;
+						}
+						remember(setField(session, 'type', e.currentTarget.value));
+					}}
 				>
-					{#each Object.entries(TYPE_LABELS) as [code, label] (code)}
+					{#each typeOptions as [code, label] (code)}
 						<option value={code}>{label}</option>
 					{/each}
+					{#if !allTypes && typeOptions.length < Object.keys(labels).length}
+						<option value={ALL_TYPES}>Show all types…</option>
+					{/if}
 				</select>
 			</label>
 
@@ -199,13 +279,12 @@
 				<button type="button" class="btn skip" onclick={() => (session = skip(session))}>
 					Skip
 				</button>
-				<button
-					type="submit"
-					class="btn btn-primary file"
-					onclick={() => (session = fileAndNext(session, {}))}
-				>
-					File &amp; next →
-				</button>
+				<!-- No `onclick`. Advancing the queue here moved the document out of
+				     `current` before the browser had dispatched the submit, which
+				     unmounted the form it was submitting: the screen said "Inbox is
+				     clear" and the server was never asked to file anything. The
+				     queue moves on when the filing comes back, below. -->
+				<button type="submit" class="btn btn-primary file">File &amp; next →</button>
 			</div>
 			<div class="hints">
 				<span class="mono counter">{counterLabel(session)}</span>

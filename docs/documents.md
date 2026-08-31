@@ -76,17 +76,103 @@ else set up.
 **Tenancy** and **Vehicles** are seeded like the rest and can be removed: not
 every household rents, and not every household drives.
 
+### How a shelf is shown
+
+Most shelves draw the same list: one row per document, grouped and sorted by the
+two controls in the toolbar. **Identity** is the first that does not — it opens
+as a **wallet**, one card per document, sectioned by whose it is, with anything
+nobody is named on under _Nobody_ at the end.
+
+A card is another way into the same document. Clicking one opens the same
+inspector a row does, and `Wallet` / `List` in the toolbar switches between them
+— the choice is in the address, so a bookmark keeps it. **Searching always shows
+the list**, whichever shelf you are on: a match is explained by the line it was
+found in, and a card face has nowhere to put one. Group, Sort and Select are
+list controls and are simply absent while the wallet is showing; the wallet has
+already decided its grouping and its order.
+
+**The card face is artwork, not your passport.** Thirty countries are drawn, in
+four kinds — passport, identity card, driving licence, and a generic face for
+everything else — and a country nobody has drawn yet gets the generic one. Two
+reasons it is not the scan: seven photographs of seven cards on white A4 look
+identical at card size, which is exactly what a wallet is for avoiding; and a
+wallet is glanced at with other people in the room. The document itself is one
+click away, in the inspector.
+
+A card says what it is — `Passport`, `Identity card` — and not what it is
+called: the section above it already names the person, so the document's own
+name would say the same thing twice. The name is in the inspector, where it is
+being read rather than scanned.
+
+Everything written on the card comes from the record — the flag and the code
+from the country, the kind from the document, the date from the same expiry
+rule the list uses. The section heading is the person's tag, in the colour that
+person has on Salary and on Tax; documents nobody is named on gather under a
+plain _Nobody_ at the end. A card from an EU member state writes its code
+inside the Union's ring of stars, as the document itself does; everywhere else
+the two letters sit plainly beside the flag. Nothing is painted into the artwork, so a card
+can never state something the document does not.
+
+The other shelves keep their list for now. Family, Health and Household have
+layouts of their own designed and not yet built; Property, Finance, Statements
+and Inbox are lists on purpose, because their paper has no shape a person
+already pictures. A mortgage agreement is not a card in a wallet.
+
+Every shelf, list or not, now knows what it is for: an empty one says what
+belongs on it, its type filter offers those kinds first, and picking a shelf
+during inbox review shortens the type list to that shelf's own and chooses the
+first — marked _suggested_, cleared the moment you touch the field, and never
+overwriting an answer you gave already. `Show all types…` opens the full list
+for the document that does not fit.
+
+The inspector's own Shelf and Type fields work the same way, so filing a
+document from the Inbox is the same act as filing it from review — and a
+document that already has a type keeps it: a shelf fills the field in only when
+nobody has answered it yet.
+
+**That list is yours.** Press the pencil beside **SHELVES** in the rail and each
+row gains a tag button: it opens every type with the shelf's own ticked. It
+works on a system shelf as much as on one you made — Identity cannot be deleted,
+but what it suggests is your business. Nothing is ever refused by it: a shelf
+takes any document of any type, and the list only decides what is offered
+first.
+
+### Identity details
+
+An identity document carries five more fields, in the inspector: kind, country,
+number, issued on, and issuer. All optional. The kind and the country are what
+the wallet card draws; the number is shown only here, masked until you click it,
+and is never searched.
+
+**They are typed by hand, always.** Nothing reads the document to fill them in.
+Continuum reads documents for their text so you can search inside them, and that
+pipeline is forbidden from writing a record's fields — a passport number a
+recogniser got wrong is worse than an empty box, because the empty box asks and
+the wrong one is believed.
+
+Changing a document's type away from _Identity document_ hides these fields and
+keeps them. Change it back and what you typed is still there.
+
 ### Types
 
-A closed list: contract, invoice, receipt, payslip, bank statement, broker
-report, insurance policy, claim, identity document, certificate, medical
-record, tax document, technical plan, correspondence, warranty, manual, other.
+Seventeen come with the app: contract, invoice, receipt, payslip, bank
+statement, broker report, insurance policy, claim, identity document,
+certificate, medical record, tax document, technical plan, correspondence,
+warranty, manual, other.
 
-It is closed because behaviour hangs off it — the salary tracker reads
-`payslip`, statement import writes `bank_statement`, an uploaded broker report
-writes `broker_report`, tax attachments write `tax_document`. Renaming those
-would quietly unhook a feature. For anything specific to your household, use
-**tags**: free, searchable, and nothing in the code depends on them.
+**You can add your own.** Open a shelf's type list from the rail and name one —
+a vaccination book, a lease annex. It behaves like any other type from then on:
+filed, filtered, grouped, offered first by whichever shelves you tick it onto.
+
+The seventeen cannot be removed, because behaviour hangs off them — the salary
+tracker reads `payslip`, statement import writes `bank_statement`, an uploaded
+broker report writes `broker_report`, tax attachments write `tax_document`, and
+the Identity wallet reads `id_document`. Removing one would quietly unhook a
+feature. Yours carry no behaviour at all, which is what makes them safe to
+invent, and one that nothing is filed as can be removed again.
+
+For something that cuts across types — a renovation, a holiday — use **tags**
+instead: free, searchable, and nothing in the code depends on them either.
 
 ## Subjects
 

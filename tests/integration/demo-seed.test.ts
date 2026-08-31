@@ -24,6 +24,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import {
 	account,
 	document,
+	documentIdentity,
 	documentLink,
 	entity,
 	importFile,
@@ -273,6 +274,32 @@ describe('the demo seed', () => {
 		);
 		expect(days).toBeGreaterThan(30);
 		expect(days).toBeLessThanOrEqual(60);
+	});
+
+	it('fills in what the two identity cards say on their faces', async () => {
+		// The wallet draws its artwork, its flag and its kind from these, so a
+		// demo seed that filed the paper and left the fields empty would show two
+		// generic cards and demonstrate nothing.
+		const rows = await testDb.select().from(documentIdentity);
+		expect(rows).toHaveLength(2);
+
+		const kinds = rows.map((r) => r.kind).sort();
+		expect(kinds).toEqual(['id_card', 'passport']);
+		for (const row of rows) {
+			expect(row.country).toBe('CZ');
+			expect(row.number).toBeTruthy();
+			expect(row.issuedOn).toBeTruthy();
+			expect(row.issuer).toBeTruthy();
+		}
+	});
+
+	it('leaves one of the two identity documents visible to everyone', async () => {
+		// A wallet worth looking at holds more than one card, and a member who
+		// sees an empty Identity shelf learns nothing about what it is for.
+		const docs = await seededDocuments();
+		const identity = docs.filter((d) => d.type === 'id_document');
+		expect(identity).toHaveLength(2);
+		expect(identity.filter((d) => d.sensitivity === 'normal')).toHaveLength(1);
 	});
 
 	it('files exactly one restricted document, which a member cannot see', async () => {

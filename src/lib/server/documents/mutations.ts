@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import postgres from 'postgres';
-import type { EnumValue } from '$lib/enums';
+import type { DocumentTypeKey, EnumValue } from '$lib/enums';
 import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { document, documentLink, documentText, tagLink } from '$lib/server/db/schema';
@@ -49,7 +49,7 @@ interface CreateDocumentInput {
 	 */
 	shelfId: string;
 	/** What kind of paper this is. Behaviour hangs off this, never off shelf. */
-	type: EnumValue<'document.type'>;
+	type: DocumentTypeKey;
 	note?: string | null;
 	sensitivity?: EnumValue<'document.sensitivity'>;
 	storedName: string | null;

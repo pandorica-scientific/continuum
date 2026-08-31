@@ -17,6 +17,7 @@
 		ondragover,
 		ondrop,
 		onrename,
+		ontypes,
 		ondelete
 	}: {
 		shelf: {
@@ -32,6 +33,8 @@
 		ondragover?: () => void;
 		ondrop?: () => void;
 		onrename?: () => void;
+		/** Which types this shelf offers first. Every shelf has a list, system or not. */
+		ontypes?: () => void;
 		ondelete?: () => void;
 	} = $props();
 </script>
@@ -58,6 +61,17 @@
 	<!-- Relabelable, never deletable, key immutable. The badge says which, in a
 	     column of its own so it never sits on top of the count. -->
 	<span class="tail">
+		<!-- Offered on a system shelf too: what Identity holds cannot be deleted,
+		     and what it offers first is still the household's to decide. -->
+		<button
+			type="button"
+			class="menu types"
+			aria-label="Types for {shelf.label}"
+			title="Which types this shelf offers first"
+			onclick={() => ontypes?.()}
+		>
+			<Icon name="tag" size={13} />
+		</button>
 		{#if shelf.system}
 			<span class="mono badge">System</span>
 		{:else}
@@ -103,7 +117,12 @@
 	}
 	.tail {
 		display: flex;
+		align-items: center;
 		justify-content: flex-end;
+		gap: var(--space-3);
+	}
+	.types {
+		display: inline-flex;
 	}
 	.label {
 		border: 0;

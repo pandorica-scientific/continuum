@@ -108,7 +108,12 @@ export const ENUMS = {
 
 	// What KIND of paper this is — orthogonal to where it is filed. Behaviour
 	// hangs off type (the salary tracker reads `type='payslip'`), never off the
-	// shelf, which is now a row a household may rename or delete.
+	// shelf, which is a row a household may rename or delete.
+	//
+	// NOT a CHECK any more: `document_type` is a table, seeded with these and
+	// grown by the household, and `document.type` is a foreign key into it. This
+	// list is what the app SHIPS and what code may refer to by name — every
+	// value here exists on every instance, which is what makes reading one safe.
 	'document.type': [
 		'contract',
 		'invoice',
@@ -147,6 +152,15 @@ export const ENUMS = {
 	// picker nobody can answer; the upgrade folds it into `expires`.
 	'document.expiry_verb': ['expires', 'renews', 'due'],
 
+	// What an identity document IS, which `document.type` cannot say: every one
+	// of these files as `type: 'id_document'`, and a wallet that cannot tell a
+	// passport from a driving licence is a wallet nobody recognises their own
+	// cards in. Hand-entered, always — nothing reads a document to fill it.
+	// `residence_permit` shares the generic artwork rather than getting a
+	// drawing of its own, because it looks different in every country that
+	// issues one.
+	'document_identity.kind': ['passport', 'id_card', 'driving_licence', 'residence_permit', 'other'],
+
 	'calendar_account.provider': ['icloud', 'google'],
 	'calendar_conflict.resolution': ['local-won', 'remote-won', 'wrote-back'],
 
@@ -159,6 +173,15 @@ export const ENUMS = {
 
 type EnumKey = keyof typeof ENUMS;
 export type EnumValue<K extends EnumKey> = (typeof ENUMS)[K][number];
+
+/**
+ * A document type: one the app ships, or one the household added.
+ *
+ * `string & {}` keeps the seventeen as suggestions while allowing any key —
+ * which is what the column holds now that `document_type` is a table. Written
+ * once so the columns and the code that reads them say the same thing.
+ */
+export type DocumentTypeKey = EnumValue<'document.type'> | (string & {});
 
 /**
  * Which column each list constrains.
@@ -189,10 +212,10 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'import_profile', column: 'origin', enum: 'import_profile.origin' },
 	{ table: 'import_file', column: 'proof_class', enum: 'proof_class' },
 	{ table: 'rule', column: 'provenance', enum: 'rule.provenance' },
-	{ table: 'document', column: 'type', enum: 'document.type' },
 	{ table: 'document', column: 'sensitivity', enum: 'document.sensitivity' },
 	{ table: 'document_text_chunk', column: 'source', enum: 'document_text_chunk.source' },
 	{ table: 'document', column: 'expiry_verb', enum: 'document.expiry_verb' },
+	{ table: 'document_identity', column: 'kind', enum: 'document_identity.kind' },
 	{ table: 'calendar_account', column: 'provider', enum: 'calendar_account.provider' },
 	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' },
 	{ table: 'entity', column: 'kind', enum: 'entity.kind' }

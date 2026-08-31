@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENTITY_KINDS, ENUM_COLUMNS } from '$lib/enums';
+import { SHELF_PROFILES } from '$lib/shelf-profiles';
 import { assertSchemaIsCurrent } from '$lib/server/db/migrate';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
 
@@ -268,6 +269,57 @@ describe('the baseline migration', () => {
 		expect(n).toBe(1);
 	});
 
+	it('carries the identity detail table, its cascade and both its CHECKs', async () => {
+		// Hand-written in the appendix, like every CHECK: nothing but this notices
+		// if the table arrives without the constraints that keep the country in a
+		// shape the flag and the card artwork can read.
+		const [{ id: documentId }] = await harness.sql<{ id: string }[]>`
+			insert into document (id, name, shelf_id, ext, added_on, type)
+			values (gen_random_uuid(), 'Passport',
+				(select id from shelf where key = 'identity'), 'PDF', current_date, 'id_document')
+			returning id`;
+		await harness.sql`
+			insert into document_identity (document_id, kind, country, number, issued_on)
+			values (${documentId}, 'passport', 'CZ', '12345678', '2022-05-02')`;
+
+		await expect(
+			harness.sql`update document_identity set kind = 'visa' where document_id = ${documentId}`
+		).rejects.toThrow(/document_identity_kind_check/);
+		await expect(
+			harness.sql`update document_identity set country = 'cz' where document_id = ${documentId}`
+		).rejects.toThrow(/document_identity_country_check/);
+		await expect(
+			harness.sql`update document_identity set country = 'Czechia' where document_id = ${documentId}`
+		).rejects.toThrow(/document_identity_country_check/);
+
+		// A country of nothing is a document whose face does not say one.
+		await harness.sql`update document_identity set country = null where document_id = ${documentId}`;
+
+		// Cascade, not restrict: these fields are a property of the paper, and
+		// paper that is gone has no face to read them off.
+		await harness.sql`delete from document where id = ${documentId}`;
+		const [{ n }] = await harness.sql<{ n: number }[]>`
+			select count(*)::int as n from document_identity where document_id = ${documentId}`;
+		expect(n).toBe(0);
+	});
+
+	it('seeds every shelf with the type list its profile names', async () => {
+		// Two places hold the same fact — the registry the app reads and the seed
+		// the baseline writes — and the household edits the second afterwards. On
+		// a fresh install they have to agree, or a shelf opens offering something
+		// nobody chose.
+		const rows = await harness.sql<{ key: string; type: string; ordinal: number }[]>`
+			select s.key, t.type, t.ordinal from shelf_type t
+			join shelf s on s.id = t.shelf_id
+			order by s.key, t.ordinal`;
+		const seeded = new Map<string, string[]>();
+		for (const row of rows) seeded.set(row.key, [...(seeded.get(row.key) ?? []), row.type]);
+
+		for (const [key, profile] of Object.entries(SHELF_PROFILES)) {
+			expect(seeded.get(key) ?? []).toEqual([...profile.expects]);
+		}
+	});
+
 	it('refuses a subject whose active period runs backwards', async () => {
 		await expect(
 			harness.sql`
@@ -297,15 +349,36 @@ describe('the boot guard', () => {
 
 	it('refuses to serve one the release notes were never run against', async () => {
 		// Exactly what an in-place upgrade leaves behind: the schema this release
-		// needs, minus the column the migrator never added.
-		await harness.sql`alter table import_file drop column document_id`;
+		// needs, minus the tables the migrator never created. Both by name —
+		// `cascade` on the parent drops the child's foreign key and leaves the
+		// child standing, which would leave the probe's own table in place.
+		await harness.sql`drop table document_identity_number`;
+		await harness.sql`drop table document_identity`;
 		try {
 			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/release notes/i);
 		} finally {
-			await harness.sql`alter table import_file add column document_id uuid
-				references document(id) on delete restrict`;
-			await harness.sql`create index if not exists import_file_document_idx
-				on import_file(document_id)`;
+			// The release notes' own SQL, which is what an operator would run.
+			await harness.sql`
+				create table if not exists document_identity (
+					document_id uuid primary key references document(id) on delete cascade,
+					kind text not null default 'other',
+					country text,
+					number text,
+					issued_on date,
+					issuer text,
+					constraint document_identity_kind_check
+						check (kind in ('passport', 'id_card', 'driving_licence', 'residence_permit', 'other')),
+					constraint document_identity_country_check
+						check (country is null or country ~ '^[A-Z]{2}$')
+				)`;
+			await harness.sql`
+				create table if not exists document_identity_number (
+					document_id uuid not null references document_identity(document_id) on delete cascade,
+					ordinal integer not null,
+					label text not null,
+					value text not null,
+					primary key (document_id, ordinal)
+				)`;
 		}
 	});
 });
