@@ -155,17 +155,20 @@ describe('the baseline migration', () => {
 	it('seeds ten shelves, eight of them system', async () => {
 		const rows = await harness.sql<{ key: string; system: boolean }[]>`
 			select key, system from shelf order by sort_order`;
+		// Ordered by how often a shelf is opened rather than by how the keys were
+		// invented: the paper a household reaches for weekly sits above the paper
+		// it produces twice a decade.
 		expect(rows.map((r) => r.key)).toEqual([
 			'inbox',
 			'identity',
+			'statements',
+			'finance',
+			'household',
 			'family',
 			'health',
 			'property',
 			'tenancy',
-			'vehicles',
-			'finance',
-			'household',
-			'statements'
+			'vehicles'
 		]);
 		// Eight of the ten, for two reasons the flag deliberately does not
 		// distinguish. Four are written to by key — capture files into inbox,
@@ -179,12 +182,12 @@ describe('the baseline migration', () => {
 		expect(rows.filter((r) => r.system).map((r) => r.key)).toEqual([
 			'inbox',
 			'identity',
-			'family',
-			'health',
-			'property',
+			'statements',
 			'finance',
 			'household',
-			'statements'
+			'family',
+			'health',
+			'property'
 		]);
 	});
 
