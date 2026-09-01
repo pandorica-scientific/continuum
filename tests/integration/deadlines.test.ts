@@ -140,6 +140,26 @@ async function seedRefixLetter(expiresOn: string, loanId: string): Promise<strin
 	return id;
 }
 
+/**
+ * The events on `soon` that this file is about.
+ *
+ * `generateEvents` also emits the schedule rules — the import reminder and the
+ * quarterly report — which have no row behind them and land on the first
+ * working day of a month. `soon` is derived from today, so roughly one run in
+ * thirty it IS that day, and a test counting every event on the date fails on
+ * a pair of reminders it never asked about. Filter to the two sides of the
+ * duplicate under test, exactly as the briefing tests filter by kind.
+ */
+function onDateFrom(
+	events: Awaited<ReturnType<typeof generateEvents>>,
+	date: string,
+	ownerTable: 'tenancy' | 'loanFixationPeriod'
+) {
+	return events.filter(
+		(e) => e.date === date && (e.binding?.table === ownerTable || e.binding?.table === 'document')
+	);
+}
+
 describe('a lease document dated the same as its tenancy', () => {
 	it('gives the briefing one lease item, not two', async () => {
 		const { tenancyId } = await seedTenancy(soon);
@@ -156,7 +176,7 @@ describe('a lease document dated the same as its tenancy', () => {
 		await seedLeaseDocument(soon, tenancyId);
 
 		const events = await generateEvents('2020-01-01', '2099-01-01', testDb);
-		const onDate = events.filter((e) => e.date === soon);
+		const onDate = onDateFrom(events, soon, 'tenancy');
 		expect(onDate).toHaveLength(1);
 		expect(onDate[0].binding?.table).toBe('tenancy');
 	});
@@ -198,7 +218,7 @@ describe('a re-fixation letter dated the same as the loan’s current fixation e
 		await seedRefixLetter(soon, loanId);
 
 		const events = await generateEvents('2020-01-01', '2099-01-01', testDb);
-		const onDate = events.filter((e) => e.date === soon);
+		const onDate = onDateFrom(events, soon, 'loanFixationPeriod');
 		expect(onDate).toHaveLength(1);
 		expect(onDate[0].binding?.table).toBe('loanFixationPeriod');
 	});
@@ -272,7 +292,7 @@ describe('a document whose owning record reminds about nothing', () => {
 		await seedLeaseDocument(soon, tenancyId);
 
 		const events = await generateEvents('2020-01-01', '2099-01-01', testDb);
-		const onDate = events.filter((e) => e.date === soon);
+		const onDate = onDateFrom(events, soon, 'tenancy');
 		expect(onDate).toHaveLength(1);
 		expect(onDate[0].binding?.table).toBe('document');
 	});
