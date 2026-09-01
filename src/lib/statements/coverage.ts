@@ -39,8 +39,15 @@ export interface CoverageStatement {
  */
 export interface CoverageBox {
 	state: MonthState;
-	/** 0-based month index within the drawn year. */
+	/**
+	 * 0-based index of the first column this box occupies.
+	 *
+	 * A month within the drawn year, or a year within the drawn decade. The name
+	 * says month because that is what it was built for and what it mostly is;
+	 * the yearly band reuses the shape rather than duplicating it.
+	 */
 	startMonth: number;
+	/** How many columns wide. Greater than 1 only for `filed`. */
 	months: number;
 	/** Empty unless `filed`; more than one where two statements overlap. */
 	documentIds: string[];
@@ -142,6 +149,83 @@ export function coverageRow(
 			evidenceKey === null || key < evidenceKey
 				? 'before-account'
 				: key >= currentKey
+					? 'not-arrived'
+					: 'gap';
+		boxes.push({ state, startMonth: index, months: 1, documentIds: [] });
+	}
+	return boxes;
+}
+
+/** How many years a decade band shows. Ten, which is what makes it a decade. */
+export const DECADE = 10;
+
+/** The first year of the decade band a year belongs to: 2026 → 2020. */
+export const decadeStart = (year: number): number => Math.floor(year / DECADE) * DECADE;
+
+/**
+ * Every YEAR a document covers, inclusive.
+ *
+ * The sibling of `monthsCovered`, for paper that arrives once a year rather
+ * than once a month. A broker's annual report is not a statement that failed to
+ * be monthly — it is a different rhythm, and squeezing it into a twelve-month
+ * grid would draw eleven gaps a year for an account that is perfectly up to
+ * date.
+ */
+export function yearsCovered(statement: CoverageStatement): number[] {
+	const first = Number(statement.periodOn.slice(0, 4));
+	const last = Number((statement.periodEndOn ?? statement.periodOn).slice(0, 4));
+	if (last < first) return [first];
+	const years: number[] = [];
+	for (let year = first; year <= last && years.length < 50; year++) years.push(year);
+	return years;
+}
+
+/**
+ * One decade of an account's yearly paper, left to right.
+ *
+ * The same four states the month band uses and the same two rules: a filed box
+ * spans the years its document covers, an empty box is always one year. The
+ * only difference is the unit — which is the whole reason this exists rather
+ * than the months view being asked to stretch.
+ */
+export function coverageDecade(
+	statements: CoverageStatement[],
+	firstYear: number,
+	firstEvidence: string | null,
+	today: string
+): CoverageBox[] {
+	const covering = new Map<number, string[]>();
+	for (const statement of statements) {
+		for (const year of yearsCovered(statement)) {
+			const index = year - firstYear;
+			if (index < 0 || index >= DECADE) continue;
+			covering.set(index, [...(covering.get(index) ?? []), statement.id]);
+		}
+	}
+
+	const thisYear = Number(today.slice(0, 4));
+	const evidenceYear = firstEvidence ? Number(firstEvidence.slice(0, 4)) : null;
+
+	const boxes: CoverageBox[] = [];
+	for (let index = 0; index < DECADE; index++) {
+		const year = firstYear + index;
+		const ids = covering.get(index);
+
+		if (ids) {
+			const previous = boxes[boxes.length - 1];
+			const sameStatements =
+				previous?.state === 'filed' &&
+				previous.documentIds.length === ids.length &&
+				previous.documentIds.every((id, i) => id === ids[i]);
+			if (sameStatements) previous.months += 1;
+			else boxes.push({ state: 'filed', startMonth: index, months: 1, documentIds: [...ids] });
+			continue;
+		}
+
+		const state: MonthState =
+			evidenceYear === null || year < evidenceYear
+				? 'before-account'
+				: year >= thisYear
 					? 'not-arrived'
 					: 'gap';
 		boxes.push({ state, startMonth: index, months: 1, documentIds: [] });

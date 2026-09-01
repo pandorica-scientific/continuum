@@ -16,16 +16,18 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import type { CoveragePayload } from '$lib/server/statements/coverage-load';
-	import { lastOfMonth } from '$lib/statements/coverage';
+	import { DECADE, lastOfMonth } from '$lib/statements/coverage';
 
 	let {
 		coverage,
 		onopen,
-		onyear
+		onyear,
+		ondecade
 	}: {
 		coverage: CoveragePayload;
 		onopen: (documentId: string) => void;
 		onyear: (year: number) => void;
+		ondecade: (firstYear: number) => void;
 	} = $props();
 
 	const MONTHS = [
@@ -61,10 +63,75 @@
 
 	const monthName = (year: number, month: number): string => `${MONTHS[month]} ${year}`;
 
+	/**
+	 * The period whose contents are listed below the band, if any.
+	 *
+	 * A period holding ONE document opens it: the list would be a menu of one.
+	 * A period holding several cannot open "the" document, and splitting the box
+	 * into halves — what this did before — stops meaning anything at three. So a
+	 * crowded period opens a list of what it holds, and the list is where the
+	 * choice is made.
+	 */
+	let open = $state<{ band: 'monthly' | 'yearly'; accountId: string; column: number } | null>(null);
+
+	const isOpen = (band: 'monthly' | 'yearly', accountId: string, column: number): boolean =>
+		open?.band === band && open.accountId === accountId && open.column === column;
+
+	function pressed(
+		band: 'monthly' | 'yearly',
+		accountId: string,
+		column: number,
+		documentIds: string[]
+	) {
+		if (documentIds.length === 1) {
+			onopen(documentIds[0]);
+			return;
+		}
+		open = isOpen(band, accountId, column) ? null : { band, accountId, column };
+	}
+
+	/** `Apr 2026` or `2025` — what the open list is headed with. */
+	const periodLabel = (band: 'monthly' | 'yearly', column: number): string =>
+		band === 'monthly'
+			? monthName(coverage.year, column)
+			: String((coverage.yearly?.firstYear ?? coverage.year) + column);
+
+	/** The documents an open period holds, in the order the band recorded them. */
+	const openDocuments = $derived.by(() => {
+		if (!open) return [];
+		const rows = open.band === 'monthly' ? coverage.rows : (coverage.yearly?.rows ?? []);
+		const row = rows.find((r) => r.accountId === open!.accountId);
+		const box = row?.boxes.find((b) => b.startMonth === open!.column);
+		return (box?.documentIds ?? []).map((id) => coverage.documents[id]).filter(Boolean);
+	});
+
+	const openRowLabel = $derived.by(() => {
+		if (!open) return '';
+		const rows = open.band === 'monthly' ? coverage.rows : (coverage.yearly?.rows ?? []);
+		return rows.find((r) => r.accountId === open!.accountId)?.label ?? '';
+	});
+
 	// Nothing to see beyond either end: a future year is twelve months of "not
 	// arrived yet", and a year before any account existed is twelve blanks.
 	const canGoBack = $derived(coverage.year > coverage.firstYear);
 	const canGoForward = $derived(coverage.year < coverage.lastYear);
+
+	// The yearly band steps a decade at a time, bounded the same way: back to the
+	// decade holding the earliest report, forward no further than this one.
+	const decadeBack = $derived(
+		coverage.yearly !== null && coverage.yearly.firstYear > coverage.yearly.earliestDecade
+	);
+	const decadeForward = $derived(
+		coverage.yearly !== null && coverage.yearly.firstYear < coverage.yearly.latestDecade
+	);
+
+	/** `2020` → `['2020', … '2029']`, the columns of one decade band. */
+	const decadeYears = (firstYear: number): number[] =>
+		Array.from({ length: DECADE }, (_, i) => firstYear + i);
+
+	/** A whole year, for the import link behind a missing annual report. */
+	const yearHref = (accountId: string, year: number): string =>
+		`/import?account=${accountId}&from=${year}-01-01&to=${year}-12-31`;
 </script>
 
 <svelte:window
@@ -153,20 +220,24 @@
 						{#each row.boxes as box (box.startMonth)}
 							<td colspan={box.months} class="cell {box.state}">
 								{#if box.state === 'filed'}
-									<!-- Where two statements overlap a month, the merge broke and
-									     this box carries both: each half opens its own document. -->
-									<div class="filed-box" style:--parts={box.documentIds.length}>
-										{#each box.documentIds as id (id)}
-											<button
-												type="button"
-												onclick={() => onopen(id)}
-												aria-label="Open the statement covering {monthName(
-													coverage.year,
-													box.startMonth
-												)} for {row.label}"
-											></button>
-										{/each}
-									</div>
+									<button
+										type="button"
+										class="filed-box"
+										class:open={isOpen('monthly', row.accountId, box.startMonth)}
+										class:crowded={box.documentIds.length > 1}
+										onclick={() =>
+											pressed('monthly', row.accountId, box.startMonth, box.documentIds)}
+										aria-expanded={box.documentIds.length > 1
+											? isOpen('monthly', row.accountId, box.startMonth)
+											: undefined}
+										aria-label={box.documentIds.length > 1
+											? `List the ${box.documentIds.length} documents covering ${monthName(coverage.year, box.startMonth)} for ${row.label}`
+											: `Open the statement covering ${monthName(coverage.year, box.startMonth)} for ${row.label}`}
+									>
+										{#if box.documentIds.length > 1}
+											<span class="mono many">{box.documentIds.length}</span>
+										{/if}
+									</button>
 								{:else if box.state === 'before-account'}
 									<span class="empty" aria-label="Before this account existed"></span>
 								{:else}
@@ -187,11 +258,141 @@
 		</table>
 	</div>
 
+	{#if coverage.yearly}
+		<!-- Paper that arrives once a year, in a band of its own.
+		     A broker's annual report is not a statement that failed to be monthly;
+		     it is a different rhythm, and putting it in the twelve-month grid
+		     above would draw eleven gaps a year for an account that is perfectly
+		     up to date. -->
+		<div class="yearly">
+			<header class="sub">
+				<div class="year">
+					<button
+						type="button"
+						aria-label="Previous decade"
+						disabled={!decadeBack}
+						onclick={() => ondecade(coverage.yearly!.firstYear - DECADE)}
+					>
+						<Icon name="chevronLeft" size={16} />
+					</button>
+					<span class="mono y sm">
+						{coverage.yearly.firstYear}–{coverage.yearly.firstYear + DECADE - 1}
+					</span>
+					<button
+						type="button"
+						aria-label="Next decade"
+						disabled={!decadeForward}
+						onclick={() => ondecade(coverage.yearly!.firstYear + DECADE)}
+					>
+						<Icon name="chevronRight" size={16} />
+					</button>
+				</div>
+				<span class="summary" class:none={coverage.yearly.gaps === 0}>
+					{coverage.yearly.gaps === 0
+						? 'Once a year · nothing missing'
+						: `Once a year · ${coverage.yearly.gaps} ${coverage.yearly.gaps === 1 ? 'year' : 'years'} missing`}
+				</span>
+			</header>
+
+			<div class="scroll">
+				<table>
+					<thead>
+						<tr>
+							<th class="account-head" scope="col">Investment</th>
+							{#each decadeYears(coverage.yearly.firstYear) as year (year)}
+								<th class="month-head mono" scope="col">{year}</th>
+							{/each}
+						</tr>
+					</thead>
+					<tbody>
+						{#each coverage.yearly.rows as row (row.accountId)}
+							<tr>
+								<th class="account" scope="row">
+									<span class="account-name">{row.label}</span>
+									{#if row.sublabel}<span class="mono account-tail">···· {row.sublabel}</span>{/if}
+								</th>
+								{#each row.boxes as box (box.startMonth)}
+									{@const year = coverage.yearly.firstYear + box.startMonth}
+									<td colspan={box.months} class="cell {box.state}">
+										{#if box.state === 'filed'}
+											<button
+												type="button"
+												class="filed-box"
+												class:open={isOpen('yearly', row.accountId, box.startMonth)}
+												class:crowded={box.documentIds.length > 1}
+												onclick={() =>
+													pressed('yearly', row.accountId, box.startMonth, box.documentIds)}
+												aria-expanded={box.documentIds.length > 1
+													? isOpen('yearly', row.accountId, box.startMonth)
+													: undefined}
+												aria-label={box.documentIds.length > 1
+													? `List the ${box.documentIds.length} documents for ${year} for ${row.label}`
+													: `Open the ${year} report for ${row.label}`}
+											>
+												{#if box.documentIds.length > 1}
+													<span class="mono many">{box.documentIds.length}</span>
+												{/if}
+											</button>
+										{:else if box.state === 'before-account'}
+											<span class="empty" aria-label="Before this account existed"></span>
+										{:else}
+											<a
+												class="empty-link"
+												href={yearHref(row.accountId, year)}
+												aria-label="File the {year} report for {row.label}"
+											></a>
+										{/if}
+									</td>
+								{/each}
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	{/if}
+
+	{#if open && openDocuments.length > 0}
+		<!-- What a crowded period holds, under the band it was opened from.
+		     Below rather than floating over: the band it came from stays visible,
+		     so it is clear which cell is being explained. -->
+		<div class="listing">
+			<div class="listing-head">
+				<span class="mono period">{periodLabel(open.band, open.column)}</span>
+				<span class="listing-who">{openRowLabel}</span>
+				<span class="listing-count">· {openDocuments.length} documents</span>
+				<!-- The same glyph the inspector's close uses; there is no close icon
+				     in the set, and inventing one for a single button would leave two
+				     ways to draw the same gesture. -->
+				<button
+					type="button"
+					class="listing-close"
+					aria-label="Close the list"
+					onclick={() => (open = null)}>✕</button
+				>
+			</div>
+			{#each openDocuments as doc (doc.id)}
+				<button type="button" class="listing-row" onclick={() => onopen(doc.id)}>
+					<span class="mono listing-ext">{doc.ext}</span>
+					<span class="listing-name">
+						<span class="listing-title">{doc.name}</span>
+						<span class="listing-type">{doc.typeLabel}</span>
+					</span>
+					<span class="mono listing-date">{doc.addedOn}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
+
 	<footer>
 		<span class="key"><span class="swatch filed"></span>filed</span>
 		<span class="key"><span class="swatch not-arrived"></span>not arrived yet</span>
-		<span class="key"><span class="swatch before-account"></span>before the account existed</span>
-		<span class="key"><span class="swatch gap"></span>a month that should be there and is not</span>
+		<span class="key">
+			<span class="swatch before-account"></span>before the account existed
+		</span>
+		<span class="key">
+			<span class="swatch gap"></span>should be there and is not
+		</span>
 		<span class="how">Click a band to open it · click a gap to file one</span>
 	</footer>
 </section>
@@ -254,6 +455,17 @@
 	.hint {
 		margin-left: auto;
 	}
+	.yearly {
+		border-top: 1px solid var(--bd);
+	}
+	header.sub {
+		border-bottom: 0;
+		padding-bottom: 0;
+	}
+	.y.sm {
+		font-size: var(--text-md);
+		min-width: 9ch;
+	}
 
 	/* The one thing allowed to scroll sideways: twelve months plus a name do not
 	   fit a phone, and squeezing them would make every band unreadable rather
@@ -305,22 +517,114 @@
 	   flex row: two statements sharing a month split it in half, and each half
 	   opens its own document rather than one of them silently winning. */
 	.filed-box {
-		display: flex;
-		gap: 1px;
+		display: grid;
+		place-items: center;
+		width: 100%;
 		height: 30px;
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-sm);
-		background: var(--bd);
-		overflow: hidden;
-	}
-	.filed-box button {
-		flex: 1;
-		border: 0;
 		background: var(--card3);
 		cursor: pointer;
 	}
-	.filed-box button:hover {
+	.filed-box:hover {
 		background: var(--card2);
+	}
+	/* A period holding more than one says so, and stays marked while its list is
+	   open — otherwise pressing a cell moves content in below with nothing
+	   pointing back at which cell did it. */
+	.filed-box.crowded {
+		color: var(--fg2);
+		font-size: var(--text-xs);
+	}
+	.filed-box.open {
+		border-color: var(--fg3);
+	}
+	.many {
+		line-height: 1;
+	}
+
+	.listing {
+		margin: 0 11px var(--space-5);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-lg);
+		background: var(--bg2);
+		overflow: hidden;
+	}
+	.listing-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--bd);
+	}
+	.period {
+		font-size: var(--text-md);
+		color: var(--fg1);
+	}
+	.listing-who {
+		font-size: var(--text-base);
+		color: var(--fg2);
+	}
+	.listing-count {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.listing-close {
+		margin-left: auto;
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--fg3);
+		cursor: pointer;
+	}
+	.listing-close:hover {
+		color: var(--fg1);
+	}
+	.listing-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-6);
+		width: 100%;
+		padding: 10px 12px;
+		border: 0;
+		border-top: 1px solid var(--bd);
+		background: transparent;
+		text-align: left;
+		cursor: pointer;
+	}
+	.listing-row:first-of-type {
+		border-top: 0;
+	}
+	.listing-row:hover {
+		background: var(--card2);
+	}
+	.listing-ext {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		min-width: 4ch;
+	}
+	.listing-name {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+	}
+	.listing-title {
+		font-size: var(--text-md);
+		color: var(--fg1);
+	}
+	.listing-type {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.listing-date {
+		margin-left: auto;
+		font-size: var(--text-sm);
+		color: var(--fg3);
 	}
 	.empty,
 	.empty-link {

@@ -148,6 +148,85 @@ describe('loadCoverage', () => {
 		expect(payload.unplaced).toBe(0);
 	});
 
+	it('keeps a brokerage account out of the monthly band entirely', async () => {
+		// Accounts are accounts and investments are investments — the line
+		// `accounts/+page.server` has drawn all along. A brokerage account does
+		// not send monthly statements and never will, so eleven red months a year
+		// would be the ribbon accusing a perfectly current account of nothing.
+		const broker = await makeAccount(db, { name: 'XTB portfolio', kind: 'brokerage' });
+		await makeTransaction(db, {
+			accountId: broker.id,
+			bookedOn: '2026-04-25',
+			amountMinor: 1000n,
+			currency: 'CZK',
+			dedupFingerprint: 'coverage-load-broker'
+		});
+
+		const payload = await loadCoverage(2026, TODAY, db);
+		expect(payload.rows).toEqual([]);
+		expect(payload.gaps).toBe(0);
+
+		// It is asked the question that DOES apply to it, in the band below.
+		expect(payload.yearly?.rows.map((r) => r.label)).toEqual(['XTB portfolio']);
+	});
+
+	it('files a yearly report into the year it reports on', async () => {
+		const broker = await makeAccount(db, { name: 'XTB portfolio', kind: 'brokerage' });
+		const report = await makeDocument(db, {
+			shelfId: await shelfIdByKey('statements', db),
+			type: 'broker_report',
+			periodOn: '2025-01-01',
+			periodEndOn: '2025-12-31'
+		});
+		await makeDocumentLink(db, { documentId: report.id, targetId: broker.id });
+
+		const payload = await loadCoverage(2026, TODAY, db);
+		const band = payload.yearly!;
+		// 2020–2029, so 2025 is the sixth column.
+		expect(band.firstYear).toBe(2020);
+		expect(band.rows[0].boxes[5]).toEqual({
+			state: 'filed',
+			startMonth: 5,
+			months: 1,
+			documentIds: [report.id]
+		});
+		// And it is not counted as unplaceable, because it was placed.
+		expect(payload.unplaced).toBe(0);
+	});
+
+	it('carries what a crowded period holds, so the band can list it', async () => {
+		// A bank re-issues a corrected statement and a household files both, so a
+		// month can hold two documents. The cell cannot open "the" document then —
+		// it opens a list — and this is what the list reads.
+		const acc = await makeAccount(db, { name: 'Revolut' });
+		const statements = await shelfIdByKey('statements', db);
+		const ids: string[] = [];
+		for (const name of ['Revolut · 2026-08', 'Revolut · 2026-08 · corrected']) {
+			const doc = await makeDocument(db, {
+				name,
+				shelfId: statements,
+				type: 'bank_statement',
+				periodOn: '2026-08-01',
+				periodEndOn: '2026-08-31'
+			});
+			await makeDocumentLink(db, { documentId: doc.id, targetId: acc.id });
+			ids.push(doc.id);
+		}
+
+		const payload = await loadCoverage(2026, TODAY, db);
+		const august = payload.rows[0].boxes.find((b) => b.startMonth === 7);
+		expect(august?.state).toBe('filed');
+		expect(august?.documentIds.sort()).toEqual(ids.sort());
+
+		// Each one named, typed and dated — a list of ids would be a list of
+		// nothing a person can choose between.
+		for (const id of ids) {
+			expect(payload.documents[id].name).toContain('Revolut');
+			expect(payload.documents[id].typeLabel).toBe('Bank statement');
+			expect(payload.documents[id].ext).toBeTruthy();
+		}
+	});
+
 	it('refuses to walk past the current year, or before the first account', async () => {
 		const acc = await makeAccount(db, { name: 'Fio current' });
 		await makeTransaction(db, {

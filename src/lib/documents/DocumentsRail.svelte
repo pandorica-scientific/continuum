@@ -561,6 +561,11 @@
 		gap: var(--space-3);
 		min-height: 0;
 		overflow-y: auto;
+		/* Scrolling stops at this panel's own end. Without it the wheel is handed
+		   on to whatever scrolls behind, so reaching the bottom here quietly
+		   starts scrolling the page — and scrolling back moves the wrong one
+		   first. See docs/ui-guidelines.md. */
+		overscroll-behavior: contain;
 	}
 	.rail-item {
 		display: grid;
@@ -740,6 +745,11 @@
 		gap: var(--space-4);
 		max-height: 40vh;
 		overflow-y: auto;
+		/* Scrolling stops at this panel's own end. Without it the wheel is handed
+		   on to whatever scrolls behind, so reaching the bottom here quietly
+		   starts scrolling the page — and scrolling back moves the wrong one
+		   first. See docs/ui-guidelines.md. */
+		overscroll-behavior: contain;
 	}
 	/* The chip and its ✕ travel together, so the ✕ never wraps onto its own
 	   line away from the type it belongs to. */

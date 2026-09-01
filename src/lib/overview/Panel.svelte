@@ -195,6 +195,11 @@
 		min-height: 0;
 		overflow-x: hidden;
 		overflow-y: auto;
+		/* Scrolling stops at this panel's own end. Without it the wheel is handed
+		   on to whatever scrolls behind, so reaching the bottom here quietly
+		   starts scrolling the page — and scrolling back moves the wrong one
+		   first. See docs/ui-guidelines.md. */
+		overscroll-behavior: contain;
 	}
 	.body.inert > :global(*) {
 		pointer-events: none;

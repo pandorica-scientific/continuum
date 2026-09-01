@@ -10,11 +10,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+	coverageDecade,
 	coverageRow,
 	countGaps,
+	decadeStart,
 	firstOfMonth,
 	lastOfMonth,
-	monthsCovered
+	monthsCovered,
+	yearsCovered
 } from '$lib/statements/coverage';
 
 const TODAY = '2026-08-31';
@@ -125,5 +128,70 @@ describe('coverageRow', () => {
 		// The CHECK constraint refuses one, so this is belt and braces — but a
 		// loop that never ends is a worse failure than a wrong box.
 		expect(monthsCovered(stmt('a', '2026-06-01', '2026-01-31'))).toEqual(['2026-06']);
+	});
+});
+
+/**
+ * The yearly band, for paper that arrives once a year.
+ *
+ * A broker's annual report is not a statement that failed to be monthly — it is
+ * a different rhythm, and putting it in the twelve-month grid would draw eleven
+ * gaps a year for an account that is perfectly up to date.
+ */
+describe('coverageDecade', () => {
+	it('starts a decade on the round year', () => {
+		expect(decadeStart(2026)).toBe(2020);
+		expect(decadeStart(2020)).toBe(2020);
+		expect(decadeStart(2019)).toBe(2010);
+	});
+
+	it('covers the years a document spans', () => {
+		expect(yearsCovered(stmt('a', '2024-01-01', '2026-12-31'))).toEqual([2024, 2025, 2026]);
+		expect(yearsCovered(stmt('a', '2025-01-01', '2025-12-31'))).toEqual([2025]);
+	});
+
+	it('fills the year a report covers and calls the ones before it gaps', () => {
+		const boxes = coverageDecade(
+			[stmt('r', '2025-01-01', '2025-12-31')],
+			2020,
+			'2023-04-01',
+			TODAY
+		);
+		// 2020–2022 predate the account; 2023 and 2024 are years that ended with
+		// no report; 2025 is filed; 2026 onward has not arrived.
+		expect(boxes.map((b) => b.state)).toEqual([
+			'before-account',
+			'before-account',
+			'before-account',
+			'gap',
+			'gap',
+			'filed',
+			'not-arrived',
+			'not-arrived',
+			'not-arrived',
+			'not-arrived'
+		]);
+		expect(countGaps(boxes)).toBe(2);
+	});
+
+	it('draws a multi-year document as one band', () => {
+		const boxes = coverageDecade(
+			[stmt('r', '2021-01-01', '2023-12-31')],
+			2020,
+			'2021-01-01',
+			TODAY
+		);
+		expect(boxes[1]).toEqual({ state: 'filed', startMonth: 1, months: 3, documentIds: ['r'] });
+	});
+
+	it('always draws ten years, and clips what falls outside the decade', () => {
+		const boxes = coverageDecade(
+			[stmt('r', '2019-01-01', '2020-12-31')],
+			2020,
+			'2019-01-01',
+			TODAY
+		);
+		expect(boxes.reduce((total, b) => total + b.months, 0)).toBe(10);
+		expect(boxes[0]).toEqual({ state: 'filed', startMonth: 0, months: 1, documentIds: ['r'] });
 	});
 });

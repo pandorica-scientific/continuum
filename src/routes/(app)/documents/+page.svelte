@@ -733,6 +733,7 @@
 					coverage={data.coverage}
 					onopen={(id) => navigate({ doc: id })}
 					onyear={(year) => navigate({ year: String(year) })}
+					ondecade={(firstYear) => navigate({ decade: String(firstYear) })}
 				/>
 			{:else}
 				{#if honestyState(data.query, data.rows.length, data.honesty) === 'not-searchable'}
@@ -1109,6 +1110,15 @@
 			{#if editing}
 				<form class="ins-sections" method="POST" action="?/updateDocument" use:enhance>
 					<input type="hidden" name="id" value={d.id} />
+					<!-- Where Edit was, not at the foot of the form.
+					     Editing replaces the Edit button rather than appending a row
+					     below fifteen fields: pressing Edit and then having to scroll
+					     to the bottom to save is two journeys for one decision, and on
+					     a long document the buttons were off the screen entirely. -->
+					<div class="ins-actions ins-actions-top">
+						<button type="submit" class="btn btn-primary">Save</button>
+						<button type="button" class="btn" onclick={() => (editing = false)}>Cancel</button>
+					</div>
 					<div class="sec">
 						<span class="eyebrow">Name</span>
 						<input name="name" value={d.name} />
@@ -1351,10 +1361,6 @@
 							</label>
 						</div>
 					{/if}
-					<div class="ins-actions">
-						<button type="submit" class="btn btn-primary">Save</button>
-						<button type="button" class="btn" onclick={() => (editing = false)}>Cancel</button>
-					</div>
 				</form>
 			{:else}
 				<div class="ins-sections">
@@ -1546,6 +1552,7 @@
 	.capture-about .about {
 		max-height: 224px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 	.capture-foot {
 		display: flex;
@@ -1949,6 +1956,11 @@
 		max-height: calc(100dvh - 28px);
 		min-height: 0;
 		overflow-y: auto;
+		/* Two scrollable things on one screen, and without this they take turns:
+		   reaching the end of the panel handed the wheel to the list behind it,
+		   so scrolling the inspector scrolled the archive, and scrolling back up
+		   moved the wrong one first. `contain` stops at this panel's own end. */
+		overscroll-behavior: contain;
 	}
 	.state-line {
 		margin: 0 var(--space-8);
@@ -2242,6 +2254,21 @@
 		align-items: center;
 		gap: var(--space-5);
 		padding-top: var(--space-5);
+	}
+	/* The edit form's own row sits at the TOP, in the Edit button's place — so it
+	   occupies that button's footprint: full width, split in two. The form's own
+	   padding already matches `.ins-primary`'s margin, so no margin here.
+	   Left-aligned and shrink-wrapped, the pair read as a different control that
+	   happened to appear rather than as the one just pressed. */
+	.ins-actions-top {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-5);
+		padding-top: 0;
+		padding-bottom: var(--space-5);
+	}
+	.ins-actions-top .btn {
+		width: 100%;
 	}
 	.about {
 		display: flex;

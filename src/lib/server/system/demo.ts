@@ -867,13 +867,20 @@ export async function seedDemo(): Promise<void> {
 		return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 	};
 
-	/** Every month from the account's first movement to the one just gone. */
+	/**
+	 * Every month from the account's first movement to the one just gone.
+	 *
+	 * An account with no movements at all still gets the latest month: a
+	 * statement saying "no movements in this period" is a real thing a bank
+	 * sends, and it is the only evidence that such an account exists — without
+	 * it the ribbon has no reason to draw the account a row.
+	 */
 	const monthsFor = (accountId: string): string[] => {
 		const first = rows
 			.filter((r) => r.accountId === accountId)
 			.map((r) => r.bookedOn.slice(0, 7))
 			.sort()[0];
-		if (!first) return [];
+		if (!first) return [statementMonth];
 		const months: string[] = [];
 		for (let m = first; m <= statementMonth; m = monthShift(m, 1)) months.push(m);
 		return months;
@@ -910,6 +917,31 @@ export async function seedDemo(): Promise<void> {
 		}
 	}
 
+	// A second document covering a month that already has one.
+	//
+	// Real, not decoration: a bank re-issues a corrected statement, and a
+	// household files both — so a period can hold more than one document, and the
+	// ribbon has to be able to say so rather than picking one. The demo carries
+	// the case because it is the one a single-statement fixture never shows.
+	await fileDemoPdf({
+		name: `Revolut · ${statementMonth} · corrected`,
+		shelfKey: 'statements',
+		type: 'bank_statement',
+		targetIds: [revolut],
+		tagNames: [statementMonth.slice(0, 4)],
+		periodOn: `${statementMonth}-01`,
+		periodEndOn: lastDayOf(statementMonth),
+		note: 'Re-issued by the bank after a correction.',
+		lines: [
+			'Account: Revolut (EUR)',
+			`Period: ${statementMonth}`,
+			'',
+			'Corrected copy — replaces the statement issued earlier this month.',
+			'',
+			`Closing balance: ${amount(310000n, 'EUR')}`
+		]
+	});
+
 	// The broker's yearly report, on the brokerage account. Dated to the last
 	// snapshot of last year, because that is the report a household attaches to
 	// a tax return — which is also what its second tag says.
@@ -924,6 +956,11 @@ export async function seedDemo(): Promise<void> {
 		type: 'broker_report',
 		targetIds: [broker],
 		tagNames: [DEMO_BROKER.toLowerCase(), `${thisYear - 1} return`],
+		// The YEAR it reports on. Yearly paper is drawn in a band of its own, ten
+		// years wide, and a report dated to its generation day would sit in the
+		// wrong column whenever last year's report arrives in January.
+		periodOn: `${thisYear - 1}-01-01`,
+		periodEndOn: `${thisYear - 1}-12-31`,
 		lines: [
 			`Broker: ${DEMO_BROKER}`,
 			'Account: XTB portfolio (CZK)',

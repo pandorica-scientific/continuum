@@ -135,6 +135,13 @@ export async function uploadBrokerReport(
 					expiresOn: null,
 					expiryVerb: 'expires',
 					contentHash,
+					// The YEAR the report is about, which is the unit the coverage
+					// ribbon draws yearly paper in. A broker's annual report covers a
+					// year, not the day it happens to be generated on, and a report
+					// dated to its generation day would sit in the wrong column the
+					// moment a household downloads January's report in February.
+					periodOn: `${reportDay.slice(0, 4)}-01-01`,
+					periodEndOn: `${reportDay.slice(0, 4)}-12-31`,
 					targetIds: brokerageAccounts.length === 1 ? [brokerageAccounts[0].id] : [],
 					tagNames: [brokerKey, reportDay.slice(0, 4)]
 				},

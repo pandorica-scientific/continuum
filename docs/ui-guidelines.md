@@ -155,6 +155,10 @@ horizontal values, so a scale there would be a restyle rather than a description
 and `.btn`, applied in `app.css`. A row of controls agrees without any of them being told
 about the others.
 
+**An edit form's Save and Cancel replace the control that opened it.** Pressing Edit at the
+top of a panel and then scrolling fifteen fields to find Save is two journeys for one
+decision, and on a long record the buttons are off the screen entirely.
+
 - Main content padding `26px 32px 60px`; gap between sections `26px`.
 - Sidebar `252px` (`src/routes/(app)/+layout.svelte:213`).
 - Card padding: `12px 14px` metric tiles (per `MetricTile.svelte`), `16px 18px` content
@@ -292,6 +296,12 @@ don't rediscover them.
 - **A wrapping tab row** shifting content down by a variable amount — the Money area's seven
   pills scroll sideways instead.
 - **A pill failing contrast in light theme** — darken the ink, never the tint.
+- **Two scrollable things taking turns** — a panel that scrolls inside a page that also
+  scrolls hands the wheel on when it reaches its own end, so scrolling the inspector quietly
+  scrolls the archive behind it, and scrolling back moves the wrong one first. **Anything
+  with `overflow-y: auto` sitting over other scrollable content gets
+  `overscroll-behavior: contain`** — the inspector, the rail, the modal, the sidebar, and
+  every picker or chip list bounded by a `max-height`.
 
 ---
 

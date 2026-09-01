@@ -503,7 +503,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			view === 'shelf' && profile?.layout === 'completeness'
 				? await loadCoverage(
 						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
-						bannerToday()
+						bannerToday(),
+						undefined,
+						Number(url.searchParams.get('decade')) || undefined
 					)
 				: null,
 		sort: url.searchParams.get('sort') ?? 'newest',

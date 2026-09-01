@@ -220,15 +220,39 @@ describe('the demo seed', () => {
 		expect(events.some((e) => e.binding?.rowId === lease.id)).toBe(false);
 	});
 
-	it('files a statement per current account and a report on the brokerage one', async () => {
+	it('files a run of statements per current account, with one month missing', async () => {
+		// A run rather than a single statement, and one month deliberately absent:
+		// the Statements shelf exists to show a month that never arrived, and a
+		// ribbon with one band on it demonstrates nothing. Every statement carries
+		// the months it covers, because the demo writes no import to derive them
+		// from and the ribbon reads the column rather than the name.
 		const docs = await seededDocuments();
 		const accounts = await testDb.select().from(account);
 		const statements = ofType(docs, 'bank_statement');
-		expect(statements).toHaveLength(2);
+		expect(statements.length).toBeGreaterThan(2);
+
+		for (const statement of statements) {
+			expect(statement.periodOn, statement.name).not.toBeNull();
+			expect(statement.periodEndOn, statement.name).not.toBeNull();
+		}
+
 		const linked = new Set((await Promise.all(statements.map((s) => targetsOf(s.id)))).flat());
 		for (const current of accounts.filter((a) => a.kind === 'current')) {
 			expect(linked).toContain(current.id);
 		}
+
+		// The gap. Whichever account has a run of months, one of them is not
+		// filed — and nothing marks it as missing, which is how a real month goes
+		// astray.
+		const months = statements
+			.map((s) => s.periodOn)
+			.filter((day): day is string => day !== null)
+			.sort();
+		const span =
+			(Number(months[months.length - 1].slice(0, 4)) - Number(months[0].slice(0, 4))) * 12 +
+			(Number(months[months.length - 1].slice(5, 7)) - Number(months[0].slice(5, 7))) +
+			1;
+		expect(span).toBeGreaterThan(new Set(months).size);
 
 		const [report] = ofType(docs, 'broker_report');
 		const brokerage = accounts.filter((a) => a.kind === 'brokerage');
