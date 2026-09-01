@@ -28,6 +28,7 @@ import { accountsSeedSql, transactionEffectiveOnSql, transferPairSql } from './a
 import { contactFoldSql, contactsSql } from './contacts';
 import { documentsCheckSql, documentsIndexSql, documentsSeedSql } from './documents';
 import { entitySql } from './entity';
+import { organisationsCheckSql } from './organisations';
 import { investmentsSql } from './investments';
 import { moneySeedSql } from './money';
 
@@ -156,7 +157,7 @@ export const BASELINE_SECTIONS: BaselineSection[] = [
 	{ title: 'Enum CHECK constraints', sql: enumChecksSql() },
 	{
 		title: 'Singletons and shapes',
-		sql: join([authSql, investmentsSql, documentsCheckSql])
+		sql: join([authSql, investmentsSql, documentsCheckSql, organisationsCheckSql])
 	},
 	{ title: 'The entity supertype', sql: entitySql },
 	{ title: 'The net-worth contract', sql: netWorthSql },

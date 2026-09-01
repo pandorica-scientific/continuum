@@ -64,7 +64,10 @@ export const ENTITY_KINDS = [
 	// employer's income confirmation, the broker's report — so a statement has
 	// to be linkable. Its attachments live in document_link like every other
 	// filing rather than in a table of their own.
-	'tax_statement'
+	'tax_statement',
+	// An employer, the tax office, an insurer. A kind rather than a table of its
+	// own so a document files against one through `document_link` unchanged.
+	'organisation'
 ] as const;
 
 export type EntityKind = (typeof ENTITY_KINDS)[number];
@@ -73,6 +76,15 @@ export const ENUMS = {
 	'person.role': ['admin', 'member'],
 
 	'account.kind': ['current', 'savings', 'brokerage'],
+
+	/**
+	 * What a counterparty IS to the household, which is what its badge says.
+	 *
+	 * Not a taxonomy of institutions — four words that change what is expected
+	 * of one: an employer sends payslips monthly, an authority is written to
+	 * once a year, an insurer neither.
+	 */
+	'organisation.kind': ['employer', 'authority', 'insurer', 'other'],
 
 	// Where a category group sits in the waterfall. Not derivable from sort
 	// order: income opens the chart, expense groups are its stages, savings
@@ -194,6 +206,7 @@ export type DocumentTypeKey = EnumValue<'document.type'> | (string & {});
 export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = [
 	{ table: 'person', column: 'role', enum: 'person.role' },
 	{ table: 'account', column: 'kind', enum: 'account.kind' },
+	{ table: 'organisation', column: 'kind', enum: 'organisation.kind' },
 	{ table: 'category_group', column: 'role', enum: 'category_group.role' },
 	{ table: 'person', column: 'theme', enum: 'person.theme' },
 	{ table: 'property', column: 'kind', enum: 'property.kind' },

@@ -7,6 +7,7 @@ import { displayCurrency } from '$lib/money';
 import {
 	document,
 	documentLink,
+	organisation,
 	subject,
 	tagLink,
 	taxStatement,
@@ -65,7 +66,8 @@ const target = {
 	contact: rowId('dt-contact'),
 	subject: rowId('dt-subject'),
 	transaction: rowId('dt-transaction'),
-	tax_statement: rowId('dt-tax-statement')
+	tax_statement: rowId('dt-tax-statement'),
+	organisation: rowId('dt-organisation')
 } as const;
 
 const archivedSubject = rowId('dt-subject-archived');
@@ -108,6 +110,11 @@ beforeAll(async () => {
 		currency: 'CZK',
 		counterparty: 'Alza',
 		dedupFingerprint: 'dt-transaction'
+	});
+	await testDb.insert(organisation).values({
+		id: target.organisation,
+		name: 'Institute of Physics CAS',
+		kind: 'employer'
 	});
 	await testDb.insert(taxStatement).values({
 		id: target.tax_statement,
@@ -192,7 +199,8 @@ describe('the registry', () => {
 			'account',
 			'loan',
 			'contact',
-			'subject'
+			'subject',
+			'organisation'
 		]);
 		// Transactions and tax statements are linked from their own screens, so
 		// the capture dialog must not offer them.
@@ -208,7 +216,8 @@ describe('the registry', () => {
 			'Contacts',
 			'Subjects',
 			'Transactions',
-			'Tax statements'
+			'Tax statements',
+			'Organisations'
 		]);
 	});
 });
@@ -231,6 +240,13 @@ describe('naming a row of every kind', () => {
 		expect(names.get('loan')?.get(target.loan)?.name).toBe('Flat mortgage');
 		expect(names.get('contact')?.get(target.contact)?.name).toBe('Plumber');
 		expect(names.get('subject')?.get(target.subject)?.name).toBe('The car');
+		expect(names.get('organisation')?.get(target.organisation)?.name).toBe(
+			'Institute of Physics CAS'
+		);
+		// The kind rides as the second line: "ČSSZ" and "VZP" are two initialisms
+		// a person half-remembers, and employer-or-authority is what tells them
+		// apart in a picker.
+		expect(names.get('organisation')?.get(target.organisation)?.meta).toBe('employer');
 	});
 
 	it('names only the rows it was asked for', async () => {
@@ -307,7 +323,8 @@ describe('naming a row of every kind', () => {
 			'account',
 			'loan',
 			'contact',
-			'subject'
+			'subject',
+			'organisation'
 		]);
 		expect(rows.some((r) => r.id === target.transaction)).toBe(false);
 		expect(rows.some((r) => r.id === target.tax_statement)).toBe(false);

@@ -206,6 +206,25 @@ CREATE TABLE "tag" (
 	CONSTRAINT "tag_normalised_name_unique" UNIQUE("normalised_name")
 );
 --> statement-breakpoint
+CREATE TABLE "engagement" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"person_id" uuid NOT NULL,
+	"organisation_id" uuid NOT NULL,
+	"role" text,
+	"starts_on" date,
+	"ends_on" date,
+	"document_id" uuid
+);
+--> statement-breakpoint
+CREATE TABLE "organisation" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"kind" text DEFAULT 'other' NOT NULL,
+	"emoji" text DEFAULT '🏛️' NOT NULL,
+	"notes" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "contact_link" (
 	"contact_id" uuid NOT NULL,
 	"target_id" uuid NOT NULL,
@@ -680,6 +699,9 @@ ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_i
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_type_document_type_key_fk" FOREIGN KEY ("type") REFERENCES "public"."document_type"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "engagement" ADD CONSTRAINT "engagement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "engagement" ADD CONSTRAINT "engagement_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "engagement" ADD CONSTRAINT "engagement_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_link" ADD CONSTRAINT "document_link_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -758,6 +780,10 @@ CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_has
 CREATE INDEX "dtc_document_idx" ON "document_text_chunk" USING btree ("document_id");--> statement-breakpoint
 CREATE INDEX "shelf_type_type_idx" ON "shelf_type" USING btree ("type");--> statement-breakpoint
 CREATE UNIQUE INDEX "subject_name_ci_idx" ON "subject" USING btree (lower("name"));--> statement-breakpoint
+CREATE INDEX "engagement_organisation_idx" ON "engagement" USING btree ("organisation_id");--> statement-breakpoint
+CREATE INDEX "engagement_person_idx" ON "engagement" USING btree ("person_id");--> statement-breakpoint
+CREATE INDEX "engagement_document_idx" ON "engagement" USING btree ("document_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organisation_name_ci_idx" ON "organisation" USING btree (lower("name"));--> statement-breakpoint
 CREATE INDEX "contact_link_target_idx" ON "contact_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "document_link_target_idx" ON "document_link" USING btree ("target_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "entity_id_kind_key" ON "entity" USING btree ("id","kind");--> statement-breakpoint
@@ -918,6 +944,9 @@ ALTER TABLE person ADD CONSTRAINT person_role_check
 ALTER TABLE account ADD CONSTRAINT account_kind_check
 	CHECK (kind in ('current', 'savings', 'brokerage'));
 --> statement-breakpoint
+ALTER TABLE organisation ADD CONSTRAINT organisation_kind_check
+	CHECK (kind in ('employer', 'authority', 'insurer', 'other'));
+--> statement-breakpoint
 ALTER TABLE category_group ADD CONSTRAINT category_group_role_check
 	CHECK (role in ('income', 'expense', 'savings'));
 --> statement-breakpoint
@@ -991,7 +1020,7 @@ ALTER TABLE calendar_conflict ADD CONSTRAINT calendar_conflict_resolution_check
 	CHECK (resolution in ('local-won', 'remote-won', 'wrote-back'));
 --> statement-breakpoint
 ALTER TABLE entity ADD CONSTRAINT entity_kind_check
-	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement'));
+	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation'));
 --> statement-breakpoint
 
 -- ---- Singletons and shapes ----
@@ -1028,6 +1057,11 @@ ALTER TABLE document_identity ADD CONSTRAINT document_identity_country_check
 ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);
 --> statement-breakpoint
+-- A period that ends before it starts is not a period, and would make a lane
+-- expect a negative number of filings.
+ALTER TABLE engagement ADD CONSTRAINT engagement_period_order_check
+	CHECK (ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on);
+--> statement-breakpoint
 
 -- ---- The entity supertype ----
 DO $outer$
@@ -1035,7 +1069,7 @@ DECLARE
 	t text;
 	has_created_at boolean;
 BEGIN
-	FOREACH t IN ARRAY ARRAY['person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement']
+	FOREACH t IN ARRAY ARRAY['person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation']
 	LOOP
 		EXECUTE format(
 			'ALTER TABLE %I ADD COLUMN entity_kind text GENERATED ALWAYS AS (%L) STORED', t, t);

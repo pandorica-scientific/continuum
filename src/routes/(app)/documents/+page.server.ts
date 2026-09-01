@@ -21,6 +21,17 @@ import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/syst
 import { readDocumentsScreen } from '$lib/server/documents/screen';
 import { shelfFacts } from '$lib/server/documents/shelf-stats';
 import {
+	addEngagement,
+	addOrganisation,
+	deleteEngagement,
+	deleteOrganisation,
+	endEngagement,
+	listOrganisations,
+	renameOrganisation,
+	setOrganisationEmoji,
+	setOrganisationKind
+} from '$lib/server/organisations/mutations';
+import {
 	coverageAccountCount,
 	gapsAcrossYears,
 	loadCoverage
@@ -495,6 +506,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 */
 		bannerFacts:
 			shelf === 'all' || query ? null : await bannerFactsFor(shelf, locals.person ?? null),
+		/**
+		 * The organisations the household deals with, for the rail's third
+		 * section. Counted behind the same read rule as everything else here.
+		 */
+		organisations: await listOrganisations(db, locals.person ?? null),
 		/**
 		 * The ribbon, or null whenever it is not what the centre column draws —
 		 * the list is one press away and does not need this payload.
@@ -1098,6 +1114,109 @@ export const actions: Actions = {
 	// Archiving is the only "removal" a subject has. A subject that once held
 	// paper is history, and history is put away rather than deleted — so there
 	// is no `removeSubject` here and there will not be one.
+
+	addOrganisation: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await addOrganisation(
+				{
+					name: String(form.get('name') ?? ''),
+					kind: asEnumValue('organisation.kind', String(form.get('kind') ?? 'other'), 'other'),
+					emoji: String(form.get('emoji') ?? '')
+				},
+				db
+			);
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
+		return { ok: true };
+	},
+
+	/** The rail's rename row: name, emoji and kind at once, as a subject's does. */
+	renameOrganisation: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		const name = String(form.get('name') ?? '').trim();
+		if (!id || !name) return fail(400, { message: 'An organisation needs a name.' });
+		try {
+			await renameOrganisation(id, name, db);
+			const emoji = form.get('emoji');
+			if (emoji !== null) await setOrganisationEmoji(id, String(emoji), db);
+			const kind = form.get('kind');
+			if (kind !== null) {
+				await setOrganisationKind(id, asEnumValue('organisation.kind', String(kind), 'other'), db);
+			}
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not rename it.'
+			});
+		}
+		return { ok: true };
+	},
+
+	deleteOrganisation: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Nothing to remove.' });
+		try {
+			await deleteOrganisation(id, db);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not remove it.'
+			});
+		}
+		return { ok: true };
+	},
+
+	addEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const organisationId = String(form.get('organisationId') ?? '').trim();
+		const personId = String(form.get('personId') ?? '').trim();
+		if (!organisationId || !personId) {
+			return fail(400, { message: 'A role period needs a person and an organisation.' });
+		}
+		try {
+			await addEngagement(
+				{
+					organisationId,
+					personId,
+					role: String(form.get('role') ?? ''),
+					startsOn: String(form.get('startsOn') ?? '') || null
+				},
+				db
+			);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not add the role.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/** Closes a period rather than removing it — see `endEngagement` for why. */
+	endEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		const endsOn = String(form.get('endsOn') ?? '').trim();
+		if (!id || !endsOn) return fail(400, { message: 'A closing date is needed.' });
+		try {
+			await endEngagement(id, endsOn, db);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not close the role.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/** For one entered by mistake. Ending a real one is `endEngagement`. */
+	deleteEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Nothing to remove.' });
+		await deleteEngagement(id, db);
+		return { ok: true };
+	},
 
 	addSubject: async ({ request }) => {
 		const form = await request.formData();

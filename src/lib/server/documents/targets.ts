@@ -33,6 +33,7 @@ import {
 	documentType,
 	entity,
 	loan,
+	organisation,
 	person,
 	property,
 	shelf,
@@ -71,7 +72,8 @@ export const DOCUMENT_TARGET_KINDS = [
 	'contact',
 	'subject',
 	'transaction',
-	'tax_statement'
+	'tax_statement',
+	'organisation'
 ] as const;
 
 export type DocumentTargetKind = (typeof DOCUMENT_TARGET_KINDS)[number];
@@ -259,6 +261,22 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 		groupLabel: 'Contacts',
 		pickable: true,
 		nameSql: sql`select ${contact.id} as id, ${contact.name} as name from ${contact}`
+	}),
+	organisation: defineKind('organisation', {
+		groupLabel: 'Organisations',
+		// Pickable, unlike a transaction: an employer is a short list a person
+		// can find by eye, and filing a payslip against one is the whole point of
+		// the record existing.
+		pickable: true,
+		nameSql: sql`select ${organisation.id} as id, ${organisation.name} as name from ${organisation}`,
+		// The kind as a second line. "Institute of Physics CAS" and "Tax office"
+		// are not ambiguous, but "ČSSZ" and "VZP" are two initialisms a person
+		// half-remembers, and `employer` or `authority` is what tells them apart.
+		extras: {
+			columns: sql`${organisation.kind} as org_kind`,
+			join: sql`join ${organisation} on ${organisation.id} = t.id`,
+			read: (raw) => ({ meta: String(raw.org_kind ?? '') })
+		}
 	}),
 	subject: defineKind('subject', {
 		groupLabel: 'Subjects',

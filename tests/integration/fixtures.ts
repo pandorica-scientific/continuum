@@ -23,7 +23,9 @@ import {
 	contact,
 	document,
 	documentLink,
+	engagement,
 	loan,
+	organisation,
 	person,
 	property,
 	transaction
@@ -121,6 +123,43 @@ export async function makeProperty(
 			currency: FIXTURE_CURRENCY,
 			...overrides
 		})
+		.returning();
+	return row;
+}
+
+export async function makeOrganisation(
+	db: Queryable,
+	overrides: Partial<Insert<typeof organisation>> = {}
+): Promise<typeof organisation.$inferSelect> {
+	const [row] = await db
+		.insert(organisation)
+		.values({
+			id: uuidv7(),
+			name: 'Test Organisation',
+			// From the registry rather than a literal, as `makeProperty` does: a
+			// pinned value goes stale the day the allowed kinds change, and does it
+			// as a constraint violation in an unrelated suite.
+			kind: ENUMS['organisation.kind'][0],
+			...overrides
+		})
+		.returning();
+	return row;
+}
+
+/**
+ * One role period. A promotion is a SECOND call, not an edit to the first.
+ *
+ * `personId` and `organisationId` are required rather than defaulted: an
+ * engagement joining two records the test did not choose is a fixture that
+ * passes while proving nothing.
+ */
+export async function makeEngagement(
+	db: Queryable,
+	overrides: Partial<Insert<typeof engagement>> & { personId: string; organisationId: string }
+): Promise<typeof engagement.$inferSelect> {
+	const [row] = await db
+		.insert(engagement)
+		.values({ id: uuidv7(), ...overrides })
 		.returning();
 	return row;
 }
