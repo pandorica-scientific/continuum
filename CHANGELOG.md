@@ -2,6 +2,36 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.8 — 2026-09-01
+
+> A shelf that counts from when the paperwork started arriving, not from the first piece of it you kept.
+
+### ✨ Added
+
+- 🗂️ **Income & Tax opens as counterparty cards** — one per employer, authority or insurer, each holding lanes of month or year cells, so the payslip that never arrived is visible as the gap it is
+- 📐 **A lane counts from the engagement rather than from the paper** — an employment that began in January with no slip until June shows five gaps, which is the whole reason role periods are recorded
+- 🧩 **Each organisation is created with the lanes its kind expects** — three for an employer, two for an authority, none for a kind with no rhythm of its own, and all of them yours to edit afterwards
+- 📄 **A period holding several documents opens a list rather than guessing which one you meant** — the same list the Statements ribbon opens, now one component instead of two
+
+### ⬆️ Upgrading
+
+- 🗄️ **One new table, which an instance migrated by hand runs once after a backup** — existing organisations get no lanes from it and can be given them from the rail
+
+```sql
+create table if not exists lane (
+  id uuid primary key,
+  organisation_id uuid not null references organisation(id) on delete cascade,
+  person_id uuid references person(id) on delete cascade,
+  label text not null,
+  cadence text not null,
+  conditions jsonb not null default '[]'::jsonb,
+  sort_order integer not null default 0,
+  constraint lane_cadence_check check (cadence in ('monthly','yearly','none'))
+);
+create index if not exists lane_organisation_idx on lane (organisation_id);
+create index if not exists lane_person_idx on lane (person_id);
+```
+
 ## 0.7.7 — 2026-09-01
 
 > An employer that is a record rather than a name printed on a payslip.

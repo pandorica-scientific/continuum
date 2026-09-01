@@ -216,6 +216,16 @@ CREATE TABLE "engagement" (
 	"document_id" uuid
 );
 --> statement-breakpoint
+CREATE TABLE "lane" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organisation_id" uuid NOT NULL,
+	"person_id" uuid,
+	"label" text NOT NULL,
+	"cadence" text NOT NULL,
+	"conditions" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "organisation" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
@@ -702,6 +712,8 @@ ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_type_document_type_key_fk" F
 ALTER TABLE "engagement" ADD CONSTRAINT "engagement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement" ADD CONSTRAINT "engagement_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement" ADD CONSTRAINT "engagement_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lane" ADD CONSTRAINT "lane_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lane" ADD CONSTRAINT "lane_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_link" ADD CONSTRAINT "document_link_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -783,6 +795,8 @@ CREATE UNIQUE INDEX "subject_name_ci_idx" ON "subject" USING btree (lower("name"
 CREATE INDEX "engagement_organisation_idx" ON "engagement" USING btree ("organisation_id");--> statement-breakpoint
 CREATE INDEX "engagement_person_idx" ON "engagement" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "engagement_document_idx" ON "engagement" USING btree ("document_id");--> statement-breakpoint
+CREATE INDEX "lane_organisation_idx" ON "lane" USING btree ("organisation_id");--> statement-breakpoint
+CREATE INDEX "lane_person_idx" ON "lane" USING btree ("person_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "organisation_name_ci_idx" ON "organisation" USING btree (lower("name"));--> statement-breakpoint
 CREATE INDEX "contact_link_target_idx" ON "contact_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "document_link_target_idx" ON "document_link" USING btree ("target_id");--> statement-breakpoint
@@ -946,6 +960,9 @@ ALTER TABLE account ADD CONSTRAINT account_kind_check
 --> statement-breakpoint
 ALTER TABLE organisation ADD CONSTRAINT organisation_kind_check
 	CHECK (kind in ('employer', 'authority', 'insurer', 'other'));
+--> statement-breakpoint
+ALTER TABLE lane ADD CONSTRAINT lane_cadence_check
+	CHECK (cadence in ('monthly', 'yearly', 'none'));
 --> statement-breakpoint
 ALTER TABLE category_group ADD CONSTRAINT category_group_role_check
 	CHECK (role in ('income', 'expense', 'savings'));

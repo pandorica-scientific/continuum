@@ -86,6 +86,17 @@ export const ENUMS = {
 	 */
 	'organisation.kind': ['employer', 'authority', 'insurer', 'other'],
 
+	/**
+	 * How often a lane expects paper, DECLARED and never inferred.
+	 *
+	 * The same ruling the coverage ribbon carries, and stronger here: a
+	 * taxpayer's declaration is annual because the law says so, not because two
+	 * of them happen to sit a year apart. `none` is not "unknown" — it is paper
+	 * that has no rhythm and never will, which is a different thing and gets a
+	 * list rather than cells.
+	 */
+	'lane.cadence': ['monthly', 'yearly', 'none'],
+
 	// Where a category group sits in the waterfall. Not derivable from sort
 	// order: income opens the chart, expense groups are its stages, savings
 	// closes it, and a user-created group has to say which it is.
@@ -207,6 +218,7 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'person', column: 'role', enum: 'person.role' },
 	{ table: 'account', column: 'kind', enum: 'account.kind' },
 	{ table: 'organisation', column: 'kind', enum: 'organisation.kind' },
+	{ table: 'lane', column: 'cadence', enum: 'lane.cadence' },
 	{ table: 'category_group', column: 'role', enum: 'category_group.role' },
 	{ table: 'person', column: 'theme', enum: 'person.theme' },
 	{ table: 'property', column: 'kind', enum: 'property.kind' },

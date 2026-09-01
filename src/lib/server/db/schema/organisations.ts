@@ -13,7 +13,17 @@
  * here, and an employer nobody happens to know anyone at could not exist at all.
  */
 import { sql } from 'drizzle-orm';
-import { date, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+	date,
+	index,
+	integer,
+	jsonb,
+	pgTable,
+	text,
+	timestamp,
+	uniqueIndex,
+	uuid
+} from 'drizzle-orm/pg-core';
 import type { EnumValue } from '../../../enums';
 import { document } from './documents';
 import { person } from './auth';
@@ -85,6 +95,43 @@ export const engagement = pgTable(
 		// holds that. Without this one, deleting a document scans every role
 		// period ever recorded to find the ones pointing at it.
 		index('engagement_document_idx').on(table.documentId)
+	]
+);
+
+/**
+ * One rhythm of paper expected from an organisation.
+ *
+ * A lane is the same coverage question the Statements ribbon asks, pointed at a
+ * different set of documents: how often should this arrive, and which months or
+ * years have nothing in them. An employer has three — payslips monthly, the
+ * declaration yearly, and everything else with no rhythm at all.
+ *
+ * `conditions` is `[{ field, op, value }]` ANDed, deliberately the shape
+ * `rule.conditions` already holds for transactions: a household that has learnt
+ * what a rule is should not have to learn a second thing. In this release they
+ * decide which lane an already-linked document falls into; in the next they
+ * propose the organisation link itself.
+ *
+ * A lane belongs to the household the moment it exists. What ships is a seed —
+ * the same relationship `shelf_type` has with `SHELF_PROFILES`.
+ */
+export const lane = pgTable(
+	'lane',
+	{
+		id: uuid('id').primaryKey(),
+		organisationId: uuid('organisation_id')
+			.notNull()
+			.references(() => organisation.id, { onDelete: 'cascade' }),
+		/** Null for a lane about the organisation rather than about one person. */
+		personId: uuid('person_id').references(() => person.id, { onDelete: 'cascade' }),
+		label: text('label').notNull(),
+		cadence: text('cadence').$type<EnumValue<'lane.cadence'>>().notNull(),
+		conditions: jsonb('conditions').notNull().default([]),
+		sortOrder: integer('sort_order').notNull().default(0)
+	},
+	(table) => [
+		index('lane_organisation_idx').on(table.organisationId),
+		index('lane_person_idx').on(table.personId)
 	]
 );
 

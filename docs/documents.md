@@ -200,6 +200,37 @@ its row to add or close a role period. An organisation is removed rather than
 archived — unlike a subject it holds no paper of its own to demote — and the
 removal is refused while anything is still filed against it.
 
+### How Income & Tax draws
+
+**One card per counterparty**, because the unit a person thinks in here is who
+the paper was with. Inside a card, **lanes** — one rhythm of paper each, with a
+cell per month or per year.
+
+A lane's cadence is **declared, never inferred**. A taxpayer's declaration is
+annual because the law says so, not because two of them happen to sit a year
+apart, and a shelf that guessed a rhythm from what it happened to hold would be
+drawing a claim nobody made. `Payslips` is monthly, `Once a year` is yearly, and
+`Changes to pay` has no cadence at all — paper with no rhythm gets a list, since
+it has nothing to be missing from.
+
+**A lane counts from the engagement, not from the paper.** If the employment
+began in January and the earliest payslip is June, January to May are gaps —
+and that is the entire reason role periods are recorded. A shelf that counted
+from the first document it happened to have would report a full year and be
+wrong in the one way that matters.
+
+**A lane matching nothing still draws its cells.** An empty lane is the finding,
+not an error.
+
+Each organisation is created with the lanes its kind expects — an employer gets
+three, an authority two, and a kind with no rhythm of its own gets none rather
+than getting the wrong ones. They are seeds: edit, delete or add to them, the
+same way a shelf's type list belongs to whoever is filing after the first day.
+
+Anything filed against an organisation that no lane claims is **counted at the
+foot of the card**, never hidden. Everything on the shelf is either drawn or
+accounted for — the same invariant the Statements ribbon keeps.
+
 ### Which shelf a document belongs on
 
 **A document files with its subject, not with its consequence.** A mortgage is

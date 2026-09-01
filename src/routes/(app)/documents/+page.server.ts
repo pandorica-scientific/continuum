@@ -20,6 +20,7 @@ import { document, documentLink, documentText, entity, tagLink } from '$lib/serv
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { readDocumentsScreen } from '$lib/server/documents/screen';
 import { shelfFacts } from '$lib/server/documents/shelf-stats';
+import { loadCounterparties } from '$lib/server/organisations/counterparties-load';
 import {
 	addEngagement,
 	addOrganisation,
@@ -511,6 +512,16 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 * section. Counted behind the same read rule as everything else here.
 		 */
 		organisations: await listOrganisations(db, locals.person ?? null),
+		/** The counterparty cards, or null when the centre column draws the list. */
+		counterparties:
+			view === 'shelf' && profile?.layout === 'counterparties'
+				? await loadCounterparties(
+						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
+						bannerToday(),
+						db,
+						locals.person ?? null
+					)
+				: null,
 		/**
 		 * The ribbon, or null whenever it is not what the centre column draws —
 		 * the list is one press away and does not need this payload.

@@ -39,13 +39,14 @@ describe('the shelf registry', () => {
 		}
 	});
 
-	it('draws the wallet on Identity, the ribbon on Statements, and the list elsewhere', () => {
+	it('draws the four layouts that exist, and the list everywhere else', () => {
 		// Family, Health and Household have their layouts specified and not yet
 		// built. This is the line that has to be edited when one lands, which is
 		// the point: a shelf does not start drawing something new by accident.
 		const bespoke = Object.values(SHELF_PROFILES).filter((p) => p.layout !== 'list');
 		expect(bespoke.map((p) => `${p.key}:${p.layout}`)).toEqual([
 			'identity:wallet',
+			'finance:counterparties',
 			'statements:completeness'
 		]);
 	});

@@ -23,6 +23,7 @@
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
 	import ShelfBanner from '$lib/documents/ShelfBanner.svelte';
 	import CoverageView from '$lib/statements/CoverageView.svelte';
+	import CounterpartiesView from '$lib/organisations/CounterpartiesView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
@@ -762,6 +763,13 @@
 					{today}
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
+				/>
+			{:else if data.view === 'shelf' && data.layout === 'counterparties' && data.counterparties}
+				<!-- Who the paper was with, and which period never arrived. -->
+				<CounterpartiesView
+					counterparties={data.counterparties}
+					onopen={(id) => navigate({ doc: id })}
+					onyear={(year) => navigate({ year: String(year) })}
 				/>
 			{:else if data.view === 'shelf' && data.layout === 'completeness' && data.coverage}
 				<!-- The one shelf drawn by what it is MISSING. Same inspector: a band

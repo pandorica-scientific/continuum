@@ -22,17 +22,18 @@ import type { GroupKey } from '$lib/documents/view';
 /**
  * How a shelf draws its contents.
  *
- * Four of these are earned rather than decorative: paper that has a physical
- * shape a person already holds in mind — a wallet of cards, a folder of
- * certificates, a medical history, the papers that came with the boiler — is
- * recognised faster as that shape than as a row. A mortgage agreement has no
- * such shape, which is why Finance is `list` and stays `list`.
+ * Each is earned rather than decorative. Paper with a physical shape a person
+ * already holds in mind — a wallet of cards, a folder of certificates — is
+ * recognised faster as that shape than as a row; and where the shape is not
+ * physical it is a QUESTION a list cannot answer, which is what `completeness`
+ * and `counterparties` are for: both draw the period that is missing, and
+ * absence has no row.
  *
- * `wallet` and `completeness` are drawn today; `gallery`, `timeline` and `kit`
- * are specified and not yet built, so the shelves that will use them are `list`
- * until they are.
- * Naming them here rather than when they arrive is deliberate: the table below
- * is the plan, and a plan that lives in a commit message is not one.
+ * `wallet`, `completeness` and `counterparties` are drawn today; `gallery`,
+ * `timeline` and `kit` are specified and not yet built, so the shelves that will
+ * use them are `list` until they are. Naming them here rather than when they
+ * arrive is deliberate: the table below is the plan, and a plan that lives in a
+ * commit message is not one.
  *
  * They are two types rather than one for the same reason. As a single union,
  * every `switch` on a shelf's layout carried three branches that no shelf could
@@ -40,7 +41,7 @@ import type { GroupKey } from '$lib/documents/view';
  * cost the working code its shape. Split, `ShelfLayout` is exactly what draws,
  * and the plan is still named, still typed, and still here.
  */
-export type ShelfLayout = 'wallet' | 'completeness' | 'list';
+export type ShelfLayout = 'wallet' | 'completeness' | 'counterparties' | 'list';
 
 /** Specified and not yet built. Promoted into `ShelfLayout` when one is drawn. */
 export type PlannedShelfLayout = 'gallery' | 'timeline' | 'kit';
@@ -77,14 +78,16 @@ export interface ShelfProfile {
 	 * what the shelf IS: health records belong to whoever or whatever they are
 	 * about, whether or not a timeline is drawing them yet.
 	 *
-	 * `account` is the odd one and it is not a person or a thing: a statement
-	 * belongs to the account it was issued for, which is why the coverage ribbon
-	 * has one row per account and none per person. A shelf that draws a layout
+	 * `account` and `organisation` are the two that are neither a person nor a
+	 * thing. A statement belongs to the account it was issued for, which is why
+	 * the coverage ribbon has one row per account; a payslip belongs to the
+	 * employer that sent it, which is why Income & Tax draws one card per
+	 * organisation and not one per person. A shelf that draws a layout
 	 * of its own has to name its unit — `tests/unit/shelf-profiles` holds that —
 	 * because a layout is a way of grouping and a grouping needs something to
 	 * group by.
 	 */
-	about: 'person' | 'subject' | 'person-or-subject' | 'account' | null;
+	about: 'person' | 'subject' | 'person-or-subject' | 'account' | 'organisation' | null;
 	/** How the LIST groups this shelf when nobody has said otherwise. */
 	group: GroupKey;
 	/** One line under "Nothing on X yet", naming the paper that belongs here. */
@@ -187,7 +190,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 	},
 	finance: {
 		key: 'finance',
-		layout: 'list',
+		// One card per counterparty, because the unit a person thinks in here is
+		// who the paper was with — the employer, the tax office — and the failure
+		// is a payslip that never arrived, which a list cannot show.
+		layout: 'counterparties',
 		// What a tax return is actually assembled from. No `invoice`: an invoice
 		// almost always concerns a thing that has a shelf of its own — the flat,
 		// the car — and offering it first here invites the one filing mistake this
@@ -195,7 +201,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		// income confirmation and the social security and health insurance
 		// statements; `correspondence` is the tax office writing back.
 		expects: ['payslip', 'tax_document', 'certificate', 'correspondence', 'contract'],
-		about: null,
+		about: 'organisation',
 		// By year: a shelf of payslips and tax papers is read by which year it
 		// concerns far more often than by whose name is on it.
 		group: 'year',
@@ -241,6 +247,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 export const LAYOUT_LABELS: Record<ShelfLayout | PlannedShelfLayout, string> = {
 	wallet: 'Wallet',
 	completeness: 'Completeness',
+	counterparties: 'Counterparties',
 	gallery: 'Gallery',
 	timeline: 'Timeline',
 	kit: 'Kit',

@@ -18,7 +18,14 @@ import { and, asc, count, eq, isNotNull, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { uuidv7 } from 'uuidv7';
 import { db, type Queryable } from '$lib/server/db';
-import { document, documentLink, engagement, organisation, person } from '$lib/server/db/schema';
+import {
+	document,
+	documentLink,
+	engagement,
+	lane,
+	organisation,
+	person
+} from '$lib/server/db/schema';
 import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import type { EnumValue } from '$lib/enums';
 
@@ -145,6 +152,115 @@ export async function listOrganisations(
 	});
 }
 
+/** A lane as it ships, before the household has touched it. */
+export interface LanePreset {
+	label: string;
+	cadence: EnumValue<'lane.cadence'>;
+	conditions: { field: string; op: string; value: string }[];
+}
+
+/**
+ * What each kind of organisation is expected to send, as a starting point.
+ *
+ * Seeds and not rules, which is the same relationship `shelf_type` has with
+ * `SHELF_PROFILES`: this is what a fresh organisation begins with, and it
+ * belongs to the household from the moment it exists. Editing this list changes
+ * what the NEXT one starts with and touches nothing already created.
+ *
+ * `other` seeds nothing. A kind with no rhythm of its own would get lanes that
+ * are wrong rather than lanes that are empty, and an empty lane is a finding
+ * while a wrong one is noise.
+ */
+export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> = {
+	employer: [
+		{
+			label: 'Payslips',
+			cadence: 'monthly',
+			conditions: [{ field: 'type', op: 'is', value: 'payslip' }]
+		},
+		{
+			label: 'Once a year · declaration, annual settlement',
+			cadence: 'yearly',
+			conditions: [{ field: 'type', op: 'is', value: 'tax_document' }]
+		},
+		// Last, and matching everything: the lanes are tried in order, so a
+		// no-cadence lane at the end is "whatever the others did not claim".
+		{ label: 'Changes to pay', cadence: 'none', conditions: [] }
+	],
+	authority: [
+		{
+			label: 'Tax return',
+			cadence: 'yearly',
+			conditions: [{ field: 'type', op: 'is', value: 'tax_document' }]
+		},
+		{ label: 'Not tied to a year', cadence: 'none', conditions: [] }
+	],
+	insurer: [
+		{
+			label: 'Annual statement',
+			cadence: 'yearly',
+			conditions: [{ field: 'type', op: 'is', value: 'insurance_policy' }]
+		},
+		{ label: 'Correspondence', cadence: 'none', conditions: [] }
+	],
+	other: []
+};
+
+export interface LaneRow {
+	id: string;
+	organisationId: string;
+	personId: string | null;
+	label: string;
+	cadence: EnumValue<'lane.cadence'>;
+	conditions: unknown;
+	sortOrder: number;
+}
+
+/** An organisation's lanes, in the order they are drawn and tried. */
+export async function lanesFor(organisationId: string, handle: Queryable = db): Promise<LaneRow[]> {
+	return handle
+		.select({
+			id: lane.id,
+			organisationId: lane.organisationId,
+			personId: lane.personId,
+			label: lane.label,
+			cadence: lane.cadence,
+			conditions: lane.conditions,
+			sortOrder: lane.sortOrder
+		})
+		.from(lane)
+		.where(eq(lane.organisationId, organisationId))
+		.orderBy(asc(lane.sortOrder), asc(lane.id));
+}
+
+export async function addLane(
+	input: {
+		organisationId: string;
+		label: string;
+		cadence: EnumValue<'lane.cadence'>;
+		personId?: string | null;
+		conditions?: unknown;
+		sortOrder?: number;
+	},
+	handle: Queryable = db
+): Promise<{ id: string }> {
+	const id = uuidv7();
+	await handle.insert(lane).values({
+		id,
+		organisationId: input.organisationId,
+		personId: input.personId ?? null,
+		label: input.label.trim(),
+		cadence: input.cadence,
+		conditions: input.conditions ?? [],
+		sortOrder: input.sortOrder ?? 100
+	});
+	return { id };
+}
+
+export async function deleteLane(id: string, handle: Queryable = db): Promise<void> {
+	await handle.delete(lane).where(eq(lane.id, id));
+}
+
 /**
  * The organisation with this name, minting one where the household has none.
  *
@@ -158,15 +274,29 @@ export async function addOrganisation(
 	const name = normalise(input.name);
 	if (!name) throw new Error('An organisation needs a name.');
 
-	await handle
+	const kind = input.kind ?? 'other';
+	const created = await handle
 		.insert(organisation)
 		.values({
 			id: uuidv7(),
 			name,
-			kind: input.kind ?? 'other',
+			kind,
 			emoji: input.emoji?.trim() || DEFAULT_ORGANISATION_EMOJI
 		})
-		.onConflictDoNothing();
+		.onConflictDoNothing()
+		.returning({ id: organisation.id });
+
+	// Lanes only for a row this call actually created. Adding by a name that
+	// already exists returns the existing organisation, and seeding again would
+	// put the app's guess back on top of whatever the household has since made
+	// of it.
+	if (created.length > 0) {
+		let sortOrder = 0;
+		for (const preset of LANE_PRESETS[kind]) {
+			await addLane({ organisationId: created[0].id, ...preset, sortOrder }, handle);
+			sortOrder += 10;
+		}
+	}
 
 	const [row] = await handle
 		.select({

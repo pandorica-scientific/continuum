@@ -202,8 +202,14 @@ describe('the view a shelf opens in', () => {
 		expect(data.coverage).not.toBeNull();
 	});
 
+	it('opens Income & Tax on its counterparty cards', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=finance');
+		expect(data.view).toBe('shelf');
+		expect(data.layout).toBe('counterparties');
+	});
+
 	it('leaves every other shelf on the list', async () => {
-		for (const shelf of ['family', 'health', 'household', 'finance']) {
+		for (const shelf of ['family', 'health', 'household']) {
 			const data = await loadDocuments(asAdmin, `?shelf=${shelf}`);
 			expect(data.view).toBe('list');
 			expect(data.layout).toBeNull();
