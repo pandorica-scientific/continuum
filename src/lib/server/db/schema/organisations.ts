@@ -127,6 +127,16 @@ export const lane = pgTable(
 		label: text('label').notNull(),
 		cadence: text('cadence').$type<EnumValue<'lane.cadence'>>().notNull(),
 		conditions: jsonb('conditions').notNull().default([]),
+		/**
+		 * How often this lane's proposals were taken, and how often corrected.
+		 *
+		 * EVIDENCE, not a tuned weight — the distinction `rule` already draws for
+		 * transactions. A lane that keeps being wrong falls silent on its own
+		 * (see `laneTrusted`), so nobody has to find and disable it, and a lane
+		 * that is usually right keeps proposing without being told it may.
+		 */
+		acceptedCount: integer('accepted_count').notNull().default(0),
+		correctedCount: integer('corrected_count').notNull().default(0),
 		sortOrder: integer('sort_order').notNull().default(0)
 	},
 	(table) => [

@@ -1,5 +1,5 @@
 {
-  "id": "a1816de7-602e-4148-a779-0603b1f10bf3",
+  "id": "5a1c651d-2d57-4585-8cd1-5913c4fc3d0d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1673,6 +1673,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'[]'::jsonb"
+        },
+        "accepted_count": {
+          "name": "accepted_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "corrected_count": {
+          "name": "corrected_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "sort_order": {
           "name": "sort_order",

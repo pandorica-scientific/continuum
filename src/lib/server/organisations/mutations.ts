@@ -213,7 +213,37 @@ export interface LaneRow {
 	label: string;
 	cadence: EnumValue<'lane.cadence'>;
 	conditions: unknown;
+	acceptedCount: number;
+	correctedCount: number;
 	sortOrder: number;
+}
+
+/**
+ * Whether this lane may still propose anything.
+ *
+ * Trusted while it has been corrected no more often than it has been accepted.
+ * A lane that has never proposed starts trusted — it has done nothing wrong —
+ * and one that keeps being wrong falls silent WITHOUT anybody having to notice
+ * it and turn it off, which is the only way a rule nobody is watching stops
+ * doing damage.
+ *
+ * Pure, so the rule can be read and tested without a database.
+ */
+export function laneTrusted(lane: { acceptedCount: number; correctedCount: number }): boolean {
+	return lane.correctedCount <= lane.acceptedCount;
+}
+
+/** Record what happened to a proposal, in the same transaction as the link. */
+export async function recordLaneOutcome(
+	laneId: string,
+	outcome: 'accepted' | 'corrected',
+	handle: Queryable = db
+): Promise<void> {
+	const column = outcome === 'accepted' ? lane.acceptedCount : lane.correctedCount;
+	await handle
+		.update(lane)
+		.set({ [outcome === 'accepted' ? 'acceptedCount' : 'correctedCount']: sql`${column} + 1` })
+		.where(eq(lane.id, laneId));
 }
 
 /** An organisation's lanes, in the order they are drawn and tried. */
@@ -226,6 +256,8 @@ export async function lanesFor(organisationId: string, handle: Queryable = db): 
 			label: lane.label,
 			cadence: lane.cadence,
 			conditions: lane.conditions,
+			acceptedCount: lane.acceptedCount,
+			correctedCount: lane.correctedCount,
 			sortOrder: lane.sortOrder
 		})
 		.from(lane)

@@ -223,6 +223,8 @@ CREATE TABLE "lane" (
 	"label" text NOT NULL,
 	"cadence" text NOT NULL,
 	"conditions" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"accepted_count" integer DEFAULT 0 NOT NULL,
+	"corrected_count" integer DEFAULT 0 NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint

@@ -22,6 +22,11 @@ import { readDocumentsScreen } from '$lib/server/documents/screen';
 import { shelfFacts } from '$lib/server/documents/shelf-stats';
 import { loadCounterparties } from '$lib/server/organisations/counterparties-load';
 import {
+	acceptProposal,
+	dismissProposal,
+	loadProposals
+} from '$lib/server/organisations/proposals-load';
+import {
 	addEngagement,
 	addOrganisation,
 	deleteEngagement,
@@ -512,6 +517,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 * section. Counted behind the same read rule as everything else here.
 		 */
 		organisations: await listOrganisations(db, locals.person ?? null),
+		/**
+		 * What the lanes think should be filed, and where.
+		 *
+		 * Computed, never stored: a stored proposal goes stale the moment a lane
+		 * is edited or the document is filed by hand, and then the screen argues
+		 * with the archive.
+		 */
+		proposals:
+			view === 'shelf' && profile?.layout === 'counterparties'
+				? await loadProposals(db, locals.person ?? null)
+				: [],
 		/** The counterparty cards, or null when the centre column draws the list. */
 		counterparties:
 			view === 'shelf' && profile?.layout === 'counterparties'
@@ -1176,6 +1192,34 @@ export const actions: Actions = {
 				message: error instanceof Error ? error.message : 'Could not remove it.'
 			});
 		}
+		return { ok: true };
+	},
+
+	acceptProposal: async ({ request, locals }) => {
+		const form = await request.formData();
+		const documentId = String(form.get('documentId') ?? '').trim();
+		const laneId = String(form.get('laneId') ?? '').trim();
+		const organisationId = String(form.get('organisationId') ?? '').trim();
+		if (!documentId || !laneId || !organisationId) {
+			return fail(400, { message: 'Nothing to file.' });
+		}
+		const result = await acceptProposal(
+			documentId,
+			laneId,
+			organisationId,
+			locals.person ?? null,
+			db
+		);
+		if (!result.ok) return fail(404, { message: result.message ?? NO_SUCH_DOCUMENT });
+		return { ok: true };
+	},
+
+	/** Files nothing. What changes is the lane's standing — see `dismissProposal`. */
+	dismissProposal: async ({ request }) => {
+		const form = await request.formData();
+		const laneId = String(form.get('laneId') ?? '').trim();
+		if (!laneId) return fail(400, { message: 'Nothing to dismiss.' });
+		await dismissProposal(laneId, db);
 		return { ok: true };
 	},
 

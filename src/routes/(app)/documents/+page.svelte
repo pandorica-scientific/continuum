@@ -768,6 +768,7 @@
 				<!-- Who the paper was with, and which period never arrived. -->
 				<CounterpartiesView
 					counterparties={data.counterparties}
+					proposals={data.proposals}
 					onopen={(id) => navigate({ doc: id })}
 					onyear={(year) => navigate({ year: String(year) })}
 				/>

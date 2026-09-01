@@ -15,17 +15,22 @@
 	// reads as missing, which is the whole reason role periods are recorded.
 	import Icon from '$lib/components/Icon.svelte';
 	import PeriodListing from '$lib/statements/PeriodListing.svelte';
+	import { enhance } from '$app/forms';
 	import type {
 		CardLane,
 		CounterpartiesPayload
 	} from '$lib/server/organisations/counterparties-load';
+	import type { ProposalRow } from '$lib/server/organisations/proposals-load';
 
 	let {
 		counterparties,
+		proposals,
 		onopen,
 		onyear
 	}: {
 		counterparties: CounterpartiesPayload;
+		/** What the lanes think should be filed. Computed, never stored. */
+		proposals: ProposalRow[];
 		onopen: (documentId: string) => void;
 		onyear: (year: number) => void;
 	} = $props();
@@ -115,6 +120,43 @@
 			{counterparties.cards.length === 1 ? 'counterparty' : 'counterparties'}
 		</span>
 	</header>
+
+	{#if proposals.length > 0}
+		<!-- What the lanes THINK, above what is settled. Proposed and not filed:
+		     a wrong link looks exactly like a right one and nobody re-reads it,
+		     so the guess stays visible until somebody agrees with it.
+
+		     Dismissing files nothing and costs the lane its standing — enough of
+		     those and it stops proposing, without anybody having to find it. -->
+		<div class="proposals">
+			<div class="proposals-head">
+				<span class="eyebrow">Not filed against anyone yet</span>
+				<span class="mono proposals-count">{proposals.length}</span>
+			</div>
+			{#each proposals as proposal (proposal.documentId)}
+				<div class="proposal">
+					<button type="button" class="proposal-name" onclick={() => onopen(proposal.documentId)}>
+						{proposal.documentName}
+					</button>
+					<span class="proposal-guess">
+						{proposal.organisationEmoji}
+						{proposal.organisationName}
+						<span class="quiet">· {proposal.laneLabel}</span>
+					</span>
+					<form method="POST" action="?/acceptProposal" use:enhance class="proposal-act">
+						<input type="hidden" name="documentId" value={proposal.documentId} />
+						<input type="hidden" name="laneId" value={proposal.laneId} />
+						<input type="hidden" name="organisationId" value={proposal.organisationId} />
+						<button type="submit" class="btn small btn-primary">File it</button>
+					</form>
+					<form method="POST" action="?/dismissProposal" use:enhance>
+						<input type="hidden" name="laneId" value={proposal.laneId} />
+						<button type="submit" class="btn small">Not this one</button>
+					</form>
+				</div>
+			{/each}
+		</div>
+	{/if}
 
 	{#each counterparties.cards as card (card.id)}
 		<article class="card">
@@ -292,6 +334,58 @@
 	.summary {
 		font-size: var(--text-sm);
 		color: var(--fg3);
+	}
+
+	.proposals {
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-xl);
+		background: var(--card);
+		overflow: hidden;
+	}
+	.proposals-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-5);
+		padding: 10px 14px;
+		border-bottom: 1px solid var(--bd);
+	}
+	.eyebrow {
+		font-size: var(--text-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--fg3);
+	}
+	.proposals-count {
+		margin-left: auto;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.proposal {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		flex-wrap: wrap;
+		padding: 8px 14px;
+		border-top: 1px solid var(--bd);
+	}
+	.proposal:first-of-type {
+		border-top: 0;
+	}
+	.proposal-name {
+		border: 0;
+		background: transparent;
+		padding: 0;
+		font-size: var(--text-md);
+		color: var(--fg1);
+		text-align: left;
+		cursor: pointer;
+	}
+	.proposal-guess {
+		font-size: var(--text-base);
+		color: var(--fg2);
+	}
+	.proposal-act {
+		margin-left: auto;
 	}
 
 	.card {
