@@ -435,14 +435,17 @@
 		color: var(--fg3);
 		cursor: default;
 	}
+	/* Both bands, one size. The two headers sit ten pixels apart and read as one
+	   control; the monthly one was set two steps larger and the pair looked like
+	   a heading followed by a caption. */
 	.y {
-		font-size: var(--text-xl);
+		font-size: var(--text-md);
 		font-weight: 600;
 		min-width: 4ch;
 		text-align: center;
 	}
 	.summary {
-		font-size: var(--text-base);
+		font-size: var(--text-sm);
 		color: var(--red);
 	}
 	.summary.none {
@@ -462,8 +465,8 @@
 		border-bottom: 0;
 		padding-bottom: 0;
 	}
+	/* Only the width differs: a decade range is twice as many characters. */
 	.y.sm {
-		font-size: var(--text-md);
 		min-width: 9ch;
 	}
 
