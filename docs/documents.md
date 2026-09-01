@@ -113,10 +113,165 @@ inside the Union's ring of stars, as the document itself does; everywhere else
 the two letters sit plainly beside the flag. Nothing is painted into the artwork, so a card
 can never state something the document does not.
 
+**Statements** is the second, and it draws what is MISSING. Ninety-six
+statements in a list look exactly the same whether or not April is among them,
+which is this shelf's only real failure — so it opens as a ribbon instead: one
+band per account, twelve months across, one year at a time.
+
+A filed statement draws as a band spanning every month it covers, so a quarterly
+one is a single band three months wide. An uncovered month is always one month,
+never merged into a longer run: nothing in the archive says whether a hole is one
+missing quarterly statement or three missing monthly ones, and a ribbon that
+guessed would be drawing a rhythm nobody stated. Nothing here infers how often an
+account is meant to send anything.
+
+A month that has ended with nothing covering it is a **gap**, drawn in red. The
+current month and every later one have simply **not arrived yet**. Months before
+the account's first statement or first transaction are left blank — an account
+nobody has imported anything for is not missing twelve statements. Clicking a
+band opens that statement; clicking a gap opens the Import with the account and
+the month already filled in, because an accepted import both writes the ledger
+rows and dates the document, so the month closes without anybody typing anything.
+`←` and `→` change the year.
+
+A statement is placed by the months it covers, taken from the period the file
+states or — where the file states none, which is most of them — from the
+movements the import just wrote. **A statement nobody imported can still be
+placed**: the reader refuses more scanned statements than it reads, and a person
+holding a scan their bank really sent can set _Covers_ in the inspector and link
+it to its account. It then draws like any other, because the shelf is asking
+whether the month's statement exists rather than whether its transactions reached
+the ledger. Whatever is still undated is named in the ribbon's header rather than
+left invisible.
+
 The other shelves keep their list for now. Family, Health and Household have
-layouts of their own designed and not yet built; Property, Finance, Statements
-and Inbox are lists on purpose, because their paper has no shape a person
-already pictures. A mortgage agreement is not a card in a wallet.
+layouts of their own designed and not yet built; Property, Finance and Inbox are
+lists on purpose, because their paper has no shape a person already pictures. A
+mortgage agreement is not a card in a wallet.
+
+### The banner
+
+Every shelf now opens with a banner saying what it is for. The paragraph is the
+shelf's own — why a person would open it, not what it contains — and beside it
+three figures answer the question that shelf exists to answer: how many people
+hold a valid document, how many months are missing, what is next to lapse. A
+figure only takes a colour when it is a task: `0 gaps` is the state the archive
+is for, and a red nought would be an alarm about nothing.
+
+A shelf the household made has no paragraph written for it and gets the default
+three — documents, what they concern, and the next date — rather than a banner
+with holes in it. The banner is a fixed height on every shelf, so moving between
+them does not shift the toolbar under the cursor.
+
+It does not say how the shelf is arranged. The Group and Sort controls state
+that themselves, two inches below and editable.
+
+### Who a document was with
+
+A shelf says where in life a document belongs and a subject says what it is
+about. **An organisation says who it was with** — an employer, the tax office, an
+insurer. It is a record, created once and linked to, for the same reason a
+subject is one rather than a name retyped on a receipt: a string typed twice is a
+string that will one day be typed differently, and then one employer is two
+employers and nothing in the archive can say so.
+
+It is not a contact. A contact is a person who happens to have an employer;
+two colleagues at one institute would be two records, and an employer nobody
+knows anyone at could not exist.
+
+**A person's dealings with an organisation are role periods, and a promotion is
+a second period rather than an edit to the first.**
+
+```
+Robert @ Institute of Physics
+  PhD student         2018-09-01 → 2021-08-31
+  Research scientist  2021-09-01 → (open)
+```
+
+Overwriting the role would be simpler and wrong. What the archive needs to know
+is when the paperwork started arriving, and that is 2018 — so the relationship
+counts from the earliest period, and a promotion cannot quietly move the
+beginning forward and take three years of missing paperwork with it. Both dates
+may be left empty: an office a household has simply always dealt with has no
+start anybody remembers.
+
+Press the pencil beside **ORGANISATIONS** in the rail to add one, and the `⋯` on
+its row to add or close a role period. An organisation is removed rather than
+archived — unlike a subject it holds no paper of its own to demote — and the
+removal is refused while anything is still filed against it.
+
+### How Income & Tax draws
+
+**One card per counterparty**, because the unit a person thinks in here is who
+the paper was with. Inside a card, **lanes** — one rhythm of paper each, with a
+cell per month or per year.
+
+A lane's cadence is **declared, never inferred**. A taxpayer's declaration is
+annual because the law says so, not because two of them happen to sit a year
+apart, and a shelf that guessed a rhythm from what it happened to hold would be
+drawing a claim nobody made. `Payslips` is monthly, `Once a year` is yearly, and
+`Changes to pay` has no cadence at all — paper with no rhythm gets a list, since
+it has nothing to be missing from.
+
+**A lane counts from the engagement, not from the paper.** If the employment
+began in January and the earliest payslip is June, January to May are gaps —
+and that is the entire reason role periods are recorded. A shelf that counted
+from the first document it happened to have would report a full year and be
+wrong in the one way that matters.
+
+**A lane matching nothing still draws its cells.** An empty lane is the finding,
+not an error.
+
+Each organisation is created with the lanes its kind expects — an employer gets
+three, an authority two, and a kind with no rhythm of its own gets none rather
+than getting the wrong ones. They are seeds: edit, delete or add to them, the
+same way a shelf's type list belongs to whoever is filing after the first day.
+
+Anything filed against an organisation that no lane claims is **counted at the
+foot of the card**, never hidden. Everything on the shelf is either drawn or
+accounted for — the same invariant the Statements ribbon keeps.
+
+**The lanes will tell you what they think.** A document on this shelf that no
+organisation has claimed is matched against every lane, and where exactly one
+organisation's lanes claim it the shelf says so above the cards — with **File
+it** and **Not this one**. It is a proposal and not a filing, because a wrong
+link looks exactly like a right one and nobody re-reads a link that seems fine,
+while a document waiting to be filed is sitting there in plain sight.
+
+Three refusals keep that safe. **Two organisations claiming the same document
+proposes nothing** — guessing between two employers is worse than asking. **A
+lane naming no conditions proposes nothing**: claiming everything is right for
+sorting what is already filed and would otherwise take every unfiled document in
+the archive. And **a lane that keeps being wrong falls silent** — pressing _Not
+this one_ is remembered, and once corrections outnumber acceptances that lane
+stops proposing, without anybody having to find it and switch it off.
+
+Nothing is stored about a proposal itself. It is worked out from the lanes as
+they are now, so editing a lane changes what it suggests immediately and there
+is no stale row anywhere to argue with the archive.
+
+### Which shelf a document belongs on
+
+**A document files with its subject, not with its consequence.** A mortgage is
+about the flat, so it goes on **Property**; a car loan goes on **Vehicles**; a
+plumber's invoice goes on Property and a service invoice on Vehicles. There is
+no shelf for "financial paperwork" as a category, because almost none of it is
+about money in the abstract — it is about a thing you own, and that is where you
+will look for it.
+
+**Income & Tax** is what is left once that rule is applied: money that arrives
+because of a _person_, and what the state takes of it. Payslips, tax returns and
+the assessment, the employer's annual income confirmation, social security and
+health insurance statements, employment contracts, and letters from the tax
+office. A household where somebody is self-employed adds the invoices they
+issued. Nothing here is about an object.
+
+The case that looks like an exception and is not: **a mortgage-interest
+confirmation**. Its subject is the flat, so it files on Property — and it reaches
+the tax year through a **link**, not by changing shelf. That is what links are
+for, and it is why a year's filing can gather papers from four shelves without
+any of them being the wrong place. Shelf is where in life, type is what kind,
+links are what it concerns.
 
 Every shelf, list or not, now knows what it is for: an empty one says what
 belongs on it, its type filter offers those kinds first, and picking a shelf
@@ -129,6 +284,14 @@ The inspector's own Shelf and Type fields work the same way, so filing a
 document from the Inbox is the same act as filing it from review — and a
 document that already has a type keeps it: a shelf fills the field in only when
 nobody has answered it yet.
+
+**A reminder window belongs to the kind of paper, not to the app.** A document
+turns amber sixty days before it expires, which is right for most things and
+wrong for a passport: replacing one takes half a year, so a warning with sixty
+days left is a warning about a trip that can no longer be made. Identity
+documents ship with six months, every other type uses the sixty-day default, and
+the window is a property of the type — how long a replacement takes is a fact
+about a country and a household, not about this repository.
 
 **That list is yours.** Press the pencil beside **SHELVES** in the rail and each
 row gains a tag button: it opens every type with the shelf's own ticked. It

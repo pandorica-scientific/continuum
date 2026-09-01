@@ -58,8 +58,16 @@ export interface DocGroup<T extends DocRow = DocRow> {
 	items: T[];
 }
 
-/** Amber inside this many days. Beyond it, a renewal is a fact, not a task. */
-const SOON_DAYS = 60;
+/**
+ * Amber inside this many days, for a type that has not said otherwise.
+ *
+ * Exported because it is a DEFAULT now rather than the rule: `document_type`
+ * carries a nullable `reminder_days`, and this is what a null there means.
+ * Sixty days suits most paper and is wrong for a passport, which takes six
+ * months to replace — a warning with sixty days left is a warning about a trip
+ * that can no longer be made.
+ */
+export const SOON_DAYS = 60;
 /** Money owed two months out is rarely worth amber; a month is. */
 const DUE_SOON_DAYS = 30;
 /**
@@ -113,7 +121,8 @@ export function expiryTreatment(
 	doc: { expiresOn: string | null; expiryVerb: string; addedOn?: string },
 	subjectArchived: boolean,
 	today: string,
-	width: RowWidth = 'wide'
+	width: RowWidth = 'wide',
+	soonDays: number = SOON_DAYS
 ): ExpiryTreatment | null {
 	if (!doc.expiresOn) {
 		return doc.addedOn ? { kind: 'outline', text: `added ${readableDate(doc.addedOn)}` } : null;
@@ -137,7 +146,10 @@ export function expiryTreatment(
 		};
 	}
 
-	const window = verb === 'due' ? DUE_SOON_DAYS : SOON_DAYS;
+	// `due` is money and keeps its own, narrower clock. A type's window says how
+	// long a REPLACEMENT takes to obtain, which says nothing about when a bill
+	// starts being worth worrying over.
+	const window = verb === 'due' ? DUE_SOON_DAYS : soonDays;
 	if (days <= window && !subjectArchived) {
 		return {
 			kind: 'pill',
@@ -177,9 +189,13 @@ export type ExpiryTone = 'expired' | 'soon' | 'quiet';
  */
 export function documentExpiryTone(
 	doc: { expiresOn: string | null; expiryVerb: string; addedOn?: string },
-	today: string
+	today: string,
+	soonDays: number = SOON_DAYS
 ): ExpiryTone {
-	const treatment = expiryTreatment(doc, false, today);
+	// The same window the text beside it used. Two readings of one date, and a
+	// card that said "expires in 120 days" in the quiet grey would be the tone
+	// contradicting the sentence it is colouring.
+	const treatment = expiryTreatment(doc, false, today, 'wide', soonDays);
 	if (treatment?.kind !== 'pill') return 'quiet';
 	if (treatment.hue === 'red') return 'expired';
 	return treatment.hue === 'yellow' ? 'soon' : 'quiet';

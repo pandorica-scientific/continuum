@@ -21,6 +21,9 @@
 	import { DOCUMENT_ACCEPT } from '$lib/uploads';
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
+	import ShelfBanner from '$lib/documents/ShelfBanner.svelte';
+	import CoverageView from '$lib/statements/CoverageView.svelte';
+	import CounterpartiesView from '$lib/organisations/CounterpartiesView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
@@ -45,6 +48,7 @@
 		honestyState,
 		readableSize,
 		rowVariant,
+		SOON_DAYS,
 		splitSnippet,
 		readableDate,
 		sortDocuments,
@@ -54,7 +58,7 @@
 		type GroupKey,
 		type SortKey
 	} from '$lib/documents/view';
-	import { navigating } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { tagHue } from '$lib/tag-hue';
 	import { fitChips } from '$lib/actions/fit-chips';
 
@@ -123,6 +127,17 @@
 	let allTypes = $state(false);
 	/** What this household calls each type: the built-ins, plus its own. */
 	const labels = $derived(typeLabels(data.documentTypes));
+
+	/**
+	 * The amber window each kind of paper earns, looked up once for the page.
+	 *
+	 * A map rather than a lookup per row: two hundred documents would otherwise
+	 * walk the type list two hundred times to answer the same question, and the
+	 * answer only changes when the household edits a type.
+	 */
+	const reminderDays = $derived(
+		new Map(data.documentTypes.map((t) => [t.key, t.reminderDays ?? SOON_DAYS]))
+	);
 	const editTypeOptions = $derived(
 		typeOptionsFor(
 			data.shelves.find((s) => s.key === editShelf)?.types ?? [],
@@ -192,6 +207,43 @@
 		// position halfway down the list.
 		goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
+
+	/**
+	 * The parameters that decide WHICH documents the centre column holds.
+	 *
+	 * Everything else — the year or decade a band is showing, which document the
+	 * inspector has open — rearranges what is already there.
+	 */
+	const ROW_SET_PARAMS = [
+		'shelf',
+		'q',
+		'view',
+		'group',
+		'sort',
+		'type',
+		'entity',
+		'tag',
+		'archived'
+	];
+
+	/**
+	 * Whether the navigation in flight is worth blanking the column for.
+	 *
+	 * It is, when the answer is about to be a different set of documents: there
+	 * is nothing honest to leave on screen while that loads. It is NOT when only
+	 * the year on the coverage ribbon changed — the table keeps its shape and
+	 * every row, and replacing it with three grey blocks for the length of a
+	 * query made stepping through years flicker hard enough to be unusable.
+	 */
+	const reloading = $derived.by(() => {
+		const to = navigating.to;
+		if (!to) return false;
+		const now = page.url.searchParams;
+		const next = to.url.searchParams;
+		return ROW_SET_PARAMS.some(
+			(key) => now.getAll(key).join('\u0000') !== next.getAll(key).join('\u0000')
+		);
+	});
 
 	const groups = $derived(
 		groupDocuments(
@@ -303,6 +355,21 @@
 			<a class="link" href="/documents/review">Review them now</a>
 		{/if}
 	</div>
+{/if}
+
+{#if data.bannerFacts}
+	<!-- Above the toolbar, because it describes the shelf the toolbar is about
+	     to filter. Absent on "Everything" and while searching: neither is a
+	     shelf, and a banner over search results would be describing the one you
+	     left. -->
+	<ShelfBanner
+		shelfKey={data.shelf}
+		label={shelfLabel}
+		emoji={data.shelves.find((s) => s.key === data.shelf)?.emoji ?? '🗂️'}
+		system={data.shelves.find((s) => s.key === data.shelf)?.system ?? false}
+		facts={data.bannerFacts}
+		emptyHint={data.emptyHint}
+	/>
 {/if}
 
 <section class="toolbar">
@@ -597,7 +664,7 @@
 				</form>
 			{/if}
 
-			{#if navigating.to}
+			{#if reloading}
 				<!-- Three static blocks, always three regardless of the real count: a
 			     guessed count that then changes is worse than none. No shimmer —
 			     the system has no animation. -->
@@ -692,9 +759,27 @@
 					rows={data.rows}
 					people={data.householdPeople}
 					{labels}
+					{reminderDays}
 					{today}
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
+				/>
+			{:else if data.view === 'shelf' && data.layout === 'counterparties' && data.counterparties}
+				<!-- Who the paper was with, and which period never arrived. -->
+				<CounterpartiesView
+					counterparties={data.counterparties}
+					proposals={data.proposals}
+					onopen={(id) => navigate({ doc: id })}
+					onyear={(year) => navigate({ year: String(year) })}
+				/>
+			{:else if data.view === 'shelf' && data.layout === 'completeness' && data.coverage}
+				<!-- The one shelf drawn by what it is MISSING. Same inspector: a band
+				     is another way into the document the list would have opened. -->
+				<CoverageView
+					coverage={data.coverage}
+					onopen={(id) => navigate({ doc: id })}
+					onyear={(year) => navigate({ year: String(year) })}
+					ondecade={(firstYear) => navigate({ decade: String(firstYear) })}
 				/>
 			{:else}
 				{#if honestyState(data.query, data.rows.length, data.honesty) === 'not-searchable'}
@@ -753,7 +838,13 @@
 								</button>
 							{/if}
 							{#each open ? g.items : [] as d (d.id)}
-								{@const expiry = expiryTreatment(d, d.subjectArchived, today, 'wide')}
+								{@const expiry = expiryTreatment(
+									d,
+									d.subjectArchived,
+									today,
+									'wide',
+									reminderDays.get(d.type)
+								)}
 								{@const variant = rowVariant(d.match)}
 								{@const parts = d.match?.snippet ? splitSnippet(d.match.snippet, data.query) : null}
 								{@const nameParts = data.query ? splitSnippet(d.name, data.query) : null}
@@ -1065,6 +1156,15 @@
 			{#if editing}
 				<form class="ins-sections" method="POST" action="?/updateDocument" use:enhance>
 					<input type="hidden" name="id" value={d.id} />
+					<!-- Where Edit was, not at the foot of the form.
+					     Editing replaces the Edit button rather than appending a row
+					     below fifteen fields: pressing Edit and then having to scroll
+					     to the bottom to save is two journeys for one decision, and on
+					     a long document the buttons were off the screen entirely. -->
+					<div class="ins-actions ins-actions-top">
+						<button type="submit" class="btn btn-primary">Save</button>
+						<button type="button" class="btn" onclick={() => (editing = false)}>Cancel</button>
+					</div>
 					<div class="sec">
 						<span class="eyebrow">Name</span>
 						<input name="name" value={d.name} />
@@ -1253,6 +1353,33 @@
 							<input type="date" name="expiresOn" value={d.expiresOn ?? ''} />
 						</div>
 					</div>
+					{#if d.type === 'bank_statement'}
+						<!-- Which months this statement covers, for one nobody imported.
+						     An accepted import fills both from the file, so these are
+						     almost always already answered — but the reader refuses more
+						     scanned statements than it reads, and a person holding a scan
+						     their bank really sent has nowhere else to say which month it
+						     is. Without them the document is filed and invisible: the
+						     coverage ribbon draws periods, and nothing but an import can
+						     write one. -->
+						<div class="sec">
+							<span class="eyebrow">Covers</span>
+							<div class="expiry-grid">
+								<input
+									type="date"
+									name="periodOn"
+									value={d.periodOn ?? ''}
+									aria-label="First day covered"
+								/>
+								<input
+									type="date"
+									name="periodEndOn"
+									value={d.periodEndOn ?? ''}
+									aria-label="Last day covered"
+								/>
+							</div>
+						</div>
+					{/if}
 					<div class="sec">
 						<span class="eyebrow">Tags</span>
 						<TagField tags={[...d.tags]} known={data.knownTags} />
@@ -1280,10 +1407,6 @@
 							</label>
 						</div>
 					{/if}
-					<div class="ins-actions">
-						<button type="submit" class="btn btn-primary">Save</button>
-						<button type="button" class="btn" onclick={() => (editing = false)}>Cancel</button>
-					</div>
 				</form>
 			{:else}
 				<div class="ins-sections">
@@ -1475,6 +1598,7 @@
 	.capture-about .about {
 		max-height: 224px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 	.capture-foot {
 		display: flex;
@@ -1878,6 +2002,11 @@
 		max-height: calc(100dvh - 28px);
 		min-height: 0;
 		overflow-y: auto;
+		/* Two scrollable things on one screen, and without this they take turns:
+		   reaching the end of the panel handed the wheel to the list behind it,
+		   so scrolling the inspector scrolled the archive, and scrolling back up
+		   moved the wrong one first. `contain` stops at this panel's own end. */
+		overscroll-behavior: contain;
 	}
 	.state-line {
 		margin: 0 var(--space-8);
@@ -2171,6 +2300,21 @@
 		align-items: center;
 		gap: var(--space-5);
 		padding-top: var(--space-5);
+	}
+	/* The edit form's own row sits at the TOP, in the Edit button's place — so it
+	   occupies that button's footprint: full width, split in two. The form's own
+	   padding already matches `.ins-primary`'s margin, so no margin here.
+	   Left-aligned and shrink-wrapped, the pair read as a different control that
+	   happened to appear rather than as the one just pressed. */
+	.ins-actions-top {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-5);
+		padding-top: 0;
+		padding-bottom: var(--space-5);
+	}
+	.ins-actions-top .btn {
+		width: 100%;
 	}
 	.about {
 		display: flex;

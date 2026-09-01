@@ -120,6 +120,7 @@ CREATE TABLE "document" (
 	"expires_on" date,
 	"expiry_verb" text DEFAULT 'expires' NOT NULL,
 	"period_on" date,
+	"period_end_on" date,
 	"content_hash" text
 );
 --> statement-breakpoint
@@ -164,7 +165,8 @@ CREATE TABLE "document_type" (
 	"key" text PRIMARY KEY NOT NULL,
 	"label" text NOT NULL,
 	"builtin" boolean DEFAULT false NOT NULL,
-	"sort_order" integer DEFAULT 0 NOT NULL
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"reminder_days" integer
 );
 --> statement-breakpoint
 CREATE TABLE "shelf" (
@@ -202,6 +204,37 @@ CREATE TABLE "tag" (
 	"normalised_name" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "tag_normalised_name_unique" UNIQUE("normalised_name")
+);
+--> statement-breakpoint
+CREATE TABLE "engagement" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"person_id" uuid NOT NULL,
+	"organisation_id" uuid NOT NULL,
+	"role" text,
+	"starts_on" date,
+	"ends_on" date,
+	"document_id" uuid
+);
+--> statement-breakpoint
+CREATE TABLE "lane" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organisation_id" uuid NOT NULL,
+	"person_id" uuid,
+	"label" text NOT NULL,
+	"cadence" text NOT NULL,
+	"conditions" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"accepted_count" integer DEFAULT 0 NOT NULL,
+	"corrected_count" integer DEFAULT 0 NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "organisation" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"kind" text DEFAULT 'other' NOT NULL,
+	"emoji" text DEFAULT '🏛️' NOT NULL,
+	"notes" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "contact_link" (
@@ -678,6 +711,11 @@ ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_i
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_type_document_type_key_fk" FOREIGN KEY ("type") REFERENCES "public"."document_type"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "engagement" ADD CONSTRAINT "engagement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "engagement" ADD CONSTRAINT "engagement_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "engagement" ADD CONSTRAINT "engagement_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lane" ADD CONSTRAINT "lane_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lane" ADD CONSTRAINT "lane_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_link" ADD CONSTRAINT "document_link_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -756,6 +794,12 @@ CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_has
 CREATE INDEX "dtc_document_idx" ON "document_text_chunk" USING btree ("document_id");--> statement-breakpoint
 CREATE INDEX "shelf_type_type_idx" ON "shelf_type" USING btree ("type");--> statement-breakpoint
 CREATE UNIQUE INDEX "subject_name_ci_idx" ON "subject" USING btree (lower("name"));--> statement-breakpoint
+CREATE INDEX "engagement_organisation_idx" ON "engagement" USING btree ("organisation_id");--> statement-breakpoint
+CREATE INDEX "engagement_person_idx" ON "engagement" USING btree ("person_id");--> statement-breakpoint
+CREATE INDEX "engagement_document_idx" ON "engagement" USING btree ("document_id");--> statement-breakpoint
+CREATE INDEX "lane_organisation_idx" ON "lane" USING btree ("organisation_id");--> statement-breakpoint
+CREATE INDEX "lane_person_idx" ON "lane" USING btree ("person_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organisation_name_ci_idx" ON "organisation" USING btree (lower("name"));--> statement-breakpoint
 CREATE INDEX "contact_link_target_idx" ON "contact_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "document_link_target_idx" ON "document_link" USING btree ("target_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "entity_id_kind_key" ON "entity" USING btree ("id","kind");--> statement-breakpoint
@@ -916,6 +960,12 @@ ALTER TABLE person ADD CONSTRAINT person_role_check
 ALTER TABLE account ADD CONSTRAINT account_kind_check
 	CHECK (kind in ('current', 'savings', 'brokerage'));
 --> statement-breakpoint
+ALTER TABLE organisation ADD CONSTRAINT organisation_kind_check
+	CHECK (kind in ('employer', 'authority', 'insurer', 'other'));
+--> statement-breakpoint
+ALTER TABLE lane ADD CONSTRAINT lane_cadence_check
+	CHECK (cadence in ('monthly', 'yearly', 'none'));
+--> statement-breakpoint
 ALTER TABLE category_group ADD CONSTRAINT category_group_role_check
 	CHECK (role in ('income', 'expense', 'savings'));
 --> statement-breakpoint
@@ -989,7 +1039,7 @@ ALTER TABLE calendar_conflict ADD CONSTRAINT calendar_conflict_resolution_check
 	CHECK (resolution in ('local-won', 'remote-won', 'wrote-back'));
 --> statement-breakpoint
 ALTER TABLE entity ADD CONSTRAINT entity_kind_check
-	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement'));
+	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation'));
 --> statement-breakpoint
 
 -- ---- Singletons and shapes ----
@@ -1004,6 +1054,17 @@ ALTER TABLE broker_import_state ADD CONSTRAINT broker_import_state_singleton
 ALTER TABLE document ADD CONSTRAINT document_period_first_of_month
 	CHECK (period_on IS NULL OR extract(day from period_on) = 1);
 --> statement-breakpoint
+-- The other end of the same fact. period_end_on closes the LAST month a document
+-- covers, so it is that month's last day — the mirror of the rule above, and
+-- what lets a statement say "April and May" without saying which days.
+ALTER TABLE document ADD CONSTRAINT document_period_end_last_of_month
+	CHECK (period_end_on IS NULL OR period_end_on = (date_trunc('month', period_end_on) + interval '1 month - 1 day')::date);
+--> statement-breakpoint
+-- A period that ends before it starts is not a period, and would draw a box of
+-- negative width. period_end_on without period_on is an end to nothing.
+ALTER TABLE document ADD CONSTRAINT document_period_order_check
+	CHECK (period_end_on IS NULL OR (period_on IS NOT NULL AND period_end_on >= period_on));
+--> statement-breakpoint
 -- Two upper-case letters or nothing. The field is a picker, so this is not
 -- defending against a typist; it is what keeps the artwork lookup and the flag
 -- from being handed 'Czechia' by a future importer and drawing nothing.
@@ -1015,6 +1076,11 @@ ALTER TABLE document_identity ADD CONSTRAINT document_identity_country_check
 ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 	CHECK (active_from IS NULL OR active_to IS NULL OR active_from <= active_to);
 --> statement-breakpoint
+-- A period that ends before it starts is not a period, and would make a lane
+-- expect a negative number of filings.
+ALTER TABLE engagement ADD CONSTRAINT engagement_period_order_check
+	CHECK (ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on);
+--> statement-breakpoint
 
 -- ---- The entity supertype ----
 DO $outer$
@@ -1022,7 +1088,7 @@ DECLARE
 	t text;
 	has_created_at boolean;
 BEGIN
-	FOREACH t IN ARRAY ARRAY['person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement']
+	FOREACH t IN ARRAY ARRAY['person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation']
 	LOOP
 		EXECUTE format(
 			'ALTER TABLE %I ADD COLUMN entity_kind text GENERATED ALWAYS AS (%L) STORED', t, t);
@@ -1129,37 +1195,40 @@ ON CONFLICT ("key") DO NOTHING;
 -- screen offers it as a tick beside the people, and nothing else creates it.
 INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '🏠');
 --> statement-breakpoint
-INSERT INTO document_type (key, label, builtin, sort_order) VALUES
-	('contract', 'Contract', true, 0),
-	('invoice', 'Invoice', true, 10),
-	('receipt', 'Receipt', true, 20),
-	('payslip', 'Payslip', true, 30),
-	('bank_statement', 'Bank statement', true, 40),
-	('broker_report', 'Broker report', true, 50),
-	('insurance_policy', 'Insurance policy', true, 60),
-	('claim', 'Claim', true, 70),
-	('id_document', 'Identity document', true, 80),
-	('certificate', 'Certificate', true, 90),
-	('medical_record', 'Medical record', true, 100),
-	('tax_document', 'Tax document', true, 110),
-	('technical_plan', 'Technical plan', true, 120),
-	('correspondence', 'Correspondence', true, 130),
-	('warranty', 'Warranty', true, 140),
-	('manual', 'Manual', true, 150),
-	('other', 'Other', true, 160)
+INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUES
+	('contract', 'Contract', true, 0, NULL),
+	('invoice', 'Invoice', true, 10, NULL),
+	('receipt', 'Receipt', true, 20, NULL),
+	('payslip', 'Payslip', true, 30, NULL),
+	('bank_statement', 'Bank statement', true, 40, NULL),
+	('broker_report', 'Broker report', true, 50, NULL),
+	('insurance_policy', 'Insurance policy', true, 60, NULL),
+	('claim', 'Claim', true, 70, NULL),
+	-- Six months, because that is how long replacing one takes. A warning that
+	-- arrives with sixty days left is a warning about a trip you can no longer
+	-- make.
+	('id_document', 'Identity document', true, 80, 180),
+	('certificate', 'Certificate', true, 90, NULL),
+	('medical_record', 'Medical record', true, 100, NULL),
+	('tax_document', 'Tax document', true, 110, NULL),
+	('technical_plan', 'Technical plan', true, 120, NULL),
+	('correspondence', 'Correspondence', true, 130, NULL),
+	('warranty', 'Warranty', true, 140, NULL),
+	('manual', 'Manual', true, 150, NULL),
+	('other', 'Other', true, 160, NULL)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
-	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
-	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, true),
-	(gen_random_uuid(), 'family',     'Family',     '👶', 20, true),
-	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, true),
-	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, true),
-	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
-	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
-	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, true),
-	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, true),
-	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
+	(gen_random_uuid(), 'inbox',      'Inbox',        '📬',  0, true),
+	(gen_random_uuid(), 'identity',   'IDs',          '🪪', 10, true),
+	(gen_random_uuid(), 'statements', 'Statements',   '🧾', 20, true),
+	(gen_random_uuid(), 'finance',    'Income & Tax', '🏦', 30, true),
+	(gen_random_uuid(), 'household',  'Household',    '🔧', 40, true),
+	(gen_random_uuid(), 'family',     'Family',       '👶', 50, true),
+	(gen_random_uuid(), 'health',     'Health',       '🩺', 60, true),
+	(gen_random_uuid(), 'property',   'Property',     '🏠', 70, true),
+	(gen_random_uuid(), 'tenancy',    'Tenancy',      '🔑', 80, false),
+	(gen_random_uuid(), 'vehicles',   'Vehicles',     '🚗', 90, false)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
@@ -1185,8 +1254,9 @@ INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
 	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 3),
 	((SELECT id FROM shelf WHERE key = 'finance'), 'payslip', 0),
 	((SELECT id FROM shelf WHERE key = 'finance'), 'tax_document', 1),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'invoice', 2),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 3),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'certificate', 2),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'correspondence', 3),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 4),
 	((SELECT id FROM shelf WHERE key = 'household'), 'warranty', 0),
 	((SELECT id FROM shelf WHERE key = 'household'), 'manual', 1),
 	((SELECT id FROM shelf WHERE key = 'household'), 'invoice', 2),

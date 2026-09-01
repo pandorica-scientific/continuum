@@ -122,6 +122,7 @@ type LoadedDocuments = {
 	group: string;
 	defaultGroup: string;
 	emptyHint: string | null;
+	coverage: { year: number; gaps: number; rows: unknown[] } | null;
 	filterOptions: { entities: AboutOption[]; types: { code: string; count: number }[] };
 	pickableTargets: { id: string; kind: string; groupLabel: string }[];
 };
@@ -194,8 +195,21 @@ describe('the view a shelf opens in', () => {
 		expect(data.layout).toBeNull();
 	});
 
+	it('opens Statements on its coverage ribbon', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=statements');
+		expect(data.view).toBe('shelf');
+		expect(data.layout).toBe('completeness');
+		expect(data.coverage).not.toBeNull();
+	});
+
+	it('opens Income & Tax on its counterparty cards', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=finance');
+		expect(data.view).toBe('shelf');
+		expect(data.layout).toBe('counterparties');
+	});
+
 	it('leaves every other shelf on the list', async () => {
-		for (const shelf of ['family', 'health', 'household', 'finance', 'statements']) {
+		for (const shelf of ['family', 'health', 'household']) {
 			const data = await loadDocuments(asAdmin, `?shelf=${shelf}`);
 			expect(data.view).toBe('list');
 			expect(data.layout).toBeNull();

@@ -17,7 +17,12 @@
 	import { enhance } from '$app/forms';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { documentExpiryTone, expiryTreatment, type ExpiryTone } from '$lib/documents/view';
+	import {
+		documentExpiryTone,
+		expiryTreatment,
+		SOON_DAYS,
+		type ExpiryTone
+	} from '$lib/documents/view';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	// Type only — erased at compile time, so the server module is never pulled
 	// into the browser bundle. The shape of a filed document is defined once,
@@ -104,7 +109,9 @@
 	 * the same on the card it is filed against and in the files.
 	 */
 	function metaOf(d: AboutDocument): string {
-		return expiryTreatment(d, false, today)?.text ?? '';
+		// The window rides on the row, because a card draws many types at once and
+		// a passport's six months must not become a receipt's.
+		return expiryTreatment(d, false, today, 'wide', d.reminderDays ?? SOON_DAYS)?.text ?? '';
 	}
 </script>
 
@@ -145,7 +152,10 @@
 						<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span>
 					{/if}
 				</span>
-				<span class="doc-meta" style:color={TONE[documentExpiryTone(d, today)]}>
+				<span
+					class="doc-meta"
+					style:color={TONE[documentExpiryTone(d, today, d.reminderDays ?? SOON_DAYS)]}
+				>
 					{d.shelfLabel} · {metaOf(d)}
 				</span>
 			</div>

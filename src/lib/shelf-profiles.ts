@@ -22,16 +22,18 @@ import type { GroupKey } from '$lib/documents/view';
 /**
  * How a shelf draws its contents.
  *
- * Four of these are earned rather than decorative: paper that has a physical
- * shape a person already holds in mind — a wallet of cards, a folder of
- * certificates, a medical history, the papers that came with the boiler — is
- * recognised faster as that shape than as a row. A mortgage agreement has no
- * such shape, which is why Finance is `list` and stays `list`.
+ * Each is earned rather than decorative. Paper with a physical shape a person
+ * already holds in mind — a wallet of cards, a folder of certificates — is
+ * recognised faster as that shape than as a row; and where the shape is not
+ * physical it is a QUESTION a list cannot answer, which is what `completeness`
+ * and `counterparties` are for: both draw the period that is missing, and
+ * absence has no row.
  *
- * `wallet` is drawn today; `gallery`, `timeline` and `kit` are specified and
- * not yet built, so the shelves that will use them are `list` until they are.
- * Naming them here rather than when they arrive is deliberate: the table below
- * is the plan, and a plan that lives in a commit message is not one.
+ * `wallet`, `completeness` and `counterparties` are drawn today; `gallery`,
+ * `timeline` and `kit` are specified and not yet built, so the shelves that will
+ * use them are `list` until they are. Naming them here rather than when they
+ * arrive is deliberate: the table below is the plan, and a plan that lives in a
+ * commit message is not one.
  *
  * They are two types rather than one for the same reason. As a single union,
  * every `switch` on a shelf's layout carried three branches that no shelf could
@@ -39,7 +41,7 @@ import type { GroupKey } from '$lib/documents/view';
  * cost the working code its shape. Split, `ShelfLayout` is exactly what draws,
  * and the plan is still named, still typed, and still here.
  */
-export type ShelfLayout = 'wallet' | 'list';
+export type ShelfLayout = 'wallet' | 'completeness' | 'counterparties' | 'list';
 
 /** Specified and not yet built. Promoted into `ShelfLayout` when one is drawn. */
 export type PlannedShelfLayout = 'gallery' | 'timeline' | 'kit';
@@ -75,12 +77,33 @@ export interface ShelfProfile {
 	 * Filled in even for a shelf still drawing the list, because it is part of
 	 * what the shelf IS: health records belong to whoever or whatever they are
 	 * about, whether or not a timeline is drawing them yet.
+	 *
+	 * `account` and `organisation` are the two that are neither a person nor a
+	 * thing. A statement belongs to the account it was issued for, which is why
+	 * the coverage ribbon has one row per account; a payslip belongs to the
+	 * employer that sent it, which is why Income & Tax draws one card per
+	 * organisation and not one per person. A shelf that draws a layout
+	 * of its own has to name its unit — `tests/unit/shelf-profiles` holds that —
+	 * because a layout is a way of grouping and a grouping needs something to
+	 * group by.
 	 */
-	about: 'person' | 'subject' | 'person-or-subject' | null;
+	about: 'person' | 'subject' | 'person-or-subject' | 'account' | 'organisation' | null;
 	/** How the LIST groups this shelf when nobody has said otherwise. */
 	group: GroupKey;
 	/** One line under "Nothing on X yet", naming the paper that belongs here. */
 	emptyHint: string;
+	/**
+	 * What the shelf is for, in two lines, above its contents.
+	 *
+	 * Prose and not derived, because this is the one thing about a shelf that
+	 * genuinely cannot be computed: why a person would open it. Compare
+	 * `arrangementLine`, which is derived precisely BECAUSE it can be wrong — it
+	 * is a claim about the screen, and a stored claim goes stale the moment a
+	 * layout is built or a grouping is changed.
+	 */
+	blurb: string;
+	/** The question the shelf answers, after `Answers ·` in its footer. */
+	answers: string;
 }
 
 export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
@@ -94,7 +117,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		// By type rather than by entity: nothing in the Inbox is linked yet, so
 		// grouping by what it is about would be one group called nothing.
 		group: 'type',
-		emptyHint: 'Nothing is waiting to be filed.'
+		emptyHint: 'Nothing is waiting to be filed.',
+		blurb:
+			'Paper that has landed and nobody has filed yet. Not a record — a queue, and the only good state for it is empty.',
+		answers: 'what still needs deciding?'
 	},
 	identity: {
 		key: 'identity',
@@ -102,7 +128,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['id_document', 'certificate'],
 		about: 'person',
 		group: 'entity',
-		emptyHint: 'Passports, identity cards and driving licences live here.'
+		emptyHint: 'Passports, identity cards and driving licences live here.',
+		blurb:
+			'Proof of who each person is. Almost everything here expires, and the person missing one is the finding.',
+		answers: 'does everybody hold a valid document?'
 	},
 	family: {
 		key: 'family',
@@ -110,7 +139,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['certificate', 'contract', 'correspondence'],
 		about: 'person',
 		group: 'entity',
-		emptyHint: 'Birth and marriage certificates, and the paper that follows them.'
+		emptyHint: 'Birth and marriage certificates, and the paper that follows them.',
+		blurb:
+			'Marriage, birth, guardianship. Nothing here expires and nothing is archived — you hold these for life.',
+		answers: 'where is the certificate for this relationship?'
 	},
 	health: {
 		key: 'health',
@@ -118,7 +150,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['medical_record', 'certificate', 'insurance_policy', 'invoice'],
 		about: 'person-or-subject',
 		group: 'entity',
-		emptyHint: 'Test results, vaccination records and health insurance.'
+		emptyHint: 'Test results, vaccination records and health insurance.',
+		blurb:
+			'Medical records per person, in the order they happened: the previous result is the context for the current one.',
+		answers: 'what happened to this person, and when?'
 	},
 	property: {
 		key: 'property',
@@ -126,7 +161,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['insurance_policy', 'technical_plan', 'contract', 'invoice'],
 		about: null,
 		group: 'entity',
-		emptyHint: 'Bills, home insurance and the plans that came with the flat.'
+		emptyHint: 'Bills, home insurance and the plans that came with the flat.',
+		blurb:
+			'Everything tied to an address. These are obligations more than records — an inspection falls due whether you look or not.',
+		answers: 'what does this property require of us?'
 	},
 	tenancy: {
 		key: 'tenancy',
@@ -134,7 +172,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['contract', 'invoice', 'correspondence'],
 		about: null,
 		group: 'entity',
-		emptyHint: 'Leases and what passes between a tenant and a landlord.'
+		emptyHint: 'Leases and what passes between a tenant and a landlord.',
+		blurb:
+			'What passes between a tenant and a landlord: the lease, what it obliges, and every letter that changed it.',
+		answers: 'what did we agree with them?'
 	},
 	vehicles: {
 		key: 'vehicles',
@@ -142,17 +183,32 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['warranty', 'insurance_policy', 'invoice', 'manual'],
 		about: 'subject',
 		group: 'entity',
-		emptyHint: 'Registrations, service history, insurance and warranties.'
+		emptyHint: 'Registrations, service history, insurance and warranties.',
+		blurb:
+			'What a vehicle needs to stay on the road. Registration, insurance and inspection each expire on their own schedule.',
+		answers: 'is this vehicle covered and legal?'
 	},
 	finance: {
 		key: 'finance',
-		layout: 'list',
-		expects: ['payslip', 'tax_document', 'invoice', 'contract'],
-		about: null,
+		// One card per counterparty, because the unit a person thinks in here is
+		// who the paper was with — the employer, the tax office — and the failure
+		// is a payslip that never arrived, which a list cannot show.
+		layout: 'counterparties',
+		// What a tax return is actually assembled from. No `invoice`: an invoice
+		// almost always concerns a thing that has a shelf of its own — the flat,
+		// the car — and offering it first here invites the one filing mistake this
+		// shelf's rule exists to prevent. `certificate` is the employer's annual
+		// income confirmation and the social security and health insurance
+		// statements; `correspondence` is the tax office writing back.
+		expects: ['payslip', 'tax_document', 'certificate', 'correspondence', 'contract'],
+		about: 'organisation',
 		// By year: a shelf of payslips and tax papers is read by which year it
 		// concerns far more often than by whose name is on it.
 		group: 'year',
-		emptyHint: 'Payslips, tax papers and the invoices behind them.'
+		emptyHint: 'Payslips, tax returns, and the confirmations a return is built from.',
+		blurb:
+			'Money that arrives because of a person, and what the state takes of it. A loan lives with the thing it bought, never here.',
+		answers: 'what did we earn, and what do we owe?'
 	},
 	household: {
 		key: 'household',
@@ -160,15 +216,25 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['warranty', 'manual', 'invoice', 'receipt', 'contract'],
 		about: 'subject',
 		group: 'entity',
-		emptyHint: 'The papers that came with the boiler, the washing machine, the roof.'
+		emptyHint: 'The papers that came with the boiler, the washing machine, the roof.',
+		blurb:
+			"Things you own that break. Receipt, warranty and manual are one object's paperwork, and filing them apart costs an afternoon.",
+		answers: 'is this still under warranty?'
 	},
 	statements: {
 		key: 'statements',
-		layout: 'list',
+		// The second shelf to draw something other than a list, and the one with
+		// the clearest reason: its failure mode is a month that never arrived,
+		// and a list of ninety-six statements looks identical whether or not
+		// April is among them. A ribbon draws the absence.
+		layout: 'completeness',
 		expects: ['bank_statement', 'broker_report'],
-		about: null,
+		about: 'account',
 		group: 'entity',
-		emptyHint: 'Accepted bank statements and broker reports file themselves here.'
+		emptyHint: 'Accepted bank statements and broker reports file themselves here.',
+		blurb:
+			'Periodic paper, read only in bulk. Nothing expires; the one failure is a month that never arrived, which a list cannot show.',
+		answers: 'is any month missing?'
 	}
 };
 
@@ -180,6 +246,8 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
  */
 export const LAYOUT_LABELS: Record<ShelfLayout | PlannedShelfLayout, string> = {
 	wallet: 'Wallet',
+	completeness: 'Completeness',
+	counterparties: 'Counterparties',
 	gallery: 'Gallery',
 	timeline: 'Timeline',
 	kit: 'Kit',

@@ -18,6 +18,8 @@ export interface DocumentTypeRow {
 	key: string;
 	label: string;
 	builtin: boolean;
+	/** The amber window this kind earns, or null for the sixty-day default. */
+	reminderDays: number | null;
 }
 
 /** Built-ins first in their shipped order, then the household's, alphabetically. */
@@ -26,7 +28,8 @@ export async function listDocumentTypes(handle: Queryable = db): Promise<Documen
 		.select({
 			key: documentType.key,
 			label: documentType.label,
-			builtin: documentType.builtin
+			builtin: documentType.builtin,
+			reminderDays: documentType.reminderDays
 		})
 		.from(documentType)
 		.orderBy(asc(documentType.sortOrder), asc(documentType.label));
@@ -70,7 +73,12 @@ export async function addDocumentType(
 	if (!key) throw new Error('A type needs a name with letters in it.');
 
 	const [existing] = await handle
-		.select({ key: documentType.key, label: documentType.label, builtin: documentType.builtin })
+		.select({
+			key: documentType.key,
+			label: documentType.label,
+			builtin: documentType.builtin,
+			reminderDays: documentType.reminderDays
+		})
 		.from(documentType)
 		.where(eq(documentType.key, key))
 		.limit(1);
@@ -79,7 +87,9 @@ export async function addDocumentType(
 	// After every built-in, so the shipped order stays the shipped order and a
 	// household's own types gather at the end of every picker.
 	await handle.insert(documentType).values({ key, label: name, builtin: false, sortOrder: 1000 });
-	return { key, label: name, builtin: false };
+	// No window: a type somebody invented carries no behaviour at all, and the
+	// sixty-day default is what "nobody has said otherwise" means.
+	return { key, label: name, builtin: false, reminderDays: null };
 }
 
 /** What a household's own type is refused for, in words rather than a code. */

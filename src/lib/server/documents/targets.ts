@@ -30,8 +30,10 @@ import {
 	contact,
 	document,
 	documentLink,
+	documentType,
 	entity,
 	loan,
+	organisation,
 	person,
 	property,
 	shelf,
@@ -70,7 +72,8 @@ export const DOCUMENT_TARGET_KINDS = [
 	'contact',
 	'subject',
 	'transaction',
-	'tax_statement'
+	'tax_statement',
+	'organisation'
 ] as const;
 
 export type DocumentTargetKind = (typeof DOCUMENT_TARGET_KINDS)[number];
@@ -135,6 +138,15 @@ export interface AboutDocument {
 	expiryVerb: EnumValue<'document.expiry_verb'>;
 	addedOn: string;
 	sensitivity: EnumValue<'document.sensitivity'>;
+	/**
+	 * The amber window this KIND of paper earns, or null for the default.
+	 *
+	 * Carried on the row rather than handed to the card as a prop: a card draws
+	 * many documents of many types, so one number could not be right for all of
+	 * them, and nine call sites would each have had to load the type table to
+	 * build a map. The window is a fact about the document, so it travels with it.
+	 */
+	reminderDays: number | null;
 	tags: string[];
 }
 
@@ -249,6 +261,22 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 		groupLabel: 'Contacts',
 		pickable: true,
 		nameSql: sql`select ${contact.id} as id, ${contact.name} as name from ${contact}`
+	}),
+	organisation: defineKind('organisation', {
+		groupLabel: 'Organisations',
+		// Pickable, unlike a transaction: an employer is a short list a person
+		// can find by eye, and filing a payslip against one is the whole point of
+		// the record existing.
+		pickable: true,
+		nameSql: sql`select ${organisation.id} as id, ${organisation.name} as name from ${organisation}`,
+		// The kind as a second line. "Institute of Physics CAS" and "Tax office"
+		// are not ambiguous, but "ČSSZ" and "VZP" are two initialisms a person
+		// half-remembers, and `employer` or `authority` is what tells them apart.
+		extras: {
+			columns: sql`${organisation.kind} as org_kind`,
+			join: sql`join ${organisation} on ${organisation.id} = t.id`,
+			read: (raw) => ({ meta: String(raw.org_kind ?? '') })
+		}
 	}),
 	subject: defineKind('subject', {
 		groupLabel: 'Subjects',
@@ -383,11 +411,13 @@ export async function documentsAbout(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity
+			sensitivity: document.sensitivity,
+			reminderDays: documentType.reminderDays
 		})
 		.from(documentLink)
 		.innerJoin(document, eq(document.id, documentLink.documentId))
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
+		.innerJoin(documentType, eq(documentType.key, document.type))
 		.where(
 			and(
 				eq(documentLink.targetId, targetId),

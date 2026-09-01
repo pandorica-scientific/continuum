@@ -98,6 +98,19 @@ export const document = pgTable(
 		// which month the paper covers, which is how a re-uploaded slip finds its
 		// own row again — see `payslipMatchingContent`.
 		periodOn: date('period_on'),
+		/**
+		 * The last day this document covers, where it covers a span.
+		 *
+		 * `_on` because it is a date, which is this schema's naming rule —
+		 * `tests/integration/schema-invariants` fails on a `date` column called
+		 * anything else, and `period_end` was exactly that.
+		 *
+		 * Only statements need it so far, and they genuinely need it: `period_on`
+		 * alone cannot say whether a statement is one month or a quarter, and the
+		 * coverage ribbon draws exactly that difference. Null means the document
+		 * covers the single month of `period_on`.
+		 */
+		periodEndOn: date('period_end_on'),
 		// SHA-256 of the stored file's bytes, so the same file uploaded twice is
 		// recognised as the same file. A month may hold more than one payslip
 		// since v0.5.5, which removed the only key that used to catch a
@@ -156,7 +169,17 @@ export const documentType = pgTable('document_type', {
 	label: text('label').notNull(),
 	/** True for the seventeen the app ships and reads by name. */
 	builtin: boolean('builtin').notNull().default(false),
-	sortOrder: integer('sort_order').notNull().default(0)
+	sortOrder: integer('sort_order').notNull().default(0),
+	/**
+	 * How many days before its expiry a document of this kind turns amber.
+	 *
+	 * NULL means the sixty-day default in `view.ts`, so this is an OVERRIDE and
+	 * not a second copy of it. It lives on the type rather than in code because
+	 * how long a replacement takes is a fact about a country and a household,
+	 * not about this repository: a passport is six months here and three
+	 * elsewhere, and that should not need a release to change.
+	 */
+	reminderDays: integer('reminder_days')
 });
 
 /**
@@ -322,6 +345,17 @@ export const documentsCheckSql = `
 ALTER TABLE document ADD CONSTRAINT document_period_first_of_month
 	CHECK (period_on IS NULL OR extract(day from period_on) = 1);
 --> statement-breakpoint
+-- The other end of the same fact. period_end_on closes the LAST month a document
+-- covers, so it is that month's last day — the mirror of the rule above, and
+-- what lets a statement say "April and May" without saying which days.
+ALTER TABLE document ADD CONSTRAINT document_period_end_last_of_month
+	CHECK (period_end_on IS NULL OR period_end_on = (date_trunc('month', period_end_on) + interval '1 month - 1 day')::date);
+--> statement-breakpoint
+-- A period that ends before it starts is not a period, and would draw a box of
+-- negative width. period_end_on without period_on is an end to nothing.
+ALTER TABLE document ADD CONSTRAINT document_period_order_check
+	CHECK (period_end_on IS NULL OR (period_on IS NOT NULL AND period_end_on >= period_on));
+--> statement-breakpoint
 -- Two upper-case letters or nothing. The field is a picker, so this is not
 -- defending against a typist; it is what keeps the artwork lookup and the flag
 -- from being handed 'Czechia' by a future importer and drawing nothing.
@@ -385,37 +419,40 @@ export const documentsSeedSql = `
 -- screen offers it as a tick beside the people, and nothing else creates it.
 INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '🏠');
 --> statement-breakpoint
-INSERT INTO document_type (key, label, builtin, sort_order) VALUES
-	('contract', 'Contract', true, 0),
-	('invoice', 'Invoice', true, 10),
-	('receipt', 'Receipt', true, 20),
-	('payslip', 'Payslip', true, 30),
-	('bank_statement', 'Bank statement', true, 40),
-	('broker_report', 'Broker report', true, 50),
-	('insurance_policy', 'Insurance policy', true, 60),
-	('claim', 'Claim', true, 70),
-	('id_document', 'Identity document', true, 80),
-	('certificate', 'Certificate', true, 90),
-	('medical_record', 'Medical record', true, 100),
-	('tax_document', 'Tax document', true, 110),
-	('technical_plan', 'Technical plan', true, 120),
-	('correspondence', 'Correspondence', true, 130),
-	('warranty', 'Warranty', true, 140),
-	('manual', 'Manual', true, 150),
-	('other', 'Other', true, 160)
+INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUES
+	('contract', 'Contract', true, 0, NULL),
+	('invoice', 'Invoice', true, 10, NULL),
+	('receipt', 'Receipt', true, 20, NULL),
+	('payslip', 'Payslip', true, 30, NULL),
+	('bank_statement', 'Bank statement', true, 40, NULL),
+	('broker_report', 'Broker report', true, 50, NULL),
+	('insurance_policy', 'Insurance policy', true, 60, NULL),
+	('claim', 'Claim', true, 70, NULL),
+	-- Six months, because that is how long replacing one takes. A warning that
+	-- arrives with sixty days left is a warning about a trip you can no longer
+	-- make.
+	('id_document', 'Identity document', true, 80, 180),
+	('certificate', 'Certificate', true, 90, NULL),
+	('medical_record', 'Medical record', true, 100, NULL),
+	('tax_document', 'Tax document', true, 110, NULL),
+	('technical_plan', 'Technical plan', true, 120, NULL),
+	('correspondence', 'Correspondence', true, 130, NULL),
+	('warranty', 'Warranty', true, 140, NULL),
+	('manual', 'Manual', true, 150, NULL),
+	('other', 'Other', true, 160, NULL)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
-	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
-	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, true),
-	(gen_random_uuid(), 'family',     'Family',     '👶', 20, true),
-	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, true),
-	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, true),
-	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
-	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
-	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, true),
-	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, true),
-	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
+	(gen_random_uuid(), 'inbox',      'Inbox',        '📬',  0, true),
+	(gen_random_uuid(), 'identity',   'IDs',          '🪪', 10, true),
+	(gen_random_uuid(), 'statements', 'Statements',   '🧾', 20, true),
+	(gen_random_uuid(), 'finance',    'Income & Tax', '🏦', 30, true),
+	(gen_random_uuid(), 'household',  'Household',    '🔧', 40, true),
+	(gen_random_uuid(), 'family',     'Family',       '👶', 50, true),
+	(gen_random_uuid(), 'health',     'Health',       '🩺', 60, true),
+	(gen_random_uuid(), 'property',   'Property',     '🏠', 70, true),
+	(gen_random_uuid(), 'tenancy',    'Tenancy',      '🔑', 80, false),
+	(gen_random_uuid(), 'vehicles',   'Vehicles',     '🚗', 90, false)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
@@ -441,8 +478,9 @@ INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
 	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 3),
 	((SELECT id FROM shelf WHERE key = 'finance'), 'payslip', 0),
 	((SELECT id FROM shelf WHERE key = 'finance'), 'tax_document', 1),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'invoice', 2),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 3),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'certificate', 2),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'correspondence', 3),
+	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 4),
 	((SELECT id FROM shelf WHERE key = 'household'), 'warranty', 0),
 	((SELECT id FROM shelf WHERE key = 'household'), 'manual', 1),
 	((SELECT id FROM shelf WHERE key = 'household'), 'invoice', 2),

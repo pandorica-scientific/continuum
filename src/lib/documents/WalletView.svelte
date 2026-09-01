@@ -34,6 +34,7 @@
 		rows,
 		people,
 		labels,
+		reminderDays,
 		today,
 		selectedId,
 		onopen
@@ -43,6 +44,15 @@
 		people: { id: string; name: string; hue: string }[];
 		/** What this household calls each type, including the ones it added. */
 		labels: Record<string, string>;
+		/**
+		 * The amber window per type, built once on the page.
+		 *
+		 * A wallet is Identity's, where every card is paperwork that takes months
+		 * to replace — so this is the shelf the six-month window exists for, and
+		 * a card reading the sixty-day default would be the one place it did not
+		 * apply.
+		 */
+		reminderDays: Map<string, number>;
 		today: string;
 		selectedId?: string;
 		onopen: (id: string) => void;
@@ -111,7 +121,13 @@
 		// `wide`, so the pill says what the date DOES as well as when: a card has
 		// room for `expires 4 Aug 2033`, and a bare date leaves a reader to guess
 		// whether it is an issue date, a renewal or the day it stops being valid.
-		const treatment = expiryTreatment(row, row.subjectArchived, today, 'wide');
+		const treatment = expiryTreatment(
+			row,
+			row.subjectArchived,
+			today,
+			'wide',
+			reminderDays.get(row.type)
+		);
 		// A pill carries a verb and a hue; the outline treatment the list uses for
 		// "added …" does not belong on a card face, where the date that matters is
 		// the one the document itself states.

@@ -14,7 +14,7 @@ import { extname } from 'node:path';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { account, document, shelf, tag, tagLink } from '$lib/server/db/schema';
+import { account, document, documentType, shelf, tag, tagLink } from '$lib/server/db/schema';
 import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { systemShelfId } from '$lib/server/documents/shelves';
@@ -135,6 +135,13 @@ export async function uploadBrokerReport(
 					expiresOn: null,
 					expiryVerb: 'expires',
 					contentHash,
+					// The YEAR the report is about, which is the unit the coverage
+					// ribbon draws yearly paper in. A broker's annual report covers a
+					// year, not the day it happens to be generated on, and a report
+					// dated to its generation day would sit in the wrong column the
+					// moment a household downloads January's report in February.
+					periodOn: `${reportDay.slice(0, 4)}-01-01`,
+					periodEndOn: `${reportDay.slice(0, 4)}-12-31`,
 					targetIds: brokerageAccounts.length === 1 ? [brokerageAccounts[0].id] : [],
 					tagNames: [brokerKey, reportDay.slice(0, 4)]
 				},
@@ -185,10 +192,12 @@ export async function brokerReports(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity
+			sensitivity: document.sensitivity,
+			reminderDays: documentType.reminderDays
 		})
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
+		.innerJoin(documentType, eq(documentType.key, document.type))
 		.where(
 			and(
 				eq(document.type, 'broker_report'),

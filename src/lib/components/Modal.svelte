@@ -52,6 +52,11 @@
 		padding: 20px;
 		z-index: 60;
 		overflow-y: auto;
+		/* Scrolling stops at this panel's own end. Without it the wheel is handed
+		   on to whatever scrolls behind, so reaching the bottom here quietly
+		   starts scrolling the page — and scrolling back moves the wrong one
+		   first. See docs/ui-guidelines.md. */
+		overscroll-behavior: contain;
 	}
 	.modal {
 		/* --card is translucent by design; a dialog needs an opaque ground */
@@ -62,6 +67,11 @@
 		width: min(860px, 100%);
 		max-height: calc(100vh - 40px);
 		overflow-y: auto;
+		/* Scrolling stops at this panel's own end. Without it the wheel is handed
+		   on to whatever scrolls behind, so reaching the bottom here quietly
+		   starts scrolling the page — and scrolling back moves the wrong one
+		   first. See docs/ui-guidelines.md. */
+		overscroll-behavior: contain;
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-7);

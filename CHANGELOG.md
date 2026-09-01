@@ -2,6 +2,188 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.9 — 2026-09-01
+
+> A guess you can see is worth more than a filing you cannot.
+
+### ✨ Added
+
+- 🔎 **The lanes propose which organisation an unfiled document belongs to** — shown above the cards with File it and Not this one, never applied silently, because a wrong link looks exactly like a right one and nobody re-reads it
+- 🤝 **A lane remembers whether its proposals were taken** — and once corrections outnumber acceptances it stops proposing, so a rule nobody is watching stops doing damage on its own
+- 🙅 **Two organisations claiming the same document proposes neither** — guessing between two employers is worse than asking, and a document nobody claimed stays in plain sight
+
+### ⬆️ Upgrading
+
+- 🗄️ **Two columns on `lane`, which an instance migrated by hand runs once after a backup** — they hold what happened rather than a tuned weight, so starting them at zero is correct and not a loss
+
+```sql
+alter table lane add column if not exists accepted_count integer not null default 0;
+alter table lane add column if not exists corrected_count integer not null default 0;
+```
+
+## 0.7.8 — 2026-09-01
+
+> A shelf that counts from when the paperwork started arriving, not from the first piece of it you kept.
+
+### ✨ Added
+
+- 🗂️ **Income & Tax opens as counterparty cards** — one per employer, authority or insurer, each holding lanes of month or year cells, so the payslip that never arrived is visible as the gap it is
+- 📐 **A lane counts from the engagement rather than from the paper** — an employment that began in January with no slip until June shows five gaps, which is the whole reason role periods are recorded
+- 🧩 **Each organisation is created with the lanes its kind expects** — three for an employer, two for an authority, none for a kind with no rhythm of its own, and all of them yours to edit afterwards
+- 📄 **A period holding several documents opens a list rather than guessing which one you meant** — the same list the Statements ribbon opens, now one component instead of two
+
+### ⬆️ Upgrading
+
+- 🗄️ **One new table, which an instance migrated by hand runs once after a backup** — existing organisations get no lanes from it and can be given them from the rail
+
+```sql
+create table if not exists lane (
+  id uuid primary key,
+  organisation_id uuid not null references organisation(id) on delete cascade,
+  person_id uuid references person(id) on delete cascade,
+  label text not null,
+  cadence text not null,
+  conditions jsonb not null default '[]'::jsonb,
+  sort_order integer not null default 0,
+  constraint lane_cadence_check check (cadence in ('monthly','yearly','none'))
+);
+create index if not exists lane_organisation_idx on lane (organisation_id);
+create index if not exists lane_person_idx on lane (person_id);
+```
+
+## 0.7.7 — 2026-09-01
+
+> An employer that is a record rather than a name printed on a payslip.
+
+### ✨ Added
+
+- 🏛️ **An organisation is a record you create once and file against** — an employer, the tax office, an insurer, in a third section of the Documents rail beside Shelves and Subjects
+- 🧑‍💼 **A person's dealings with one are role periods, and a promotion is a second period rather than an edit** — so the archive keeps knowing when the paperwork actually started arriving, which is what a missing year is counted from
+- 📎 **Any document can be filed against an organisation** — the picker offers them wherever it offers a person or a flat, and search finds them by name
+- 🧾 **The demo ships an employer with a promotion behind it and a tax office with neither role nor start date** — the two cases a single-period fixture never shows
+
+### ⬆️ Upgrading
+
+- 🗄️ **Two new tables, which an instance migrated by hand runs once after a backup** — an organisation is registered in the entity supertype like every other record, which is what lets a document be filed against one with no new link table
+
+```sql
+create table if not exists organisation (
+  id uuid primary key,
+  name text not null,
+  kind text not null default 'other',
+  emoji text not null default '🏛️',
+  notes text,
+  created_at timestamptz not null default now(),
+  constraint organisation_kind_check check (kind in ('employer','authority','insurer','other'))
+);
+create unique index if not exists organisation_name_ci_idx on organisation (lower(name));
+
+create table if not exists engagement (
+  id uuid primary key,
+  person_id uuid not null references person(id) on delete cascade,
+  organisation_id uuid not null references organisation(id) on delete cascade,
+  role text,
+  starts_on date,
+  ends_on date,
+  document_id uuid references document(id) on delete set null,
+  constraint engagement_period_order_check
+    check (ends_on is null or starts_on is null or ends_on >= starts_on)
+);
+create index if not exists engagement_organisation_idx on engagement (organisation_id);
+create index if not exists engagement_person_idx on engagement (person_id);
+create index if not exists engagement_document_idx on engagement (document_id);
+```
+
+- 🔗 **The entity registration is what makes filing work, and it is not in the statement above** — a fresh install gets it from the baseline's `DO` block, and an existing one needs the generated column, the composite foreign key and the two triggers for `organisation` as `drizzle/0000_baseline.sql` writes them
+
+```sql
+ALTER TABLE organisation ADD COLUMN entity_kind text GENERATED ALWAYS AS ('organisation') STORED;
+ALTER TABLE organisation ADD CONSTRAINT organisation_entity_fk
+  FOREIGN KEY (id, entity_kind) REFERENCES entity (id, kind) ON DELETE CASCADE;
+
+CREATE FUNCTION organisation_register_entity() RETURNS trigger LANGUAGE plpgsql AS $b$
+BEGIN
+  INSERT INTO entity (id, kind, created_at)
+    VALUES (NEW.id, 'organisation', COALESCE(NEW.created_at, now()))
+    ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END $b$;
+CREATE TRIGGER organisation_register_entity_trg BEFORE INSERT ON organisation
+  FOR EACH ROW EXECUTE FUNCTION organisation_register_entity();
+
+CREATE FUNCTION organisation_retire_entity() RETURNS trigger LANGUAGE plpgsql AS $b$
+BEGIN
+  DELETE FROM entity WHERE id = OLD.id;
+  RETURN OLD;
+END $b$;
+CREATE TRIGGER organisation_retire_entity_trg AFTER DELETE ON organisation
+  FOR EACH ROW EXECUTE FUNCTION organisation_retire_entity();
+```
+
+## 0.7.6 — 2026-09-01
+
+> A shelf that can only show you what it holds cannot show you what is missing.
+
+### ✨ Added
+
+- 🧾 **Statements opens as a coverage ribbon** — one band per account across twelve months, so a month that never arrived is visible as the gap it is instead of being invisible in a list of ninety-six statements
+- 📅 **A filed statement now records which months it covers** — taken from the period the file states, or from the movements the import just wrote where it states none, so a quarterly statement draws as one band three months wide
+- 📤 **Clicking a gap opens the Import with the account and month already chosen** — an accepted import writes the ledger rows and dates the document in one go, so the month closes without anybody typing a date
+- ✍️ **A statement the reader refused can say which months it covers** — set _Covers_ in the inspector and link it to its account, and a scan that could not be read still counts towards coverage
+- 🪧 **Every shelf opens with a banner saying what it is for** — the paragraph is why you would open the shelf, and the three figures beside it answer the question that shelf exists to answer
+
+### 🔧 Changed
+
+- 🪪 **An identity document turns amber six months before it expires, not sixty days** — replacing a passport takes half a year, and the window now belongs to the kind of paper rather than to the app, so a household can change it
+- 🎨 **A figure in a banner only takes a colour when it is a task** — `0 gaps` is the state the archive is for, and a red nought is an alarm about nothing
+- 🗂️ **A fresh install's shelves are ordered by how often they are opened, and two are renamed** — Identity is now **IDs** and Finance is now **Income & Tax**, which is what that shelf has always held
+- 🧾 **Income & Tax offers the papers a tax return is assembled from** — payslips, tax documents, confirmations, correspondence and contracts, and no longer Invoice, because an invoice is almost always about a thing that has a shelf of its own
+
+### ⬆️ Upgrading
+
+- 🗄️ **Two new columns and three constraints, which an instance migrated by hand runs once after a backup** — the first statement holds the schema, the second dates the statements already filed so the ribbon can draw the archive that exists
+
+```sql
+alter table document add column if not exists period_end_on date;
+alter table document_type add column if not exists reminder_days integer;
+update document_type set reminder_days = 180 where key = 'id_document';
+
+alter table document add constraint document_period_end_last_of_month
+  check (period_end_on is null or period_end_on = (date_trunc('month', period_end_on) + interval '1 month - 1 day')::date);
+alter table document add constraint document_period_order_check
+  check (period_end_on is null or (period_on is not null and period_end_on >= period_on));
+```
+
+- 🏷️ **An existing instance keeps the shelf names and order it already has** — a label is the household's, never the app's, so nothing is renamed underneath anybody; the statement below is the same change for a database that would like it
+
+```sql
+update shelf set label = 'IDs' where key = 'identity' and label = 'Identity';
+update shelf set label = 'Income & Tax' where key = 'finance' and label = 'Finance';
+update shelf set sort_order = v.ord from (values
+  ('inbox', 0), ('identity', 10), ('statements', 20), ('finance', 30), ('household', 40),
+  ('family', 50), ('health', 60), ('property', 70), ('tenancy', 80), ('vehicles', 90)
+) as v(key, ord) where shelf.key = v.key;
+```
+
+- 📆 **Statements imported before this release have no period, so the ribbon cannot place them** — this dates them from the movements each one wrote, snapped to whole months because that is what the columns mean
+
+```sql
+update document d
+set period_on = coalesce(d.period_on, date_trunc('month', t.first_day)::date),
+    period_end_on = coalesce(
+      d.period_end_on,
+      (date_trunc('month', t.last_day) + interval '1 month - 1 day')::date
+    )
+from (
+  select f.document_id, min(x.booked_on) as first_day, max(x.booked_on) as last_day
+  from import_file f
+  join "transaction" x on x.import_file_id = f.id
+  where f.document_id is not null
+  group by f.document_id
+) t
+where d.id = t.document_id and d.type = 'bank_statement';
+```
+
 ## 0.7.5 — 2026-08-31
 
 > Software that promises your data never leaves your machine has to let you read what it does with it.

@@ -17,6 +17,37 @@
 
 	let assignAccountId = $state('');
 
+	// Pre-answer the picker when the Statements ribbon sent you here from a gap.
+	//
+	// An effect rather than an initial value, because arriving by a client-side
+	// navigation never re-runs an initialiser — the link from the ribbon is one,
+	// so the initial-value version answered the picker on a full page load and
+	// silently did nothing on a click. Still only a starting point: the picker
+	// is yours to change afterwards, and nothing here reads it back.
+	$effect(() => {
+		if (data.prefill.accountId) assignAccountId = data.prefill.accountId;
+	});
+
+	/**
+	 * The month this upload was asked for, in words, or null.
+	 *
+	 * Only shown when the ribbon named one. Arriving from a gap and seeing an
+	 * ordinary upload box gives no sign the screen understood which month was
+	 * missing — and the answer matters, because filing the wrong one leaves the
+	 * gap exactly where it was.
+	 */
+	const askedFor = $derived.by(() => {
+		const { from, accountId } = data.prefill;
+		if (!from) return null;
+		const account = data.accounts.find((a) => a.id === accountId);
+		const month = new Date(`${from}T00:00:00Z`).toLocaleString('en-GB', {
+			month: 'long',
+			year: 'numeric',
+			timeZone: 'UTC'
+		});
+		return account ? `${month} · ${account.name}` : month;
+	});
+
 	// Categories picked since the page rendered, so Save can be disabled while
 	// there is nothing to save. Deliberately NOT bind:value with a seeded record:
 	// binding overrides the `selected` attributes below, and the server-rendered
@@ -90,6 +121,14 @@
 {/if}
 
 <section class="section">
+	{#if askedFor}
+		<!-- What the ribbon asked for. The upload itself is unchanged — the file
+		     still says which month it covers, and this is not a filter — but a
+		     person who clicked a specific gap should see that the screen knows
+		     which one. -->
+		<p class="asked">Filing the statement for <strong>{askedFor}</strong></p>
+	{/if}
+
 	<UploadDropzone
 		accept=".csv,.tsv,.txt,.pdf,.xlsx,.xls,.xml,.camt,.gpc,.abo,.sta,.mt940,.ofx,.qfx,.png,.jpg,.jpeg,.tiff"
 		multiple={true}
@@ -550,6 +589,11 @@
 	   what this screen is for — but still a ROW: the dropzone is a one-line
 	   control now, and a column layout drops its capture buttons onto a second
 	   line under the copy. */
+	.asked {
+		margin: 0 0 var(--space-5);
+		font-size: var(--text-base);
+		color: var(--fg2);
+	}
 	:global(.dropzone) {
 		padding: 34px 24px;
 		justify-content: center;

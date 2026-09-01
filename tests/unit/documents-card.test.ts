@@ -23,6 +23,7 @@ const doc = (over: Partial<AboutDocument> = {}): AboutDocument => ({
 	type: 'contract',
 	shelfKey: 'property',
 	shelfLabel: 'Property',
+	reminderDays: null,
 	expiresOn: null,
 	expiryVerb: 'expires',
 	addedOn: '2026-01-02',

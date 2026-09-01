@@ -63,6 +63,15 @@ describe('what a fresh install ships', () => {
 		expect(builtin.sort()).toEqual([...ENUMS['document.type']].sort());
 	});
 
+	it('seeds a six-month reminder for identity documents and none for the rest', async () => {
+		// Null is not "no reminder" — it is "the 60-day default", which is what
+		// every other kind of paper wants. A passport is the exception because
+		// replacing one takes half a year.
+		const rows = await listDocumentTypes(testDb);
+		expect(rows.find((r) => r.key === 'id_document')?.reminderDays).toBe(180);
+		expect(rows.find((r) => r.key === 'invoice')?.reminderDays).toBeNull();
+	});
+
 	it('labels them the way the screens already do', async () => {
 		// The seed and `TYPE_LABELS` are two places holding one fact, so they are
 		// held to each other here: a household that renames one changes its own

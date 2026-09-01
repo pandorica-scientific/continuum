@@ -19,6 +19,30 @@ import { db } from '$lib/server/db';
 import { document, documentLink, documentText, entity, tagLink } from '$lib/server/db/schema';
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { readDocumentsScreen } from '$lib/server/documents/screen';
+import { shelfFacts } from '$lib/server/documents/shelf-stats';
+import { loadCounterparties } from '$lib/server/organisations/counterparties-load';
+import {
+	acceptProposal,
+	dismissProposal,
+	loadProposals
+} from '$lib/server/organisations/proposals-load';
+import {
+	addEngagement,
+	addOrganisation,
+	deleteEngagement,
+	deleteOrganisation,
+	endEngagement,
+	listOrganisations,
+	renameOrganisation,
+	setOrganisationEmoji,
+	setOrganisationKind
+} from '$lib/server/organisations/mutations';
+import {
+	coverageAccountCount,
+	gapsAcrossYears,
+	loadCoverage
+} from '$lib/server/statements/coverage-load';
+import { firstOfMonth, lastOfMonth } from '$lib/statements/coverage';
 import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
 import {
 	identityNumbersFor,
@@ -74,7 +98,8 @@ import {
 	assertVisibleDocument,
 	visibleDocumentIds,
 	visibleDocumentPredicate,
-	NO_SUCH_DOCUMENT
+	NO_SUCH_DOCUMENT,
+	type Actor
 } from '$lib/server/documents/visibility';
 import { searchDocuments } from '$lib/server/documents/search';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
@@ -100,6 +125,56 @@ function centreView(
 	if (asked === 'tags') return 'tags';
 	if (asked === 'list' || query) return 'list';
 	return layout && layout !== 'list' ? 'shelf' : 'list';
+}
+
+/** A period whose end precedes its start. Not a period, and not a box to draw. */
+const PERIOD_BACKWARDS = Symbol('period backwards');
+
+/**
+ * The months a document says it covers, snapped to whole ones.
+ *
+ * Snapped and not stored verbatim, because that is what the columns MEAN:
+ * `document_period_first_of_month` and its mirror have said so since before this
+ * shelf existed, and the coverage ribbon works in whole months regardless. So a
+ * person typing the 15th is saying "this month", and gets it — rather than a
+ * constraint violation for answering the question as asked.
+ *
+ * An end with no start is dropped rather than refused: half an answer is a
+ * person part-way through filling the pair in, not an error worth a red banner.
+ */
+function coveredMonths(
+	form: FormData
+): { periodOn: string | null; periodEndOn: string | null } | typeof PERIOD_BACKWARDS {
+	const start = String(form.get('periodOn') ?? '').trim();
+	const end = String(form.get('periodEndOn') ?? '').trim();
+	if (!start) return { periodOn: null, periodEndOn: null };
+	if (end && end < start) return PERIOD_BACKWARDS;
+	return {
+		periodOn: firstOfMonth(start),
+		periodEndOn: end ? lastOfMonth(end) : null
+	};
+}
+
+/** One reading of today for the whole request, so it cannot straddle midnight. */
+const bannerToday = (): string => new Date().toISOString().slice(0, 10);
+
+/**
+ * A shelf's banner figures, with the two only Statements can answer.
+ *
+ * `accounts` and `gaps` are facts about COVERAGE — which months are accounted
+ * for — and `shelf-stats` counts document rows. Answering them there would have
+ * meant a second reading of what a gap is, so they are filled from the coverage
+ * loader that already knows.
+ */
+async function bannerFactsFor(shelfKey: string, viewer: Actor | null) {
+	const facts = await shelfFacts(shelfKey, viewer);
+	if (shelfKey !== 'statements') return facts;
+	const today = bannerToday();
+	return {
+		...facts,
+		accounts: await coverageAccountCount(),
+		gaps: await gapsAcrossYears(today)
+	};
 }
 
 export const load: PageServerLoad = async ({ url, locals }) => {
@@ -369,6 +444,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			tags: tagsByDoc.get(d.id) ?? [],
 			addedOn: d.addedOn,
 			periodOn: d.periodOn,
+			periodEndOn: d.periodEndOn,
 			expiresOn: d.expiresOn,
 			expiryVerb: d.expiryVerb,
 			subjectArchived: archivedByDoc.has(d.id),
@@ -428,6 +504,53 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		/** What this shelf COULD draw, so the toolbar can offer the switch. */
 		shelfLayout: profile?.layout ?? null,
 		emptyHint: profile?.emptyHint ?? null,
+		/**
+		 * The three figures the banner shows, or null where there is no one shelf
+		 * to describe: "Everything" is not a shelf, and a result set is not one
+		 * either — a banner over search results would be describing the shelf you
+		 * left rather than what is on screen.
+		 */
+		bannerFacts:
+			shelf === 'all' || query ? null : await bannerFactsFor(shelf, locals.person ?? null),
+		/**
+		 * The organisations the household deals with, for the rail's third
+		 * section. Counted behind the same read rule as everything else here.
+		 */
+		organisations: await listOrganisations(db, locals.person ?? null),
+		/**
+		 * What the lanes think should be filed, and where.
+		 *
+		 * Computed, never stored: a stored proposal goes stale the moment a lane
+		 * is edited or the document is filed by hand, and then the screen argues
+		 * with the archive.
+		 */
+		proposals:
+			view === 'shelf' && profile?.layout === 'counterparties'
+				? await loadProposals(db, locals.person ?? null)
+				: [],
+		/** The counterparty cards, or null when the centre column draws the list. */
+		counterparties:
+			view === 'shelf' && profile?.layout === 'counterparties'
+				? await loadCounterparties(
+						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
+						bannerToday(),
+						db,
+						locals.person ?? null
+					)
+				: null,
+		/**
+		 * The ribbon, or null whenever it is not what the centre column draws —
+		 * the list is one press away and does not need this payload.
+		 */
+		coverage:
+			view === 'shelf' && profile?.layout === 'completeness'
+				? await loadCoverage(
+						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
+						bannerToday(),
+						undefined,
+						Number(url.searchParams.get('decade')) || undefined
+					)
+				: null,
 		sort: url.searchParams.get('sort') ?? 'newest',
 		// What the screen is allowed to say about what it could not find.
 		honesty: search?.honesty ?? null,
@@ -647,6 +770,11 @@ export const actions: Actions = {
 		const guarded = await salaryGuardedDocuments([id], { type, keptTargetIds: wanted });
 		if (guarded.length > 0) return fail(409, { message: SALARY_ENTRY_REFUSAL });
 
+		const period = coveredMonths(form);
+		if (period === PERIOD_BACKWARDS) {
+			return fail(400, { message: 'A statement cannot stop covering months before it starts.' });
+		}
+
 		await db.transaction(async (tx) => {
 			await tx
 				.update(document)
@@ -661,6 +789,7 @@ export const actions: Actions = {
 						String(form.get('expiryVerb') ?? 'expires'),
 						'expires'
 					),
+					...period,
 					// Only an admin can restrict, and only an admin can unrestrict:
 					// a member's form has no such field and must not be able to send one.
 					...(locals.person?.role === 'admin'
@@ -1012,6 +1141,137 @@ export const actions: Actions = {
 	// Archiving is the only "removal" a subject has. A subject that once held
 	// paper is history, and history is put away rather than deleted — so there
 	// is no `removeSubject` here and there will not be one.
+
+	addOrganisation: async ({ request }) => {
+		const form = await request.formData();
+		try {
+			await addOrganisation(
+				{
+					name: String(form.get('name') ?? ''),
+					kind: asEnumValue('organisation.kind', String(form.get('kind') ?? 'other'), 'other'),
+					emoji: String(form.get('emoji') ?? '')
+				},
+				db
+			);
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
+		return { ok: true };
+	},
+
+	/** The rail's rename row: name, emoji and kind at once, as a subject's does. */
+	renameOrganisation: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		const name = String(form.get('name') ?? '').trim();
+		if (!id || !name) return fail(400, { message: 'An organisation needs a name.' });
+		try {
+			await renameOrganisation(id, name, db);
+			const emoji = form.get('emoji');
+			if (emoji !== null) await setOrganisationEmoji(id, String(emoji), db);
+			const kind = form.get('kind');
+			if (kind !== null) {
+				await setOrganisationKind(id, asEnumValue('organisation.kind', String(kind), 'other'), db);
+			}
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not rename it.'
+			});
+		}
+		return { ok: true };
+	},
+
+	deleteOrganisation: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Nothing to remove.' });
+		try {
+			await deleteOrganisation(id, db);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not remove it.'
+			});
+		}
+		return { ok: true };
+	},
+
+	acceptProposal: async ({ request, locals }) => {
+		const form = await request.formData();
+		const documentId = String(form.get('documentId') ?? '').trim();
+		const laneId = String(form.get('laneId') ?? '').trim();
+		const organisationId = String(form.get('organisationId') ?? '').trim();
+		if (!documentId || !laneId || !organisationId) {
+			return fail(400, { message: 'Nothing to file.' });
+		}
+		const result = await acceptProposal(
+			documentId,
+			laneId,
+			organisationId,
+			locals.person ?? null,
+			db
+		);
+		if (!result.ok) return fail(404, { message: result.message ?? NO_SUCH_DOCUMENT });
+		return { ok: true };
+	},
+
+	/** Files nothing. What changes is the lane's standing — see `dismissProposal`. */
+	dismissProposal: async ({ request }) => {
+		const form = await request.formData();
+		const laneId = String(form.get('laneId') ?? '').trim();
+		if (!laneId) return fail(400, { message: 'Nothing to dismiss.' });
+		await dismissProposal(laneId, db);
+		return { ok: true };
+	},
+
+	addEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const organisationId = String(form.get('organisationId') ?? '').trim();
+		const personId = String(form.get('personId') ?? '').trim();
+		if (!organisationId || !personId) {
+			return fail(400, { message: 'A role period needs a person and an organisation.' });
+		}
+		try {
+			await addEngagement(
+				{
+					organisationId,
+					personId,
+					role: String(form.get('role') ?? ''),
+					startsOn: String(form.get('startsOn') ?? '') || null
+				},
+				db
+			);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not add the role.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/** Closes a period rather than removing it — see `endEngagement` for why. */
+	endEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		const endsOn = String(form.get('endsOn') ?? '').trim();
+		if (!id || !endsOn) return fail(400, { message: 'A closing date is needed.' });
+		try {
+			await endEngagement(id, endsOn, db);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not close the role.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/** For one entered by mistake. Ending a real one is `endEngagement`. */
+	deleteEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Nothing to remove.' });
+		await deleteEngagement(id, db);
+		return { ok: true };
+	},
 
 	addSubject: async ({ request }) => {
 		const form = await request.formData();

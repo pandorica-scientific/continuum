@@ -20,7 +20,7 @@ import { mkdtempSync, readdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
 	account,
 	document,
@@ -42,6 +42,9 @@ import { SUGGESTED_LAYOUT } from '$lib/overview/panels';
 import { seedBanks, seedCategories } from '$lib/server/categorize';
 import { generateEvents } from '$lib/server/calendar';
 import { listSubjects } from '$lib/server/documents/subjects';
+import { documentsAbout } from '$lib/server/documents/targets';
+import { listOrganisations } from '$lib/server/organisations/mutations';
+import { engagementSpan, engagementsFor } from '$lib/server/organisations/engagements';
 import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { hashBytes, readUpload } from '$lib/server/system/files';
 import { seedDemo } from '$lib/server/system/demo';
@@ -220,15 +223,39 @@ describe('the demo seed', () => {
 		expect(events.some((e) => e.binding?.rowId === lease.id)).toBe(false);
 	});
 
-	it('files a statement per current account and a report on the brokerage one', async () => {
+	it('files a run of statements per current account, with one month missing', async () => {
+		// A run rather than a single statement, and one month deliberately absent:
+		// the Statements shelf exists to show a month that never arrived, and a
+		// ribbon with one band on it demonstrates nothing. Every statement carries
+		// the months it covers, because the demo writes no import to derive them
+		// from and the ribbon reads the column rather than the name.
 		const docs = await seededDocuments();
 		const accounts = await testDb.select().from(account);
 		const statements = ofType(docs, 'bank_statement');
-		expect(statements).toHaveLength(2);
+		expect(statements.length).toBeGreaterThan(2);
+
+		for (const statement of statements) {
+			expect(statement.periodOn, statement.name).not.toBeNull();
+			expect(statement.periodEndOn, statement.name).not.toBeNull();
+		}
+
 		const linked = new Set((await Promise.all(statements.map((s) => targetsOf(s.id)))).flat());
 		for (const current of accounts.filter((a) => a.kind === 'current')) {
 			expect(linked).toContain(current.id);
 		}
+
+		// The gap. Whichever account has a run of months, one of them is not
+		// filed — and nothing marks it as missing, which is how a real month goes
+		// astray.
+		const months = statements
+			.map((s) => s.periodOn)
+			.filter((day): day is string => day !== null)
+			.sort();
+		const span =
+			(Number(months[months.length - 1].slice(0, 4)) - Number(months[0].slice(0, 4))) * 12 +
+			(Number(months[months.length - 1].slice(5, 7)) - Number(months[0].slice(5, 7))) +
+			1;
+		expect(span).toBeGreaterThan(new Set(months).size);
 
 		const [report] = ofType(docs, 'broker_report');
 		const brokerage = accounts.filter((a) => a.kind === 'brokerage');
@@ -239,6 +266,49 @@ describe('the demo seed', () => {
 		// import, so there is no `import_file` row for a statement to be keyed
 		// to — the branch the D10 ruling names as the alternative.
 		expect(await testDb.select().from(importFile)).toHaveLength(0);
+	});
+
+	it('gives the demo an employer with a promotion behind it', async () => {
+		// Two role periods, one person. A single-period fixture never exercises
+		// the case that matters — the span must keep reporting the ORIGINAL start
+		// after a promotion, or the years before it stop being counted as missing.
+		const orgs = await listOrganisations(testDb);
+		const employer = orgs.find((o) => o.kind === 'employer');
+		expect(employer).toBeDefined();
+		expect(employer!.peopleCount, 'a promotion is not a second colleague').toBe(1);
+
+		const roles = await engagementsFor(employer!.id, testDb);
+		expect(roles).toHaveLength(2);
+		const span = engagementSpan(roles);
+		expect(span.endsOn, 'an open period means the employment is current').toBeNull();
+
+		// And it reaches back past the earliest payslip, which is the whole point
+		// of the fixture: a lane can only show a year with nothing filed in it if
+		// the relationship began before the paper did.
+		const [earliest] = await testDb
+			.select({ periodOn: document.periodOn })
+			.from(document)
+			.where(eq(document.type, 'payslip'))
+			.orderBy(asc(document.periodOn))
+			.limit(1);
+		expect(span.startsOn! < earliest.periodOn!).toBe(true);
+	});
+
+	it('files every payslip against that employer', async () => {
+		const orgs = await listOrganisations(testDb);
+		const employer = orgs.find((o) => o.kind === 'employer')!;
+		const filed = await documentsAbout(employer.id, null, testDb);
+		expect(filed.filter((d) => d.type === 'payslip')).toHaveLength(12);
+	});
+
+	it('gives the tax office no role and no start, which is a real case', async () => {
+		// An office a household has simply always dealt with. The span has to
+		// survive having nothing to measure.
+		const orgs = await listOrganisations(testDb);
+		const authority = orgs.find((o) => o.kind === 'authority')!;
+		const roles = await engagementsFor(authority.id, testDb);
+		expect(roles).toHaveLength(1);
+		expect(engagementSpan(roles)).toEqual({ startsOn: null, endsOn: null });
 	});
 
 	it('files three receipts on transactions, each printing a variable symbol', async () => {

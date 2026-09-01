@@ -12,6 +12,7 @@ export * from './money';
 export * from './auth';
 export * from './contacts';
 export * from './documents';
+export * from './organisations';
 export * from './entity';
 export * from './accounts';
 export * from './property';

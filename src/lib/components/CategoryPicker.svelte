@@ -294,6 +294,11 @@
 		padding: var(--space-2);
 		list-style: none;
 		overflow-y: auto;
+		/* Scrolling stops at this panel's own end. Without it the wheel is handed
+		   on to whatever scrolls behind, so reaching the bottom here quietly
+		   starts scrolling the page — and scrolling back moves the wrong one
+		   first. See docs/ui-guidelines.md. */
+		overscroll-behavior: contain;
 		/* --bg2, not --card. The card tokens are TINTS in the dark theme —
 		   rgba(255,255,255,0.03) — which read as a raised panel in the document
 		   flow and as a transparent smear when something floats over content.

@@ -10,8 +10,19 @@
 # without protection.
 #
 # Automatic where it can be. Signatures are recorded once per person, in
-# signatures/cla.json on this branch, and every later pull request from that
-# account passes without asking again. Nobody has to chase anyone.
+# signatures/cla.json on the `cla-signatures` branch, and every later pull
+# request from that account passes without asking again. Nobody has to chase
+# anyone.
+#
+# That branch exists so this one does not have to be writable by a bot: the
+# action commits a signature the moment somebody agrees, and main is protected.
+#
+# The allowlist carries an entry for the assistant co-author trailer some
+# commits here have. Whether this action counts a `Co-authored-by:` address as a
+# committer is not something the maintainer has confirmed — the entry is
+# defensive. If a pull request is ever blocked on a signature from an address
+# with no GitHub account behind it, the trailer is the cause and dropping it is
+# the certain fix; an allowlist entry is only a guess at how the match is made.
 name: CLA
 
 on:
@@ -41,7 +52,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          branch: main
+          # NOT `main`. The action pushes a commit to whatever branch this names
+          # every time somebody signs, and main is protected: a ruleset that
+          # requires a pull request and the `cla` check refuses that push, so
+          # the whole workflow fails with "Cannot update this protected ref"
+          # and every contributor is told they have not signed.
+          #
+          # A branch of its own, holding nothing but signatures/cla.json, is
+          # what the action expects. It must be left unprotected — which costs
+          # nothing, because nothing else lives on it.
+          branch: cla-signatures
           path-to-document: https://github.com/pandorica-scientific/continuum/blob/main/CLA.md
           path-to-signatures: signatures/cla.json
 
@@ -65,4 +85,4 @@ jobs:
           custom-allsigned-prcomment: 'Agreement on file — thank you. Later pull requests will not ask again.'
 
           # The maintainer holds the copyright; bots author nothing.
-          allowlist: RRobert92,dependabot[bot],github-actions[bot]
+          allowlist: RRobert92,dependabot[bot],github-actions[bot],noreply@anthropic.com
