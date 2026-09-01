@@ -188,14 +188,20 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 	finance: {
 		key: 'finance',
 		layout: 'list',
-		expects: ['payslip', 'tax_document', 'invoice', 'contract'],
+		// What a tax return is actually assembled from. No `invoice`: an invoice
+		// almost always concerns a thing that has a shelf of its own — the flat,
+		// the car — and offering it first here invites the one filing mistake this
+		// shelf's rule exists to prevent. `certificate` is the employer's annual
+		// income confirmation and the social security and health insurance
+		// statements; `correspondence` is the tax office writing back.
+		expects: ['payslip', 'tax_document', 'certificate', 'correspondence', 'contract'],
 		about: null,
 		// By year: a shelf of payslips and tax papers is read by which year it
 		// concerns far more often than by whose name is on it.
 		group: 'year',
-		emptyHint: 'Payslips, tax papers and the invoices behind them.',
+		emptyHint: 'Payslips, tax returns, and the confirmations a return is built from.',
 		blurb:
-			'Payslips, tax returns and the papers behind them. Read by year, because a year is the unit both a tax office and a lender ask in.',
+			'Money that arrives because of a person, and what the state takes of it. A loan lives with the thing it bought, never here.',
 		answers: 'what did we earn, and what do we owe?'
 	},
 	household: {

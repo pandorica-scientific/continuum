@@ -166,6 +166,29 @@ them does not shift the toolbar under the cursor.
 It does not say how the shelf is arranged. The Group and Sort controls state
 that themselves, two inches below and editable.
 
+### Which shelf a document belongs on
+
+**A document files with its subject, not with its consequence.** A mortgage is
+about the flat, so it goes on **Property**; a car loan goes on **Vehicles**; a
+plumber's invoice goes on Property and a service invoice on Vehicles. There is
+no shelf for "financial paperwork" as a category, because almost none of it is
+about money in the abstract — it is about a thing you own, and that is where you
+will look for it.
+
+**Income & Tax** is what is left once that rule is applied: money that arrives
+because of a _person_, and what the state takes of it. Payslips, tax returns and
+the assessment, the employer's annual income confirmation, social security and
+health insurance statements, employment contracts, and letters from the tax
+office. A household where somebody is self-employed adds the invoices they
+issued. Nothing here is about an object.
+
+The case that looks like an exception and is not: **a mortgage-interest
+confirmation**. Its subject is the flat, so it files on Property — and it reaches
+the tax year through a **link**, not by changing shelf. That is what links are
+for, and it is why a year's filing can gather papers from four shelves without
+any of them being the wrong place. Shelf is where in life, type is what kind,
+links are what it concerns.
+
 Every shelf, list or not, now knows what it is for: an empty one says what
 belongs on it, its type filter offers those kinds first, and picking a shelf
 during inbox review shortens the type list to that shelf's own and chooses the

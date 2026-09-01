@@ -19,6 +19,7 @@
 - 🪪 **An identity document turns amber six months before it expires, not sixty days** — replacing a passport takes half a year, and the window now belongs to the kind of paper rather than to the app, so a household can change it
 - 🎨 **A figure in a banner only takes a colour when it is a task** — `0 gaps` is the state the archive is for, and a red nought is an alarm about nothing
 - 🗂️ **A fresh install's shelves are ordered by how often they are opened, and two are renamed** — Identity is now **IDs** and Finance is now **Income & Tax**, which is what that shelf has always held
+- 🧾 **Income & Tax offers the papers a tax return is assembled from** — payslips, tax documents, confirmations, correspondence and contracts, and no longer Invoice, because an invoice is almost always about a thing that has a shelf of its own
 
 ### ⬆️ Upgrading
 
