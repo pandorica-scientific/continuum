@@ -443,16 +443,16 @@ INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUE
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
-	(gen_random_uuid(), 'inbox',      'Inbox',      '📬',  0, true),
-	(gen_random_uuid(), 'identity',   'Identity',   '🪪', 10, true),
-	(gen_random_uuid(), 'family',     'Family',     '👶', 20, true),
-	(gen_random_uuid(), 'health',     'Health',     '🩺', 30, true),
-	(gen_random_uuid(), 'property',   'Property',   '🏠', 40, true),
-	(gen_random_uuid(), 'tenancy',    'Tenancy',    '🔑', 50, false),
-	(gen_random_uuid(), 'vehicles',   'Vehicles',   '🚗', 60, false),
-	(gen_random_uuid(), 'finance',    'Finance',    '🏦', 70, true),
-	(gen_random_uuid(), 'household',  'Household',  '🔧', 80, true),
-	(gen_random_uuid(), 'statements', 'Statements', '🧾', 90, true)
+	(gen_random_uuid(), 'inbox',      'Inbox',        '📬',  0, true),
+	(gen_random_uuid(), 'identity',   'IDs',          '🪪', 10, true),
+	(gen_random_uuid(), 'statements', 'Statements',   '🧾', 20, true),
+	(gen_random_uuid(), 'finance',    'Income & Tax', '🏦', 30, true),
+	(gen_random_uuid(), 'household',  'Household',    '🔧', 40, true),
+	(gen_random_uuid(), 'family',     'Family',       '👶', 50, true),
+	(gen_random_uuid(), 'health',     'Health',       '🩺', 60, true),
+	(gen_random_uuid(), 'property',   'Property',     '🏠', 70, true),
+	(gen_random_uuid(), 'tenancy',    'Tenancy',      '🔑', 80, false),
+	(gen_random_uuid(), 'vehicles',   'Vehicles',     '🚗', 90, false)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES

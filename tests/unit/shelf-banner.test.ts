@@ -95,6 +95,13 @@ describe('bannerStats', () => {
 		expect(cover).toEqual({ value: '7', label: 'still in warranty', tone: 'note' });
 	});
 
+	it('counts Income & Tax by the people it is about, not by bank', () => {
+		// A payslip and a tax return belong to a person. Counting institutions was
+		// a figure left over from when the shelf was called Finance.
+		const [first] = bannerStats('finance', facts({ people: 2, institutions: 6, documents: 41 }));
+		expect(first).toEqual({ value: '2', label: 'people', tone: 'plain' });
+	});
+
 	it('counts gaps for Statements, in the hue that says it is a task', () => {
 		const [accounts, statements, gaps] = bannerStats(
 			'statements',

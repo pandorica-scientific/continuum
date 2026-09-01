@@ -18,6 +18,7 @@
 
 - 🪪 **An identity document turns amber six months before it expires, not sixty days** — replacing a passport takes half a year, and the window now belongs to the kind of paper rather than to the app, so a household can change it
 - 🎨 **A figure in a banner only takes a colour when it is a task** — `0 gaps` is the state the archive is for, and a red nought is an alarm about nothing
+- 🗂️ **A fresh install's shelves are ordered by how often they are opened, and two are renamed** — Identity is now **IDs** and Finance is now **Income & Tax**, which is what that shelf has always held
 
 ### ⬆️ Upgrading
 
@@ -32,6 +33,17 @@ alter table document add constraint document_period_end_last_of_month
   check (period_end_on is null or period_end_on = (date_trunc('month', period_end_on) + interval '1 month - 1 day')::date);
 alter table document add constraint document_period_order_check
   check (period_end_on is null or (period_on is not null and period_end_on >= period_on));
+```
+
+- 🏷️ **An existing instance keeps the shelf names and order it already has** — a label is the household's, never the app's, so nothing is renamed underneath anybody; the statement below is the same change for a database that would like it
+
+```sql
+update shelf set label = 'IDs' where key = 'identity' and label = 'Identity';
+update shelf set label = 'Income & Tax' where key = 'finance' and label = 'Finance';
+update shelf set sort_order = v.ord from (values
+  ('inbox', 0), ('identity', 10), ('statements', 20), ('finance', 30), ('household', 40),
+  ('family', 50), ('health', 60), ('property', 70), ('tenancy', 80), ('vehicles', 90)
+) as v(key, ord) where shelf.key = v.key;
 ```
 
 - 📆 **Statements imported before this release have no period, so the ribbon cannot place them** — this dates them from the movements each one wrote, snapped to whole months because that is what the columns mean

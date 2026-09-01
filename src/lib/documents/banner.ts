@@ -136,8 +136,12 @@ export function bannerStats(
 				dated(facts.nextDate, 'next one due')
 			];
 		case 'finance':
+			// People rather than institutions. The shelf is Income & Tax: a payslip
+			// and a tax return belong to a PERSON, and counting banks was a figure
+			// left over from when this shelf was called Finance and meant the
+			// mortgage.
 			return [
-				plain(facts.institutions, 'institutions'),
+				plain(facts.people, 'people'),
 				plain(facts.documents, 'documents'),
 				countedAlert(facts.paymentsDue, 'payments due')
 			];

@@ -195,8 +195,8 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'year',
 		emptyHint: 'Payslips, tax papers and the invoices behind them.',
 		blurb:
-			'Institutions, accounts and the agreements behind them. Nobody looks for a PDF — they look for “the mortgage”.',
-		answers: 'what did we sign, and with whom?'
+			'Payslips, tax returns and the papers behind them. Read by year, because a year is the unit both a tax office and a lender ask in.',
+		answers: 'what did we earn, and what do we owe?'
 	},
 	household: {
 		key: 'household',

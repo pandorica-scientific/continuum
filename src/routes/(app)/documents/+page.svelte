@@ -57,7 +57,7 @@
 		type GroupKey,
 		type SortKey
 	} from '$lib/documents/view';
-	import { navigating } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { tagHue } from '$lib/tag-hue';
 	import { fitChips } from '$lib/actions/fit-chips';
 
@@ -206,6 +206,43 @@
 		// position halfway down the list.
 		goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
+
+	/**
+	 * The parameters that decide WHICH documents the centre column holds.
+	 *
+	 * Everything else — the year or decade a band is showing, which document the
+	 * inspector has open — rearranges what is already there.
+	 */
+	const ROW_SET_PARAMS = [
+		'shelf',
+		'q',
+		'view',
+		'group',
+		'sort',
+		'type',
+		'entity',
+		'tag',
+		'archived'
+	];
+
+	/**
+	 * Whether the navigation in flight is worth blanking the column for.
+	 *
+	 * It is, when the answer is about to be a different set of documents: there
+	 * is nothing honest to leave on screen while that loads. It is NOT when only
+	 * the year on the coverage ribbon changed — the table keeps its shape and
+	 * every row, and replacing it with three grey blocks for the length of a
+	 * query made stepping through years flicker hard enough to be unusable.
+	 */
+	const reloading = $derived.by(() => {
+		const to = navigating.to;
+		if (!to) return false;
+		const now = page.url.searchParams;
+		const next = to.url.searchParams;
+		return ROW_SET_PARAMS.some(
+			(key) => now.getAll(key).join('\u0000') !== next.getAll(key).join('\u0000')
+		);
+	});
 
 	const groups = $derived(
 		groupDocuments(
@@ -626,7 +663,7 @@
 				</form>
 			{/if}
 
-			{#if navigating.to}
+			{#if reloading}
 				<!-- Three static blocks, always three regardless of the real count: a
 			     guessed count that then changes is worse than none. No shimmer —
 			     the system has no animation. -->
