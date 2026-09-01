@@ -25,10 +25,28 @@ import { asEnumValue, ENUMS } from '$lib/enums';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+/**
+ * A calendar day, or nothing.
+ *
+ * Shape AND validity: `2026-13-45` matches the pattern and is not a date, and a
+ * month drawn from it would be a box the ribbon cannot place.
+ */
+function isoDay(value: string | null): string | null {
+	if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+	const parsed = new Date(`${value}T00:00:00Z`);
+	return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value
+		? null
+		: value;
+}
+
+export const load: PageServerLoad = async ({ url }) => {
 	const monthStart = new Date();
 	monthStart.setDate(1);
 	const monthStartIso = monthStart.toISOString().slice(0, 10);
+
+	// Read before the queries so the account check below has something to test
+	// against, and so an absent parameter is null rather than the string "null".
+	const wantedAccount = url.searchParams.get('account');
 
 	const proposedPairs = await db
 		.select()
@@ -176,6 +194,22 @@ export const load: PageServerLoad = async () => {
 			suggestedCategoryId: r.suggestedCategoryId
 		})),
 		accounts,
+		/**
+		 * Where an upload was asked for, when somewhere asked for it.
+		 *
+		 * The Statements ribbon links here with the account and the month already
+		 * known, so filing a gap does not mean re-answering what the screen that
+		 * sent you had already answered.
+		 *
+		 * Every value is checked rather than trusted. These arrive in the URL, so
+		 * a stale bookmark naming a deleted account must leave a usable upload
+		 * form and not a 500 — an unrecognised value is dropped, never refused.
+		 */
+		prefill: {
+			accountId: accounts.some((a) => a.id === wantedAccount) ? wantedAccount : null,
+			from: isoDay(url.searchParams.get('from')),
+			to: isoDay(url.searchParams.get('to'))
+		},
 		// Every group, including the empty ones: the modal needs somewhere to put a
 		// new category, and a group with nothing in it yet is exactly the case.
 		groups: groups.map((group) => ({ key: group.key, label: group.label })),

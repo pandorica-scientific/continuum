@@ -76,8 +76,15 @@ export interface ShelfProfile {
 	 * Filled in even for a shelf still drawing the list, because it is part of
 	 * what the shelf IS: health records belong to whoever or whatever they are
 	 * about, whether or not a timeline is drawing them yet.
+	 *
+	 * `account` is the odd one and it is not a person or a thing: a statement
+	 * belongs to the account it was issued for, which is why the coverage ribbon
+	 * has one row per account and none per person. A shelf that draws a layout
+	 * of its own has to name its unit — `tests/unit/shelf-profiles` holds that —
+	 * because a layout is a way of grouping and a grouping needs something to
+	 * group by.
 	 */
-	about: 'person' | 'subject' | 'person-or-subject' | null;
+	about: 'person' | 'subject' | 'person-or-subject' | 'account' | null;
 	/** How the LIST groups this shelf when nobody has said otherwise. */
 	group: GroupKey;
 	/** One line under "Nothing on X yet", naming the paper that belongs here. */
@@ -109,7 +116,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'type',
 		emptyHint: 'Nothing is waiting to be filed.',
 		blurb:
-			'Paper that has landed and nobody has filed yet. Nothing here is a record of anything; it is a queue, and the only good state for it is empty — every document on it is a decision somebody still has to make.',
+			'Paper that has landed and nobody has filed yet. Not a record — a queue, and the only good state for it is empty.',
 		answers: 'what still needs deciding?'
 	},
 	identity: {
@@ -120,7 +127,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'Passports, identity cards and driving licences live here.',
 		blurb:
-			'Proof of who each person in the household is. Almost every document here has an expiry, and a person missing one is the finding — so this shelf is arranged to show absence, not just contents.',
+			'Proof of who each person is. Almost everything here expires, and the person missing one is the finding.',
 		answers: 'does everybody hold a valid document?'
 	},
 	family: {
@@ -131,7 +138,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'Birth and marriage certificates, and the paper that follows them.',
 		blurb:
-			'The paperwork that proves a relationship — marriage, birth, guardianship. Nothing here expires and nothing is ever archived; these are the documents you hold for life and produce twice a decade.',
+			'Marriage, birth, guardianship. Nothing here expires and nothing is archived — you hold these for life.',
 		answers: 'where is the certificate for this relationship?'
 	},
 	health: {
@@ -142,7 +149,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'Test results, vaccination records and health insurance.',
 		blurb:
-			'Medical records per person, in the order they happened. A folder structure is wrong here — what a person needs is the sequence, because the previous result is the context for the current one.',
+			'Medical records per person, in the order they happened: the previous result is the context for the current one.',
 		answers: 'what happened to this person, and when?'
 	},
 	property: {
@@ -153,7 +160,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'Bills, home insurance and the plans that came with the flat.',
 		blurb:
-			'Everything tied to an address. Property documents are obligations more than records — an inspection is due whether or not you look at the shelf, so the recurring ones are surfaced above the archive.',
+			'Everything tied to an address. These are obligations more than records — an inspection falls due whether you look or not.',
 		answers: 'what does this property require of us?'
 	},
 	tenancy: {
@@ -164,7 +171,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'Leases and what passes between a tenant and a landlord.',
 		blurb:
-			'What passes between a tenant and a landlord. A lease is an obligation with dates in it — notice periods, deposit returns, renewals — so what matters is not only the contract but every letter that changed it.',
+			'What passes between a tenant and a landlord: the lease, what it obliges, and every letter that changed it.',
 		answers: 'what did we agree with them?'
 	},
 	vehicles: {
@@ -175,7 +182,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'Registrations, service history, insurance and warranties.',
 		blurb:
-			'Everything a vehicle needs to stay on the road. Registration, insurance and inspection each expire on their own schedule, and the one that lapsed is the one you find out about from a police officer.',
+			'What a vehicle needs to stay on the road. Registration, insurance and inspection each expire on their own schedule.',
 		answers: 'is this vehicle covered and legal?'
 	},
 	finance: {
@@ -188,7 +195,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'year',
 		emptyHint: 'Payslips, tax papers and the invoices behind them.',
 		blurb:
-			'Institutions, accounts and the agreements behind them. The unit a person thinks in is the account and never the document — nobody looks for a PDF, they look for “the mortgage”, and then for a paper inside it.',
+			'Institutions, accounts and the agreements behind them. Nobody looks for a PDF — they look for “the mortgage”.',
 		answers: 'what did we sign, and with whom?'
 	},
 	household: {
@@ -199,18 +206,22 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		group: 'entity',
 		emptyHint: 'The papers that came with the boiler, the washing machine, the roof.',
 		blurb:
-			'Things you own that break. Receipt, warranty and manual are three documents about one object, and filing them apart is what turns a warranty claim from a one-minute job into an afternoon of searching.',
+			"Things you own that break. Receipt, warranty and manual are one object's paperwork, and filing them apart costs an afternoon.",
 		answers: 'is this still under warranty?'
 	},
 	statements: {
 		key: 'statements',
-		layout: 'list',
+		// The second shelf to draw something other than a list, and the one with
+		// the clearest reason: its failure mode is a month that never arrived,
+		// and a list of ninety-six statements looks identical whether or not
+		// April is among them. A ribbon draws the absence.
+		layout: 'completeness',
 		expects: ['bank_statement', 'broker_report'],
-		about: null,
+		about: 'account',
 		group: 'entity',
 		emptyHint: 'Accepted bank statements and broker reports file themselves here.',
 		blurb:
-			'Periodic documents that arrive on a schedule and are only ever read in bulk. Nothing here expires, and the single way it goes wrong is a month that never arrived — which is an absence, and no list can show you one.',
+			'Periodic paper, read only in bulk. Nothing expires; the one failure is a month that never arrived, which a list cannot show.',
 		answers: 'is any month missing?'
 	}
 };

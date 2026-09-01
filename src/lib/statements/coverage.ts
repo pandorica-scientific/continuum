@@ -30,7 +30,7 @@ export interface CoverageStatement {
 	/** First day covered. An undated statement does not reach here. */
 	periodOn: string;
 	/** Last day covered, or null for a statement covering one month. */
-	periodEnd: string | null;
+	periodEndOn: string | null;
 }
 
 /**
@@ -81,7 +81,7 @@ function nextMonth(key: string): string {
  */
 export function monthsCovered(statement: CoverageStatement): string[] {
 	const first = monthKey(statement.periodOn);
-	const last = monthKey(statement.periodEnd ?? statement.periodOn);
+	const last = monthKey(statement.periodEndOn ?? statement.periodOn);
 	if (last < first) return [first];
 	const months: string[] = [];
 	for (let key = first; key <= last && months.length < 24; key = nextMonth(key)) {

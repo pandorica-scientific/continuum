@@ -156,6 +156,10 @@ export const ICONS = {
 	search: [{ circle: [11, 11, 6.5] }, { line: [15.8, 15.8, 20, 20] }],
 	arrowUp: [{ line: [12, 20, 12, 4] }, { path: 'M6 10l6-6 6 6' }],
 	arrowDown: [{ line: [12, 4, 12, 20] }, { path: 'M18 14l-6 6-6-6' }],
+	// Chevrons rather than arrows: these step through a sequence — a year at a
+	// time on the statement ribbon — where an arrow reads as "go somewhere".
+	chevronLeft: [{ path: 'M15 5l-7 7 7 7' }],
+	chevronRight: [{ path: 'M9 5l7 7-7 7' }],
 
 	// Overview board and briefing
 	//

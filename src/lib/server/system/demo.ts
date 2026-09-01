@@ -173,6 +173,8 @@ async function fileDemoPdf(input: {
 	expiresOn?: string;
 	expiryVerb?: EnumValue<'document.expiry_verb'>;
 	periodOn?: string;
+	/** The last day it covers. Statements span months; the coverage ribbon reads both. */
+	periodEndOn?: string;
 	/** What the face says, for the wallet to draw. Hand-entered in a real install. */
 	identity?: IdentityFields;
 }): Promise<string> {
@@ -194,7 +196,8 @@ async function fileDemoPdf(input: {
 		targetIds: input.targetIds ?? [],
 		tagNames: input.tagNames ?? [],
 		contentHash: hashBytes(bytes),
-		periodOn: input.periodOn ?? null
+		periodOn: input.periodOn ?? null,
+		periodEndOn: input.periodEndOn ?? null
 	});
 	if (input.identity) await upsertIdentity(id, input.identity);
 	return id;
@@ -845,45 +848,67 @@ export async function seedDemo(): Promise<void> {
 		]
 	});
 
-	// One statement per current account, for the month just gone. The demo
-	// writes its transactions directly rather than running an import, so there
-	// is no `import_file` row for these to be keyed to — that column is written
-	// by ingest, and inventing an import here would be inventing evidence the
-	// household never produced.
+	// A RUN of monthly statements per current account, each with a month
+	// deliberately missing.
+	//
+	// One statement apiece would have been less code and a worse demo: the
+	// Statements shelf exists to show a month that never arrived, and a ribbon
+	// with a single band on it demonstrates nothing. The gap is the feature, so
+	// the demo has to contain one.
+	//
+	// The demo writes its transactions directly rather than running an import,
+	// so there is no `import_file` row for these to be keyed to — that column is
+	// written by ingest, and inventing an import here would be inventing evidence
+	// the household never produced. The period is set explicitly for the same
+	// reason: nothing else would set it.
 	const statementMonth = monthShift(thisMonth, -1);
-	const fioLines = rows
-		.filter((r) => r.accountId === fio && r.bookedOn.startsWith(statementMonth))
-		.map((r) => `${r.bookedOn}   ${r.counterparty}   ${amount(r.amountMinor, 'CZK')}`);
-	await fileDemoPdf({
-		name: `Fio běžný · ${statementMonth}`,
-		shelfKey: 'statements',
-		type: 'bank_statement',
-		targetIds: [fio],
-		tagNames: [statementMonth.slice(0, 4)],
-		lines: [
-			`Account: Fio běžný (CZK)`,
-			`Period: ${statementMonth}`,
-			'',
-			...fioLines,
-			'',
-			`Closing balance: ${amount(24350000n, 'CZK')}`
-		]
-	});
-	await fileDemoPdf({
-		name: `Revolut · ${statementMonth}`,
-		shelfKey: 'statements',
-		type: 'bank_statement',
-		targetIds: [revolut],
-		tagNames: [statementMonth.slice(0, 4)],
-		lines: [
-			'Account: Revolut (EUR)',
-			`Period: ${statementMonth}`,
-			'',
-			'No movements in this period.',
-			'',
-			`Closing balance: ${amount(310000n, 'EUR')}`
-		]
-	});
+	const lastDayOf = (month: string): string => {
+		const [y, m] = month.split('-').map(Number);
+		return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+	};
+
+	/** Every month from the account's first movement to the one just gone. */
+	const monthsFor = (accountId: string): string[] => {
+		const first = rows
+			.filter((r) => r.accountId === accountId)
+			.map((r) => r.bookedOn.slice(0, 7))
+			.sort()[0];
+		if (!first) return [];
+		const months: string[] = [];
+		for (let m = first; m <= statementMonth; m = monthShift(m, 1)) months.push(m);
+		return months;
+	};
+
+	for (const [accountId, label, currency, closing, skip] of [
+		[fio, 'Fio běžný', 'CZK', 24350000n, monthShift(statementMonth, -3)],
+		[revolut, 'Revolut', 'EUR', 310000n, monthShift(statementMonth, -1)]
+	] as const) {
+		for (const month of monthsFor(accountId)) {
+			// The missing one. Nothing marks it as missing anywhere — it is simply
+			// not filed, which is exactly how a real month goes astray.
+			if (month === skip) continue;
+			const lines = rows
+				.filter((r) => r.accountId === accountId && r.bookedOn.startsWith(month))
+				.map((r) => `${r.bookedOn}   ${r.counterparty}   ${amount(r.amountMinor, currency)}`);
+			await fileDemoPdf({
+				name: `${label} · ${month}`,
+				shelfKey: 'statements',
+				type: 'bank_statement',
+				targetIds: [accountId],
+				tagNames: [month.slice(0, 4)],
+				periodOn: `${month}-01`,
+				periodEndOn: lastDayOf(month),
+				lines: [
+					`Account: ${label} (${currency})`,
+					`Period: ${month}`,
+					'',
+					...(lines.length > 0 ? lines : ['No movements in this period.']),
+					'',
+					`Closing balance: ${amount(closing, currency)}`
+				]
+			});
+		}
+	}
 
 	// The broker's yearly report, on the brokerage account. Dated to the last
 	// snapshot of last year, because that is the report a household attaches to

@@ -22,6 +22,7 @@
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
 	import ShelfBanner from '$lib/documents/ShelfBanner.svelte';
+	import CoverageView from '$lib/statements/CoverageView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
@@ -725,6 +726,14 @@
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
 				/>
+			{:else if data.view === 'shelf' && data.layout === 'completeness' && data.coverage}
+				<!-- The one shelf drawn by what it is MISSING. Same inspector: a band
+				     is another way into the document the list would have opened. -->
+				<CoverageView
+					coverage={data.coverage}
+					onopen={(id) => navigate({ doc: id })}
+					onyear={(year) => navigate({ year: String(year) })}
+				/>
 			{:else}
 				{#if honestyState(data.query, data.rows.length, data.honesty) === 'not-searchable'}
 					<p class="quiet">
@@ -1288,6 +1297,33 @@
 							<input type="date" name="expiresOn" value={d.expiresOn ?? ''} />
 						</div>
 					</div>
+					{#if d.type === 'bank_statement'}
+						<!-- Which months this statement covers, for one nobody imported.
+						     An accepted import fills both from the file, so these are
+						     almost always already answered — but the reader refuses more
+						     scanned statements than it reads, and a person holding a scan
+						     their bank really sent has nowhere else to say which month it
+						     is. Without them the document is filed and invisible: the
+						     coverage ribbon draws periods, and nothing but an import can
+						     write one. -->
+						<div class="sec">
+							<span class="eyebrow">Covers</span>
+							<div class="expiry-grid">
+								<input
+									type="date"
+									name="periodOn"
+									value={d.periodOn ?? ''}
+									aria-label="First day covered"
+								/>
+								<input
+									type="date"
+									name="periodEndOn"
+									value={d.periodEndOn ?? ''}
+									aria-label="Last day covered"
+								/>
+							</div>
+						</div>
+					{/if}
 					<div class="sec">
 						<span class="eyebrow">Tags</span>
 						<TagField tags={[...d.tags]} known={data.knownTags} />

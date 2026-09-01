@@ -15,8 +15,10 @@ import { resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { document } from '$lib/server/db/schema';
 import { ingestFile } from '$lib/server/import/ingest';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { coverageRow } from '$lib/statements/coverage';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { makeAccount } from './fixtures';
+import { makeAccount, makeDocument, makeDocumentLink } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -134,5 +136,49 @@ describe('a statement filed by an accepted import', () => {
 		const filed = await filedStatement('unstated.csv');
 		expect(filed.periodOn).toBe('2026-04-01');
 		expect(filed.periodEndOn).toBe('2026-04-30');
+	});
+});
+
+describe('a statement nobody could import', () => {
+	it('draws exactly like an imported one once somebody says which month it is', async () => {
+		// `ocr.ts` records the measured truth: 8 of 20 scanned statements read
+		// exactly and the rest are refused. The person is left holding a scan
+		// their bank really sent, and filing the PDF by hand is the reasonable
+		// thing to do with it — so it has to be able to reach the ribbon.
+		//
+		// No separate state for it, and no extra swatch. This shelf asks whether
+		// this month's statement EXISTS, not whether its transactions reached the
+		// ledger, and a scan in the archive answers that question yes.
+		const statements = await shelfIdByKey('statements', db);
+		const doc = await makeDocument(db, {
+			shelfId: statements,
+			type: 'bank_statement',
+			periodOn: '2026-04-01',
+			periodEndOn: '2026-04-30'
+		});
+		await makeDocumentLink(db, { documentId: doc.id, targetId: accountId });
+
+		const boxes = coverageRow(
+			[{ id: doc.id, periodOn: '2026-04-01', periodEndOn: '2026-04-30' }],
+			2026,
+			'2026-01-01',
+			'2026-08-31'
+		);
+		expect(boxes[3]).toEqual({
+			state: 'filed',
+			startMonth: 3,
+			months: 1,
+			documentIds: [doc.id]
+		});
+	});
+
+	it('has no period at all until somebody gives it one, so it stays off the ribbon', async () => {
+		// Never imported means no movements, which is exactly why it cannot be
+		// dated automatically. Invisible is the wrong answer, which is what the
+		// header's "not dated" count is for — but it must not draw as covered.
+		const statements = await shelfIdByKey('statements', db);
+		const doc = await makeDocument(db, { shelfId: statements, type: 'bank_statement' });
+		expect(doc.periodOn).toBeNull();
+		expect(doc.periodEndOn).toBeNull();
 	});
 });

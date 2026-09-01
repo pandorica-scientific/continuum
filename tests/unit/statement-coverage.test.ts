@@ -18,10 +18,10 @@ import {
 } from '$lib/statements/coverage';
 
 const TODAY = '2026-08-31';
-const stmt = (id: string, periodOn: string, periodEnd: string | null = null) => ({
+const stmt = (id: string, periodOn: string, periodEndOn: string | null = null) => ({
 	id,
 	periodOn,
-	periodEnd
+	periodEndOn
 });
 
 describe('month boundaries', () => {

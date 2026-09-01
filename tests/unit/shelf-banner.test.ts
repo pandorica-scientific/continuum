@@ -108,16 +108,17 @@ describe('bannerStats', () => {
 
 describe('SHELF_PROFILES', () => {
 	it('writes every blurb to about one length, so the banners are one height', () => {
-		// Not a style rule wearing a test. The banner's height is driven by how
-		// many lines the blurb wraps to, and a shelf whose copy is half as long
-		// as its neighbours' stands shorter — so moving between shelves shifted
-		// the toolbar and the list under the cursor. A `min-height` cannot fix
-		// that: on a narrow screen every blurb wraps past the floor and they
-		// diverge again by however much the copy differs. Matched length is the
-		// fix, and this is what keeps it matched.
+		// Not a style rule wearing a test, and it holds two things at once.
+		//
+		// The band's WIDTH keeps the banners one height: a shelf whose copy is
+		// half as long as its neighbours' stands shorter, and moving between
+		// shelves then shifts the toolbar under the cursor. Its CEILING keeps the
+		// banner small: the blurb's box is two reserved lines, spent on every
+		// shelf on every visit, and copy that outgrew the box would either be
+		// clipped or force the reservation up.
 		const lengths = Object.values(SHELF_PROFILES).map((p) => p.blurb.length);
-		expect(Math.min(...lengths)).toBeGreaterThanOrEqual(190);
-		expect(Math.max(...lengths)).toBeLessThanOrEqual(215);
+		expect(Math.min(...lengths)).toBeGreaterThanOrEqual(100);
+		expect(Math.max(...lengths)).toBeLessThanOrEqual(130);
 	});
 
 	it('says what every seeded shelf is for, and what it answers', () => {

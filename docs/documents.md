@@ -113,10 +113,58 @@ inside the Union's ring of stars, as the document itself does; everywhere else
 the two letters sit plainly beside the flag. Nothing is painted into the artwork, so a card
 can never state something the document does not.
 
+**Statements** is the second, and it draws what is MISSING. Ninety-six
+statements in a list look exactly the same whether or not April is among them,
+which is this shelf's only real failure — so it opens as a ribbon instead: one
+band per account, twelve months across, one year at a time.
+
+A filed statement draws as a band spanning every month it covers, so a quarterly
+one is a single band three months wide. An uncovered month is always one month,
+never merged into a longer run: nothing in the archive says whether a hole is one
+missing quarterly statement or three missing monthly ones, and a ribbon that
+guessed would be drawing a rhythm nobody stated. Nothing here infers how often an
+account is meant to send anything.
+
+A month that has ended with nothing covering it is a **gap**, drawn in red. The
+current month and every later one have simply **not arrived yet**. Months before
+the account's first statement or first transaction are left blank — an account
+nobody has imported anything for is not missing twelve statements. Clicking a
+band opens that statement; clicking a gap opens the Import with the account and
+the month already filled in, because an accepted import both writes the ledger
+rows and dates the document, so the month closes without anybody typing anything.
+`←` and `→` change the year.
+
+A statement is placed by the months it covers, taken from the period the file
+states or — where the file states none, which is most of them — from the
+movements the import just wrote. **A statement nobody imported can still be
+placed**: the reader refuses more scanned statements than it reads, and a person
+holding a scan their bank really sent can set _Covers_ in the inspector and link
+it to its account. It then draws like any other, because the shelf is asking
+whether the month's statement exists rather than whether its transactions reached
+the ledger. Whatever is still undated is named in the ribbon's header rather than
+left invisible.
+
 The other shelves keep their list for now. Family, Health and Household have
-layouts of their own designed and not yet built; Property, Finance, Statements
-and Inbox are lists on purpose, because their paper has no shape a person
-already pictures. A mortgage agreement is not a card in a wallet.
+layouts of their own designed and not yet built; Property, Finance and Inbox are
+lists on purpose, because their paper has no shape a person already pictures. A
+mortgage agreement is not a card in a wallet.
+
+### The banner
+
+Every shelf now opens with a banner saying what it is for. The paragraph is the
+shelf's own — why a person would open it, not what it contains — and beside it
+three figures answer the question that shelf exists to answer: how many people
+hold a valid document, how many months are missing, what is next to lapse. A
+figure only takes a colour when it is a task: `0 gaps` is the state the archive
+is for, and a red nought would be an alarm about nothing.
+
+A shelf the household made has no paragraph written for it and gets the default
+three — documents, what they concern, and the next date — rather than a banner
+with holes in it. The banner is a fixed height on every shelf, so moving between
+them does not shift the toolbar under the cursor.
+
+It does not say how the shelf is arranged. The Group and Sort controls state
+that themselves, two inches below and editable.
 
 Every shelf, list or not, now knows what it is for: an empty one says what
 belongs on it, its type filter offers those kinds first, and picking a shelf
@@ -129,6 +177,14 @@ The inspector's own Shelf and Type fields work the same way, so filing a
 document from the Inbox is the same act as filing it from review — and a
 document that already has a type keeps it: a shelf fills the field in only when
 nobody has answered it yet.
+
+**A reminder window belongs to the kind of paper, not to the app.** A document
+turns amber sixty days before it expires, which is right for most things and
+wrong for a passport: replacing one takes half a year, so a warning with sixty
+days left is a warning about a trip that can no longer be made. Identity
+documents ship with six months, every other type uses the sixty-day default, and
+the window is a property of the type — how long a replacement takes is a fact
+about a country and a household, not about this repository.
 
 **That list is yours.** Press the pencil beside **SHELVES** in the rail and each
 row gains a tag button: it opens every type with the shelf's own ticked. It

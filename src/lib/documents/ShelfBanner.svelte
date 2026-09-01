@@ -80,6 +80,7 @@
 					</span>
 				</div>
 				{#if blurb}<p class="blurb">{blurb}</p>{/if}
+				<p class="answers">Answers · {answers}</p>
 			</div>
 		</div>
 
@@ -91,10 +92,6 @@
 				</div>
 			{/each}
 		</div>
-	</div>
-
-	<div class="footer">
-		<span class="answers">Answers · {answers}</span>
 	</div>
 </section>
 
@@ -110,7 +107,7 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 24px;
-		padding: 16px 18px;
+		padding: 12px 14px;
 	}
 	.identity {
 		display: flex;
@@ -158,15 +155,16 @@
 		font-size: var(--text-base);
 		line-height: 1.5;
 		color: var(--fg2);
-		/* FOUR LINES, always. Not a floor — a fixed box.
-		   The banner has to be one height across every shelf, or moving between
-		   them shifts the toolbar and the list under the cursor. Matching the
-		   copy lengths got them close and could not finish the job: at a given
-		   width a 214-character blurb still wraps to four lines where a
-		   191-character one wraps to three, and no amount of editing removes
-		   that at EVERY width. So the space is reserved instead of measured.
-		   `tests/unit/shelf-banner` keeps every blurb short enough to fit. */
-		height: 6em;
+		/* TWO LINES, always. Reserved rather than measured: the banner has to be
+		   one height across every shelf, or moving between them shifts the
+		   toolbar and the list under the cursor, and matching the copy lengths
+		   alone cannot do it — at a given width one blurb still tips onto a line
+		   its neighbour does not.
+
+		   Two and not four because reserved space is space spent on every shelf,
+		   every visit. `tests/unit/shelf-banner` holds every blurb inside a band
+		   short enough to fit, which is what keeps the reservation small. */
+		height: 3em;
 		overflow: hidden;
 	}
 	.stats {
@@ -175,10 +173,10 @@
 		flex-shrink: 0;
 	}
 	.stat {
-		min-width: 108px;
+		min-width: 104px;
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-lg);
-		padding: 12px 14px;
+		padding: 8px 12px;
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
@@ -201,16 +199,9 @@
 		line-height: 1.2;
 		color: var(--fg3);
 	}
-	.footer {
-		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: var(--space-3) var(--space-5);
-		padding: 10px 18px;
-		border-top: 1px solid var(--bd);
-	}
 	.answers {
-		font-size: var(--text-base);
+		margin: var(--space-4) 0 0;
+		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
 	@media (max-width: 1100px) {
@@ -232,8 +223,8 @@
 	   figures stay legible because they are what a glance is for. */
 	@media (max-width: 760px) {
 		.top {
-			gap: var(--space-6);
-			padding: 14px;
+			gap: var(--space-5);
+			padding: 12px;
 		}
 		.emoji {
 			font-size: var(--text-3xl);
@@ -244,9 +235,9 @@
 		.blurb {
 			font-size: var(--text-sm);
 			line-height: 1.45;
-			/* More lines at a smaller size: the same reserved box, sized for a
-			   width where every blurb wraps further. */
-			height: 8.7em;
+			/* Three at this width, where a line holds fewer characters. Still the
+			   same reservation, just sized for the narrower column. */
+			height: 4.35em;
 		}
 		.stat {
 			min-width: 0;
@@ -254,9 +245,6 @@
 		}
 		.value {
 			font-size: var(--text-xl);
-		}
-		.footer {
-			padding: 10px 14px;
 		}
 	}
 </style>

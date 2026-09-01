@@ -2,6 +2,57 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.6 — 2026-09-01
+
+> A shelf that can only show you what it holds cannot show you what is missing.
+
+### ✨ Added
+
+- 🧾 **Statements opens as a coverage ribbon** — one band per account across twelve months, so a month that never arrived is visible as the gap it is instead of being invisible in a list of ninety-six statements
+- 📅 **A filed statement now records which months it covers** — taken from the period the file states, or from the movements the import just wrote where it states none, so a quarterly statement draws as one band three months wide
+- 📤 **Clicking a gap opens the Import with the account and month already chosen** — an accepted import writes the ledger rows and dates the document in one go, so the month closes without anybody typing a date
+- ✍️ **A statement the reader refused can say which months it covers** — set _Covers_ in the inspector and link it to its account, and a scan that could not be read still counts towards coverage
+- 🪧 **Every shelf opens with a banner saying what it is for** — the paragraph is why you would open the shelf, and the three figures beside it answer the question that shelf exists to answer
+
+### 🔧 Changed
+
+- 🪪 **An identity document turns amber six months before it expires, not sixty days** — replacing a passport takes half a year, and the window now belongs to the kind of paper rather than to the app, so a household can change it
+- 🎨 **A figure in a banner only takes a colour when it is a task** — `0 gaps` is the state the archive is for, and a red nought is an alarm about nothing
+
+### ⬆️ Upgrading
+
+- 🗄️ **Two new columns and three constraints, which an instance migrated by hand runs once after a backup** — the first statement holds the schema, the second dates the statements already filed so the ribbon can draw the archive that exists
+
+```sql
+alter table document add column if not exists period_end_on date;
+alter table document_type add column if not exists reminder_days integer;
+update document_type set reminder_days = 180 where key = 'id_document';
+
+alter table document add constraint document_period_end_last_of_month
+  check (period_end_on is null or period_end_on = (date_trunc('month', period_end_on) + interval '1 month - 1 day')::date);
+alter table document add constraint document_period_order_check
+  check (period_end_on is null or (period_on is not null and period_end_on >= period_on));
+```
+
+- 📆 **Statements imported before this release have no period, so the ribbon cannot place them** — this dates them from the movements each one wrote, snapped to whole months because that is what the columns mean
+
+```sql
+update document d
+set period_on = coalesce(d.period_on, date_trunc('month', t.first_day)::date),
+    period_end_on = coalesce(
+      d.period_end_on,
+      (date_trunc('month', t.last_day) + interval '1 month - 1 day')::date
+    )
+from (
+  select f.document_id, min(x.booked_on) as first_day, max(x.booked_on) as last_day
+  from import_file f
+  join "transaction" x on x.import_file_id = f.id
+  where f.document_id is not null
+  group by f.document_id
+) t
+where d.id = t.document_id and d.type = 'bank_statement';
+```
+
 ## 0.7.5 — 2026-08-31
 
 > Software that promises your data never leaves your machine has to let you read what it does with it.
