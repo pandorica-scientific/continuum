@@ -14,6 +14,7 @@ import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { formatMinor } from '$lib/money';
+import { firstOfMonth, lastOfMonth } from '$lib/statements/coverage';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';
 import { loadProfiles } from './profiles';
@@ -356,6 +357,50 @@ function assertChainStartsWhereTheAccountLeftOff(
  * `account-statement_2026-07-01_2026-07-31_en_38c41c.csv`. The file name is the
  * fallback for a reading that could not say.
  */
+/**
+ * The span a filed statement covers, from the best evidence in the file.
+ *
+ * The STATED period wins wherever a reader found one: it is what the file says
+ * about itself, and it is right even where the first week of it held no
+ * movements. But `periodStart` and `periodEnd` are OPTIONAL on
+ * `ParsedStatement` and most readers leave them undefined — an ABO export names
+ * no period at all — so the movements are the fallback. An accepted import
+ * always has movements, which is what makes every accepted statement datable.
+ *
+ * Safe as a fallback only because everything downstream works in whole months:
+ * a statement covering all of April whose first movement lands on the 3rd
+ * resolves to April either way.
+ *
+ * Widest across every statement in the file, since one CAMT or ABO file may
+ * carry several months, and snapped out to whole months at both ends.
+ */
+export function statementPeriod(
+	statements: ParsedStatement[]
+): { start: string; end: string } | null {
+	const starts: string[] = [];
+	const ends: string[] = [];
+	for (const statement of statements) {
+		const booked = statement.rows
+			.map((row) => row.bookedAt)
+			.filter(Boolean)
+			.sort();
+		const start = statement.periodStart ?? booked[0];
+		const end = statement.periodEnd ?? booked[booked.length - 1];
+		if (start) starts.push(start);
+		if (end) ends.push(end);
+	}
+	if (starts.length === 0 || ends.length === 0) return null;
+	// Snapped to month boundaries, because that is what the column MEANS:
+	// `document_period_first_of_month` has said so since the salary importer,
+	// and the coverage ribbon works in whole months regardless. A statement
+	// running the 15th to the 14th covers April and May, and storing the 15th
+	// would record a precision nothing reads.
+	return {
+		start: firstOfMonth(starts.sort()[0]),
+		end: lastOfMonth(ends.sort()[ends.length - 1])
+	};
+}
+
 function statementDocumentName(filename: string, statements: ParsedStatement[]): string {
 	const [first] = statements;
 	const period = first?.periodEnd ?? first?.periodStart;
@@ -632,6 +677,9 @@ export async function ingestFile(
 			// throws out of the reader long before the transaction opens.
 			if (storedName) {
 				filedDocumentId = uuidv7();
+				// What the ribbon draws. Before this the two dates were parsed and
+				// dropped, so a filed statement knew its account and not its month.
+				const period = statementPeriod(statements);
 				await insertDocumentAggregate(
 					{
 						id: filedDocumentId,
@@ -647,6 +695,8 @@ export async function ingestFile(
 						// the file and the document it is filed as are one upload, so
 						// they carry one hash between them.
 						contentHash,
+						periodOn: period?.start ?? null,
+						periodEndOn: period?.end ?? null,
 						targetIds: firstAccountId ? [firstAccountId] : [],
 						tagNames: statementDocumentTags(statements)
 					},

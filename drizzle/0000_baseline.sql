@@ -120,6 +120,7 @@ CREATE TABLE "document" (
 	"expires_on" date,
 	"expiry_verb" text DEFAULT 'expires' NOT NULL,
 	"period_on" date,
+	"period_end_on" date,
 	"content_hash" text
 );
 --> statement-breakpoint
@@ -164,7 +165,8 @@ CREATE TABLE "document_type" (
 	"key" text PRIMARY KEY NOT NULL,
 	"label" text NOT NULL,
 	"builtin" boolean DEFAULT false NOT NULL,
-	"sort_order" integer DEFAULT 0 NOT NULL
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"reminder_days" integer
 );
 --> statement-breakpoint
 CREATE TABLE "shelf" (
@@ -1004,6 +1006,17 @@ ALTER TABLE broker_import_state ADD CONSTRAINT broker_import_state_singleton
 ALTER TABLE document ADD CONSTRAINT document_period_first_of_month
 	CHECK (period_on IS NULL OR extract(day from period_on) = 1);
 --> statement-breakpoint
+-- The other end of the same fact. period_end_on closes the LAST month a document
+-- covers, so it is that month's last day — the mirror of the rule above, and
+-- what lets a statement say "April and May" without saying which days.
+ALTER TABLE document ADD CONSTRAINT document_period_end_last_of_month
+	CHECK (period_end_on IS NULL OR period_end_on = (date_trunc('month', period_end_on) + interval '1 month - 1 day')::date);
+--> statement-breakpoint
+-- A period that ends before it starts is not a period, and would draw a box of
+-- negative width. period_end_on without period_on is an end to nothing.
+ALTER TABLE document ADD CONSTRAINT document_period_order_check
+	CHECK (period_end_on IS NULL OR (period_on IS NOT NULL AND period_end_on >= period_on));
+--> statement-breakpoint
 -- Two upper-case letters or nothing. The field is a picker, so this is not
 -- defending against a typist; it is what keeps the artwork lookup and the flag
 -- from being handed 'Czechia' by a future importer and drawing nothing.
@@ -1129,24 +1142,27 @@ ON CONFLICT ("key") DO NOTHING;
 -- screen offers it as a tick beside the people, and nothing else creates it.
 INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '🏠');
 --> statement-breakpoint
-INSERT INTO document_type (key, label, builtin, sort_order) VALUES
-	('contract', 'Contract', true, 0),
-	('invoice', 'Invoice', true, 10),
-	('receipt', 'Receipt', true, 20),
-	('payslip', 'Payslip', true, 30),
-	('bank_statement', 'Bank statement', true, 40),
-	('broker_report', 'Broker report', true, 50),
-	('insurance_policy', 'Insurance policy', true, 60),
-	('claim', 'Claim', true, 70),
-	('id_document', 'Identity document', true, 80),
-	('certificate', 'Certificate', true, 90),
-	('medical_record', 'Medical record', true, 100),
-	('tax_document', 'Tax document', true, 110),
-	('technical_plan', 'Technical plan', true, 120),
-	('correspondence', 'Correspondence', true, 130),
-	('warranty', 'Warranty', true, 140),
-	('manual', 'Manual', true, 150),
-	('other', 'Other', true, 160)
+INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUES
+	('contract', 'Contract', true, 0, NULL),
+	('invoice', 'Invoice', true, 10, NULL),
+	('receipt', 'Receipt', true, 20, NULL),
+	('payslip', 'Payslip', true, 30, NULL),
+	('bank_statement', 'Bank statement', true, 40, NULL),
+	('broker_report', 'Broker report', true, 50, NULL),
+	('insurance_policy', 'Insurance policy', true, 60, NULL),
+	('claim', 'Claim', true, 70, NULL),
+	-- Six months, because that is how long replacing one takes. A warning that
+	-- arrives with sixty days left is a warning about a trip you can no longer
+	-- make.
+	('id_document', 'Identity document', true, 80, 180),
+	('certificate', 'Certificate', true, 90, NULL),
+	('medical_record', 'Medical record', true, 100, NULL),
+	('tax_document', 'Tax document', true, 110, NULL),
+	('technical_plan', 'Technical plan', true, 120, NULL),
+	('correspondence', 'Correspondence', true, 130, NULL),
+	('warranty', 'Warranty', true, 140, NULL),
+	('manual', 'Manual', true, 150, NULL),
+	('other', 'Other', true, 160, NULL)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES

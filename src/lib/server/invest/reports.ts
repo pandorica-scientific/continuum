@@ -14,7 +14,7 @@ import { extname } from 'node:path';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { account, document, shelf, tag, tagLink } from '$lib/server/db/schema';
+import { account, document, documentType, shelf, tag, tagLink } from '$lib/server/db/schema';
 import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { systemShelfId } from '$lib/server/documents/shelves';
@@ -185,10 +185,12 @@ export async function brokerReports(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity
+			sensitivity: document.sensitivity,
+			reminderDays: documentType.reminderDays
 		})
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
+		.innerJoin(documentType, eq(documentType.key, document.type))
 		.where(
 			and(
 				eq(document.type, 'broker_report'),

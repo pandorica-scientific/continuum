@@ -30,6 +30,7 @@ import {
 	contact,
 	document,
 	documentLink,
+	documentType,
 	entity,
 	loan,
 	person,
@@ -135,6 +136,15 @@ export interface AboutDocument {
 	expiryVerb: EnumValue<'document.expiry_verb'>;
 	addedOn: string;
 	sensitivity: EnumValue<'document.sensitivity'>;
+	/**
+	 * The amber window this KIND of paper earns, or null for the default.
+	 *
+	 * Carried on the row rather than handed to the card as a prop: a card draws
+	 * many documents of many types, so one number could not be right for all of
+	 * them, and nine call sites would each have had to load the type table to
+	 * build a map. The window is a fact about the document, so it travels with it.
+	 */
+	reminderDays: number | null;
 	tags: string[];
 }
 
@@ -383,11 +393,13 @@ export async function documentsAbout(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity
+			sensitivity: document.sensitivity,
+			reminderDays: documentType.reminderDays
 		})
 		.from(documentLink)
 		.innerJoin(document, eq(document.id, documentLink.documentId))
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
+		.innerJoin(documentType, eq(documentType.key, document.type))
 		.where(
 			and(
 				eq(documentLink.targetId, targetId),

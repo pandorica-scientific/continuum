@@ -1,5 +1,5 @@
 {
-  "id": "3b48cc1d-3dc7-4a3a-99a1-2c766f79f6a9",
+  "id": "b9bae4d1-13f0-4937-9d7c-22fdc1f11d6f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -796,6 +796,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "period_end_on": {
+          "name": "period_end_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
         "content_hash": {
           "name": "content_hash",
           "type": "text",
@@ -1194,6 +1200,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "reminder_days": {
+          "name": "reminder_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},

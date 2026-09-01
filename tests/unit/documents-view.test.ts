@@ -50,6 +50,39 @@ describe('expiryTreatment', () => {
 		).toEqual({ kind: 'pill', hue: 'purple', text: 'expires 4 Aug 2032' });
 	});
 
+	it('takes the amber window from the type, so a passport warns six months out', () => {
+		// 120 days away: quiet at the 60-day default, amber for a type that takes
+		// half a year to replace. The window is the type's, not the shelf's —
+		// behaviour hangs off type everywhere else in the archive too.
+		expect(
+			hueOf(
+				expiryTreatment({ expiresOn: '2026-12-26', expiryVerb: 'expires' }, false, TODAY, 'wide')
+			)
+		).toBe('purple');
+		expect(
+			hueOf(
+				expiryTreatment(
+					{ expiresOn: '2026-12-26', expiryVerb: 'expires' },
+					false,
+					TODAY,
+					'wide',
+					180
+				)
+			)
+		).toBe('yellow');
+	});
+
+	it('keeps money on its own clock — a wider paperwork window never widens "due"', () => {
+		// 90 days out with a 180-day window passed in: still quiet, because a
+		// type's window says how long a REPLACEMENT takes, which tells you nothing
+		// about when a bill is worth worrying over.
+		expect(
+			hueOf(
+				expiryTreatment({ expiresOn: '2026-11-26', expiryVerb: 'due' }, false, TODAY, 'wide', 180)
+			)
+		).toBe('blue');
+	});
+
 	it('turns amber inside sixty days, and the verb hue is replaced rather than tinted', () => {
 		expect(
 			expiryTreatment({ expiresOn: '2026-09-18', expiryVerb: 'renews' }, false, TODAY, 'wide')

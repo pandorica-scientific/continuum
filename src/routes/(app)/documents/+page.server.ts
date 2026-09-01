@@ -19,6 +19,7 @@ import { db } from '$lib/server/db';
 import { document, documentLink, documentText, entity, tagLink } from '$lib/server/db/schema';
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { readDocumentsScreen } from '$lib/server/documents/screen';
+import { shelfFacts } from '$lib/server/documents/shelf-stats';
 import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
 import {
 	identityNumbersFor,
@@ -428,6 +429,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		/** What this shelf COULD draw, so the toolbar can offer the switch. */
 		shelfLayout: profile?.layout ?? null,
 		emptyHint: profile?.emptyHint ?? null,
+		/**
+		 * The three figures the banner shows, or null where there is no one shelf
+		 * to describe: "Everything" is not a shelf, and a result set is not one
+		 * either — a banner over search results would be describing the shelf you
+		 * left rather than what is on screen.
+		 */
+		bannerFacts: shelf === 'all' || query ? null : await shelfFacts(shelf, locals.person ?? null),
 		sort: url.searchParams.get('sort') ?? 'newest',
 		// What the screen is allowed to say about what it could not find.
 		honesty: search?.honesty ?? null,

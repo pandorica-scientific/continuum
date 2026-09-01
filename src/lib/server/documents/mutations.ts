@@ -76,6 +76,8 @@ interface CreateDocumentInput {
 	contentHash?: string | null;
 	/** The month a document is ABOUT, not the day it was filed. See `document.periodOn`. */
 	periodOn?: string | null;
+	/** The last day it covers, for a document that covers a span. See `period_end_on`. */
+	periodEndOn?: string | null;
 }
 
 export async function createDocument(input: CreateDocumentInput, handle: Db = db): Promise<void> {
@@ -118,6 +120,7 @@ export async function insertDocumentAggregate(
 		expiresOn: input.expiresOn,
 		expiryVerb: input.expiryVerb,
 		periodOn: input.periodOn ?? null,
+		periodEndOn: input.periodEndOn ?? null,
 		contentHash: input.contentHash ?? null
 	});
 

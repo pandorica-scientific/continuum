@@ -28,8 +28,9 @@ import type { GroupKey } from '$lib/documents/view';
  * recognised faster as that shape than as a row. A mortgage agreement has no
  * such shape, which is why Finance is `list` and stays `list`.
  *
- * `wallet` is drawn today; `gallery`, `timeline` and `kit` are specified and
- * not yet built, so the shelves that will use them are `list` until they are.
+ * `wallet` and `completeness` are drawn today; `gallery`, `timeline` and `kit`
+ * are specified and not yet built, so the shelves that will use them are `list`
+ * until they are.
  * Naming them here rather than when they arrive is deliberate: the table below
  * is the plan, and a plan that lives in a commit message is not one.
  *
@@ -39,7 +40,7 @@ import type { GroupKey } from '$lib/documents/view';
  * cost the working code its shape. Split, `ShelfLayout` is exactly what draws,
  * and the plan is still named, still typed, and still here.
  */
-export type ShelfLayout = 'wallet' | 'list';
+export type ShelfLayout = 'wallet' | 'completeness' | 'list';
 
 /** Specified and not yet built. Promoted into `ShelfLayout` when one is drawn. */
 export type PlannedShelfLayout = 'gallery' | 'timeline' | 'kit';
@@ -81,6 +82,18 @@ export interface ShelfProfile {
 	group: GroupKey;
 	/** One line under "Nothing on X yet", naming the paper that belongs here. */
 	emptyHint: string;
+	/**
+	 * What the shelf is for, in two lines, above its contents.
+	 *
+	 * Prose and not derived, because this is the one thing about a shelf that
+	 * genuinely cannot be computed: why a person would open it. Compare
+	 * `arrangementLine`, which is derived precisely BECAUSE it can be wrong — it
+	 * is a claim about the screen, and a stored claim goes stale the moment a
+	 * layout is built or a grouping is changed.
+	 */
+	blurb: string;
+	/** The question the shelf answers, after `Answers ·` in its footer. */
+	answers: string;
 }
 
 export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
@@ -94,7 +107,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		// By type rather than by entity: nothing in the Inbox is linked yet, so
 		// grouping by what it is about would be one group called nothing.
 		group: 'type',
-		emptyHint: 'Nothing is waiting to be filed.'
+		emptyHint: 'Nothing is waiting to be filed.',
+		blurb:
+			'Paper that has landed and nobody has filed yet. Nothing here is a record of anything; it is a queue, and the only good state for it is empty — every document on it is a decision somebody still has to make.',
+		answers: 'what still needs deciding?'
 	},
 	identity: {
 		key: 'identity',
@@ -102,7 +118,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['id_document', 'certificate'],
 		about: 'person',
 		group: 'entity',
-		emptyHint: 'Passports, identity cards and driving licences live here.'
+		emptyHint: 'Passports, identity cards and driving licences live here.',
+		blurb:
+			'Proof of who each person in the household is. Almost every document here has an expiry, and a person missing one is the finding — so this shelf is arranged to show absence, not just contents.',
+		answers: 'does everybody hold a valid document?'
 	},
 	family: {
 		key: 'family',
@@ -110,7 +129,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['certificate', 'contract', 'correspondence'],
 		about: 'person',
 		group: 'entity',
-		emptyHint: 'Birth and marriage certificates, and the paper that follows them.'
+		emptyHint: 'Birth and marriage certificates, and the paper that follows them.',
+		blurb:
+			'The paperwork that proves a relationship — marriage, birth, guardianship. Nothing here expires and nothing is ever archived; these are the documents you hold for life and produce twice a decade.',
+		answers: 'where is the certificate for this relationship?'
 	},
 	health: {
 		key: 'health',
@@ -118,7 +140,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['medical_record', 'certificate', 'insurance_policy', 'invoice'],
 		about: 'person-or-subject',
 		group: 'entity',
-		emptyHint: 'Test results, vaccination records and health insurance.'
+		emptyHint: 'Test results, vaccination records and health insurance.',
+		blurb:
+			'Medical records per person, in the order they happened. A folder structure is wrong here — what a person needs is the sequence, because the previous result is the context for the current one.',
+		answers: 'what happened to this person, and when?'
 	},
 	property: {
 		key: 'property',
@@ -126,7 +151,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['insurance_policy', 'technical_plan', 'contract', 'invoice'],
 		about: null,
 		group: 'entity',
-		emptyHint: 'Bills, home insurance and the plans that came with the flat.'
+		emptyHint: 'Bills, home insurance and the plans that came with the flat.',
+		blurb:
+			'Everything tied to an address. Property documents are obligations more than records — an inspection is due whether or not you look at the shelf, so the recurring ones are surfaced above the archive.',
+		answers: 'what does this property require of us?'
 	},
 	tenancy: {
 		key: 'tenancy',
@@ -134,7 +162,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['contract', 'invoice', 'correspondence'],
 		about: null,
 		group: 'entity',
-		emptyHint: 'Leases and what passes between a tenant and a landlord.'
+		emptyHint: 'Leases and what passes between a tenant and a landlord.',
+		blurb:
+			'What passes between a tenant and a landlord. A lease is an obligation with dates in it — notice periods, deposit returns, renewals — so what matters is not only the contract but every letter that changed it.',
+		answers: 'what did we agree with them?'
 	},
 	vehicles: {
 		key: 'vehicles',
@@ -142,7 +173,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['warranty', 'insurance_policy', 'invoice', 'manual'],
 		about: 'subject',
 		group: 'entity',
-		emptyHint: 'Registrations, service history, insurance and warranties.'
+		emptyHint: 'Registrations, service history, insurance and warranties.',
+		blurb:
+			'Everything a vehicle needs to stay on the road. Registration, insurance and inspection each expire on their own schedule, and the one that lapsed is the one you find out about from a police officer.',
+		answers: 'is this vehicle covered and legal?'
 	},
 	finance: {
 		key: 'finance',
@@ -152,7 +186,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		// By year: a shelf of payslips and tax papers is read by which year it
 		// concerns far more often than by whose name is on it.
 		group: 'year',
-		emptyHint: 'Payslips, tax papers and the invoices behind them.'
+		emptyHint: 'Payslips, tax papers and the invoices behind them.',
+		blurb:
+			'Institutions, accounts and the agreements behind them. The unit a person thinks in is the account and never the document — nobody looks for a PDF, they look for “the mortgage”, and then for a paper inside it.',
+		answers: 'what did we sign, and with whom?'
 	},
 	household: {
 		key: 'household',
@@ -160,7 +197,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['warranty', 'manual', 'invoice', 'receipt', 'contract'],
 		about: 'subject',
 		group: 'entity',
-		emptyHint: 'The papers that came with the boiler, the washing machine, the roof.'
+		emptyHint: 'The papers that came with the boiler, the washing machine, the roof.',
+		blurb:
+			'Things you own that break. Receipt, warranty and manual are three documents about one object, and filing them apart is what turns a warranty claim from a one-minute job into an afternoon of searching.',
+		answers: 'is this still under warranty?'
 	},
 	statements: {
 		key: 'statements',
@@ -168,7 +208,10 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
 		expects: ['bank_statement', 'broker_report'],
 		about: null,
 		group: 'entity',
-		emptyHint: 'Accepted bank statements and broker reports file themselves here.'
+		emptyHint: 'Accepted bank statements and broker reports file themselves here.',
+		blurb:
+			'Periodic documents that arrive on a schedule and are only ever read in bulk. Nothing here expires, and the single way it goes wrong is a month that never arrived — which is an absence, and no list can show you one.',
+		answers: 'is any month missing?'
 	}
 };
 
@@ -180,6 +223,7 @@ export const SHELF_PROFILES: Record<SystemShelfKey, ShelfProfile> = {
  */
 export const LAYOUT_LABELS: Record<ShelfLayout | PlannedShelfLayout, string> = {
 	wallet: 'Wallet',
+	completeness: 'Completeness',
 	gallery: 'Gallery',
 	timeline: 'Timeline',
 	kit: 'Kit',

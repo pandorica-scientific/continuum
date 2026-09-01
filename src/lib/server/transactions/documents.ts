@@ -21,7 +21,7 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
-import { document, documentLink, shelf, tag, tagLink } from '$lib/server/db/schema';
+import { document, documentLink, documentType, shelf, tag, tagLink } from '$lib/server/db/schema';
 import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import type { AboutDocument } from '$lib/server/documents/targets';
 
@@ -55,11 +55,13 @@ export async function loadTransactionDocuments(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity
+			sensitivity: document.sensitivity,
+			reminderDays: documentType.reminderDays
 		})
 		.from(documentLink)
 		.innerJoin(document, eq(documentLink.documentId, document.id))
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
+		.innerJoin(documentType, eq(documentType.key, document.type))
 		.where(and(inArray(documentLink.targetId, transactionIds), visibleDocumentPredicate(actor)))
 		.orderBy(document.name);
 

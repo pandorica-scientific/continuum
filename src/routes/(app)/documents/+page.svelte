@@ -21,6 +21,7 @@
 	import { DOCUMENT_ACCEPT } from '$lib/uploads';
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
+	import ShelfBanner from '$lib/documents/ShelfBanner.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
@@ -45,6 +46,7 @@
 		honestyState,
 		readableSize,
 		rowVariant,
+		SOON_DAYS,
 		splitSnippet,
 		readableDate,
 		sortDocuments,
@@ -123,6 +125,17 @@
 	let allTypes = $state(false);
 	/** What this household calls each type: the built-ins, plus its own. */
 	const labels = $derived(typeLabels(data.documentTypes));
+
+	/**
+	 * The amber window each kind of paper earns, looked up once for the page.
+	 *
+	 * A map rather than a lookup per row: two hundred documents would otherwise
+	 * walk the type list two hundred times to answer the same question, and the
+	 * answer only changes when the household edits a type.
+	 */
+	const reminderDays = $derived(
+		new Map(data.documentTypes.map((t) => [t.key, t.reminderDays ?? SOON_DAYS]))
+	);
 	const editTypeOptions = $derived(
 		typeOptionsFor(
 			data.shelves.find((s) => s.key === editShelf)?.types ?? [],
@@ -303,6 +316,21 @@
 			<a class="link" href="/documents/review">Review them now</a>
 		{/if}
 	</div>
+{/if}
+
+{#if data.bannerFacts}
+	<!-- Above the toolbar, because it describes the shelf the toolbar is about
+	     to filter. Absent on "Everything" and while searching: neither is a
+	     shelf, and a banner over search results would be describing the one you
+	     left. -->
+	<ShelfBanner
+		shelfKey={data.shelf}
+		label={shelfLabel}
+		emoji={data.shelves.find((s) => s.key === data.shelf)?.emoji ?? '🗂️'}
+		system={data.shelves.find((s) => s.key === data.shelf)?.system ?? false}
+		facts={data.bannerFacts}
+		emptyHint={data.emptyHint}
+	/>
 {/if}
 
 <section class="toolbar">
@@ -692,6 +720,7 @@
 					rows={data.rows}
 					people={data.householdPeople}
 					{labels}
+					{reminderDays}
 					{today}
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
@@ -753,7 +782,13 @@
 								</button>
 							{/if}
 							{#each open ? g.items : [] as d (d.id)}
-								{@const expiry = expiryTreatment(d, d.subjectArchived, today, 'wide')}
+								{@const expiry = expiryTreatment(
+									d,
+									d.subjectArchived,
+									today,
+									'wide',
+									reminderDays.get(d.type)
+								)}
 								{@const variant = rowVariant(d.match)}
 								{@const parts = d.match?.snippet ? splitSnippet(d.match.snippet, data.query) : null}
 								{@const nameParts = data.query ? splitSnippet(d.name, data.query) : null}
