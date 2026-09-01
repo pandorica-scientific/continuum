@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.svg" alt="" width="88">
+<img src="docs/logo.svg" alt="" width="176">
 
 <h1>Continuum</h1>
 
