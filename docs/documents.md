@@ -231,6 +231,25 @@ Anything filed against an organisation that no lane claims is **counted at the
 foot of the card**, never hidden. Everything on the shelf is either drawn or
 accounted for — the same invariant the Statements ribbon keeps.
 
+**The lanes will tell you what they think.** A document on this shelf that no
+organisation has claimed is matched against every lane, and where exactly one
+organisation's lanes claim it the shelf says so above the cards — with **File
+it** and **Not this one**. It is a proposal and not a filing, because a wrong
+link looks exactly like a right one and nobody re-reads a link that seems fine,
+while a document waiting to be filed is sitting there in plain sight.
+
+Three refusals keep that safe. **Two organisations claiming the same document
+proposes nothing** — guessing between two employers is worse than asking. **A
+lane naming no conditions proposes nothing**: claiming everything is right for
+sorting what is already filed and would otherwise take every unfiled document in
+the archive. And **a lane that keeps being wrong falls silent** — pressing _Not
+this one_ is remembered, and once corrections outnumber acceptances that lane
+stops proposing, without anybody having to find it and switch it off.
+
+Nothing is stored about a proposal itself. It is worked out from the lanes as
+they are now, so editing a lane changes what it suggests immediately and there
+is no stale row anywhere to argue with the archive.
+
 ### Which shelf a document belongs on
 
 **A document files with its subject, not with its consequence.** A mortgage is

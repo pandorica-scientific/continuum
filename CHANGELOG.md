@@ -2,6 +2,25 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.9 — 2026-09-01
+
+> A guess you can see is worth more than a filing you cannot.
+
+### ✨ Added
+
+- 🔎 **The lanes propose which organisation an unfiled document belongs to** — shown above the cards with File it and Not this one, never applied silently, because a wrong link looks exactly like a right one and nobody re-reads it
+- 🤝 **A lane remembers whether its proposals were taken** — and once corrections outnumber acceptances it stops proposing, so a rule nobody is watching stops doing damage on its own
+- 🙅 **Two organisations claiming the same document proposes neither** — guessing between two employers is worse than asking, and a document nobody claimed stays in plain sight
+
+### ⬆️ Upgrading
+
+- 🗄️ **Two columns on `lane`, which an instance migrated by hand runs once after a backup** — they hold what happened rather than a tuned weight, so starting them at zero is correct and not a loss
+
+```sql
+alter table lane add column if not exists accepted_count integer not null default 0;
+alter table lane add column if not exists corrected_count integer not null default 0;
+```
+
 ## 0.7.8 — 2026-09-01
 
 > A shelf that counts from when the paperwork started arriving, not from the first piece of it you kept.
