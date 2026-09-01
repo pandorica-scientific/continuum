@@ -44,6 +44,8 @@ import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { upsertIdentity, type IdentityFields } from '$lib/server/documents/identity';
 import { createDocument } from '$lib/server/documents/mutations';
 import { addSubject, archiveSubject } from '$lib/server/documents/subjects';
+import { attachDocument } from '$lib/server/documents/targets';
+import { addEngagement, addOrganisation } from '$lib/server/organisations/mutations';
 import { filePayslipDocument, recordSalary } from '$lib/server/salary';
 import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { saveSplits } from '$lib/server/splits';
@@ -752,6 +754,7 @@ export async function seedDemo(): Promise<void> {
 	// Twelve payslips, through the salary tracker's own writer rather than a
 	// hand-written insert: the shelf, the name format, the first-of-month
 	// `period_on` and the content hash are its business, not this file's.
+	const payslipIds: string[] = [];
 	for (let i = 11; i >= 0; i--) {
 		const m = monthShift(thisMonth, -i - 1);
 		const year = Number(m.slice(0, 4));
@@ -805,6 +808,7 @@ export async function seedDemo(): Promise<void> {
 			storedName: await saveUploadBytes(bytes, 'payslip.pdf'),
 			contentHash: hashBytes(bytes)
 		});
+		payslipIds.push(documentId);
 		// The slip states gross, and the demo's approximate withholding gives the
 		// net beside it — which is what the salary screen has always shown. The
 		// credit above keeps its own place on the row, so the month reads as one
@@ -820,6 +824,50 @@ export async function seedDemo(): Promise<void> {
 			documentId
 		});
 	}
+
+	// The employer and the tax office, and the role periods behind them.
+	//
+	// The engagement starts THREE YEARS before the earliest payslip, and that is
+	// the point of the fixture rather than a detail: a lane counts the filings it
+	// expected from when the relationship began, so a demo whose employment
+	// starts with its first payslip can never show a year with nothing filed in
+	// it — which is the only interesting thing the shelf has to say.
+	//
+	// Two periods, not one. A promotion is a second row against the same person
+	// and employer, and a single-period fixture never exercises the case that
+	// matters: the span has to keep reporting 2023 after the 2026 promotion, or
+	// three years of missing paperwork vanish from the count.
+	const employer = await addOrganisation(
+		{ name: DEMO_EMPLOYER, kind: 'employer', emoji: '🏛️' },
+		db
+	);
+	const employedFrom = `${monthShift(thisMonth, -47)}-01`;
+	const promotedOn = `${monthShift(thisMonth, -23)}-01`;
+	await addEngagement(
+		{
+			organisationId: employer.id,
+			personId: jana,
+			role: 'Analytik',
+			startsOn: employedFrom,
+			endsOn: `${monthShift(promotedOn.slice(0, 7), -1)}-28`
+		},
+		db
+	);
+	await addEngagement(
+		{ organisationId: employer.id, personId: jana, role: 'Senior analytik', startsOn: promotedOn },
+		db
+	);
+	for (const documentId of payslipIds) {
+		await attachDocument(employer.id, documentId, null, db);
+	}
+
+	// The authority. No role and no start: an office a household has simply
+	// always dealt with, which is the undated case the span has to survive.
+	const taxOffice = await addOrganisation(
+		{ name: 'Finanční úřad', kind: 'authority', emoji: '🏛️' },
+		db
+	);
+	await addEngagement({ organisationId: taxOffice.id, personId: jana }, db);
 
 	// The lease, filed against the TENANCY — not the flat, which outlives any one
 	// lease on it. Filing it there is also what makes D7 apply: the document's

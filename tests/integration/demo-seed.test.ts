@@ -20,7 +20,7 @@ import { mkdtempSync, readdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
 	account,
 	document,
@@ -42,6 +42,9 @@ import { SUGGESTED_LAYOUT } from '$lib/overview/panels';
 import { seedBanks, seedCategories } from '$lib/server/categorize';
 import { generateEvents } from '$lib/server/calendar';
 import { listSubjects } from '$lib/server/documents/subjects';
+import { documentsAbout } from '$lib/server/documents/targets';
+import { listOrganisations } from '$lib/server/organisations/mutations';
+import { engagementSpan, engagementsFor } from '$lib/server/organisations/engagements';
 import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { hashBytes, readUpload } from '$lib/server/system/files';
 import { seedDemo } from '$lib/server/system/demo';
@@ -263,6 +266,49 @@ describe('the demo seed', () => {
 		// import, so there is no `import_file` row for a statement to be keyed
 		// to — the branch the D10 ruling names as the alternative.
 		expect(await testDb.select().from(importFile)).toHaveLength(0);
+	});
+
+	it('gives the demo an employer with a promotion behind it', async () => {
+		// Two role periods, one person. A single-period fixture never exercises
+		// the case that matters — the span must keep reporting the ORIGINAL start
+		// after a promotion, or the years before it stop being counted as missing.
+		const orgs = await listOrganisations(testDb);
+		const employer = orgs.find((o) => o.kind === 'employer');
+		expect(employer).toBeDefined();
+		expect(employer!.peopleCount, 'a promotion is not a second colleague').toBe(1);
+
+		const roles = await engagementsFor(employer!.id, testDb);
+		expect(roles).toHaveLength(2);
+		const span = engagementSpan(roles);
+		expect(span.endsOn, 'an open period means the employment is current').toBeNull();
+
+		// And it reaches back past the earliest payslip, which is the whole point
+		// of the fixture: a lane can only show a year with nothing filed in it if
+		// the relationship began before the paper did.
+		const [earliest] = await testDb
+			.select({ periodOn: document.periodOn })
+			.from(document)
+			.where(eq(document.type, 'payslip'))
+			.orderBy(asc(document.periodOn))
+			.limit(1);
+		expect(span.startsOn! < earliest.periodOn!).toBe(true);
+	});
+
+	it('files every payslip against that employer', async () => {
+		const orgs = await listOrganisations(testDb);
+		const employer = orgs.find((o) => o.kind === 'employer')!;
+		const filed = await documentsAbout(employer.id, null, testDb);
+		expect(filed.filter((d) => d.type === 'payslip')).toHaveLength(12);
+	});
+
+	it('gives the tax office no role and no start, which is a real case', async () => {
+		// An office a household has simply always dealt with. The span has to
+		// survive having nothing to measure.
+		const orgs = await listOrganisations(testDb);
+		const authority = orgs.find((o) => o.kind === 'authority')!;
+		const roles = await engagementsFor(authority.id, testDb);
+		expect(roles).toHaveLength(1);
+		expect(engagementSpan(roles)).toEqual({ startsOn: null, endsOn: null });
 	});
 
 	it('files three receipts on transactions, each printing a variable symbol', async () => {

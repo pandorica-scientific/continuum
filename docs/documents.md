@@ -166,6 +166,40 @@ them does not shift the toolbar under the cursor.
 It does not say how the shelf is arranged. The Group and Sort controls state
 that themselves, two inches below and editable.
 
+### Who a document was with
+
+A shelf says where in life a document belongs and a subject says what it is
+about. **An organisation says who it was with** — an employer, the tax office, an
+insurer. It is a record, created once and linked to, for the same reason a
+subject is one rather than a name retyped on a receipt: a string typed twice is a
+string that will one day be typed differently, and then one employer is two
+employers and nothing in the archive can say so.
+
+It is not a contact. A contact is a person who happens to have an employer;
+two colleagues at one institute would be two records, and an employer nobody
+knows anyone at could not exist.
+
+**A person's dealings with an organisation are role periods, and a promotion is
+a second period rather than an edit to the first.**
+
+```
+Robert @ Institute of Physics
+  PhD student         2018-09-01 → 2021-08-31
+  Research scientist  2021-09-01 → (open)
+```
+
+Overwriting the role would be simpler and wrong. What the archive needs to know
+is when the paperwork started arriving, and that is 2018 — so the relationship
+counts from the earliest period, and a promotion cannot quietly move the
+beginning forward and take three years of missing paperwork with it. Both dates
+may be left empty: an office a household has simply always dealt with has no
+start anybody remembers.
+
+Press the pencil beside **ORGANISATIONS** in the rail to add one, and the `⋯` on
+its row to add or close a role period. An organisation is removed rather than
+archived — unlike a subject it holds no paper of its own to demote — and the
+removal is refused while anything is still filed against it.
+
 ### Which shelf a document belongs on
 
 **A document files with its subject, not with its consequence.** A mortgage is

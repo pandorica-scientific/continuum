@@ -2,6 +2,75 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.7.7 — 2026-09-01
+
+> An employer that is a record rather than a name printed on a payslip.
+
+### ✨ Added
+
+- 🏛️ **An organisation is a record you create once and file against** — an employer, the tax office, an insurer, in a third section of the Documents rail beside Shelves and Subjects
+- 🧑‍💼 **A person's dealings with one are role periods, and a promotion is a second period rather than an edit** — so the archive keeps knowing when the paperwork actually started arriving, which is what a missing year is counted from
+- 📎 **Any document can be filed against an organisation** — the picker offers them wherever it offers a person or a flat, and search finds them by name
+- 🧾 **The demo ships an employer with a promotion behind it and a tax office with neither role nor start date** — the two cases a single-period fixture never shows
+
+### ⬆️ Upgrading
+
+- 🗄️ **Two new tables, which an instance migrated by hand runs once after a backup** — an organisation is registered in the entity supertype like every other record, which is what lets a document be filed against one with no new link table
+
+```sql
+create table if not exists organisation (
+  id uuid primary key,
+  name text not null,
+  kind text not null default 'other',
+  emoji text not null default '🏛️',
+  notes text,
+  created_at timestamptz not null default now(),
+  constraint organisation_kind_check check (kind in ('employer','authority','insurer','other'))
+);
+create unique index if not exists organisation_name_ci_idx on organisation (lower(name));
+
+create table if not exists engagement (
+  id uuid primary key,
+  person_id uuid not null references person(id) on delete cascade,
+  organisation_id uuid not null references organisation(id) on delete cascade,
+  role text,
+  starts_on date,
+  ends_on date,
+  document_id uuid references document(id) on delete set null,
+  constraint engagement_period_order_check
+    check (ends_on is null or starts_on is null or ends_on >= starts_on)
+);
+create index if not exists engagement_organisation_idx on engagement (organisation_id);
+create index if not exists engagement_person_idx on engagement (person_id);
+create index if not exists engagement_document_idx on engagement (document_id);
+```
+
+- 🔗 **The entity registration is what makes filing work, and it is not in the statement above** — a fresh install gets it from the baseline's `DO` block, and an existing one needs the generated column, the composite foreign key and the two triggers for `organisation` as `drizzle/0000_baseline.sql` writes them
+
+```sql
+ALTER TABLE organisation ADD COLUMN entity_kind text GENERATED ALWAYS AS ('organisation') STORED;
+ALTER TABLE organisation ADD CONSTRAINT organisation_entity_fk
+  FOREIGN KEY (id, entity_kind) REFERENCES entity (id, kind) ON DELETE CASCADE;
+
+CREATE FUNCTION organisation_register_entity() RETURNS trigger LANGUAGE plpgsql AS $b$
+BEGIN
+  INSERT INTO entity (id, kind, created_at)
+    VALUES (NEW.id, 'organisation', COALESCE(NEW.created_at, now()))
+    ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END $b$;
+CREATE TRIGGER organisation_register_entity_trg BEFORE INSERT ON organisation
+  FOR EACH ROW EXECUTE FUNCTION organisation_register_entity();
+
+CREATE FUNCTION organisation_retire_entity() RETURNS trigger LANGUAGE plpgsql AS $b$
+BEGIN
+  DELETE FROM entity WHERE id = OLD.id;
+  RETURN OLD;
+END $b$;
+CREATE TRIGGER organisation_retire_entity_trg AFTER DELETE ON organisation
+  FOR EACH ROW EXECUTE FUNCTION organisation_retire_entity();
+```
+
 ## 0.7.6 — 2026-09-01
 
 > A shelf that can only show you what it holds cannot show you what is missing.
