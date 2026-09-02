@@ -80,7 +80,7 @@ async function seedDocument(options: {
 	await makeDocument(testDb, {
 		id,
 		name: storedName,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		ext: options.ext.toUpperCase(),
 		storedName,

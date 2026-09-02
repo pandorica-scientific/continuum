@@ -98,10 +98,19 @@ beforeAll(async () => {
 		owedMinor: 900_000n
 	});
 	await makeContact(testDb, { id: target.contact, name: 'Plumber' });
-	await testDb.insert(subject).values({ id: target.subject, name: 'The car' });
+	await testDb.insert(subject).values({
+		id: target.subject,
+		name: 'The car',
+		shelfId: await shelfIdByKey('vehicles', testDb)
+	});
 	await testDb
 		.insert(subject)
-		.values({ id: archivedSubject, name: 'The old car', archivedAt: new Date() });
+		.values({
+			id: archivedSubject,
+			name: 'The old car',
+			shelfId: await shelfIdByKey('vehicles', testDb),
+			archivedAt: new Date()
+		});
 	await makeTransaction(testDb, {
 		id: target.transaction,
 		accountId: target.account,
@@ -114,6 +123,7 @@ beforeAll(async () => {
 	await testDb.insert(organisation).values({
 		id: target.organisation,
 		name: 'Institute of Physics CAS',
+		shelfId: await shelfIdByKey('income_tax', testDb),
 		kind: 'employer'
 	});
 	await testDb.insert(taxStatement).values({
@@ -149,7 +159,7 @@ async function seedDocument(options: SeedOptions): Promise<string> {
 	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		sensitivity: options.sensitivity ?? 'normal',
 		storedName: `${id}.pdf`,
@@ -345,7 +355,7 @@ describe('the documents about a record', () => {
 		const passport = docs.find((d) => d.name === 'Passport');
 		expect(passport?.ext).toBe('PDF');
 		expect(passport?.type).toBe('other');
-		expect(passport?.shelfKey).toBe('household');
+		expect(passport?.shelfKey).toBe('inventory');
 		expect(passport?.shelfLabel).toBeTruthy();
 		expect(passport?.storedName).toBe(`${passport?.id}.pdf`);
 		expect(passport?.addedOn).toBe('2026-01-01');
@@ -418,7 +428,7 @@ describe('the documents about a record', () => {
 		// below regardless of how the rows happened to land on disk.
 		const idHigh = '11111111-1111-5111-8111-111111111112';
 		const idLow = '11111111-1111-5111-8111-111111111111';
-		const shelfId = await shelfIdByKey('household', testDb);
+		const shelfId = await shelfIdByKey('inventory', testDb);
 		for (const id of [idHigh, idLow]) {
 			await makeDocument(testDb, {
 				id,
@@ -572,7 +582,7 @@ describe('what is left to attach', () => {
 	it('breaks a name tie with the id in the candidate list too', async () => {
 		const idHigh = '22222222-2222-5222-8222-222222222222';
 		const idLow = '22222222-2222-5222-8222-222222222221';
-		const shelfId = await shelfIdByKey('household', testDb);
+		const shelfId = await shelfIdByKey('inventory', testDb);
 		for (const id of [idHigh, idLow]) {
 			await makeDocument(testDb, {
 				id,

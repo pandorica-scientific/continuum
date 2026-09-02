@@ -329,7 +329,7 @@ describe('the demo seed', () => {
 		const shelves = await testDb.select().from(shelf);
 		const keyOf = (shelfId: string) => shelves.find((s) => s.id === shelfId)?.key;
 		const onShelf = receipts.map((r) => keyOf(r.shelfId)).sort();
-		expect(onShelf).toEqual(['household', 'inbox', 'inbox']);
+		expect(onShelf).toEqual(['inventory', 'inbox', 'inbox']);
 	});
 
 	it('files an insurance policy that renews soon, on the flat', async () => {

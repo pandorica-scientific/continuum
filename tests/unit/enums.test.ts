@@ -29,6 +29,48 @@ describe('the screens and the schema agree', () => {
 	});
 });
 
+/**
+ * What a shelf IS, as data.
+ *
+ * Before v0.8.0 this lived in `src/lib/shelf-profiles.ts` as a hand-written
+ * record keyed by shelf, so a shelf a household made could not have a layout at
+ * all. Naming the template and the unit as enums is what lets the shelf row
+ * carry them, and what puts them behind a CHECK constraint like every other
+ * closed set in the schema.
+ */
+describe('the shelf enums', () => {
+	it('name seven templates and six units', () => {
+		expect(ENUMS['shelf.template']).toEqual([
+			'queue',
+			'wallet',
+			'completeness',
+			'dossier',
+			'timeline',
+			'kit',
+			'obligations'
+		]);
+		expect(ENUMS['shelf.unit']).toEqual([
+			'document',
+			'person',
+			'account',
+			'organisation',
+			'property',
+			'subject'
+		]);
+	});
+
+	it('a lane can expect paper once', () => {
+		// A slot — receipt, warranty, manual — is a lane with cadence `once`, not
+		// a table of its own.
+		expect(ENUMS['lane.cadence']).toEqual(['monthly', 'yearly', 'once', 'none']);
+	});
+
+	it('both shelf columns get a CHECK', () => {
+		const shelfChecks = ENUM_COLUMNS.filter((c) => c.table === 'shelf').map((c) => c.column);
+		expect(shelfChecks.sort()).toEqual(['template', 'unit']);
+	});
+});
+
 describe('every constrained column names a list that exists', () => {
 	it('has no dangling enum key', () => {
 		for (const { table, column, enum: key } of ENUM_COLUMNS) {

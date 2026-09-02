@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENTITY_KINDS, ENUM_COLUMNS } from '$lib/enums';
-import { SHELF_PROFILES } from '$lib/shelf-profiles';
+import { SHELF_SEED_ROWS } from '$lib/server/db/schema/documents';
 import { assertSchemaIsCurrent } from '$lib/server/db/migrate';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
 
@@ -73,13 +73,18 @@ describe('the baseline migration', () => {
 		).toHaveLength(0);
 	});
 
-	it('seeds the two rows the schema cannot imply', async () => {
+	it('seeds the rows the schema cannot imply, and no subject', async () => {
 		// Data, not schema — so `db:generate` will never re-emit these, and a
-		// regenerated baseline drops them silently. The first symptom of the
-		// household subject going missing was a tick absent from the documents
-		// form, which no schema comparison would have caught.
+		// regenerated baseline drops them silently. The first symptom of a seeded
+		// row going missing is a screen with a control absent, which no schema
+		// comparison would have caught.
+		//
+		// NO subject. v0.7.x seeded a catch-all "Household" one so a document
+		// always had something to be about; a subject now belongs to a shelf, and
+		// paper that names no card sits on the dossier's "Not assigned yet" card
+		// instead — which is drawn rather than stored.
 		const subjects = await harness.sql<{ name: string }[]>`select name from subject`;
-		expect(subjects.map((row) => row.name)).toEqual(['Household']);
+		expect(subjects).toHaveLength(0);
 
 		// A floor, not the list: the harness runs refreshCurrencies afterwards, as
 		// boot() does, and CLDR fills in the rest.
@@ -152,41 +157,43 @@ describe('the baseline migration', () => {
 		expect(names).toContain('document_name_trgm_idx');
 	});
 
-	it('seeds ten shelves, eight of them system', async () => {
+	it('seeds eight shelves, seven of them system', async () => {
 		const rows = await harness.sql<{ key: string; system: boolean }[]>`
 			select key, system from shelf order by sort_order`;
 		// Ordered by how often a shelf is opened rather than by how the keys were
 		// invented: the paper a household reaches for weekly sits above the paper
 		// it produces twice a decade.
+		//
+		// Eight rather than ten since v0.8.0. Family folded into IDs — a birth
+		// certificate is proof of who somebody is, and it was already a card in the
+		// same wallet — and Tenancy folded into Property, because a lease is an
+		// obligation on an address and belongs on that address's card.
 		expect(rows.map((r) => r.key)).toEqual([
 			'inbox',
 			'identity',
 			'statements',
-			'finance',
-			'household',
-			'family',
+			'income_tax',
 			'health',
+			'inventory',
 			'property',
-			'tenancy',
 			'vehicles'
 		]);
-		// Eight of the ten, for two reasons the flag deliberately does not
+		// Seven of the eight, for two reasons the flag deliberately does not
 		// distinguish. Four are written to by key — capture files into inbox,
-		// import into statements, payslips and tax attachments into finance,
-		// bills into property. Four are the paper every household has, fixed so
-		// that a passport or a test result is in the same place on every
-		// instance: identity, family, health, household.
+		// import into statements, payslips and tax attachments into income_tax,
+		// bills into property. Three are the paper every household has, fixed so
+		// that a passport, a test result or a boiler warranty is in the same place
+		// on every instance: identity, health, inventory.
 		//
-		// tenancy and vehicles are the two that stay removable, and the reason
-		// this assertion is a list rather than "every seeded shelf".
+		// vehicles is the one that stays removable, and the reason this assertion
+		// is a list rather than "every seeded shelf".
 		expect(rows.filter((r) => r.system).map((r) => r.key)).toEqual([
 			'inbox',
 			'identity',
 			'statements',
-			'finance',
-			'household',
-			'family',
+			'income_tax',
 			'health',
+			'inventory',
 			'property'
 		]);
 	});
@@ -195,7 +202,7 @@ describe('the baseline migration', () => {
 		// ON DELETE RESTRICT. The only legal delete is reassign-then-delete, and
 		// this is the constraint that makes "always" true rather than "in the UI".
 		const [{ id: shelfId }] = await harness.sql<{ id: string }[]>`
-			select id from shelf where key = 'household'`;
+			select id from shelf where key = 'inventory'`;
 		await harness.sql`
 			insert into document (id, name, shelf_id, ext, added_on, type)
 			values (gen_random_uuid(), 'Deed', ${shelfId}, 'PDF', current_date, 'other')`;
@@ -266,7 +273,7 @@ describe('the baseline migration', () => {
 		await harness.sql`
 			insert into document (id, name, shelf_id, ext, added_on, type)
 			values (gen_random_uuid(), 'Broker report 2025',
-				(select id from shelf where key = 'finance'), 'PDF', current_date, 'broker_report')`;
+				(select id from shelf where key = 'statements'), 'PDF', current_date, 'broker_report')`;
 		const [{ n }] = await harness.sql<{ n: number }[]>`
 			select count(*)::int as n from document where type = 'broker_report'`;
 		expect(n).toBe(1);
@@ -318,16 +325,55 @@ describe('the baseline migration', () => {
 		const seeded = new Map<string, string[]>();
 		for (const row of rows) seeded.set(row.key, [...(seeded.get(row.key) ?? []), row.type]);
 
-		for (const [key, profile] of Object.entries(SHELF_PROFILES)) {
-			expect(seeded.get(key) ?? []).toEqual([...profile.expects]);
+		for (const row of SHELF_SEED_ROWS) {
+			expect(seeded.get(row.key) ?? [], row.key).toEqual([...row.types]);
 		}
+	});
+
+	it('seeds the eight shelves with their template, unit and question', async () => {
+		// A shelf is one question, one unit, one template — and all three are on
+		// the row rather than in a registry keyed by shelf, so a shelf somebody
+		// makes gets the same three.
+		const rows = await harness.sql<
+			{ key: string; template: string; unit: string; question: string; system: boolean }[]
+		>`select key, template, unit, question, system from shelf order by sort_order`;
+		expect(rows).toEqual(
+			SHELF_SEED_ROWS.map((s) => ({
+				key: s.key,
+				template: s.template,
+				unit: s.unit,
+				question: s.question,
+				system: s.system
+			}))
+		);
+	});
+
+	it('seeds the lanes a new card on each shelf starts with', async () => {
+		const rows = await harness.sql<{ key: string; lane_seeds: unknown }[]>`
+			select key, lane_seeds from shelf order by sort_order`;
+		const byKey = new Map(rows.map((r) => [r.key, r.lane_seeds]));
+		// Vehicles is the shelf that proves `every`: a technical inspection is one
+		// cell two years wide, not two cells one of which is always empty.
+		expect(byKey.get('vehicles')).toEqual([
+			{ label: 'Insurance', cadence: 'yearly', every: 1 },
+			{ label: 'Technical inspection', cadence: 'yearly', every: 2 },
+			{ label: 'Road tax', cadence: 'yearly', every: 1 }
+		]);
+		expect(byKey.get('inventory')).toEqual([
+			{ label: 'Receipt', cadence: 'once', every: 1 },
+			{ label: 'Warranty', cadence: 'once', every: 1 },
+			{ label: 'Manual', cadence: 'once', every: 1 }
+		]);
+		// An organisation seeds from its KIND, not from the shelf.
+		expect(byKey.get('income_tax')).toEqual([]);
 	});
 
 	it('refuses a subject whose active period runs backwards', async () => {
 		await expect(
 			harness.sql`
-			insert into subject (id, name, active_from, active_to)
-			values (gen_random_uuid(), 'Backwards', '2026-06-01', '2026-01-01')`
+			insert into subject (id, name, shelf_id, active_from, active_to)
+			values (gen_random_uuid(), 'Backwards',
+			        (select id from shelf where key = 'inventory'), '2026-06-01', '2026-01-01')`
 		).rejects.toThrow();
 	});
 });

@@ -381,7 +381,7 @@ describe('domain replacement writes', () => {
 				{
 					id: rowId('document-fail'),
 					name: 'Rollback document',
-					shelfId: await shelfIdByKey('family', testDb),
+					shelfId: await shelfIdByKey('identity', testDb),
 					type: 'other',
 					storedName: 'stored.pdf',
 					ext: 'PDF',

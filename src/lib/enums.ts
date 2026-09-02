@@ -87,6 +87,35 @@ export const ENUMS = {
 	'organisation.kind': ['employer', 'authority', 'insurer', 'other'],
 
 	/**
+	 * How a shelf draws, in the household's words rather than the code's.
+	 *
+	 * Seven names, four engines: `templateEngine` in `$lib/documents/templates`
+	 * is the mapping, and `timeline`, `kit` and `obligations` are the dossier
+	 * with a different start — which lanes a new card is seeded with, and which
+	 * way its history reads. They are separate names because a household picking
+	 * a template for a shelf of its own is choosing between "a kit of parts" and
+	 * "a set of obligations", not between two spellings of one word.
+	 */
+	'shelf.template': [
+		'queue',
+		'wallet',
+		'completeness',
+		'dossier',
+		'timeline',
+		'kit',
+		'obligations'
+	],
+
+	/**
+	 * What a card on the shelf IS.
+	 *
+	 * A shelf is organised by one kind of thing, and a unit belongs to one shelf
+	 * for the same reason a document does. `document` is the Inbox, which is
+	 * organised by the paper itself because nothing about it is decided yet.
+	 */
+	'shelf.unit': ['document', 'person', 'account', 'organisation', 'property', 'subject'],
+
+	/**
 	 * How often a lane expects paper, DECLARED and never inferred.
 	 *
 	 * The same ruling the coverage ribbon carries, and stronger here: a
@@ -94,8 +123,14 @@ export const ENUMS = {
 	 * of them happen to sit a year apart. `none` is not "unknown" — it is paper
 	 * that has no rhythm and never will, which is a different thing and gets a
 	 * list rather than cells.
+	 *
+	 * `once` is an expected slot: a receipt, a warranty, a manual. One cell that
+	 * is filled or is not, so the missing manual is visible on the card. It is a
+	 * cadence rather than a table of its own because a slot IS a lane in every
+	 * other respect — it has a label, it holds documents, it can be added and
+	 * removed — and a second table would double every query that reads a card.
 	 */
-	'lane.cadence': ['monthly', 'yearly', 'none'],
+	'lane.cadence': ['monthly', 'yearly', 'once', 'none'],
 
 	// Where a category group sits in the waterfall. Not derivable from sort
 	// order: income opens the chart, expense groups are its stages, savings
@@ -218,6 +253,8 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'person', column: 'role', enum: 'person.role' },
 	{ table: 'account', column: 'kind', enum: 'account.kind' },
 	{ table: 'organisation', column: 'kind', enum: 'organisation.kind' },
+	{ table: 'shelf', column: 'template', enum: 'shelf.template' },
+	{ table: 'shelf', column: 'unit', enum: 'shelf.unit' },
 	{ table: 'lane', column: 'cadence', enum: 'lane.cadence' },
 	{ table: 'category_group', column: 'role', enum: 'category_group.role' },
 	{ table: 'person', column: 'theme', enum: 'person.theme' },

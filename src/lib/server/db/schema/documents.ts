@@ -9,6 +9,7 @@ import {
 	date,
 	index,
 	integer,
+	jsonb,
 	pgTable,
 	primaryKey,
 	real,
@@ -20,6 +21,7 @@ import {
 // Relative, not aliased: drizzle-kit loads these files outside Vite and
 // does not resolve SvelteKit's $lib.
 import type { DocumentTypeKey, EnumValue } from '../../../enums';
+import { templateDefaults, type LaneSeed } from '../../../documents/templates';
 
 // ---- Documents ----
 
@@ -34,10 +36,16 @@ import type { DocumentTypeKey, EnumValue } from '../../../enums';
  *
  * `system` marks the four rows the application refers to by key: `inbox`,
  * where capture lands; `statements`, where an accepted import files itself;
- * `finance`, where the salary tracker files payslips and tax attachments; and
- * `property`, where bills file themselves. Their label and emoji are the
+ * `income_tax`, where the salary tracker files payslips and tax attachments;
+ * and `property`, where bills file themselves. Their label and emoji are the
  * household's ("K vyřízení" is a legal name for the inbox); their key and
  * their existence are not.
+ *
+ * **A shelf is one question, one unit, one template**, and all three are on the
+ * row. Before v0.8.0 they lived in `src/lib/shelf-profiles.ts`, keyed by shelf,
+ * so a shelf the household made could not have a layout, a question or an
+ * expected rhythm — it got the generic list and nothing else. Moving them here
+ * is what makes a shelf somebody invents as good as one that ships.
  */
 export const shelf = pgTable('shelf', {
 	id: uuid('id').primaryKey(),
@@ -46,6 +54,28 @@ export const shelf = pgTable('shelf', {
 	emoji: text('emoji').notNull().default('🗂️'),
 	sortOrder: integer('sort_order').notNull().default(0),
 	system: boolean('system').notNull().default(false),
+	/** One of seven names; `templateEngine` says which of four components draws it. */
+	template: text('template').$type<EnumValue<'shelf.template'>>().notNull(),
+	/** What a card on this shelf is: a person, an account, an organisation, a thing. */
+	unit: text('unit').$type<EnumValue<'shelf.unit'>>().notNull(),
+	/**
+	 * The caption under the screen title. "Is any month missing?"
+	 *
+	 * Prose and not derived, because this is the one thing about a shelf that
+	 * genuinely cannot be computed: why a person would open it. A shelf that
+	 * cannot name its question is a folder, and folders are what this model
+	 * exists to avoid.
+	 */
+	question: text('question').notNull(),
+	/**
+	 * What a NEW card on this shelf starts with: `[{ label, cadence, every }]`.
+	 *
+	 * Seeded from the template when the shelf is made and the household's
+	 * afterwards, exactly as `shelf_type` seeds a shelf's type list. Empty where
+	 * the unit seeds its own — an organisation's lanes come from its kind, since
+	 * an employer sends payslips and a tax office does not.
+	 */
+	laneSeeds: jsonb('lane_seeds').$type<LaneSeed[]>().notNull().default([]),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -117,7 +147,21 @@ export const document = pgTable(
 		// re-upload — see `payslipMatchingContent`. Null on a document filed
 		// before this column existed, and on a metadata-only one; filled in the
 		// first time something has to compare against it.
-		contentHash: text('content_hash')
+		contentHash: text('content_hash'),
+		/**
+		 * The lane on its card this document sits in, or null for history.
+		 *
+		 * EXPLICIT membership, not computed. A lane's `conditions` propose a lane
+		 * and a person confirms; matching alone cannot say which of two lanes a
+		 * payslip belongs to when both match it, and the counterparties release
+		 * had exactly that ambiguity.
+		 *
+		 * No `.references()` here: `lane` lives in `organisations.ts`, which
+		 * imports this file, so a thunk would make the two modules import each
+		 * other. The foreign key and its covering index are raw SQL beside the
+		 * lane's own CHECK — see `organisationsCheckSql`.
+		 */
+		laneId: uuid('lane_id')
 	},
 	(table) => [
 		index('document_shelf_id_idx').on(table.shelfId),
@@ -319,19 +363,33 @@ export const subject = pgTable(
 		id: uuid('id').primaryKey(),
 		name: text('name').notNull().unique(),
 		emoji: text('emoji').notNull().default('🏠'),
+		// The shelf this thing lives on, and its card is drawn there.
+		//
+		// A unit belongs to one shelf for the same reason a document does: a car
+		// is on Vehicles and a boiler is on Inventory, and neither is offered when
+		// filing the other's paper. RESTRICT, matching `document.shelf_id` — the
+		// reassign-and-delete in `shelves.ts` is the only legal way to remove a
+		// shelf, and it must move the cards as well as the paper.
+		shelfId: uuid('shelf_id')
+			.notNull()
+			.references(() => shelf.id, { onDelete: 'restrict' }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		// Archiving a subject demotes everything filed under it in one reversible
 		// action — a sold car stops crowding the list without anything being
 		// deleted. `activeFrom`/`activeTo` are the period the subject was real,
 		// which is what lets an old document read as history rather than as an
-		// expiry someone forgot.
+		// expiry someone forgot — and, since v0.8.0, what bounds its card's lanes:
+		// a car bought in 2021 is not missing an insurance policy for 2019.
 		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		activeFrom: date('active_from'),
 		activeTo: date('active_to')
 	},
 	// "Car" and "car" are the same thing; two records differing only in case
 	// would be the phantom-column problem sneaking back in.
-	(table) => [uniqueIndex('subject_name_ci_idx').on(sql`lower(${table.name})`)]
+	(table) => [
+		uniqueIndex('subject_name_ci_idx').on(sql`lower(${table.name})`),
+		index('subject_shelf_id_idx').on(table.shelfId)
+	]
 );
 
 // ---- SQL drizzle-kit cannot model ----
@@ -391,7 +449,7 @@ CREATE INDEX document_name_trgm_idx ON document
 `;
 
 /**
- * The seventeen types the app ships with, the ten shelves a fresh install
+ * The seventeen types the app ships with, the eight shelves a fresh install
  * starts with, and what each shelf offers first in a type picker.
  *
  * Data rather than schema, and the one part of the baseline `db:generate` will
@@ -399,94 +457,206 @@ CREATE INDEX document_name_trgm_idx ON document
  * only satisfiable value with it, and the first symptom is a screen with a
  * control missing rather than an error.
  *
+ * The shelves are a TypeScript array rather than hand-written SQL because two
+ * things now read them — the baseline and the tests that hold the seeded rows to
+ * what the app expects — and a second copy is a second thing to keep right.
+ *
  * A household adds its own types beside the built-ins; these are the ones code
  * reads by name, so they are marked and kept. Households likewise rename,
- * re-order and re-emoji the shelves freely — eight of the ten cannot be removed,
- * for two different reasons that both end at the same flag. Four are keys the
- * application writes to: capture files into `inbox`, an accepted import files
- * into `statements`, payslips and tax attachments file into `finance`, bills
- * file into `property`. Deleting one of those breaks the next upload. Four are
- * the paper every household has whether or not it has said so: `identity`,
- * `family`, `health` and `household`. Nothing files into them by key, so
+ * re-order and re-emoji the shelves freely — seven of the eight cannot be
+ * removed, for two different reasons that both end at the same flag. Four are
+ * keys the application writes to: capture files into `inbox`, an accepted import
+ * files into `statements`, payslips and tax attachments file into `income_tax`,
+ * bills file into `property`. Deleting one of those breaks the next upload.
+ * Three are the paper every household has whether or not it has said so:
+ * `identity`, `health` and `inventory`. Nothing files into them by key, so
  * deleting one breaks nothing today — but a documents product whose shipped
  * answer to "where does a passport go" can be removed has no shipped answer.
- * `tenancy` and `vehicles` stay removable, and are the reason the flag is a
- * column rather than a list of every seeded key: not every household rents, and
- * not every household drives.
+ * `vehicles` stays removable, and is the reason the flag is a column rather than
+ * a list of every seeded key: not every household drives.
  */
+export interface ShelfSeedRow {
+	key: string;
+	label: string;
+	emoji: string;
+	sortOrder: number;
+	system: boolean;
+	template: EnumValue<'shelf.template'>;
+	unit: EnumValue<'shelf.unit'>;
+	question: string;
+	laneSeeds: LaneSeed[];
+	/** `shelf_type` rows, in the order the type picker offers them. */
+	types: DocumentTypeKey[];
+}
+
+export const SHELF_SEED_ROWS: ShelfSeedRow[] = [
+	{
+		key: 'inbox',
+		label: 'Inbox',
+		emoji: '📥',
+		sortOrder: 0,
+		system: true,
+		template: 'queue',
+		unit: 'document',
+		question: 'What still needs deciding?',
+		laneSeeds: [],
+		// Nothing is expected here: the Inbox is where paper lands before anyone
+		// has said what it is, so proposing a type would be guessing out loud.
+		types: []
+	},
+	{
+		key: 'identity',
+		label: 'IDs',
+		emoji: '🪪',
+		sortOrder: 10,
+		system: true,
+		template: 'wallet',
+		unit: 'person',
+		question: 'Does everybody hold a valid document?',
+		laneSeeds: [],
+		// Certificates too: a birth or marriage certificate is proof of who
+		// somebody is, and the shelf that used to hold them separately was one
+		// more place to look for the same kind of paper.
+		types: ['id_document', 'certificate']
+	},
+	{
+		key: 'statements',
+		label: 'Statements',
+		emoji: '🧾',
+		sortOrder: 20,
+		system: true,
+		template: 'completeness',
+		unit: 'account',
+		question: 'Is any month missing?',
+		laneSeeds: [],
+		types: ['bank_statement', 'broker_report']
+	},
+	{
+		key: 'income_tax',
+		label: 'Income & Tax',
+		emoji: '🏛️',
+		sortOrder: 30,
+		system: true,
+		template: 'dossier',
+		unit: 'organisation',
+		question: 'Which filing never arrived?',
+		// An organisation seeds its lanes from its kind, not from the shelf: an
+		// employer sends payslips monthly and a tax office does not.
+		laneSeeds: [],
+		// What a tax return is actually assembled from. No `invoice`: an invoice
+		// almost always concerns a thing that has a shelf of its own.
+		types: ['payslip', 'tax_document', 'certificate', 'correspondence', 'contract']
+	},
+	{
+		key: 'health',
+		label: 'Health',
+		emoji: '🩺',
+		sortOrder: 40,
+		system: true,
+		template: 'timeline',
+		unit: 'person',
+		question: 'What happened to this person, and when?',
+		laneSeeds: [],
+		types: ['medical_record', 'certificate', 'insurance_policy', 'invoice']
+	},
+	{
+		key: 'inventory',
+		label: 'Inventory',
+		emoji: '🔧',
+		sortOrder: 50,
+		system: true,
+		template: 'kit',
+		unit: 'subject',
+		question: 'Is this still under warranty?',
+		laneSeeds: templateDefaults('kit').laneSeeds,
+		types: ['warranty', 'manual', 'invoice', 'receipt', 'contract']
+	},
+	{
+		key: 'property',
+		label: 'Property',
+		emoji: '🏠',
+		sortOrder: 60,
+		system: true,
+		template: 'obligations',
+		unit: 'property',
+		question: 'What does this address require of us?',
+		// More than the template's one lane, because a flat has two duties every
+		// household with one recognises. The lease and its letters are history on
+		// the same card, which is why Tenancy is no longer a shelf.
+		laneSeeds: [
+			{ label: 'Home insurance', cadence: 'yearly', every: 1 },
+			{ label: 'Boiler inspection', cadence: 'yearly', every: 1 }
+		],
+		types: ['insurance_policy', 'technical_plan', 'contract', 'invoice', 'correspondence']
+	},
+	{
+		key: 'vehicles',
+		label: 'Vehicles',
+		emoji: '🚗',
+		sortOrder: 70,
+		system: false,
+		template: 'obligations',
+		unit: 'subject',
+		question: 'Is this vehicle covered and legal?',
+		// Three rhythms, one of them every second year — which is the reason
+		// `lane.every` exists at all.
+		laneSeeds: [
+			{ label: 'Insurance', cadence: 'yearly', every: 1 },
+			{ label: 'Technical inspection', cadence: 'yearly', every: 2 },
+			{ label: 'Road tax', cadence: 'yearly', every: 1 }
+		],
+		types: ['insurance_policy', 'contract', 'invoice', 'correspondence', 'warranty', 'manual']
+	}
+];
+
+/** A single-quoted SQL literal, with any quote inside it doubled. */
+const sqlText = (value: string) => `'${value.replace(/'/g, "''")}'`;
+
+function shelfSeedSql(): string {
+	const shelves = SHELF_SEED_ROWS.map(
+		(s) =>
+			`\t(gen_random_uuid(), ${sqlText(s.key)}, ${sqlText(s.label)}, ${sqlText(s.emoji)}, ${s.sortOrder}, ${s.system}, ${sqlText(s.template)}, ${sqlText(s.unit)}, ${sqlText(s.question)}, ${sqlText(JSON.stringify(s.laneSeeds))}::jsonb)`
+	);
+	const types = SHELF_SEED_ROWS.flatMap((s) =>
+		s.types.map(
+			(type, ordinal) =>
+				`\t((SELECT id FROM shelf WHERE key = ${sqlText(s.key)}), ${sqlText(type)}, ${ordinal})`
+		)
+	);
+	return [
+		'INSERT INTO shelf (id, key, label, emoji, sort_order, system, template, unit, question, lane_seeds) VALUES',
+		shelves.join(',\n'),
+		'ON CONFLICT (key) DO NOTHING;',
+		'--> statement-breakpoint',
+		'INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES',
+		types.join(',\n'),
+		'ON CONFLICT (shelf_id, type) DO NOTHING;'
+	].join('\n');
+}
+
 export const documentsSeedSql = `
--- One place for a document to always belong: the household. The documents
--- screen offers it as a tick beside the people, and nothing else creates it.
-INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '🏠');
---> statement-breakpoint
 INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUES
-	('contract', 'Contract', true, 0, NULL),
-	('invoice', 'Invoice', true, 10, NULL),
-	('receipt', 'Receipt', true, 20, NULL),
-	('payslip', 'Payslip', true, 30, NULL),
-	('bank_statement', 'Bank statement', true, 40, NULL),
-	('broker_report', 'Broker report', true, 50, NULL),
-	('insurance_policy', 'Insurance policy', true, 60, NULL),
-	('claim', 'Claim', true, 70, NULL),
-	-- Six months, because that is how long replacing one takes. A warning that
-	-- arrives with sixty days left is a warning about a trip you can no longer
-	-- make.
-	('id_document', 'Identity document', true, 80, 180),
-	('certificate', 'Certificate', true, 90, NULL),
-	('medical_record', 'Medical record', true, 100, NULL),
-	('tax_document', 'Tax document', true, 110, NULL),
-	('technical_plan', 'Technical plan', true, 120, NULL),
-	('correspondence', 'Correspondence', true, 130, NULL),
-	('warranty', 'Warranty', true, 140, NULL),
-	('manual', 'Manual', true, 150, NULL),
-	('other', 'Other', true, 160, NULL)
+\t('contract', 'Contract', true, 0, NULL),
+\t('invoice', 'Invoice', true, 10, NULL),
+\t('receipt', 'Receipt', true, 20, NULL),
+\t('payslip', 'Payslip', true, 30, NULL),
+\t('bank_statement', 'Bank statement', true, 40, NULL),
+\t('broker_report', 'Broker report', true, 50, NULL),
+\t('insurance_policy', 'Insurance policy', true, 60, NULL),
+\t('claim', 'Claim', true, 70, NULL),
+\t-- Six months, because that is how long replacing one takes. A warning that
+\t-- arrives with sixty days left is a warning about a trip you can no longer
+\t-- make.
+\t('id_document', 'Identity document', true, 80, 180),
+\t('certificate', 'Certificate', true, 90, NULL),
+\t('medical_record', 'Medical record', true, 100, NULL),
+\t('tax_document', 'Tax document', true, 110, NULL),
+\t('technical_plan', 'Technical plan', true, 120, NULL),
+\t('correspondence', 'Correspondence', true, 130, NULL),
+\t('warranty', 'Warranty', true, 140, NULL),
+\t('manual', 'Manual', true, 150, NULL),
+\t('other', 'Other', true, 160, NULL)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
-INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
-	(gen_random_uuid(), 'inbox',      'Inbox',        '📬',  0, true),
-	(gen_random_uuid(), 'identity',   'IDs',          '🪪', 10, true),
-	(gen_random_uuid(), 'statements', 'Statements',   '🧾', 20, true),
-	(gen_random_uuid(), 'finance',    'Income & Tax', '🏦', 30, true),
-	(gen_random_uuid(), 'household',  'Household',    '🔧', 40, true),
-	(gen_random_uuid(), 'family',     'Family',       '👶', 50, true),
-	(gen_random_uuid(), 'health',     'Health',       '🩺', 60, true),
-	(gen_random_uuid(), 'property',   'Property',     '🏠', 70, true),
-	(gen_random_uuid(), 'tenancy',    'Tenancy',      '🔑', 80, false),
-	(gen_random_uuid(), 'vehicles',   'Vehicles',     '🚗', 90, false)
-ON CONFLICT (key) DO NOTHING;
---> statement-breakpoint
-INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
-	((SELECT id FROM shelf WHERE key = 'identity'), 'id_document', 0),
-	((SELECT id FROM shelf WHERE key = 'identity'), 'certificate', 1),
-	((SELECT id FROM shelf WHERE key = 'family'), 'certificate', 0),
-	((SELECT id FROM shelf WHERE key = 'family'), 'contract', 1),
-	((SELECT id FROM shelf WHERE key = 'family'), 'correspondence', 2),
-	((SELECT id FROM shelf WHERE key = 'health'), 'medical_record', 0),
-	((SELECT id FROM shelf WHERE key = 'health'), 'certificate', 1),
-	((SELECT id FROM shelf WHERE key = 'health'), 'insurance_policy', 2),
-	((SELECT id FROM shelf WHERE key = 'health'), 'invoice', 3),
-	((SELECT id FROM shelf WHERE key = 'property'), 'insurance_policy', 0),
-	((SELECT id FROM shelf WHERE key = 'property'), 'technical_plan', 1),
-	((SELECT id FROM shelf WHERE key = 'property'), 'contract', 2),
-	((SELECT id FROM shelf WHERE key = 'property'), 'invoice', 3),
-	((SELECT id FROM shelf WHERE key = 'tenancy'), 'contract', 0),
-	((SELECT id FROM shelf WHERE key = 'tenancy'), 'invoice', 1),
-	((SELECT id FROM shelf WHERE key = 'tenancy'), 'correspondence', 2),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'warranty', 0),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'insurance_policy', 1),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'invoice', 2),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 3),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'payslip', 0),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'tax_document', 1),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'certificate', 2),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'correspondence', 3),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 4),
-	((SELECT id FROM shelf WHERE key = 'household'), 'warranty', 0),
-	((SELECT id FROM shelf WHERE key = 'household'), 'manual', 1),
-	((SELECT id FROM shelf WHERE key = 'household'), 'invoice', 2),
-	((SELECT id FROM shelf WHERE key = 'household'), 'receipt', 3),
-	((SELECT id FROM shelf WHERE key = 'household'), 'contract', 4),
-	((SELECT id FROM shelf WHERE key = 'statements'), 'bank_statement', 0),
-	((SELECT id FROM shelf WHERE key = 'statements'), 'broker_report', 1)
-ON CONFLICT (shelf_id, type) DO NOTHING;
+${shelfSeedSql()}
 `;

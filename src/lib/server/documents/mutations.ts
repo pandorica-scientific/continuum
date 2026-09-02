@@ -3,7 +3,8 @@ import postgres from 'postgres';
 import type { DocumentTypeKey, EnumValue } from '$lib/enums';
 import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { document, documentLink, documentText, tagLink } from '$lib/server/db/schema';
+import { and } from 'drizzle-orm';
+import { document, documentLink, documentText, lane, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
 import { upsertSubjectByName } from './subjects';
 import { hashBytes, removeUpload } from '$lib/server/system/files';
@@ -104,7 +105,12 @@ export async function insertDocumentAggregate(
 	// household already has a "Car" has to find that one, not fail and not mint a
 	// second — and the lowercase comparison that decides it is now written once.
 	if (input.newSubjectName) {
-		wantedTargetIds.push(await upsertSubjectByName(input.newSubjectName, handle));
+		// A subject made on the way in lands on the shelf the document is being
+		// filed to — which is where its card belongs and where it will be offered
+		// next time.
+		wantedTargetIds.push(
+			await upsertSubjectByName(input.newSubjectName, input.shelfId, handle)
+		);
 	}
 
 	await handle.insert(document).values({
@@ -261,4 +267,39 @@ export async function replaceDocumentFile(
 	await enqueueExtraction(documentId, handle);
 	const removedFile = previous.storedName ? await removeUpload(previous.storedName) : false;
 	return { ok: true, removedFile };
+}
+
+/**
+ * Put a document in a lane on a card it is linked to, or back into history.
+ *
+ * The link is checked rather than assumed. A lane belongs to one card, and a
+ * document that is not on that card cannot be in its lane — otherwise a payslip
+ * could close a cell on an employer it was never filed against, and the count
+ * that says "5 of 6" would be counting the wrong six.
+ *
+ * `null` is history, which is a real answer and not an absence: paper with no
+ * rhythm is most of what a card holds.
+ */
+export async function assignLane(
+	documentId: string,
+	laneId: string | null,
+	handle: Queryable = db
+): Promise<void> {
+	if (laneId) {
+		const [target] = await handle
+			.select({ entityId: lane.entityId })
+			.from(lane)
+			.where(eq(lane.id, laneId))
+			.limit(1);
+		if (!target) throw new Error('No such lane.');
+		const [link] = await handle
+			.select({ documentId: documentLink.documentId })
+			.from(documentLink)
+			.where(
+				and(eq(documentLink.documentId, documentId), eq(documentLink.targetId, target.entityId))
+			)
+			.limit(1);
+		if (!link) throw new Error('The document is not linked to the card that lane is on.');
+	}
+	await handle.update(document).set({ laneId }).where(eq(document.id, documentId));
 }

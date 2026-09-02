@@ -7,6 +7,7 @@
  * differently depending on which screen minted them.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import {
 	addEngagement,
 	addOrganisation,
@@ -20,6 +21,10 @@ import {
 import { engagementsFor } from '$lib/server/organisations/engagements';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeDocument, makeDocumentLink, makeOrganisation, makePerson } from './fixtures';
+
+/** Income & Tax, resolved by key: an organisation belongs to a shelf now. */
+const incomeTaxShelf = (handle: Parameters<typeof shelfIdByKey>[1]) =>
+	shelfIdByKey('income_tax', handle);
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -55,20 +60,20 @@ describe('adding an organisation', () => {
 	it('finds the one that already answers to that name', async () => {
 		// Idempotent rather than an error: two people adding "Tax office" on two
 		// devices have agreed, not collided. `upsertSubjectByName` reads the same.
-		const first = await addOrganisation({ name: 'Tax office', kind: 'authority' }, db);
-		const again = await addOrganisation({ name: '  tax   office ' }, db);
+		const first = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Tax office', kind: 'authority' }, db);
+		const again = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: '  tax   office ' }, db);
 		expect(again.id).toBe(first.id);
 		// And the second call does not overwrite what the first decided.
 		expect(again.kind).toBe('authority');
 	});
 
 	it('refuses a name with nothing in it', async () => {
-		await expect(addOrganisation({ name: '   ' }, db)).rejects.toThrow();
+		await expect(addOrganisation({ shelfId: await incomeTaxShelf(db), name: '   ' }, db)).rejects.toThrow();
 	});
 
 	it('says so when a rename would collide', async () => {
-		const a = await addOrganisation({ name: 'Institute of Physics CAS' }, db);
-		await addOrganisation({ name: 'Tax office' }, db);
+		const a = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' }, db);
+		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Tax office' }, db);
 		await expect(renameOrganisation(a.id, 'tax office', db)).rejects.toThrow(
 			ORGANISATION_NAME_TAKEN
 		);
@@ -80,14 +85,14 @@ describe('removing an organisation', () => {
 		// The same rule a shelf keeps: a document must always be somewhere, and
 		// deleting the employer out from under a payslip is not a delete anybody
 		// asked for.
-		const org = await addOrganisation({ name: 'Institute of Physics CAS' }, db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' }, db);
 		const doc = await makeDocument(db, { type: 'payslip' });
 		await makeDocumentLink(db, { documentId: doc.id, targetId: org.id });
 		await expect(deleteOrganisation(org.id, db)).rejects.toThrow(ORGANISATION_IN_USE);
 	});
 
 	it('takes its role periods with it once nothing is filed', async () => {
-		const org = await addOrganisation({ name: 'Gone Ltd' }, db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Gone Ltd' }, db);
 		const person = await makePerson(db, { name: 'Robert' });
 		await addEngagement({ organisationId: org.id, personId: person.id }, db);
 		await deleteOrganisation(org.id, db);
@@ -99,7 +104,7 @@ describe('role periods', () => {
 	it('closes one rather than deleting it', async () => {
 		// History is the point. A period removed on promotion takes its years with
 		// it, and a lane's expected count silently shrinks.
-		const org = await addOrganisation({ name: 'Institute of Physics CAS' }, db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' }, db);
 		const person = await makePerson(db, { name: 'Robert' });
 		const role = await addEngagement(
 			{

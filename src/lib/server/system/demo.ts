@@ -40,7 +40,8 @@ import {
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
+import { shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
 import { upsertIdentity, type IdentityFields } from '$lib/server/documents/identity';
 import { createDocument } from '$lib/server/documents/mutations';
 import { addSubject, archiveSubject } from '$lib/server/documents/subjects';
@@ -838,7 +839,12 @@ export async function seedDemo(): Promise<void> {
 	// matters: the span has to keep reporting 2023 after the 2026 promotion, or
 	// three years of missing paperwork vanish from the count.
 	const employer = await addOrganisation(
-		{ name: DEMO_EMPLOYER, kind: 'employer', emoji: '🏛️' },
+		{
+			name: DEMO_EMPLOYER,
+			kind: 'employer',
+			emoji: '🏛️',
+			shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax)
+		},
 		db
 	);
 	const employedFrom = `${monthShift(thisMonth, -47)}-01`;
@@ -888,7 +894,12 @@ export async function seedDemo(): Promise<void> {
 	// The authority. No role and no start: an office a household has simply
 	// always dealt with, which is the undated case the span has to survive.
 	const taxOffice = await addOrganisation(
-		{ name: 'Finanční úřad', kind: 'authority', emoji: '🏛️' },
+		{
+			name: 'Finanční úřad',
+			kind: 'authority',
+			emoji: '🏛️',
+			shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax)
+		},
 		db
 	);
 	await addEngagement({ organisationId: taxOffice.id, personId: jana }, db);
@@ -1168,7 +1179,7 @@ export async function seedDemo(): Promise<void> {
 	// paper is archived: it stays in the archive and drops out of every default
 	// list, and its long-passed warranty reads as history rather than as an
 	// expiry somebody forgot.
-	const carSubject = await addSubject('Car', '🚗');
+	const carSubject = await addSubject('Car', '🚗', await shelfIdByKey('vehicles'));
 	await fileDemoPdf({
 		name: `Warranty · ${DEMO_CAR}`,
 		shelfKey: 'vehicles',
@@ -1191,7 +1202,7 @@ export async function seedDemo(): Promise<void> {
 	// The dog is current, and its booster falls inside the year — a second
 	// reminder from a subject rather than from a flat or a loan, which is the
 	// case the rail's subjects exist for.
-	const dogSubject = await addSubject('Dog', '🐕');
+	const dogSubject = await addSubject('Dog', '🐕', await shelfIdByKey('health'));
 	const boosterDue = new Date(Date.now() + 100 * 86400000).toISOString().slice(0, 10);
 	const vaccinatedOn = new Date(Date.now() - 265 * 86400000).toISOString().slice(0, 10);
 	await fileDemoPdf({

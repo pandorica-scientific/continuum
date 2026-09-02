@@ -5,7 +5,7 @@
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
-	import MetricTile from '$lib/components/MetricTile.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 
 	let { data, form } = $props();
@@ -119,44 +119,48 @@
 			{data.asOf ? `from the report of ${data.asOf}` : 'upload the first report below'}
 		</span>
 	</div>
-	<div class="tiles">
-		<MetricTile
-			label="Portfolio"
-			value={data.metrics.portfolio}
-			unit={data.accountUnit}
-			note={data.metrics.portfolioBase ? `≈ ${data.metrics.portfolioBase} ${data.unit}` : undefined}
-		/>
-		<MetricTile
-			label="Money in"
-			value={data.metrics.moneyIn}
-			unit={data.accountUnit}
-			note={data.metrics.since ? `since ${data.metrics.since}` : undefined}
-		/>
-		<MetricTile
-			label="Gain"
-			value={data.metrics.gain}
-			unit={data.accountUnit}
-			color={data.metrics.gainPositive ? 'var(--green)' : 'var(--red)'}
-			note={data.metrics.gainPct ?? undefined}
-		/>
-		<MetricTile
-			label="Annualised"
-			value={data.metrics.annualised ?? '—'}
-			note="nominal, on money in"
-		/>
-		<!-- An estimate, and it says so. It knows nothing about losses carried
-		     forward from earlier years, other income, allowances, or anything held
-		     outside this instance. The rate is configured below rather than
-		     assumed: it differs by country. -->
-		<MetricTile
-			label="Tax on {data.tax.year} gains"
-			value={data.tax.configured ? data.tax.estimated : '—'}
-			unit={data.tax.configured ? data.accountUnit : undefined}
-			note={data.tax.configured
-				? `estimate · ${data.tax.ratePct}% of ${data.tax.taxable}`
-				: 'set a rate below'}
-		/>
-	</div>
+	<!-- The tax figure is an estimate, and it says so. It knows nothing about
+	     losses carried forward from earlier years, other income, allowances, or
+	     anything held outside this instance. The rate is configured below rather
+	     than assumed: it differs by country. -->
+	<SummaryBand
+		tiles={[
+			{
+				label: 'Portfolio',
+				value: data.metrics.portfolio,
+				unit: data.accountUnit,
+				note: data.metrics.portfolioBase
+					? `≈ ${data.metrics.portfolioBase} ${data.unit}`
+					: undefined
+			},
+			{
+				label: 'Money in',
+				value: data.metrics.moneyIn,
+				unit: data.accountUnit,
+				note: data.metrics.since ? `since ${data.metrics.since}` : undefined
+			},
+			{
+				label: 'Gain',
+				value: data.metrics.gain,
+				unit: data.accountUnit,
+				color: data.metrics.gainPositive ? 'var(--green)' : 'var(--red)',
+				note: data.metrics.gainPct ?? undefined
+			},
+			{
+				label: 'Annualised',
+				value: data.metrics.annualised ?? '—',
+				note: 'nominal, on money in'
+			},
+			{
+				label: `Tax on ${data.tax.year} gains`,
+				value: data.tax.configured ? data.tax.estimated : '—',
+				unit: data.tax.configured ? data.accountUnit : undefined,
+				note: data.tax.configured
+					? `estimate · ${data.tax.ratePct}% of ${data.tax.taxable}`
+					: 'set a rate below'
+			}
+		]}
+	/>
 
 	{#if data.tax.configured && data.tax.disposals > 0}
 		<div class="card tax-detail">
@@ -472,11 +476,6 @@
 		font-size: var(--text-lg);
 		line-height: 1;
 		padding: var(--space-1) var(--space-2);
-	}
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: var(--space-6);
 	}
 	.chart-card {
 		display: flex;

@@ -138,17 +138,17 @@ async function loadDocuments(locals: unknown, search = ''): Promise<LoadedDocume
 
 describe('the documents load', () => {
 	it('gives a member a rail count that has already forgotten the restricted one', async () => {
-		await seedShelf('household', { normal: 26, restricted: 1 });
+		await seedShelf('inventory', { normal: 26, restricted: 1 });
 		const data = await loadDocuments(asMember);
-		expect(data.shelves.find((s) => s.key === 'household')!.count).toBe(26);
+		expect(data.shelves.find((s) => s.key === 'inventory')!.count).toBe(26);
 		expect(data.shelves.find((s) => s.key === 'all')!.count).toBe(26);
 		expect(data.total).toBe(26);
 	});
 
 	it('gives the admin 27', async () => {
-		await seedShelf('household', { normal: 26, restricted: 1 });
+		await seedShelf('inventory', { normal: 26, restricted: 1 });
 		const data = await loadDocuments(asAdmin);
-		expect(data.shelves.find((s) => s.key === 'household')!.count).toBe(27);
+		expect(data.shelves.find((s) => s.key === 'inventory')!.count).toBe(27);
 		expect(data.total).toBe(27);
 	});
 
@@ -156,7 +156,7 @@ describe('the documents load', () => {
 		// Not a row, not a name, not a flag set on anything the member can see.
 		// The document does not reach the screen at all — there is nothing to
 		// dim, grey out or mark as withheld, because a placeholder IS the leak.
-		await seedShelf('household', { normal: 1, restricted: 1 });
+		await seedShelf('inventory', { normal: 1, restricted: 1 });
 		const data = (await loadDocuments(asMember)) as LoadedDocuments & {
 			rows: { name: string; restricted: boolean }[];
 		};
@@ -209,7 +209,7 @@ describe('the view a shelf opens in', () => {
 	});
 
 	it('leaves every other shelf on the list', async () => {
-		for (const shelf of ['family', 'health', 'household']) {
+		for (const shelf of ['identity', 'health', 'inventory']) {
 			const data = await loadDocuments(asAdmin, `?shelf=${shelf}`);
 			expect(data.view).toBe('list');
 			expect(data.layout).toBeNull();
@@ -282,7 +282,7 @@ async function fileAgainst(name: string, targetIds: readonly string[]): Promise<
 	await makeDocument(testDb, {
 		id,
 		name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		addedOn: '2026-01-01'
 	});
@@ -332,7 +332,7 @@ describe('capture', () => {
 		const { actions } = await import('../../src/routes/(app)/documents/+page.server');
 		const form = new FormData();
 		form.set('name', fields.name);
-		form.set('shelf', 'household');
+		form.set('shelf', 'inventory');
 		for (const id of fields.linkIds ?? []) form.append('linkIds', id);
 		if (fields.newSubject) form.set('newSubject', fields.newSubject);
 		const request = new Request('http://localhost/documents?/addDocument', {
@@ -392,7 +392,7 @@ describe('capture', () => {
 		const file = new File(['broken'], 'broken.pdf', { type: 'application/pdf' });
 		file.arrayBuffer = () => Promise.reject(new Error('Corrupt upload.'));
 		const form = new FormData();
-		form.set('shelf', 'household');
+		form.set('shelf', 'inventory');
 		form.set('file', file);
 		const request = { formData: async () => form } as unknown as Request;
 
@@ -439,7 +439,7 @@ describe('the review screen', () => {
 		const form = new FormData();
 		form.set('id', id);
 		form.set('name', 'A boiler service');
-		form.set('shelf', 'household');
+		form.set('shelf', 'inventory');
 		form.set('type', 'invoice');
 		const request = new Request('http://localhost/documents/review?/file', {
 			method: 'POST',
@@ -456,7 +456,7 @@ describe('the review screen', () => {
 			.from(document)
 			.where(eq(document.id, id));
 		expect(row.shelfId).not.toBe(await shelfIdByKey('inbox', testDb));
-		expect(row.shelfId).toBe(await shelfIdByKey('household', testDb));
+		expect(row.shelfId).toBe(await shelfIdByKey('inventory', testDb));
 		expect(row.name).toBe('A boiler service');
 		expect(row.type).toBe('invoice');
 	});

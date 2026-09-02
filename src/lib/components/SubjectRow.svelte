@@ -20,8 +20,6 @@
 			name: string;
 			emoji: string;
 			archived: boolean;
-			/** The seeded subject: renameable, never archivable. */
-			household: boolean;
 			count: number;
 		};
 		onrename?: () => void;
@@ -39,16 +37,12 @@
 		{#if subject.archived}
 			<span class="mono badge">Archived</span>
 		{/if}
-		{#if subject.household}
-			<span class="mono badge">Household</span>
-		{:else}
-			<button
-				type="button"
-				class="menu"
-				aria-label="More for {subject.name}"
-				onclick={() => onmenu?.()}>⋯</button
-			>
-		{/if}
+		<button
+			type="button"
+			class="menu"
+			aria-label="More for {subject.name}"
+			onclick={() => onmenu?.()}>⋯</button
+		>
 	</span>
 </div>
 

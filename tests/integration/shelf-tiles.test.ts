@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The three figures a shelf's banner shows.
+ * The figures a shelf's summary band shows.
  *
  * Counted against a real database rather than a fixture list, because most of
- * what makes them interesting is a join: Identity counts PEOPLE and not
- * documents, Household counts the objects its paper is about, and the amber
+ * what makes them interesting is a join: a wallet counts PEOPLE and not
+ * documents, a dossier counts the cards its paper is about, and the amber
  * window comes off the document's type rather than off a constant. None of
  * those survive being faked.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { shelfFacts } from '$lib/server/documents/shelf-stats';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
-import { upsertSubjectByName } from '$lib/server/documents/subjects';
+import { shelfFacts } from '$lib/server/documents/shelf-tiles';
+import { listShelves, shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { makeDocument, makeDocumentLink, makePerson, makeProperty } from './fixtures';
+import { makeDocument, makeDocumentLink, makePerson, makeSubject } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -24,6 +23,12 @@ vi.mock('$env/dynamic/private', () => ({
 let harness: Harness;
 let db: TestDb;
 let previousUrl: string | undefined;
+
+/** The facts for a shelf named by key — the row is what `shelfFacts` takes. */
+async function factsFor(key: string, viewer: Parameters<typeof shelfFacts>[1] = null) {
+	const row = (await listShelves(db)).find((s) => s.key === key)!;
+	return shelfFacts(row, viewer, db);
+}
 
 /** An ISO day relative to today, so no fixture sits on an expiry boundary by accident. */
 const daysFromToday = (days: number): string => {
@@ -75,51 +80,51 @@ describe('shelfFacts', () => {
 		});
 		await makeDocumentLink(db, { documentId: soon.id, targetId: bob.id });
 
-		const facts = await shelfFacts('identity', null, db);
-		expect(facts.people).toBe(2);
+		const facts = await factsFor('identity');
+		expect(facts.cards).toBe(2);
 		expect(facts.expired).toBe(1);
 		expect(facts.inReminderWindow).toBe(1);
 	});
 
 	it('reports a shelf holding nothing dated as undated, whatever it holds', async () => {
-		const shelfId = await shelfIdByKey('family', db);
+		const shelfId = await shelfIdByKey('identity', db);
 		await makeDocument(db, { shelfId, type: 'certificate', expiresOn: null });
-		const facts = await shelfFacts('family', null, db);
-		expect(facts.records).toBe(1);
-		expect(facts.anyDated).toBe(false);
+		const facts = await factsFor('identity');
+		expect(facts.documents).toBe(1);
 		expect(facts.nextDate).toBeNull();
 	});
 
-	it('counts Household by the items its documents are about, not by document', async () => {
-		// Three documents about one boiler is ONE item — which is the whole reason
+	it('counts Inventory by the items its documents are about, not by document', async () => {
+		// Three documents about one boiler is ONE card — which is the whole reason
 		// the shelf is arranged by subject.
-		const shelfId = await shelfIdByKey('household', db);
-		const boiler = await upsertSubjectByName('Boiler', db);
+		const shelfId = await shelfIdByKey('inventory', db);
+		const boiler = await makeSubject(db, { shelfKey: 'inventory', name: 'Boiler' });
 		for (const type of ['receipt', 'warranty', 'manual'] as const) {
 			const doc = await makeDocument(db, { shelfId, type });
-			await makeDocumentLink(db, { documentId: doc.id, targetId: boiler });
+			await makeDocumentLink(db, { documentId: doc.id, targetId: boiler.id });
 		}
-		const facts = await shelfFacts('household', null, db);
-		expect(facts.subjects).toBe(1);
+		const facts = await factsFor('inventory');
+		expect(facts.cards).toBe(1);
 		expect(facts.documents).toBe(3);
 	});
 
-	it('counts addresses for Property from the properties, not from the paper', async () => {
-		// A flat with no documents filed yet is still a flat this shelf is for.
-		await makeProperty(db, { name: 'Karlín' });
-		await makeProperty(db, { name: 'Vinohrady' });
-		const facts = await shelfFacts('property', null, db);
-		expect(facts.addresses).toBe(2);
+	it('counts the Inbox by how long the oldest has waited', async () => {
+		const shelfId = await shelfIdByKey('inbox', db);
+		await makeDocument(db, { shelfId, addedOn: daysFromToday(-6) });
+		await makeDocument(db, { shelfId, addedOn: daysFromToday(-1) });
+		const facts = await factsFor('inbox');
+		expect(facts.waiting).toBe(2);
+		expect(facts.oldestDays).toBe(6);
 	});
 
 	it('hides a restricted document from a member, exactly as the list does', async () => {
-		// A banner counting a document a member cannot see would tell them it
+		// A band counting a document a member cannot see would tell them it
 		// exists, which is the one fact the restriction protects.
-		const shelfId = await shelfIdByKey('family', db);
+		const shelfId = await shelfIdByKey('identity', db);
 		await makeDocument(db, { shelfId, type: 'certificate', sensitivity: 'restricted' });
 		await makeDocument(db, { shelfId, type: 'certificate' });
 
-		expect((await shelfFacts('family', { id: 'x', role: 'member' }, db)).documents).toBe(1);
-		expect((await shelfFacts('family', { id: 'x', role: 'admin' }, db)).documents).toBe(2);
+		expect((await factsFor('identity', { id: 'x', role: 'member' })).documents).toBe(1);
+		expect((await factsFor('identity', { id: 'x', role: 'admin' })).documents).toBe(2);
 	});
 });

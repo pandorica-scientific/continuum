@@ -72,7 +72,7 @@ async function seedDocumentWithFile(options: { sensitivity: 'normal' | 'restrict
 	await makeDocument(testDb, {
 		id,
 		name: 'Paper',
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		sensitivity: options.sensitivity,
 		storedName,

@@ -5,8 +5,9 @@
  * Domain code used to write `shelf: 'payslips'` in four places, which meant the
  * set of shelves was a code enum three modules could disagree about — and did.
  * Now shelves are rows a household owns, so `payslips` may not exist, and the
- * salary tracker has no business knowing that. It asks for `finance` and files
- * a document of `type='payslip'`; behaviour hangs off type, never off shelf.
+ * salary tracker has no business knowing that. It asks for the Income & Tax key
+ * from `SYSTEM_SHELF_KEYS` and files a document of `type='payslip'`; behaviour
+ * hangs off type, never off shelf.
  *
  * Unknown keys THROW. A fallback to inbox would file a payslip somewhere nobody
  * looks and nothing would say so; a key this repo asks for and the database does
@@ -14,7 +15,15 @@
  */
 import { asc, count, eq, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import type { DocumentTypeKey } from '$lib/enums';
+import type { DocumentTypeKey, EnumValue } from '$lib/enums';
+import type { WrittenShelfKey } from '$lib/documents/shelves';
+import {
+	templateDefaults,
+	unitsForTemplate,
+	type LaneSeed,
+	type ShelfTemplate,
+	type ShelfUnit
+} from '$lib/documents/templates';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { document, shelf, shelfType } from '$lib/server/db/schema';
 
@@ -25,6 +34,14 @@ export interface ShelfRow {
 	emoji: string;
 	sortOrder: number;
 	system: boolean;
+	/** One of seven names; `templateEngine` maps it to the component that draws. */
+	template: EnumValue<'shelf.template'>;
+	/** What a card on this shelf is. */
+	unit: EnumValue<'shelf.unit'>;
+	/** The caption under the screen title. */
+	question: string;
+	/** What a new card here starts with. */
+	laneSeeds: LaneSeed[];
 }
 
 export async function shelfIdByKey(key: string, handle: Queryable = db): Promise<string> {
@@ -45,7 +62,7 @@ export async function shelfIdByKey(key: string, handle: Queryable = db): Promise
  * through the untyped `shelfIdByKey`, so they keep doing that.
  */
 export async function systemShelfId(
-	key: 'inbox' | 'statements',
+	key: WrittenShelfKey,
 	handle: Queryable = db
 ): Promise<string> {
 	return shelfIdByKey(key, handle);
@@ -59,7 +76,11 @@ export async function listShelves(handle: Queryable = db): Promise<ShelfRow[]> {
 			label: shelf.label,
 			emoji: shelf.emoji,
 			sortOrder: shelf.sortOrder,
-			system: shelf.system
+			system: shelf.system,
+			template: shelf.template,
+			unit: shelf.unit,
+			question: shelf.question,
+			laneSeeds: shelf.laneSeeds
 		})
 		.from(shelf)
 		.orderBy(shelf.sortOrder, shelf.label);
@@ -97,14 +118,31 @@ export async function reorderShelves(order: string[], handle: Queryable = db): P
 	}
 }
 
-/** A new shelf, keyed by a slug derived from its label. */
+/**
+ * A new shelf, keyed by a slug derived from its label.
+ *
+ * A shelf is one question, one unit, one template — so making one asks for all
+ * three rather than just a name and an emoji. The lanes a card on it starts
+ * with come from the template, exactly as its type list comes from the seed:
+ * both are the household's the moment the shelf exists.
+ */
 export async function addShelf(
-	label: string,
-	emoji: string,
+	input: {
+		label: string;
+		emoji?: string;
+		template: ShelfTemplate;
+		unit: ShelfUnit;
+		question?: string;
+	},
 	handle: Queryable = db
-): Promise<string> {
-	const trimmed = label.trim();
+): Promise<ShelfRow> {
+	const trimmed = input.label.trim();
 	if (!trimmed) throw new Error('A shelf needs a name.');
+	// A wallet of accounts and a ribbon of people are not layouts anybody could
+	// draw. Refused here rather than in the dialog, because the dialog is not the
+	// only caller and a shelf that cannot be drawn is a screen that cannot open.
+	if (!unitsForTemplate(input.template).includes(input.unit))
+		throw new Error(`A ${input.template} shelf cannot be organised by ${input.unit}.`);
 	// The key is derived once and then immutable, exactly like a category's:
 	// renaming the shelf later must not change what code refers to.
 	const base =
@@ -122,10 +160,34 @@ export async function addShelf(
 		.select({ next: sql<number>`coalesce(max(${shelf.sortOrder}), 0) + 10` })
 		.from(shelf);
 	const id = uuidv7();
-	await handle
+	const [row] = await handle
 		.insert(shelf)
-		.values({ id, key, label: trimmed, emoji: emoji.trim() || '🗂️', sortOrder: next });
-	return id;
+		.values({
+			id,
+			key,
+			label: trimmed,
+			emoji: input.emoji?.trim() || '🗂️',
+			sortOrder: next,
+			template: input.template,
+			unit: input.unit,
+			// A shelf with no question written for it still HAS one, so the screen
+			// never draws a blank caption. It is prose the household can replace.
+			question: input.question?.trim() || 'What is filed here?',
+			laneSeeds: templateDefaults(input.template).laneSeeds
+		})
+		.returning({
+			id: shelf.id,
+			key: shelf.key,
+			label: shelf.label,
+			emoji: shelf.emoji,
+			sortOrder: shelf.sortOrder,
+			system: shelf.system,
+			template: shelf.template,
+			unit: shelf.unit,
+			question: shelf.question,
+			laneSeeds: shelf.laneSeeds
+		});
+	return row;
 }
 
 /** How much paper is on a shelf — the number the delete dialog has to say. */

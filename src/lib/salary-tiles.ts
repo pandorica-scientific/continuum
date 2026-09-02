@@ -66,7 +66,8 @@ export function salarySummaryTiles(
 	const avgYearNet = empty ? null : totalNet / BigInt(rows.length);
 	const latestAvgGross =
 		latest && latest.grossMonths > 0 ? latest.gross / BigInt(latest.grossMonths) : null;
-	const latestAvgNet = latest && latest.netMonths > 0 ? latest.net / BigInt(latest.netMonths) : null;
+	const latestAvgNet =
+		latest && latest.netMonths > 0 ? latest.net / BigInt(latest.netMonths) : null;
 
 	// A household has no single raise — two people get their own, in different
 	// years, and averaging them describes nobody.
@@ -120,7 +121,10 @@ export function salarySummaryTiles(
 		{
 			label: 'Last increase',
 			value: increase === null ? '—' : `+${increase.pct}%`,
-			note: increase === null ? 'no increase recorded' : `in ${increase.year} · base pay, bonus excluded`,
+			note:
+				increase === null
+					? 'no increase recorded'
+					: `in ${increase.year} · base pay, bonus excluded`,
 			// Green only when there IS one. A green dash reads as a positive figure
 			// at a glance, which is the opposite of what it says.
 			color: increase === null ? undefined : 'var(--green)'

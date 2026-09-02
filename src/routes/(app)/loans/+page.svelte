@@ -5,7 +5,7 @@
 	import TagInput from '$lib/components/TagInput.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
-	import MetricTile from '$lib/components/MetricTile.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
 	import RepayDialog from '$lib/components/RepayDialog.svelte';
@@ -71,27 +71,24 @@
 				: `${data.count} loan${data.count === 1 ? '' : 's'}`}
 		</span>
 	</div>
-	<div class="tiles">
-		<MetricTile
-			label="Total owed"
-			value={data.metrics.totalOwed}
-			unit={data.unit}
-			color="var(--red)"
-		/>
-		<MetricTile label="Monthly payments" value={data.metrics.monthlyPayments} unit={data.unit} />
-		<MetricTile
-			label="Interest this year"
-			value={data.metrics.interestThisYear}
-			unit={data.unit}
-			color="var(--orange)"
-			note={data.metrics.interestNote}
-		/>
-		<MetricTile
-			label="Debt-free"
-			value={data.metrics.debtFree ? String(data.metrics.debtFree) : '—'}
-			note="at current payments"
-		/>
-	</div>
+	<SummaryBand
+		tiles={[
+			{ label: 'Total owed', value: data.metrics.totalOwed, unit: data.unit, color: 'var(--red)' },
+			{ label: 'Monthly payments', value: data.metrics.monthlyPayments, unit: data.unit },
+			{
+				label: 'Interest this year',
+				value: data.metrics.interestThisYear,
+				unit: data.unit,
+				color: 'var(--orange)',
+				note: data.metrics.interestNote
+			},
+			{
+				label: 'Debt-free',
+				value: data.metrics.debtFree ? String(data.metrics.debtFree) : '—',
+				note: 'at current payments'
+			}
+		]}
+	/>
 </section>
 
 <section class="section" style="gap: 12px;">
@@ -440,11 +437,6 @@
 		border-radius: var(--radius-xl);
 		padding: 9px 14px;
 		font-size: var(--text-md);
-	}
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: var(--space-6);
 	}
 	.loan {
 		display: flex;

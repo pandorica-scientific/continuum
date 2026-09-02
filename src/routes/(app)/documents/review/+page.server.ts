@@ -17,6 +17,7 @@ import { document, documentLink, tag, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { documentTargetSpec, loadPickableTargets } from '$lib/server/documents/targets';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import {
 	listShelves,
 	shelfIdByKey,
@@ -27,7 +28,7 @@ import { assertVisibleDocument, visibleDocumentPredicate } from '$lib/server/doc
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const inboxId = await systemShelfId('inbox');
+	const inboxId = await systemShelfId(SYSTEM_SHELF_KEYS.inbox);
 	const [waiting, shelves, targets, tags, shelfTypes, documentTypes] = await Promise.all([
 		db
 			.select({

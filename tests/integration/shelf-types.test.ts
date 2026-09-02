@@ -8,7 +8,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { SHELF_PROFILES } from '$lib/shelf-profiles';
+import { SHELF_SEED_ROWS } from '$lib/server/db/schema/documents';
 import { addDocumentType } from '$lib/server/documents/types';
 import { shelf, shelfType } from '$lib/server/db/schema';
 import {
@@ -50,17 +50,18 @@ beforeEach(async () => {
 	await harness.sql`truncate shelf_type`;
 	await harness.sql`delete from shelf where key = 'boat'`;
 	await harness.sql`delete from document_type where builtin = false`;
-	for (const [key, profile] of Object.entries(SHELF_PROFILES)) {
-		if (profile.expects.length === 0) continue;
-		await setShelfTypes(await shelfIdByKey(key, testDb), [...profile.expects], testDb);
+	for (const row of SHELF_SEED_ROWS) {
+		if (row.types.length === 0) continue;
+		await setShelfTypes(await shelfIdByKey(row.key, testDb), [...row.types], testDb);
 	}
 });
 
 describe('what a shelf starts with', () => {
-	it('is the list its profile names', async () => {
+	it('is the list the seed names', async () => {
 		const byKey = await shelfTypesByKey(testDb);
-		expect(byKey.get('identity')).toEqual([...SHELF_PROFILES.identity.expects]);
-		expect(byKey.get('finance')).toEqual([...SHELF_PROFILES.finance.expects]);
+		const seeded = (key: string) => SHELF_SEED_ROWS.find((r) => r.key === key)!.types;
+		expect(byKey.get('identity')).toEqual([...seeded('identity')]);
+		expect(byKey.get('income_tax')).toEqual([...seeded('income_tax')]);
 	});
 
 	it('is nothing for the Inbox, because nothing in it has been decided yet', async () => {
@@ -93,7 +94,7 @@ describe('editing a shelf’s list', () => {
 	});
 
 	it('is allowed on a shelf the household made', async () => {
-		await addShelf('Boat', '⛵', testDb);
+		(await addShelf({ label: 'Boat', emoji: '⛵', template: 'kit', unit: 'subject' }, testDb)).id;
 		const id = await shelfIdByKey('boat', testDb);
 		await setShelfTypes(id, ['insurance_policy', 'manual'], testDb);
 
@@ -129,7 +130,7 @@ describe('the column itself', () => {
 	});
 
 	it('goes when the shelf goes', async () => {
-		await addShelf('Boat', '⛵', testDb);
+		(await addShelf({ label: 'Boat', emoji: '⛵', template: 'kit', unit: 'subject' }, testDb)).id;
 		const id = await shelfIdByKey('boat', testDb);
 		await setShelfTypes(id, ['manual'], testDb);
 

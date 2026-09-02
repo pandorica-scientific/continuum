@@ -12,6 +12,7 @@
  * about what should.
  */
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { db, type Queryable } from '$lib/server/db';
 import {
 	document,
@@ -65,7 +66,7 @@ async function unclaimedDocuments(
 		.innerJoin(documentType, eq(documentType.key, document.type))
 		.where(
 			and(
-				eq(shelf.key, 'finance'),
+				eq(shelf.key, SYSTEM_SHELF_KEYS.incomeTax),
 				visibleDocumentPredicate(actor),
 				notExists(
 					handle
@@ -106,7 +107,7 @@ export async function loadProposals(
 	const lanes = await handle
 		.select({
 			id: laneTable.id,
-			organisationId: laneTable.organisationId,
+			organisationId: laneTable.entityId,
 			organisationName: organisation.name,
 			organisationEmoji: organisation.emoji,
 			label: laneTable.label,
@@ -116,7 +117,7 @@ export async function loadProposals(
 			sortOrder: laneTable.sortOrder
 		})
 		.from(laneTable)
-		.innerJoin(organisation, eq(organisation.id, laneTable.organisationId));
+		.innerJoin(organisation, eq(organisation.id, laneTable.entityId));
 
 	const byLane = new Map(lanes.map((l) => [l.id, l]));
 	const byDocument = new Map(documents.map((d) => [d.id, d]));

@@ -20,7 +20,8 @@ import {
 import { hashStoredUpload } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
+import { systemShelfId } from '$lib/server/documents/shelves';
 
 export type SalaryResult = { ok: true } | { ok: false; status: 400 | 404; message: string };
 
@@ -512,7 +513,7 @@ export async function filePayslipDocument(
 			{
 				id: documentId,
 				name,
-				shelfId: await shelfIdByKey('finance', tx),
+				shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax, tx),
 				type: 'payslip',
 				storedName,
 				ext: storedName ? (storedName.split('.').pop() ?? 'pdf').toUpperCase() : 'PDF',

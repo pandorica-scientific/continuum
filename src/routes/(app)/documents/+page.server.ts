@@ -11,7 +11,8 @@
  */
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue, type DocumentTypeKey } from '$lib/enums';
-import { orderTypeOptions, shelfProfile, type ShelfLayout } from '$lib/shelf-profiles';
+import { templateEngine, type ShelfEngine } from '$lib/documents/templates';
+import { archiveTiles, shelfTiles } from '$lib/documents/shelf-tiles';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -19,7 +20,7 @@ import { db } from '$lib/server/db';
 import { document, documentLink, documentText, entity, tagLink } from '$lib/server/db/schema';
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { readDocumentsScreen } from '$lib/server/documents/screen';
-import { shelfFacts } from '$lib/server/documents/shelf-stats';
+import { archiveFacts, shelfFacts } from '$lib/server/documents/shelf-tiles';
 import { loadCounterparties } from '$lib/server/organisations/counterparties-load';
 import {
 	acceptProposal,
@@ -63,6 +64,7 @@ import {
 	listDocumentTypes,
 	removeDocumentType
 } from '$lib/server/documents/types';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import {
 	addShelf,
 	listShelves,
@@ -71,7 +73,9 @@ import {
 	reorderShelves,
 	setShelfTypes,
 	shelfIdByKey,
-	shelfTypesByKey
+	shelfTypesByKey,
+	systemShelfId,
+	type ShelfRow
 } from '$lib/server/documents/shelves';
 import {
 	addSubject,
@@ -120,11 +124,42 @@ import type { Actions, PageServerLoad } from './$types';
 function centreView(
 	asked: string | null,
 	query: string,
-	layout: ShelfLayout | null
+	engine: ShelfEngine | null
 ): 'tags' | 'list' | 'shelf' {
 	if (asked === 'tags') return 'tags';
+	// A search is explained by the line it was found in, and a card face has
+	// nowhere to put one. Everything has no single engine to draw.
 	if (asked === 'list' || query) return 'list';
-	return layout && layout !== 'list' ? 'shelf' : 'list';
+	return engine ? 'shelf' : 'list';
+}
+
+/**
+ * How the list groups when nobody has said otherwise.
+ *
+ * One answer for every shelf, because the list is a secondary view now: the
+ * shelf's own engine is what a shelf is FOR, and a per-shelf default grouping
+ * for the fallback view was a preference nobody expressed.
+ */
+const DEFAULT_GROUP = 'type';
+
+/**
+ * The types on the shelf, in the order the shelf offers them, then by weight.
+ *
+ * `shelf_type.ordinal` is what a person dragged into place, so it decides; a
+ * type on the shelf that is not in the list follows, heaviest first. This
+ * replaces `orderTypeOptions`, which ranked against a hard-coded `expects`
+ * array and so could disagree with the list the household had edited.
+ */
+function orderShelfTypes<T extends { code: string; count: number }>(
+	types: T[],
+	offered: readonly string[]
+): T[] {
+	const rank = new Map(offered.map((code, i) => [code, i]));
+	return [...types].sort((a, b) => {
+		const ra = rank.get(a.code) ?? Number.MAX_SAFE_INTEGER;
+		const rb = rank.get(b.code) ?? Number.MAX_SAFE_INTEGER;
+		return ra - rb || b.count - a.count || a.code.localeCompare(b.code);
+	});
 }
 
 /** A period whose end precedes its start. Not a period, and not a box to draw. */
@@ -166,14 +201,16 @@ const bannerToday = (): string => new Date().toISOString().slice(0, 10);
  * meant a second reading of what a gap is, so they are filled from the coverage
  * loader that already knows.
  */
-async function bannerFactsFor(shelfKey: string, viewer: Actor | null) {
-	const facts = await shelfFacts(shelfKey, viewer);
-	if (shelfKey !== 'statements') return facts;
-	const today = bannerToday();
+async function tileFactsFor(shelfRow: ShelfRow, viewer: Actor | null) {
+	const facts = await shelfFacts(shelfRow, viewer);
+	if (templateEngine(shelfRow.template) !== 'completeness') return facts;
+	// A gap is a fact about periods, and the coverage loader is what knows it.
+	// Counting holes a second time from document rows would be a second answer
+	// to one question.
 	return {
 		...facts,
-		accounts: await coverageAccountCount(),
-		gaps: await gapsAcrossYears(today)
+		cards: await coverageAccountCount(),
+		missing: await gapsAcrossYears(bannerToday())
 	};
 }
 
@@ -187,8 +224,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const entityFilter = url.searchParams.get('entity') ?? '';
 	const includeArchived = url.searchParams.get('archived') === '1';
 	const openDocumentId = url.searchParams.get('doc') ?? '';
-	const profile = shelfProfile(shelf);
-	const view = centreView(url.searchParams.get('view'), query, profile?.layout ?? null);
 	const isAdmin = locals.person?.role === 'admin';
 
 	// Other screens open capture pre-addressed by id, never by name:
@@ -229,6 +264,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		shelfTypesByKey(),
 		listDocumentTypes()
 	]);
+
+	// The shelf being looked at, and how it draws. Both come off the row now:
+	// a shelf is one question, one unit, one template, and a shelf the household
+	// made carries all three exactly as a seeded one does.
+	const shelfRow = shelf === 'all' ? null : (shelves.find((s) => s.key === shelf) ?? null);
+	const engine = shelfRow ? templateEngine(shelfRow.template) : null;
+	const view = centreView(url.searchParams.get('view'), query, engine);
 
 	/** One record a document is filed against, ready to draw as a chip. */
 	interface DocumentLinkRow extends TargetRow {
@@ -399,9 +441,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// What the shelf expects first, then by how many documents each would
 		// leave: opening Identity's type filter should start with Identity
 		// document rather than with whatever happens to be most numerous.
-		types: orderTypeOptions(
+		types: orderShelfTypes(
 			[...typeCounts.entries()].map(([code, n]) => ({ code, count: n })),
-			// The household's own list, which the registry only seeded.
+			// The household's own list, which the seed only started. Its ORDER is
+			// the answer now: `shelf_type.ordinal` is what a person dragged, and a
+			// registry that re-sorted it would be a second opinion about the same
+			// question.
 			shelfTypes.get(shelf) ?? []
 		),
 		// Registry order first, so the groups the screen draws come out in the
@@ -494,24 +539,26 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// The shelf's own default, so Finance opens by year and Identity by who it
 		// is about; the control still nulls the parameter at whatever the shelf
 		// would have done on its own.
-		group: url.searchParams.get('group') ?? profile?.group ?? 'type',
-		defaultGroup: profile?.group ?? 'type',
+		group: url.searchParams.get('group') ?? DEFAULT_GROUP,
+		defaultGroup: DEFAULT_GROUP,
 		// Every kind of paper this household files, built-in and its own. Drawn
 		// from here rather than from the enum, which is only what ships.
 		documentTypes,
 		/** The layout being drawn, or null whenever the centre column is the list. */
-		layout: view === 'shelf' ? (profile?.layout ?? null) : null,
+		layout: view === 'shelf' ? engine : null,
 		/** What this shelf COULD draw, so the toolbar can offer the switch. */
-		shelfLayout: profile?.layout ?? null,
-		emptyHint: profile?.emptyHint ?? null,
+		shelfLayout: engine,
+		emptyHint: shelfRow?.question ?? null,
 		/**
 		 * The three figures the banner shows, or null where there is no one shelf
 		 * to describe: "Everything" is not a shelf, and a result set is not one
 		 * either — a banner over search results would be describing the shelf you
 		 * left rather than what is on screen.
 		 */
-		bannerFacts:
-			shelf === 'all' || query ? null : await bannerFactsFor(shelf, locals.person ?? null),
+		/** The three figures, chosen by the shelf's engine. */
+		tiles: shelfRow
+			? shelfTiles(engine!, await tileFactsFor(shelfRow, locals.person ?? null))
+			: archiveTiles(await archiveFacts(locals.person ?? null)),
 		/**
 		 * The organisations the household deals with, for the rail's third
 		 * section. Counted behind the same read rule as everything else here.
@@ -525,12 +572,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 * with the archive.
 		 */
 		proposals:
-			view === 'shelf' && profile?.layout === 'counterparties'
+			view === 'shelf' && engine === 'dossier'
 				? await loadProposals(db, locals.person ?? null)
 				: [],
 		/** The counterparty cards, or null when the centre column draws the list. */
 		counterparties:
-			view === 'shelf' && profile?.layout === 'counterparties'
+			view === 'shelf' && engine === 'dossier'
 				? await loadCounterparties(
 						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
 						bannerToday(),
@@ -543,7 +590,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 * the list is one press away and does not need this payload.
 		 */
 		coverage:
-			view === 'shelf' && profile?.layout === 'completeness'
+			view === 'shelf' && engine === 'completeness'
 				? await loadCoverage(
 						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
 						bannerToday(),
@@ -590,7 +637,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			name: s.name,
 			emoji: s.emoji,
 			archived: s.archivedAt !== null,
-			household: s.household,
 			count: s.documentCount
 		})),
 		inboxCount: shelfCounts.get(inboxKey) ?? 0,
@@ -1104,7 +1150,16 @@ export const actions: Actions = {
 	addShelf: async ({ request }) => {
 		const form = await request.formData();
 		try {
-			await addShelf(String(form.get('label') ?? ''), String(form.get('emoji') ?? '🗂️'), db);
+			await addShelf(
+				{
+					label: String(form.get('label') ?? ''),
+					emoji: String(form.get('emoji') ?? '🗂️'),
+					template: asEnumValue('shelf.template', String(form.get('template') ?? ''), 'dossier'),
+					unit: asEnumValue('shelf.unit', String(form.get('unit') ?? ''), 'subject'),
+					question: String(form.get('question') ?? '')
+				},
+				db
+			);
 		} catch (error) {
 			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
 		}
@@ -1148,6 +1203,7 @@ export const actions: Actions = {
 			await addOrganisation(
 				{
 					name: String(form.get('name') ?? ''),
+					shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax),
 					kind: asEnumValue('organisation.kind', String(form.get('kind') ?? 'other'), 'other'),
 					emoji: String(form.get('emoji') ?? '')
 				},
@@ -1276,7 +1332,13 @@ export const actions: Actions = {
 	addSubject: async ({ request }) => {
 		const form = await request.formData();
 		try {
-			await addSubject(String(form.get('name') ?? ''), String(form.get('emoji') ?? ''), db);
+			const shelfKey = String(form.get('shelf') ?? '');
+			await addSubject(
+				String(form.get('name') ?? ''),
+				String(form.get('emoji') ?? ''),
+				await shelfIdByKey(shelfKey || SYSTEM_SHELF_KEYS.inbox),
+				db
+			);
 		} catch (error) {
 			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
 		}

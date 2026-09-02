@@ -88,7 +88,7 @@ async function payslipDoc(id: string, periodMonth: string): Promise<void> {
 	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${periodMonth} · Robert`,
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'payslip',
 		storedName: null,
 		ext: 'PDF',

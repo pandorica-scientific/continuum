@@ -8,9 +8,10 @@
  * from the code by construction.
  *
  *   node scripts/design-tokens.mjs           write design_system/TOKENS.md
- *   node scripts/design-tokens.mjs --check   verify TOKENS.md is current AND
- *                                            every var(--x) in the design
- *                                            canvases resolves to something
+ *   node scripts/design-tokens.mjs --check   verify TOKENS.md is current, every
+ *                                            var(--x) in the design canvases
+ *                                            resolves, and every token value a
+ *                                            handoff doc quotes still matches
  *
  * Check exits non-zero when a canvas references a token that is defined neither
  * in app.css nor locally in that canvas — a typo that silently renders as
@@ -157,14 +158,17 @@ function family(tokens) {
 	return `\`--${names[0]}\` … \`--${names[names.length - 1]}\``;
 }
 
-function collectCanvases(dir, acc = []) {
+function collect(dir, ext, acc = []) {
 	for (const entry of readdirSync(dir)) {
 		const p = join(dir, entry);
-		if (statSync(p).isDirectory()) collectCanvases(p, acc);
-		else if (entry.endsWith('.dc.html')) acc.push(p);
+		if (statSync(p).isDirectory()) collect(p, ext, acc);
+		else if (entry.endsWith(ext)) acc.push(p);
 	}
-	return acc;
+	return acc.sort();
 }
+
+const collectCanvases = (dir) => collect(dir, '.dc.html');
+const collectDocs = (dir) => collect(dir, '.md');
 
 function render(css) {
 	const darkGroups = parseGroups(ruleBody(css, DARK_SELECTOR));
@@ -229,7 +233,7 @@ function drift(css) {
 	const unresolved = [];
 	const local = [];
 
-	for (const file of collectCanvases(CANVAS_DIR).sort()) {
+	for (const file of collectCanvases(CANVAS_DIR)) {
 		const text = readFileSync(file, 'utf8');
 		const selfDefined = new Set([...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 		const used = new Set([...text.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1]));
@@ -239,6 +243,48 @@ function drift(css) {
 		}
 	}
 	return { unresolved, local };
+}
+
+/**
+ * Hand-written handoff docs quote token values in tables. They are allowed to —
+ * a handoff should read standalone — but a quoted value that no longer matches
+ * the stylesheet is worse than no value at all, so every quote is checked
+ * against both themes. TOKENS.md is exempt: it is generated from the stylesheet.
+ */
+function quoted(css) {
+	const dark = new Map(
+		[...ruleBody(css, DARK_SELECTOR).matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);/gm)].map((m) => [
+			m[1],
+			m[2].trim()
+		])
+	);
+	const light = new Map(
+		[...ruleBody(css, LIGHT_SELECTOR).matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);/gm)].map((m) => [
+			m[1],
+			m[2].trim()
+		])
+	);
+	const same = (a, b) => b !== undefined && a.replace(/\s+/g, '') === b.replace(/\s+/g, '');
+
+	const wrong = [];
+	for (const file of collectDocs(CANVAS_DIR)) {
+		if (file === OUT) continue;
+		const text = readFileSync(file, 'utf8');
+		for (const m of text.matchAll(/^\|\s*`(--[a-z0-9-]+)`\s*\|\s*`([^`]+)`\s*\|/gm)) {
+			const [, name, value] = m;
+			if (!dark.has(name) && !light.has(name)) {
+				wrong.push({ file: basename(file), name, value, expected: 'not defined in app.css' });
+			} else if (!same(value, dark.get(name)) && !same(value, light.get(name))) {
+				wrong.push({
+					file: basename(file),
+					name,
+					value,
+					expected: [dark.get(name), light.get(name)].filter(Boolean).join(' / ')
+				});
+			}
+		}
+	}
+	return wrong;
 }
 
 const css = readFileSync(CSS, 'utf8');
@@ -273,6 +319,14 @@ if (unresolved.length) {
 	failed = true;
 }
 
+const stale = quoted(css);
+if (stale.length) {
+	console.error('\ndesign:tokens — doc quotes a token value that no longer matches app.css:');
+	for (const w of stale)
+		console.error(`  ${w.file}: ${w.name} = ${w.value} (app.css: ${w.expected})`);
+	failed = true;
+}
+
 if (local.length) {
 	console.log('\ndesign:tokens — canvas-local tokens, candidates to promote into app.css:');
 	const byFile = new Map();
@@ -280,5 +334,8 @@ if (local.length) {
 	for (const [file, names] of byFile) console.log(`  ${file}: ${names.join(' ')}`);
 }
 
-if (!failed) console.log('\ndesign:tokens — reference current, every canvas token resolves.');
+if (!failed)
+	console.log(
+		'\ndesign:tokens — reference current, every canvas token resolves, every quoted value matches.'
+	);
 process.exit(failed ? 1 : 0);

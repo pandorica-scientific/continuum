@@ -10,6 +10,7 @@
  * the trigger, the generated column and the composite foreign key.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { organisation } from '$lib/server/db/schema';
@@ -44,11 +45,17 @@ beforeEach(async () => {
 });
 
 describe('an organisation', () => {
+	/** Income & Tax. An organisation belongs to a shelf, as a document does. */
+	let shelfId: string;
+	beforeAll(async () => {
+		shelfId = await shelfIdByKey('income_tax', db);
+	});
+
 	it('registers itself in the entity supertype, like every other record', async () => {
 		const id = uuidv7();
 		await db
 			.insert(organisation)
-			.values({ id, name: 'Institute of Physics CAS', kind: 'employer' });
+			.values({ id, name: 'Institute of Physics CAS', kind: 'employer', shelfId });
 
 		const rows = await harness.sql<{ kind: string }[]>`
 			select kind from entity where id = ${id}`;
@@ -57,22 +64,25 @@ describe('an organisation', () => {
 
 	it('refuses a kind nobody named', async () => {
 		await expect(
-			harness.sql`insert into organisation (id, name, kind)
-				values (gen_random_uuid(), 'Nowhere', 'landlord')`
+			harness.sql`insert into organisation (id, name, kind, shelf_id)
+				values (gen_random_uuid(), 'Nowhere', 'landlord',
+				        (select id from shelf where key = 'income_tax'))`
 		).rejects.toThrow();
 	});
 
 	it('treats two spellings of one employer as one', async () => {
 		// "AV ČR" and "av čr" are the same institute. Two records differing only
 		// in case is the phantom-column problem returning by another door.
-		await db.insert(organisation).values({ id: uuidv7(), name: 'AV ČR' });
-		await expect(db.insert(organisation).values({ id: uuidv7(), name: 'av čr' })).rejects.toThrow();
+		await db.insert(organisation).values({ id: uuidv7(), name: 'AV ČR', shelfId });
+		await expect(
+			db.insert(organisation).values({ id: uuidv7(), name: 'av čr', shelfId })
+		).rejects.toThrow();
 	});
 
 	it('retires its entity row when it is deleted', async () => {
 		// Otherwise the supertype fills with orphans a later link could attach to.
 		const id = uuidv7();
-		await db.insert(organisation).values({ id, name: 'Gone Ltd' });
+		await db.insert(organisation).values({ id, name: 'Gone Ltd', shelfId });
 		await db.delete(organisation).where(eq(organisation.id, id));
 		expect(await harness.sql`select 1 from entity where id = ${id}`).toHaveLength(0);
 	});

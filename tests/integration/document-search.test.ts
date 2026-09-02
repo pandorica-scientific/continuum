@@ -136,7 +136,7 @@ async function seedDocument(options: {
 	await makeDocument(testDb, {
 		id,
 		name: options.name ?? `Document ${id}`,
-		shelfId: await shelfIdByKey(options.shelf ?? 'household', testDb),
+		shelfId: await shelfIdByKey(options.shelf ?? 'inventory', testDb),
 		type: options.type ?? 'other',
 		note: options.note ?? null,
 		sensitivity: options.sensitivity ?? 'normal',
@@ -182,7 +182,12 @@ async function seedText(
 
 async function seedSubject(name: string, archived: boolean): Promise<string> {
 	const id = uuidv7();
-	await testDb.insert(subject).values({ id, name, archivedAt: archived ? new Date() : null });
+	await testDb.insert(subject).values({
+		id,
+		name,
+		shelfId: await shelfIdByKey('inventory', testDb),
+		archivedAt: archived ? new Date() : null
+	});
 	return id;
 }
 
@@ -231,7 +236,7 @@ describe('the candidate union', () => {
 	});
 
 	it('scopes to one shelf when the rail is on one', async () => {
-		await seedDocument({ name: 'Insurance', shelf: 'finance' });
+		await seedDocument({ name: 'Insurance', shelf: 'income_tax' });
 		await seedDocument({ name: 'Insurance', shelf: 'property' });
 		const { hits } = await searchDocuments('insurance', asAdmin, { shelfKey: 'property' }, testDb);
 		expect(hits).toHaveLength(1);

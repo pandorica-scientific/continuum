@@ -14,6 +14,10 @@ import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeDocument, makeDocumentLink, makePerson } from './fixtures';
 
+/** Income & Tax, resolved by key: an organisation belongs to a shelf now. */
+const incomeTaxShelf = (handle: Parameters<typeof shelfIdByKey>[1]) =>
+	shelfIdByKey('income_tax', handle);
+
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
 		get: (_target, key: string) => process.env[key]
@@ -48,13 +52,13 @@ beforeEach(async () => {
 
 /** An employer with a person, an engagement, and a payslip per month given. */
 async function employerWith(months: string[], since: string | null) {
-	const org = await addOrganisation({ name: 'Institute', kind: 'employer' }, db);
+	const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
 	const person = await makePerson(db, { name: 'Robert' });
 	await addEngagement(
 		{ organisationId: org.id, personId: person.id, role: 'Analyst', startsOn: since },
 		db
 	);
-	const shelfId = await shelfIdByKey('finance', db);
+	const shelfId = await shelfIdByKey('income_tax', db);
 	for (const month of months) {
 		const doc = await makeDocument(db, {
 			name: `Payslip ${month}`,
@@ -96,10 +100,10 @@ describe('loadCounterparties', () => {
 	it('gives a no-cadence lane a list and no cells', async () => {
 		// Paper with no rhythm has nothing to be missing from, and a grid over it
 		// would invent an expectation nobody stated.
-		const org = await addOrganisation({ name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
 		const doc = await makeDocument(db, {
 			name: 'Contract amendment',
-			shelfId: await shelfIdByKey('finance', db),
+			shelfId: await shelfIdByKey('income_tax', db),
 			type: 'contract'
 		});
 		await makeDocumentLink(db, { documentId: doc.id, targetId: org.id });
@@ -124,7 +128,7 @@ describe('loadCounterparties', () => {
 	it('counts a document no lane claims rather than dropping it', async () => {
 		// An organisation whose kind seeds no lanes at all: every document filed
 		// against it is unclaimed, and the card has to say so.
-		const org = await addOrganisation({ name: 'Someone', kind: 'other' }, db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Someone', kind: 'other' }, db);
 		const doc = await makeDocument(db, { name: 'A letter', type: 'correspondence' });
 		await makeDocumentLink(db, { documentId: doc.id, targetId: org.id });
 
@@ -136,13 +140,13 @@ describe('loadCounterparties', () => {
 	it('leaves out an organisation nobody has used', async () => {
 		// A record somebody created and never filed against. A card of empty lanes
 		// for it is noise, and the record is still in the rail.
-		await addOrganisation({ name: 'Unused', kind: 'other' }, db);
+		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Unused', kind: 'other' }, db);
 		expect((await loadCounterparties(2026, TODAY, db)).cards).toEqual([]);
 	});
 
 	it('hides a restricted document from a member, as every other read does', async () => {
-		const org = await addOrganisation({ name: 'Institute', kind: 'employer' }, db);
-		const shelfId = await shelfIdByKey('finance', db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const shelfId = await shelfIdByKey('income_tax', db);
 		for (const sensitivity of ['normal', 'restricted'] as const) {
 			const doc = await makeDocument(db, {
 				shelfId,
@@ -160,7 +164,7 @@ describe('loadCounterparties', () => {
 	});
 
 	it('draws a yearly lane in decades, counting from the engagement', async () => {
-		const org = await addOrganisation({ name: 'Tax office', kind: 'authority' }, db);
+		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Tax office', kind: 'authority' }, db);
 		const person = await makePerson(db, { name: 'Robert' });
 		await addEngagement(
 			{ organisationId: org.id, personId: person.id, startsOn: '2023-01-01' },
@@ -168,7 +172,7 @@ describe('loadCounterparties', () => {
 		);
 		const doc = await makeDocument(db, {
 			name: 'Tax return 2025',
-			shelfId: await shelfIdByKey('finance', db),
+			shelfId: await shelfIdByKey('income_tax', db),
 			type: 'tax_document',
 			periodOn: '2025-01-01',
 			periodEndOn: '2025-12-31'

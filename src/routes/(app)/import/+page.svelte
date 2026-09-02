@@ -10,7 +10,7 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
-	import MetricTile from '$lib/components/MetricTile.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import Field from '$lib/components/Field.svelte';
 
 	let { data, form } = $props();
@@ -373,20 +373,22 @@
 	</section>
 {/if}
 
-<section class="tiles">
-	<MetricTile label="Files this month" value={String(data.stats.filesThisMonth)} />
-	<MetricTile label="Transactions read" value={String(data.stats.transactionsRead)} />
-	<MetricTile
-		label="Filed automatically"
-		value={data.stats.autoPct === null ? '—' : `${data.stats.autoPct}%`}
-		note="corrections teach the categoriser"
-	/>
-	<MetricTile
-		label="Transfers paired"
-		value={String(data.stats.transfersPaired)}
-		note="excluded from income and spending"
-	/>
-</section>
+<SummaryBand
+	tiles={[
+		{ label: 'Files this month', value: String(data.stats.filesThisMonth) },
+		{ label: 'Transactions read', value: String(data.stats.transactionsRead) },
+		{
+			label: 'Filed automatically',
+			value: data.stats.autoPct === null ? '—' : `${data.stats.autoPct}%`,
+			note: 'corrections teach the categoriser'
+		},
+		{
+			label: 'Transfers paired',
+			value: String(data.stats.transfersPaired),
+			note: 'excluded from income and spending'
+		}
+	]}
+/>
 
 <section class="section">
 	<div class="eyebrow-row">
@@ -772,11 +774,6 @@
 		   a phone that single row became 1160px wide. */
 		min-width: 0;
 		overflow-wrap: anywhere;
-	}
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: var(--space-6);
 	}
 	.review-row {
 		display: flex;

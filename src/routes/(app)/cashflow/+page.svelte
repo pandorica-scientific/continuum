@@ -1,7 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
-	import MetricTile from '$lib/components/MetricTile.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import FlowCard from '$lib/charts/FlowCard.svelte';
 	import PeriodControls from '$lib/charts/PeriodControls.svelte';
 	import MonthHistoryChart from '$lib/charts/MonthHistoryChart.svelte';
@@ -26,22 +26,19 @@
 		caption={data.flow.caption}
 	/>
 
-	<div class="tiles">
-		<MetricTile label="Money in" value={fmt(data.metrics.moneyIn)} {unit} color="var(--green)" />
-		<MetricTile label="Money out" value={fmt(data.metrics.moneyOut)} {unit} />
-		<MetricTile
-			label="Saved and invested"
-			value={fmt(data.metrics.saved)}
-			{unit}
-			color="var(--green)"
-		/>
-		<MetricTile
-			label="Biggest single line"
-			value={data.metrics.biggest ? fmt(data.metrics.biggest.value) : '—'}
-			unit={data.metrics.biggest ? unit : undefined}
-			note={data.metrics.biggest?.name}
-		/>
-	</div>
+	<SummaryBand
+		tiles={[
+			{ label: 'Money in', value: fmt(data.metrics.moneyIn), unit, color: 'var(--green)' },
+			{ label: 'Money out', value: fmt(data.metrics.moneyOut), unit },
+			{ label: 'Saved and invested', value: fmt(data.metrics.saved), unit, color: 'var(--green)' },
+			{
+				label: 'Biggest single line',
+				value: data.metrics.biggest ? fmt(data.metrics.biggest.value) : '—',
+				unit: data.metrics.biggest ? unit : undefined,
+				note: data.metrics.biggest?.name
+			}
+		]}
+	/>
 
 	<FlowCard flow={data.flow} currency={data.baseCurrency} />
 
@@ -52,11 +49,3 @@
 		negativeMonths={data.history.negativeMonths}
 	/>
 </section>
-
-<style>
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: var(--space-6);
-	}
-</style>

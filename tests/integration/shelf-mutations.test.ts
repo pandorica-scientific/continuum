@@ -39,7 +39,7 @@ afterAll(async () => {
 beforeEach(async () => {
 	await harness.sql`delete from document`;
 	await harness.sql`delete from shelf where system = false and key not in
-		('identity','family','health','property','tenancy','vehicles','finance','household')`;
+		('identity','health','property','vehicles','income_tax','inventory')`;
 });
 
 async function seedDocuments(shelfId: string, n: number): Promise<void> {
@@ -59,8 +59,8 @@ const shelfExists = async (id: string) =>
 
 describe('reassign-and-delete', () => {
 	it('moves the paper and deletes the shelf in one transaction', async () => {
-		const from = await addShelf('Old boiler', '🔥', testDb);
-		const to = await shelfIdByKey('household', testDb);
+		const from = (await addShelf({ label: 'Old boiler', emoji: '🔥', template: 'kit', unit: 'subject' }, testDb)).id;
+		const to = await shelfIdByKey('inventory', testDb);
 		await seedDocuments(from, 32);
 
 		await reassignAndDelete(from, to, testDb);
@@ -69,7 +69,7 @@ describe('reassign-and-delete', () => {
 	});
 
 	it('rolls the whole thing back if the destination is not a shelf', async () => {
-		const from = await addShelf('Old boiler', '🔥', testDb);
+		const from = (await addShelf({ label: 'Old boiler', emoji: '🔥', template: 'kit', unit: 'subject' }, testDb)).id;
 		await seedDocuments(from, 32);
 
 		await expect(
@@ -81,47 +81,46 @@ describe('reassign-and-delete', () => {
 
 	it('refuses to delete a system shelf, but not an ordinary one', async () => {
 		const inbox = await systemShelfId('inbox', testDb);
-		const household = await shelfIdByKey('household', testDb);
+		const household = await shelfIdByKey('inventory', testDb);
 		await expect(reassignAndDelete(inbox, household, testDb)).rejects.toThrow(/system/i);
 		expect(await shelfExists(inbox)).toBe(true);
 
 		// D4: finance and property joined inbox/statements as system shelves —
 		// the salary tracker files payslips and tax attachments to finance by
 		// key, so a household that deleted it would break the next payslip.
-		const finance = await shelfIdByKey('finance', testDb);
+		const finance = await shelfIdByKey('income_tax', testDb);
 		await expect(reassignAndDelete(finance, household, testDb)).rejects.toThrow(/system/i);
 		expect(await shelfExists(finance)).toBe(true);
 
-		// identity, family, health and household carry the flag for the other
-		// reason: nothing writes to them by key, so deleting one would break
-		// nothing that runs, and they are fixed anyway so that a passport, a
-		// birth certificate, a test result and a boiler warranty are findable in
-		// the same place on every instance. Asserted here because that is
-		// exactly the kind of rule a later refactor "simplifies" back out by
-		// deriving the flag from who writes to it.
-		for (const key of ['identity', 'family', 'health', 'household']) {
+		// identity, health and inventory carry the flag for the other reason:
+		// nothing writes to them by key, so deleting one would break nothing that
+		// runs, and they are fixed anyway so that a passport, a test result and a
+		// boiler warranty are findable in the same place on every instance.
+		// Asserted here because that is exactly the kind of rule a later refactor
+		// "simplifies" back out by deriving the flag from who writes to it.
+		for (const key of ['identity', 'health', 'inventory']) {
 			const id = await shelfIdByKey(key, testDb);
 			await expect(reassignAndDelete(id, inbox, testDb)).rejects.toThrow(/system/i);
 			expect(await shelfExists(id)).toBe(true);
 		}
 
-		// tenancy is seeded and removable — not every household rents. The
+		// vehicles is seeded and removable — not every household drives. The
 		// contrast that proves the guard reads the `system` flag rather than
 		// refusing every seeded shelf.
-		const tenancy = await shelfIdByKey('tenancy', testDb);
-		await reassignAndDelete(tenancy, household, testDb);
-		expect(await shelfExists(tenancy)).toBe(false);
+		const vehicles = await shelfIdByKey('vehicles', testDb);
+		await reassignAndDelete(vehicles, household, testDb);
+		expect(await shelfExists(vehicles)).toBe(false);
 	});
 
 	it('refuses to move a shelf onto itself', async () => {
-		const household = await shelfIdByKey('household', testDb);
+		const household = await shelfIdByKey('inventory', testDb);
 		await expect(reassignAndDelete(household, household, testDb)).rejects.toThrow(/itself/i);
 	});
 
 	it('is what the database itself insists on', async () => {
 		// Not a rule the screen enforces: a plain delete of an occupied shelf is
 		// refused by the constraint, which is what makes "always" true.
-		const from = await addShelf('Occupied', '📄', testDb);
+		const from = (await addShelf({ label: 'Occupied', emoji: '📄', template: 'kit', unit: 'subject' }, testDb)).id;
 		await seedDocuments(from, 1);
 		await expect(harness.sql`delete from shelf where id = ${from}`).rejects.toThrow();
 	});
@@ -142,8 +141,8 @@ describe('renaming, reordering and adding', () => {
 	});
 
 	it('derives an immutable key from the name, and never collides', async () => {
-		const first = await addShelf('Půjčky & úvěry', '🏦', testDb);
-		const second = await addShelf('Půjčky & úvěry', '🏦', testDb);
+		const first = (await addShelf({ label: 'Půjčky & úvěry', emoji: '🏦', template: 'kit', unit: 'subject' }, testDb)).id;
+		const second = (await addShelf({ label: 'Půjčky & úvěry', emoji: '🏦', template: 'kit', unit: 'subject' }, testDb)).id;
 		const rows = await listShelves(testDb);
 		const keys = rows.filter((r) => [first, second].includes(r.id)).map((r) => r.key);
 		expect(keys[0]).toBe('pujcky-uvery');
@@ -151,7 +150,9 @@ describe('renaming, reordering and adding', () => {
 	});
 
 	it('refuses a shelf with no name', async () => {
-		await expect(addShelf('   ', '🗂️', testDb)).rejects.toThrow(/name/i);
+		await expect(
+			addShelf({ label: '   ', emoji: '🗂️', template: 'kit', unit: 'subject' }, testDb)
+		).rejects.toThrow(/name/i);
 	});
 
 	it('keeps the order the household dragged them into', async () => {
@@ -160,5 +161,26 @@ describe('renaming, reordering and adding', () => {
 		await reorderShelves(reversed, testDb);
 		const after = await listShelves(testDb);
 		expect(after.map((s) => s.id)).toEqual(reversed);
+	});
+
+	it('a new shelf takes a template and a unit and starts with the template seeds', async () => {
+		const row = await addShelf(
+			{ label: 'Boat', template: 'obligations', unit: 'subject' },
+			testDb
+		);
+		expect(row.template).toBe('obligations');
+		expect(row.unit).toBe('subject');
+		expect(row.laneSeeds).toEqual([{ label: 'Insurance', cadence: 'yearly', every: 1 }]);
+		// A shelf with no question still has one, so the screen never draws a
+		// blank caption.
+		expect(row.question).toBe('What is filed here?');
+	});
+
+	it('refuses a unit the template cannot be organised by', async () => {
+		// A wallet of things is not a layout anybody could draw, and refusing it
+		// here rather than in the dialog is what stops a shelf that cannot open.
+		await expect(
+			addShelf({ label: 'Cards', template: 'wallet', unit: 'subject' }, testDb)
+		).rejects.toThrow(/wallet/);
 	});
 });

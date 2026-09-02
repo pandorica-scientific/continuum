@@ -12,6 +12,7 @@ import { extname } from 'node:path';
 import { hashBytes, saveUpload } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { formatMinor } from '$lib/money';
 import { firstOfMonth, lastOfMonth } from '$lib/statements/coverage';
@@ -684,7 +685,7 @@ export async function ingestFile(
 					{
 						id: filedDocumentId,
 						name: statementDocumentName(filename, statements),
-						shelfId: await systemShelfId('statements', tx),
+						shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.statements, tx),
 						type: 'bank_statement',
 						storedName,
 						ext: extname(filename).replace(/^\./, '').toLowerCase() || 'csv',

@@ -33,7 +33,7 @@ const property = (id: string) =>
 	harness.sql`insert into property (id, name, kind) values (${id}, 'Flat', 'lived')`;
 const document = (id: string) =>
 	harness.sql`insert into document (id, name, shelf_id, type, added_on)
-		values (${id}, 'Lease', (select id from shelf where key = 'tenancy'), 'contract', '2026-01-01')`;
+		values (${id}, 'Lease', (select id from shelf where key = 'property'), 'contract', '2026-01-01')`;
 const person = (id: string) =>
 	harness.sql`insert into person (id, name, initials) values (${id}, 'Jana', 'J')`;
 

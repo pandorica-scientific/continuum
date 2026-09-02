@@ -27,7 +27,9 @@ import {
 	loan,
 	organisation,
 	person,
+	lane,
 	property,
+	subject,
 	transaction
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
@@ -129,17 +131,63 @@ export async function makeProperty(
 
 export async function makeOrganisation(
 	db: Queryable,
-	overrides: Partial<Insert<typeof organisation>> = {}
+	overrides: Partial<Insert<typeof organisation>> & { shelfKey?: string } = {}
 ): Promise<typeof organisation.$inferSelect> {
+	const { shelfKey, ...rest } = overrides;
+	// Resolved by the key a reader recognises, exactly as `makeDocument` does:
+	// `shelf_id` is NOT NULL against a seeded table, and a test that had to carry
+	// a uuid for it would be a test about plumbing.
+	const shelfId = rest.shelfId ?? (await shelfIdByKey(shelfKey ?? 'income_tax', db));
 	const [row] = await db
 		.insert(organisation)
 		.values({
 			id: uuidv7(),
 			name: 'Test Organisation',
+			shelfId,
 			// From the registry rather than a literal, as `makeProperty` does: a
 			// pinned value goes stale the day the allowed kinds change, and does it
 			// as a constraint violation in an unrelated suite.
 			kind: ENUMS['organisation.kind'][0],
+			...rest
+		})
+		.returning();
+	return row;
+}
+
+/** A thing a household owns — an item, a car, a boat. Lives on one shelf. */
+export async function makeSubject(
+	db: Queryable,
+	overrides: Partial<Insert<typeof subject>> & { shelfKey?: string } = {}
+): Promise<typeof subject.$inferSelect> {
+	const { shelfKey, ...rest } = overrides;
+	const shelfId = rest.shelfId ?? (await shelfIdByKey(shelfKey ?? 'inventory', db));
+	const [row] = await db
+		.insert(subject)
+		.values({
+			id: uuidv7(),
+			// Unique by default: `subject.name` is case-insensitively unique, and a
+			// fixed name would make the second call in one suite a constraint
+			// violation about nothing.
+			name: `Thing ${uuidv7().slice(-8)}`,
+			shelfId,
+			...rest
+		})
+		.returning();
+	return row;
+}
+
+/** One lane on a card. `entityId` is the card, through the supertype. */
+export async function makeLane(
+	db: Queryable,
+	overrides: Partial<Insert<typeof lane>> & { entityId: string }
+): Promise<typeof lane.$inferSelect> {
+	const [row] = await db
+		.insert(lane)
+		.values({
+			id: uuidv7(),
+			label: 'Insurance',
+			cadence: 'yearly',
+			every: 1,
 			...overrides
 		})
 		.returning();

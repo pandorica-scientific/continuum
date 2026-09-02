@@ -62,7 +62,6 @@
 		name: string;
 		emoji: string;
 		archived: boolean;
-		household: boolean;
 		count: number;
 	}
 

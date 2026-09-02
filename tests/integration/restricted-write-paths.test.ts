@@ -76,7 +76,7 @@ beforeEach(async () => {
 async function seedDocument(
 	id: string,
 	sensitivity: 'normal' | 'restricted',
-	shelfKey = 'finance'
+	shelfKey = 'income_tax'
 ): Promise<void> {
 	await makeDocument(testDb, {
 		id,
@@ -270,7 +270,7 @@ describe('the inbox review flow', () => {
 
 		const outcome = await reviewAction(
 			'file',
-			{ id: RESTRICTED, shelf: 'finance', name: 'Filed by a member', type: 'other' },
+			{ id: RESTRICTED, shelf: 'income_tax', name: 'Filed by a member', type: 'other' },
 			asMember
 		);
 

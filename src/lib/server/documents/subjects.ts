@@ -37,8 +37,6 @@ const DEFAULT_SUBJECT_EMOJI = '📁';
 /** What a person is told when the name they typed is already taken. */
 export const SUBJECT_NAME_TAKEN = 'A subject with that name already exists.';
 
-/** What a person is told when they try to archive the household itself. */
-export const HOUSEHOLD_NOT_ARCHIVABLE = 'The household is not something you archive.';
 
 export interface SubjectRow {
 	id: string;
@@ -50,7 +48,6 @@ export interface SubjectRow {
 	/** How much paper is filed under it — behind the read rule, never around it. */
 	documentCount: number;
 	/** The seeded row. Renameable, but never archived. */
-	household: boolean;
 }
 
 /**
@@ -85,25 +82,6 @@ async function refusingDuplicates<T>(write: () => Promise<T>): Promise<T> {
 }
 
 /**
- * The household's own subject — the row the baseline seeded, found by age.
- *
- * NOT by the word "Household": a Czech household may call it "Domácnost", the
- * ruling says it may be renamed, and a rule that reads the name would quietly
- * stop protecting it the moment somebody did. It is not by id either, because
- * the baseline seeds it with `gen_random_uuid()`. What is durably true is that
- * it existed before the database was handed over: every other subject is minted
- * by capture or by the rail, and therefore later.
- */
-export async function householdSubjectId(handle: Queryable = db): Promise<string | null> {
-	const [row] = await handle
-		.select({ id: subject.id })
-		.from(subject)
-		.orderBy(asc(subject.createdAt), asc(subject.id))
-		.limit(1);
-	return row?.id ?? null;
-}
-
-/**
  * Every subject, with how much paper is filed under it.
  *
  * The count carries `visibleDocumentPredicate`, exactly as the shelf counts do:
@@ -119,8 +97,7 @@ export async function listSubjects(
 	handle: Queryable = db,
 	actor: Actor | null = null
 ): Promise<SubjectRow[]> {
-	const [household, rows, counted] = await Promise.all([
-		householdSubjectId(handle),
+	const [rows, counted] = await Promise.all([
 		handle
 			.select({
 				id: subject.id,
@@ -147,15 +124,20 @@ export async function listSubjects(
 	return rows.map((row) => ({
 		...row,
 		// A subject nothing is filed under is a zero, not an absence.
-		documentCount: countByTarget.get(row.id) ?? 0,
-		household: row.id === household
+		documentCount: countByTarget.get(row.id) ?? 0
 	}));
 }
 
-/** A new subject, refusing a name another subject already answers to. */
+/**
+ * A new subject, refusing a name another subject already answers to.
+ *
+ * Takes the shelf it lives on: a car is on Vehicles and a boiler on Inventory,
+ * and neither is offered when filing the other's paper.
+ */
 export async function addSubject(
 	name: string,
 	emoji: string,
+	shelfId: string,
 	handle: Queryable = db
 ): Promise<string> {
 	const trimmed = name.trim();
@@ -164,7 +146,7 @@ export async function addSubject(
 	await refusingDuplicates(() =>
 		handle
 			.insert(subject)
-			.values({ id, name: trimmed, emoji: emoji.trim() || DEFAULT_SUBJECT_EMOJI })
+			.values({ id, name: trimmed, shelfId, emoji: emoji.trim() || DEFAULT_SUBJECT_EMOJI })
 	);
 	return id;
 }
@@ -177,12 +159,16 @@ export async function addSubject(
  * upsert are two readings of ONE case-insensitive uniqueness rule rather than
  * two hand-written lowercase comparisons that agree today.
  */
-export async function upsertSubjectByName(name: string, handle: Queryable): Promise<string> {
+export async function upsertSubjectByName(
+	name: string,
+	shelfId: string,
+	handle: Queryable
+): Promise<string> {
 	const trimmed = name.trim();
 	if (!trimmed) throw new Error('A subject needs a name.');
 	await handle
 		.insert(subject)
-		.values({ id: uuidv7(), name: trimmed, emoji: DEFAULT_SUBJECT_EMOJI })
+		.values({ id: uuidv7(), name: trimmed, shelfId, emoji: DEFAULT_SUBJECT_EMOJI })
 		.onConflictDoNothing();
 	const [existing] = await handle
 		.select({ id: subject.id })
@@ -244,7 +230,6 @@ export async function archiveSubject(
 	on: string = todayIso(),
 	handle: Queryable = db
 ): Promise<void> {
-	if (id === (await householdSubjectId(handle))) throw new Error(HOUSEHOLD_NOT_ARCHIVABLE);
 	await handle
 		.update(subject)
 		.set({

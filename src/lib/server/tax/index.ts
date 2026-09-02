@@ -16,7 +16,8 @@ import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { attachDocument, documentsAbout } from '$lib/server/documents/targets';
 import type { Actor } from '$lib/server/documents/visibility';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
+import { systemShelfId } from '$lib/server/documents/shelves';
 // Naming a filed document needs no database, and the screen renders the same
 // kinds this module files under — so both live in the pure module. Re-exported
 // because callers have always reached for it here.
@@ -164,7 +165,7 @@ export async function attachDocumentsToStatement(
 				name,
 				// The `tax` shelf is gone: a tax document is finance paperwork with
 				// a type that says so, which survives a household renaming shelves.
-				shelfId: await shelfIdByKey('finance', handle),
+				shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax, handle),
 				type: 'tax_document',
 				storedName: attachment.storedName,
 				ext: attachment.ext,

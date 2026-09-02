@@ -220,7 +220,7 @@ async function payslip(
 	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${periodMonth} · Robert`,
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'payslip',
 		storedName,
 		ext: 'PDF',
@@ -462,7 +462,7 @@ describe('a bulk edit that would retype a payslip', () => {
 		await makeDocument(testDb, {
 			id,
 			name,
-			shelfKey: 'household',
+			shelfKey: 'inventory',
 			type: 'other',
 			addedOn: '2026-08-25'
 		});
@@ -537,11 +537,11 @@ describe('a bulk edit that would retype a payslip', () => {
 		await seedHousehold();
 		const slip = await payslip('2026-07', 6_840_000n);
 
-		await bulkUpdate([slip.id], { type: 'other', shelf: 'household' });
+		await bulkUpdate([slip.id], { type: 'other', shelf: 'inventory' });
 
 		const [row] = await testDb.select().from(document).where(eq(document.id, slip.id));
 		expect(row.type).toBe('payslip');
-		expect(row.shelfId).toBe(await shelfIdByKey('household', testDb));
+		expect(row.shelfId).toBe(await shelfIdByKey('inventory', testDb));
 	});
 
 	it('still guards the payslip when the posted type is not a real enum value at all', async () => {
@@ -570,12 +570,12 @@ describe('a bulk edit that would retype a payslip', () => {
 		await makeDocument(testDb, {
 			id: letter,
 			name: 'Untouched',
-			shelfKey: 'household',
+			shelfKey: 'inventory',
 			type: 'correspondence',
 			addedOn: '2026-08-25'
 		});
 
-		await bulkUpdate([letter], { shelf: 'household' });
+		await bulkUpdate([letter], { shelf: 'inventory' });
 
 		expect(await typeOf(letter)).toBe('correspondence');
 	});

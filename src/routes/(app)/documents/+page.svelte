@@ -21,7 +21,6 @@
 	import { DOCUMENT_ACCEPT } from '$lib/uploads';
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
-	import ShelfBanner from '$lib/documents/ShelfBanner.svelte';
 	import CoverageView from '$lib/statements/CoverageView.svelte';
 	import CounterpartiesView from '$lib/organisations/CounterpartiesView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
@@ -38,7 +37,7 @@
 		typeOptionsFor
 	} from '$lib/documents';
 	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
-	import { LAYOUT_LABELS } from '$lib/shelf-profiles';
+	import { ENGINE_LABELS } from '$lib/documents/templates';
 	import {
 		aboutOptionLabel,
 		expiryTreatment,
@@ -165,9 +164,7 @@
 	 * it IS drawing. Null while searching, because a search forces the list —
 	 * offering the switch there would be a control that undoes itself.
 	 */
-	const layoutSwitch = $derived(
-		!data.query && data.shelfLayout && data.shelfLayout !== 'list' ? data.shelfLayout : null
-	);
+	const layoutSwitch = $derived(!data.query && data.shelfLayout ? data.shelfLayout : null);
 
 	$effect(() => {
 		// A navigation is what carries new data in; nothing stays armed across it.
@@ -357,20 +354,6 @@
 	</div>
 {/if}
 
-{#if data.bannerFacts}
-	<!-- Above the toolbar, because it describes the shelf the toolbar is about
-	     to filter. Absent on "Everything" and while searching: neither is a
-	     shelf, and a banner over search results would be describing the one you
-	     left. -->
-	<ShelfBanner
-		shelfKey={data.shelf}
-		label={shelfLabel}
-		emoji={data.shelves.find((s) => s.key === data.shelf)?.emoji ?? '🗂️'}
-		system={data.shelves.find((s) => s.key === data.shelf)?.system ?? false}
-		facts={data.bannerFacts}
-		emptyHint={data.emptyHint}
-	/>
-{/if}
 
 <section class="toolbar">
 	<div class="search">
@@ -390,8 +373,8 @@
 		     disabling it, because a search always renders the list. -->
 		<Segmented
 			options={[
-				{ value: 'shelf', label: LAYOUT_LABELS[layoutSwitch] },
-				{ value: 'list', label: LAYOUT_LABELS.list }
+				{ value: 'shelf', label: ENGINE_LABELS[layoutSwitch] },
+				{ value: 'list', label: 'List' }
 			]}
 			value={data.view === 'shelf' ? 'shelf' : 'list'}
 			onchange={(value) => navigate({ view: value === 'list' ? 'list' : null })}
@@ -764,7 +747,7 @@
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
 				/>
-			{:else if data.view === 'shelf' && data.layout === 'counterparties' && data.counterparties}
+			{:else if data.view === 'shelf' && data.layout === 'dossier' && data.counterparties}
 				<!-- Who the paper was with, and which period never arrived. -->
 				<CounterpartiesView
 					counterparties={data.counterparties}

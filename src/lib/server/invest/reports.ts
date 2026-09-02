@@ -17,6 +17,7 @@ import { db, type Db, type Queryable } from '$lib/server/db';
 import { account, document, documentType, shelf, tag, tagLink } from '$lib/server/db/schema';
 import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import {
@@ -127,7 +128,7 @@ export async function uploadBrokerReport(
 				{
 					id: documentId,
 					name: `${brokerKey.toUpperCase()} report ${reportDay}`,
-					shelfId: await systemShelfId('statements', tx),
+					shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.statements, tx),
 					type: 'broker_report',
 					storedName,
 					ext,

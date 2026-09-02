@@ -1,5 +1,5 @@
 {
-  "id": "5a1c651d-2d57-4585-8cd1-5913c4fc3d0d",
+  "id": "d1a2fefa-2164-4f01-b281-937352fdba4d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -807,6 +807,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "lane_id": {
+          "name": "lane_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -1259,6 +1265,31 @@
           "notNull": true,
           "default": false
         },
+        "template": {
+          "name": "template",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "question": {
+          "name": "question",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lane_seeds": {
+          "name": "lane_seeds",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1388,6 +1419,12 @@
           "notNull": true,
           "default": "'🏠'"
         },
+        "shelf_id": {
+          "name": "shelf_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1429,9 +1466,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "subject_shelf_id_idx": {
+          "name": "subject_shelf_id_idx",
+          "columns": [
+            {
+              "expression": "shelf_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "subject_shelf_id_shelf_id_fk": {
+          "name": "subject_shelf_id_shelf_id_fk",
+          "tableFrom": "subject",
+          "tableTo": "shelf",
+          "columnsFrom": [
+            "shelf_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "subject_name_unique": {
@@ -1643,8 +1709,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "organisation_id": {
-          "name": "organisation_id",
+        "entity_id": {
+          "name": "entity_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1666,6 +1732,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "every": {
+          "name": "every",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "conditions": {
           "name": "conditions",
@@ -1697,11 +1770,11 @@
         }
       },
       "indexes": {
-        "lane_organisation_idx": {
-          "name": "lane_organisation_idx",
+        "lane_entity_idx": {
+          "name": "lane_entity_idx",
           "columns": [
             {
-              "expression": "organisation_id",
+              "expression": "entity_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1729,12 +1802,12 @@
         }
       },
       "foreignKeys": {
-        "lane_organisation_id_organisation_id_fk": {
-          "name": "lane_organisation_id_organisation_id_fk",
+        "lane_entity_id_entity_id_fk": {
+          "name": "lane_entity_id_entity_id_fk",
           "tableFrom": "lane",
-          "tableTo": "organisation",
+          "tableTo": "entity",
           "columnsFrom": [
-            "organisation_id"
+            "entity_id"
           ],
           "columnsTo": [
             "id"
@@ -1798,6 +1871,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "shelf_id": {
+          "name": "shelf_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1821,9 +1900,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "organisation_shelf_id_idx": {
+          "name": "organisation_shelf_id_idx",
+          "columns": [
+            {
+              "expression": "shelf_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "organisation_shelf_id_shelf_id_fk": {
+          "name": "organisation_shelf_id_shelf_id_fk",
+          "tableFrom": "organisation",
+          "tableTo": "shelf",
+          "columnsFrom": [
+            "shelf_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

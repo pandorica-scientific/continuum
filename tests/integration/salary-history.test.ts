@@ -48,7 +48,7 @@ describe('loadSalaryHistory', () => {
 		await makeDocument(testDb, {
 			id: DOC,
 			name: 'Payslip 2026-08 · Robert',
-			shelfKey: 'finance',
+			shelfKey: 'income_tax',
 			type: 'payslip',
 			storedName: 'slip-aug.pdf',
 			ext: 'PDF',
@@ -141,7 +141,7 @@ describe('latestSalaryByPerson', () => {
 	it('gives the newest month with both jobs in it, and the month before', async () => {
 		const jobA = rowId('document-slip-jul-a');
 		const jobB = rowId('document-slip-jul-b');
-		const financeShelf = await shelfIdByKey('finance', testDb);
+		const financeShelf = await shelfIdByKey('income_tax', testDb);
 		await testDb.insert(document).values(
 			[jobA, jobB].map((id) => ({
 				id,
