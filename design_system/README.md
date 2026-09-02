@@ -1313,7 +1313,7 @@ when nothing is pressing.
 | `Continuum Error Pages.dc.html` | The ten error states. Opens standalone; chips in the header switch state, and the rings hide an easter egg. |
 | `Continuum Ingest v0.3.8.dc.html` | The statement-ingest branch — eleven elements, both themes. Chips in the header switch element. |
 | `image-slot.js` | The drop-target component the property image slots use. Reference only. |
-| `colors_and_type.css` | The Stock Watcher design system's token file, for the values the design inherits. |
+| `TOKENS.md` | The token reference, generated from `src/lib/styles/app.css`. Regenerate with `npm run design:tokens`; never hand-edit. |
 | `README.md` | This document. |
 
 `Continuum v4.dc.html` is a single self-contained file: an HTML template followed by

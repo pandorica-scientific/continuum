@@ -1,5 +1,8 @@
-/* Continuum design tokens — from the Stock Watcher design system handoff.
-   Dark is the default theme; light is an explicit opt-in (no system fallback). */
+/* Continuum design tokens — the source of truth for the whole product, and the
+   one the design canvases in design_system/ are authored against.
+   Dark is the default theme; light is an explicit opt-in (no system fallback).
+   design_system/TOKENS.md is generated from this file; after editing it run
+   `npm run design:tokens`. */
 
 :root {
 	/* Tells the browser to paint its OWN chrome — scrollbars above all — in the
@@ -8,6 +11,10 @@
 	   Nothing in the app draws that bar, which is why it survived a search. */
 	color-scheme: dark;
 
+	/* Surfaces, then inks, then the hue set every tint and wash is mixed from.
+	   Three card grounds rather than one: a card, something resting on a card,
+	   and something resting on that. Past three a reader stops counting depth
+	   and starts seeing noise, which is the same argument elevation makes below. */
 	--bg: #0e1117;
 	--bg2: #11161f;
 	--side: #0a0d13;
@@ -31,7 +38,9 @@
 	--brand: #4a86c8;
 	--plate: rgba(14, 17, 23, 0.86);
 
-	/* Pill fills: the hue itself at 0.18 over the card. */
+	/* Pill fills: the hue itself at 0.18 over the card. Grey is the one
+	   exception at 0.16 — a neutral at the same alpha as a hue reads heavier,
+	   because nothing about it is carried by chroma. */
 	--green-tint: rgba(46, 204, 113, 0.18);
 	--yellow-tint: rgba(241, 196, 15, 0.18);
 	--red-tint: rgba(239, 106, 92, 0.18);
@@ -40,13 +49,15 @@
 	--purple-tint: rgba(189, 133, 211, 0.18);
 	--orange-tint: rgba(230, 126, 34, 0.18);
 	--indigo-tint: rgba(123, 140, 232, 0.18);
+	--brand-tint: rgba(74, 134, 200, 0.18);
 	--grey-tint: rgba(138, 150, 166, 0.16);
 
 	/* One step below a tint: tile and card grounds that carry a hue without
 	   becoming a pill.
 	   Complete by design. Both families cover the same hues so a component can
 	   step between them, and a wash nothing happens to reference today is a gap
-	   in the palette rather than dead code — do not "clean" one out. */
+	   in the palette rather than dead code — do not "clean" one out.
+	   Grey drops with its tint, one step under the 0.07 the hues take. */
 	--green-wash: rgba(46, 204, 113, 0.07);
 	--yellow-wash: rgba(241, 196, 15, 0.07);
 	--red-wash: rgba(239, 106, 92, 0.07);
@@ -55,6 +66,8 @@
 	--purple-wash: rgba(189, 133, 211, 0.07);
 	--orange-wash: rgba(230, 126, 34, 0.07);
 	--indigo-wash: rgba(123, 140, 232, 0.07);
+	--brand-wash: rgba(74, 134, 200, 0.07);
+	--grey-wash: rgba(138, 150, 166, 0.06);
 
 	/* ── Category series colours ──────────────────────────────────────────────
 	 * Generated in OKLCH and validated, not chosen by eye. Every pair was
@@ -381,6 +394,7 @@ html[data-ledger-theme='light'] {
 	--purple-tint: rgba(165, 101, 196, 0.13);
 	--orange-tint: rgba(224, 123, 30, 0.14);
 	--indigo-tint: rgba(112, 128, 224, 0.14);
+	--brand-tint: rgba(63, 124, 191, 0.13);
 	--grey-tint: rgba(120, 130, 145, 0.13);
 
 	/* The same bright values, one step lighter again. */
@@ -392,6 +406,8 @@ html[data-ledger-theme='light'] {
 	--purple-wash: rgba(165, 101, 196, 0.06);
 	--orange-wash: rgba(224, 123, 30, 0.06);
 	--indigo-wash: rgba(112, 128, 224, 0.06);
+	--brand-wash: rgba(63, 124, 191, 0.05);
+	--grey-wash: rgba(120, 130, 145, 0.05);
 
 	/* Category series, light theme. Its own steps from the same hues — not the
 	 * dark values lightened, which would fail contrast against a white card. */
