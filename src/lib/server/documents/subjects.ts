@@ -17,7 +17,7 @@
  * no delete, because a subject that once held paper is history and archiving is
  * how history is put away.
  */
-import { asc, count, eq, sql } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { uuidv7 } from 'uuidv7';
 import { db, type Queryable } from '$lib/server/db';
@@ -36,7 +36,6 @@ const DEFAULT_SUBJECT_EMOJI = '📁';
 
 /** What a person is told when the name they typed is already taken. */
 export const SUBJECT_NAME_TAKEN = 'A subject with that name already exists.';
-
 
 export interface SubjectRow {
 	id: string;

@@ -108,9 +108,7 @@ export async function insertDocumentAggregate(
 		// A subject made on the way in lands on the shelf the document is being
 		// filed to — which is where its card belongs and where it will be offered
 		// next time.
-		wantedTargetIds.push(
-			await upsertSubjectByName(input.newSubjectName, input.shelfId, handle)
-		);
+		wantedTargetIds.push(await upsertSubjectByName(input.newSubjectName, input.shelfId, handle));
 	}
 
 	await handle.insert(document).values({

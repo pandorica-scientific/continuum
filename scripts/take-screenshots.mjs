@@ -96,7 +96,18 @@ const SCREENS = [
 	{ name: 'tax', path: '/tax', settle: 600, scrollTo: 'text=one line per person and country' },
 	{ name: 'calendar', path: '/calendar', phone: true },
 	{ name: 'contacts', path: '/contacts' },
-	{ name: 'documents', path: '/documents' }
+	// One per shelf: each draws a different engine, and a single screenshot of
+	// "Documents" shows one of eight answers.
+	{ name: 'documents', path: '/documents' },
+	{ name: 'documents-inbox', path: '/documents?shelf=inbox' },
+	{ name: 'documents-ids', path: '/documents?shelf=identity' },
+	{ name: 'documents-statements', path: '/documents?shelf=statements' },
+	{ name: 'documents-income-tax', path: '/documents?shelf=income_tax' },
+	{ name: 'documents-health', path: '/documents?shelf=health' },
+	{ name: 'documents-inventory', path: '/documents?shelf=inventory' },
+	{ name: 'documents-property', path: '/documents?shelf=property' },
+	{ name: 'documents-vehicles', path: '/documents?shelf=vehicles' },
+	{ name: 'documents-list', path: '/documents?shelf=vehicles&view=list' }
 ];
 
 const only = process.env.SHOT_ONLY?.split(',').map((s) => s.trim());

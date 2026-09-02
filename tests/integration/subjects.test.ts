@@ -22,7 +22,6 @@ import {
 	archiveSubject,
 	listSubjects,
 	renameSubject,
-	setSubjectEmoji,
 	SUBJECT_NAME_TAKEN,
 	unarchiveSubject
 } from '$lib/server/documents/subjects';
@@ -225,7 +224,9 @@ describe('unarchiving a subject', () => {
 describe('naming a subject', () => {
 	it('refuses a second subject whose name differs only in case', async () => {
 		await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
-		await expect(addSubject('car', '🚗', await shelfIdByKey('inventory', testDb), testDb)).rejects.toThrow(SUBJECT_NAME_TAKEN);
+		await expect(
+			addSubject('car', '🚗', await shelfIdByKey('inventory', testDb), testDb)
+		).rejects.toThrow(SUBJECT_NAME_TAKEN);
 	});
 
 	it('refuses a rename onto a name another subject already has', async () => {
@@ -235,7 +236,9 @@ describe('naming a subject', () => {
 	});
 
 	it('refuses a subject with no name at all', async () => {
-		await expect(addSubject('   ', '🚗', await shelfIdByKey('inventory', testDb), testDb)).rejects.toThrow(/needs a name/i);
+		await expect(
+			addSubject('   ', '🚗', await shelfIdByKey('inventory', testDb), testDb)
+		).rejects.toThrow(/needs a name/i);
 	});
 });
 

@@ -10,7 +10,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { env } from '$env/dynamic/private';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { shelf, subject } from '$lib/server/db/schema';
 import { initialsFor } from '$lib/people';
 import { interestForMonth } from '$lib/loans/amortise';
 import { formatMinor } from '$lib/money';
@@ -41,7 +43,10 @@ import {
 	transaction
 } from '$lib/server/db/schema';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
-import { shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
+import { addShelf, shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
+import { createCard } from '$lib/server/documents/cards';
+import { assignLane } from '$lib/server/documents/mutations';
+import { addLane, lanesFor } from '$lib/server/organisations/mutations';
 import { upsertIdentity, type IdentityFields } from '$lib/server/documents/identity';
 import { createDocument } from '$lib/server/documents/mutations';
 import { addSubject, archiveSubject } from '$lib/server/documents/subjects';
@@ -180,6 +185,8 @@ async function fileDemoPdf(input: {
 	periodEndOn?: string;
 	/** What the face says, for the wallet to draw. Hand-entered in a real install. */
 	identity?: IdentityFields;
+	/** The lane on its card this document sits in, where the card has one. */
+	laneId?: string;
 }): Promise<string> {
 	const bytes = await makeDemoPdf(input.name, input.lines);
 	const storedName = await saveUploadBytes(bytes, 'demo.pdf');
@@ -203,7 +210,34 @@ async function fileDemoPdf(input: {
 		periodEndOn: input.periodEndOn ?? null
 	});
 	if (input.identity) await upsertIdentity(id, input.identity);
+	// After the links, because a lane may only hold paper on its own card.
+	if (input.laneId) await assignLane(id, input.laneId);
 	return id;
+}
+
+/**
+ * A card on a shelf, with its lanes, and a helper to file into one by label.
+ *
+ * The demo exists to show every state a cell can be in — filed, missing, not
+ * due yet, before the thing existed — because a demo with nothing missing shows
+ * nothing about what the shelf is FOR.
+ */
+async function demoCard(
+	shelfKey: string,
+	name: string,
+	emoji?: string,
+	kind?: EnumValue<'organisation.kind'>
+): Promise<{ id: string; lane: (label: string) => string }> {
+	const card = await createCard({ shelfId: await shelfIdByKey(shelfKey), name, emoji, kind });
+	const lanes = await lanesFor(card.id);
+	return {
+		id: card.id,
+		lane: (label: string) => {
+			const found = lanes.find((l) => l.label === label);
+			if (!found) throw new Error(`The demo asked for a lane "${label}" that ${name} has not got.`);
+			return found.id;
+		}
+	};
 }
 
 function monthShift(base: string, offset: number): string {
@@ -863,8 +897,15 @@ export async function seedDemo(): Promise<void> {
 		{ organisationId: employer.id, personId: jana, role: 'Senior analytik', startsOn: promotedOn },
 		db
 	);
+	const employerLanes = await lanesFor(employer.id, db);
+	const laneNamed = (label: string) => employerLanes.find((l) => l.label === label)?.id ?? null;
 	for (const documentId of payslipIds) {
 		await attachDocument(employer.id, documentId, null, db);
+		// Into the lane, not merely onto the card. A payslip in the card's history
+		// leaves the month it covers reading as a hole, which is the one thing
+		// this shelf exists to be right about.
+		const payslipLane = laneNamed('Payslips');
+		if (payslipLane) await assignLane(documentId, payslipLane, db);
 	}
 
 	// One year's declaration and not the next, so the employer's yearly lane
@@ -874,9 +915,10 @@ export async function seedDemo(): Promise<void> {
 	const declaredYear = thisYear - 2;
 	await fileDemoPdf({
 		name: `Prohlášení poplatníka ${declaredYear}`,
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'tax_document',
 		targetIds: [employer.id, jana],
+		laneId: laneNamed('Once a year · declaration, annual settlement') ?? undefined,
 		tagNames: [String(declaredYear)],
 		periodOn: `${declaredYear}-01-01`,
 		periodEndOn: `${declaredYear}-12-31`,
@@ -910,7 +952,7 @@ export async function seedDemo(): Promise<void> {
 	// ending once, from the tenancy, rather than once from each track.
 	await fileDemoPdf({
 		name: 'Renting contract · Karlín',
-		shelfKey: 'tenancy',
+		shelfKey: 'property',
 		type: 'contract',
 		targetIds: [tenancyB],
 		expiresOn: tenancyEndsOn,
@@ -1068,7 +1110,7 @@ export async function seedDemo(): Promise<void> {
 	const receipts = [
 		// The Alza purchase is also the split and tagged one, so the same payment
 		// now carries every connector the ledger has.
-		{ row: alza, shelfKey: 'household', tags: ['Renovation 2026'] },
+		{ row: alza, shelfKey: 'inventory', tags: ['Renovation 2026'] },
 		{ row: latestTo('Albert'), shelfKey: 'inbox', tags: [] },
 		{ row: latestTo('Shell'), shelfKey: 'inbox', tags: [] }
 	].filter(
@@ -1094,6 +1136,40 @@ export async function seedDemo(): Promise<void> {
 		});
 	}
 
+	// A flat's card is the ledger's property row, so it exists already; what it
+	// has not got is lanes. Seeded from the shelf, then filled with one gap, so
+	// the card carries a finding the way a real one would.
+	const propertyShelf = await shelfIdByKey('property');
+	const flatLanes: { label: string; id: string }[] = [];
+	for (const [index, seed] of (
+		await db.select({ laneSeeds: shelf.laneSeeds }).from(shelf).where(eq(shelf.id, propertyShelf))
+	)[0].laneSeeds.entries()) {
+		const made = await addLane(
+			{
+				entityId: flatA,
+				label: seed.label,
+				cadence: seed.cadence,
+				every: seed.every,
+				sortOrder: index * 10
+			},
+			db
+		);
+		flatLanes.push({ label: seed.label, id: made.id });
+	}
+	const flatLane = (label: string) => flatLanes.find((l) => l.label === label)?.id;
+	// Every year but one. The boiler inspection nobody booked is the finding.
+	for (const year of [thisYear - 5, thisYear - 4, thisYear - 2, thisYear - 1]) {
+		await fileDemoPdf({
+			name: `Boiler inspection ${year}`,
+			shelfKey: 'property',
+			type: 'certificate',
+			targetIds: [flatA],
+			laneId: flatLane('Boiler inspection'),
+			periodOn: `${year}-10-01`,
+			lines: ['Annual gas safety inspection.', `Carried out ${year}-10-15.`]
+		});
+	}
+
 	// The insurance on the lived-in flat, renewing inside the window the
 	// briefing paints amber, so the Overview has one date that is genuinely
 	// close rather than only ones that are comfortably far off.
@@ -1103,6 +1179,8 @@ export async function seedDemo(): Promise<void> {
 		shelfKey: 'property',
 		type: 'insurance_policy',
 		targetIds: [flatA],
+		laneId: flatLane('Home insurance'),
+		periodOn: `${thisYear}-01-01`,
 		expiresOn: policyRenewsOn,
 		expiryVerb: 'renews',
 		lines: [
@@ -1199,15 +1277,125 @@ export async function seedDemo(): Promise<void> {
 	// `active_to` is what lets the warranty above read as history.
 	await archiveSubject(carSubject, `${thisYear - 1}-09-30`);
 
+	// A CURRENT car, with every state a cell can be in on one card. A demo whose
+	// lanes are all green demonstrates nothing: the claim of a dossier shelf is
+	// that it shows the year that never arrived.
+	const octavia = await demoCard('vehicles', 'Škoda Octavia', '🚗');
+	await db
+		.update(subject)
+		.set({ activeFrom: `${thisYear - 5}-03-01` })
+		.where(eq(subject.id, octavia.id));
+	for (const year of [thisYear - 5, thisYear - 4, thisYear - 3, thisYear - 1]) {
+		await fileDemoPdf({
+			name: `Vehicle insurance ${year}`,
+			shelfKey: 'vehicles',
+			type: 'insurance_policy',
+			targetIds: [octavia.id],
+			laneId: octavia.lane('Insurance'),
+			periodOn: `${year}-01-01`,
+			lines: [`Vehicle: Škoda Octavia`, `Cover: ${year}-01-15 to ${year + 1}-01-14`]
+		});
+	}
+	// Every two years, so the cell is two columns wide and one filing fills it.
+	for (const year of [thisYear - 5, thisYear - 3, thisYear - 1]) {
+		await fileDemoPdf({
+			name: `Technical inspection ${year}`,
+			shelfKey: 'vehicles',
+			type: 'certificate',
+			targetIds: [octavia.id],
+			laneId: octavia.lane('Technical inspection'),
+			periodOn: `${year}-05-01`,
+			lines: [`Vehicle: Škoda Octavia`, `Inspected: ${year}-05-10`]
+		});
+	}
+	// Two years missing, which is the finding this card carries.
+	for (const year of [thisYear - 5, thisYear - 4, thisYear - 1]) {
+		await fileDemoPdf({
+			name: `Road tax ${year}`,
+			shelfKey: 'vehicles',
+			type: 'tax_document',
+			targetIds: [octavia.id],
+			laneId: octavia.lane('Road tax'),
+			periodOn: `${year}-01-01`,
+			lines: [`Vehicle: Škoda Octavia`, `Road tax for ${year}`]
+		});
+	}
+	// Paper with no rhythm, which is most of what a card holds.
+	await fileDemoPdf({
+		name: 'Accident claim · rear bumper',
+		shelfKey: 'vehicles',
+		type: 'correspondence',
+		targetIds: [octavia.id],
+		periodOn: `${thisYear - 1}-03-01`,
+		lines: ['Claim opened after a car park collision.', 'No injuries; bumper and sensor replaced.']
+	});
+	await fileDemoPdf({
+		name: 'Repair invoice · Auto Kelly',
+		shelfKey: 'vehicles',
+		type: 'invoice',
+		targetIds: [octavia.id],
+		periodOn: `${thisYear - 1}-03-01`,
+		lines: ['Rear bumper, parking sensor, paint.', 'Settled by the insurer.']
+	});
+	// A second card with nothing on it: an empty card is a finding too, and the
+	// stack has to be able to show one.
+	await demoCard('vehicles', 'Honda PCX 125', '🛵');
+
+	// One item's paperwork, with the manual missing — the case a `kit` shelf
+	// exists for.
+	const boiler = await demoCard('inventory', 'Boiler · Vaillant ecoTEC', '🔥');
+	await fileDemoPdf({
+		name: 'Boiler receipt · Topenářství Kolář',
+		shelfKey: 'inventory',
+		type: 'receipt',
+		targetIds: [boiler.id],
+		laneId: boiler.lane('Receipt'),
+		periodOn: `${thisYear - 3}-10-01`,
+		lines: ['Vaillant ecoTEC plus, supplied and fitted.', '48 900 Kč including VAT.']
+	});
+	await fileDemoPdf({
+		name: 'Boiler warranty · Vaillant ecoTEC',
+		shelfKey: 'inventory',
+		type: 'warranty',
+		targetIds: [boiler.id],
+		laneId: boiler.lane('Warranty'),
+		periodOn: `${thisYear - 3}-10-01`,
+		expiresOn: `${thisYear + 2}-10-03`,
+		lines: ['Five years from installation.', 'Annual service required to keep it valid.']
+	});
+	// No manual. That empty slot is the whole point of drawing three.
+	await fileDemoPdf({
+		name: 'Service invoice · annual check',
+		shelfKey: 'inventory',
+		type: 'invoice',
+		targetIds: [boiler.id],
+		periodOn: `${thisYear - 1}-09-01`,
+		lines: ['Annual service, as the warranty requires.']
+	});
+
+	// A shelf the household made, which is the point of v0.8.0's templates: a
+	// Pets shelf drawing a timeline is as good as a shipped one. The dog lives
+	// here rather than on Health, whose cards are the PEOPLE — a pet's records
+	// are the same shape and belong to a different unit.
+	const pets = await addShelf(
+		{
+			label: 'Pets',
+			emoji: '🐾',
+			template: 'timeline',
+			unit: 'subject',
+			question: 'What has happened to this animal?'
+		},
+		db
+	);
 	// The dog is current, and its booster falls inside the year — a second
 	// reminder from a subject rather than from a flat or a loan, which is the
-	// case the rail's subjects exist for.
-	const dogSubject = await addSubject('Dog', '🐕', await shelfIdByKey('health'));
+	// case a card on a shelf of one's own exists for.
+	const dogSubject = await addSubject('Dog', '🐕', pets.id);
 	const boosterDue = new Date(Date.now() + 100 * 86400000).toISOString().slice(0, 10);
 	const vaccinatedOn = new Date(Date.now() - 265 * 86400000).toISOString().slice(0, 10);
 	await fileDemoPdf({
 		name: `Vaccination certificate · ${DEMO_DOG}`,
-		shelfKey: 'health',
+		shelfKey: 'pets',
 		type: 'certificate',
 		targetIds: [dogSubject],
 		expiresOn: boosterDue,

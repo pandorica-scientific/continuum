@@ -120,7 +120,7 @@ describe('the inbox backlog', () => {
 		await seedDocument({ name: 'Passport scan', shelfKey: 'inbox' });
 
 		const { items } = await buildBriefing(asAdmin);
-		expect(backlogItem(items)?.href).toBe('/documents/review');
+		expect(backlogItem(items)?.href).toBe('/documents?shelf=inbox');
 	});
 });
 

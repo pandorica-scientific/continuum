@@ -64,7 +64,10 @@ const aPayslip = async () =>
 
 describe('proposals', () => {
 	it('proposes the employer for an unfiled payslip', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		const doc = await aPayslip();
 
 		const [proposal] = await loadProposals(db);
@@ -75,21 +78,33 @@ describe('proposals', () => {
 
 	it('says nothing about a document already filed against an organisation', async () => {
 		// It has an answer. Proposing a second would be arguing with it.
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		const doc = await aPayslip();
 		await makeDocumentLink(db, { documentId: doc.id, targetId: org.id });
 		expect(await loadProposals(db)).toEqual([]);
 	});
 
 	it('says nothing when two employers both claim it', async () => {
-		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
-		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Another employer', kind: 'employer' }, db);
+		await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
+		await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Another employer', kind: 'employer' },
+			db
+		);
 		await aPayslip();
 		expect(await loadProposals(db)).toEqual([]);
 	});
 
 	it('files the document and records that the lane was right', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		const doc = await aPayslip();
 		const [proposal] = await loadProposals(db);
 
@@ -112,7 +127,10 @@ describe('proposals', () => {
 	});
 
 	it('files nothing and records that the lane was wrong', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		await aPayslip();
 		const [proposal] = await loadProposals(db);
 		await dismissProposal(proposal.laneId, db);
@@ -125,7 +143,10 @@ describe('proposals', () => {
 	it('falls silent once corrections outnumber acceptances', async () => {
 		// Nobody has to notice a bad lane and disable it, which is the only way a
 		// rule nobody is watching stops doing damage.
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		await aPayslip();
 		const lanes = await lanesFor(org.id, db);
 		const payslips = lanes.find((l) => l.label === 'Payslips')!;

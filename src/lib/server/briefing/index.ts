@@ -144,7 +144,7 @@ const inboxBacklog: Source = async (handle: Queryable = db, actor = null) => {
 			hue: 'blue',
 			title: countTitle(waiting, 'document waiting to be filed', 'documents waiting to be filed'),
 			detail: 'Until they are filed, no record shows them and no expiry date is watched.',
-			href: '/documents/review',
+			href: '/documents?shelf=inbox',
 			rank: 25
 		}
 	];

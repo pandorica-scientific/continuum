@@ -11,11 +11,20 @@
 		caption,
 		syncedAt,
 		icon,
+		emoji,
 		actions
 	}: {
 		title: string;
 		caption: string;
 		syncedAt?: string;
+		/**
+		 * A household-editable mark, in place of the area's icon.
+		 *
+		 * Shelves, accounts and subjects each carry an emoji the household chose,
+		 * and on a screen that IS one of them that emoji is the identity — drawing
+		 * the area's icon beside it would be two marks for one thing.
+		 */
+		emoji?: string;
 		/** Only for screens outside the navigation; every listed screen names its
 		 *  own icon in the registry. */
 		icon?: IconName;
@@ -53,9 +62,13 @@
 <header>
 	<div class="titles">
 		<h1>
-			{#if titleIcon}<span class="mark" style:color="var(--{area?.hue ?? 'brand'})"
-					><Icon name={titleIcon} size={26} /></span
-				>{/if}
+			{#if emoji}
+				<span class="emoji-mark" aria-hidden="true">{emoji}</span>
+			{:else if titleIcon}
+				<span class="mark" style:color="var(--{area?.hue ?? 'brand'})">
+					<Icon name={titleIcon} size={26} />
+				</span>
+			{/if}
 			<span>{title}</span>
 		</h1>
 		<span class="caption">{caption}</span>
@@ -114,6 +127,13 @@
 	   a screen outside the navigation. */
 	.mark {
 		display: flex;
+	}
+	/* Sized to the icon it replaces, so a shelf's title sits at the same height
+	   as every other screen's. */
+	.emoji-mark {
+		display: flex;
+		font-size: 26px;
+		line-height: 1;
 	}
 	.caption {
 		font-size: var(--text-md);

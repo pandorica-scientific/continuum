@@ -45,7 +45,10 @@ beforeEach(async () => {
 
 describe('lanes', () => {
 	it('seeds an employer with the three lanes an employer has', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		const lanes = await lanesFor(org.id, db);
 		expect(lanes.map((l) => `${l.label}:${l.cadence}`)).toEqual([
 			'Payslips:monthly',
@@ -55,31 +58,46 @@ describe('lanes', () => {
 	});
 
 	it('seeds an authority with its two', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Tax office', kind: 'authority' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Tax office', kind: 'authority' },
+			db
+		);
 		expect((await lanesFor(org.id, db)).map((l) => l.cadence)).toEqual(['yearly', 'none']);
 	});
 
 	it('seeds nothing for a kind with no rhythm of its own', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Someone', kind: 'other' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Someone', kind: 'other' },
+			db
+		);
 		expect(await lanesFor(org.id, db)).toEqual([]);
 	});
 
 	it('does not seed a second set over a household that has edited theirs', async () => {
 		// `addOrganisation` is idempotent by name. Seeding again on the second call
 		// would put the app's guess back on top of the household's answer.
-		const first = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' }, db);
+		const first = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
+			db
+		);
 		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'institute' }, db);
 		expect(await lanesFor(first.id, db)).toHaveLength(3);
 	});
 
 	it('goes with the organisation', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Gone Ltd', kind: 'employer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Gone Ltd', kind: 'employer' },
+			db
+		);
 		await harness.sql`delete from organisation where id = ${org.id}`;
 		expect(await lanesFor(org.id, db)).toEqual([]);
 	});
 
 	it('lets the household add one of its own', async () => {
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Insurer', kind: 'insurer' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Insurer', kind: 'insurer' },
+			db
+		);
 		await addLane({ entityId: org.id, label: 'Annual statement', cadence: 'yearly' }, db);
 		expect((await lanesFor(org.id, db)).map((l) => l.label)).toContain('Annual statement');
 	});

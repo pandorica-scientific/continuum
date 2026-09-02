@@ -21,7 +21,14 @@ import { document, documentLink, documentText, entity, tagLink } from '$lib/serv
 import { saveUploadAndHash, saveUploadBytes, uploadSize } from '$lib/server/system/files';
 import { readDocumentsScreen } from '$lib/server/documents/screen';
 import { archiveFacts, shelfFacts } from '$lib/server/documents/shelf-tiles';
-import { loadCounterparties } from '$lib/server/organisations/counterparties-load';
+import { createCard } from '$lib/server/documents/cards';
+import { loadQueue } from '$lib/server/documents/queue-load';
+import {
+	dossierMissing,
+	lanesForDocument,
+	loadDossier,
+	type DossierPayload
+} from '$lib/server/documents/dossier-load';
 import {
 	acceptProposal,
 	dismissProposal,
@@ -44,7 +51,7 @@ import {
 	loadCoverage
 } from '$lib/server/statements/coverage-load';
 import { firstOfMonth, lastOfMonth } from '$lib/statements/coverage';
-import { createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
+import { assignLane, createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
 import {
 	identityNumbersFor,
 	readIdentityFields,
@@ -89,8 +96,8 @@ import {
 	documentTargetSpec,
 	DOCUMENT_TARGET_KINDS,
 	isDocumentTargetKind,
-	loadPickableTargets,
 	loadTargetNames,
+	pickableTargetsForShelf,
 	type DocumentTargetKind,
 	type TargetRow
 } from '$lib/server/documents/targets';
@@ -201,8 +208,20 @@ const bannerToday = (): string => new Date().toISOString().slice(0, 10);
  * meant a second reading of what a gap is, so they are filled from the coverage
  * loader that already knows.
  */
-async function tileFactsFor(shelfRow: ShelfRow, viewer: Actor | null) {
+async function tileFactsFor(
+	shelfRow: ShelfRow,
+	viewer: Actor | null,
+	dossier: DossierPayload | null
+) {
 	const facts = await shelfFacts(shelfRow, viewer);
+	// A dossier's cards and holes are what its own loader drew; the row count
+	// cannot see a lane.
+	if (dossier)
+		return {
+			...facts,
+			cards: dossier.cards.filter((c) => c.id !== null).length,
+			missing: dossierMissing(dossier)
+		};
 	if (templateEngine(shelfRow.template) !== 'completeness') return facts;
 	// A gap is a fact about periods, and the coverage loader is what knows it.
 	// Counting holes a second time from document rows would be a second answer
@@ -243,7 +262,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		{ docs, railCounts, everywhereCount, docLinks, docTags, tags, texts, pending, identities },
 		shelves,
 		subjects,
-		pickableTargets,
 		shelfTypes,
 		documentTypes
 	] = await Promise.all([
@@ -260,7 +278,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// transaction had no name and an ordinary bank account had no chip: one of
 		// them asked for brokerage accounts only, because one screen once did.
 		// (Names for what the documents point at are read below, by id.)
-		loadPickableTargets(),
 		shelfTypesByKey(),
 		listDocumentTypes()
 	]);
@@ -271,6 +288,35 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const shelfRow = shelf === 'all' ? null : (shelves.find((s) => s.key === shelf) ?? null);
 	const engine = shelfRow ? templateEngine(shelfRow.template) : null;
 	const view = centreView(url.searchParams.get('view'), query, engine);
+
+	// About offers only what belongs on this shelf. A document belongs to one
+	// shelf and never links across shelves, so a car's paper is offered the cars
+	// and not the boiler.
+	const shelfTargets = await pickableTargetsForShelf(shelfRow, db);
+
+	// Drawn before the tiles, because `missing` is a fact about the cells and
+	// counting holes a second time from document rows would be a second answer
+	// to one question.
+	// The Inbox IS the queue: filing is what the shelf is for, so it draws the
+	// decision rather than a link to a page that carries it.
+	const queue =
+		view === 'shelf' && engine === 'queue'
+			? await loadQueue(locals.person ?? null, db, bannerToday(), openDocumentId)
+			: null;
+
+	// Drawn whatever the view: the band answers the SHELF's question, and the
+	// question does not change because somebody pressed List. Opening the list
+	// used to report "missing 0" on a shelf with three holes in it.
+	const dossier =
+		engine === 'dossier' && shelfRow
+			? await loadDossier(
+					shelfRow,
+					locals.person ?? null,
+					Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
+					db,
+					bannerToday()
+				)
+			: null;
 
 	/** One record a document is filed against, ready to draw as a chip. */
 	interface DocumentLinkRow extends TargetRow {
@@ -527,6 +573,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const inboxKey = shelves.find((s) => s.system && s.key === 'inbox')?.key ?? 'inbox';
 	const selected = openDocumentId ? docs.find((d) => d.id === openDocumentId) : undefined;
 
+	// The lanes of the card the open document names, for the inspector's Lane
+	// picker. A lane belongs to one card, so a document naming no card has none
+	// to choose from — and off a dossier shelf there are no lanes at all.
+	const selectedLanes =
+		selected && engine === 'dossier' ? await lanesForDocument(selected.id, shelfRow, db) : [];
+
 	return {
 		view,
 		tagsScreen: view === 'tags' ? await loadTagsScreen(locals.person ?? null) : null,
@@ -555,9 +607,30 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 * either — a banner over search results would be describing the shelf you
 		 * left rather than what is on screen.
 		 */
+		/**
+		 * What the screen is called and what it is for.
+		 *
+		 * The shelf IS the screen: its name is the title and its question is the
+		 * caption. Everything says "Documents" only on Everything, which is not a
+		 * shelf and has no one question.
+		 */
+		screen: shelfRow
+			? {
+					emoji: shelfRow.emoji,
+					label: shelfRow.label,
+					count: railCounts.find((c) => c.key === shelfRow.key)?.n ?? 0,
+					question: shelfRow.question
+				}
+			: {
+					emoji: '🗂️',
+					label: 'Everything',
+					count: everywhereCount,
+					question:
+						'One archive for the household. Shelf is where in life, type is what kind, links are what it concerns.'
+				},
 		/** The three figures, chosen by the shelf's engine. */
 		tiles: shelfRow
-			? shelfTiles(engine!, await tileFactsFor(shelfRow, locals.person ?? null))
+			? shelfTiles(engine!, await tileFactsFor(shelfRow, locals.person ?? null, dossier))
 			: archiveTiles(await archiveFacts(locals.person ?? null)),
 		/**
 		 * The organisations the household deals with, for the rail's third
@@ -575,16 +648,18 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			view === 'shelf' && engine === 'dossier'
 				? await loadProposals(db, locals.person ?? null)
 				: [],
-		/** The counterparty cards, or null when the centre column draws the list. */
-		counterparties:
-			view === 'shelf' && engine === 'dossier'
-				? await loadCounterparties(
-						Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
-						bannerToday(),
-						db,
-						locals.person ?? null
-					)
-				: null,
+		/** The cards, or null when the centre column draws the list. */
+		dossier: view === 'shelf' ? dossier : null,
+		/** The Inbox's own queue, or null. */
+		queue,
+		/**
+		 * The lanes of the card the OPEN document names, for the inspector's
+		 * Lane picker. Empty off a dossier shelf and empty for a document that
+		 * names no card: a lane belongs to one card.
+		 */
+		selectedLanes,
+		/** Card ids collapsed to one line. In the address, so a bookmark keeps it. */
+		closed: (url.searchParams.get('closed') ?? '').split(',').filter(Boolean),
 		/**
 		 * The ribbon, or null whenever it is not what the centre column draws —
 		 * the list is one press away and does not need this payload.
@@ -659,6 +734,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					// never shows one, so no row on the shelf needs to carry them.
 					identityNumbers: await identityNumbersFor(selected.id),
 					links: targetsByDoc.get(selected.id) ?? [],
+					// Which lane on its card holds it, or null for history.
+					laneId: selected.laneId,
 					sensitivity: selected.sensitivity
 				}
 			: null,
@@ -670,7 +747,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		// NOT pick reaches the screen on the document's own `links` instead: it is
 		// shown, and it can be unlinked, but it cannot be chosen from a list of
 		// every transaction the household has.
-		pickableTargets: pickableTargets.map((row) => ({
+		// Narrowed to the shelf: a document belongs to one shelf and never links
+		// across shelves, so a car's paper is offered the cars and not the boiler.
+		pickableTargets: shelfTargets.map((row) => ({
 			...row,
 			groupLabel: documentTargetSpec(row.kind).groupLabel
 		}))
@@ -907,6 +986,11 @@ export const actions: Actions = {
 				const resolved = await upsertTag(tagName, tx);
 				await tx.insert(tagLink).values({ tagId: resolved.id, targetId: id }).onConflictDoNothing();
 			}
+
+			// Last, and only when the picker was shown: the lane is checked against
+			// the links, and those were only just written. An empty value is
+			// history, which is a real answer rather than an absence.
+			if (form.has('laneId')) await assignLane(id, String(form.get('laneId')) || null, tx);
 		});
 		return { ok: true };
 	},
@@ -1327,6 +1411,121 @@ export const actions: Actions = {
 		if (!id) return fail(400, { message: 'Nothing to remove.' });
 		await deleteEngagement(id, db);
 		return { ok: true };
+	},
+
+	/**
+	 * File the document in front of the queue, and move on.
+	 *
+	 * Three steps in one post: the shelf, the card on it, the lane on that card.
+	 * A card can be made on the way past — `newCardName` — because the moment a
+	 * person knows the paper is the Octavia's is the moment they know the shelf
+	 * needs a card for it, and sending them elsewhere to make one loses the
+	 * document they were holding.
+	 *
+	 * Skip is not an action: passing over a document changes nothing, so it never
+	 * reaches the server.
+	 */
+	fileFromQueue: async ({ request, locals }) => {
+		if (!locals.person) return fail(401, { message: 'Sign in first.' });
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which document?' });
+		const readable = await assertVisibleDocument(id, locals.person ?? null);
+		if (!readable.ok) return fail(readable.status, { message: readable.message });
+
+		let shelfId: string;
+		try {
+			shelfId = await shelfIdByKey(String(form.get('shelf') ?? ''));
+		} catch {
+			return fail(400, { message: 'Pick a shelf.' });
+		}
+
+		const laneId = String(form.get('laneId') ?? '').trim();
+		const newCardName = String(form.get('newCardName') ?? '').trim();
+		let cardId = String(form.get('cardId') ?? '').trim();
+
+		try {
+			await db.transaction(async (tx) => {
+				// A card made on the way past, before anything is linked to it.
+				if (!cardId && newCardName) {
+					const made = await createCard({ shelfId, name: newCardName }, tx);
+					cardId = made.id;
+				}
+
+				await tx
+					.update(document)
+					.set({
+						name: String(form.get('name') ?? '').trim() || 'Document',
+						shelfId,
+						type: asDocumentType(form.get('type'), await documentTypeKeys()),
+						note: String(form.get('note') ?? '').trim() || null,
+						expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
+						expiryVerb: asEnumValue(
+							'document.expiry_verb',
+							String(form.get('expiryVerb') ?? 'expires'),
+							'expires'
+						),
+						...(locals.person?.role === 'admin'
+							? {
+									sensitivity: asEnumValue(
+										'document.sensitivity',
+										String(form.get('sensitivity') ?? 'normal'),
+										'normal'
+									)
+								}
+							: {})
+					})
+					.where(eq(document.id, id));
+
+				if (cardId)
+					await tx
+						.insert(documentLink)
+						.values({ documentId: id, targetId: cardId })
+						.onConflictDoNothing();
+
+				// After the link, because a lane may only hold paper on its own card.
+				if (laneId) await assignLane(id, laneId, tx);
+
+				for (const tagName of await readTags(form)) {
+					const resolved = await upsertTag(tagName, tx);
+					await tx
+						.insert(tagLink)
+						.values({ tagId: resolved.id, targetId: id })
+						.onConflictDoNothing();
+				}
+			});
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not file it.' });
+		}
+		return { ok: true, filedId: id };
+	},
+
+	/**
+	 * A card on a dossier shelf: a subject or an organisation, with the lanes
+	 * its shelf seeds.
+	 *
+	 * One action for both, because from the screen they are one gesture — "this
+	 * shelf needs a card for the Octavia" — and which table it lands in is a
+	 * fact about the shelf, not about what the person did.
+	 */
+	addCard: async ({ request, locals }) => {
+		if (!locals.person) return fail(401, { message: 'Sign in first.' });
+		const form = await request.formData();
+		const name = String(form.get('name') ?? '').trim();
+		if (!name) return fail(400, { message: 'A card needs a name.' });
+		try {
+			const shelfId = await shelfIdByKey(String(form.get('shelf') ?? ''));
+			const kindField = form.get('kind');
+			const card = await createCard({
+				shelfId,
+				name,
+				emoji: String(form.get('emoji') ?? '') || undefined,
+				kind: kindField ? asEnumValue('organisation.kind', String(kindField), 'other') : undefined
+			});
+			return { ok: true, cardId: card.id };
+		} catch (error) {
+			return fail(400, { message: error instanceof Error ? error.message : 'Could not add it.' });
+		}
 	},
 
 	addSubject: async ({ request }) => {

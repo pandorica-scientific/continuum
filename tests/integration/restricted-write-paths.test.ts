@@ -105,15 +105,6 @@ async function documentsAction(
 	return callAction(actions, name, fields, locals, files, 'documents');
 }
 
-async function reviewAction(
-	name: string,
-	fields: Record<string, string | string[]>,
-	locals: typeof asAdmin | typeof asMember
-): Promise<ActionResult> {
-	const { actions } = await import('../../src/routes/(app)/documents/review/+page.server');
-	return callAction(actions, name, fields, locals, [], 'documents/review');
-}
-
 async function taxAction(
 	name: string,
 	fields: Record<string, string | string[]>,
@@ -268,8 +259,10 @@ describe('the inbox review flow', () => {
 			sensitivity: 'restricted'
 		});
 
-		const outcome = await reviewAction(
-			'file',
+		// The queue is the Inbox's own layout since v0.8.0; filing from it is an
+		// action on the documents screen, and it carries the same read rule.
+		const outcome = await documentsAction(
+			'fileFromQueue',
 			{ id: RESTRICTED, shelf: 'income_tax', name: 'Filed by a member', type: 'other' },
 			asMember
 		);

@@ -60,19 +60,30 @@ describe('adding an organisation', () => {
 	it('finds the one that already answers to that name', async () => {
 		// Idempotent rather than an error: two people adding "Tax office" on two
 		// devices have agreed, not collided. `upsertSubjectByName` reads the same.
-		const first = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Tax office', kind: 'authority' }, db);
-		const again = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: '  tax   office ' }, db);
+		const first = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Tax office', kind: 'authority' },
+			db
+		);
+		const again = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: '  tax   office ' },
+			db
+		);
 		expect(again.id).toBe(first.id);
 		// And the second call does not overwrite what the first decided.
 		expect(again.kind).toBe('authority');
 	});
 
 	it('refuses a name with nothing in it', async () => {
-		await expect(addOrganisation({ shelfId: await incomeTaxShelf(db), name: '   ' }, db)).rejects.toThrow();
+		await expect(
+			addOrganisation({ shelfId: await incomeTaxShelf(db), name: '   ' }, db)
+		).rejects.toThrow();
 	});
 
 	it('says so when a rename would collide', async () => {
-		const a = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' }, db);
+		const a = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' },
+			db
+		);
 		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Tax office' }, db);
 		await expect(renameOrganisation(a.id, 'tax office', db)).rejects.toThrow(
 			ORGANISATION_NAME_TAKEN
@@ -85,7 +96,10 @@ describe('removing an organisation', () => {
 		// The same rule a shelf keeps: a document must always be somewhere, and
 		// deleting the employer out from under a payslip is not a delete anybody
 		// asked for.
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' },
+			db
+		);
 		const doc = await makeDocument(db, { type: 'payslip' });
 		await makeDocumentLink(db, { documentId: doc.id, targetId: org.id });
 		await expect(deleteOrganisation(org.id, db)).rejects.toThrow(ORGANISATION_IN_USE);
@@ -104,7 +118,10 @@ describe('role periods', () => {
 	it('closes one rather than deleting it', async () => {
 		// History is the point. A period removed on promotion takes its years with
 		// it, and a lane's expected count silently shrinks.
-		const org = await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' }, db);
+		const org = await addOrganisation(
+			{ shelfId: await incomeTaxShelf(db), name: 'Institute of Physics CAS' },
+			db
+		);
 		const person = await makePerson(db, { name: 'Robert' });
 		const role = await addEngagement(
 			{

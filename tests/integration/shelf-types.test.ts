@@ -94,7 +94,7 @@ describe('editing a shelf’s list', () => {
 	});
 
 	it('is allowed on a shelf the household made', async () => {
-		(await addShelf({ label: 'Boat', emoji: '⛵', template: 'kit', unit: 'subject' }, testDb)).id;
+		await addShelf({ label: 'Boat', emoji: '⛵', template: 'kit', unit: 'subject' }, testDb);
 		const id = await shelfIdByKey('boat', testDb);
 		await setShelfTypes(id, ['insurance_policy', 'manual'], testDb);
 
@@ -130,7 +130,7 @@ describe('the column itself', () => {
 	});
 
 	it('goes when the shelf goes', async () => {
-		(await addShelf({ label: 'Boat', emoji: '⛵', template: 'kit', unit: 'subject' }, testDb)).id;
+		await addShelf({ label: 'Boat', emoji: '⛵', template: 'kit', unit: 'subject' }, testDb);
 		const id = await shelfIdByKey('boat', testDb);
 		await setShelfTypes(id, ['manual'], testDb);
 

@@ -103,14 +103,12 @@ beforeAll(async () => {
 		name: 'The car',
 		shelfId: await shelfIdByKey('vehicles', testDb)
 	});
-	await testDb
-		.insert(subject)
-		.values({
-			id: archivedSubject,
-			name: 'The old car',
-			shelfId: await shelfIdByKey('vehicles', testDb),
-			archivedAt: new Date()
-		});
+	await testDb.insert(subject).values({
+		id: archivedSubject,
+		name: 'The old car',
+		shelfId: await shelfIdByKey('vehicles', testDb),
+		archivedAt: new Date()
+	});
 	await makeTransaction(testDb, {
 		id: target.transaction,
 		accountId: target.account,

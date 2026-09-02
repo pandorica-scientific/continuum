@@ -48,12 +48,7 @@ describe('shelf templates', () => {
 		expect(unitsForTemplate('queue')).toEqual(['document']);
 		expect(unitsForTemplate('wallet')).toEqual(['person']);
 		expect(unitsForTemplate('completeness')).toEqual(['account']);
-		expect(unitsForTemplate('dossier')).toEqual([
-			'organisation',
-			'property',
-			'subject',
-			'person'
-		]);
+		expect(unitsForTemplate('dossier')).toEqual(['organisation', 'property', 'subject', 'person']);
 	});
 
 	it('every seeded lane names a whole number of periods', () => {

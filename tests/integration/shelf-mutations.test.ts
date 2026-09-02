@@ -59,7 +59,9 @@ const shelfExists = async (id: string) =>
 
 describe('reassign-and-delete', () => {
 	it('moves the paper and deletes the shelf in one transaction', async () => {
-		const from = (await addShelf({ label: 'Old boiler', emoji: '🔥', template: 'kit', unit: 'subject' }, testDb)).id;
+		const from = (
+			await addShelf({ label: 'Old boiler', emoji: '🔥', template: 'kit', unit: 'subject' }, testDb)
+		).id;
 		const to = await shelfIdByKey('inventory', testDb);
 		await seedDocuments(from, 32);
 
@@ -69,7 +71,9 @@ describe('reassign-and-delete', () => {
 	});
 
 	it('rolls the whole thing back if the destination is not a shelf', async () => {
-		const from = (await addShelf({ label: 'Old boiler', emoji: '🔥', template: 'kit', unit: 'subject' }, testDb)).id;
+		const from = (
+			await addShelf({ label: 'Old boiler', emoji: '🔥', template: 'kit', unit: 'subject' }, testDb)
+		).id;
 		await seedDocuments(from, 32);
 
 		await expect(
@@ -120,7 +124,9 @@ describe('reassign-and-delete', () => {
 	it('is what the database itself insists on', async () => {
 		// Not a rule the screen enforces: a plain delete of an occupied shelf is
 		// refused by the constraint, which is what makes "always" true.
-		const from = (await addShelf({ label: 'Occupied', emoji: '📄', template: 'kit', unit: 'subject' }, testDb)).id;
+		const from = (
+			await addShelf({ label: 'Occupied', emoji: '📄', template: 'kit', unit: 'subject' }, testDb)
+		).id;
 		await seedDocuments(from, 1);
 		await expect(harness.sql`delete from shelf where id = ${from}`).rejects.toThrow();
 	});
@@ -141,8 +147,18 @@ describe('renaming, reordering and adding', () => {
 	});
 
 	it('derives an immutable key from the name, and never collides', async () => {
-		const first = (await addShelf({ label: 'Půjčky & úvěry', emoji: '🏦', template: 'kit', unit: 'subject' }, testDb)).id;
-		const second = (await addShelf({ label: 'Půjčky & úvěry', emoji: '🏦', template: 'kit', unit: 'subject' }, testDb)).id;
+		const first = (
+			await addShelf(
+				{ label: 'Půjčky & úvěry', emoji: '🏦', template: 'kit', unit: 'subject' },
+				testDb
+			)
+		).id;
+		const second = (
+			await addShelf(
+				{ label: 'Půjčky & úvěry', emoji: '🏦', template: 'kit', unit: 'subject' },
+				testDb
+			)
+		).id;
 		const rows = await listShelves(testDb);
 		const keys = rows.filter((r) => [first, second].includes(r.id)).map((r) => r.key);
 		expect(keys[0]).toBe('pujcky-uvery');
@@ -164,10 +180,7 @@ describe('renaming, reordering and adding', () => {
 	});
 
 	it('a new shelf takes a template and a unit and starts with the template seeds', async () => {
-		const row = await addShelf(
-			{ label: 'Boat', template: 'obligations', unit: 'subject' },
-			testDb
-		);
+		const row = await addShelf({ label: 'Boat', template: 'obligations', unit: 'subject' }, testDb);
 		expect(row.template).toBe('obligations');
 		expect(row.unit).toBe('subject');
 		expect(row.laneSeeds).toEqual([{ label: 'Insurance', cadence: 'yearly', every: 1 }]);

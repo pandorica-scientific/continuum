@@ -12,6 +12,7 @@
  * about what should.
  */
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { assignLane } from '$lib/server/documents/mutations';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { db, type Queryable } from '$lib/server/db';
 import {
@@ -158,6 +159,10 @@ export async function acceptProposal(
 ): Promise<{ ok: boolean; message?: string }> {
 	const result = await attachDocument(organisationId, documentId, actor, handle);
 	if (!result.ok) return { ok: false, message: result.message };
+	// The link AND the lane. Accepting a proposal that only linked the card left
+	// the document in the card's history rather than in the lane that claimed
+	// it, so the cell it was proposed for stayed a gap.
+	await assignLane(documentId, laneId, handle);
 	await recordLaneOutcome(laneId, 'accepted', handle);
 	return { ok: true };
 }

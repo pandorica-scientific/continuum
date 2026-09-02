@@ -15,9 +15,14 @@ the archive turning into a folder tree nobody can navigate.
 | **Links** | what it concerns                | many — a person, flat, tenancy, account, loan, contact, subject, transaction or tax statement |
 | **Tags**  | anything else you cut across by | many, free text                                                                               |
 
-A payslip lives on **Finance**, is of type **payslip**, links to **Jana**, and
-might be tagged `2025 return`. Move the shelf and nothing breaks: the salary
-tracker reads the type, never the shelf.
+A payslip lives on **Income & Tax**, is of type **payslip**, links to
+**Zaměstnavatel s.r.o.**, and might be tagged `2025 return`. Move the shelf and
+nothing breaks: the salary tracker reads the type, never the shelf.
+
+Since v0.8.0 a fifth thing describes a payslip and not a boiler manual: which
+**lane** on its card it sits in. That is not a fifth axis — a lane belongs to
+one card, and a card belongs to one shelf — but it is what lets a shelf say
+_March never arrived_.
 
 ### What a document can be about
 
@@ -40,144 +45,143 @@ the panel could offer people, flats and subjects, and saving replaced the whole
 set with what it had offered — so opening a receipt and pressing Save threw away
 the payment it evidenced. Removing a link is now something you do to a chip.
 
-### Shelves are yours
+### Shelves are questions
 
-Ten come with a fresh install — Inbox, Identity, Family, Health, Property,
-Tenancy, Vehicles, Finance, Household, Statements — and every one of them can be
-renamed, re-ordered and given a different emoji. Eight of the ten cannot be
-removed; see below. Press the pencil beside **SHELVES** in the rail: rows become
-draggable, a click on a name renames it, `⋯` removes the ones that can go, and
-`+ New shelf` adds one.
+**A shelf is one question, one unit, one template.** Eight come with a fresh
+install, and each opens on a screen that answers its own question rather than
+on a list of everything it holds.
 
-Shelves are one level deep and always will be. Volume is answered by filtering
-and grouping, not by nesting folders.
+| Shelf           | Asks                                    | A card is           | Draws               |
+| --------------- | --------------------------------------- | ------------------- | ------------------- |
+| 📥 Inbox        | What still needs deciding?              | the document itself | a queue             |
+| 🪪 IDs          | Does everybody hold a valid document?   | a person            | a wallet            |
+| 🧾 Statements   | Is any month missing?                   | an account          | a ribbon            |
+| 🏛️ Income & Tax | Which filing never arrived?             | an organisation     | cards               |
+| 🩺 Health       | What happened to this person, and when? | a person            | cards, oldest first |
+| 🔧 Inventory    | Is this still under warranty?           | a thing you own     | cards with slots    |
+| 🏠 Property     | What does this address require of us?   | an address          | cards               |
+| 🚗 Vehicles     | Is this vehicle covered and legal?      | a vehicle           | cards               |
+
+Seven of the eight cannot be deleted. Four because the application writes to
+them by name — capture files into **Inbox**, an accepted import into
+**Statements**, payslips and tax attachments into **Income & Tax**, bills into
+**Property** — and three because they are the paper every household has:
+**IDs**, **Health** and **Inventory**. **Vehicles** is removable: not every
+household drives.
+
+Every one of them can be renamed, re-ordered and given a different emoji.
+Press the pencil beside **SHELVES** in the rail.
 
 **Deleting a shelf always moves its paper first.** The dialog asks where the
 documents go and does both in one transaction; the database refuses the delete
-otherwise, so there is no path — through the screen or otherwise — that leaves
-a document unfiled.
+otherwise, so there is no path that leaves a document unfiled.
 
-**Eight of the ten seeded shelves are system shelves.** You can rename them
-(_K vyřízení_ is a fine name for the inbox), re-order them and change their
-emoji, but they cannot be deleted. They carry the badge in the rail.
+### Making a shelf of your own
 
-Four because the application writes to them by name: capture files into
-**Inbox**, an accepted bank import files into **Statements**, payslips and tax
-attachments file into **Finance**, and bills file into **Property**. Deleting
-one would break the next upload.
+`+ New shelf` asks for three things, because all three are what a shelf IS: a
+name, a **template**, and what it is **organised by**. A shelf you make is as
+good as one that ships — before v0.8.0 it got a plain list and no question,
+which made it a folder.
 
-Four because they are the paper every household has: **Identity**,
-**Family**, **Health** and **Household**. Nothing files into these
-automatically, so removing one would break nothing that runs — they are fixed
-because a passport, a birth certificate, a test result and a boiler warranty
-should be findable in the same place on every instance, including one somebody
-else set up.
+Seven templates, four of which are the same engine with a different start:
 
-**Tenancy** and **Vehicles** are seeded like the rest and can be removed: not
-every household rents, and not every household drives.
+| Template         | Starts with                                             |
+| ---------------- | ------------------------------------------------------- |
+| **Queue**        | one document at a time, until nothing is left           |
+| **Wallet**       | a card per document, by whose it is                     |
+| **Completeness** | a band per account, across the year                     |
+| **Dossier**      | a card per counterparty, with what it owes you          |
+| **Timeline**     | a card per person or thing, in the order it happened    |
+| **Kit**          | a card per thing, with its receipt, warranty and manual |
+| **Obligations**  | a card per thing, with what falls due and when          |
 
-### How a shelf is shown
+The last four all draw a **card**. What differs is what a new card begins with
+and which way its history reads; nothing about a template removes a part, so a
+card on a Timeline shelf that gains a yearly lane draws its cells.
 
-Most shelves draw the same list: one row per document, grouped and sorted by the
-two controls in the toolbar. **Identity** is the first that does not — it opens
-as a **wallet**, one card per document, sectioned by whose it is, with anything
-nobody is named on under _Nobody_ at the end.
+### Cards
 
-A card is another way into the same document. Clicking one opens the same
-inspector a row does, and `Wallet` / `List` in the toolbar switches between them
-— the choice is in the address, so a bookmark keeps it. **Searching always shows
-the list**, whichever shelf you are on: a match is explained by the line it was
-found in, and a card face has nowhere to put one. Group, Sort and Select are
-list controls and are simply absent while the wallet is showing; the wallet has
-already decided its grouping and its order.
+On the five card shelves, the shelf is a stack of cards — one per person,
+organisation, address or thing. A card holds, top to bottom:
 
-**The card face is artwork, not your passport.** Thirty countries are drawn, in
-four kinds — passport, identity card, driving licence, and a generic face for
-everything else — and a country nobody has drawn yet gets the generic one. Two
-reasons it is not the scan: seven photographs of seven cards on white A4 look
-identical at card size, which is exactly what a wallet is for avoiding; and a
-wallet is glanced at with other people in the room. The document itself is one
-click away, in the inspector.
+- **its name**, kind, and how much paper it holds;
+- **a relationship line** where there is one: the current role, and when the
+  whole thing began, which after a promotion are two different years;
+- **the pinned document** the relationship rests on — the contract, the lease,
+  the purchase;
+- **lanes**, each with a rhythm and a row of cells;
+- **history**, for the paper that has no rhythm, which is most of it.
 
-A card says what it is — `Passport`, `Identity card` — and not what it is
-called: the section above it already names the person, so the document's own
-name would say the same thing twice. The name is in the inspector, where it is
-being read rather than scanned.
+Cards sort **findings first**: a card with a hole in it is what the shelf
+exists to show. Every card opens expanded; a click on its header collapses it
+to one line naming what it is hiding, and the set of collapsed cards is in the
+address, so a bookmark keeps it.
 
-Everything written on the card comes from the record — the flag and the code
-from the country, the kind from the document, the date from the same expiry
-rule the list uses. The section heading is the person's tag, in the colour that
-person has on Salary and on Tax; documents nobody is named on gather under a
-plain _Nobody_ at the end. A card from an EU member state writes its code
-inside the Union's ring of stars, as the document itself does; everywhere else
-the two letters sit plainly beside the flag. Nothing is painted into the artwork, so a card
-can never state something the document does not.
+**A card is made where it is used.** `+ New card` at the end of the stack asks
+for a name and an emoji and seeds the shelf's lanes. People, accounts and
+addresses have screens of their own, so those shelves offer no New card: a card
+for each exists the moment the record does. Rename and archive live in the
+card's own `⋯` menu.
 
-**Statements** is the second, and it draws what is MISSING. Ninety-six
-statements in a list look exactly the same whether or not April is among them,
-which is this shelf's only real failure — so it opens as a ribbon instead: one
-band per account, twelve months across, one year at a time.
+**Paper that names no card sits on "Not assigned yet"**, last, and only when it
+holds something. That is what makes filing to a shelf before its card exists a
+safe thing to do.
 
-A filed statement draws as a band spanning every month it covers, so a quarterly
-one is a single band three months wide. An uncovered month is always one month,
-never merged into a longer run: nothing in the archive says whether a hole is one
-missing quarterly statement or three missing monthly ones, and a ribbon that
-guessed would be drawing a rhythm nobody stated. Nothing here infers how often an
-account is meant to send anything.
+### Lanes and slots
 
-A month that has ended with nothing covering it is a **gap**, drawn in red. The
-current month and every later one have simply **not arrived yet**. Months before
-the account's first statement or first transaction are left blank — an account
-nobody has imported anything for is not missing twelve statements. Clicking a
-band opens that statement; clicking a gap opens the Import with the account and
-the month already filled in, because an accepted import both writes the ledger
-rows and dates the document, so the month closes without anybody typing anything.
-`←` and `→` change the year.
+**A lane is a rhythm.** _Payslips, monthly._ _Technical inspection, every two
+years._ It draws one cell per period, and each cell is in one of four states —
+filed, a gap, not arrived yet, or before the relationship began. The last is
+what stops a car bought in 2021 reading as missing five years of insurance.
 
-A statement is placed by the months it covers, taken from the period the file
-states or — where the file states none, which is most of them — from the
-movements the import just wrote. **A statement nobody imported can still be
-placed**: the reader refuses more scanned statements than it reads, and a person
-holding a scan their bank really sent can set _Covers_ in the inspector and link
-it to its account. It then draws like any other, because the shelf is asking
-whether the month's statement exists rather than whether its transactions reached
-the ledger. Whatever is still undated is named in the ribbon's header rather than
-left invisible.
+**A slot is a lane that expects paper once.** Receipt, warranty, manual. One
+cell, filled or not, carrying its own name — because a nameless empty square
+says nothing about which paper is missing.
 
-The other shelves keep their list for now. Family, Health and Household have
-layouts of their own designed and not yet built; Property, Finance and Inbox are
-lists on purpose, because their paper has no shape a person already pictures. A
-mortgage agreement is not a card in a wallet.
+**A cadence is declared, never inferred.** One quarterly upload does not make
+an account quarterly, and a taxpayer's declaration is annual because the law
+says so.
 
-### The banner
+**A document is in a lane because somebody put it there.** A lane's rule
+_proposes_ one and a person confirms; matching alone cannot say which of two
+lanes on one card holds a payslip when both match it. The Lane picker in the
+inspector is where that is changed afterwards.
 
-Every shelf now opens with a banner saying what it is for. The paragraph is the
-shelf's own — why a person would open it, not what it contains — and beside it
-three figures answer the question that shelf exists to answer: how many people
-hold a valid document, how many months are missing, what is next to lapse. A
-figure only takes a colour when it is a task: `0 gaps` is the state the archive
-is for, and a red nought would be an alarm about nothing.
+### The Inbox is a queue
 
-A shelf the household made has no paragraph written for it and gets the default
-three — documents, what they concern, and the next date — rather than a banner
-with holes in it. The banner is a fixed height on every shelf, so moving between
-them does not shift the toolbar under the cursor.
+Opening Inbox shows the oldest unfiled document: the file on the left, the
+decision on the right. The decision is three steps, and they are three because
+each narrows the next — **the shelf** decides which cards exist, **the card**
+decides which lanes exist, and **the lane** decides what the paper probably is.
 
-It does not say how the shelf is arranged. The Group and Sort controls state
-that themselves, two inches below and editable.
+A card can be made on the way past. The moment you know the paper is the
+Octavia's is the moment the shelf needs a card for it, and being sent elsewhere
+to make one loses the document you were holding.
+
+Where a rule matched, all three are pre-answered and the guess stays on screen
+until somebody agrees with it. Skip files nothing and deletes nothing.
+
+### As a list
+
+Every shelf opens its own list: the same documents, grouped and sorted, with
+the type, about and tag filters and bulk editing. It is one press away and it
+is where a search always lands — a match is explained by the line it was found
+in, and a card face has nowhere to put one.
+
+**Everything** is that list with no shelf.
 
 ### Who a document was with
 
 A shelf says where in life a document belongs and a subject says what it is
-about. **An organisation says who it was with** — an employer, the tax office, an
-insurer. It is a record, created once and linked to, for the same reason a
-subject is one rather than a name retyped on a receipt: a string typed twice is a
-string that will one day be typed differently, and then one employer is two
+about. **An organisation says who it was with** — an employer, the tax office,
+an insurer. It is a record, created once and linked to, for the same reason a
+subject is one rather than a name retyped on a receipt: a string typed twice is
+a string that will one day be typed differently, and then one employer is two
 employers and nothing in the archive can say so.
 
-It is not a contact. A contact is a person who happens to have an employer;
-two colleagues at one institute would be two records, and an employer nobody
-knows anyone at could not exist.
+It is not a contact. A contact is a person who happens to have an employer; two
+colleagues at one institute would be two records, and an employer nobody knows
+anyone at could not exist.
 
 **A person's dealings with an organisation are role periods, and a promotion is
 a second period rather than an edit to the first.**
@@ -191,64 +195,7 @@ Robert @ Institute of Physics
 Overwriting the role would be simpler and wrong. What the archive needs to know
 is when the paperwork started arriving, and that is 2018 — so the relationship
 counts from the earliest period, and a promotion cannot quietly move the
-beginning forward and take three years of missing paperwork with it. Both dates
-may be left empty: an office a household has simply always dealt with has no
-start anybody remembers.
-
-Press the pencil beside **ORGANISATIONS** in the rail to add one, and the `⋯` on
-its row to add or close a role period. An organisation is removed rather than
-archived — unlike a subject it holds no paper of its own to demote — and the
-removal is refused while anything is still filed against it.
-
-### How Income & Tax draws
-
-**One card per counterparty**, because the unit a person thinks in here is who
-the paper was with. Inside a card, **lanes** — one rhythm of paper each, with a
-cell per month or per year.
-
-A lane's cadence is **declared, never inferred**. A taxpayer's declaration is
-annual because the law says so, not because two of them happen to sit a year
-apart, and a shelf that guessed a rhythm from what it happened to hold would be
-drawing a claim nobody made. `Payslips` is monthly, `Once a year` is yearly, and
-`Changes to pay` has no cadence at all — paper with no rhythm gets a list, since
-it has nothing to be missing from.
-
-**A lane counts from the engagement, not from the paper.** If the employment
-began in January and the earliest payslip is June, January to May are gaps —
-and that is the entire reason role periods are recorded. A shelf that counted
-from the first document it happened to have would report a full year and be
-wrong in the one way that matters.
-
-**A lane matching nothing still draws its cells.** An empty lane is the finding,
-not an error.
-
-Each organisation is created with the lanes its kind expects — an employer gets
-three, an authority two, and a kind with no rhythm of its own gets none rather
-than getting the wrong ones. They are seeds: edit, delete or add to them, the
-same way a shelf's type list belongs to whoever is filing after the first day.
-
-Anything filed against an organisation that no lane claims is **counted at the
-foot of the card**, never hidden. Everything on the shelf is either drawn or
-accounted for — the same invariant the Statements ribbon keeps.
-
-**The lanes will tell you what they think.** A document on this shelf that no
-organisation has claimed is matched against every lane, and where exactly one
-organisation's lanes claim it the shelf says so above the cards — with **File
-it** and **Not this one**. It is a proposal and not a filing, because a wrong
-link looks exactly like a right one and nobody re-reads a link that seems fine,
-while a document waiting to be filed is sitting there in plain sight.
-
-Three refusals keep that safe. **Two organisations claiming the same document
-proposes nothing** — guessing between two employers is worse than asking. **A
-lane naming no conditions proposes nothing**: claiming everything is right for
-sorting what is already filed and would otherwise take every unfiled document in
-the archive. And **a lane that keeps being wrong falls silent** — pressing _Not
-this one_ is remembered, and once corrections outnumber acceptances that lane
-stops proposing, without anybody having to find it and switch it off.
-
-Nothing is stored about a proposal itself. It is worked out from the lanes as
-they are now, so editing a lane changes what it suggests immediately and there
-is no stale row anywhere to argue with the archive.
+beginning forward and take three years of missing paperwork with it.
 
 ### Which shelf a document belongs on
 
@@ -258,6 +205,13 @@ plumber's invoice goes on Property and a service invoice on Vehicles. There is
 no shelf for "financial paperwork" as a category, because almost none of it is
 about money in the abstract — it is about a thing you own, and that is where you
 will look for it.
+
+**One document, one shelf, and no links across shelves.** What a document may
+be about is narrowed to its own shelf, so filing a car's policy offers the cars
+and not the boiler — and not the insurer whose letters live on Income & Tax.
+A car's insurer and the health insurer are two records because they answer to
+two different shelves, which is the rule doing its job rather than a
+duplication.
 
 **Income & Tax** is what is left once that rule is applied: money that arrives
 because of a _person_, and what the state takes of it. Payslips, tax returns and
@@ -392,19 +346,17 @@ instead, since there is nothing to tick it out of.
 Filing is still a separate pass, so dropping twenty scans never turns into twenty
 forms.
 
-### Inbox review
+### Filing from the queue
 
-**Review inbox** deals with them one at a time: the page on the left, the
-fields on the right, `Skip` or `File & next →`. Enter files, Escape leaves. Its
-**About** chips are the same list capture and the inspector offer — every kind a
-document can be filed against, grouped by kind.
+The Inbox draws the queue itself — see _The Inbox is a queue_ above. Shelf,
+card and lane, then `File it`; the next document takes its place immediately.
 
-- Shelf and type **carry over** from the previous filing — a folder import is
-  twenty near-identical documents — and the word `kept` beside the label says
-  so until you change it.
-- `Skip` files nothing and deletes nothing, so a lap of pure skipping is a
-  no-op. At the end it offers the ones you skipped, then leaves them in the
-  Inbox.
+- The **shelf carries over** from the previous filing, because a folder import
+  is twenty near-identical documents. The card and the lane do not: a folder of
+  everything must not file its second document onto the first one's card.
+- Choosing a lane also answers the **type**, where the lane's rule names one.
+  Proposed, never imposed — the select is still there.
+- `Skip` files nothing and deletes nothing.
 - `Delete` is there for what should never have arrived: a duplicate, a photo of
   the floor. Two taps, and the file goes with the record.
 

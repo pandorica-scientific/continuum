@@ -61,10 +61,7 @@ export async function shelfIdByKey(key: string, handle: Queryable = db): Promise
  * and bills file to them by key — but those writers already asked for them
  * through the untyped `shelfIdByKey`, so they keep doing that.
  */
-export async function systemShelfId(
-	key: WrittenShelfKey,
-	handle: Queryable = db
-): Promise<string> {
+export async function systemShelfId(key: WrittenShelfKey, handle: Queryable = db): Promise<string> {
 	return shelfIdByKey(key, handle);
 }
 

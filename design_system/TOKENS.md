@@ -32,8 +32,8 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 | `--purple` | `#bd85d3` | `#743990` |
 | `--orange` | `#e67e22` | `#a2530f` |
 | `--teal` | `#1abc9c` | `#087059` |
-| `--indigo` | `#7b8ce8` | `#454fb0` |
-| `--brand` | `#4a86c8` | `#1b4f8a` |
+| `--indigo` | `#7d8feb` | `#454fb0` |
+| `--brand` | `#5895d8` | `#1b4f8a` |
 | `--plate` | `rgba(14, 17, 23, 0.86)` | `rgba(243, 240, 233, 0.9)` |
 
 ## Pill fills
@@ -41,6 +41,15 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 > Pill fills: the hue itself at 0.18 over the card. Grey is the one
 > exception at 0.16 — a neutral at the same alpha as a hue reads heavier,
 > because nothing about it is carried by chroma.
+>
+> Two inks above are set BY this line rather than the other way round.
+> `--indigo` and `--brand` measured 4.38 and 3.73 as text on their own
+> tints, under the 4.5 floor, and were lifted in OKLCH — hue and chroma
+> held, lightness raised to the first shippable hex that clears it. The
+> alternative, thinning the tint, needs brand at alpha 0.035 to work,
+> which is not a pill any more. Light needs neither: both clear there.
+> palette-contrast.test.ts measures every tint family, derived from this
+> block, so a hue added here is checked without being listed anywhere.
 
 | Token | Dark | Light |
 |---|---|---|
