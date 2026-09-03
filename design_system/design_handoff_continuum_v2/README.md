@@ -189,8 +189,8 @@ All in `tokens/app.v2.css` (dark values first, light overrides under `html[data-
 | `--card / -2 / -3` | app.css | `#f9f7f2` / `#f1ede5` / `#e6e0d4` |
 | `--bd / --bd2` | app.css | `rgb(60 52 40 / .11)` / `.22` |
 | `--fg2 / --fg3` | app.css | `#3d3a34` / `#75705f` |
-| `--shadow-card` | `0 1px 2px rgb(0 0 0/.28), 0 12px 32px -16px rgb(0 0 0/.55)` | `0 1px 2px rgb(60 52 40/.08), 0 14px 36px -18px rgb(60 52 40/.32)` |
-| `--shadow-hero` | `0 18px 44px -22px brand 70%` | `… brand 55%` |
+| `--shadow-card` | `0 1px 2px rgb(0 0 0 / 0.28), 0 12px 32px -16px rgb(0 0 0 / 0.55)` | `0 1px 2px rgb(60 52 40 / 0.08), 0 14px 36px -18px rgb(60 52 40 / 0.32)` |
+| `--shadow-hero` | `0 18px 44px -22px color-mix(in srgb, var(--brand) 70%, transparent)` | `0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent)` |
 | `--shadow-float` | app.css (unchanged) | overridden: `0 8px 28px -8px rgb(60 52 40/.35), 0 1px 3px rgb(60 52 40/.12)` |
 | `--tile-alpha / -active` | 16 % / 28 % | 17 % / 28 % |
 | `--<hue>-wash` (light) | app.css | hue 11–16 % into `#fff` |

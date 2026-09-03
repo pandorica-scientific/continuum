@@ -21,7 +21,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
-import { join, relative, basename } from 'node:path';
+import { join, relative, basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -227,6 +227,31 @@ function render(css) {
 	return out.join('\n');
 }
 
+/**
+ * Local stylesheets a canvas links from its `<helmet>`. A canvas that ships its
+ * own design-system export or handoff sheet defines tokens there rather than
+ * inline, and those resolve in the browser exactly like an inline definition —
+ * so the check has to read them too, or it reports live tokens as broken.
+ * Remote and absolute hrefs are skipped: nothing local can be read from them.
+ */
+function linkedStylesheets(file, text) {
+	const dir = dirname(file);
+	const sheets = [];
+	for (const m of text.matchAll(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/g)) {
+		const tag = m[0];
+		if (!/\brel\s*=\s*["']?stylesheet/i.test(tag)) continue;
+		const href = m[1];
+		if (/^(?:[a-z]+:)?\/\//i.test(href) || href.startsWith('/') || href.startsWith('data:'))
+			continue;
+		const path = resolve(dir, href.split(/[?#]/)[0]);
+		if (existsSync(path)) sheets.push(path);
+	}
+	return sheets;
+}
+
+/** Every custom property a CSS source declares. */
+const declaredIn = (text) => [...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]);
+
 /** Report every var(--x) in the canvases that app.css does not define. */
 function drift(css) {
 	const defined = new Set([...css.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]));
@@ -235,7 +260,9 @@ function drift(css) {
 
 	for (const file of collectCanvases(CANVAS_DIR)) {
 		const text = readFileSync(file, 'utf8');
-		const selfDefined = new Set([...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+		const selfDefined = new Set(declaredIn(text));
+		for (const sheet of linkedStylesheets(file, text))
+			for (const name of declaredIn(readFileSync(sheet, 'utf8'))) selfDefined.add(name);
 		const used = new Set([...text.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1]));
 		for (const name of [...used].sort()) {
 			if (defined.has(name)) continue;
@@ -243,6 +270,21 @@ function drift(css) {
 		}
 	}
 	return { unresolved, local };
+}
+
+/**
+ * A handoff doc sits above the prototype it hands off, so token values it quotes
+ * are checked against the stylesheets under its own directory as well as
+ * app.css. A prototype token has no app.css entry yet by definition; the
+ * prototype sheet is its source of truth until it is promoted.
+ */
+function siblingTokens(docFile) {
+	const dir = dirname(docFile);
+	const values = new Map();
+	for (const sheet of collect(dir, '.css'))
+		for (const m of readFileSync(sheet, 'utf8').matchAll(/(--[a-z0-9-]+)\s*:\s*([^;{}]+);/g))
+			values.set(m[1], [...(values.get(m[1]) ?? []), m[2].trim()]);
+	return values;
 }
 
 /**
@@ -270,16 +312,22 @@ function quoted(css) {
 	for (const file of collectDocs(CANVAS_DIR)) {
 		if (file === OUT) continue;
 		const text = readFileSync(file, 'utf8');
-		for (const m of text.matchAll(/^\|\s*`(--[a-z0-9-]+)`\s*\|\s*`([^`]+)`\s*\|/gm)) {
+		const quotes = [...text.matchAll(/^\|\s*`(--[a-z0-9-]+)`\s*\|\s*`([^`]+)`\s*\|/gm)];
+		if (!quotes.length) continue;
+		const sibling = siblingTokens(file);
+		for (const m of quotes) {
 			const [, name, value] = m;
-			if (!dark.has(name) && !light.has(name)) {
-				wrong.push({ file: basename(file), name, value, expected: 'not defined in app.css' });
-			} else if (!same(value, dark.get(name)) && !same(value, light.get(name))) {
+			const candidates = [dark.get(name), light.get(name), ...(sibling.get(name) ?? [])].filter(
+				(v) => v !== undefined
+			);
+			if (!candidates.length) {
+				wrong.push({ file: basename(file), name, value, expected: 'defined in no stylesheet' });
+			} else if (!candidates.some((c) => same(value, c))) {
 				wrong.push({
 					file: basename(file),
 					name,
 					value,
-					expected: [dark.get(name), light.get(name)].filter(Boolean).join(' / ')
+					expected: [...new Set(candidates)].join(' / ')
 				});
 			}
 		}
@@ -321,9 +369,11 @@ if (unresolved.length) {
 
 const stale = quoted(css);
 if (stale.length) {
-	console.error('\ndesign:tokens — doc quotes a token value that no longer matches app.css:');
+	console.error(
+		'\ndesign:tokens — doc quotes a token value that no longer matches its stylesheet:'
+	);
 	for (const w of stale)
-		console.error(`  ${w.file}: ${w.name} = ${w.value} (app.css: ${w.expected})`);
+		console.error(`  ${w.file}: ${w.name} = ${w.value} (stylesheet: ${w.expected})`);
 	failed = true;
 }
 
