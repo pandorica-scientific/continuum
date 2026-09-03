@@ -494,20 +494,24 @@
 		gap: var(--space-5);
 		padding: var(--space-4) var(--space-5);
 		border: 0;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 		background: transparent;
 		color: var(--fg2);
 		font-size: var(--text-md);
 		text-align: left;
 		text-decoration: none;
+		transition: background-color var(--dur) var(--ease);
 		cursor: pointer;
 	}
 	.rail-item:hover {
-		background: var(--card2);
+		background: var(--surface-2);
 	}
+	/* A lifted surface and the weight, not a darker card: the rail sits on the
+	   page's own ground, so a darker fill read as a hole rather than a row. */
 	.rail-item.active {
-		background: var(--card3);
+		background: var(--surface-2);
 		color: var(--fg1);
+		font-weight: 600;
 	}
 	.rail-label {
 		overflow: hidden;
@@ -524,7 +528,8 @@
 		text-align: center;
 	}
 	.rail-count {
-		font-size: var(--text-2xs);
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		font-variant-numeric: tabular-nums;
 	}

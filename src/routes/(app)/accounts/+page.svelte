@@ -65,7 +65,7 @@
 <section class="grid-2">
 	<div class="card list">
 		<div class="eyebrow-row" style="padding-bottom: 10px;">
-			<Eyebrow emoji="🏦" label="Accounts" />
+			<Eyebrow hue="--teal" emoji="🏦" label="Accounts" />
 			<span class="eyebrow-caption"
 				>native currency · {data.cashTotalFormatted}
 				{data.baseCurrencyDisplay} in total</span
@@ -234,7 +234,7 @@
 
 	<div class="card transfers">
 		<div class="eyebrow-row" style="padding-bottom: 4px;">
-			<Eyebrow emoji="🔁" label="Transfers between your own accounts" />
+			<Eyebrow hue="--teal" emoji="🔁" label="Transfers between your own accounts" />
 			<span class="eyebrow-caption">matched automatically · never counted as income or expense</span
 			>
 		</div>
@@ -286,11 +286,17 @@
 {/if}
 
 <section class="card sits">
-	<Eyebrow emoji="🥧" label="Where the cash sits" />
+	<Eyebrow hue="--teal" emoji="🥧" label="Where the cash sits">
+		{#snippet right()}
+			<!-- The total moves out of the hole and into the header. It was set in
+			     13px type inside an 88px disc, which is the smallest a figure this
+			     important is printed anywhere in the app — and the disc it sat in
+			     was the reason the chart had a hole at all. -->
+			<span class="sits-total display">{data.cashTotalFormatted}</span>
+		{/snippet}
+	</Eyebrow>
 	<div class="donut-wrap">
-		<div class="donut" style:background={donutGradient}>
-			<div class="hole"><span class="mono">{data.cashTotalFormatted}</span></div>
-		</div>
+		<div class="pie" style:background={donutGradient}></div>
 		<div class="legend">
 			{#each data.donut as s (s.id)}
 				<div class="legend-row">
@@ -475,24 +481,16 @@
 		gap: 22px;
 		flex-wrap: wrap;
 	}
-	.donut {
-		width: 148px;
-		height: 148px;
-		border-radius: 148px;
-		flex: 0 0 148px;
-		display: grid;
-		place-items: center;
+	/* A pie, not a donut. With the total moved to the header the hole held
+	   nothing, and a ring reads a share less directly than a wedge does. */
+	.pie {
+		width: 140px;
+		height: 140px;
+		border-radius: var(--radius-pill);
+		flex: 0 0 140px;
 	}
-	.hole {
-		width: 88px;
-		height: 88px;
-		border-radius: 88px;
-		background: var(--bg2);
-		display: grid;
-		place-items: center;
-	}
-	.hole .mono {
-		font-size: var(--text-md);
+	.sits-total {
+		font-size: var(--text-2xl);
 	}
 	.legend {
 		/* Full width now, so the rows spread across the row instead of stacking in a
@@ -510,10 +508,12 @@
 		align-items: center;
 		font-size: var(--text-sm);
 	}
+	/* Square, matching every other swatch in the app: a round dot beside a
+	   category name read as a bullet rather than as the wedge's colour. */
 	.dot {
-		width: 9px;
-		height: 9px;
-		border-radius: 3px;
+		width: 10px;
+		height: 10px;
+		border-radius: var(--radius-xs);
 	}
 	.legend-label {
 		color: var(--fg2);

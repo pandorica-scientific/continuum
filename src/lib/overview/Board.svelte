@@ -259,7 +259,12 @@
 		{#each unplaced as panel (panel.key)}
 			<!-- No description here: the board behind the tray is already showing
 			     what these panels look like. -->
-			<PanelChip icon={panel.icon} title={panel.title} onclick={() => add(panel.key)} />
+			<PanelChip
+				icon={panel.icon}
+				hue={panel.hue}
+				title={panel.title}
+				onclick={() => add(panel.key)}
+			/>
 		{/each}
 	</div>
 {/if}
@@ -316,6 +321,7 @@
 				<Panel
 					title={panel.title}
 					icon={panel.icon}
+					hue={panel.hue}
 					href={panel.href}
 					{customising}
 					{narrow}
@@ -381,16 +387,19 @@
 	}
 	/* The chips inside are PanelChip's, styling and all: the tray and the
 	   first-run picker offer the same thing and used to draw it twice. */
+	/* Dashed and brand-tinted: the tray only exists in customise mode, and the
+	   dashes say "a place things go" rather than "a card of content" — the same
+	   vocabulary as the dashed Add-a-shelf and Add-a-loan cards. */
 	.tray {
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
 		flex-wrap: wrap;
 		padding: var(--space-6) var(--space-7);
-		margin-bottom: 16px;
-		background: var(--card);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		margin-bottom: var(--space-8);
+		background: color-mix(in srgb, var(--brand) 6%, transparent);
+		border: 1px dashed color-mix(in srgb, var(--brand) 45%, transparent);
+		border-radius: var(--radius-card);
 	}
 	.tray-label {
 		font-size: var(--text-xs);

@@ -8,16 +8,19 @@
 	// drifting apart panel by panel — and the tray's version is the one every
 	// household has already learnt to recognise, so it is kept exactly as it
 	// was and the description is what the picker adds on top.
-	import Icon from '$lib/components/Icon.svelte';
+	import IconTile from '$lib/components/IconTile.svelte';
 	import type { IconName } from '$lib/icons';
 
 	let {
 		icon,
+		hue = '--fg3',
 		title,
 		description,
 		onclick
 	}: {
 		icon: IconName;
+		/** The panel's identity colour, so the tray reads as the board does. */
+		hue?: string;
 		title: string;
 		/** The picker's second line. Absent in the tray, where the board behind
 		 *  it already shows what these panels look like. */
@@ -27,7 +30,7 @@
 </script>
 
 <button type="button" class="chip" class:described={description} {onclick}>
-	<span class="title"><Icon name={icon} size={14} />{title}</span>
+	<span class="title"><IconTile {hue} {icon} size={description ? 26 : 18} />{title}</span>
 	{#if description}
 		<span class="description">{description}</span>
 	{/if}
@@ -38,17 +41,17 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-3);
-		background: var(--card2);
-		border: 1px solid var(--bd);
-		border-radius: 20px;
+		background: var(--card);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-pill);
 		color: var(--fg2);
 		font-size: var(--text-sm);
-		padding: 5px 12px;
+		padding: 4px var(--space-6) 4px 5px;
 		cursor: pointer;
 		text-align: left;
 	}
 	.chip:hover {
-		background: var(--card3);
+		background: var(--surface-2);
 	}
 	/* The same ring every other control in the app draws. Without it eighteen
 	   chips beside a .btn primary fall back to whatever the browser does, which
@@ -66,8 +69,8 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-2);
-		border-radius: var(--radius-lg);
-		padding: var(--space-5) var(--space-6);
+		border-radius: var(--radius-card);
+		padding: var(--space-6) var(--space-7);
 		width: 100%;
 		height: 100%;
 	}

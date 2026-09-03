@@ -56,8 +56,22 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		cookies.set(THEME_COOKIE, theme, themeCookieOptions());
 	}
 
+	// Who is signed in, with their colour. The sidebar's foot used to show the
+	// HOUSEHOLD's initial in a grey disc, which said nothing a person could not
+	// already see in the line beside it; v0.8.1 puts the person there, in the
+	// same hue every screen already tags their payslips and statements with.
+	const signedInId = locals.person?.id ?? null;
+	const signedIn = locals.person
+		? {
+				name: locals.person.name,
+				initials: locals.person.initials,
+				hue: (signedInId ? hues.get(signedInId) : null) ?? '--fg3'
+			}
+		: null;
+
 	return {
 		modules,
+		signedIn,
 		// Carried on every screen, not just Settings: an instance anyone can walk
 		// into should say so wherever you are looking, or the state is a surprise.
 		householdLabel,

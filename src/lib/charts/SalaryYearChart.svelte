@@ -1,40 +1,25 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Salary by year, in the Tax screen's visual language.
+	// Salary by year, drawn by the shared LineChart.
 	//
-	// The two tabs sit next to each other, so the panel geometry, the hatching,
-	// the unified hover and the SVG constraints are shared rather than
-	// reinvented — see tax-chart-geometry.ts and TaxYearChart.svelte for the
-	// three SVG facts that govern both (var() in attributes, the letterboxed
-	// viewBox, HTML axis labels).
-	//
-	// What differs is what a bar means. A tax bar splits what was kept from what
-	// was taken; a salary bar splits the base from the bonus that was added to
-	// it, with net marked as a tick across the whole.
+	// It used to own a letterboxed viewBox of its own, with HTML axis labels
+	// positioned in percentages on top of it because text inside a scaled SVG
+	// scales too. TaxYearChart owned a second copy of the same arrangement, and
+	// the two had already drifted on bar width and readout placement. Both now
+	// hand LineChart their values; what is left in this file is what a salary
+	// bar MEANS — base, bonus, net, and the change line over the top.
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
-	import { compactAxis, displayCurrency, formatMinor } from '$lib/money';
+	import LineChart from './LineChart.svelte';
+	import type { BarSlot, LineSeries } from './line';
+	import { displayCurrency, formatMinor } from '$lib/money';
 	import {
-		MONEY_BOTTOM,
-		MONEY_TITLE_PCT,
-		MONEY_TOP,
-		RATE_BOTTOM_Y,
-		RATE_TITLE_PCT,
-		TALL_TITLE_PCT,
-		VIEW_H,
 		barValues,
-		barWidth,
-		bars,
 		ceilingFor,
-		changeBand,
-		changeRuns,
-		changeSpan,
-		changeY,
-		netTickY,
+		salaryBarSegments,
 		type SalaryMode,
 		type SerialisedSalaryYear
 	} from '$lib/charts/salary-chart-geometry';
-	import { VIEW_W, X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
 
 	let {
 		years,
@@ -48,60 +33,87 @@
 		onchange: (next: SalaryMode) => void;
 	} = $props();
 
-	let hover = $state<number | null>(null);
-
-	const ceiling = $derived(ceilingFor(years, mode));
-	const width = $derived(barWidth(Math.max(years.length, 1)));
-	const band = $derived(changeBand(mode));
-	const span = $derived(changeSpan(years));
 	const anyBonus = $derived(years.some((y) => BigInt(y.bonusTotalMinor) > 0n));
 
-	const totalRuns = $derived(changeRuns(years, (r) => r.deltaPct, span, band));
-	const baseRuns = $derived(changeRuns(years, (r) => r.baseDeltaPct, span, band));
-
-	const path = (points: { x: number; y: number }[]) =>
-		points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
-
-	// Labels come from compactAxis rather than per-tick formatting: at some
-	// magnitudes whole thousands collapse and two gridlines read the same.
-	const moneyGrid = $derived.by(() => {
-		const fractions = [0, 0.25, 0.5, 0.75, 1];
-		const values = fractions.map((f) => BigInt(Math.round(Number(ceiling) * f)));
-		const labels = compactAxis(values, currency);
-		return fractions.map((f, i) => ({
-			y: MONEY_BOTTOM - f * (MONEY_BOTTOM - MONEY_TOP),
-			fraction: f,
-			label: labels[i]
-		}));
-	});
-	const changeGrid = $derived(
-		(mode === 'change' ? [-1, -0.5, 0, 0.5, 1] : [-1, 0, 1]).map((f) => ({
-			y: changeY(f * span, span, band),
-			pct: Math.round(f * span)
-		}))
+	/**
+	 * Bars in minor units, which is what the ledger stores and what the readout
+	 * formats. The axis divides them down to thousands or millions for its own
+	 * labels; nothing else here needs to know about that.
+	 *
+	 * Bonus at the foot, base above it — the order `bars()` used to place them
+	 * in, and for the reason it recorded: the other way round, a bonus that
+	 * changed size every year moved the base's boundary for a reason that had
+	 * nothing to do with the base.
+	 */
+	const barSlots = $derived<BarSlot[]>(
+		mode === 'change'
+			? []
+			: years.map((row) => ({
+					segments: salaryBarSegments(row, mode),
+					// Net is not a segment: it is what was LEFT of the same gross
+					// rather than a further amount stacked on it, so it crosses.
+					tick: (() => {
+						const net = barValues(row, mode).net;
+						return net === null ? null : Number(net);
+					})()
+				}))
 	);
 
-	const axisUnit = $derived.by(() => {
-		const top = Number(ceiling) / 100;
-		const symbol = displayCurrency(currency);
-		if (top >= 1_000_000) return `Millions ${symbol}`;
-		if (top >= 1_000) return `Thousands ${symbol}`;
-		return symbol;
-	});
+	// The base line is the one that answers "did my salary go up". The total
+	// moves with a one-off bonus and reads as a raise.
+	const series = $derived<LineSeries[]>([
+		{
+			key: 'total',
+			colorVar: '--teal',
+			endLabel: anyBonus ? 'total' : 'change',
+			points: years.map((y) => ({ value: y.deltaPct }))
+		},
+		...(anyBonus
+			? [
+					{
+						key: 'base',
+						colorVar: '--series-health',
+						dashed: true,
+						endLabel: 'base',
+						points: years.map((y) => ({ value: y.baseDeltaPct }))
+					}
+				]
+			: [])
+	]);
 
-	const hovered = $derived(hover === null ? null : (years[hover] ?? null));
-	const flip = $derived(hover !== null && hover >= years.length / 2);
+	/**
+	 * What the money axis counts in.
+	 *
+	 * Six-figure koruna printed against every gridline is a wall of digits, so
+	 * the unit moves into the axis title and the labels shrink to two or three
+	 * characters — the job `compactAxis` did for the old fixed grid.
+	 */
+	const ceiling = $derived(ceilingFor(years, mode));
+	const unitStep = $derived.by(() => {
+		const top = Number(ceiling) / 100;
+		if (top >= 1_000_000) return { divisor: 1_000_000 * 100, label: 'Millions' };
+		if (top >= 1_000) return { divisor: 1_000 * 100, label: 'Thousands' };
+		return { divisor: 100, label: '' };
+	});
+	const axisUnit = $derived(`${unitStep.label} ${displayCurrency(currency)}`.trim());
 
 	const LABEL: Record<SalaryMode, string> = {
 		avg: 'Average month',
 		total: 'Yearly total',
 		change: 'Year on year'
 	};
+
+	const FOOTNOTE: Record<SalaryMode, string> = {
+		total:
+			'A year with fewer than twelve months is marked in its readout — a partial year is not a small one',
+		avg: 'Averaged over the months actually recorded, so a part year compares as a monthly rate',
+		change: 'Base excludes bonuses, so a one-off award does not read as a raise and then a cut'
+	};
 </script>
 
 <section class="card chart">
 	<div class="head">
-		<Eyebrow emoji="💼" label={LABEL[mode]} />
+		<Eyebrow hue="--teal" emoji="💼" label={LABEL[mode]} />
 		<Segmented
 			options={[
 				{ value: 'avg', label: 'Average month' },
@@ -119,226 +131,105 @@
 			Transactions screen, and the history draws itself.
 		</p>
 	{:else}
-		<!-- Scrolls sideways rather than shrinking. The geometry is a fixed
-		     viewBox, so a narrower card is a shorter chart too, and on a phone the
-		     panel collapsed to about a hundred pixels — with eight axis values
-		     printed over one another inside it. The matrices answer "this does not
-		     fit a phone" the same way. -->
-		<div class="plot-scroll">
-			<div class="plot">
-				<svg viewBox="0 0 {VIEW_W} {VIEW_H}" role="img" aria-label="Salary by year">
-					<defs>
-						<filter id="salary-shadow" x="-50%" y="-50%" width="200%" height="200%">
-							<feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3" />
-						</filter>
-						<linearGradient id="salary-base" x1="0" y1="0" x2="0" y2="1">
-							<stop offset="0" style="stop-color: var(--series-health-soft); stop-opacity: 0.62" />
-							<stop offset="1" style="stop-color: var(--series-health-soft); stop-opacity: 0.42" />
-						</linearGradient>
-						<pattern
-							id="salary-bonus"
-							width="7"
-							height="7"
-							patternUnits="userSpaceOnUse"
-							patternTransform="rotate(45)"
-						>
-							<rect width="7" height="7" style="fill: var(--orange); fill-opacity: 0.12" />
-							<line
-								x1="0"
-								y1="0"
-								x2="0"
-								y2="7"
-								style="stroke: var(--orange); stroke-opacity: 0.5; stroke-width: 2.6"
-							/>
-						</pattern>
-					</defs>
-
-					{#if mode !== 'change'}
-						{#each moneyGrid as g (g.fraction)}
-							<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
-							<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
-						{/each}
-						<line x1={X_LEFT} y1={MONEY_TOP} x2={X_LEFT} y2={MONEY_BOTTOM} class="spine" />
-						<line x1={X_LEFT} y1={MONEY_BOTTOM} x2={X_RIGHT} y2={MONEY_BOTTOM} class="spine" />
-					{/if}
-
-					{#each changeGrid as g (g.pct)}
-						<line
-							x1={X_LEFT}
-							y1={g.y}
-							x2={X_RIGHT}
-							y2={g.y}
-							class="grid"
-							class:zero={g.pct === 0}
-						/>
-						<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
-					{/each}
-					<line x1={X_LEFT} y1={band[0]} x2={X_LEFT} y2={band[1]} class="spine" />
-
-					{#if mode !== 'change'}
-						{#each years as row, i (row.year)}
-							{#each bars(row, mode, ceiling) as seg, j (j)}
-								<rect
-									x={slotFor(i, years.length) - width / 2}
-									y={seg.y}
-									{width}
-									height={seg.height}
-									rx="2"
-									filter="url(#salary-shadow)"
-									style="fill: url(#salary-{seg.kind}); {seg.stroked
-										? `stroke: var(${seg.kind === 'bonus' ? '--orange' : '--series-health-soft'}); stroke-width: 1`
-										: 'stroke: none'}"
-								/>
-							{/each}
-							{@const tick = netTickY(row, mode, ceiling)}
-							{#if tick !== null}
-								<line
-									x1={slotFor(i, years.length) - width / 2}
-									y1={tick}
-									x2={slotFor(i, years.length) + width / 2}
-									y2={tick}
-									class="net-tick"
-								/>
-							{/if}
-						{/each}
-					{/if}
-
-					<!-- The base line is the one that answers "did my salary go up".
-				     The total moves with a one-off bonus and reads as a raise. -->
-					{#each totalRuns as run, i (i)}
-						{#if run.length > 1}<path d={path(run)} class="line total" />{/if}
-						{#each run as p (p.year)}
-							<circle cx={p.x} cy={p.y} r="3.5" class="dot total" />
-						{/each}
-					{/each}
-					{#if anyBonus}
-						{#each baseRuns as run, i (i)}
-							{#if run.length > 1}<path d={path(run)} class="line base" />{/if}
-							{#each run as p (p.year)}
-								<circle cx={p.x} cy={p.y} r="3" class="dot base" />
-							{/each}
-						{/each}
-					{/if}
-
-					{#if hover !== null}
-						<line
-							x1={slotFor(hover, years.length)}
-							y1={mode === 'change' ? band[0] : MONEY_TOP}
-							x2={slotFor(hover, years.length)}
-							y2={band[1]}
-							class="guide"
-						/>
-					{/if}
-				</svg>
-
-				{#if mode !== 'change'}
-					<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
-					{#each moneyGrid as g (g.fraction)}
-						<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.label}</span>
-					{/each}
-				{/if}
-				<span class="axis-title" style:top="{mode === 'change' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
-					>Change</span
+		<LineChart
+			{series}
+			bars={barSlots}
+			labels={years.map((y) => String(y.year))}
+			height={mode === 'change' ? 300 : 340}
+			title="Salary by year"
+			description="Gross split into base and bonus, with net marked across each bar, and the year-on-year change beneath."
+			format={(v) => `${Math.round(v)}%`}
+			barFormat={(v) => String(Math.round(v / unitStep.divisor))}
+			axisTitle="Change"
+			barAxisTitle={axisUnit}
+			slotLabel={(i) => `${years[i].year} figures`}
+		>
+			{#snippet defs()}
+				<linearGradient id="salary-base" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0" style="stop-color: var(--series-health-soft); stop-opacity: 0.62" />
+					<stop offset="1" style="stop-color: var(--series-health-soft); stop-opacity: 0.42" />
+				</linearGradient>
+				<pattern
+					id="salary-bonus"
+					width="7"
+					height="7"
+					patternUnits="userSpaceOnUse"
+					patternTransform="rotate(45)"
 				>
-				{#each changeGrid as g (g.pct)}
-					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
-				{/each}
-				{#each years as y, i (y.year)}
-					<span
-						class="axis-year mono"
-						style:left="{(slotFor(i, years.length) / VIEW_W) * 100}%"
-						style:top="{(RATE_BOTTOM_Y / VIEW_H) * 100}%">{y.year}</span
-					>
-				{/each}
+					<rect width="7" height="7" style="fill: var(--orange); fill-opacity: 0.12" />
+					<line
+						x1="0"
+						y1="0"
+						x2="0"
+						y2="7"
+						style="stroke: var(--orange); stroke-opacity: 0.5; stroke-width: 2.6"
+					/>
+				</pattern>
+			{/snippet}
 
-				{#each years as y, i (y.year)}
-					<button
-						type="button"
-						class="hit"
-						style:left="{((slotFor(i, years.length) - (X_RIGHT - X_LEFT) / years.length / 2) /
-							VIEW_W) *
-							100}%"
-						style:width="{((X_RIGHT - X_LEFT) / years.length / VIEW_W) * 100}%"
-						onmouseenter={() => (hover = i)}
-						onmouseleave={() => (hover = null)}
-						onfocus={() => (hover = i)}
-						onblur={() => (hover = null)}
-						aria-label="{y.year} figures"
-					></button>
-				{/each}
-
-				{#if hovered}
-					{@const v = barValues(hovered, mode === 'change' ? 'total' : mode)}
-					<div
-						class="readout"
-						class:flip
-						style:left="{(slotFor(hover!, years.length) / VIEW_W) * 100}%"
-					>
-						<span class="r-year mono">{hovered.year}</span>
-						<div class="r-row">
-							<span class="swatch base"></span>
-							<span>base</span>
-							<strong class="mono">{formatMinor(v.base, currency)}</strong>
-						</div>
-						{#if v.bonus > 0n}
-							<div class="r-row">
-								<span class="swatch bonus"></span>
-								<span>bonus</span>
-								<strong class="mono">{formatMinor(v.bonus, currency)}</strong>
-							</div>
-						{/if}
-						<!-- The sum the bar actually draws. base + bonus IS gross, and with
-					     the two stacked it is worth stating rather than leaving to be
-					     added up by eye — especially beside net, which is what was left
-					     of this same figure rather than a further amount. -->
-						<div class="r-row total">
-							<span class="swatch gross"></span>
-							<span>gross</span>
-							<strong class="mono">{formatMinor(v.base + v.bonus, currency)}</strong>
-						</div>
-						{#if v.net !== null}
-							<div class="r-row">
-								<span class="swatch net"></span>
-								<span>net</span>
-								<strong class="mono">{formatMinor(v.net, currency)}</strong>
-							</div>
-						{/if}
-						<div class="r-foot">
-							{#if hovered.deltaPct !== null}
-								<span>{hovered.deltaPct > 0 ? '+' : ''}{hovered.deltaPct}% total</span>
-							{/if}
-							{#if hovered.baseDeltaPct !== null && anyBonus}
-								<span>{hovered.baseDeltaPct > 0 ? '+' : ''}{hovered.baseDeltaPct}% base</span>
-							{/if}
-							<span class="months">
-								{hovered.grossMonths} gross · {hovered.netMonths} net
-								{#if !hovered.netComplete && hovered.netMonths > 0}⚠{/if}
-							</span>
-						</div>
+			{#snippet readout(i)}
+				{@const row = years[i]}
+				{@const v = barValues(row, mode === 'change' ? 'total' : mode)}
+				<span class="r-year mono">{row.year}</span>
+				<div class="r-row">
+					<span class="swatch base"></span>
+					<span>base</span>
+					<strong class="mono">{formatMinor(v.base, currency)}</strong>
+				</div>
+				{#if v.bonus > 0n}
+					<div class="r-row">
+						<span class="swatch bonus"></span>
+						<span>bonus</span>
+						<strong class="mono">{formatMinor(v.bonus, currency)}</strong>
 					</div>
 				{/if}
-			</div>
-		</div>
+				<!-- The sum the bar actually draws. base + bonus IS gross, and with the
+				     two stacked it is worth stating rather than leaving to be added up
+				     by eye — especially beside net, which is what was left of this same
+				     figure rather than a further amount. -->
+				<div class="r-row total">
+					<span class="swatch gross"></span>
+					<span>gross</span>
+					<strong class="mono">{formatMinor(v.base + v.bonus, currency)}</strong>
+				</div>
+				{#if v.net !== null}
+					<div class="r-row">
+						<span class="swatch net"></span>
+						<span>net</span>
+						<strong class="mono">{formatMinor(v.net, currency)}</strong>
+					</div>
+				{/if}
+				<div class="r-foot">
+					{#if row.deltaPct !== null}
+						<span>{row.deltaPct > 0 ? '+' : ''}{row.deltaPct}% total</span>
+					{/if}
+					{#if row.baseDeltaPct !== null && anyBonus}
+						<span>{row.baseDeltaPct > 0 ? '+' : ''}{row.baseDeltaPct}% base</span>
+					{/if}
+					<span class="months">
+						{row.grossMonths} gross · {row.netMonths} net
+						{#if !row.netComplete && row.netMonths > 0}⚠{/if}
+					</span>
+				</div>
+			{/snippet}
 
-		<span class="axis-caption">Year</span>
-		<div class="legend">
-			<span class="key"><span class="swatch base"></span> base salary</span>
-			{#if anyBonus}
-				<span class="key"><span class="swatch bonus"></span> bonus</span>
-			{/if}
-			<span class="key"><span class="swatch net"></span> net</span>
-			<span class="key"><span class="swatch line-total"></span> change, total</span>
-			{#if anyBonus}
-				<span class="key"><span class="swatch line-base"></span> change, base only</span>
-			{/if}
-			<span class="footnote">
-				{mode === 'total'
-					? 'A year with fewer than twelve months is marked in its readout — a partial year is not a small one'
-					: mode === 'avg'
-						? 'Averaged over the months actually recorded, so a part year compares as a monthly rate'
-						: 'Base excludes bonuses, so a one-off award does not read as a raise and then a cut'}
-			</span>
-		</div>
+			{#snippet legend()}
+				<!-- The bar keys only where there are bars. In Change mode they named
+				     three fills that are not on screen. -->
+				{#if mode !== 'change'}
+					<span class="key"><span class="swatch base"></span> base salary</span>
+					{#if anyBonus}
+						<span class="key"><span class="swatch bonus"></span> bonus</span>
+					{/if}
+					<span class="key"><span class="swatch net"></span> net</span>
+				{/if}
+				<span class="key"><span class="swatch line-total"></span> change, total</span>
+				{#if anyBonus}
+					<span class="key"><span class="swatch line-base"></span> change, base only</span>
+				{/if}
+				<span class="footnote">{FOOTNOTE[mode]}</span>
+			{/snippet}
+		</LineChart>
 	{/if}
 </section>
 
@@ -352,244 +243,82 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-5);
+		gap: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.empty {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	.plot-scroll {
-		overflow-x: auto;
-		/* The rotated axis title steps out into this padding when the gutter it
-		   normally sits in is too narrow to hold it beside the value nearest it —
-		   see the container query below. The negative margin gives the space back,
-		   so on a wide card the plot occupies exactly the pixels it always did.
-
-		   A container, so that decision is made from the width the PLOT actually
-		   gets rather than the viewport's: the same viewport gives this card very
-		   different widths with and without the sidebar. */
-		container-type: inline-size;
-		padding-left: 16px;
-		margin-left: -16px;
-	}
-	.plot {
-		position: relative;
-		width: 100%;
-		/* The width at which the two stacked bands still have room for their axis
-		   values — roughly what the chart already gets on a tablet. */
-		min-width: 640px;
-		aspect-ratio: 1000 / 322;
-	}
-	svg {
-		width: 100%;
-		height: 100%;
-		display: block;
-		overflow: visible;
-	}
-	.grid {
-		stroke: var(--bd);
-		stroke-width: 1;
-	}
-	.grid.zero {
-		stroke: var(--bd2);
-	}
-	.tick,
-	.spine {
-		stroke: var(--bd2);
-		stroke-width: 1;
-	}
-	.net-tick {
-		stroke: var(--fg1);
-		stroke-width: 1.6;
-	}
-	.line {
-		fill: none;
-		stroke-linejoin: round;
-	}
-	.line.total {
-		stroke: var(--yellow);
-		stroke-width: 2.5;
-	}
-	.line.base {
-		stroke: var(--teal);
-		stroke-width: 2;
-		stroke-dasharray: 5 3;
-	}
-	.dot {
-		stroke: var(--bg);
-		stroke-width: 1.5;
-	}
-	.dot.total {
-		fill: var(--yellow);
-	}
-	.dot.base {
-		fill: var(--teal);
-	}
-	.guide {
-		stroke: var(--bd2);
-		stroke-width: 1;
-	}
-	.axis-title {
-		position: absolute;
-		left: 0;
-		font-size: var(--text-xs);
-		color: var(--fg3);
-		transform-origin: left top;
-		/* Rotated about its top-left, so the text runs UP from the anchor; the
-		   translate slides it back down by half its own length, centring it on
-		   the band `top` names. The anchors are derived in the geometry module —
-		   they used to be eyeballed percentages that missed both band centres. */
-		transform: rotate(-90deg) translateX(-50%);
-		white-space: nowrap;
-	}
-	/* Snug against the plot's left edge, inside the gutter the axis values are
-	   right-aligned in. That gutter is a PERCENTAGE of the plot's width while the
-	   text in it is a fixed size, so below the width below it stops holding both
-	   and the title lands on top of the value beside it — "Millions Kč" printed
-	   through "2.6M". Only then does the title step out.
-
-	   1024px is where a five-character value and the title's own band still
-	   clear each other: the gutter is 5.2% of the plot, so about 53px, against
-	   33px of value and 15px of rotated title. */
-	@container (max-width: 1024px) {
-		.axis-title {
-			left: -16px;
-		}
-	}
-	.axis-value {
-		position: absolute;
-		right: calc(100% - 5.2%);
-		transform: translateY(-50%);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-		font-family: var(--font-mono);
-		white-space: nowrap;
-	}
-	.axis-year {
-		position: absolute;
-		transform: translate(-50%, 6px);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	/* Below the plot, in the flow, rather than hanging off its bottom edge.
-	   Absolutely positioned at `bottom: -8%` it stuck out of the scroll
-	   container, and a scroll container clips or scrolls what leaves it — so the
-	   chart grew a vertical scrollbar of its own and could be dragged up and
-	   down inside the card. */
-	.axis-caption {
-		display: block;
-		margin-top: var(--space-3);
-		text-align: center;
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	.hit {
-		position: absolute;
-		top: 0;
-		height: 91%;
-		border: 0;
-		padding: 0;
-		background: transparent;
-		cursor: default;
-	}
-	.readout {
-		position: absolute;
-		top: 4%;
-		margin-left: 12px;
-		min-width: 210px;
-		background: var(--bg2);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-float);
-		padding: var(--space-5) var(--space-6);
-		pointer-events: none;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		z-index: 2;
-	}
-	.readout.flip {
-		margin-left: -12px;
-		transform: translateX(-100%);
-	}
-	.r-year {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	.r-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
+		margin: 0;
 		font-size: var(--text-md);
+		color: var(--fg3);
+		line-height: 1.55;
+	}
+
+	/* The readout's and legend's own rows. `:global` because that markup is
+	   rendered inside LineChart, which scopes its own styles and not these. */
+	.chart :global(.r-year) {
+		display: block;
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		margin-bottom: var(--space-3);
+	}
+	.chart :global(.r-row) {
+		display: grid;
+		grid-template-columns: 10px minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-4);
+		padding: 1px 0;
 		color: var(--fg2);
 	}
-	.r-row strong {
-		margin-left: auto;
+	.chart :global(.r-row.total) {
 		color: var(--fg1);
 	}
-	.r-foot {
+	.chart :global(.r-foot) {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-3);
+		gap: var(--space-4);
+		margin-top: var(--space-3);
+		padding-top: var(--space-3);
 		border-top: 1px solid var(--bd);
-		padding-top: 6px;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
-	.months {
-		margin-left: auto;
-	}
-	.legend {
-		display: flex;
-		align-items: center;
-		gap: var(--space-6);
-		flex-wrap: wrap;
-		border-top: 1px solid var(--bd);
-		padding-top: var(--space-6);
-	}
-	.key {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	.swatch {
+
+	.chart :global(.swatch) {
 		width: 10px;
 		height: 10px;
 		border-radius: var(--radius-xs);
 		flex: none;
 	}
-	.swatch.base {
-		background: var(--series-health-soft);
+	.chart :global(.swatch.base) {
+		background: color-mix(in srgb, var(--series-health-soft) 55%, transparent);
 	}
-	.swatch.bonus {
-		background: var(--orange);
+	.chart :global(.swatch.bonus) {
+		background: color-mix(in srgb, var(--orange) 45%, transparent);
 	}
-	.swatch.gross {
-		background: linear-gradient(to bottom, var(--series-health-soft) 0 50%, var(--orange) 50% 100%);
+	.chart :global(.swatch.gross) {
+		background: var(--bd2);
 	}
-	.r-row.total {
-		border-top: 1px solid var(--bd2);
-		padding-top: 4px;
-		margin-top: 2px;
-	}
-	.swatch.net {
+	.chart :global(.swatch.net) {
 		background: var(--fg1);
-		height: 2px;
 	}
-	.swatch.line-total {
-		background: var(--yellow);
-		height: 2px;
-	}
-	.swatch.line-base {
+	.chart :global(.swatch.line-total) {
 		background: var(--teal);
-		height: 2px;
 	}
-	.footnote {
-		margin-left: auto;
+	.chart :global(.swatch.line-base) {
+		background: var(--series-health);
+	}
+
+	.chart :global(.key) {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.chart :global(.footnote) {
+		flex-basis: 100%;
 		font-size: var(--text-xs);
 		color: var(--fg3);
+		line-height: 1.5;
 	}
 </style>

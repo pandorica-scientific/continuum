@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import { personHues } from '$lib/people';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import ContactForm from '$lib/components/ContactForm.svelte';
 	import ActionError from '$lib/components/ActionError.svelte';
@@ -34,6 +35,10 @@
 		return (form.valuesFor ?? null) === id ? form.values : undefined;
 	}
 
+	// The same stable assignment the household's own people get: sorted by id,
+	// so a contact keeps their colour as the address book grows.
+	const hues = $derived(personHues(data.contacts.map((c) => c.id)));
+
 	function labelsFor(contact: (typeof data.contacts)[number]): string[] {
 		const name = (list: { id: string; name: string }[], ids: string[]) =>
 			ids
@@ -54,7 +59,7 @@
 	caption="People and companies, and what in the household they are attached to."
 />
 
-<section class="section">
+<section class="section" class:cards={editing === null}>
 	<form class="search-row" method="GET">
 		<input
 			class="search"
@@ -73,7 +78,7 @@
 	<ActionError message={form?.message ?? null} />
 
 	<div class="eyebrow-row">
-		<Eyebrow emoji="📇" label="Address book" />
+		<Eyebrow hue="--indigo" emoji="📇" label="Address book" />
 		<span class="eyebrow-caption">
 			{data.contacts.length}
 			{data.contacts.length === 1 ? 'contact' : 'contacts'}
@@ -113,7 +118,11 @@
 				{#if contact.photo}
 					<img class="avatar" src="/files/{contact.photo}" alt="" />
 				{:else}
-					<span class="avatar avatar-blank" aria-hidden="true">
+					<span
+						class="avatar avatar-blank"
+						style:--contact-hue="var({hues.get(contact.id) ?? '--fg3'})"
+						aria-hidden="true"
+					>
 						{contact.name.slice(0, 1).toUpperCase()}
 					</span>
 				{/if}
@@ -156,27 +165,48 @@
 		flex: 1 1 240px;
 	}
 
+	/* Cards in a grid, not rows in a column. A contact is a person, not a line
+	   item, and at four columns the phone number ended up further from the name
+	   than the Edit button was. */
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+		gap: var(--space-6);
+		align-items: start;
+	}
+	/* The toolbar and the count are the page's, not a card's. */
+	.cards > .search-row,
+	.cards > :global(.eyebrow-row),
+	.cards > .empty {
+		grid-column: 1 / -1;
+	}
 	.contact-row {
 		display: grid;
-		grid-template-columns: auto 1fr auto auto;
-		align-items: center;
-		gap: var(--space-5) var(--space-7);
+		grid-template-columns: 44px minmax(0, 1fr) auto;
+		align-items: start;
+		gap: var(--space-4) var(--space-6);
 	}
 
 	/* The avatar is decorative: the name beside it is the label, so an empty alt
 	   keeps a screen reader from announcing the same person twice. */
 	.avatar {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
+		width: 44px;
+		height: 44px;
+		border-radius: var(--radius-pill);
 		object-fit: cover;
 		background: var(--card2);
+		flex: none;
 	}
 
+	/* The initial in the contact's own series colour, the way a person's tag is
+	   drawn everywhere else. Derived from the name so it is stable without a
+	   stored preference. */
 	.avatar-blank {
 		display: grid;
 		place-items: center;
-		color: var(--fg3);
+		background: color-mix(in srgb, var(--contact-hue, var(--fg3)) 24%, transparent);
+		color: var(--fg1);
+		font-size: var(--text-lg);
 		font-weight: 600;
 	}
 
@@ -187,19 +217,27 @@
 	}
 
 	.c-name {
-		font-weight: 600;
+		font-size: 15px;
+		font-weight: 650;
+		letter-spacing: -0.01em;
 	}
 
-	.c-work,
-	.reach {
+	.c-work {
 		color: var(--fg3);
-		font-size: var(--text-md);
+		font-size: 12.5px;
+	}
+	.reach {
+		font-size: 12.5px;
 	}
 
 	.reach {
 		display: flex;
 		flex-direction: column;
-		text-align: right;
+		gap: var(--space-1);
+		grid-column: 2;
+	}
+	.reach :global(a) {
+		color: var(--blue);
 	}
 
 	.linked {

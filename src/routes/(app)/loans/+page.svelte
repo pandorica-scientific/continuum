@@ -64,7 +64,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="💳" label="What you owe" />
+		<Eyebrow hue="--purple" emoji="💳" label="What you owe" />
 		<span class="eyebrow-caption">
 			{data.count === 0
 				? 'no loans on record yet'
@@ -156,7 +156,7 @@
 				<div class="detail">
 					{#if l.chart.length}
 						<div class="eyebrow-row">
-							<Eyebrow emoji="📊" label="Interest vs principal" />
+							<Eyebrow hue="--purple" emoji="📊" label="Interest vs principal" />
 							<span class="eyebrow-caption">{l.chartNote}</span>
 						</div>
 						<LoanSchedule years={l.chart} currency={l.currency} />
@@ -583,11 +583,13 @@
 	.e-amount {
 		font-size: var(--text-sm);
 	}
+	/* Dashed and purple: the vocabulary the Overview tray and the Add-a-shelf
+	   row use for "a place a new thing goes", in this area's own hue. */
 	.add-tile {
-		border: 1.5px dashed var(--bd2);
-		background: transparent;
-		border-radius: var(--radius-lg);
-		padding: 18px;
+		border: 1.5px dashed color-mix(in srgb, var(--purple) 40%, transparent);
+		background: color-mix(in srgb, var(--purple) 5%, transparent);
+		border-radius: var(--radius-card);
+		padding: 18px 20px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
@@ -597,7 +599,7 @@
 		color: var(--fg2);
 	}
 	.add-tile:hover {
-		border-color: var(--blue);
+		border-color: var(--purple);
 	}
 	.a-title {
 		font-size: var(--text-lg);

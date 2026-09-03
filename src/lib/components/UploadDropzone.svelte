@@ -12,6 +12,8 @@
 		busyText = 'Uploading…',
 		description,
 		reportErrors = true,
+		hero = false,
+		formats = [],
 		name,
 		onfiles
 	}: {
@@ -29,6 +31,17 @@
 		 * error in two places reads as two separate failures.
 		 */
 		reportErrors?: boolean;
+		/**
+		 * The big version: an icon tile, a title and the formats spelled out.
+		 *
+		 * For a screen whose whole purpose IS the upload — Import — where the
+		 * control has room and where a person arriving for the first time needs
+		 * to be told what the app will accept. Everywhere else the dropzone is
+		 * one field beside a date and a subject, and stays the compact one.
+		 */
+		hero?: boolean;
+		/** Format names printed as chips under the title. Hero only. */
+		formats?: string[];
 		/**
 		 * Field mode. The file stays on this component's own input and the
 		 * enclosing <form> posts it under this name, exactly as a raw
@@ -173,6 +186,7 @@
 
 <div
 	class="dropzone"
+	class:hero
 	class:dragging
 	class:busy
 	role="button"
@@ -196,7 +210,15 @@
 		adopt(event.dataTransfer.files);
 	}}
 >
+	{#if hero}
+		<span class="hero-tile"><Icon name="inbox" size={24} /></span>
+	{/if}
 	<span class="title">{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}</span>
+	{#if hero && formats.length > 0 && !busy}
+		<span class="formats">
+			{#each formats as f (f)}<span class="format mono">{f}</span>{/each}
+		</span>
+	{/if}
 	{#if !busy && !dragging}
 		{#if offersPhoto}
 			<button
@@ -309,15 +331,56 @@
 		min-height: var(--control-h);
 		padding: 7px 13px;
 		border: 1.5px dashed var(--bd2);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-ctl);
 		font-size: var(--text-md);
 		line-height: 1.35;
 		color: var(--fg2);
 		cursor: pointer;
 	}
 	.dropzone:hover {
-		border-color: var(--bd2);
+		border-color: color-mix(in srgb, var(--teal) 45%, transparent);
+		background: var(--teal-wash);
 		color: var(--fg1);
+	}
+	/* The one screen that IS an upload gets a target the size of the job.
+	   Teal because Import belongs to Money, and the ground says "drop here"
+	   before the sentence does. */
+	.dropzone.hero {
+		flex-direction: column;
+		justify-content: center;
+		gap: var(--space-5);
+		padding: 34px var(--space-8);
+		border-radius: var(--radius-card);
+		border-color: color-mix(in srgb, var(--teal) 40%, transparent);
+		background: var(--teal-wash);
+		text-align: center;
+	}
+	.dropzone.hero .title {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--fg1);
+	}
+	.hero-tile {
+		display: grid;
+		place-items: center;
+		width: 48px;
+		height: 48px;
+		border-radius: 14px;
+		background: color-mix(in srgb, var(--teal) var(--tile-alpha), transparent);
+		color: var(--teal);
+	}
+	.formats {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-3);
+	}
+	.format {
+		font-size: var(--text-xs);
+		padding: 2px var(--space-5);
+		border-radius: var(--radius-pill);
+		background: var(--surface-2);
+		color: var(--fg3);
 	}
 	.dropzone:focus-visible {
 		outline: 2px solid var(--blue);

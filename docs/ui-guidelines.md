@@ -50,9 +50,12 @@ the reverse, unless the code is the thing that drifted.
 1. **Never write a colour literal.** Every colour comes from a token in `app.css`. A hex in
    a component is a bug: it will be wrong in one of the two themes, and nobody notices
    until a screenshot.
-2. **Every number is set in mono.** Balances, percentages, dates in lists, counts, tickers.
-   `class="mono"` or `font-family: var(--font-mono)`. Load-bearing for scannability, not
-   taste.
+2. **Every number is set in mono, except a headline figure.** Balances in a table,
+   percentages, dates in lists, counts and tickers are `class="mono"`. The one exception,
+   added in v0.8.1: a **headline** figure — the net-worth hero, a `MetricTile` value, a
+   month's net, an account balance — is `class="display"`, which is the sans at 650 with
+   `-0.03em` and tabular figures. Nothing else. A figure in a table row that reaches for
+   `display` is a bug: the column stops aligning.
 3. **Reuse before you create.** Check `src/lib/components/` first. Drift between two
    near-identical cards is this codebase's most common defect.
 
@@ -153,18 +156,19 @@ used to be twenty-two distinct sizes, four of them within a pixel of each other 
 declarations — which is what "the app uses different fonts in different places" actually
 looks like. Add a step here rather than a one-off px value in a component.
 
-| Role                      | Size      | Weight           | Notes                                       |
-| ------------------------- | --------- | ---------------- | ------------------------------------------- |
-| Screen title `h1`         | 28px      | 600              | `letter-spacing: -0.02em`, emoji-prefixed   |
-| Screen caption            | 13.6px    | 400              | `--fg3`                                     |
-| Section heading           | 22px      | 600              | `letter-spacing: -0.01em`                   |
-| Eyebrow (section or card) | 11px      | 400              | uppercase, `letter-spacing: 0.1em`, `--fg3` |
-| Metric value              | 18–19px   | 600              | **mono**                                    |
-| Metric label              | 12px      | 400              | `--fg3`                                     |
-| Body / list row           | 13–13.5px | 400              |                                             |
-| Small caption             | 11.5–12px | 400              | `--fg3`                                     |
-| Sidebar nav item          | 13.5px    | 400 (500 active) |                                             |
-| Sidebar group label       | 10.5px    | 400              | uppercase, `letter-spacing: 0.1em`          |
+| Role                  | Size      | Weight           | Notes                                                |
+| --------------------- | --------- | ---------------- | ---------------------------------------------------- |
+| Screen title `h1`     | 30px      | 650              | `--font-display`, `-0.025em`, 46px area tile         |
+| Screen caption        | 13.6px    | 400              | `--fg3`                                              |
+| Section heading       | 22px      | 600              | `letter-spacing: -0.01em`                            |
+| Section / panel title | 14px      | 600              | sentence case, behind a 26px hue tile                |
+| Eyebrow (label only)  | 11px      | 400              | uppercase `0.1em` `--fg3` — column heads, hero label |
+| Metric value          | 22–28px   | 650              | **`display`**, never mono                            |
+| Metric label          | 12px      | 400              | `--fg3`                                              |
+| Body / list row       | 13–13.5px | 400              |                                                      |
+| Small caption         | 11.5–12px | 400              | `--fg3`                                              |
+| Sidebar nav item      | 13.5px    | 400 (500 active) |                                                      |
+| Sidebar group label   | 10.5px    | 400              | uppercase, `letter-spacing: 0.1em`                   |
 
 Foreground ramp: `--fg1` primary, `--fg2` secondary, `--fg3` muted. Never dim text with
 opacity.
@@ -195,16 +199,24 @@ decision, and on a long record the buttons are off the screen entirely.
 - Card padding: `12px 14px` metric tiles (per `MetricTile.svelte`), `16px 18px` content
   cards.
 - Grid gaps: `12px` metric rows, `16px` card grids.
-- Radii: `8px` buttons and inputs · `9–10px` cards and tiles · `12px` pills · `20px` chips ·
-  `999px` avatars.
+- Radii, by what wears them (v0.8.1): `--radius-ctl` (10) buttons, inputs and segmented
+  controls · `--radius-tile` (12) icon tiles and inner tiles · `--radius-card` (16) cards
+  and panels · `--radius-pill` (999) pills, chips and avatars. All three are aliases of
+  the scale — `--radius-2xl`, `--radius-xl`, `--radius-lg` — not new numbers.
 - Borders are **1px** unless the width is carrying meaning: a panel's active edge (2px), the
   app's current-area marker (3px), and a dashed legend swatch are the whole list. `--bd`
   cards, `--bd2` inputs and emphasis.
-- **Coloured borders only on traffic-light pills.** Nowhere else.
-- **Nothing in the document flow is raised.** A card is separated by its ground and its
-  border; a shadow there is decoration standing in for a boundary that already exists.
-- **What floats gets `--shadow-float`**; a subtle lift is `--shadow-raise`. Those two are the
-  whole set, and `design/no-raw-shadow` fails the build on any other value. A tooltip, a
+- **Coloured borders on traffic-light pills, and on four states that are modes**: the rate
+  banner (`orange` 35%), the selected person on sign-in (`brand` 55%), a panel being
+  customised (`--brand`), and the retirement verdict (`blue` 30%). Nowhere else.
+- **A card in the flow carries `--shadow-card`** — one value, quiet, and the same one
+  everywhere. This reverses the pre-0.8.1 rule that nothing in the flow is raised: with
+  white cards on light paper the 10% border alone was not telling a reader where a card
+  began. It is still one value, and it is still from a token.
+- **What is lit gets `--shadow-hero`** — the net-worth panel and the quick-add, and
+  nothing else. **What floats gets `--shadow-float`**; a subtle lift is `--shadow-raise`.
+  Those four are the whole set, and `design/no-raw-shadow` fails the build on any other
+  value. A tooltip, a
   picker or a menu sits over unpredictable content, and its shadow is the only thing telling
   a reader where the page stopped — that is information, not styling.
 - **`inset` is not a shadow.** `box-shadow: inset 3px 0 0 var(--teal)` is a left rail marker,
@@ -242,12 +254,17 @@ briefing-card eyebrows.
 Add new glyphs to `$lib/icons` as paths.
 
 Emoji survive only on the rows that carry an emoji of their own — accounts, shelves and
-subjects, each a household-editable field over a supplied default — and as screen-title
-prefixes. Not as section markers in new UI: the Overview's panel eyebrows and the briefing
-cards each name an icon now.
+subjects, each a household-editable field over a supplied default. **Not as a screen-title
+prefix**: since v0.8.1 the area's icon sits in a 46px tile in the area hue, and a shelf's
+emoji goes inside that same tile rather than in front of the sentence a screen reader
+reads as the heading.
 
-**Panel header.** An Overview panel's eyebrow is `<Icon size={14} />` then the title, on
-the left. On the right, a panel that summarises a screen carries a quiet `Open →` link to
+**Icon tiles.** A hue mixed into the ground behind a stroke icon, drawn by
+`IconTile.svelte` and never by hand. Four sizes, and the radius follows the size rather
+than being chosen: 26 (panel title) · 30 (row) · 44 (card) · 46 (screen title).
+
+**Panel header.** An Overview panel's head is a 26px `IconTile` in the panel's own hue
+then the title in sentence case at 14/600, on the left. On the right, a panel that summarises a screen carries a quiet `Open →` link to
 it (`--fg3`, no underline) — and only there, never at the foot of the body. While the
 board is being customised the link gives way to the move, resize and remove controls: the
 header belongs to arranging, and a link there is one more thing a stray tap can follow.
@@ -292,11 +309,12 @@ rare enough to notice.
 ## Before you call it done
 
 - [ ] No colour literal in the diff.
-- [ ] Every figure is mono.
+- [ ] Every figure is mono, except a headline figure, which is `display`.
 - [ ] Checked both themes — toggle `data-ledger-theme` on `<html>`, don't assume.
 - [ ] Reused an existing component, or can say why a new one was needed.
-- [ ] Borders 1px unless the width means something; elevation from a token; coloured
-      border only on a pill.
+- [ ] Borders 1px unless the width means something; elevation from one of the four
+      tokens; a coloured border only on a pill or one of the four named modes.
+- [ ] Motion is `var(--dur)`/`var(--dur-slow)` on `var(--ease)`, and nothing else.
 - [ ] Pill hue means state, not decoration.
 - [ ] Keyboard focus visible; `prefers-reduced-motion` respected if anything animates.
 - [ ] Wide content scrolls in its own `overflow-x: auto` container — the body never scrolls

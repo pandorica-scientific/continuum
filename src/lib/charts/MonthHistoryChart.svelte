@@ -72,7 +72,7 @@
 
 <section class="card chart">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="📊" label="Every month on record" />
+		<Eyebrow hue="--teal" emoji="📊" label="Every month on record" />
 		<span class="eyebrow-caption">
 			{#if months.length}
 				{months[0].month} – {months[months.length - 1].month} · {savedRate}% saved on average

@@ -2,6 +2,7 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { page } from '$app/state';
 	import Icon from './Icon.svelte';
+	import IconTile from './IconTile.svelte';
 	import { areaForPath, visibleAreas, type ModuleToggles } from '$lib/modules/registry';
 	import type { IconName } from '$lib/icons';
 	import type { Snippet } from 'svelte';
@@ -62,14 +63,15 @@
 <header>
 	<div class="titles">
 		<h1>
+			<!-- The area's hue in a tile, in place of the bare glyph — and in place
+			     of the emoji prefix the title used to carry, which put a picture
+			     inside the sentence a screen reader reads as its heading. -->
 			{#if emoji}
-				<span class="emoji-mark" aria-hidden="true">{emoji}</span>
+				<IconTile hue="--{area?.hue ?? 'brand'}" {emoji} size={46} />
 			{:else if titleIcon}
-				<span class="mark" style:color="var(--{area?.hue ?? 'brand'})">
-					<Icon name={titleIcon} size={26} />
-				</span>
+				<IconTile hue="--{area?.hue ?? 'brand'}" icon={titleIcon} size={46} />
 			{/if}
-			<span>{title}</span>
+			<span class="text">{title}</span>
 		</h1>
 		<span class="caption">{caption}</span>
 	</div>
@@ -92,7 +94,9 @@
 				class="tab"
 				class:active={isCurrent(screen.path)}
 				aria-current={isCurrent(screen.path) ? 'page' : undefined}
+				style:--tab-hue="var(--{area?.hue ?? 'brand'})"
 			>
+				<Icon name={screen.icon} size={15} />
 				{screen.label}
 			</a>
 		{/each}
@@ -111,29 +115,22 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
+		min-width: 0;
 	}
 	h1 {
 		margin: 0;
-		font-size: var(--text-4xl);
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.2;
+		font-size: var(--text-5xl);
+		font-family: var(--font-display);
+		font-weight: 650;
+		letter-spacing: -0.025em;
+		line-height: 1.15;
 		display: flex;
 		align-items: center;
-		gap: 11px;
+		gap: var(--space-7);
+		min-width: 0;
 	}
-	/* The mark carries the area's identity colour — the one place a hue appears
-	   in content that is not a traffic-light state. Falls back to the brand for
-	   a screen outside the navigation. */
-	.mark {
-		display: flex;
-	}
-	/* Sized to the icon it replaces, so a shelf's title sits at the same height
-	   as every other screen's. */
-	.emoji-mark {
-		display: flex;
-		font-size: 26px;
-		line-height: 1;
+	.text {
+		min-width: 0;
 	}
 	.caption {
 		font-size: var(--text-md);
@@ -152,7 +149,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-ctl);
 		padding: 7px 11px;
 		background: var(--card);
 		white-space: nowrap;
@@ -162,32 +159,52 @@
 	   would shift every screen's content down by a variable amount. */
 	.subtabs {
 		display: flex;
-		gap: var(--space-3);
+		gap: var(--space-2);
 		align-items: center;
-		border-bottom: 1px solid var(--bd);
-		padding-bottom: 10px;
-		margin-top: -8px;
+		margin-top: -6px;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
 	.subtabs::-webkit-scrollbar {
 		display: none;
 	}
+	/* The rule under the row is gone: with a filled pill marking the current
+	   screen, the line was a second answer to a question already answered, and
+	   it cut the header off from the band of figures below it. */
 	.tab {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		height: 34px;
 		font-size: var(--text-md);
 		color: var(--fg2);
-		padding: 5px 12px;
-		border-radius: 20px;
+		padding: 0 var(--space-6);
+		border-radius: var(--radius-pill);
 		white-space: nowrap;
 		flex: none;
+		transition:
+			background-color var(--dur) var(--ease),
+			color var(--dur) var(--ease);
 	}
 	.tab:hover {
-		background: var(--card2);
+		background: var(--surface-2);
 		text-decoration: none;
 	}
 	.tab.active {
-		background: var(--card3);
+		background: color-mix(in srgb, var(--tab-hue) 18%, transparent);
 		color: var(--fg1);
-		font-weight: 500;
+		font-weight: 600;
+	}
+	/* The icon carries the hue on the lit pill; on the others it stays as quiet
+	   as the label, or seven colours compete for the same row. */
+	.tab.active :global(svg) {
+		color: var(--tab-hue);
+	}
+
+	@media (max-width: 719px) {
+		h1 {
+			font-size: var(--text-4xl);
+			gap: var(--space-5);
+		}
 	}
 </style>

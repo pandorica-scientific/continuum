@@ -624,7 +624,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			: {
 					emoji: '🗂️',
 					label: 'Everything',
-					count: everywhereCount,
+					// `everywhereCount` is a row array, not a number — line 719 already
+					// reads it as `everywhereCount[0]?.n`. Passed whole, the header
+					// rendered "[object Object] documents".
+					count: everywhereCount[0]?.n ?? 0,
 					question:
 						'One archive for the household. Shelf is where in life, type is what kind, links are what it concerns.'
 				},

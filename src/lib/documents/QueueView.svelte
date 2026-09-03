@@ -340,13 +340,15 @@
 	}
 	/* Letterboxed, never cropped: a tall receipt cropped to a square is a
 	   receipt with its total cut off. */
+	/* Letterboxed, the way a sheet of paper sits on a desk: the gradient gives
+	   the preview an edge without a second border inside the card's own. */
 	.sheet {
 		display: grid;
 		place-items: center;
 		min-height: 420px;
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card2);
+		border-radius: var(--radius-card);
+		background: linear-gradient(160deg, var(--surface-3), var(--card));
 		overflow: hidden;
 	}
 	.sheet object {
@@ -359,8 +361,8 @@
 		gap: var(--space-6);
 		padding: var(--space-7);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 	}
 	.field {
 		display: flex;
@@ -374,10 +376,10 @@
 		align-items: center;
 		gap: var(--space-4);
 		margin: 0;
-		padding: var(--space-4) var(--space-5);
-		border: 1px solid var(--blue);
-		border-radius: var(--radius-md);
-		background: var(--blue-tint);
+		padding: var(--space-5) var(--space-6);
+		border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent);
+		border-radius: var(--radius-tile);
+		background: var(--blue-wash);
 		font-size: var(--text-sm);
 		color: var(--fg1);
 	}
@@ -465,8 +467,8 @@
 		gap: var(--space-4);
 		padding: var(--space-8);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 	}
 	.clear-line {
 		margin: 0;

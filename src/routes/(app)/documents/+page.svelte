@@ -1607,8 +1607,8 @@
 		flex-direction: column;
 		gap: var(--space-5);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		padding: var(--space-7);
 	}
 	/* The inspector's own About block, in the capture card. No rule under it:
@@ -1686,14 +1686,14 @@
 		gap: var(--space-5);
 		flex-wrap: wrap;
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		padding: var(--space-5) var(--space-7);
 	}
 	.matrix {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.mhead,
@@ -1946,8 +1946,8 @@
 		gap: var(--space-5);
 		min-height: 160px;
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		padding: var(--space-7);
 	}
 	.h-key {
@@ -2009,8 +2009,8 @@
 		flex-direction: column;
 		gap: var(--space-6);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		/* Bounded by the viewport, not by the list beside it: the sections scroll
 		   inside the panel, and the page never has to scroll to reach the note.
 		   dvh, so a phone's retreating browser chrome does not push the last

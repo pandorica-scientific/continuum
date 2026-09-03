@@ -543,8 +543,8 @@
 
 	.proposals {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.proposals-head {
@@ -739,24 +739,36 @@
 	}
 	.card {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.card-head {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: var(--space-5);
-		padding: 12px 14px;
+		padding: var(--space-6) var(--space-7);
 		border-bottom: 1px solid var(--bd);
 	}
+	/* The card's own emoji in a 36px tile, the shape every other head on the
+	   product uses — a bare glyph put the name at a different left edge on
+	   every card, depending on how wide the emoji happened to render. */
 	.emoji {
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-lg);
+		background: var(--surface-2);
 		font-size: var(--text-xl);
+		line-height: 1;
+		flex: none;
 	}
 	h3 {
 		margin: 0;
-		font-size: var(--text-xl);
-		font-weight: 600;
+		font-size: 15px;
+		font-weight: 650;
+		letter-spacing: -0.01em;
 	}
 	.chip {
 		font-size: var(--text-2xs);

@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import {
-	MONEY_BOTTOM,
-	MONEY_TOP,
-	RATE_TOP_PCT,
-	barWidth,
-	maxGross,
-	rateRuns,
-	rateY,
-	segments
-} from '$lib/charts/tax-chart-geometry';
-import { X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
+import { maxGross, taxBarSegments, type SerialisedYear } from '$lib/charts/tax-chart-geometry';
 
+/**
+ * What a tax bar means. Where it goes is `line-chart.test.ts` now.
+ *
+ * The slot spacing, the bar width cap, the hairline floor under a tiny segment
+ * and the "no stroke on a segment too thin to carry one" rule all moved into
+ * the shared chart engine in v0.8.1, and are tested there once instead of
+ * here and in the salary chart's own copy of the same arithmetic. What is
+ * still this file's business is the ORDER of the blocks, because that order is
+ * the picture the engine draws.
+ */
 const hues = new Map([
 	['CZ', '--series-health-soft'],
 	['PL', '--series-taxes-soft']
 ]);
 
 /** A year whose PL filing is two orders below its CZ one — the real shape. */
-const lopsided = {
+const lopsided: SerialisedYear = {
 	year: 2025,
 	grossMinor: '10000000',
 	taxMinor: '2000000',
@@ -29,182 +29,46 @@ const lopsided = {
 	]
 };
 
-describe('slot geometry', () => {
-	it('spreads the years across the plot, centred in their slots', () => {
-		const first = slotFor(0, 8);
-		const last = slotFor(7, 8);
-		expect(first).toBeGreaterThan(X_LEFT);
-		expect(last).toBeLessThan(X_RIGHT);
-		expect(last - first).toBeCloseTo(((X_RIGHT - X_LEFT) / 8) * 7, 5);
+describe('the blocks a tax bar is made of', () => {
+	it('puts every tax block at the foot and every kept block above it', () => {
+		// The engine stacks in the order it is given, so this order IS the
+		// picture: the hatched foot has to be one block rather than interleaved
+		// with what was kept.
+		const out = taxBarSegments(lopsided, hues);
+		const lastHatched = out.map((s) => s.hatched).lastIndexOf(true);
+		const firstKept = out.map((s) => s.hatched).indexOf(false);
+		expect(lastHatched).toBeLessThan(firstKept);
 	});
 
-	it('centres a single year rather than pinning it to the left edge', () => {
-		expect(slotFor(0, 1)).toBeCloseTo((X_LEFT + X_RIGHT) / 2, 5);
+	it('draws what was kept, not what was earned, above the tax', () => {
+		const [, kept] = taxBarSegments(lopsided, hues).filter((s) => !s.hatched);
+		// CZ: 9 990 000 earned less 2 000 000 tax.
+		const cz = taxBarSegments(lopsided, hues).find((s) => !s.hatched && s.country === 'CZ');
+		expect(cz?.value).toBe(7_990_000);
+		expect(kept ?? cz).toBeDefined();
 	});
 
-	it('caps the bar width so two years do not read as one block', () => {
-		expect(barWidth(2)).toBe(58);
-		expect(barWidth(40)).toBeLessThan(58);
-	});
-});
-
-describe('segment stacking', () => {
-	it('puts every tax segment at the foot and every kept segment above it', () => {
-		const out = segments(lopsided, 10_000_000n, hues);
-		const tax = out.filter((s) => s.hatched);
-		const kept = out.filter((s) => !s.hatched);
-		// SVG y grows downward, so the foot of the bar has the LARGEST y.
-		expect(Math.min(...tax.map((s) => s.y))).toBeGreaterThanOrEqual(
-			Math.max(...kept.map((s) => s.y + s.height))
-		);
+	it('keeps a filing two orders below the rest rather than dropping it', () => {
+		const pl = taxBarSegments(lopsided, hues).filter((s) => s.country === 'PL');
+		// PL paid no tax, so only its kept block survives — and it does survive.
+		expect(pl).toHaveLength(1);
+		expect(pl[0].value).toBe(10_000);
 	});
 
-	it('scales the tallest year to fill the money panel', () => {
-		// A year with no sub-pixel segment, so the hairline floor does not apply
-		// and the bar is exactly the panel.
-		const even = {
-			year: 2025,
-			grossMinor: '10000000',
-			taxMinor: '2000000',
-			ratePct: 20,
-			byCountry: [{ country: 'CZ', grossMinor: '10000000', taxMinor: '2000000', ratePct: 20 }]
+	it('drops a block worth nothing, which the hairline floor would make visible', () => {
+		const nothing: SerialisedYear = {
+			...lopsided,
+			byCountry: [{ country: 'CZ', grossMinor: '0', taxMinor: '0', ratePct: null }]
 		};
-		const total = segments(even, 10_000_000n, hues).reduce((sum, s) => sum + s.height, 0);
-		expect(total).toBeCloseTo(MONEY_BOTTOM - MONEY_TOP, 5);
+		expect(taxBarSegments(nothing, hues)).toEqual([]);
 	});
 
-	it('overshoots the panel only by what the hairline floor added', () => {
-		// Clamping a 0.196px segment up to 0.8px makes the bar slightly taller
-		// than its true share. That is the trade the floor buys, and it is
-		// bounded: at most 0.8px per segment, not a proportional error.
-		const out = segments(lopsided, 10_000_000n, hues);
-		const total = out.reduce((sum, s) => sum + s.height, 0);
-		expect(total).toBeGreaterThanOrEqual(MONEY_BOTTOM - MONEY_TOP);
-		expect(total).toBeLessThan(MONEY_BOTTOM - MONEY_TOP + 0.8 * out.length);
-	});
-
-	it('starts the stack at the baseline', () => {
-		const out = segments(lopsided, 10_000_000n, hues);
-		expect(Math.max(...out.map((s) => s.y + s.height))).toBeCloseTo(MONEY_BOTTOM, 5);
-	});
-
-	it('gives a sub-pixel segment a floor height so it stays findable', () => {
-		// PL kept is 10 000 of 10 000 000 — 0.196px unclamped.
-		const out = segments(lopsided, 10_000_000n, hues);
-		for (const s of out) expect(s.height).toBeGreaterThanOrEqual(0.8);
-	});
-
-	it('withholds the stroke from a segment thinner than its own border', () => {
-		// A rect 0.4px tall with a 1px border paints a ~2px band at full
-		// strength, making the least significant number the loudest pixels.
-		const out = segments(lopsided, 10_000_000n, hues);
-		const hairlines = out.filter((s) => s.height < 2.5);
-		expect(hairlines.length).toBeGreaterThan(0);
-		for (const s of hairlines) expect(s.stroked).toBe(false);
-	});
-
-	it('strokes a segment big enough to carry one', () => {
-		const out = segments(lopsided, 10_000_000n, hues);
-		const solid = out.filter((s) => s.height >= 2.5);
-		expect(solid.length).toBeGreaterThan(0);
-		for (const s of solid) expect(s.stroked).toBe(true);
-	});
-
-	it('scales a shorter year against the tallest, not against itself', () => {
-		// Otherwise every bar would be full height and the chart would say every
-		// year earned the same.
-		const half = {
-			year: 2024,
-			grossMinor: '5000000',
-			taxMinor: '1000000',
-			ratePct: 20,
-			byCountry: [{ country: 'CZ', grossMinor: '5000000', taxMinor: '1000000', ratePct: 20 }]
+	it('falls back to a palette colour for a country nobody has a hue for', () => {
+		const unknown: SerialisedYear = {
+			...lopsided,
+			byCountry: [{ country: 'ZZ', grossMinor: '100', taxMinor: '10', ratePct: 10 }]
 		};
-		const total = segments(half, 10_000_000n, hues).reduce((sum, s) => sum + s.height, 0);
-		expect(total).toBeCloseTo((MONEY_BOTTOM - MONEY_TOP) / 2, 5);
-	});
-
-	it('never gives a segment a negative height when tax exceeds gross', () => {
-		// A correction can leave tax above gross on a filed statement. It is not
-		// this chart's job to refuse the data, only to not draw upside down.
-		const odd = {
-			year: 2025,
-			grossMinor: '1000',
-			taxMinor: '2000',
-			ratePct: 200,
-			byCountry: [{ country: 'CZ', grossMinor: '1000', taxMinor: '2000', ratePct: 200 }]
-		};
-		for (const s of segments(odd, 2000n, hues)) expect(s.height).toBeGreaterThan(0);
-	});
-
-	it('draws nothing rather than dividing by zero on an empty record', () => {
-		expect(segments(lopsided, 0n, hues)).toEqual([]);
-	});
-
-	it('falls back to a reserve hue for a jurisdiction with no assigned token', () => {
-		const out = segments(lopsided, 10_000_000n, new Map());
-		for (const s of out) expect(s.token).toBe('--series-r1');
-	});
-});
-
-describe('the rate strip', () => {
-	it('puts a higher rate higher up', () => {
-		expect(rateY(20)).toBeLessThan(rateY(5));
-	});
-
-	it('clamps a rate past the ceiling rather than drawing outside the strip', () => {
-		expect(rateY(RATE_TOP_PCT + 50)).toBe(rateY(RATE_TOP_PCT));
-	});
-});
-
-describe('rate runs', () => {
-	const rows = [
-		{
-			year: 2021,
-			grossMinor: '1',
-			taxMinor: '0',
-			ratePct: 15,
-			byCountry: [{ country: 'CZ', grossMinor: '1', taxMinor: '0', ratePct: 15 }]
-		},
-		{
-			year: 2022,
-			grossMinor: '1',
-			taxMinor: '0',
-			ratePct: 16,
-			byCountry: [{ country: 'CZ', grossMinor: '1', taxMinor: '0', ratePct: 16 }]
-		},
-		{ year: 2023, grossMinor: '0', taxMinor: '0', ratePct: null, byCountry: [] },
-		{
-			year: 2024,
-			grossMinor: '1',
-			taxMinor: '0',
-			ratePct: 18,
-			byCountry: [{ country: 'CZ', grossMinor: '1', taxMinor: '0', ratePct: 18 }]
-		}
-	];
-
-	it('breaks the run where a jurisdiction did not file', () => {
-		// A connected line across a year with no filing asserts a figure that
-		// does not exist.
-		const runs = rateRuns(rows, 'CZ');
-		expect(runs).toHaveLength(2);
-		expect(runs[0].map((p) => p.year)).toEqual([2021, 2022]);
-		expect(runs[1].map((p) => p.year)).toEqual([2024]);
-	});
-
-	it('keeps a lone year as a one-point run, so it draws a dot and no line', () => {
-		const runs = rateRuns([rows[3]], 'CZ');
-		expect(runs).toHaveLength(1);
-		expect(runs[0]).toHaveLength(1);
-	});
-
-	it('returns nothing for a jurisdiction that never filed', () => {
-		expect(rateRuns(rows, 'DE')).toEqual([]);
-	});
-
-	it('keeps each run at its own year slot', () => {
-		const runs = rateRuns(rows, 'CZ');
-		expect(runs[1][0].x).toBeCloseTo(slotFor(3, rows.length), 5);
+		expect(taxBarSegments(unknown, new Map())[0].stroke).toBe('var(--series-r1)');
 	});
 });
 

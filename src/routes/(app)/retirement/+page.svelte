@@ -120,6 +120,29 @@
 		};
 	});
 
+	/**
+	 * The gauge's arithmetic.
+	 *
+	 * `r` and the circumference are constants rather than props: the arc is a
+	 * fixed 124px drawing scaled by the viewBox, and a caller choosing a radius
+	 * would also have to choose a stroke width that suits it.
+	 */
+	const GAUGE_R = 55;
+	const GAUGE_C = 2 * Math.PI * GAUGE_R;
+
+	const coveredPct = $derived(Math.round((model.rows[0].total / Math.max(cfg.spend, 1)) * 100));
+	// The same three steps the rest of the app reads a proportion at. Above 100
+	// is still green: over-covered is not a warning.
+	const coveredTone = $derived(
+		coveredPct < 50 ? '--red' : coveredPct < 100 ? '--yellow' : '--green'
+	);
+	// A floor of 2.5%, so "almost nothing" is visibly not "nothing at all" —
+	// with a round cap a zero-length dash draws no arc, and an empty ring and a
+	// 1% ring would be the same picture.
+	const gaugeDash = $derived(
+		(Math.max(coveredPct === 0 ? 0 : 2.5, Math.min(100, coveredPct)) / 100) * GAUGE_C
+	);
+
 	const verdict = $derived(
 		model.fire
 			? model.fire.t === 0
@@ -137,25 +160,59 @@
 {#if saveError}<p class="save-error" role="alert">Could not save assumptions: {saveError}</p>{/if}
 
 <section class="verdict">
-	<p>
-		If you stopped working today, your capital would pay about
-		<span class="mono chip">{money(model.rows[0].draw)} {unit}</span> a month and the state pension
-		would add
-		<span class="mono chip"
-			>{model.rows[0].pension ? `${money(model.rows[0].pension)} ${unit}` : 'nothing yet'}</span
-		>. That covers
-		<span class="mono chip"
-			>{Math.round((model.rows[0].total / Math.max(cfg.spend, 1)) * 100)}%</span
+	<div class="verdict-text">
+		<p>
+			If you stopped working today, your capital would pay about
+			<span class="mono chip">{money(model.rows[0].draw)} {unit}</span> a month and the state
+			pension would add
+			<span class="mono chip"
+				>{model.rows[0].pension ? `${money(model.rows[0].pension)} ${unit}` : 'nothing yet'}</span
+			>. That covers
+			<span class="mono chip">{coveredPct}%</span>
+			of the {money(cfg.spend)}
+			{unit} you say you would need.
+		</p>
+		<span class="verdict-line">{verdict}</span>
+	</div>
+
+	<!-- The one figure this screen exists to produce, drawn as well as said.
+	     A stroke arc rather than a filled wedge: the arc's own thickness is
+	     constant, so a small share still reads as a share rather than as a
+	     sliver of a pie that is mostly empty. -->
+	<div class="gauge">
+		<svg
+			viewBox="0 0 124 124"
+			role="img"
+			aria-label="{coveredPct}% of what you need, covered today"
 		>
-		of the {money(cfg.spend)}
-		{unit} you say you would need.
-	</p>
-	<span class="verdict-line">{verdict}</span>
+			<circle
+				cx="62"
+				cy="62"
+				r={GAUGE_R}
+				fill="none"
+				stroke="color-mix(in srgb, var(--fg1) 10%, transparent)"
+				stroke-width="12"
+			/>
+			<circle
+				cx="62"
+				cy="62"
+				r={GAUGE_R}
+				fill="none"
+				stroke="var({coveredTone})"
+				stroke-width="12"
+				stroke-linecap="round"
+				stroke-dasharray="{gaugeDash} {GAUGE_C}"
+				transform="rotate(-90 62 62)"
+			/>
+		</svg>
+		<span class="gauge-figure display">{coveredPct}<span class="gauge-pct">%</span></span>
+		<span class="gauge-note">covered today</span>
+	</div>
 </section>
 
 <section class="card stack">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="🎛️" label="What you assume" />
+		<Eyebrow hue="--blue" emoji="🎛️" label="What you assume" />
 		<span class="eyebrow-caption">
 			capital, savings rate, mortgages and rent are read from your own data
 		</span>
@@ -306,7 +363,7 @@
 </section>
 
 <section class="card stack">
-	<Eyebrow emoji="📋" label="Where that leaves you" />
+	<Eyebrow hue="--blue" emoji="📋" label="Where that leaves you" />
 	<div class="table">
 		<div class="t-head">
 			<span>When</span><span class="r">Ages</span><span class="r">Capital</span><span class="r"
@@ -330,7 +387,7 @@
 
 <section class="card stack">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="📈" label="The pot against what the target requires" />
+		<Eyebrow hue="--blue" emoji="📈" label="The pot against what the target requires" />
 		<span class="eyebrow-caption">millions {unit} · twenty years out</span>
 	</div>
 	<div class="chart">
@@ -401,14 +458,61 @@
 		color: var(--red);
 		font-size: var(--text-md);
 	}
-	.verdict {
-		background: var(--blue-tint);
-		border: 1px solid var(--blue);
-		border-radius: var(--radius-xl);
-		padding: 18px 22px;
+	.gauge {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 124px;
+		height: 124px;
+		justify-self: center;
+		align-self: center;
+	}
+	.gauge svg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
+	.gauge-figure {
+		font-size: var(--text-5xl);
+		line-height: 1;
+	}
+	.gauge-pct {
+		font-size: var(--text-xl);
+		color: var(--fg3);
+		margin-left: 1px;
+	}
+	.gauge-note {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		margin-top: 2px;
+	}
+	.verdict-text {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-6);
+		gap: var(--space-5);
+		min-width: 0;
+	}
+	/* A wash and a 30% edge rather than a full tint inside a solid blue border:
+	   at the size this panel now is, the old pair read as an alert. */
+	.verdict {
+		background: var(--blue-wash);
+		border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		padding: var(--space-8) 22px;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 22px;
+	}
+	/* The gauge moves beside the sentence only where there is room for both.
+	   Below 1100 it sits above it, which is still better than a 124px circle
+	   squeezed into a third of a phone. */
+	@media (min-width: 1100px) {
+		.verdict {
+			grid-template-columns: 1.3fr minmax(200px, auto);
+			align-items: center;
+		}
 	}
 	.verdict p {
 		margin: 0;

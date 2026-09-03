@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
+	import Switch from '$lib/components/Switch.svelte';
 	import { goto } from '$app/navigation';
 	import { selectedDayForMonth } from '$lib/ui/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -245,20 +246,11 @@
 
 	<div class="side">
 		<div class="card stack">
-			<Eyebrow emoji="🤖" label="What the ledger puts here by itself" />
+			<Eyebrow hue="--indigo" emoji="🤖" label="What the ledger puts here by itself" />
 			{#each data.rules as rule (rule.key)}
 				<form method="POST" action="?/toggleRule" use:enhance class="rule">
 					<input type="hidden" name="key" value={rule.key} />
-					<button
-						type="submit"
-						class="switch"
-						class:on={rule.on}
-						role="switch"
-						aria-checked={rule.on}
-						aria-label={rule.label}
-					>
-						<span class="knob"></span>
-					</button>
+					<Switch on={rule.on} label={rule.label} />
 					<span class="r-text">
 						<span class="r-label">{rule.label}</span>
 						<span class="r-detail">{rule.detail}</span>
@@ -269,7 +261,7 @@
 
 		<div class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow emoji="🔗" label="Connected calendars" />
+				<Eyebrow hue="--indigo" emoji="🔗" label="Connected calendars" />
 				<InfoHint label="What connecting a calendar does">
 					<strong class="warn">Two-way: what you write here appears there, and back.</strong>
 					<ol class="steps">
@@ -480,11 +472,14 @@
 		padding-bottom: 3px;
 	}
 	.day {
-		min-height: 58px;
+		min-height: 64px;
 		border: 1px solid var(--bd);
-		background: transparent;
-		border-radius: var(--radius-md);
+		background: var(--card);
+		border-radius: var(--radius-lg);
 		padding: 6px 7px 7px;
+		transition:
+			background-color var(--dur) var(--ease),
+			border-color var(--dur) var(--ease);
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
@@ -492,14 +487,16 @@
 		cursor: pointer;
 	}
 	.day:hover {
-		background: var(--card2);
+		background: var(--surface-2);
 	}
+	/* Today in the area's own hue, not a shade of grey: it is the one cell a
+	   reader looks for before anything else on the screen. */
 	.day.today {
-		border-color: var(--bd2);
-		background: var(--card2);
+		border-color: color-mix(in srgb, var(--indigo) 50%, transparent);
+		background: color-mix(in srgb, var(--indigo) 14%, transparent);
 	}
 	.day.selected {
-		background: var(--card3);
+		background: var(--surface-3);
 		border-color: var(--bd2);
 	}
 	.num {
@@ -569,34 +566,6 @@
 		align-items: center;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
-	}
-	.switch {
-		width: 38px;
-		height: 22px;
-		border-radius: 22px;
-		border: 1px solid var(--bd2);
-		background: var(--card2);
-		position: relative;
-		cursor: pointer;
-		padding: 0;
-	}
-	.switch .knob {
-		position: absolute;
-		top: 2px;
-		left: 2px;
-		width: 16px;
-		height: 16px;
-		border-radius: var(--radius-2xl);
-		background: var(--fg3);
-	}
-	.switch.on {
-		border-color: var(--green);
-		background: var(--green-tint);
-	}
-	.switch.on .knob {
-		left: auto;
-		right: 2px;
-		background: var(--green);
 	}
 	.r-text {
 		display: flex;

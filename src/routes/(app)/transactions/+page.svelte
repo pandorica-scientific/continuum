@@ -13,7 +13,10 @@
 	// the transactions inside the open month are paged by the URL, because they
 	// are fetched a month at a time. Paging one leaves the other where it was.
 	import { deserialize } from '$app/forms';
+	import { page } from '$app/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import ControlRow from '$lib/components/ControlRow.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Field from '$lib/components/Field.svelte';
 	import MonthMatrix from '$lib/components/MonthMatrix.svelte';
@@ -119,6 +122,84 @@
 		};
 	});
 
+	// The quick chips are links, not form controls: they have to be reachable
+	// while the filter grid is closed, and a link keeps the register's whole
+	// state in the URL — which is what makes a narrowed view shareable.
+	interface QuickChip {
+		label: string;
+		hue: string;
+		/** Params to set; a null value removes the key. */
+		params: Record<string, string | null>;
+		on: (filter: typeof data.filter) => boolean;
+	}
+	const QUICK: QuickChip[] = [
+		{
+			label: 'All',
+			hue: '--fg3',
+			params: { review: null, dir: null },
+			on: (f) => !f.reviewState && (!f.direction || f.direction === 'any')
+		},
+		{
+			label: 'Needs a look',
+			hue: '--yellow',
+			params: { review: 'needs_review', dir: null },
+			on: (f) => f.reviewState === 'needs_review'
+		},
+		{
+			label: 'Money in',
+			hue: '--green',
+			params: { dir: 'in', review: null },
+			on: (f) => f.direction === 'in'
+		},
+		{
+			label: 'Money out',
+			hue: '--red',
+			params: { dir: 'out', review: null },
+			on: (f) => f.direction === 'out'
+		}
+	];
+
+	// Built as a string rather than by mutating a URLSearchParams: the app's
+	// lint rule reserves the mutable class for reactive state, and this is a
+	// throwaway read of the current URL.
+	function quickHref(params: Record<string, string | null>): string {
+		const touched = new Set(Object.keys(params));
+		const pairs = [...page.url.searchParams.entries()]
+			// A narrowing always lands on the first page: page 4 of the old result
+			// set is a different four hundred rows.
+			.filter(([key]) => key !== 'page' && !touched.has(key))
+			.concat(
+				Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== null)
+			);
+		const query = pairs
+			.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+			.join('&');
+		return query ? `?${query}` : '/transactions';
+	}
+
+	// Everything the search box must not drop when it submits on its own.
+	const carried = $derived(
+		[...page.url.searchParams.entries()].filter(([key]) => key !== 'q' && key !== 'page')
+	);
+
+	// Open when something in the grid is already narrowing the view, so a filter
+	// that is in force is never invisible.
+	let showFilters = $state(false);
+	$effect(() => {
+		if (
+			data.filter.from ||
+			data.filter.to ||
+			data.filter.accountId ||
+			data.filter.categoryId ||
+			data.filter.minMinor ||
+			data.filter.maxMinor ||
+			data.filter.sourceMethod ||
+			data.filter.includeTransfers
+		) {
+			showFilters = true;
+		}
+	});
+
 	const rowFrom = $derived((data.filter.page - 1) * data.pageSize + 1);
 	const rowTo = $derived(Math.min(data.monthTotal, data.filter.page * data.pageSize));
 </script>
@@ -134,7 +215,54 @@
 	<div class="error">{form.message}</div>
 {/if}
 
-<section class="section">
+<!-- Four chips and a search box answer nearly every visit: what needs a look,
+     and money in or out. The eleven-field grid is still here, one click away,
+     rather than the first thing on the screen every time. -->
+<ControlRow>
+	{#snippet left()}
+		<form method="GET" class="quick-search">
+			{#each carried as [key, value] (key)}
+				<input type="hidden" name={key} {value} />
+			{/each}
+			<label class="search">
+				<Icon name="search" size={15} />
+				<input
+					type="search"
+					name="q"
+					value={data.filter.search ?? ''}
+					placeholder="Search transactions"
+					aria-label="Search transactions"
+				/>
+			</label>
+		</form>
+		<div class="chips-row" role="group" aria-label="Quick filters">
+			{#each QUICK as chip (chip.label)}
+				<a
+					class="chip"
+					class:on={chip.on(data.filter)}
+					aria-current={chip.on(data.filter) ? 'true' : undefined}
+					style:--chip-hue="var({chip.hue})"
+					href={quickHref(chip.params)}
+				>
+					{chip.label}
+				</a>
+			{/each}
+		</div>
+	{/snippet}
+	{#snippet right()}
+		<button
+			type="button"
+			class="btn"
+			aria-expanded={showFilters}
+			onclick={() => (showFilters = !showFilters)}
+		>
+			<Icon name="sliders" size={15} />
+			More filters
+		</button>
+	{/snippet}
+</ControlRow>
+
+<section class="section" hidden={!showFilters}>
 	<form method="GET" class="card filters">
 		<!-- A GET form submits its own fields and nothing else, so a chosen page
 		     size would be dropped the moment anything was filtered. Only carried
@@ -242,7 +370,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="📒" label="Matching" />
+		<Eyebrow hue="--teal" emoji="📒" label="Matching" />
 		<span class="eyebrow-caption">
 			{data.total}
 			{data.total === 1 ? 'transaction' : 'transactions'} · open a month to read it
@@ -366,6 +494,69 @@
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
+	.quick-search {
+		display: contents;
+	}
+	.search {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		flex: 1 1 220px;
+		min-width: 0;
+		max-width: 320px;
+		height: 38px;
+		padding: 0 var(--space-6);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-ctl);
+		background: var(--card);
+		color: var(--fg3);
+	}
+	.search input {
+		border: 0;
+		background: none;
+		padding: 0;
+		min-height: 0;
+		flex: 1;
+		min-width: 0;
+		color: var(--fg1);
+	}
+	.search input:focus {
+		outline: none;
+	}
+	.search:focus-within {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+	}
+	.chips-row {
+		display: flex;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.chips-row .chip {
+		display: inline-flex;
+		align-items: center;
+		height: 32px;
+		padding: 0 var(--space-6);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-pill);
+		background: var(--card);
+		color: var(--fg2);
+		font-size: var(--text-sm);
+		white-space: nowrap;
+		transition:
+			background-color var(--dur) var(--ease),
+			border-color var(--dur) var(--ease);
+	}
+	.chips-row .chip:hover {
+		background: var(--surface-2);
+		text-decoration: none;
+	}
+	.chips-row .chip.on {
+		background: color-mix(in srgb, var(--chip-hue) 16%, transparent);
+		border-color: color-mix(in srgb, var(--chip-hue) 45%, transparent);
+		color: var(--fg1);
+		font-weight: 600;
+	}
 	.filters {
 		display: flex;
 		flex-direction: column;
@@ -376,7 +567,10 @@
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: var(--space-6);
 	}
-	label {
+	/* Scoped to the filter grid. Bare, it also caught the search box in the
+	   control row above, which is a row and not a stacked field — the icon
+	   ended up above the input. */
+	.filters label {
 		display: flex;
 		flex-direction: column;
 		gap: 5px;

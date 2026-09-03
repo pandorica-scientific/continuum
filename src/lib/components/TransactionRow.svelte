@@ -147,6 +147,12 @@
 
 <div class="txn" class:open>
 	<button type="button" class="face" aria-expanded={open} onclick={ontoggle}>
+		<!-- The category's colour, leading the row rather than only sitting beside
+		     its name three columns to the right. A bar and not a dot: at 8×22 it
+		     reads down a list of forty rows as a stripe of colour, which is what
+		     makes a register scannable without reading a word of it. -->
+		<span class="cat-bar" style="background: var({row.categoryToken})" aria-hidden="true"></span>
+
 		<!-- The date the money moved. Where the bank booked it on another day, that
 		     day is on the title rather than in a second column: the row is filed
 		     under one of them and a register that showed both would be asking
@@ -169,7 +175,6 @@
 		<span class="mono t-amount" class:negative={row.negative}>{row.amount}</span>
 
 		<span class="t-category">
-			<span class="dot" style="background: var({row.categoryToken})"></span>
 			<span class="t-cat-name">{row.categoryLabel ?? 'Uncategorised'}</span>
 		</span>
 
@@ -413,7 +418,7 @@
 	   to scan one of those columns. */
 	.face {
 		display: grid;
-		grid-template-columns: 96px minmax(0, 1fr) 150px 150px auto;
+		grid-template-columns: 8px 96px minmax(0, 1fr) 150px 150px auto;
 		align-items: center;
 		gap: var(--space-5);
 		width: 100%;
@@ -427,7 +432,7 @@
 		cursor: pointer;
 	}
 	.face:hover {
-		background: var(--card3, var(--card2));
+		background: var(--surface-2);
 	}
 	.txn.open .face {
 		background: var(--card3, var(--card2));
@@ -476,10 +481,10 @@
 		font-size: var(--text-sm);
 		color: var(--fg2);
 	}
-	.dot {
+	.cat-bar {
 		width: 8px;
-		height: 8px;
-		border-radius: 50%;
+		height: 22px;
+		border-radius: var(--radius-xs);
 		flex: none;
 	}
 	.t-cat-name {
@@ -644,10 +649,10 @@
 		/* Two lines rather than five squeezed columns: when, what and how much on
 		   the first, what it is filed as on the second. */
 		.face {
-			grid-template-columns: 96px minmax(0, 1fr) auto;
+			grid-template-columns: 8px 96px minmax(0, 1fr) auto;
 		}
 		.t-category {
-			grid-column: 2;
+			grid-column: 3;
 		}
 		.t-marks {
 			grid-column: 3;

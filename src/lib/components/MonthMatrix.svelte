@@ -224,9 +224,9 @@
 <style>
 	.matrix {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-card);
 		overflow: hidden;
-		background: var(--card);
+		background: var(--surface);
 	}
 	/* Below its minimum the columns stop fitting. The grid scrolls rather than
 	   reflowing into cards — cards are what this replaced. */

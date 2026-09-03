@@ -15,6 +15,7 @@
 	interface Props {
 		modules: ModuleToggles;
 		householdLabel: string;
+		signedIn: { name: string; initials: string; hue: string } | null;
 		netWorth: string | null;
 		netWorthDelta: string | null;
 		netWorthDeltaPositive: boolean;
@@ -28,6 +29,7 @@
 	let {
 		modules,
 		householdLabel,
+		signedIn,
 		netWorth,
 		netWorthDelta,
 		netWorthDeltaPositive,
@@ -66,7 +68,7 @@
 		// to be moved by hand or those areas keep the old theme's colour.
 		document
 			.querySelector('meta[name="theme-color"]')
-			?.setAttribute('content', next === 'light' ? '#f3f0e9' : '#0e1117');
+			?.setAttribute('content', next === 'light' ? '#eeeae2' : '#0e1117');
 		void fetch('/settings/theme', {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json' },
@@ -85,11 +87,13 @@
 	const badgeArea = $derived(
 		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key
 	);
+
+	const initials = $derived(signedIn?.initials || signedIn?.name.slice(0, 1).toUpperCase() || '·');
 </script>
 
 <aside>
 	<div class="brand">
-		<BrandMark size={22} />
+		<span class="brand-tile"><BrandMark size={18} /></span>
 		<span class="wordmark">Continuum</span>
 		<!-- Settings lives here rather than in the navigation. It used to share an
 		     "Admin" row with Documents, which put configuration somebody opens
@@ -108,13 +112,17 @@
 	</div>
 
 	{#if netWorth !== null}
-		<div class="networth">
-			<span class="eyebrow" style="letter-spacing: 0.07em;">Net worth</span>
-			<span class="mono amount">{netWorth}<span class="ccy">{baseCurrency}</span></span>
+		<!-- The one lit surface in the product. It was a card among cards, which
+		     made the figure the whole app exists to move look like a statistic;
+		     v0.8.1 gives it the gradient and the only warm shadow, and puts white
+		     type on it in BOTH themes so the number reads the same either way. -->
+		<div class="hero">
+			<span class="hero-label">Net worth</span>
+			<span class="hero-figure display">{netWorth}<span class="hero-ccy">{baseCurrency}</span></span
+			>
 			{#if netWorthDelta}
-				<span class="delta" style:color={netWorthDeltaPositive ? 'var(--green)' : 'var(--red)'}>
-					{netWorthDelta} this month
-				</span>
+				<span class="hero-delta mono" class:down={!netWorthDeltaPositive}>{netWorthDelta}</span>
+				<span class="hero-note">this month</span>
 			{/if}
 		</div>
 	{/if}
@@ -129,29 +137,60 @@
 				class:active={activeArea === area.key}
 				aria-current={activeArea === area.key ? 'page' : undefined}
 				onclick={onNavigate}
+				title={area.label}
 				style:--row-hue="var(--{area.hue})"
 			>
-				<span class="icon" style:color="var(--row-hue)"><Icon name={area.icon} /></span>
+				<!-- Not IconTile: an idle nav tile's ground is a SURFACE, not a mix of
+				     the row's hue, so the two states differ in kind rather than in
+				     strength and the shared primitive has nothing to share. -->
+				<span class="nav-tile"><Icon name={area.icon} size={17} /></span>
 				<span class="label">{area.label}</span>
 				{#if area.key === badgeArea && importBadge > 0}
-					<span class="badge mono">{importBadge}</span>
+					<!-- A dot, not a count. The number was never acted on — it said
+					     "something is waiting", which is what a dot says in a tenth of
+					     the space, and the rail has no room for the digits at all.
+					     The count survives for anyone not looking at the screen. -->
+					<span
+						class="badge"
+						role="status"
+						aria-label="{importBadge} transactions waiting to be reviewed"
+					></span>
 				{/if}
 			</a>
 		{/each}
 	</nav>
 
 	<div class="foot">
-		<div class="themes">
-			<button type="button" class:active={theme === 'dark'} onclick={() => setTheme('dark')}
-				>🌙 Dark</button
+		<div class="themes" role="group" aria-label="Theme">
+			<button
+				type="button"
+				class:active={theme === 'dark'}
+				aria-pressed={theme === 'dark'}
+				title="Dark"
+				onclick={() => setTheme('dark')}
 			>
-			<button type="button" class:active={theme === 'light'} onclick={() => setTheme('light')}
-				>☀️ Light</button
+				<span aria-hidden="true">🌙</span><span class="theme-label">Dark</span>
+			</button>
+			<button
+				type="button"
+				class:active={theme === 'light'}
+				aria-pressed={theme === 'light'}
+				title="Light"
+				onclick={() => setTheme('light')}
 			>
+				<span aria-hidden="true">☀️</span><span class="theme-label">Light</span>
+			</button>
 		</div>
 		<div class="person">
-			<span class="avatar">{householdLabel.slice(0, 1).toUpperCase() || '·'}</span>
-			<span class="name">{householdLabel}</span>
+			<span
+				class="avatar"
+				style:--person-hue="var({signedIn?.hue ?? '--fg3'})"
+				title={signedIn?.name ?? householdLabel}>{initials}</span
+			>
+			<span class="who">
+				<span class="name">{signedIn?.name ?? householdLabel}</span>
+				<span class="household">{householdLabel}</span>
+			</span>
 			<!-- /logout has existed since the first release with nothing linking to
 			     it; without this there is no way to switch accounts or sign in with
 			     a passkey once a session exists. -->
@@ -171,28 +210,13 @@
 </aside>
 
 <style>
-	.settings {
-		margin-left: auto;
-		display: grid;
-		place-items: center;
-		width: 26px;
-		height: 26px;
-		border-radius: var(--radius-sm);
-		color: var(--fg3);
-	}
-	.settings:hover,
-	.settings.active {
-		color: var(--fg1);
-		background: var(--card2);
-	}
-
 	aside {
 		background: var(--side);
 		border-right: 1px solid var(--bd);
-		padding: 20px 14px 22px;
+		padding: 18px 14px 20px;
 		display: flex;
 		flex-direction: column;
-		gap: 22px;
+		gap: 18px;
 		/* Fills whatever the wrapper gives it, which is the full screen height in
 		   both layouts — the sticky column on a wide screen and the fixed drawer on
 		   a narrow one. It used to set its own `100vh` and stick on its own, which
@@ -204,39 +228,99 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
+
 	.brand {
 		display: flex;
 		align-items: center;
-		gap: 9px;
-		padding: 0 8px;
+		gap: var(--space-5);
+		padding: 0 var(--space-1);
+	}
+	.brand-tile {
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border-radius: var(--radius-lg);
+		background: color-mix(in srgb, var(--brand) var(--tile-alpha), transparent);
+		color: var(--brand);
+		flex: none;
 	}
 	.wordmark {
-		font-size: var(--text-xl);
-		font-weight: 600;
-		letter-spacing: -0.01em;
+		font-size: 17px;
+		font-weight: 650;
+		letter-spacing: -0.015em;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
 	}
-	.networth {
-		padding: var(--space-5) var(--space-6);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-	}
-	.amount {
-		font-size: var(--text-2xl);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-	}
-	.ccy {
-		font-size: var(--text-sm);
+	.settings {
+		margin-left: auto;
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		border-radius: 9px;
 		color: var(--fg3);
+		flex: none;
+		transition: background-color var(--dur) var(--ease);
+	}
+	.settings:hover,
+	.settings.active {
+		color: var(--fg1);
+		background: var(--surface-2);
+	}
+
+	.hero {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		align-items: center;
+		gap: 0 var(--space-3);
+		padding: var(--space-6) var(--space-7) var(--space-7);
+		border-radius: var(--radius-card);
+		background: var(--hero-bg);
+		box-shadow: var(--shadow-hero);
+		/* Fixed white rather than --fg1: the gradient is dark in both themes, so
+		   a theme-following foreground would put near-black on navy in light. */
+		color: #fff;
+	}
+	.hero-label {
+		grid-column: 1 / -1;
+		font-size: var(--text-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		opacity: 0.75;
+	}
+	.hero-figure {
+		grid-column: 1 / -1;
+		font-size: var(--display-hero);
+		margin: 3px 0 var(--space-3);
+	}
+	.hero-ccy {
+		font-size: var(--text-sm);
+		font-weight: 400;
+		letter-spacing: 0;
+		opacity: 0.7;
 		margin-left: 5px;
 	}
-	.delta {
+	/* Translucent white, not green or red: on this gradient a green pill is
+	   unreadable, and the sign is already in the number. Down gets a tint of
+	   red behind it rather than red text, for the same reason. */
+	.hero-delta {
+		justify-self: start;
 		font-size: var(--text-xs);
+		padding: 2px var(--space-4);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.16);
 	}
+	.hero-delta.down {
+		background: color-mix(in srgb, var(--red) 40%, rgba(255, 255, 255, 0.16));
+	}
+	.hero-note {
+		font-size: var(--text-xs);
+		opacity: 0.7;
+		margin-left: var(--space-2);
+	}
+
 	/* One row per area, no group headings: the areas are the grouping now. */
 	nav {
 		display: flex;
@@ -244,40 +328,46 @@
 		gap: var(--space-1);
 	}
 	.nav-item {
+		position: relative;
 		display: grid;
-		grid-template-columns: 20px minmax(0, 1fr) auto;
+		grid-template-columns: 32px minmax(0, 1fr) auto;
 		align-items: center;
-		gap: var(--space-5);
-		padding: var(--space-4) var(--space-5);
-		border-radius: var(--radius-md);
+		gap: var(--space-6);
+		height: 42px;
+		padding: 0 var(--space-5) 0 5px;
+		border-radius: var(--radius-xl);
 		color: var(--fg2);
-		font-size: var(--text-md);
-		font-weight: 400;
+		font-size: 13.5px;
+		font-weight: 500;
+		transition:
+			background-color var(--dur) var(--ease),
+			color var(--dur) var(--ease);
+	}
+	.nav-tile {
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 9px;
+		background: var(--surface-2);
+		color: var(--row-hue);
+		flex: none;
+		transition: background-color var(--dur) var(--ease);
 	}
 	/* Tinted with the row's OWN colour rather than a neutral grey: the icon
 	   already carries that colour, so a grey wash underneath reads as a different
-	   element highlighting rather than this one. Mixed at low strength so the
-	   label stays readable in both themes. */
+	   element highlighting rather than this one. */
 	.nav-item:hover {
-		background: color-mix(in srgb, var(--row-hue) 14%, transparent);
+		background: color-mix(in srgb, var(--row-hue) 9%, transparent);
 		text-decoration: none;
 	}
 	.nav-item.active {
-		background: color-mix(in srgb, var(--row-hue) 22%, transparent);
+		background: color-mix(in srgb, var(--row-hue) 14%, transparent);
 		color: var(--fg1);
-		font-weight: 500;
+		font-weight: 600;
 	}
-	/* The identity colour lives on the icon, set inline from the area's hue.
-	   Inactive rows hold it back so the lit row still stands out. */
-	.icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0.75;
-	}
-	.nav-item:hover .icon,
-	.nav-item.active .icon {
-		opacity: 1;
+	.nav-item.active .nav-tile {
+		background: color-mix(in srgb, var(--row-hue) var(--tile-alpha-active), transparent);
 	}
 	.label {
 		min-width: 0;
@@ -286,20 +376,110 @@
 		white-space: nowrap;
 	}
 	.badge {
-		font-size: var(--text-2xs);
-		color: var(--fg-inverse);
+		width: 7px;
+		height: 7px;
+		border-radius: var(--radius-pill);
 		background: var(--yellow);
-		border-radius: 20px;
-		padding: 1px 6px;
+		flex: none;
 	}
+
 	.foot {
 		margin-top: auto;
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-5);
 		border-top: 1px solid var(--bd);
-		padding-top: 14px;
+		padding-top: var(--space-7);
 	}
+
+	.themes {
+		display: flex;
+		gap: var(--space-1);
+		padding: 3px;
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-ctl);
+		background: var(--card);
+	}
+	.themes button {
+		flex: 1 1 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-3);
+		min-width: 0;
+		border: 0;
+		background: transparent;
+		color: var(--fg3);
+		border-radius: var(--radius-md);
+		padding: 5px var(--space-3);
+		font-size: var(--text-sm);
+		font-family: inherit;
+		cursor: pointer;
+		transition: background-color var(--dur) var(--ease);
+	}
+	.themes button.active {
+		background: var(--surface-3);
+		color: var(--fg1);
+		font-weight: 600;
+	}
+	.themes button:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+	}
+
+	.person {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		padding: 0 var(--space-2);
+	}
+	.avatar {
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-pill);
+		background: color-mix(in srgb, var(--person-hue) 26%, transparent);
+		color: var(--fg1);
+		display: grid;
+		place-items: center;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		flex: 0 0 auto;
+	}
+	.who {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		flex: 1;
+		line-height: 1.25;
+	}
+	.name {
+		font-size: var(--text-md);
+		font-weight: 500;
+		color: var(--fg1);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.household {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.sign-out {
+		border: 0;
+		background: transparent;
+		color: var(--fg2);
+		font-size: var(--text-xs);
+		cursor: pointer;
+		padding: 2px 0;
+		white-space: nowrap;
+	}
+	.sign-out:hover {
+		color: var(--fg1);
+	}
+
 	.install {
 		display: flex;
 		align-items: baseline;
@@ -311,65 +491,84 @@
 		text-decoration: none;
 		letter-spacing: 0.01em;
 	}
-
 	.install:hover {
 		color: var(--fg2);
 		text-decoration: none;
 	}
 
-	.themes {
-		display: flex;
-		gap: var(--space-3);
-	}
-	.themes button {
-		flex: 1 1 0;
-		border: 1px solid var(--bd);
-		background: transparent;
-		color: var(--fg3);
-		border-radius: var(--radius-md);
-		padding: 7px 4px;
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.themes button.active {
-		border-color: var(--bd2);
-		background: var(--card2);
-		color: var(--fg1);
-	}
-	.person {
-		display: flex;
-		align-items: center;
-		gap: var(--space-4);
-		padding: 0 4px;
-	}
-	.sign-out {
-		border: 0;
-		background: transparent;
-		color: var(--fg2);
-		font-size: var(--text-xs);
-		cursor: pointer;
-		padding: 2px 0;
-	}
-	.sign-out:hover {
-		color: var(--fg1);
-	}
-	.avatar {
-		width: 24px;
-		height: 24px;
-		border-radius: 24px;
-		background: var(--card3);
-		display: grid;
-		place-items: center;
-		font-size: var(--text-xs);
-		flex: 0 0 auto;
-	}
-	.name {
-		font-size: var(--text-sm);
-		color: var(--fg2);
-		min-width: 0;
-		flex: 1;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	/* ── Rail ───────────────────────────────────────────────────────────────
+	 * 720–1179px: a tablet, where 264px of navigation is a quarter of the
+	 * screen. The same markup with the words taken away — every row keeps its
+	 * `title`, so the label is a hover away and is still read aloud.
+	 *
+	 * A media query rather than a `variant` prop, deliberately: the layout is a
+	 * function of the viewport and nothing else, and a prop would mean the
+	 * server guessing a width it cannot know and hydrating into a correction.
+	 */
+	@media (min-width: 720px) and (max-width: 1179px) {
+		aside {
+			padding: 18px var(--space-5) 20px;
+			align-items: center;
+			gap: var(--space-7);
+		}
+		.brand {
+			flex-direction: column;
+			gap: var(--space-5);
+		}
+		.wordmark,
+		.hero,
+		.label,
+		.theme-label,
+		.who,
+		.install,
+		.sign-out {
+			display: none;
+		}
+		.settings {
+			margin-left: 0;
+		}
+		nav {
+			gap: var(--space-3);
+			width: 100%;
+			align-items: center;
+		}
+		.nav-item {
+			grid-template-columns: 44px;
+			justify-content: center;
+			height: 44px;
+			width: 44px;
+			padding: 0;
+		}
+		.nav-tile {
+			width: 44px;
+			height: 44px;
+			border-radius: var(--radius-xl);
+		}
+		/* Pinned to the tile's corner rather than sitting in a column of its
+		   own, which the rail has taken away. */
+		.badge {
+			position: absolute;
+			top: 4px;
+			right: 4px;
+		}
+		.foot {
+			width: 100%;
+			align-items: center;
+			gap: var(--space-6);
+		}
+		.themes {
+			flex-direction: column;
+			gap: var(--space-1);
+		}
+		.themes button {
+			padding: var(--space-3);
+		}
+		.person {
+			padding: 0;
+		}
+		.avatar {
+			width: 32px;
+			height: 32px;
+		}
 	}
 </style>

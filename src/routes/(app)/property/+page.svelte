@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
+	import IconTile from '$lib/components/IconTile.svelte';
 	import { shouldCloseAfterAction } from '$lib/actions/result';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
@@ -82,12 +83,14 @@
 			class:active={tab.active}
 			onclick={() => goto(`?p=${tab.id}`, { keepFocus: true, noScroll: true })}
 		>
-			<span>🏢</span><span>{tab.name}</span>
+			<IconTile hue="--purple" icon="buildings" size={28} />
+			<span class="t-name">{tab.name}</span>
 			<span class="mono tag">{tab.tag}</span>
 		</button>
 	{/each}
 	<button type="button" class="tab add" onclick={() => (addingProperty = !addingProperty)}>
-		➕ Add property
+		<IconTile hue="--purple" icon="plus" size={28} />
+		<span class="t-name">Add property</span>
 	</button>
 </section>
 
@@ -146,7 +149,7 @@
 {#if data.detail}
 	<section class="section">
 		<div class="eyebrow-row">
-			<Eyebrow emoji="🏢" label="This flat" />
+			<Eyebrow hue="--purple" emoji="🏢" label="This flat" />
 			<span class="eyebrow-caption">{data.detail.sizeLabel || data.detail.name}</span>
 			<span class="p-tags">
 				{#each data.detail.tags as t (t)}
@@ -183,7 +186,7 @@
 
 	<section class="card stack">
 		<div class="eyebrow-row">
-			<Eyebrow emoji="📈" label="What it has been worth" />
+			<Eyebrow hue="--purple" emoji="📈" label="What it has been worth" />
 			<span class="eyebrow-caption">
 				{data.detail.valueSeries.length > 1
 					? `${data.detail.valueSeries.length} valuations`
@@ -252,7 +255,7 @@
 	</section>
 
 	<section class="card stack">
-		<Eyebrow emoji="🧾" label="What it cost to buy" />
+		<Eyebrow hue="--purple" emoji="🧾" label="What it cost to buy" />
 		<!-- Money in is the household's OWN cash: the deposit plus the costs of
 		     buying. The price itself is mostly the bank's, and the part that becomes
 		     theirs arrives as the mortgage is repaid — which the loan already
@@ -287,7 +290,7 @@
 	<section class="two-col">
 		<div class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow emoji="📐" label="Floor plan" />
+				<Eyebrow hue="--purple" emoji="📐" label="Floor plan" />
 				<button type="button" class="btn plan-edit" onclick={() => (editingPlan = !editingPlan)}>
 					{editingPlan
 						? 'Close editor'
@@ -348,7 +351,7 @@
 				{#if data.detail.lease}
 					<div class="card stack">
 						<div class="eyebrow-row">
-							<Eyebrow emoji="🔑" label="Tenancy" />
+							<Eyebrow hue="--purple" emoji="🔑" label="Tenancy" />
 							<Pill hue={data.detail.lease.hue}>{data.detail.lease.state}</Pill>
 						</div>
 						<div class="tenant">
@@ -462,7 +465,7 @@
 				{/if}
 			{:else}
 				<div class="card stack">
-					<Eyebrow emoji="🏠" label="You live here" />
+					<Eyebrow hue="--purple" emoji="🏠" label="You live here" />
 					<span class="quiet">
 						Home Assistant is bound to this flat, so its energy and water readings become the bills
 						you see below — no meter typing. The integration lands in Phase 4.
@@ -472,7 +475,7 @@
 
 			<div class="card stack">
 				<div class="eyebrow-row">
-					<Eyebrow emoji="🧾" label="Monthly bills" />
+					<Eyebrow hue="--purple" emoji="🧾" label="Monthly bills" />
 					<span class="mono eyebrow-caption">{data.detail.billsTotal}</span>
 				</div>
 				{#each data.detail.bills as bill (bill.id)}
@@ -546,7 +549,7 @@
 			{#if data.detail.mortgage}
 				<div class="card stack">
 					<div class="eyebrow-row">
-						<Eyebrow emoji="🏦" label="Mortgage" />
+						<Eyebrow hue="--purple" emoji="🏦" label="Mortgage" />
 						<span class="eyebrow-caption" style="color: var(--yellow);"
 							>{data.detail.mortgage.fixation}</span
 						>
@@ -561,7 +564,7 @@
 				</div>
 			{:else}
 				<div class="card stack">
-					<Eyebrow emoji="🏦" label="Mortgage" />
+					<Eyebrow hue="--purple" emoji="🏦" label="Mortgage" />
 					<span class="quiet">
 						Add the mortgage on the <a href="/loans">Loans screen</a> and link it to this flat to see
 						equity and the repayment schedule here.
@@ -658,20 +661,30 @@
 		align-items: center;
 		gap: 9px;
 		border: 1px solid var(--bd);
-		background: var(--card);
+		background: var(--surface);
 		color: var(--fg2);
-		border-radius: var(--radius-lg);
-		padding: 10px 15px;
+		border-radius: var(--radius-card);
+		padding: var(--space-4) var(--space-6);
+		font-family: inherit;
 		font-size: var(--text-md);
 		cursor: pointer;
+		transition:
+			background-color var(--dur) var(--ease),
+			border-color var(--dur) var(--ease);
 	}
 	.tab:hover {
 		border-color: var(--bd2);
+		background: var(--surface-2);
 	}
+	/* The area's hue, not a grey fill: this row is the screen's subject, and on
+	   a page of purple tiles a grey selection read as disabled. */
 	.tab.active {
-		background: var(--card3);
+		background: color-mix(in srgb, var(--purple) 12%, transparent);
 		color: var(--fg1);
-		border-color: var(--bd2);
+		border-color: color-mix(in srgb, var(--purple) 45%, transparent);
+	}
+	.t-name {
+		font-weight: 500;
 	}
 	.tab .tag {
 		font-size: var(--text-xs);
@@ -679,6 +692,8 @@
 	}
 	.tab.add {
 		border-style: dashed;
+		border-color: color-mix(in srgb, var(--purple) 40%, transparent);
+		color: var(--fg3);
 	}
 	.two-col {
 		display: grid;

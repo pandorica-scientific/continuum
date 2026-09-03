@@ -278,6 +278,62 @@
 	 * values in the system deliberately not drawn from a hue token. */
 	--shadow-float: 0 10px 30px rgb(0 0 0 / 0.55);
 	--shadow-raise: 0 4px 14px rgb(0 0 0 / 0.35);
+
+	/* ── v0.8.1, the v2 skin ────────────────────────────────────────────────
+	 * Promoted here from `design_system/design_handoff_continuum_v2/tokens/`
+	 * rather than loaded as a second stylesheet beside this one, because
+	 * `scripts/design-tokens.mjs` reads THIS file to build the reference and to
+	 * check that no canvas quotes a value which has drifted. A token living
+	 * anywhere else is a token the drift check cannot see. */
+
+	/* Geometry named by what wears it. Aliases, not new numbers: a card and a
+	   tile step two rungs up the scale, a control one. */
+	--radius-card: var(--radius-2xl);
+	--radius-tile: var(--radius-xl);
+	--radius-ctl: var(--radius-lg);
+
+	/* A ground one step brighter than --card, so a card has something to lift
+	   off and a shadow has somewhere to fall. */
+	--surface: rgba(255, 255, 255, 0.045);
+	--surface-2: rgba(255, 255, 255, 0.075);
+	--surface-3: rgba(255, 255, 255, 0.11);
+
+	/* Elevation in the flow. The rule until now was that nothing in the flow is
+	   raised; v2 allows exactly one quiet value for a card, plus one for the two
+	   things that are meant to read as lit — the net-worth hero and quick-add. */
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.28), 0 12px 32px -16px rgb(0 0 0 / 0.55);
+	--shadow-hero: 0 18px 44px -22px color-mix(in srgb, var(--brand) 70%, transparent);
+
+	/* Motion. The easing is the one already here under its v2 name; two
+	   durations join the 90ms press, which is unchanged. */
+	--ease: var(--ease-out);
+	--dur: 150ms;
+	--dur-slow: 260ms;
+
+	/* An icon tile is a hue mixed into the ground behind a stroke icon. */
+	--tile-alpha: 16%;
+	--tile-alpha-active: 28%;
+
+	/* Headline figures in the sans — the one sanctioned exception to "every
+	   number in mono". Table figures, dates, IDs and pills stay mono. */
+	--font-display: var(--font-sans);
+	--display-tracking: -0.03em;
+
+	/* The sizes those figures need. The ramp above tops out at 28px because
+	   nothing before v2 printed a number larger than a panel heading. */
+	--text-5xl: 30px;
+	--display-hero: 26px;
+	--display-figure: 24px;
+	--display-sm: 20px;
+	--display-xs: 17px;
+
+	/* Worn by the net-worth hero, the sign-in panel and the quick-add. */
+	--hero-bg: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--brand) 46%, var(--surface)),
+		color-mix(in srgb, var(--indigo) 26%, var(--surface)) 62%,
+		color-mix(in srgb, var(--teal) 18%, var(--surface))
+	);
 }
 
 /* ── Shared marks ──────────────────────────────────────────────────────────
@@ -377,7 +433,11 @@ html[data-ledger-theme='light'] {
 	--fg-inverse: #ffffff;
 
 	/* Ink only — used as text or a 1px border, never mixed into a tint. */
-	--green: #0e7a4a;
+	/* Darkened from #0e7a4a for v0.8.1: the light `--card` moved a step off white
+	   so that white `--surface` cards read as cards, and the green pill's ground
+	   fell with it to 4.40:1. Per the note below, a failing pill is fixed by
+	   darkening the ink and leaving the tint alone. Now 4.89:1. */
+	--green: #0d7245;
 	--red: #bd2e21;
 	--yellow: #8a5900;
 	--blue: #186294;
@@ -461,6 +521,58 @@ html[data-ledger-theme='light'] {
 	--series-r8: #0098a1;
 	--series-r9: #189f5a;
 	--series-r10: #4967c5;
+
+	/* ── v0.8.1, light ─────────────────────────────────────────────────────
+	 * Paper a step DARKER than the cards, and the sidebar a step lighter than
+	 * the page. The light theme above put white cards on near-white paper, and
+	 * a card with a 10% border and no shadow then had nothing telling a reader
+	 * where it began. Cooler than the oat above so the hue washes stay legible
+	 * on it. */
+	--bg: #eeeae2;
+	--bg2: #e6e1d7;
+	--side: #f5f2ec;
+	--card: #f9f7f2;
+	--card2: #f1ede5;
+	--card3: #e6e0d4;
+	--surface: #ffffff;
+	--surface-2: #f3efe7;
+	--surface-3: #e4ded2;
+	--bd: rgb(60 52 40 / 0.11);
+	--bd2: rgb(60 52 40 / 0.22);
+	--fg2: #3d3a34;
+	--fg3: #75705f;
+
+	/* Warm-tinted rather than near-black: a neutral shadow over warm paper
+	   reads as grey dirt under the card. */
+	--shadow-card: 0 1px 2px rgb(60 52 40 / 0.08), 0 14px 36px -18px rgb(60 52 40 / 0.32);
+	--shadow-hero: 0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent);
+	--shadow-float: 0 8px 28px -8px rgb(60 52 40 / 0.35), 0 1px 3px rgb(60 52 40 / 0.12);
+	--tile-alpha: 17%;
+	--tile-alpha-active: 28%;
+
+	/* Washes remixed at 11-16% into white. The 5-7% values above were tuned
+	   against a dark ground and vanish on paper — a wash you cannot see is a
+	   card that has lost its identity hue. Mixed from the bright hues for the
+	   reason stated on the tints: a wash mixed from the dark ink is mud. */
+	--teal-wash: color-mix(in srgb, rgb(20 161 132) 11%, #fff);
+	--purple-wash: color-mix(in srgb, rgb(165 101 196) 11%, #fff);
+	--blue-wash: color-mix(in srgb, rgb(63 143 206) 11%, #fff);
+	--orange-wash: color-mix(in srgb, rgb(224 123 30) 12%, #fff);
+	--indigo-wash: color-mix(in srgb, rgb(112 128 224) 11%, #fff);
+	--green-wash: color-mix(in srgb, rgb(34 163 102) 12%, #fff);
+	--yellow-wash: color-mix(in srgb, rgb(232 169 4) 16%, #fff);
+	--red-wash: color-mix(in srgb, rgb(224 80 63) 10%, #fff);
+	--brand-wash: color-mix(in srgb, rgb(63 124 191) 11%, #fff);
+	--grey-wash: color-mix(in srgb, rgb(120 130 145) 10%, #fff);
+
+	/* The hero is the one place light theme stays dark: white type on a deep
+	   gradient, so the net-worth figure reads the same in both themes. */
+	--hero-bg: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--brand) 92%, #0e1a2b),
+		color-mix(in srgb, var(--indigo) 78%, #1a1436) 62%,
+		color-mix(in srgb, var(--teal) 72%, #0f2a2a)
+	);
 }
 
 html,
@@ -578,11 +690,41 @@ input[type='file']::file-selector-button:hover {
 	font-family: var(--font-mono);
 }
 
+/* v2: a card is a lit surface. It sits one step brighter than the page, keeps
+   its 1px border, and carries the single quiet elevation value — the border
+   alone was doing the work of separating a card from the page, and on light
+   paper it could not. */
 .card {
-	background: var(--card);
+	background: var(--surface);
 	border: 1px solid var(--bd);
-	border-radius: 10px;
-	padding: 14px 16px;
+	border-radius: var(--radius-card);
+	box-shadow: var(--shadow-card);
+	padding: 18px 20px;
+}
+
+/* A headline figure. The sans, tightened and tabular — see --font-display. */
+.display {
+	font-family: var(--font-display);
+	font-weight: 650;
+	letter-spacing: var(--display-tracking);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.05;
+	/* A figure that wraps stops being a figure. Every tile that holds one sets
+	   its own min track width; this is the half of that contract the type owns. */
+	white-space: nowrap;
+}
+
+/* The screen settling in. One place, so a route transition cannot be half
+   applied — and cheap enough to run on every navigation. */
+@keyframes v2-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
 }
 
 .eyebrow {
@@ -615,6 +757,12 @@ input[type='file']::file-selector-button:hover {
 	flex-direction: column;
 	gap: 12px;
 }
+/* `display: flex` above beats the `[hidden]` attribute's own `display: none`,
+   so a section hidden by an attribute stayed on screen. Stated here rather
+   than in each component that hides one — v0.8.1 has three. */
+.section[hidden] {
+	display: none;
+}
 
 /* ---- Form controls ----
  * The look of a box somebody types into, copied into twenty-seven component
@@ -641,7 +789,7 @@ textarea {
 	border: 1px solid var(--bd2);
 	background: var(--card);
 	color: var(--fg1);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-ctl);
 	padding: var(--space-4) 11px;
 	font-size: var(--text-md);
 	font-family: inherit;
@@ -673,8 +821,9 @@ textarea {
 	border: 1px solid var(--bd2);
 	background: var(--card);
 	color: var(--fg1);
-	border-radius: 8px;
+	border-radius: var(--radius-ctl);
 	padding: 7px 13px;
+	font-weight: 600;
 	font-size: var(--text-md);
 	cursor: pointer;
 	white-space: nowrap;
@@ -747,7 +896,7 @@ textarea {
 .icon-btn {
 	background: none;
 	border: 1px solid var(--bd);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-lg);
 	color: var(--fg3);
 	cursor: pointer;
 	display: inline-flex;

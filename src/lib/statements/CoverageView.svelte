@@ -381,8 +381,8 @@
 <style>
 	.coverage {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	header {

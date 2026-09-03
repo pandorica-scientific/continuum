@@ -27,7 +27,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="🏷️" label="Tags" />
+		<Eyebrow hue="--fg3" emoji="🏷️" label="Tags" />
 		<span class="eyebrow-caption">
 			{screen.tags.length}
 			{screen.tags.length === 1 ? 'tag' : 'tags'} · what each has cost, across every category it touches

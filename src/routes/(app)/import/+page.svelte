@@ -130,6 +130,8 @@
 	{/if}
 
 	<UploadDropzone
+		hero
+		formats={['CSV', 'XLSX', 'PDF', 'CAMT.053', 'MT940', 'OFX', 'ABO/GPC', 'photo']}
 		accept=".csv,.tsv,.txt,.pdf,.xlsx,.xls,.xml,.camt,.gpc,.abo,.sta,.mt940,.ofx,.qfx,.png,.jpg,.jpeg,.tiff"
 		multiple={true}
 		idleText="Drop statements here, or click to browse"
@@ -217,6 +219,7 @@
 {#if form?.preview}
 	<section class="section">
 		<Eyebrow
+			hue="--teal"
 			emoji="🧩"
 			label="Map this layout"
 			caption="say what the columns are — the balances still decide whether it adds up"
@@ -323,7 +326,12 @@
 
 {#if data.imports.length > 0}
 	<section class="section">
-		<Eyebrow emoji="🧾" label="Recent imports" caption="what each statement was checked against" />
+		<Eyebrow
+			hue="--teal"
+			emoji="🧾"
+			label="Recent imports"
+			caption="what each statement was checked against"
+		/>
 		<!--
 			What each statement was checked against before its movements were filed.
 
@@ -392,7 +400,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="🧐" label="Needs a decision" />
+		<Eyebrow hue="--teal" emoji="🧐" label="Needs a decision" />
 		<span class="eyebrow-caption">
 			{data.review.length === 0
 				? 'nothing waiting — everything filed itself'

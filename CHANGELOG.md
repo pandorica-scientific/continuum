@@ -2,6 +2,38 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.1 — 2026-09-03
+
+> The same app, in a warmer skin that says which screen you are on before you read a word.
+
+### ✨ Added
+
+- 🎨 **Every area has a colour, and wears it** — a hue tile before each screen title, panel head and nav row, so the shape of a screen is recognisable before any of it is read
+- 📐 **Three layouts from one markup** — a 264px sidebar on a monitor, a 76px icon rail on a tablet, and a bottom bar on a phone in place of the ☰ drawer
+- 💰 **Net worth is the one lit surface in the product** — a gradient panel with white type in both themes, where it used to be a card among cards
+- 📊 **Rules group by category and open closed** — a header row carries the count, the average trust and how often the group was overridden, so "is anything filing wrongly" is answered without opening one
+- 🎚️ **The confidence floor can be moved** — it has been a stored setting with nothing able to change it since rules existed
+- 🔎 **Transactions opens on four chips and a search box** — the eleven-field filter grid is one click away instead of the first thing on the screen
+- 📈 **One chart engine behind the salary and tax screens** — bars and lines, its own axis for each, round steps, gaps at null points, a hover readout and a series named at the end of its own line; the two screens each owned a copy of that arrangement and had already drifted on bar width and readout placement
+- 🔥 **Hovering a Sankey block lights its whole route** in both directions and dims the rest, with a slow flame on the lit bands
+
+### 🔧 Changed
+
+- ⚙️ **Settings shows one section at a time** behind a nav of nine, where it was ten stacked sections and a scroll position
+- 🃏 **A card in the flow is raised** by one quiet shadow, and sits a step brighter than the page — the border alone could not hold an edge on light paper
+- 🔤 **Headline figures are set in the sans**, tightened and tabular; every figure in a table, every date and every ID stays mono
+- 🌗 **The light theme puts white cards on darker paper**, with washes remixed at 11–16% so an area's colour survives a bright screen
+- 🥧 **The cash-split chart is a pie again** — its hole held the total, which now sits in the panel header at four times the size
+- 🚪 **Sign-in is two columns above 900px**, with what is true about the instance beside the form
+- 🎚️ **One switch component**, where the same track, knob and thirty lines of CSS were written out three times across Settings and Calendar
+- 🎨 **A register row leads with its category's colour** — an 8×22 bar down the left, so a month of spending is scannable before a word of it is read
+
+### 🐛 Fixed
+
+- 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
+- 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`
+- 🟢 **The green pill clears AA on light paper again** — the ink is darkened rather than the tint lightened, per the rule the palette already states
+
 ## 0.8.0 — 2026-09-02
 
 > Every shelf is a question, and the screen answers it.

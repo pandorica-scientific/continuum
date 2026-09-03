@@ -28,9 +28,24 @@
 
 	<SummaryBand
 		tiles={[
-			{ label: 'Money in', value: fmt(data.metrics.moneyIn), unit, color: 'var(--green)' },
-			{ label: 'Money out', value: fmt(data.metrics.moneyOut), unit },
-			{ label: 'Saved and invested', value: fmt(data.metrics.saved), unit, color: 'var(--green)' },
+			// The wash says WHICH figure this is; the colour on the value says
+			// whether it is good news. In and Saved carry both; Out is red ground
+			// with plain ink, because money going out is not in itself a problem.
+			{
+				label: 'Money in',
+				value: fmt(data.metrics.moneyIn),
+				unit,
+				color: 'var(--green)',
+				wash: 'green'
+			},
+			{ label: 'Money out', value: fmt(data.metrics.moneyOut), unit, wash: 'red' },
+			{
+				label: 'Saved and invested',
+				value: fmt(data.metrics.saved),
+				unit,
+				color: 'var(--green)',
+				wash: 'teal'
+			},
 			{
 				label: 'Biggest single line',
 				value: data.metrics.biggest ? fmt(data.metrics.biggest.value) : '—',

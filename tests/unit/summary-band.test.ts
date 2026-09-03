@@ -17,7 +17,10 @@ describe('the summary band', () => {
 		const source = read('src/lib/components/SummaryBand.svelte');
 		expect(source).toContain("import MetricTile from './MetricTile.svelte'");
 		expect(source).toContain('<MetricTile');
-		expect(source).toMatch(/grid-template-columns:\s*repeat\(var\(--columns\), minmax\(0, 1fr\)\)/);
+		// auto-fit against a floor, not a column per tile: a headline figure must
+		// never wrap, and equal `1fr` columns will squeeze five of them until it
+		// does. The floor is the contract; the column count follows from it.
+		expect(source).toMatch(/grid-template-columns:\s*repeat\(auto-fit, minmax\(200px, 1fr\)\)/);
 		expect(source).toContain('gap: var(--space-6)');
 	});
 

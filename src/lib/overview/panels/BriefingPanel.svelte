@@ -97,9 +97,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 7px;
-		background: var(--card);
+		background: var(--surface);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-card);
 		padding: 13px 15px;
 		color: var(--fg1);
 	}

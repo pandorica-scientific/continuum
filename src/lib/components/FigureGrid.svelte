@@ -102,9 +102,9 @@
 		gap: var(--space-6);
 	}
 	.figure {
-		background: var(--card);
+		background: var(--surface);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-card);
 		padding: var(--space-6) var(--space-7);
 		display: flex;
 		flex-direction: column;
