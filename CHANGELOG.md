@@ -2,6 +2,32 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.0 — 2026-09-02
+
+> Every shelf is a question, and the screen answers it.
+
+### ✨ Added
+
+- 🗂️ **A shelf is one question, one unit and one template** — its name is the screen title, its question is the caption, and three figures beneath answer that question
+- 🧩 **A household makes its own shelves from seven templates** — a Boat shelf drawing obligations is as good as a shipped one, where before it got a plain list and nothing else
+- 🚗 **Cards on Health, Inventory, Property and Vehicles** — one per person, item, address or vehicle, each with lanes for what falls due and a history for what does not
+- 🧾 **Slots for the paper a thing is expected to have** — a receipt, a warranty and a manual are drawn whether or not anything is in them, because the missing manual is the finding
+- 🔁 **A lane can expect paper every two years** — one cell two columns wide, so a technical inspection is not read as a yearly one with every other year missing
+- 📥 **The Inbox files paper in three steps** — shelf, then card, then lane, each narrowing the next, with a card made on the way past when the shelf has not got one yet
+- 📊 **Every screen draws its figures with one summary band** — Tax, Salary and six others had their own, at three different sizes
+
+### 🔧 Changed
+
+- 🔧 **Household is Inventory**, and Family's certificates now live on IDs while Tenancy's leases live on the address they concern
+- 📋 **The list with its filters is a view every shelf opens on request**, not what a shelf is
+- 🎚️ **The Documents rail holds Inbox, the shelves and Everything** — a subject and an organisation are cards on their own shelf, which is where they are made, renamed and archived
+- 🔗 **A document is offered only what belongs on its shelf** — a car's policy is offered the cars, not the boiler and not the tax office
+- 🚏 **A document is in a lane because somebody put it there** — a rule proposes and a person confirms, because two lanes on one card can both match a payslip
+
+### ⬆️ Upgrading
+
+- There is no upgrade path from 0.7.x. This release ships a fresh baseline and starts on an empty database; nobody is running it yet, and that window closes here.
+
 ## 0.7.9 — 2026-09-01
 
 > A guess you can see is worth more than a filing you cannot.

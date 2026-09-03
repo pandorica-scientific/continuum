@@ -26,6 +26,7 @@ import {
 	type Actor
 } from '$lib/server/documents/visibility';
 import { loadRecordDates, ownedByLinkedRecord } from '$lib/server/documents/deadlines';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { isDocumentTargetKind, loadTargetNames } from '$lib/server/documents/targets';
 import { aboutLine, briefingCaption, countTitle, latestJobPerDocument } from './pure';
@@ -120,7 +121,7 @@ const unreviewedImports: Source = async () => {
 const inboxBacklog: Source = async (handle: Queryable = db, actor = null) => {
 	let inboxId: string;
 	try {
-		inboxId = await systemShelfId('inbox', handle);
+		inboxId = await systemShelfId(SYSTEM_SHELF_KEYS.inbox, handle);
 	} catch {
 		// `systemShelfId` throws for a household that has no such shelf, and it is
 		// right to: code that files INTO the inbox must not guess. A source that
@@ -143,7 +144,7 @@ const inboxBacklog: Source = async (handle: Queryable = db, actor = null) => {
 			hue: 'blue',
 			title: countTitle(waiting, 'document waiting to be filed', 'documents waiting to be filed'),
 			detail: 'Until they are filed, no record shows them and no expiry date is watched.',
-			href: '/documents/review',
+			href: '/documents?shelf=inbox',
 			rank: 25
 		}
 	];

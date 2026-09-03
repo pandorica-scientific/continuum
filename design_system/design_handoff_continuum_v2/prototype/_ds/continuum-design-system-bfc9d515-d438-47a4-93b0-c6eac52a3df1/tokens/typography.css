@@ -1,0 +1,14 @@
+/* The type ramp — nine whole-pixel steps; half-pixel drift was merged into them. */
+:root{
+--font-sans:'Inter Variable','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+--font-mono:'Source Code Pro',ui-monospace,monospace;
+--text-2xs:10px;--text-xs:11px;--text-sm:12px;--text-md:13px;--text-lg:14px;--text-xl:16px;--text-2xl:19px;--text-3xl:22px;--text-4xl:28px;
+/* Role aliases */
+--type-screen-title:600 var(--text-4xl)/1.2 var(--font-sans);
+--type-section-heading:600 var(--text-3xl)/1.25 var(--font-sans);
+--type-metric-value:600 var(--text-2xl)/1.2 var(--font-mono);
+--type-body:400 var(--text-md)/1.55 var(--font-sans);
+--type-eyebrow:400 var(--text-xs)/1.4 var(--font-sans);
+--tracking-title:-0.02em;--tracking-heading:-0.01em;--tracking-eyebrow:0.1em;
+--leading-body:1.55;--leading-control:1.35;
+}

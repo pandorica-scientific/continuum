@@ -14,6 +14,7 @@
 	import FloorPlan from '$lib/components/FloorPlan.svelte';
 	import FloorPlanEditor from '$lib/components/FloorPlanEditor.svelte';
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
+	import FigureGrid from '$lib/components/FigureGrid.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	let { data, form } = $props();
@@ -40,14 +41,6 @@
 	// A lease with no agreed end. The date input is disabled rather than hidden so
 	// the field it replaces stays where the eye expects it.
 	let openEnded = $state(false);
-	/** Which figure tile is open for editing, by its label. */
-	let editingFigure = $state<string | null>(null);
-	const figureSaved =
-		() =>
-		async ({ update }: { update: () => Promise<void> }) => {
-			editingFigure = null;
-			await update();
-		};
 	let addingBill = $state(false);
 
 	/**
@@ -185,47 +178,7 @@
 				</InfoHint>
 			</span>
 		</div>
-		<div class="tiles">
-			{#each data.detail.metrics as m (m.label)}
-				<div class="tile">
-					<span class="t-label">
-						{m.label}
-						{#if m.edit}
-							<!-- Only on the two figures the property actually stores. The rest
-							     are computed from the loans and the tenancy, and a pencil on
-							     those would offer an edit the next recompute discards. -->
-							<button
-								type="button"
-								class="pencil"
-								aria-label="Edit {m.label}"
-								onclick={() => (editingFigure = editingFigure === m.label ? null : m.label)}
-							>
-								✏️
-							</button>
-						{/if}
-					</span>
-					{#if m.edit && editingFigure === m.label}
-						<form method="POST" action="?/setFigure" use:enhance={figureSaved} class="figure-form">
-							<input type="hidden" name="propertyId" value={data.detail.id} />
-							<input type="hidden" name="field" value={m.edit.field} />
-							<input name="amount" inputmode="decimal" value={m.edit.amount} />
-							{#if m.edit.field === 'value'}
-								<input name="valuedOn" type="date" value={m.edit.valuedOn ?? ''} />
-							{/if}
-							<div class="figure-actions">
-								<button type="submit" class="btn btn-primary">Save</button>
-								<button type="button" class="btn" onclick={() => (editingFigure = null)}>
-									Cancel
-								</button>
-							</div>
-						</form>
-					{:else}
-						<span class="mono t-value" style:color={m.color}>{m.value}</span>
-					{/if}
-					<span class="t-note">{m.note}</span>
-				</div>
-			{/each}
-		</div>
+		<FigureGrid figures={data.detail.metrics} recordId={data.detail.id} action="?/setFigure" />
 	</section>
 
 	<section class="card stack">
@@ -726,53 +679,6 @@
 	}
 	.tab.add {
 		border-style: dashed;
-	}
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: var(--space-6);
-	}
-	.tile {
-		background: var(--card);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		padding: var(--space-6) var(--space-7);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-	.pencil {
-		background: none;
-		border: 0;
-		padding: 0 0 0 4px;
-		cursor: pointer;
-		font-size: var(--text-2xs);
-		opacity: 0.65;
-	}
-	.pencil:hover {
-		opacity: 1;
-	}
-	.figure-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		padding: 4px 0;
-	}
-	.figure-actions {
-		display: flex;
-		gap: var(--space-3);
-	}
-	.t-label {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	.t-value {
-		font-size: var(--text-2xl);
-		font-weight: 600;
-	}
-	.t-note {
-		font-size: var(--text-xs);
-		color: var(--fg3);
 	}
 	.two-col {
 		display: grid;

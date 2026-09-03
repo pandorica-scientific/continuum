@@ -110,7 +110,7 @@ describe('the inbox backlog', () => {
 	// The backlog is a shelf, not a state: a document filed on finance has been
 	// dealt with, and counting it would make the number never reach zero.
 	it('does not count a document that has already been filed', async () => {
-		await seedDocument({ name: 'Payslip · March', shelfKey: 'finance' });
+		await seedDocument({ name: 'Payslip · March', shelfKey: 'income_tax' });
 
 		const { items } = await buildBriefing(asAdmin);
 		expect(backlogItem(items)).toBeUndefined();
@@ -120,13 +120,13 @@ describe('the inbox backlog', () => {
 		await seedDocument({ name: 'Passport scan', shelfKey: 'inbox' });
 
 		const { items } = await buildBriefing(asAdmin);
-		expect(backlogItem(items)?.href).toBe('/documents/review');
+		expect(backlogItem(items)?.href).toBe('/documents?shelf=inbox');
 	});
 });
 
 describe('extraction failures', () => {
 	it('raises the one document whose reading failed, and opens it', async () => {
-		const id = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'finance' });
+		const id = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'income_tax' });
 		await seedExtraction(id, 'failed', new Date('2026-02-01T00:00:00Z'), 'mupdf: cannot open file');
 
 		const { items } = await buildBriefing(asAdmin);
@@ -139,7 +139,7 @@ describe('extraction failures', () => {
 	// The failed row stays in the table for ever. Only the newest attempt says
 	// whether the document has text today.
 	it('says nothing about a failure a later run cleared', async () => {
-		const id = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'finance' });
+		const id = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'income_tax' });
 		await seedExtraction(id, 'failed', new Date('2026-01-01T00:00:00Z'), 'mupdf: cannot open file');
 		await seedExtraction(id, 'done', new Date('2026-03-01T00:00:00Z'));
 
@@ -148,8 +148,8 @@ describe('extraction failures', () => {
 	});
 
 	it('stops naming one document once there are two of them', async () => {
-		const first = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'finance' });
-		const second = await seedDocument({ name: 'Lease · Karlín', shelfKey: 'tenancy' });
+		const first = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'income_tax' });
+		const second = await seedDocument({ name: 'Lease · Karlín', shelfKey: 'property' });
 		await seedExtraction(first, 'failed', new Date('2026-02-01T00:00:00Z'), 'mupdf: cannot open');
 		await seedExtraction(second, 'failed', new Date('2026-02-02T00:00:00Z'));
 
@@ -162,7 +162,7 @@ describe('extraction failures', () => {
 	it('keeps a restricted document out of a member’s strip', async () => {
 		const id = await seedDocument({
 			name: 'Divorce papers',
-			shelfKey: 'household',
+			shelfKey: 'inventory',
 			sensitivity: 'restricted'
 		});
 		await seedExtraction(id, 'failed', new Date('2026-02-01T00:00:00Z'));
@@ -199,7 +199,7 @@ describe('a document’s about line', () => {
 
 		const documentId = await seedDocument({
 			name: 'Renting contract · Karlín',
-			shelfKey: 'tenancy',
+			shelfKey: 'property',
 			expiresOn: soon
 		});
 		await testDb.insert(documentLink).values([
@@ -209,7 +209,7 @@ describe('a document’s about line', () => {
 
 		const { items } = await buildBriefing(asAdmin);
 		const item = items.find((i) => i.kind === 'Document');
-		expect(item?.detail).toContain('Filed under Tenancy, about ');
+		expect(item?.detail).toContain('Filed under Property, about ');
 		expect(item?.detail).toContain('Flat Karlín · Martin Dvořák');
 		expect(item?.detail).toContain('Mortgage ČS');
 		expect(item?.href).toBe(`/documents?doc=${documentId}`);

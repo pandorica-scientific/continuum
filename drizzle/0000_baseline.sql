@@ -121,7 +121,8 @@ CREATE TABLE "document" (
 	"expiry_verb" text DEFAULT 'expires' NOT NULL,
 	"period_on" date,
 	"period_end_on" date,
-	"content_hash" text
+	"content_hash" text,
+	"lane_id" uuid
 );
 --> statement-breakpoint
 CREATE TABLE "document_identity" (
@@ -176,6 +177,10 @@ CREATE TABLE "shelf" (
 	"emoji" text DEFAULT '🗂️' NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"system" boolean DEFAULT false NOT NULL,
+	"template" text NOT NULL,
+	"unit" text NOT NULL,
+	"question" text NOT NULL,
+	"lane_seeds" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "shelf_key_unique" UNIQUE("key")
 );
@@ -191,6 +196,7 @@ CREATE TABLE "subject" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"emoji" text DEFAULT '🏠' NOT NULL,
+	"shelf_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"archived_at" timestamp with time zone,
 	"active_from" date,
@@ -218,10 +224,11 @@ CREATE TABLE "engagement" (
 --> statement-breakpoint
 CREATE TABLE "lane" (
 	"id" uuid PRIMARY KEY NOT NULL,
-	"organisation_id" uuid NOT NULL,
+	"entity_id" uuid NOT NULL,
 	"person_id" uuid,
 	"label" text NOT NULL,
 	"cadence" text NOT NULL,
+	"every" integer DEFAULT 1 NOT NULL,
 	"conditions" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"accepted_count" integer DEFAULT 0 NOT NULL,
 	"corrected_count" integer DEFAULT 0 NOT NULL,
@@ -234,6 +241,7 @@ CREATE TABLE "organisation" (
 	"kind" text DEFAULT 'other' NOT NULL,
 	"emoji" text DEFAULT '🏛️' NOT NULL,
 	"notes" text,
+	"shelf_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -711,11 +719,13 @@ ALTER TABLE "document_text" ADD CONSTRAINT "document_text_document_id_document_i
 ALTER TABLE "document_text_chunk" ADD CONSTRAINT "document_text_chunk_document_id_document_text_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document_text"("document_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_type" ADD CONSTRAINT "shelf_type_type_document_type_key_fk" FOREIGN KEY ("type") REFERENCES "public"."document_type"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "subject" ADD CONSTRAINT "subject_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement" ADD CONSTRAINT "engagement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement" ADD CONSTRAINT "engagement_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement" ADD CONSTRAINT "engagement_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lane" ADD CONSTRAINT "lane_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lane" ADD CONSTRAINT "lane_entity_id_entity_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "lane" ADD CONSTRAINT "lane_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "organisation" ADD CONSTRAINT "organisation_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_link" ADD CONSTRAINT "contact_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_link" ADD CONSTRAINT "document_link_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -794,12 +804,14 @@ CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_has
 CREATE INDEX "dtc_document_idx" ON "document_text_chunk" USING btree ("document_id");--> statement-breakpoint
 CREATE INDEX "shelf_type_type_idx" ON "shelf_type" USING btree ("type");--> statement-breakpoint
 CREATE UNIQUE INDEX "subject_name_ci_idx" ON "subject" USING btree (lower("name"));--> statement-breakpoint
+CREATE INDEX "subject_shelf_id_idx" ON "subject" USING btree ("shelf_id");--> statement-breakpoint
 CREATE INDEX "engagement_organisation_idx" ON "engagement" USING btree ("organisation_id");--> statement-breakpoint
 CREATE INDEX "engagement_person_idx" ON "engagement" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "engagement_document_idx" ON "engagement" USING btree ("document_id");--> statement-breakpoint
-CREATE INDEX "lane_organisation_idx" ON "lane" USING btree ("organisation_id");--> statement-breakpoint
+CREATE INDEX "lane_entity_idx" ON "lane" USING btree ("entity_id");--> statement-breakpoint
 CREATE INDEX "lane_person_idx" ON "lane" USING btree ("person_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "organisation_name_ci_idx" ON "organisation" USING btree (lower("name"));--> statement-breakpoint
+CREATE INDEX "organisation_shelf_id_idx" ON "organisation" USING btree ("shelf_id");--> statement-breakpoint
 CREATE INDEX "contact_link_target_idx" ON "contact_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "document_link_target_idx" ON "document_link" USING btree ("target_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "entity_id_kind_key" ON "entity" USING btree ("id","kind");--> statement-breakpoint
@@ -963,8 +975,14 @@ ALTER TABLE account ADD CONSTRAINT account_kind_check
 ALTER TABLE organisation ADD CONSTRAINT organisation_kind_check
 	CHECK (kind in ('employer', 'authority', 'insurer', 'other'));
 --> statement-breakpoint
+ALTER TABLE shelf ADD CONSTRAINT shelf_template_check
+	CHECK (template in ('queue', 'wallet', 'completeness', 'dossier', 'timeline', 'kit', 'obligations'));
+--> statement-breakpoint
+ALTER TABLE shelf ADD CONSTRAINT shelf_unit_check
+	CHECK (unit in ('document', 'person', 'account', 'organisation', 'property', 'subject'));
+--> statement-breakpoint
 ALTER TABLE lane ADD CONSTRAINT lane_cadence_check
-	CHECK (cadence in ('monthly', 'yearly', 'none'));
+	CHECK (cadence in ('monthly', 'yearly', 'once', 'none'));
 --> statement-breakpoint
 ALTER TABLE category_group ADD CONSTRAINT category_group_role_check
 	CHECK (role in ('income', 'expense', 'savings'));
@@ -1081,6 +1099,20 @@ ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 ALTER TABLE engagement ADD CONSTRAINT engagement_period_order_check
 	CHECK (ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on);
 --> statement-breakpoint
+-- Every N years, where N is a whole number of years. Zero would divide the
+-- ribbon by nothing and a negative would run it backwards.
+ALTER TABLE lane ADD CONSTRAINT lane_every_check CHECK (every >= 1);
+--> statement-breakpoint
+-- `document.lane_id` lives here rather than on the column, because `lane` is
+-- declared in this file and `document` in the one that imports it: a Drizzle
+-- reference would make the two modules import each other. SET NULL, so deleting
+-- a lane sends its paper back to the card's history and never deletes it.
+ALTER TABLE document ADD CONSTRAINT document_lane_id_fk
+	FOREIGN KEY (lane_id) REFERENCES lane(id) ON DELETE SET NULL;
+--> statement-breakpoint
+-- The covering index every foreign key gets; `schema-invariants` holds us to it.
+CREATE INDEX document_lane_idx ON document (lane_id);
+--> statement-breakpoint
 
 -- ---- The entity supertype ----
 DO $outer$
@@ -1191,10 +1223,6 @@ INSERT INTO "bank" ("key", "label", "emoji") VALUES
 	('other', 'Other', '💼')
 ON CONFLICT ("key") DO NOTHING;
 --> statement-breakpoint
--- One place for a document to always belong: the household. The documents
--- screen offers it as a tick beside the people, and nothing else creates it.
-INSERT INTO subject (id, name, emoji) VALUES (gen_random_uuid(), 'Household', '🏠');
---> statement-breakpoint
 INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUES
 	('contract', 'Contract', true, 0, NULL),
 	('invoice', 'Invoice', true, 10, NULL),
@@ -1218,50 +1246,45 @@ INSERT INTO document_type (key, label, builtin, sort_order, reminder_days) VALUE
 	('other', 'Other', true, 160, NULL)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
-INSERT INTO shelf (id, key, label, emoji, sort_order, system) VALUES
-	(gen_random_uuid(), 'inbox',      'Inbox',        '📬',  0, true),
-	(gen_random_uuid(), 'identity',   'IDs',          '🪪', 10, true),
-	(gen_random_uuid(), 'statements', 'Statements',   '🧾', 20, true),
-	(gen_random_uuid(), 'finance',    'Income & Tax', '🏦', 30, true),
-	(gen_random_uuid(), 'household',  'Household',    '🔧', 40, true),
-	(gen_random_uuid(), 'family',     'Family',       '👶', 50, true),
-	(gen_random_uuid(), 'health',     'Health',       '🩺', 60, true),
-	(gen_random_uuid(), 'property',   'Property',     '🏠', 70, true),
-	(gen_random_uuid(), 'tenancy',    'Tenancy',      '🔑', 80, false),
-	(gen_random_uuid(), 'vehicles',   'Vehicles',     '🚗', 90, false)
+INSERT INTO shelf (id, key, label, emoji, sort_order, system, template, unit, question, lane_seeds) VALUES
+	(gen_random_uuid(), 'inbox', 'Inbox', '📥', 0, true, 'queue', 'document', 'What still needs deciding?', '[]'::jsonb),
+	(gen_random_uuid(), 'identity', 'IDs', '🪪', 10, true, 'wallet', 'person', 'Does everybody hold a valid document?', '[]'::jsonb),
+	(gen_random_uuid(), 'statements', 'Statements', '🧾', 20, true, 'completeness', 'account', 'Is any month missing?', '[]'::jsonb),
+	(gen_random_uuid(), 'income_tax', 'Income & Tax', '🏛️', 30, true, 'dossier', 'organisation', 'Which filing never arrived?', '[]'::jsonb),
+	(gen_random_uuid(), 'health', 'Health', '🩺', 40, true, 'timeline', 'person', 'What happened to this person, and when?', '[]'::jsonb),
+	(gen_random_uuid(), 'inventory', 'Inventory', '🔧', 50, true, 'kit', 'subject', 'Is this still under warranty?', '[{"label":"Receipt","cadence":"once","every":1},{"label":"Warranty","cadence":"once","every":1},{"label":"Manual","cadence":"once","every":1}]'::jsonb),
+	(gen_random_uuid(), 'property', 'Property', '🏠', 60, true, 'obligations', 'property', 'What does this address require of us?', '[{"label":"Home insurance","cadence":"yearly","every":1},{"label":"Boiler inspection","cadence":"yearly","every":1}]'::jsonb),
+	(gen_random_uuid(), 'vehicles', 'Vehicles', '🚗', 70, false, 'obligations', 'subject', 'Is this vehicle covered and legal?', '[{"label":"Insurance","cadence":"yearly","every":1},{"label":"Technical inspection","cadence":"yearly","every":2},{"label":"Road tax","cadence":"yearly","every":1}]'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
 	((SELECT id FROM shelf WHERE key = 'identity'), 'id_document', 0),
 	((SELECT id FROM shelf WHERE key = 'identity'), 'certificate', 1),
-	((SELECT id FROM shelf WHERE key = 'family'), 'certificate', 0),
-	((SELECT id FROM shelf WHERE key = 'family'), 'contract', 1),
-	((SELECT id FROM shelf WHERE key = 'family'), 'correspondence', 2),
+	((SELECT id FROM shelf WHERE key = 'statements'), 'bank_statement', 0),
+	((SELECT id FROM shelf WHERE key = 'statements'), 'broker_report', 1),
+	((SELECT id FROM shelf WHERE key = 'income_tax'), 'payslip', 0),
+	((SELECT id FROM shelf WHERE key = 'income_tax'), 'tax_document', 1),
+	((SELECT id FROM shelf WHERE key = 'income_tax'), 'certificate', 2),
+	((SELECT id FROM shelf WHERE key = 'income_tax'), 'correspondence', 3),
+	((SELECT id FROM shelf WHERE key = 'income_tax'), 'contract', 4),
 	((SELECT id FROM shelf WHERE key = 'health'), 'medical_record', 0),
 	((SELECT id FROM shelf WHERE key = 'health'), 'certificate', 1),
 	((SELECT id FROM shelf WHERE key = 'health'), 'insurance_policy', 2),
 	((SELECT id FROM shelf WHERE key = 'health'), 'invoice', 3),
+	((SELECT id FROM shelf WHERE key = 'inventory'), 'warranty', 0),
+	((SELECT id FROM shelf WHERE key = 'inventory'), 'manual', 1),
+	((SELECT id FROM shelf WHERE key = 'inventory'), 'invoice', 2),
+	((SELECT id FROM shelf WHERE key = 'inventory'), 'receipt', 3),
+	((SELECT id FROM shelf WHERE key = 'inventory'), 'contract', 4),
 	((SELECT id FROM shelf WHERE key = 'property'), 'insurance_policy', 0),
 	((SELECT id FROM shelf WHERE key = 'property'), 'technical_plan', 1),
 	((SELECT id FROM shelf WHERE key = 'property'), 'contract', 2),
 	((SELECT id FROM shelf WHERE key = 'property'), 'invoice', 3),
-	((SELECT id FROM shelf WHERE key = 'tenancy'), 'contract', 0),
-	((SELECT id FROM shelf WHERE key = 'tenancy'), 'invoice', 1),
-	((SELECT id FROM shelf WHERE key = 'tenancy'), 'correspondence', 2),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'warranty', 0),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'insurance_policy', 1),
+	((SELECT id FROM shelf WHERE key = 'property'), 'correspondence', 4),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'insurance_policy', 0),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'contract', 1),
 	((SELECT id FROM shelf WHERE key = 'vehicles'), 'invoice', 2),
-	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 3),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'payslip', 0),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'tax_document', 1),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'certificate', 2),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'correspondence', 3),
-	((SELECT id FROM shelf WHERE key = 'finance'), 'contract', 4),
-	((SELECT id FROM shelf WHERE key = 'household'), 'warranty', 0),
-	((SELECT id FROM shelf WHERE key = 'household'), 'manual', 1),
-	((SELECT id FROM shelf WHERE key = 'household'), 'invoice', 2),
-	((SELECT id FROM shelf WHERE key = 'household'), 'receipt', 3),
-	((SELECT id FROM shelf WHERE key = 'household'), 'contract', 4),
-	((SELECT id FROM shelf WHERE key = 'statements'), 'bank_statement', 0),
-	((SELECT id FROM shelf WHERE key = 'statements'), 'broker_report', 1)
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'correspondence', 3),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'warranty', 4),
+	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 5)
 ON CONFLICT (shelf_id, type) DO NOTHING;

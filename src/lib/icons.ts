@@ -160,6 +160,12 @@ export const ICONS = {
 	// time on the statement ribbon — where an arrow reads as "go somewhere".
 	chevronLeft: [{ path: 'M15 5l-7 7 7 7' }],
 	chevronRight: [{ path: 'M9 5l7 7-7 7' }],
+	chevronDown: [{ path: 'M5 9l7 7 7-7' }],
+	// The overflow menu, three dots on the row it belongs to.
+	dots: [{ circle: [5.5, 12, 1.3] }, { circle: [12, 12, 1.3] }, { circle: [18.5, 12, 1.3] }],
+	// A drawing pin seen from the side: the document a card's relationship rests
+	// on, one click from every cell it explains.
+	pin: [{ path: 'M9 4h6l-1 6 3 3v1H7v-1l3-3z' }, { line: [12, 14, 12, 20] }],
 
 	// Overview board and briefing
 	//

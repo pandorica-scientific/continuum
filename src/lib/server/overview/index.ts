@@ -36,6 +36,7 @@ import {
 	visibleDocumentPredicate,
 	type Actor
 } from '$lib/server/documents/visibility';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { groupSummary } from '$lib/documents/view';
 import { statementStatus } from '$lib/statements/cadence';
@@ -492,7 +493,7 @@ const builders: Record<string, Builder> = {
 		// `systemShelfId` throws where the shelf is not there, and it is right to
 		// for anything that FILES into it. A panel that only counts has no such
 		// stake: nothing to count, nothing to say.
-		const inboxId = await systemShelfId('inbox').catch(() => null);
+		const inboxId = await systemShelfId(SYSTEM_SHELF_KEYS.inbox).catch(() => null);
 
 		const [inboxRows, shelfRows, expiring, filed] = await Promise.all([
 			// Deliberately WITHOUT the archive half, because that is exactly what

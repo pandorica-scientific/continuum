@@ -51,7 +51,21 @@ function ratio(a: Rgb, b: Rgb): number {
 	return (hi + 0.05) / (lo + 0.05);
 }
 
-const HUES = ['green', 'yellow', 'red', 'blue', 'teal', 'purple', 'orange'] as const;
+/**
+ * Derived, never listed. A hardcoded roster is a hole that opens silently: this
+ * list held seven names while the palette had nine tint families, so `--indigo`
+ * and `--brand` shipped as pill fills that no test had ever measured. Reading the
+ * families out of the stylesheet means a hue added tomorrow is checked tomorrow.
+ *
+ * A tint with no ink of the same name is not a pill and is skipped — `--grey-tint`
+ * is a ground, and there is no `--grey` to set on it.
+ */
+function pillHues(tokens: Record<string, string>): string[] {
+	return Object.keys(tokens)
+		.filter((name) => name.endsWith('-tint'))
+		.map((name) => name.slice(2, -'-tint'.length))
+		.filter((hue) => tokens[`--${hue}`] !== undefined);
+}
 
 /** The canvas is a gradient; its lighter end is the harder ground for dark ink. */
 function ground(tokens: Record<string, string>): Rgb {
@@ -65,8 +79,16 @@ describe.each([
 ])('%s theme contrast', (_name, selector) => {
 	const tokens = block(selector);
 
+	const hues = pillHues(tokens);
+
+	// Guards the derivation itself: an empty roster would make every case below
+	// vacuous, which is exactly the failure the hardcoded list used to hide.
+	it('has a pill hue to check', () => {
+		expect(hues.length).toBeGreaterThan(7);
+	});
+
 	// A pill is its hue as text on its own tint, over a card, over the canvas.
-	it.each(HUES)('%s pill text clears AA on its own tint', (hue) => {
+	it.each(hues)('%s pill text clears AA on its own tint', (hue) => {
 		const tint = tokens[`--${hue}-tint`];
 		const ink = tokens[`--${hue}`];
 		expect(tint, `--${hue}-tint is missing`).toBeDefined();

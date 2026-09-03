@@ -14,7 +14,8 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
 	import TaxStatementDialog from '$lib/components/TaxStatementDialog.svelte';
-	import TaxSummaryBand from '$lib/components/TaxSummaryBand.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
+	import { taxSummaryTiles } from '$lib/tax-tiles';
 	import TaxMatrix from '$lib/components/TaxMatrix.svelte';
 	import TaxYearDetail from '$lib/components/TaxYearDetail.svelte';
 	import TaxYearChart from '$lib/charts/TaxYearChart.svelte';
@@ -77,7 +78,7 @@
 	<div class="error">{form.message}</div>
 {/if}
 
-<TaxSummaryBand years={data.years} currency={data.prefs.currency} />
+<SummaryBand tiles={taxSummaryTiles(data.years, data.prefs.currency)} />
 
 {#if data.people.length > 1}
 	<div class="filter">

@@ -481,17 +481,16 @@ export function aboutOptionLabel(option: { name: string; meta?: string; count: n
 /**
  * One subject as the rail draws it.
  *
- * `household` travels with the row rather than being worked out from the name:
- * the seeded subject may be renamed to anything, and a view that recognised it
- * by the word "Household" would offer to archive the household the first time
- * a Czech household called it "Domácnost".
+ * No `household` flag since v0.8.0: nothing seeds a catch-all subject any more,
+ * because a subject now belongs to a shelf and paper that names no card sits on
+ * the dossier's "Not assigned yet" card instead — which is drawn rather than
+ * stored, so there is nothing to protect from being archived.
  */
 export interface RailSubject {
 	id: string;
 	name: string;
 	emoji: string;
 	archived: boolean;
-	household: boolean;
 	/** How much paper is filed under it, behind the reader's own read rule. */
 	count: number;
 }
@@ -505,23 +504,16 @@ export interface RailSubject {
  * loud, because a subject that was archived and then vanished from the only
  * screen that can un-archive it is a one-way door.
  *
- * The household leads, because it is the one subject every document may belong
- * to; the rest are by name, folded, so "dog" and "Dog" sort together; archived
- * ones sit last, where a dimmed row is a footnote rather than a gap in the
- * middle of the list.
+ * By name, folded, so "dog" and "Dog" sort together; archived ones sit last,
+ * where a dimmed row is a footnote rather than a gap in the middle of the list.
  */
-export function railSubjects<T extends { archived: boolean; household: boolean; name: string }>(
+export function railSubjects<T extends { archived: boolean; name: string }>(
 	subjects: T[],
 	includeArchived: boolean
 ): { shown: T[]; hidden: number } {
 	const hidden = subjects.filter((s) => s.archived).length;
 	const shown = subjects
 		.filter((s) => includeArchived || !s.archived)
-		.sort(
-			(a, b) =>
-				Number(a.archived) - Number(b.archived) ||
-				Number(b.household) - Number(a.household) ||
-				a.name.localeCompare(b.name)
-		);
+		.sort((a, b) => Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name));
 	return { shown, hidden: includeArchived ? 0 : hidden };
 }

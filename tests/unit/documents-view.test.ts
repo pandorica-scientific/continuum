@@ -27,7 +27,7 @@ const row = (over: Partial<DocRow> = {}): DocRow => ({
 	id: over.id ?? 'd1',
 	name: over.name ?? 'A document',
 	type: over.type ?? 'other',
-	shelfKey: over.shelfKey ?? 'household',
+	shelfKey: over.shelfKey ?? 'inventory',
 	shelfLabel: over.shelfLabel ?? 'Household',
 	entities: over.entities ?? [],
 	addedOn: over.addedOn ?? '2026-01-01',

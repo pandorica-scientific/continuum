@@ -134,7 +134,7 @@ describe('which currency a slip row is read in', () => {
 		await makeDocument(testDb, {
 			id,
 			name: `Payslip ${month} · Robert`,
-			shelfKey: 'finance',
+			shelfKey: 'income_tax',
 			type: 'payslip',
 			storedName: `${month}.pdf`,
 			ext: 'PDF',

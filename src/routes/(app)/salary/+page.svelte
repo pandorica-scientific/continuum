@@ -12,7 +12,8 @@
 	import Segmented from '$lib/components/Segmented.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import SalaryMatrix from '$lib/components/SalaryMatrix.svelte';
-	import SalarySummaryBand from '$lib/components/SalarySummaryBand.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
+	import { salarySummaryTiles } from '$lib/salary-tiles';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
 	import BulkPayslipDialog from '$lib/components/BulkPayslipDialog.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
@@ -126,7 +127,9 @@
 	/>
 {/if}
 
-<SalarySummaryBand {years} currency={data.baseCurrency} scope={selected ? 'person' : 'household'} />
+<SummaryBand
+	tiles={salarySummaryTiles(years, data.baseCurrency, selected ? 'person' : 'household')}
+/>
 
 {#if data.people.length > 1}
 	<div class="filter">

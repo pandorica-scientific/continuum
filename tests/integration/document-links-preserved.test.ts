@@ -100,7 +100,7 @@ async function seedDocument(name: string, links: string[]): Promise<string> {
 	await makeDocument(testDb, {
 		id: DOC,
 		name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		storedName: `${DOC}.pdf`,
 		ext: 'PDF',
@@ -306,7 +306,7 @@ describe('saving a document', () => {
 		await makeDocument(testDb, {
 			id: other,
 			name: 'Something else',
-			shelfKey: 'household',
+			shelfKey: 'inventory',
 			type: 'other',
 			addedOn: '2026-01-01'
 		});

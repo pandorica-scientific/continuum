@@ -14,16 +14,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { documentLink, subject } from '$lib/server/db/schema';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 import { documentsAbout } from '$lib/server/documents/targets';
 import {
 	addSubject,
 	archiveSubject,
-	HOUSEHOLD_NOT_ARCHIVABLE,
-	householdSubjectId,
 	listSubjects,
 	renameSubject,
-	setSubjectEmoji,
 	SUBJECT_NAME_TAKEN,
 	unarchiveSubject
 } from '$lib/server/documents/subjects';
@@ -41,7 +39,8 @@ vi.mock('$env/dynamic/private', () => ({
 let harness: Harness;
 let testDb: TestDb;
 let previousUrl: string | undefined;
-let household: string;
+/** A second subject, so "archiving one" can be told from "archiving all". */
+let other: string;
 
 const asAdmin = {
 	person: { id: 'a', name: 'A', initials: 'A', role: 'admin' as const, theme: null }
@@ -56,7 +55,6 @@ beforeAll(async () => {
 	process.env.DATABASE_URL = harness.url;
 	await harness.applyMigrations(ALL_MIGRATIONS);
 	testDb = harness.db;
-	household = (await householdSubjectId(testDb))!;
 }, 180_000);
 
 afterAll(async () => {
@@ -67,11 +65,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql`delete from document`;
-	await harness.sql`delete from subject where id <> ${household}`;
-	await harness.sql`update subject
-		set name = 'Household', emoji = '🏠', archived_at = null,
-		    active_from = null, active_to = null
-		where id = ${household}`;
+	await harness.sql`delete from subject`;
+	other = await addSubject('The house', '🏠', await shelfIdByKey('inventory', testDb), testDb);
 });
 
 /** One document, filed under whichever subjects it belongs to. */
@@ -84,7 +79,7 @@ async function fileUnder(
 	await makeDocument(testDb, {
 		id,
 		name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		sensitivity,
 		addedOn: '2026-01-01'
@@ -115,7 +110,6 @@ async function loadDocuments(locals: Locals, search = '') {
 			name: string;
 			emoji: string;
 			archived: boolean;
-			household: boolean;
 			count: number;
 		}[];
 	};
@@ -134,18 +128,19 @@ async function postAction(action: string, fields: Record<string, string>, locals
 }
 
 describe('the subjects list', () => {
-	it('names the seeded household and marks it as the one that cannot be archived', async () => {
-		const subjects = await listSubjects(testDb);
-		const home = subjects.find((s) => s.id === household)!;
-		expect(home.name).toBe('Household');
-		expect(home.household).toBe(true);
-		expect(subjects.filter((s) => s.household)).toHaveLength(1);
+	it('seeds no subject at all, because a subject now belongs to a shelf', async () => {
+		// v0.7.x seeded a catch-all "Household" so a document always had something
+		// to be about. A subject lives on a shelf now, and paper that names no
+		// card sits on the dossier's "Not assigned yet" — drawn, not stored, so
+		// there is nothing to protect from being archived.
+		const before = await listSubjects(testDb);
+		expect(before.filter((s) => s.name === 'Household')).toHaveLength(0);
 	});
 
 	it('counts the paper filed under each subject behind the read rule', async () => {
 		// The same invariant the shelf counts carry: a member seeing a count that
 		// includes a restricted document has been told it exists.
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		await fileUnder('Insurance', [car]);
 		await fileUnder('Service book', [car]);
 		await fileUnder('Private valuation', [car], 'restricted');
@@ -159,7 +154,7 @@ describe('the subjects list', () => {
 
 describe('archiving a subject', () => {
 	it('writes archived_at and closes the active period', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		await archiveSubject(car, '2026-08-29', testDb);
 
 		const found = await row(car);
@@ -168,7 +163,7 @@ describe('archiving a subject', () => {
 	});
 
 	it('keeps a period that had already been closed by hand', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		await testDb.update(subject).set({ activeTo: '2020-01-31' }).where(eq(subject.id, car));
 		await archiveSubject(car, '2026-08-29', testDb);
 
@@ -176,9 +171,9 @@ describe('archiving a subject', () => {
 	});
 
 	it('takes its paper out of every read path the predicate already guards', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		const insurance = await fileUnder('Car insurance', [car]);
-		const letter = await fileUnder('Letter about the house', [household]);
+		const letter = await fileUnder('Letter about the house', [other]);
 
 		await archiveSubject(car, '2026-08-29', testDb);
 
@@ -198,36 +193,18 @@ describe('archiving a subject', () => {
 	});
 
 	it('demotes only the paper filed under it alone', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
-		const shared = await fileUnder('Garage lease', [car, household]);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
+		const shared = await fileUnder('Garage lease', [car, other]);
 		await archiveSubject(car, '2026-08-29', testDb);
 
 		const listed = await loadDocuments(asAdmin);
 		expect(listed.rows.map((r) => r.id)).toEqual([shared]);
 	});
-
-	it('refuses the household, because that is not a thing you archive', async () => {
-		await expect(archiveSubject(household, '2026-08-29', testDb)).rejects.toThrow(
-			HOUSEHOLD_NOT_ARCHIVABLE
-		);
-		expect((await row(household)).archivedAt).toBeNull();
-	});
-
-	it('still refuses the household after it has been renamed', async () => {
-		// The household is identified by being the row the baseline seeded, not
-		// by the word "Household" — the household may call itself anything.
-		await renameSubject(household, 'Domácnost', testDb);
-		await setSubjectEmoji(household, '🏡', testDb);
-		expect(await householdSubjectId(testDb)).toBe(household);
-		await expect(archiveSubject(household, '2026-08-29', testDb)).rejects.toThrow(
-			HOUSEHOLD_NOT_ARCHIVABLE
-		);
-	});
 });
 
 describe('unarchiving a subject', () => {
 	it('clears archived_at, leaves the period alone, and the paper comes back', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		const insurance = await fileUnder('Car insurance', [car]);
 		await archiveSubject(car, '2026-08-29', testDb);
 
@@ -246,18 +223,22 @@ describe('unarchiving a subject', () => {
 
 describe('naming a subject', () => {
 	it('refuses a second subject whose name differs only in case', async () => {
-		await addSubject('Car', '🚗', testDb);
-		await expect(addSubject('car', '🚗', testDb)).rejects.toThrow(SUBJECT_NAME_TAKEN);
+		await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
+		await expect(
+			addSubject('car', '🚗', await shelfIdByKey('inventory', testDb), testDb)
+		).rejects.toThrow(SUBJECT_NAME_TAKEN);
 	});
 
 	it('refuses a rename onto a name another subject already has', async () => {
-		await addSubject('Car', '🚗', testDb);
-		const dog = await addSubject('Dog', '🐕', testDb);
+		await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
+		const dog = await addSubject('Dog', '🐕', await shelfIdByKey('inventory', testDb), testDb);
 		await expect(renameSubject(dog, 'CAR', testDb)).rejects.toThrow(SUBJECT_NAME_TAKEN);
 	});
 
 	it('refuses a subject with no name at all', async () => {
-		await expect(addSubject('   ', '🚗', testDb)).rejects.toThrow(/needs a name/i);
+		await expect(
+			addSubject('   ', '🚗', await shelfIdByKey('inventory', testDb), testDb)
+		).rejects.toThrow(/needs a name/i);
 	});
 });
 
@@ -276,7 +257,7 @@ describe('the rail’s actions', () => {
 	});
 
 	it('renames, re-emojis, archives and unarchives through the rail', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		await fileUnder('Car insurance', [car]);
 
 		expect(
@@ -299,24 +280,16 @@ describe('the rail’s actions', () => {
 		expect((await row(car)).archivedAt).toBeNull();
 		expect((await loadDocuments(asAdmin)).rows).toHaveLength(1);
 	});
-
-	it('refuses to archive the household, in the words a person reads', async () => {
-		expect(await postAction('archiveSubject', { id: household }, asAdmin)).toMatchObject({
-			status: 400,
-			data: { message: HOUSEHOLD_NOT_ARCHIVABLE }
-		});
-	});
 });
 
 describe('the rail’s own data', () => {
 	it('hands the screen every subject with its count, and says which are archived', async () => {
-		const car = await addSubject('Car', '🚗', testDb);
+		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		await fileUnder('Car insurance', [car]);
 		await archiveSubject(car, '2026-08-29', testDb);
 
 		const { subjects } = await loadDocuments(asAdmin);
 		const carRow = subjects.find((s) => s.id === car)!;
 		expect(carRow).toMatchObject({ name: 'Car', emoji: '🚗', archived: true, count: 1 });
-		expect(subjects.find((s) => s.id === household)).toMatchObject({ household: true });
 	});
 });

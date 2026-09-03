@@ -120,19 +120,19 @@ describe('the Paper panel', () => {
 	it('leaves the inbox out of the shelf list and counts it on its own', async () => {
 		await seed({ name: 'Scan 004', shelf: 'inbox' });
 		await seed({ name: 'Scan 005', shelf: 'inbox' });
-		await seed({ name: 'Boiler service', shelf: 'household' });
+		await seed({ name: 'Boiler service', shelf: 'inventory' });
 
 		const panel = await paperFor(asAdmin);
 
 		expect(panel.inbox).toBe(2);
-		expect(panel.shelves.map((s) => s.key)).toEqual(['household']);
+		expect(panel.shelves.map((s) => s.key)).toEqual(['inventory']);
 	});
 
 	it('names the nearest expiry still ahead', async () => {
 		await seed({ name: 'Car insurance', shelf: 'vehicles', expiresOn: later });
 		await seed({ name: 'Passport', shelf: 'identity', expiresOn: soon });
 		// Behind us, so it is not what happens next however recent it is.
-		await seed({ name: 'Old lease', shelf: 'tenancy', expiresOn: day(-5) });
+		await seed({ name: 'Old lease', shelf: 'property', expiresOn: day(-5) });
 
 		const panel = await paperFor(asAdmin);
 

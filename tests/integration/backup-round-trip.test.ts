@@ -13,6 +13,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rowId } from '../row-id';
 import * as schema from '$lib/server/db/schema';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeDocument, makePerson } from './fixtures';
@@ -123,7 +124,12 @@ describe('dumpDatabase', () => {
 	});
 
 	it('reloads every row it wrote out', async () => {
-		await testDb.insert(schema.subject).values({ id: SUBJECT, name: 'Car', emoji: '🚗' });
+		await testDb.insert(schema.subject).values({
+			id: SUBJECT,
+			name: 'Car',
+			emoji: '🚗',
+			shelfId: await shelfIdByKey('vehicles', testDb)
+		});
 		await makeDocument(testDb, {
 			id: DOCUMENT,
 			name: 'Passport · Person A',
@@ -146,7 +152,7 @@ describe('dumpDatabase', () => {
 		expect(people.map((p) => p.name)).toEqual(['Person A']);
 		// The baseline seeds a Household subject, so this is the seeded row plus
 		// the one this test added — both of which the dump has to bring back.
-		expect(subjects.map((s) => s.name).sort()).toEqual(['Car', 'Household']);
+		expect(subjects.map((s) => s.name).sort()).toEqual(['Car']);
 		expect(documents.map((d) => d.name)).toEqual(['Passport · Person A']);
 	});
 

@@ -425,7 +425,7 @@ describe('slipDocument', () => {
 			{
 				id: rowId('doc-tax'),
 				name: 'Tax 2026',
-				shelfId: await shelfIdByKey('finance', testDb),
+				shelfId: await shelfIdByKey('income_tax', testDb),
 				type: 'tax_document',
 				storedName: 'tax.pdf',
 				ext: 'PDF',
@@ -435,7 +435,7 @@ describe('slipDocument', () => {
 			{
 				id: rowId('doc-slip'),
 				name: 'Payslip 2026-08',
-				shelfId: await shelfIdByKey('finance', testDb),
+				shelfId: await shelfIdByKey('income_tax', testDb),
 				type: 'payslip',
 				storedName: 'slip.pdf',
 				ext: 'PDF',
@@ -445,7 +445,7 @@ describe('slipDocument', () => {
 			{
 				id: rowId('doc-jan'),
 				name: 'Payslip 2026-01',
-				shelfId: await shelfIdByKey('finance', testDb),
+				shelfId: await shelfIdByKey('income_tax', testDb),
 				type: 'payslip',
 				storedName: 'jan.pdf',
 				ext: 'PDF',

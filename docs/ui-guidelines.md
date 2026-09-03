@@ -66,6 +66,37 @@ modules of its own".
 
 ---
 
+## The screen frame
+
+Every screen draws the same things in the same order, from the same primitives,
+and nothing else above its content:
+
+1. **`ScreenHeader`** — the title with its mark, a one-line caption, and a
+   sub-tab row where the area has more than one screen. Pass `emoji` instead of
+   an icon where the screen IS a record the household named — a shelf, for
+   instance — because drawing the area's icon beside its emoji is two marks for
+   one thing.
+2. **`SummaryBand`** — a row of `MetricTile`, and the only way figures appear at
+   the top of a screen. A screen with no figures has no band. A figure takes a
+   colour only when it is a task: `0 gaps` is the state the archive is for, and
+   a red nought is an alarm about nothing.
+3. **`ControlRow`** — search on the left, actions on the right. One primary
+   action per screen, never two.
+4. **The content.**
+5. **The sidebar**, and on Documents a rail.
+
+`tests/unit/screen-frame.test.ts` fails the build on a screen that draws its own
+row of figures — three screens had grown their own summary band at three
+different type sizes, which is what "the app looks different in different
+places" actually looks like.
+
+**`FigureGrid` is not a summary band**, and the difference is the pencil: a
+summary tile is read, and a figure grid is read AND written. Property's value
+and money-in are stored on the record rather than computed, and the place to
+correct a figure is where it is wrong.
+
+---
+
 ## Themes
 
 Dark is the **default and the base**; light is an **explicit opt-in** with no system

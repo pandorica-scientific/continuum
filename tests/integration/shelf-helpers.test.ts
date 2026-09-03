@@ -22,9 +22,9 @@ afterAll(async () => {
 
 describe('shelf helpers', () => {
 	it('resolves a key to the seeded row', async () => {
-		const id = await shelfIdByKey('finance', harness.db);
+		const id = await shelfIdByKey('income_tax', harness.db);
 		const [row] = await harness.sql<{ key: string }[]>`select key from shelf where id = ${id}`;
-		expect(row.key).toBe('finance');
+		expect(row.key).toBe('income_tax');
 	});
 
 	it('throws on a key nobody seeded, rather than filing into nowhere', async () => {

@@ -87,7 +87,7 @@ describe('the backlog import', () => {
 
 	it('files a mapped path where the folder says, with the type it implies', async () => {
 		await run();
-		expect(await shelfKeyOf('elektrina')).toBe('finance');
+		expect(await shelfKeyOf('elektrina')).toBe('income_tax');
 		const [row] = await testDb.select().from(document).where(eq(document.name, 'elektrina'));
 		expect(row.type).toBe('invoice');
 		expect(row.contentHash).toMatch(/^[0-9a-f]{64}$/);

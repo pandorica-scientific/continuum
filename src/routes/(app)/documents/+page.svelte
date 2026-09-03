@@ -13,6 +13,8 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
+	import ControlRow from '$lib/components/ControlRow.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
@@ -21,9 +23,9 @@
 	import { DOCUMENT_ACCEPT } from '$lib/uploads';
 	import TagField from '$lib/components/TagField.svelte';
 	import TagsPanel from '$lib/components/TagsPanel.svelte';
-	import ShelfBanner from '$lib/documents/ShelfBanner.svelte';
 	import CoverageView from '$lib/statements/CoverageView.svelte';
-	import CounterpartiesView from '$lib/organisations/CounterpartiesView.svelte';
+	import DossierView from '$lib/documents/DossierView.svelte';
+	import QueueView from '$lib/documents/QueueView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
@@ -38,7 +40,7 @@
 		typeOptionsFor
 	} from '$lib/documents';
 	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
-	import { LAYOUT_LABELS } from '$lib/shelf-profiles';
+	import { ENGINE_LABELS } from '$lib/documents/templates';
 	import {
 		aboutOptionLabel,
 		expiryTreatment,
@@ -165,9 +167,7 @@
 	 * it IS drawing. Null while searching, because a search forces the list —
 	 * offering the switch there would be a control that undoes itself.
 	 */
-	const layoutSwitch = $derived(
-		!data.query && data.shelfLayout && data.shelfLayout !== 'list' ? data.shelfLayout : null
-	);
+	const layoutSwitch = $derived(!data.query && data.shelfLayout ? data.shelfLayout : null);
 
 	$effect(() => {
 		// A navigation is what carries new data in; nothing stays armed across it.
@@ -323,10 +323,20 @@
 	});
 </script>
 
-<ScreenHeader
-	title="Documents"
-	caption="One archive for the household. Shelf is where in life, type is what kind, links are what it concerns."
-/>
+<!-- The shelf IS the screen: its name is the title, its question is the
+     caption, and the three figures beneath answer that question. Before
+     v0.8.0 this said "Documents" on every shelf, and what the shelf was for
+     lived in a banner below a toolbar. -->
+<ScreenHeader emoji={data.screen.emoji} title={data.screen.label} caption={data.screen.question}>
+	{#snippet actions()}
+		<span class="mono screen-count">
+			{data.screen.count}
+			{data.screen.count === 1 ? 'document' : 'documents'}
+		</span>
+	{/snippet}
+</ScreenHeader>
+
+<SummaryBand tiles={data.tiles} />
 
 {#if form?.message}
 	<!-- The same slot carries a refusal and a report. A bulk edit that skipped a
@@ -352,100 +362,43 @@
 				File it now
 			</button>
 		{:else}
-			<a class="link" href="/documents/review">Review them now</a>
+			<a class="link" href="/documents?shelf=inbox">Review them now</a>
 		{/if}
 	</div>
 {/if}
 
-{#if data.bannerFacts}
-	<!-- Above the toolbar, because it describes the shelf the toolbar is about
-	     to filter. Absent on "Everything" and while searching: neither is a
-	     shelf, and a banner over search results would be describing the one you
-	     left. -->
-	<ShelfBanner
-		shelfKey={data.shelf}
-		label={shelfLabel}
-		emoji={data.shelves.find((s) => s.key === data.shelf)?.emoji ?? '🗂️'}
-		system={data.shelves.find((s) => s.key === data.shelf)?.system ?? false}
-		facts={data.bannerFacts}
-		emptyHint={data.emptyHint}
-	/>
-{/if}
-
-<section class="toolbar">
-	<div class="search">
-		<span class="search-icon"><Icon name="search" size={16} /></span>
-		<input
-			type="search"
-			bind:value={query}
-			placeholder="Search documents and their contents…"
-			onkeydown={(e) => e.key === 'Enter' && navigate({ q: query, doc: null })}
-			aria-label="Search documents"
-		/>
-	</div>
-
-	{#if layoutSwitch}
-		<!-- Two segments and no third state: the shelf's own layout, or the list
-		     it would otherwise be. A search removes this control rather than
-		     disabling it, because a search always renders the list. -->
-		<Segmented
-			options={[
-				{ value: 'shelf', label: LAYOUT_LABELS[layoutSwitch] },
-				{ value: 'list', label: LAYOUT_LABELS.list }
-			]}
-			value={data.view === 'shelf' ? 'shelf' : 'list'}
-			onchange={(value) => navigate({ view: value === 'list' ? 'list' : null })}
-		/>
-	{/if}
-
-	<!-- Absent while a layout is showing, not disabled. None of the three has a
-	     meaning against a wallet: the layout already decided the grouping and
-	     the order, and bulk selection is a list gesture. They come back with
-	     the list, one click away. -->
-	{#if data.view !== 'shelf'}
-		<span class="eyebrow group-label">Group</span>
-		<Segmented
-			options={[
-				{ value: 'type', label: 'Type' },
-				{ value: 'entity', label: 'Entity' },
-				{ value: 'year', label: 'Year' },
-				{ value: 'expiry', label: 'Expiry' },
-				{ value: 'none', label: 'None' }
-			]}
-			value={data.group}
-			onchange={(value) => navigate({ group: value === data.defaultGroup ? null : value })}
-		/>
-
-		<!-- Group is not sort. Two questions, two controls. -->
-		<select
-			class="sort"
-			aria-label="Sort documents"
-			value={data.sort}
-			onchange={(e) =>
-				navigate({ sort: e.currentTarget.value === 'newest' ? null : e.currentTarget.value })}
-		>
-			<option value="newest">Sort · Newest first</option>
-			<option value="oldest">Sort · Oldest first</option>
-			<option value="name">Sort · Name A–Z</option>
-			<option value="expiry">Sort · Expiry soonest</option>
-		</select>
-
-		<button
-			type="button"
-			class="btn select-toggle"
-			class:active={selecting}
-			onclick={() => {
-				selecting = !selecting;
-				if (!selecting) selection = [];
-			}}
-		>
-			Select
+<ControlRow>
+	{#snippet left()}
+		<div class="search">
+			<span class="search-icon"><Icon name="search" size={16} /></span>
+			<input
+				type="search"
+				bind:value={query}
+				placeholder="Search documents and their contents…"
+				onkeydown={(e) => e.key === 'Enter' && navigate({ q: query, doc: null })}
+				aria-label="Search documents"
+			/>
+		</div>
+	{/snippet}
+	{#snippet right()}
+		{#if layoutSwitch}
+			<!-- Two segments and no third state: the shelf's own engine, or the
+			     list it would otherwise be. A search removes this control rather
+			     than disabling it, because a search always renders the list. -->
+			<Segmented
+				options={[
+					{ value: 'shelf', label: ENGINE_LABELS[layoutSwitch] },
+					{ value: 'list', label: 'List' }
+				]}
+				value={data.view === 'shelf' ? 'shelf' : 'list'}
+				onchange={(value) => navigate({ view: value === 'list' ? 'list' : null })}
+			/>
+		{/if}
+		<button type="button" class="btn btn-primary" onclick={() => (capturing = !capturing)}>
+			Add document
 		</button>
-	{/if}
-	<button type="button" class="btn btn-primary" onclick={() => (capturing = !capturing)}>
-		Add document
-	</button>
-</section>
+	{/snippet}
+</ControlRow>
 
 {#if capturing}
 	<form
@@ -544,30 +497,66 @@
 		{#if data.view === 'tags' && data.tagsScreen}
 			<TagsPanel screen={data.tagsScreen} message={form?.message} />
 		{:else}
-			{#if data.inboxCount > 0 && data.shelf !== 'inbox'}
-				<div class="strip">
-					<Pill hue="yellow">{data.inboxCount} in Inbox</Pill>
-					<span class="strip-text">
-						{data.inboxCount}
-						{data.inboxCount === 1 ? 'document is' : 'documents are'} waiting in Inbox
-					</span>
-					<a class="btn strip-act" href="/documents/review">Review inbox →</a>
-				</div>
-			{/if}
+			{#if data.view !== 'shelf'}
+				<!-- Group, Sort and Select are LIST controls, and they live with the
+				     list. None of the three has a meaning against a wallet or a set
+				     of cards: the engine already decided the grouping and the order,
+				     and bulk selection is a list gesture. -->
+				{#if data.archivedHidden > 0 || data.includeArchived}
+					<div class="archive-line">
+						<span class="quiet">
+							Active subjects · <span class="mono">{data.archivedHidden}</span>
+							{data.archivedHidden === 1 ? 'document' : 'documents'} hidden from archived subjects
+						</span>
+						<button
+							type="button"
+							class="btn small"
+							class:active={data.includeArchived}
+							onclick={() => navigate({ archived: data.includeArchived ? null : '1' })}
+						>
+							{data.includeArchived ? 'Hide archived' : 'Include archived subjects'}
+						</button>
+					</div>
+				{/if}
 
-			{#if data.archivedHidden > 0 || data.includeArchived}
-				<div class="archive-line">
-					<span class="quiet">
-						Active subjects · <span class="mono">{data.archivedHidden}</span>
-						{data.archivedHidden === 1 ? 'document' : 'documents'} hidden from archived subjects
-					</span>
+				<div class="list-controls">
+					<span class="eyebrow group-label">Group</span>
+					<Segmented
+						options={[
+							{ value: 'type', label: 'Type' },
+							{ value: 'entity', label: 'Entity' },
+							{ value: 'year', label: 'Year' },
+							{ value: 'expiry', label: 'Expiry' },
+							{ value: 'none', label: 'None' }
+						]}
+						value={data.group}
+						onchange={(value) => navigate({ group: value === data.defaultGroup ? null : value })}
+					/>
+
+					<!-- Group is not sort. Two questions, two controls. -->
+					<select
+						class="sort"
+						aria-label="Sort documents"
+						value={data.sort}
+						onchange={(e) =>
+							navigate({ sort: e.currentTarget.value === 'newest' ? null : e.currentTarget.value })}
+					>
+						<option value="newest">Sort · Newest first</option>
+						<option value="oldest">Sort · Oldest first</option>
+						<option value="name">Sort · Name A–Z</option>
+						<option value="expiry">Sort · Expiry soonest</option>
+					</select>
+
 					<button
 						type="button"
-						class="btn small"
-						class:active={data.includeArchived}
-						onclick={() => navigate({ archived: data.includeArchived ? null : '1' })}
+						class="btn select-toggle"
+						class:active={selecting}
+						onclick={() => {
+							selecting = !selecting;
+							if (!selecting) selection = [];
+						}}
 					>
-						{data.includeArchived ? 'Hide archived' : 'Include archived subjects'}
+						Select
 					</button>
 				</div>
 			{/if}
@@ -673,7 +662,10 @@
 					<div class="skeleton" style:opacity="0.7"></div>
 					<div class="skeleton" style:opacity="0.45"></div>
 				</div>
-			{:else if data.rows.length === 0}
+			{:else if data.rows.length === 0 && !(data.view === 'shelf' && (data.layout === 'dossier' || data.layout === 'queue'))}
+				<!-- A dossier draws its own empty state: an empty shelf still has
+				     cards to make and slots to show as missing, which is the whole
+				     reason it is a dossier rather than a list. -->
 				{#if data.query}
 					{@const state = honestyState(data.query, 0, data.honesty)}
 					<div class="honesty">
@@ -752,6 +744,16 @@
 						</p>
 					</div>
 				{/if}
+			{:else if data.view === 'shelf' && data.layout === 'queue' && data.queue}
+				<!-- One document at a time, until nothing is left. The only good
+				     state for the Inbox is empty. -->
+				<QueueView
+					queue={data.queue}
+					documentTypes={data.documentTypes}
+					knownTags={data.knownTags}
+					isAdmin={data.isAdmin}
+					onopen={(id) => navigate({ doc: id })}
+				/>
 			{:else if data.view === 'shelf' && data.layout === 'wallet'}
 				<!-- Same rows, same inspector: a card is another way into the document
 				     the list would have opened, not another screen. -->
@@ -764,13 +766,16 @@
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
 				/>
-			{:else if data.view === 'shelf' && data.layout === 'counterparties' && data.counterparties}
-				<!-- Who the paper was with, and which period never arrived. -->
-				<CounterpartiesView
-					counterparties={data.counterparties}
+			{:else if data.view === 'shelf' && data.layout === 'dossier' && data.dossier}
+				<!-- One card per unit, with what it owes you and what never arrived. -->
+				<DossierView
+					dossier={data.dossier}
 					proposals={data.proposals}
+					closed={data.closed}
+					shelfKey={data.shelf}
 					onopen={(id) => navigate({ doc: id })}
 					onyear={(year) => navigate({ year: String(year) })}
+					onclosed={(ids) => navigate({ closed: ids.join(',') || null })}
 				/>
 			{:else if data.view === 'shelf' && data.layout === 'completeness' && data.coverage}
 				<!-- The one shelf drawn by what it is MISSING. Same inspector: a band
@@ -1111,7 +1116,7 @@
 						<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
 							File it
 						</button>
-						<a class="btn" href="/documents/review">Review inbox →</a>
+						<a class="btn" href="/documents?shelf=inbox">Review inbox →</a>
 					{:else}
 						<button type="button" class="btn btn-primary ins-edit" onclick={() => (editing = true)}>
 							Edit
@@ -1340,6 +1345,26 @@
 							{/each}
 						</div>
 					</div>
+					{#if data.selectedLanes.length > 0}
+						<!-- Which lane on the card this document sits in. Only on a
+						     dossier shelf, and only once the document names a card:
+						     a lane belongs to one card, and paper not on that card
+						     cannot be in its lane. History is a real answer, not an
+						     absence — most of what a card holds has no rhythm. -->
+						<label class="sec">
+							<span class="eyebrow">Lane</span>
+							<select name="laneId" value={data.selected?.laneId ?? ''}>
+								<option value="">History</option>
+								{#each data.selectedLanes as lane (lane.id)}
+									<option value={lane.id}>
+										{lane.label} · {lane.cadence === 'yearly' && lane.every > 1
+											? `every ${lane.every} years`
+											: lane.cadence}
+									</option>
+								{/each}
+							</select>
+						</label>
+					{/if}
 					<div class="sec">
 						<span class="eyebrow">Expiry</span>
 						<div class="expiry-grid">
@@ -1519,11 +1544,11 @@
 		align-items: center;
 		gap: var(--space-5);
 	}
-	.toolbar {
-		display: flex;
-		align-items: center;
-		gap: var(--space-5);
-		flex-wrap: wrap;
+	/* Beside the title, not under it: how much is on this shelf is part of
+	   naming the shelf. */
+	.screen-count {
+		font-size: var(--text-md);
+		color: var(--fg3);
 	}
 	.search {
 		position: relative;
@@ -1623,26 +1648,17 @@
 		gap: var(--space-7);
 		min-width: 0;
 	}
-	.strip {
-		display: flex;
-		align-items: center;
-		gap: var(--space-6);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
-		padding: 11px 14px;
-	}
-	.strip-text {
-		font-size: var(--text-md);
-		color: var(--fg2);
-	}
-	.strip-act {
-		margin-left: auto;
-	}
 	.archive-line {
 		display: flex;
 		align-items: center;
 		gap: var(--space-5);
+	}
+	/* Group, Sort and Select, above the filters they belong with. */
+	.list-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		flex-wrap: wrap;
 	}
 	.filters {
 		display: flex;

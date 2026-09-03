@@ -17,6 +17,9 @@
  * is proved rather than asserted.
  */
 import { mkdtempSync, readdirSync } from 'node:fs';
+import { listShelves } from '$lib/server/documents/shelves';
+import { loadDossier } from '$lib/server/documents/dossier-load';
+import { loadQueue } from '$lib/server/documents/queue-load';
 import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -80,6 +83,7 @@ const asAdmin = { id: 'a', role: 'admin' as const };
 const asMember = { id: 'm', role: 'member' as const };
 
 const today = new Date().toISOString().slice(0, 10);
+const thisYear = Number(today.slice(0, 4));
 
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
@@ -313,7 +317,10 @@ describe('the demo seed', () => {
 
 	it('files three receipts on transactions, each printing a variable symbol', async () => {
 		const docs = await seededDocuments();
-		const receipts = ofType(docs, 'receipt');
+		// The three filed against a PAYMENT. The demo also seeds a boiler receipt,
+		// which is one object's paperwork on the Inventory shelf and has no
+		// transaction behind it.
+		const receipts = ofType(docs, 'receipt').filter((r) => r.name.startsWith('Receipt ·'));
 		expect(receipts).toHaveLength(3);
 
 		const transactions = await testDb.select({ id: transaction.id }).from(transaction);
@@ -329,7 +336,7 @@ describe('the demo seed', () => {
 		const shelves = await testDb.select().from(shelf);
 		const keyOf = (shelfId: string) => shelves.find((s) => s.id === shelfId)?.key;
 		const onShelf = receipts.map((r) => keyOf(r.shelfId)).sort();
-		expect(onShelf).toEqual(['household', 'inbox', 'inbox']);
+		expect(onShelf).toEqual(['inbox', 'inbox', 'inventory']);
 	});
 
 	it('files an insurance policy that renews soon, on the flat', async () => {
@@ -402,13 +409,20 @@ describe('the demo seed', () => {
 		expect(dog!.archivedAt).toBeNull();
 
 		const docs = await seededDocuments();
-		const [warranty] = ofType(docs, 'warranty');
+		// By name: the demo seeds a boiler warranty too, and which of the two
+		// comes back first is not a fact worth depending on.
+		const warranty = ofType(docs, 'warranty').find((w) => w.name.startsWith('Warranty ·'))!;
 		expect(await targetsOf(warranty.id)).toContain(car!.id);
 		// Past-dated on purpose: an archived subject's paper has to read as
 		// history rather than as an expiry somebody forgot.
 		expect(warranty.expiresOn! < today).toBe(true);
 
-		const [certificate] = ofType(docs, 'certificate');
+		// By name: the demo also seeds inspection certificates on the vehicle and
+		// property cards, and which comes back first is not a fact worth
+		// depending on.
+		const certificate = ofType(docs, 'certificate').find((c) =>
+			c.name.startsWith('Vaccination certificate')
+		)!;
 		expect(await targetsOf(certificate.id)).toContain(dog!.id);
 		expect(certificate.expiresOn! > today).toBe(true);
 	});
@@ -481,5 +495,96 @@ describe('the demo seed', () => {
 			subjects: (await testDb.select().from(subject)).length,
 			files: readdirSync(uploadDir).length
 		}).toEqual(before);
+	});
+
+	it('gives every dossier shelf a card, and every cell state somewhere on it', async () => {
+		// A demo whose lanes are all green demonstrates nothing. The claim of a
+		// dossier shelf is that it shows the period that never arrived, so the
+		// fixture has to contain one.
+		const shelves = await listShelves(testDb);
+		const shelfBy = (key: string) => shelves.find((s) => s.key === key)!;
+
+		const vehicles = await loadDossier(shelfBy('vehicles'), asAdmin, thisYear, testDb, today);
+		const octavia = vehicles.cards.find((c) => c.name.includes('Octavia'))!;
+		expect(octavia).toBeDefined();
+		expect(octavia.lanes.find((l) => l.label === 'Road tax')!.gaps).toBeGreaterThan(0);
+		// Every two years is one cell two columns wide, not two cells one of
+		// which is always empty.
+		expect(octavia.lanes.find((l) => l.label === 'Technical inspection')!.every).toBe(2);
+		// A card with nothing on it is a finding too, and the stack has to show one.
+		expect(vehicles.cards.some((c) => c.name.includes('PCX'))).toBe(true);
+
+		const inventory = await loadDossier(shelfBy('inventory'), asAdmin, thisYear, testDb, today);
+		const boiler = inventory.cards.find((c) => c.name.startsWith('Boiler'))!;
+		expect(boiler.lanes.find((l) => l.label === 'Manual')!.cells[0].state).toBe('gap');
+		expect(boiler.lanes.find((l) => l.label === 'Receipt')!.cells[0].state).toBe('filed');
+
+		const property = await loadDossier(shelfBy('property'), asAdmin, thisYear, testDb, today);
+		expect(
+			property.cards.some((c) => c.lanes.some((l) => l.label === 'Boiler inspection' && l.gaps > 0))
+		).toBe(true);
+
+		// Every person has a card on a person shelf, whether or not anything is
+		// filed against them: the member with no record is the finding.
+		const health = await loadDossier(shelfBy('health'), asAdmin, thisYear, testDb, today);
+		expect(health.cards.filter((c) => c.id !== null).length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('files the payslips into their lane, not merely onto the employer', async () => {
+		// A payslip in the card's history leaves the month it covers reading as a
+		// hole, which is the one thing this shelf exists to be right about.
+		const shelves = await listShelves(testDb);
+		const incomeTax = await loadDossier(
+			shelves.find((s) => s.key === 'income_tax')!,
+			asAdmin,
+			thisYear,
+			testDb,
+			today
+		);
+		const employer = incomeTax.cards.find((c) => c.lanes.some((l) => l.label === 'Payslips'))!;
+		const payslips = employer.lanes.find((l) => l.label === 'Payslips')!;
+		expect(payslips.filed).toBeGreaterThan(0);
+		expect(payslips.cells.some((c) => c.state === 'filed')).toBe(true);
+	});
+
+	it('leaves paper in the Inbox for the queue to have something to do', async () => {
+		const queue = await loadQueue(asAdmin, testDb, today);
+		expect(queue.waiting.length).toBeGreaterThan(0);
+		expect(queue.current).toBe(queue.waiting[0].id);
+		// Every shelf but the Inbox is offered to file onto.
+		expect(queue.shelves.map((s) => s.key)).not.toContain('inbox');
+	});
+
+	it('seeds the eight shelves and none that were folded away', async () => {
+		const keys = (await listShelves(testDb)).map((s) => s.key);
+		for (const key of [
+			'health',
+			'identity',
+			'inbox',
+			'income_tax',
+			'inventory',
+			'property',
+			'statements',
+			'vehicles'
+		])
+			expect(keys, key).toContain(key);
+		// Family, Tenancy and the old spellings are gone for good.
+		for (const gone of ['family', 'tenancy', 'finance', 'household'])
+			expect(keys, gone).not.toContain(gone);
+	});
+
+	it('makes a shelf of its own, because that is what the templates are for', async () => {
+		// A Pets shelf drawing a timeline is as good as a shipped one. The dog
+		// lives there rather than on Health, whose cards are the PEOPLE.
+		const pets = (await listShelves(testDb)).find((s) => s.key === 'pets');
+		expect(pets).toBeDefined();
+		expect(pets!.template).toBe('timeline');
+		expect(pets!.unit).toBe('subject');
+		expect(pets!.system).toBe(false);
+
+		const drawn = await loadDossier(pets!, asAdmin, thisYear, testDb, today);
+		const dog = drawn.cards.find((c) => c.name === 'Dog')!;
+		expect(dog).toBeDefined();
+		expect(dog.history.length).toBeGreaterThan(0);
 	});
 });

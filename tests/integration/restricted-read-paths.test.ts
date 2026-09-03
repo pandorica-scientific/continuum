@@ -86,7 +86,7 @@ async function seedDocument(options: {
 	await makeDocument(testDb, {
 		id,
 		name: options.name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: options.type ?? 'other',
 		sensitivity: options.sensitivity,
 		storedName: options.storedName ?? null,

@@ -74,7 +74,7 @@ async function seedDocument(path: string): Promise<string> {
 	await makeDocument(testDb, {
 		id,
 		name: 'Invoice',
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'invoice',
 		ext: 'PDF',
 		storedName,
@@ -161,7 +161,7 @@ describe('what gets queued', () => {
 		await makeDocument(testDb, {
 			id,
 			name: 'Metadata only',
-			shelfKey: 'household',
+			shelfKey: 'inventory',
 			type: 'other',
 			addedOn: '2026-01-01'
 		});

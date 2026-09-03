@@ -106,7 +106,7 @@ describe('a statement that brings its own document', () => {
 
 		expect(await attachedTo(statement.id)).toEqual([statementDocumentName(2025, 'CZ')]);
 		expect(doc).toMatchObject({
-			shelfId: await shelfIdByKey('finance', testDb),
+			shelfId: await shelfIdByKey('income_tax', testDb),
 			type: 'tax_document',
 			storedName: upload.storedName,
 			ext: 'PDF',
@@ -416,7 +416,7 @@ describe('deleteAttachment', () => {
 		await makeDocument(testDb, {
 			id: slipId,
 			name: 'Payslip 2025-06 · Person A',
-			shelfKey: 'finance',
+			shelfKey: 'income_tax',
 			type: 'payslip',
 			storedName: '22222222-2222-2222-2222-222222222222.pdf',
 			ext: 'PDF',

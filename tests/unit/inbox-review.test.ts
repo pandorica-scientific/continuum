@@ -46,14 +46,14 @@ describe('the review session', () => {
 	});
 
 	it('carries shelf and type forward, and says so', () => {
-		const s = fileAndNext(startSession(['a', 'b']), { shelfKey: 'finance', type: 'invoice' });
+		const s = fileAndNext(startSession(['a', 'b']), { shelfKey: 'income_tax', type: 'invoice' });
 		expect(currentId(s)).toBe('b');
 		expect(keptFields(s)).toEqual(['shelf', 'type']);
 		expect(s.filed).toEqual(['a']);
 	});
 
 	it('clears the kept mark the moment the field changes', () => {
-		let s = fileAndNext(startSession(['a', 'b']), { shelfKey: 'finance', type: 'invoice' });
+		let s = fileAndNext(startSession(['a', 'b']), { shelfKey: 'income_tax', type: 'invoice' });
 		s = setField(s, 'type', 'receipt');
 		expect(keptFields(s)).toEqual(['shelf']);
 		expect(s.sticky.type).toBe('receipt');
@@ -62,7 +62,7 @@ describe('the review session', () => {
 	it('counts what is left rather than what was offered', () => {
 		let s = startSession(['a', 'b', 'c']);
 		expect(counterLabel(s)).toBe('3 remaining');
-		s = fileAndNext(s, { shelfKey: 'finance' });
+		s = fileAndNext(s, { shelfKey: 'income_tax' });
 		expect(counterLabel(s)).toBe('2 remaining');
 		s = skip(s);
 		expect(counterLabel(s)).toBe('1 remaining');

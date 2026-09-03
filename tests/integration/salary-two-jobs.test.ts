@@ -41,7 +41,7 @@ async function slip(id: string, month: string) {
 	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${month} · Robert`,
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'payslip',
 		storedName: `${id}.pdf`,
 		ext: 'PDF',

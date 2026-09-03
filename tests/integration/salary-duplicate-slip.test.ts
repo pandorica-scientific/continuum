@@ -80,7 +80,7 @@ async function fileOnShelf(options: {
 	await makeDocument(testDb, {
 		id,
 		name: `Payslip ${options.month}`,
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: options.type ?? 'payslip',
 		storedName,
 		ext: 'PDF',

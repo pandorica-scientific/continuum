@@ -3,7 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
 import { document, documentLink, entity, subject } from '$lib/server/db/schema';
-import { shelfIdByKey } from '$lib/server/documents/shelves';
+import { createCard } from '$lib/server/documents/cards';
+import { loadDossier } from '$lib/server/documents/dossier-load';
+import { lanesFor } from '$lib/server/organisations/mutations';
+import { addShelf, listShelves, shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeAccount, makeDocument, makeLoan, makePerson, makeTransaction } from './fixtures';
 
@@ -125,30 +128,67 @@ type LoadedDocuments = {
 	coverage: { year: number; gaps: number; rows: unknown[] } | null;
 	filterOptions: { entities: AboutOption[]; types: { code: string; count: number }[] };
 	pickableTargets: { id: string; kind: string; groupLabel: string }[];
+	screen: { emoji: string; label: string; count: number; question: string };
+	tiles: { label: string; value: string }[];
+	queue: {
+		waiting: { id: string; name: string }[];
+		current: string | null;
+		shelves: { key: string }[];
+	} | null;
+	dossier: { cards: { id: string | null; name: string }[] } | null;
 };
 
-async function loadDocuments(locals: unknown, search = ''): Promise<LoadedDocuments> {
+/**
+ * One of the page's actions, called the way a form posts to it.
+ *
+ * The screen's actions are the only place several of these rules exist, and a
+ * test that reached past them into the mutation would not be testing what a
+ * person can actually do.
+ */
+async function callAction(
+	name: string,
+	fields: Record<string, string | string[]>,
+	locals: unknown
+): Promise<unknown> {
+	const { actions } = await import('../../src/routes/(app)/documents/+page.server');
+	const body = new FormData();
+	for (const [key, value] of Object.entries(fields))
+		for (const one of Array.isArray(value) ? value : [value]) body.append(key, one);
+	const request = new Request('http://localhost/documents?shelf=inbox', { method: 'POST', body });
+	return (actions as Record<string, (event: unknown) => Promise<unknown>>)[name]({
+		request,
+		locals,
+		url: new URL(request.url)
+	});
+}
+
+async function loadDocuments(
+	locals: unknown,
+	search = '',
+	params: Record<string, string> = {}
+): Promise<LoadedDocuments> {
 	const { load } = await import('../../src/routes/(app)/documents/+page.server');
+	const url = new URL(`http://localhost/documents${search}`);
+	// `search` is the older spelling and carries a whole query string; `params`
+	// is the readable one. Both, so the calls already written keep working.
+	for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	return (await (load as any)({
-		url: new URL(`http://localhost/documents${search}`),
-		locals
-	})) as LoadedDocuments;
+	return (await (load as any)({ url, locals })) as LoadedDocuments;
 }
 
 describe('the documents load', () => {
 	it('gives a member a rail count that has already forgotten the restricted one', async () => {
-		await seedShelf('household', { normal: 26, restricted: 1 });
+		await seedShelf('inventory', { normal: 26, restricted: 1 });
 		const data = await loadDocuments(asMember);
-		expect(data.shelves.find((s) => s.key === 'household')!.count).toBe(26);
+		expect(data.shelves.find((s) => s.key === 'inventory')!.count).toBe(26);
 		expect(data.shelves.find((s) => s.key === 'all')!.count).toBe(26);
 		expect(data.total).toBe(26);
 	});
 
 	it('gives the admin 27', async () => {
-		await seedShelf('household', { normal: 26, restricted: 1 });
+		await seedShelf('inventory', { normal: 26, restricted: 1 });
 		const data = await loadDocuments(asAdmin);
-		expect(data.shelves.find((s) => s.key === 'household')!.count).toBe(27);
+		expect(data.shelves.find((s) => s.key === 'inventory')!.count).toBe(27);
 		expect(data.total).toBe(27);
 	});
 
@@ -156,7 +196,7 @@ describe('the documents load', () => {
 		// Not a row, not a name, not a flag set on anything the member can see.
 		// The document does not reach the screen at all — there is nothing to
 		// dim, grey out or mark as withheld, because a placeholder IS the leak.
-		await seedShelf('household', { normal: 1, restricted: 1 });
+		await seedShelf('inventory', { normal: 1, restricted: 1 });
 		const data = (await loadDocuments(asMember)) as LoadedDocuments & {
 			rows: { name: string; restricted: boolean }[];
 		};
@@ -202,50 +242,87 @@ describe('the view a shelf opens in', () => {
 		expect(data.coverage).not.toBeNull();
 	});
 
-	it('opens Income & Tax on its counterparty cards', async () => {
-		const data = await loadDocuments(asAdmin, '?shelf=finance');
+	it('opens Income & Tax on its dossier cards', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=income_tax');
 		expect(data.view).toBe('shelf');
-		expect(data.layout).toBe('counterparties');
+		expect(data.layout).toBe('dossier');
 	});
 
-	it('leaves every other shelf on the list', async () => {
-		for (const shelf of ['family', 'health', 'household']) {
+	it('opens every other shelf on its own engine, not on the list', async () => {
+		// The v0.8.0 ruling: a shelf is one question, one unit, one template, and
+		// the list is a view it can OPEN rather than what it is. Before this,
+		// six of the eight fell through to the list because only three layouts
+		// had been built.
+		for (const [shelf, engine] of [
+			['identity', 'wallet'],
+			['health', 'dossier'],
+			['inventory', 'dossier'],
+			['vehicles', 'dossier']
+		] as const) {
 			const data = await loadDocuments(asAdmin, `?shelf=${shelf}`);
-			expect(data.view).toBe('list');
-			expect(data.layout).toBeNull();
-			expect(data.shelfLayout).toBe('list');
+			expect(data.view, shelf).toBe('shelf');
+			expect(data.layout, shelf).toBe(engine);
 		}
 	});
 
-	it('has no layout for Everything, or for a shelf a household made', async () => {
-		for (const search of ['', '?shelf=all', '?shelf=boat']) {
+	it('opens a shelf the household made on its template, too', async () => {
+		// The whole point of moving this onto the row: a Boat shelf is as good as
+		// a seeded one. Before v0.8.0 a custom shelf had no profile and therefore
+		// no layout at all.
+		await addShelf(
+			{ label: 'Boat', template: 'obligations', unit: 'subject', question: 'Is she seaworthy?' },
+			testDb
+		);
+		const data = await loadDocuments(asAdmin, '?shelf=boat');
+		expect(data.view).toBe('shelf');
+		expect(data.layout).toBe('dossier');
+		expect(data.emptyHint).toBe('Is she seaworthy?');
+	});
+
+	it('falls to the list for a shelf key that names nothing', async () => {
+		const data = await loadDocuments(asAdmin, '?shelf=nonesuch');
+		expect(data.view).toBe('list');
+		expect(data.shelfLayout).toBeNull();
+	});
+
+	it('has no engine for Everything, which is not a shelf', async () => {
+		for (const search of ['', '?shelf=all']) {
 			const data = await loadDocuments(asAdmin, search);
 			expect(data.view).toBe('list');
 			expect(data.shelfLayout).toBeNull();
 			expect(data.emptyHint).toBeNull();
 		}
 	});
+
+	it('sends a search to the list, whichever shelf it started on', async () => {
+		// A match is explained by the line it was found in, and a card face has
+		// nowhere to put one.
+		const data = await loadDocuments(asAdmin, '?shelf=identity&q=passport');
+		expect(data.view).toBe('list');
+	});
 });
 
 describe('what a shelf brings with it', () => {
-	it('groups the list the way the shelf is read', async () => {
-		// Finance by year, because a shelf of payslips and tax papers is read by
-		// which year it concerns; Identity by who it is about.
-		expect((await loadDocuments(asAdmin, '?shelf=finance')).group).toBe('year');
-		expect((await loadDocuments(asAdmin, '?shelf=identity&view=list')).group).toBe('entity');
-		expect((await loadDocuments(asAdmin, '?shelf=inbox')).group).toBe('type');
+	it('groups the list by type on every shelf, because the list is not the shelf', async () => {
+		// One default for every shelf since v0.8.0. A per-shelf grouping for the
+		// FALLBACK view was a preference nobody expressed: what a shelf is for is
+		// its engine, and the list is what you open when you want the other thing.
+		for (const shelf of ['income_tax', 'identity', 'inbox'])
+			expect((await loadDocuments(asAdmin, `?shelf=${shelf}&view=list`)).group, shelf).toBe('type');
 	});
 
 	it('still lets the control say otherwise', async () => {
-		const data = await loadDocuments(asAdmin, '?shelf=finance&group=type');
-		expect(data.group).toBe('type');
-		expect(data.defaultGroup).toBe('year');
+		const data = await loadDocuments(asAdmin, '?shelf=income_tax&view=list&group=entity');
+		expect(data.group).toBe('entity');
+		expect(data.defaultGroup).toBe('type');
 	});
 
-	it('says what belongs on the shelf, for an empty one to show', async () => {
+	it('carries the question the shelf answers, for an empty one to show', async () => {
+		// Prose on the row now, not in a registry keyed by shelf — so a shelf
+		// somebody made has one too.
 		expect(await loadDocuments(asAdmin, '?shelf=identity')).toHaveProperty(
 			'emptyHint',
-			expect.stringContaining('Passports')
+			'Does everybody hold a valid document?'
 		);
 	});
 
@@ -282,7 +359,7 @@ async function fileAgainst(name: string, targetIds: readonly string[]): Promise<
 	await makeDocument(testDb, {
 		id,
 		name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		addedOn: '2026-01-01'
 	});
@@ -332,7 +409,7 @@ describe('capture', () => {
 		const { actions } = await import('../../src/routes/(app)/documents/+page.server');
 		const form = new FormData();
 		form.set('name', fields.name);
-		form.set('shelf', 'household');
+		form.set('shelf', 'inventory');
 		for (const id of fields.linkIds ?? []) form.append('linkIds', id);
 		if (fields.newSubject) form.set('newSubject', fields.newSubject);
 		const request = new Request('http://localhost/documents?/addDocument', {
@@ -392,7 +469,7 @@ describe('capture', () => {
 		const file = new File(['broken'], 'broken.pdf', { type: 'application/pdf' });
 		file.arrayBuffer = () => Promise.reject(new Error('Corrupt upload.'));
 		const form = new FormData();
-		form.set('shelf', 'household');
+		form.set('shelf', 'inventory');
 		form.set('file', file);
 		const request = { formData: async () => form } as unknown as Request;
 
@@ -405,27 +482,43 @@ describe('capture', () => {
 	});
 });
 
-describe('the review screen', () => {
+describe('the Inbox queue', () => {
 	it('offers every kind a document may be filed against, and no kind it may not', async () => {
-		const { load } = await import('../../src/routes/(app)/documents/review/+page.server');
-		const data = (await (load as unknown as (event: unknown) => Promise<unknown>)({
-			locals: asAdmin
-		})) as { targets: { id: string; kind: string; groupLabel: string }[] };
+		const data = await loadDocuments(asAdmin, '', { shelf: 'inbox' });
 
-		expect(data.targets.find((t) => t.id === RECORD.loan)?.groupLabel).toBe('Loans');
-		expect(data.targets.some((t) => t.id === RECORD.account)).toBe(true);
+		expect(data.pickableTargets.find((t) => t.id === RECORD.loan)?.groupLabel).toBe('Loans');
+		expect(data.pickableTargets.some((t) => t.id === RECORD.account)).toBe(true);
 		// A list of every transaction is a list nobody can read by eye. They reach
 		// a document from their own screen instead.
-		expect(data.targets.some((t) => t.kind === 'transaction')).toBe(false);
+		expect(data.pickableTargets.some((t) => t.kind === 'transaction')).toBe(false);
+	});
+
+	it('draws the queue on the shelf itself, oldest first', async () => {
+		// The Inbox IS the queue since v0.8.0: it was a shelf that showed the
+		// problem and a separate page for doing something about it.
+		await makeDocument(testDb, {
+			name: 'Older',
+			shelfKey: 'inbox',
+			type: 'other',
+			addedOn: '2026-01-01'
+		});
+		await makeDocument(testDb, {
+			name: 'Newer',
+			shelfKey: 'inbox',
+			type: 'other',
+			addedOn: '2026-02-01'
+		});
+		const data = await loadDocuments(asAdmin, '', { shelf: 'inbox' });
+		expect(data.layout).toBe('queue');
+		expect(data.queue).not.toBeNull();
+		expect(data.queue!.waiting.map((d) => d.name)).toEqual(['Older', 'Newer']);
+		// The oldest is what is in front of you: a queue offering the newest
+		// leaves the one that has waited longest waiting longer.
+		expect(data.queue!.current).toBe(data.queue!.waiting[0].id);
+		expect(data.queue!.shelves.map((s) => s.key)).not.toContain('inbox');
 	});
 
 	it('takes a document off the Inbox when it is filed', async () => {
-		// The screen once said "Inbox is clear" while the document sat exactly
-		// where it started: the button advanced the queue before the browser had
-		// dispatched the submit, which unmounted the form mid-submission. The
-		// client half of that cannot be tested here — there is no browser suite —
-		// but this holds the half that has to be true for the fix to mean
-		// anything: a filing moves the paper.
 		const id = uuidv7();
 		await makeDocument(testDb, {
 			id,
@@ -435,20 +528,11 @@ describe('the review screen', () => {
 			addedOn: '2026-01-01'
 		});
 
-		const { actions } = await import('../../src/routes/(app)/documents/review/+page.server');
-		const form = new FormData();
-		form.set('id', id);
-		form.set('name', 'A boiler service');
-		form.set('shelf', 'household');
-		form.set('type', 'invoice');
-		const request = new Request('http://localhost/documents/review?/file', {
-			method: 'POST',
-			body: form
-		});
-		const result = (await (actions.file as (event: unknown) => Promise<unknown>)({
-			request,
-			locals: asAdmin
-		})) as { ok?: boolean };
+		const result = (await callAction(
+			'fileFromQueue',
+			{ id, name: 'A boiler service', shelf: 'inventory', type: 'invoice' },
+			asAdmin
+		)) as { ok?: boolean };
 		expect(result.ok).toBe(true);
 
 		const [row] = await testDb
@@ -456,8 +540,81 @@ describe('the review screen', () => {
 			.from(document)
 			.where(eq(document.id, id));
 		expect(row.shelfId).not.toBe(await shelfIdByKey('inbox', testDb));
-		expect(row.shelfId).toBe(await shelfIdByKey('household', testDb));
+		expect(row.shelfId).toBe(await shelfIdByKey('inventory', testDb));
 		expect(row.name).toBe('A boiler service');
 		expect(row.type).toBe('invoice');
+	});
+
+	it('files onto a card and into its lane, and closes the cell', async () => {
+		const vehicles = (await listShelves(testDb)).find((s) => s.key === 'vehicles')!;
+		const car = await createCard({ shelfId: vehicles.id, name: 'Octavia' }, testDb);
+		const insurance = (await lanesFor(car.id, testDb)).find((l) => l.label === 'Insurance')!;
+		const id = uuidv7();
+		await makeDocument(testDb, {
+			id,
+			name: 'Insurance 2025',
+			shelfKey: 'inbox',
+			type: 'other',
+			addedOn: '2026-01-01',
+			periodOn: '2025-01-01'
+		});
+
+		const result = (await callAction(
+			'fileFromQueue',
+			{
+				id,
+				name: 'Vehicle insurance 2025',
+				shelf: 'vehicles',
+				cardId: car.id,
+				laneId: insurance.id,
+				type: 'insurance_policy'
+			},
+			asAdmin
+		)) as { ok?: boolean };
+		expect(result.ok).toBe(true);
+
+		const [row] = await testDb
+			.select({ laneId: document.laneId })
+			.from(document)
+			.where(eq(document.id, id));
+		expect(row.laneId).toBe(insurance.id);
+		// The cell it was filed for is no longer a hole. That is the whole point
+		// of the third step.
+		const payload = await loadDossier(
+			vehicles,
+			{ id: 'a', role: 'admin' },
+			2026,
+			testDb,
+			'2026-09-02'
+		);
+		const drawn = payload.cards[0].lanes.find((l) => l.id === insurance.id)!;
+		expect(drawn.cells.find((c) => c.key === '2025')?.state).toBe('filed');
+	});
+
+	it('makes the card on the way past', async () => {
+		const id = uuidv7();
+		await makeDocument(testDb, {
+			id,
+			name: 'A bike receipt',
+			shelfKey: 'inbox',
+			type: 'other',
+			addedOn: '2026-01-01'
+		});
+		const result = (await callAction(
+			'fileFromQueue',
+			{ id, name: 'PCX receipt', shelf: 'vehicles', newCardName: 'Honda PCX', type: 'receipt' },
+			asAdmin
+		)) as { ok?: boolean };
+		expect(result.ok).toBe(true);
+
+		const [made] = await testDb.select().from(subject).where(eq(subject.name, 'Honda PCX'));
+		expect(made).toBeDefined();
+		// Seeded with the shelf's lanes, so the new card can be missing something
+		// from the moment it exists.
+		expect((await lanesFor(made.id, testDb)).map((l) => l.label)).toEqual([
+			'Insurance',
+			'Technical inspection',
+			'Road tax'
+		]);
 	});
 });

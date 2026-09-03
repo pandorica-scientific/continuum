@@ -33,6 +33,7 @@ import { loadTransactionDocuments } from '$lib/server/transactions/documents';
 import { attachDocument, candidateDocuments, detachDocument } from '$lib/server/documents/targets';
 import { createDocument } from '$lib/server/documents/mutations';
 import { removeDocument } from '$lib/server/documents/lifecycle';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { saveUploadAndHash } from '$lib/server/system/files';
 import { uuidv7 } from 'uuidv7';
@@ -376,7 +377,7 @@ export const actions: Actions = {
 			// Continuum knows this is a receipt and what it evidences; it does not
 			// know where the household files receipts, so it lands in the inbox
 			// rather than being guessed onto a shelf.
-			shelfId: await systemShelfId('inbox'),
+			shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.inbox),
 			type: 'receipt',
 			storedName,
 			ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',

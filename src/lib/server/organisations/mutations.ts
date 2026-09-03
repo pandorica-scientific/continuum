@@ -156,14 +156,16 @@ export async function listOrganisations(
 export interface LanePreset {
 	label: string;
 	cadence: EnumValue<'lane.cadence'>;
+	/** For `yearly`: a cell every N years. Omitted means every year. */
+	every?: number;
 	conditions: { field: string; op: string; value: string }[];
 }
 
 /**
  * What each kind of organisation is expected to send, as a starting point.
  *
- * Seeds and not rules, which is the same relationship `shelf_type` has with
- * `SHELF_PROFILES`: this is what a fresh organisation begins with, and it
+ * Seeds and not rules, the same relationship `shelf_type` has with the shelf
+ * seed rows: this is what a fresh organisation begins with, and it
  * belongs to the household from the moment it exists. Editing this list changes
  * what the NEXT one starts with and touches nothing already created.
  *
@@ -208,10 +210,13 @@ export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> 
 
 export interface LaneRow {
 	id: string;
-	organisationId: string;
+	/** The card this lane sits on, through the entity supertype. */
+	entityId: string;
 	personId: string | null;
 	label: string;
 	cadence: EnumValue<'lane.cadence'>;
+	/** For `yearly`: a cell every N years. */
+	every: number;
 	conditions: unknown;
 	acceptedCount: number;
 	correctedCount: number;
@@ -246,30 +251,38 @@ export async function recordLaneOutcome(
 		.where(eq(lane.id, laneId));
 }
 
-/** An organisation's lanes, in the order they are drawn and tried. */
-export async function lanesFor(organisationId: string, handle: Queryable = db): Promise<LaneRow[]> {
+/**
+ * A card's lanes, in the order they are drawn and tried.
+ *
+ * Takes an ENTITY id, so a car's road tax and an employer's payslips are the
+ * same call. It was `organisationId` while Income & Tax was the only shelf
+ * drawing lanes.
+ */
+export async function lanesFor(entityId: string, handle: Queryable = db): Promise<LaneRow[]> {
 	return handle
 		.select({
 			id: lane.id,
-			organisationId: lane.organisationId,
+			entityId: lane.entityId,
 			personId: lane.personId,
 			label: lane.label,
 			cadence: lane.cadence,
+			every: lane.every,
 			conditions: lane.conditions,
 			acceptedCount: lane.acceptedCount,
 			correctedCount: lane.correctedCount,
 			sortOrder: lane.sortOrder
 		})
 		.from(lane)
-		.where(eq(lane.organisationId, organisationId))
+		.where(eq(lane.entityId, entityId))
 		.orderBy(asc(lane.sortOrder), asc(lane.id));
 }
 
 export async function addLane(
 	input: {
-		organisationId: string;
+		entityId: string;
 		label: string;
 		cadence: EnumValue<'lane.cadence'>;
+		every?: number;
 		personId?: string | null;
 		conditions?: unknown;
 		sortOrder?: number;
@@ -279,10 +292,11 @@ export async function addLane(
 	const id = uuidv7();
 	await handle.insert(lane).values({
 		id,
-		organisationId: input.organisationId,
+		entityId: input.entityId,
 		personId: input.personId ?? null,
 		label: input.label.trim(),
 		cadence: input.cadence,
+		every: input.every ?? 1,
 		conditions: input.conditions ?? [],
 		sortOrder: input.sortOrder ?? 100
 	});
@@ -300,7 +314,7 @@ export async function deleteLane(id: string, handle: Queryable = db): Promise<vo
  * people adding "Tax office" on two devices have agreed, not collided.
  */
 export async function addOrganisation(
-	input: { name: string; kind?: EnumValue<'organisation.kind'>; emoji?: string },
+	input: { name: string; shelfId: string; kind?: EnumValue<'organisation.kind'>; emoji?: string },
 	handle: Queryable = db
 ): Promise<OrganisationRow> {
 	const name = normalise(input.name);
@@ -313,6 +327,7 @@ export async function addOrganisation(
 			id: uuidv7(),
 			name,
 			kind,
+			shelfId: input.shelfId,
 			emoji: input.emoji?.trim() || DEFAULT_ORGANISATION_EMOJI
 		})
 		.onConflictDoNothing()
@@ -325,7 +340,7 @@ export async function addOrganisation(
 	if (created.length > 0) {
 		let sortOrder = 0;
 		for (const preset of LANE_PRESETS[kind]) {
-			await addLane({ organisationId: created[0].id, ...preset, sortOrder }, handle);
+			await addLane({ entityId: created[0].id, ...preset, sortOrder }, handle);
 			sortOrder += 10;
 		}
 	}

@@ -5,7 +5,7 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
-	import MetricTile from '$lib/components/MetricTile.svelte';
+	import SummaryBand from '$lib/components/SummaryBand.svelte';
 
 	let { data, form } = $props();
 
@@ -101,11 +101,14 @@
 		</form>
 	</section>
 {:else if data.snapshot}
-	<section class="tiles">
-		{#each data.snapshot.metrics as m (m.key)}
-			<MetricTile label={m.label} value={m.value} unit={m.unit} note={m.note} />
-		{/each}
-	</section>
+	<SummaryBand
+		tiles={data.snapshot.metrics.map((m) => ({
+			label: m.label,
+			value: m.value,
+			unit: m.unit,
+			note: m.note
+		}))}
+	/>
 
 	{#if data.snapshot.attention.length}
 		<section class="attention">
@@ -232,11 +235,6 @@
 	.quiet {
 		line-height: 1.55;
 		margin: 0;
-	}
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: var(--space-6);
 	}
 	.attention {
 		display: flex;

@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { document, documentLink, subject } from '$lib/server/db/schema';
 import { archiveScopePredicate } from '$lib/server/documents/visibility';
+import { shelfIdByKey } from '$lib/server/documents/shelves';
 
 import { buildBriefing } from '$lib/server/briefing';
 import { generateEvents } from '$lib/server/calendar';
@@ -52,7 +53,7 @@ async function seedDocumentLinkedTo(kinds: ('active' | 'archived')[]): Promise<s
 	await makeDocument(testDb, {
 		id,
 		name: `Document ${id}`,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		addedOn: '2026-01-01'
 	});
@@ -61,6 +62,7 @@ async function seedDocumentLinkedTo(kinds: ('active' | 'archived')[]): Promise<s
 		await testDb.insert(subject).values({
 			id: subjectId,
 			name: `Subject ${subjectId}`,
+			shelfId: await shelfIdByKey('inventory', testDb),
 			archivedAt: kind === 'archived' ? new Date() : null
 		});
 		await testDb.insert(documentLink).values({ documentId: id, targetId: subjectId });
@@ -125,7 +127,7 @@ async function seedExpiringDocumentLinkedTo(
 	await makeDocument(testDb, {
 		id,
 		name,
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'other',
 		expiresOn: soon,
 		expiryVerb: 'expires',
@@ -136,6 +138,7 @@ async function seedExpiringDocumentLinkedTo(
 		await testDb.insert(subject).values({
 			id: subjectId,
 			name: `Subject ${subjectId}`,
+			shelfId: await shelfIdByKey('inventory', testDb),
 			archivedAt: kind === 'archived' ? new Date() : null
 		});
 		await testDb.insert(documentLink).values({ documentId: id, targetId: subjectId });

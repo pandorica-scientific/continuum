@@ -35,7 +35,7 @@ beforeEach(async () => {
 });
 
 async function seedDocuments(counts: { normal: number; restricted: number }): Promise<string[]> {
-	const shelfId = await shelfIdByKey('household', testDb);
+	const shelfId = await shelfIdByKey('inventory', testDb);
 	const ids: string[] = [];
 	for (const [sensitivity, n] of [
 		['normal', counts.normal],

@@ -76,7 +76,7 @@ beforeEach(async () => {
 async function seedDocument(
 	id: string,
 	sensitivity: 'normal' | 'restricted',
-	shelfKey = 'finance'
+	shelfKey = 'income_tax'
 ): Promise<void> {
 	await makeDocument(testDb, {
 		id,
@@ -103,15 +103,6 @@ async function documentsAction(
 ): Promise<ActionResult> {
 	const { actions } = await import('../../src/routes/(app)/documents/+page.server');
 	return callAction(actions, name, fields, locals, files, 'documents');
-}
-
-async function reviewAction(
-	name: string,
-	fields: Record<string, string | string[]>,
-	locals: typeof asAdmin | typeof asMember
-): Promise<ActionResult> {
-	const { actions } = await import('../../src/routes/(app)/documents/review/+page.server');
-	return callAction(actions, name, fields, locals, [], 'documents/review');
 }
 
 async function taxAction(
@@ -268,9 +259,11 @@ describe('the inbox review flow', () => {
 			sensitivity: 'restricted'
 		});
 
-		const outcome = await reviewAction(
-			'file',
-			{ id: RESTRICTED, shelf: 'finance', name: 'Filed by a member', type: 'other' },
+		// The queue is the Inbox's own layout since v0.8.0; filing from it is an
+		// action on the documents screen, and it carries the same read rule.
+		const outcome = await documentsAction(
+			'fileFromQueue',
+			{ id: RESTRICTED, shelf: 'income_tax', name: 'Filed by a member', type: 'other' },
 			asMember
 		);
 

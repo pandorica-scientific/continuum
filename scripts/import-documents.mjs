@@ -45,10 +45,10 @@ const KEEP = new Set([
 
 /** The default table: a starting point the household edits, not a guess. */
 export const DEFAULT_MAPPING = [
-	{ segment: 'smlouvy', shelf: 'household', type: 'contract' },
-	{ segment: 'contracts', shelf: 'household', type: 'contract' },
-	{ segment: 'faktury', shelf: 'finance', type: 'invoice' },
-	{ segment: 'invoices', shelf: 'finance', type: 'invoice' },
+	{ segment: 'smlouvy', shelf: 'inventory', type: 'contract' },
+	{ segment: 'contracts', shelf: 'inventory', type: 'contract' },
+	{ segment: 'faktury', shelf: 'income_tax', type: 'invoice' },
+	{ segment: 'invoices', shelf: 'income_tax', type: 'invoice' },
 	{ segment: 'pojisteni', shelf: 'property', type: 'insurance_policy', tag: 'insurance' },
 	{ segment: 'insurance', shelf: 'property', type: 'insurance_policy', tag: 'insurance' },
 	{ segment: 'vypisy', shelf: 'statements', type: 'bank_statement' },
@@ -57,8 +57,8 @@ export const DEFAULT_MAPPING = [
 	{ segment: 'health', shelf: 'health', type: 'medical_record' },
 	{ segment: 'auto', shelf: 'vehicles' },
 	{ segment: 'vehicles', shelf: 'vehicles' },
-	{ segment: 'dane', shelf: 'finance', type: 'tax_document' },
-	{ segment: 'tax', shelf: 'finance', type: 'tax_document' }
+	{ segment: 'dane', shelf: 'income_tax', type: 'tax_document' },
+	{ segment: 'tax', shelf: 'income_tax', type: 'tax_document' }
 ];
 
 /**

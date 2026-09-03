@@ -379,6 +379,47 @@ export async function loadPickableTargets(handle: Queryable = db): Promise<Targe
 }
 
 /**
+ * The chips About offers, narrowed to the shelf.
+ *
+ * A document belongs to one shelf and never links across shelves, so a car's
+ * paper is offered the cars and not the boiler — and an insurer whose letters
+ * are filed on Income & Tax is not offered when filing a car's policy. Before
+ * v0.8.0 every pickable record on the instance was offered on every shelf,
+ * which is how a receipt for a washing machine ended up about a tenancy.
+ *
+ * `all` and the Inbox offer everything: neither is a shelf with a unit, and the
+ * Inbox is where a document waits precisely because nobody has said yet.
+ */
+export async function pickableTargetsForShelf(
+	shelfRow: { id: string; unit: string } | null,
+	handle: Queryable = db
+): Promise<TargetRow[]> {
+	if (!shelfRow || shelfRow.unit === 'document') return loadPickableTargets(handle);
+
+	const kind = shelfRow.unit as DocumentTargetKind;
+	if (!DOCUMENT_TARGET_KINDS.includes(kind)) return loadPickableTargets(handle);
+	const rows = await REGISTRY[kind].load(handle);
+
+	// Subjects and organisations carry a home shelf; a person, an account and a
+	// property do not, because each already has a screen of its own and belongs
+	// to the household rather than to one shelf.
+	if (kind !== 'subject' && kind !== 'organisation') return rows;
+	const homed = await homedOn(kind, shelfRow.id, handle);
+	return rows.filter((row) => homed.has(row.id));
+}
+
+/** The ids of one kind homed on one shelf. */
+async function homedOn(
+	kind: 'subject' | 'organisation',
+	shelfId: string,
+	handle: Queryable
+): Promise<Set<string>> {
+	const table = kind === 'subject' ? subject : organisation;
+	const rows = await handle.select({ id: table.id }).from(table).where(eq(table.shelfId, shelfId));
+	return new Set(rows.map((r) => r.id));
+}
+
+/**
  * The paper filed against one record — THE query behind every documents card.
  *
  * Both halves of the read rule are in the `where`, so a card on the loans

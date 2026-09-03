@@ -85,7 +85,7 @@ async function seedRestrictedSlip(): Promise<void> {
 	await makeDocument(testDb, {
 		id: SLIP,
 		name: 'Payslip 2026-07 · Petra',
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'payslip',
 		storedName: 'petra-july.pdf',
 		ext: 'PDF',

@@ -70,7 +70,7 @@ async function seedLongScan(): Promise<string> {
 	await makeDocument(testDb, {
 		id,
 		name: 'A very long scan',
-		shelfKey: 'household',
+		shelfKey: 'inventory',
 		type: 'manual',
 		ext: 'PDF',
 		storedName,

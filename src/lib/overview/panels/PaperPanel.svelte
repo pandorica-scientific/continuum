@@ -35,7 +35,7 @@
 	<div class="figures">
 		<!-- The only figure with somewhere of its own to go: the review flow is
 		     what empties the inbox, and /documents cannot. -->
-		<a class="figure" href="/documents/review">
+		<a class="figure" href="/documents?shelf=inbox">
 			<span class="mono count">{data.inbox}</span>
 			<span class="what">waiting to be filed</span>
 		</a>

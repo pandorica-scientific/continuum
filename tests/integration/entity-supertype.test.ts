@@ -46,9 +46,10 @@ describe('registration', () => {
 			values (${rowId('a-1')}, 'Current', 'other', 'CZK')`;
 		await harness.sql`insert into property (id, name, kind) values (${rowId('pr-1')}, 'Flat', 'lived')`;
 		await harness.sql`insert into document (id, name, shelf_id, type, added_on)
-			values (${rowId('d-1')}, 'Lease', (select id from shelf where key = 'tenancy'), 'contract', '2026-01-01')`;
+			values (${rowId('d-1')}, 'Lease', (select id from shelf where key = 'property'), 'contract', '2026-01-01')`;
 		await harness.sql`insert into contact (id, name) values (${rowId('c-1')}, 'Plumber')`;
-		await harness.sql`insert into subject (id, name) values (${rowId('s-1')}, 'The car')`;
+		await harness.sql`insert into subject (id, name, shelf_id)
+			values (${rowId('s-1')}, 'The car', (select id from shelf where key = 'vehicles'))`;
 
 		const rows = await harness.sql<{ kind: string }[]>`
 			select kind from entity where id in (${rowId('p-1')}, ${rowId('a-1')}, ${rowId('pr-1')},

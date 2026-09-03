@@ -51,7 +51,7 @@ async function addDocument(id: string, name: string) {
 		{
 			id,
 			name,
-			shelfId: await shelfIdByKey('family', testDb),
+			shelfId: await shelfIdByKey('identity', testDb),
 			type: 'other',
 			storedName: `${id}.pdf`,
 			ext: 'PDF',

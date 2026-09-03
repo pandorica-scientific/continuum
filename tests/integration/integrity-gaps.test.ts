@@ -71,7 +71,7 @@ describe('document.period_on', () => {
 
 	it('accepts the first of a month', async () => {
 		await harness.sql`insert into document (id, name, shelf_id, type, added_on, period_on)
-			values (${rowId('doc-1')}, 'March payslip', (select id from shelf where key = 'finance'), 'payslip', '2026-04-01', '2026-03-01')`;
+			values (${rowId('doc-1')}, 'March payslip', (select id from shelf where key = 'income_tax'), 'payslip', '2026-04-01', '2026-03-01')`;
 		const [row] = await harness.sql<{ period_on: string }[]>`
 			select to_char(period_on, 'YYYY-MM-DD') as period_on from document where id = ${rowId('doc-1')}`;
 		expect(row.period_on).toBe('2026-03-01');
@@ -83,7 +83,7 @@ describe('document.period_on', () => {
 		// anything at all — including a value the FX join's regex silently skipped.
 		await expect(
 			harness.sql`insert into document (id, name, shelf_id, type, added_on, period_on)
-				values (${rowId('doc-2')}, 'Odd', (select id from shelf where key = 'finance'), 'payslip', '2026-04-01', '2026-03-17')`
+				values (${rowId('doc-2')}, 'Odd', (select id from shelf where key = 'income_tax'), 'payslip', '2026-04-01', '2026-03-17')`
 		).rejects.toThrow(/document_period_first_of_month/);
 	});
 

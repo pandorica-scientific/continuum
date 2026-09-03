@@ -119,8 +119,8 @@ fallback — this was an explicit decision).
 | `--plate` | `rgba(14,17,23,0.86)` | label halo base |
 | `--*-tint` | `rgba(<hue>,0.18)` | traffic-light pill fills (green/yellow/red/blue/teal/purple) |
 | `--grey-tint` | `rgba(138,150,166,0.16)` | neutral pill fill |
-| `--indigo` | `#7b8ce8` | Calendar area identity |
-| `--brand` | `#4a86c8` | logo mark, Overview area identity — see *Brand* |
+| `--indigo` | `#7d8feb` | Calendar area identity |
+| `--brand` | `#5895d8` | logo mark, Overview area identity — see *Brand* |
 | `--*-wash` | `rgba(<hue>,0.07)` | metric-tile and card backgrounds, one step below a tint |
 
 ### Colour — light
@@ -1313,7 +1313,7 @@ when nothing is pressing.
 | `Continuum Error Pages.dc.html` | The ten error states. Opens standalone; chips in the header switch state, and the rings hide an easter egg. |
 | `Continuum Ingest v0.3.8.dc.html` | The statement-ingest branch — eleven elements, both themes. Chips in the header switch element. |
 | `image-slot.js` | The drop-target component the property image slots use. Reference only. |
-| `colors_and_type.css` | The Stock Watcher design system's token file, for the values the design inherits. |
+| `TOKENS.md` | The token reference, generated from `src/lib/styles/app.css`. Regenerate with `npm run design:tokens`; never hand-edit. |
 | `README.md` | This document. |
 
 `Continuum v4.dc.html` is a single self-contained file: an HTML template followed by

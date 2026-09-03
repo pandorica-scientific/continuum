@@ -66,7 +66,7 @@ async function seedLeaseDocument(expiresOn: string, targetId: string): Promise<s
 	await makeDocument(testDb, {
 		id,
 		name: 'Renting contract · Karlín',
-		shelfKey: 'tenancy',
+		shelfKey: 'property',
 		type: 'contract',
 		addedOn: '2026-01-01',
 		expiresOn,
@@ -130,7 +130,7 @@ async function seedRefixLetter(expiresOn: string, loanId: string): Promise<strin
 	await makeDocument(testDb, {
 		id,
 		name: 'Mortgage re-fixation letter',
-		shelfKey: 'finance',
+		shelfKey: 'income_tax',
 		type: 'contract',
 		addedOn: '2026-01-01',
 		expiresOn,
