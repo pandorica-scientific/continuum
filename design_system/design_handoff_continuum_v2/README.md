@@ -200,7 +200,7 @@ All in `tokens/app.v2.css` (dark values first, light overrides under `html[data-
 
 Area hues unchanged: Overview `--brand`, Money `--teal`, Assets `--purple`, Retirement `--blue`, Home `--orange`, Calendar `--indigo`, Documents `--fg3`. Series palette unchanged. Person hues: Jana `--series-health`, Petr `--series-savings`.
 
-Type scale used: 30/24 screen title · 26 hero figure · 24–28 tile figure (22 <900) · 20 banner stat · 17–18 panel figure · 16 banner title · 15 section title · 14 panel title/row title · 13–13.5 body · 12–12.5 secondary · 11–11.5 notes/eyebrows · 10–10.5 micro. Mono: every tabular number, date, ID, %.
+Type scale used: 30/24 screen title · 26 hero figure · 24–28 tile figure (22 <900) · 20 worded tile figure (17 <900) · 17–18 panel figure · 16 queue document name · 15 section title · 14 panel title/row title · 13–13.5 body · 12–12.5 secondary · 11–11.5 notes/eyebrows · 10–10.5 micro. Mono: every tabular number, date, ID, %.
 
 ## Components to add / change (Svelte)
 | Component | Change |
