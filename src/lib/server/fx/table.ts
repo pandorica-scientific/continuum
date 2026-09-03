@@ -69,7 +69,7 @@ export function conversionBasis(
  * unconverted. Scaling stays in bigint and rounds halves away from zero when
  * the target currency stores fewer fractional digits.
  */
-export function faceValueMinor(amountMinor: bigint, from: string, to: string): bigint {
+function faceValueMinor(amountMinor: bigint, from: string, to: string): bigint {
 	const shift = minorDigits(to) - minorDigits(from);
 	if (shift === 0) return amountMinor;
 	if (shift > 0) return amountMinor * 10n ** BigInt(shift);

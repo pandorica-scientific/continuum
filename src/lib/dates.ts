@@ -13,7 +13,7 @@
  */
 
 /** Milliseconds in a day, at UTC where every day has the same number of them. */
-export const MS_PER_DAY = 86_400_000;
+const MS_PER_DAY = 86_400_000;
 
 /** Whole days from one ISO date to another. Negative when `to` is earlier. */
 export function daysBetween(from: string, to: string): number {

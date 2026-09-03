@@ -13,7 +13,7 @@ import type { Corners, DetectState } from '../core/index.ts';
 export const DETECT_INTERVAL_MS = 110;
 export const STABLE_FRAMES = 3;
 /** All four corners must have moved less than this share of the frame's width. */
-export const STABLE_TOLERANCE = 0.02;
+const STABLE_TOLERANCE = 0.02;
 /** Below this, the instruction strobes and cannot be read. */
 export const GUIDANCE_DEBOUNCE_MS = 400;
 const CORNERS = ['tl', 'tr', 'br', 'bl'] as const;

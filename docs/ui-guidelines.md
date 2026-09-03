@@ -86,7 +86,31 @@ and nothing else above its content:
 3. **`ControlRow`** — search on the left, actions on the right. One primary
    action per screen, never two.
 4. **The content.**
-5. **The sidebar**, and on Documents a rail.
+5. **The navigation** — a 264px sidebar at ≥1180, a 76px icon rail at 720–1179, a
+   bottom bar below that, and on Documents a rail beside the content. One markup,
+   three layouts: the shape is a function of the viewport and nothing else, so it
+   is media queries inside `Sidebar.svelte` rather than a `variant` prop the
+   server would have to guess.
+
+**The primitives those five are built from**, added or reworked in v0.8.1:
+
+- **`IconTile`** — a hue mixed into the ground behind a stroke icon or an emoji.
+  The most repeated shape in the product: before a screen title, a panel title,
+  a row, a card head, a nav row. Four sizes — 26 (panel title) · 30 (row) · 44
+  (card) · 46 (screen title) — and the radius follows the size rather than being
+  a prop, because a 26px tile at radius 14 and a 46px tile at radius 8 are both
+  wrong and a caller choosing freely will eventually pick one.
+- **`Switch`** — a form's submit button wearing a track and a knob, with
+  `role="switch"` and `aria-checked`. A button and not a checkbox: every switch
+  in the product sits alone in a `<form method="POST">` and IS the submission,
+  and a checkbox would need script to submit anything.
+- **`LineChart`** — lines over slots, optionally with stacked bars in their own
+  band above them, each band on its own axis. It measures its box and draws at
+  real pixel sizes; a scaled viewBox stretches the stroke and the type with the
+  width. All the geometry is in `charts/line.ts`, which has no DOM and a test
+  beside it.
+- **`Segmented`**, **`Pill`**, **`MetricTile`**, **`Eyebrow`** — restyled, same
+  contracts.
 
 `tests/unit/screen-frame.test.ts` fails the build on a screen that draws its own
 row of figures — three screens had grown their own summary band at three
@@ -167,7 +191,7 @@ looks like. Add a step here rather than a one-off px value in a component.
 | Metric label          | 12px      | 400              | `--fg3`                                              |
 | Body / list row       | 13–13.5px | 400              |                                                      |
 | Small caption         | 11.5–12px | 400              | `--fg3`                                              |
-| Sidebar nav item      | 13.5px    | 400 (500 active) |                                                      |
+| Sidebar nav item      | 13.5px    | 500 (600 active) |                                                      |
 | Sidebar group label   | 10.5px    | 400              | uppercase, `letter-spacing: 0.1em`                   |
 
 Foreground ramp: `--fg1` primary, `--fg2` secondary, `--fg3` muted. Never dim text with
@@ -194,11 +218,15 @@ about the others.
 top of a panel and then scrolling fifteen fields to find Save is two journeys for one
 decision, and on a long record the buttons are off the screen entirely.
 
-- Main content padding `26px 32px 60px`; gap between sections `26px`.
-- Sidebar `252px` (`src/routes/(app)/+layout.svelte:213`).
-- Card padding: `12px 14px` metric tiles (per `MetricTile.svelte`), `16px 18px` content
-  cards.
-- Grid gaps: `12px` metric rows, `16px` card grids.
+- Main content padding `26px 32px 60px`; `22px 22px 60px` on a rail-width screen;
+  `16px 14px 90px` on a phone, where the bottom bar owns the last 62px plus the
+  safe area. Gap between sections `16px`.
+- Navigation `264px` sidebar · `76px` rail · bottom bar (`src/routes/(app)/+layout.svelte`).
+- Card padding: `18px 20px` content cards and panels, `16px 18px` metric tiles
+  (`12px 14px` for one inside a panel).
+- Grid gaps: `12px` metric rows, `16px` card grids. A summary band lays its tiles
+  out as `repeat(auto-fit, minmax(200px, 1fr))` — a headline figure must never
+  wrap, and equal `1fr` columns will squeeze five of them until it does.
 - Radii, by what wears them (v0.8.1): `--radius-ctl` (10) buttons, inputs and segmented
   controls · `--radius-tile` (12) icon tiles and inner tiles · `--radius-card` (16) cards
   and panels · `--radius-pill` (999) pills, chips and avatars. All three are aliases of

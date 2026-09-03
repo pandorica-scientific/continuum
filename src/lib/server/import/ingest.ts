@@ -375,9 +375,7 @@ function assertChainStartsWhereTheAccountLeftOff(
  * Widest across every statement in the file, since one CAMT or ABO file may
  * carry several months, and snapped out to whole months at both ends.
  */
-export function statementPeriod(
-	statements: ParsedStatement[]
-): { start: string; end: string } | null {
+function statementPeriod(statements: ParsedStatement[]): { start: string; end: string } | null {
 	const starts: string[] = [];
 	const ends: string[] = [];
 	for (const statement of statements) {

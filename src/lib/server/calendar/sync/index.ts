@@ -20,8 +20,6 @@ import { syncAccount, type SyncReport } from './engine';
 export * from './provider';
 export { syncAccount, type SyncReport } from './engine';
 
-export type CalendarAccountRow = typeof calendarAccount.$inferSelect;
-
 /** Connected accounts, without their credentials. */
 export async function listCalendarAccounts(handle: Db = db) {
 	return handle

@@ -279,7 +279,7 @@ export type Reading = {
 	why: string;
 };
 
-export function evaluate(run: Run, cells: Cell[]): Reading {
+function evaluate(run: Run, cells: Cell[]): Reading {
 	const bands = bandsOf(run.anchors, cells);
 	const assigned = bands.reduce((a, b) => a + b.cells.length, 0);
 
@@ -390,7 +390,7 @@ function keepTypicalShapes(records: AssembledRecord[]): AssembledRecord[] {
 	});
 }
 
-export function assemble(cells: Cell[]): { records: AssembledRecord[]; readings: Reading[] } {
+function assemble(cells: Cell[]): { records: AssembledRecord[]; readings: Reading[] } {
 	const pages = [...new Set(cells.map((c) => c.page))].sort((a, b) => a - b);
 	const anchor = documentAnchor(cells, pages);
 	const records: AssembledRecord[] = [];

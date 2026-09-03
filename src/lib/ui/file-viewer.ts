@@ -18,7 +18,7 @@ export type FileKind = 'image' | 'pdf' | 'download';
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 
 /** Where an uploaded file's bytes are served from. */
-export const FILE_PREFIX = '/files/';
+const FILE_PREFIX = '/files/';
 
 /**
  * A document's bytes are served through the document, not through the filename
@@ -53,7 +53,7 @@ export function fileKind(name: string): FileKind {
  * extension it already holds — `PDF`, `JPG` — and the dot and the case are
  * this function's problem rather than every call site's.
  */
-export function fileKindFromExtension(ext: string): FileKind {
+function fileKindFromExtension(ext: string): FileKind {
 	const dotted = ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
 	if (IMAGE_EXT.has(dotted)) return 'image';
 	if (dotted === '.pdf') return 'pdf';

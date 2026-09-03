@@ -1,5 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
+	// The colour comes from whatever holds the mark, through `currentColor`.
+	// It used to be pinned to `--brand` in an inline style attribute, which beats
+	// any class — so on the sign-in hero's navy gradient the mark was drawn in
+	// mid-blue on navy and all but disappeared.
 	let { size = 22 }: { size?: number } = $props();
 </script>
 
@@ -7,7 +11,7 @@
 	viewBox="0 0 56 56"
 	style:width="{size}px"
 	style:height="{size}px"
-	style="flex: 0 0 auto; display: block; color: var(--brand);"
+	style="flex: 0 0 auto; display: block;"
 	aria-hidden="true"
 >
 	<g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round">

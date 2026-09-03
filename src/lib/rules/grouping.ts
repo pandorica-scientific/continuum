@@ -50,7 +50,7 @@ export interface RuleGroup<T extends RuleRow = RuleRow> {
 }
 
 /** Rules that only tag, filed under a name that says so rather than "—". */
-export const UNFILED_GROUP = {
+const UNFILED_GROUP = {
 	key: '',
 	label: 'No category',
 	color: '--fg3'

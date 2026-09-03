@@ -115,25 +115,27 @@
 			/>
 		{:else}
 			<article class="card contact-row">
-				{#if contact.photo}
-					<img class="avatar" src="/files/{contact.photo}" alt="" />
-				{:else}
-					<span
-						class="avatar avatar-blank"
-						style:--contact-hue="var({hues.get(contact.id) ?? '--fg3'})"
-						aria-hidden="true"
-					>
-						{contact.name.slice(0, 1).toUpperCase()}
-					</span>
-				{/if}
-
-				<div class="who">
-					<span class="c-name">{contact.name}</span>
-					{#if contact.organisation || contact.jobTitle}
-						<span class="c-work">
-							{[contact.jobTitle, contact.organisation].filter(Boolean).join(' · ')}
+				<div class="c-head">
+					{#if contact.photo}
+						<img class="avatar" src="/files/{contact.photo}" alt="" />
+					{:else}
+						<span
+							class="avatar avatar-blank"
+							style:--contact-hue="var({hues.get(contact.id) ?? '--fg3'})"
+							aria-hidden="true"
+						>
+							{contact.name.slice(0, 1).toUpperCase()}
 						</span>
 					{/if}
+
+					<div class="who">
+						<span class="c-name">{contact.name}</span>
+						{#if contact.organisation || contact.jobTitle}
+							<span class="c-work">
+								{[contact.jobTitle, contact.organisation].filter(Boolean).join(' · ')}
+							</span>
+						{/if}
+					</div>
 				</div>
 
 				<div class="reach">
@@ -168,11 +170,13 @@
 	/* Cards in a grid, not rows in a column. A contact is a person, not a line
 	   item, and at four columns the phone number ended up further from the name
 	   than the Edit button was. */
+	/* No `align-items: start`: two cards side by side at different heights read
+	   as a broken grid, and a contact with an email had 60px more card than one
+	   without. They stretch, and Edit sits at the foot of whichever is taller. */
 	.cards {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 		gap: var(--space-6);
-		align-items: start;
 	}
 	/* The toolbar and the count are the page's, not a card's. */
 	.cards > .search-row,
@@ -180,11 +184,21 @@
 	.cards > .empty {
 		grid-column: 1 / -1;
 	}
+	/* A column, not a grid: the Edit button has to sit at the FOOT of whichever
+	   card in the row is tallest, and `margin-top: auto` cannot push a grid item
+	   when the rows are packed to the top. */
 	.contact-row {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		height: 100%;
+	}
+	.c-head {
 		display: grid;
-		grid-template-columns: 44px minmax(0, 1fr) auto;
-		align-items: start;
-		gap: var(--space-4) var(--space-6);
+		grid-template-columns: 44px minmax(0, 1fr);
+		align-items: center;
+		gap: var(--space-6);
+		min-width: 0;
 	}
 
 	/* The avatar is decorative: the name beside it is the label, so an empty alt
@@ -234,7 +248,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
-		grid-column: 2;
+	}
+	/* The last thing in the column, pushed down by whatever space is left — so
+	   the button is at the same height on every card in the row. */
+	.contact-row > :global(.btn) {
+		align-self: flex-start;
+		margin-top: auto;
 	}
 	.reach :global(a) {
 		color: var(--blue);

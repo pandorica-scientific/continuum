@@ -473,13 +473,18 @@
 		width: 100%;
 		height: 100%;
 	}
+	/* `tabular-nums` is for a COLUMN of figures that has to align. This is one
+	   number with a unit beside it, and the tabular advance padded a narrow "4"
+	   out to a full digit width — which read as "4    %". */
 	.gauge-figure {
 		font-size: var(--text-5xl);
 		line-height: 1;
+		font-variant-numeric: normal;
 	}
 	.gauge-pct {
 		font-size: var(--text-xl);
 		color: var(--fg3);
+		letter-spacing: normal;
 		margin-left: 1px;
 	}
 	.gauge-note {

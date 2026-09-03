@@ -804,7 +804,7 @@ interface MonthBar {
  * together: the newest is where a screen opens, and the pair is where the month
  * steppers stop.
  */
-export async function monthSpanWithData(handle: Queryable = db): Promise<MonthSpan | null> {
+async function monthSpanWithData(handle: Queryable = db): Promise<MonthSpan | null> {
 	const day = effectiveDate();
 	const [row] = await handle
 		.select({

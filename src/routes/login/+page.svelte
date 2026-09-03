@@ -19,7 +19,7 @@
 	     the instance rather than what it could do. Below 900px it is dropped
 	     entirely: on a phone the form is the whole screen. -->
 	<aside class="hero">
-		<span class="hero-mark"><BrandMark size={22} /></span>
+		<span class="hero-mark"><BrandMark size={30} /></span>
 		<h1 class="tagline">Your household's money, on your own machine.</h1>
 		<p class="hero-sub">
 			Every figure here was read from a statement you imported, by software running where you put
@@ -108,16 +108,22 @@
 		justify-content: center;
 		gap: var(--space-7);
 		padding: 60px 56px;
+		/* Down the panel, not across its corner: this one is tall and narrow, so
+		   at the token's default 135deg the teal end landed in the bottom-right
+		   as a blob rather than as the end of a flow. */
+		--hero-angle: 165deg;
 		background: var(--hero-bg);
-		/* Fixed white in both themes: the gradient is dark in both. */
+		/* Fixed white in both themes: the gradient is dark in both. And the mark
+		   inside inherits it, which is the point of BrandMark taking its colour
+		   from context. */
 		color: #fff;
 	}
 	.hero-mark {
 		display: grid;
 		place-items: center;
-		width: 40px;
-		height: 40px;
-		border-radius: var(--radius-xl);
+		width: 52px;
+		height: 52px;
+		border-radius: var(--radius-tile);
 		background: rgba(255, 255, 255, 0.14);
 	}
 	.tagline {
@@ -168,6 +174,7 @@
 		display: flex;
 		align-items: center;
 		gap: 9px;
+		color: var(--brand);
 	}
 	.wordmark {
 		font-size: 17px;

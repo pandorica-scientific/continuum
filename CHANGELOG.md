@@ -25,6 +25,9 @@
 - 🌗 **The light theme puts white cards on darker paper**, with washes remixed at 11–16% so an area's colour survives a bright screen
 - 🥧 **The cash-split chart is a pie again** — its hole held the total, which now sits in the panel header at four times the size
 - 🚪 **Sign-in is two columns above 900px**, with what is true about the instance beside the form
+- 📐 **Two chart geometry modules folded into one engine** — `salary-chart-geometry.ts` and `tax-chart-geometry.ts` keep what a bar means and hand the pixels to `charts/line.ts`, which is tested once instead of twice
+- 🧹 **Nineteen exports narrowed to the file that uses them** and six dead declarations removed; `npm run scan:unused` went from 117 names to 98, and every one still listed is a type naming an exported function's own signature
+- 📸 **The README's screenshots are the new UI**, in both themes
 - 🎚️ **One switch component**, where the same track, knob and thirty lines of CSS were written out three times across Settings and Calendar
 - 🎨 **A register row leads with its category's colour** — an 8×22 bar down the left, so a month of spending is scannable before a word of it is read
 
@@ -33,6 +36,11 @@
 - 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
 - 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`
 - 🟢 **The green pill clears AA on light paper again** — the ink is darkened rather than the tint lightened, per the rule the palette already states
+
+### ⬆️ Upgrading
+
+- No migration. This release changes no table, column or enum; the 0.8.0 database runs it unchanged.
+- One lint rule moved: `design/no-raw-shadow` now allows `--shadow-card` and `--shadow-hero` beside `--shadow-float` and `--shadow-raise`. A fork carrying its own elevation values will still fail the build, which is the point.
 
 ## 0.8.0 — 2026-09-02
 

@@ -19,7 +19,7 @@ import { addMonths } from '$lib/cashflow/period';
  * summer is compared against a line that has seen both. Longer would drag in
  * prices from before the last two rounds of inflation.
  */
-export const BUDGET_HISTORY_MONTHS = 12;
+const BUDGET_HISTORY_MONTHS = 12;
 
 /** The smallest a bar may be drawn and still say "something, but not much". */
 const MIN_BAR_WIDTH_PCT = 2;

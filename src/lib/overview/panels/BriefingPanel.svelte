@@ -1,6 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	import Icon from '$lib/components/Icon.svelte';
+	import IconTile from '$lib/components/IconTile.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import { BRIEFING_STRIP_SIZE } from '$lib/briefing';
 	// The shape the builder produces, not a second copy of it: a source that
@@ -24,9 +24,13 @@
 			     is a thrown render rather than a muddled list. The href names the
 			     record behind the card, so the pair is unique. -->
 			{#each shown as item (`${item.href}|${item.title}`)}
-				<a href={item.href} class="brief-card">
+				<!-- Grounded in the pill's own hue, so what kind of decision this is
+				     is legible before the words are: a red card is an expiry, an
+				     amber one something waiting. -->
+				<a href={item.href} class="brief-card" style:--brief-hue="var(--{item.hue})">
 					<span class="b-top">
-						<Icon name={item.icon} size={14} /><span>{item.kind}</span>
+						<IconTile hue="--{item.hue}" icon={item.icon} size={30} />
+						<span>{item.kind}</span>
 						<span class="b-pill"><Pill hue={item.hue}>{item.pill}</Pill></span>
 					</span>
 					<span class="b-title">{item.title}</span>
@@ -97,14 +101,20 @@
 		display: flex;
 		flex-direction: column;
 		gap: 7px;
-		background: var(--surface);
+		background: color-mix(in srgb, var(--brief-hue) 8%, var(--surface));
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-card);
 		padding: 13px 15px;
 		color: var(--fg1);
+		transition:
+			background-color var(--dur) var(--ease),
+			transform var(--dur) var(--ease);
 	}
+	/* A card that opens something lifts. One pixel: enough to answer "is this a
+	   link", not enough to make four of them jump about as the pointer crosses. */
 	.brief-card:hover {
-		background: var(--card2);
+		background: color-mix(in srgb, var(--brief-hue) 14%, var(--surface));
+		transform: translateY(-1px);
 		text-decoration: none;
 	}
 	.b-top {

@@ -29,7 +29,7 @@ export const STALE_AFTER_DAYS = 45;
  * Three, because two imports are one gap and one gap is an accident. A median
  * needs something to be in the middle of.
  */
-export const MIN_IMPORTS_FOR_CADENCE = 3;
+const MIN_IMPORTS_FOR_CADENCE = 3;
 
 /**
  * How much later than the usual gap a statement may arrive before it is late.
@@ -38,7 +38,7 @@ export const MIN_IMPORTS_FOR_CADENCE = 3;
  * runs a week or two over, and a threshold with no slack in it would report
  * that as a problem every month.
  */
-export const CADENCE_SLACK = 1.5;
+const CADENCE_SLACK = 1.5;
 
 /** The middle value, or the mean of the two middle ones. */
 function median(values: number[]): number {
