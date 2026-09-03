@@ -1,0 +1,47 @@
+/* Continuum colour tokens — verbatim from src/lib/styles/app.css.
+   Dark is the default; light is an explicit opt-in via html[data-ledger-theme="light"]. */
+:root{
+color-scheme:dark;
+--bg:#0e1117;--bg2:#11161f;--side:#0a0d13;
+--card:rgba(255,255,255,0.03);--card2:rgba(255,255,255,0.06);--card3:rgba(255,255,255,0.09);
+--bd:rgba(255,255,255,0.08);--bd2:rgba(255,255,255,0.18);
+--fg1:#e6e9ef;--fg2:#c5ccd6;--fg3:#99a4b3;--fg-inverse:#0e1117;
+--green:#2ecc71;--red:#ef6a5c;--yellow:#f1c40f;--blue:#5aaee4;--purple:#bd85d3;--orange:#e67e22;--teal:#1abc9c;--indigo:#7b8ce8;--brand:#4a86c8;
+--plate:rgba(14,17,23,0.86);
+/* Pill fills: the hue itself at 0.18 over the card. */
+--green-tint:rgba(46,204,113,0.18);--yellow-tint:rgba(241,196,15,0.18);--red-tint:rgba(239,106,92,0.18);--blue-tint:rgba(90,174,228,0.18);--teal-tint:rgba(26,188,156,0.18);--purple-tint:rgba(189,133,211,0.18);--orange-tint:rgba(230,126,34,0.18);--indigo-tint:rgba(123,140,232,0.18);--grey-tint:rgba(138,150,166,0.16);
+/* One step below a tint: tile and card grounds that carry a hue without becoming a pill. */
+--green-wash:rgba(46,204,113,0.07);--yellow-wash:rgba(241,196,15,0.07);--red-wash:rgba(239,106,92,0.07);--blue-wash:rgba(90,174,228,0.07);--teal-wash:rgba(26,188,156,0.07);--purple-wash:rgba(189,133,211,0.07);--orange-wash:rgba(230,126,34,0.07);--indigo-wash:rgba(123,140,232,0.07);
+/* Category series — generated in OKLCH, validated for protan/deutan separation. Waterfall order. */
+--series-income:#75a322;--series-taxes:#ac2f3b;--series-bills:#da7306;--series-subscriptions:#7d43a8;--series-health:#7189f3;--series-transport:#786000;--series-living:#d365aa;--series-housing:#006b98;--series-savings:#00a6ad;
+/* Jurisdiction fills for the tax chart. */
+--series-health-soft:#6279f1;--series-income-soft:#aee659;--series-bills-soft:#c96900;--series-taxes-soft:#ff7d80;
+/* Reserve series for groups a household adds. Assign in order. */
+--series-r1:#008f75;--series-r2:#007369;--series-r3:#5f6ed7;--series-r4:#00ad72;--series-r5:#00a0d0;--series-r6:#ab6900;--series-r7:#9e57b9;--series-r8:#008b93;--series-r9:#009250;--series-r10:#3d5abd;
+/* Scan flow: held at dark values in both themes, deliberately. */
+--scan-plate:rgba(14,17,23,0.72);--scan-plate-edge:rgba(14,17,23,0.86);--scan-ink:#e6e9ef;
+--detect-searching:var(--fg3);--detect-found:var(--blue);--detect-stable:var(--green);--detect-rejected:var(--yellow);
+/* Elevation: two, and only two. Nothing in the document flow is raised. */
+--shadow-float:0 10px 30px rgb(0 0 0 / 0.55);--shadow-raise:0 4px 14px rgb(0 0 0 / 0.35);
+/* Semantic aliases (design-system additions; every one resolves to a product token). */
+--surface-canvas:var(--bg);--surface-sidebar:var(--side);--surface-card:var(--card);--surface-hover:var(--card2);--surface-active:var(--card3);--surface-floating:var(--bg2);
+--text-primary:var(--fg1);--text-body:var(--fg2);--text-muted:var(--fg3);--text-link:var(--blue);
+--border-soft:var(--bd);--border-strong:var(--bd2);
+--action-primary:var(--blue);--state-good:var(--green);--state-watch:var(--yellow);--state-bad:var(--red);
+}
+html[data-ledger-theme="light"]{
+color-scheme:light;
+--bg:#f3f0e9;--bg2:#eeeae1;--side:#efebe2;
+--card:#ffffff;--card2:#f7f4ee;--card3:#ebe6dc;
+--bd:rgba(60,52,40,0.1);--bd2:rgba(60,52,40,0.2);
+--fg1:#1c1a16;--fg2:#494339;--fg3:#6b6559;--fg-inverse:#ffffff;
+/* Ink only — text or a 1px border, never mixed into a tint. */
+--green:#0e7a4a;--red:#bd2e21;--yellow:#8a5900;--blue:#186294;--purple:#743990;--orange:#a2530f;--teal:#087059;--indigo:#454fb0;--brand:#1b4f8a;
+--plate:rgba(243,240,233,0.9);
+/* Tints mixed from BRIGHT hues that exist nowhere else — never from the ink above. */
+--green-tint:rgba(34,163,102,0.13);--yellow-tint:rgba(232,169,4,0.16);--red-tint:rgba(224,80,63,0.13);--blue-tint:rgba(63,143,206,0.13);--teal-tint:rgba(20,161,132,0.13);--purple-tint:rgba(165,101,196,0.13);--orange-tint:rgba(224,123,30,0.14);--indigo-tint:rgba(112,128,224,0.14);--grey-tint:rgba(120,130,145,0.13);
+--green-wash:rgba(34,163,102,0.06);--yellow-wash:rgba(232,169,4,0.06);--red-wash:rgba(224,80,63,0.05);--blue-wash:rgba(63,143,206,0.06);--teal-wash:rgba(20,161,132,0.06);--purple-wash:rgba(165,101,196,0.06);--orange-wash:rgba(224,123,30,0.06);--indigo-wash:rgba(112,128,224,0.06);
+--series-income:#83af3e;--series-taxes:#b23e46;--series-bills:#e38231;--series-subscriptions:#844fad;--series-health:#7e96fb;--series-transport:#826900;--series-living:#de75b5;--series-housing:#0074a4;--series-savings:#00b4bb;
+--series-health-soft:#4556d9;--series-income-soft:#8cc700;--series-bills-soft:#d16e00;--series-taxes-soft:#c11435;
+--series-r1:#009d81;--series-r2:#008075;--series-r3:#6b7cdf;--series-r4:#23ba7d;--series-r5:#00aee1;--series-r6:#bb7400;--series-r7:#a966c2;--series-r8:#0098a1;--series-r9:#189f5a;--series-r10:#4967c5;
+}

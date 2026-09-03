@@ -1,0 +1,14 @@
+/* Geometry — measured from the code, not chosen. Add a step rather than a one-off px. */
+:root{
+--radius-xs:4px;--radius-sm:6px;--radius-md:8px;--radius-lg:10px;--radius-xl:12px;--radius-2xl:16px;--radius-chip:20px;--radius-pill:999px;
+--space-1:2px;--space-2:4px;--space-3:6px;--space-4:8px;--space-5:10px;--space-6:12px;--space-7:14px;--space-8:16px;
+/* Layout constants the screens share */
+--control-h:36px;--sidebar-w:252px;--main-pad:26px 32px 60px;--section-gap:26px;--card-gap:16px;--tile-gap:12px;
+--touch-min:44px;--shutter-size:72px;
+--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px);
+/* Motion — the product is static; these exist for the press and the scan flow only. */
+--motion-snap:90ms; /* @kind other */
+--motion-settle:220ms; /* @kind other */
+--motion-capture:700ms; /* @kind other */
+--ease-out:cubic-bezier(0.2,0,0.2,1); /* @kind other */
+}

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/tokens/geometry.css">
+  <link rel="stylesheet" href="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/tokens/base.css">
+  <link rel="stylesheet" href="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/styles.css">
+  <script src="_ds/continuum-design-system-bfc9d515-d438-47a4-93b0-c6eac52a3df1/_ds_bundle.js"></script>
+  <script src="data/demo.js"></script>
+  <style>
+    html{background:var(--bg);scrollbar-gutter:stable}
+    body{margin:0;background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);background-attachment:fixed;color:var(--fg1);font-family:var(--font-sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+    *{box-sizing:border-box}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+  </style>
+</helmet>
+
+<sc-if value="{{ signedOut }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Sign in" style="max-width:380px;margin:0 auto;padding:90px 20px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:9px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.BrandMark" size="26" hint-size="26px,26px"></x-import><span style="font-size:16px;font-weight:600;letter-spacing:-0.01em">Continuum</span></div>
+    <p style="margin:0;font-size:12px;color:var(--fg3);text-align:center">Passkeys work at <code style="font-family:var(--font-mono)">https://continuum.local</code> — sign in with a password here.</p>
+    <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <sc-for list="{{ people }}" as="p" hint-placeholder-count="2">
+          <button type="button" onClick="{{ p.pick }}" style="display:flex;align-items:center;gap:10px;border:1px solid {{ p.border }};background:{{ p.bg }};color:{{ p.color }};border-radius:8px;padding:9px 11px;font-size:13px;cursor:pointer;text-align:left;font-family:inherit"><span style="width:26px;height:26px;border-radius:26px;background:var(--card3);display:grid;place-items:center;font-size:11px">{{ p.initials }}</span>{{ p.name }}</button>
+        </sc-for>
+      </div>
+      <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" type="password" placeholder="Password" default-value="demo-demo-demo" hint-size="100%,36px"></x-import>
+      <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Button" variant="primary" on-click="{{ signIn }}" hint-size="100%,36px">Sign in</x-import>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ signedIn }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:252px minmax(0,1fr);min-height:100vh;align-items:start">
+  <div style="position:sticky;top:0;height:100dvh">
+    <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Sidebar" active="{{ area }}" import-badge="{{ badge }}" net-worth="6 479 322.83" theme="{{ theme }}" on-theme="{{ setTheme }}" on-navigate="{{ goArea }}" hint-size="252px,100%"></x-import>
+  </div>
+  <main style="padding:26px 32px 60px;display:flex;flex-direction:column;gap:26px;min-width:0">
+    <sc-if value="{{ banner }}" hint-placeholder-val="{{ true }}">
+      <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.RateBanner" on-dismiss="{{ dismissBanner }}" hint-size="100%,48px"></x-import>
+    </sc-if>
+    <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.ScreenHeader" icon="{{ S.icon }}" hue="{{ S.hue }}" title="{{ S.title }}" caption="{{ S.caption }}" tabs="{{ S.tabs }}" active-tab="{{ S.title }}" on-tab="{{ goTab }}" hint-size="100%,80px"></x-import>
+
+    <!-- Overview -->
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Overview" style="display:flex;flex-direction:column;gap:26px">
+        <div><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Button" on-click="{{ toggleCustomise }}" hint-size="auto,36px">{{ customiseLabel }}</x-import></div>
+        <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px">
+          <div style="grid-column:1 / span 12">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Panel" title="Needs you" icon="bell" customising="{{ customising }}" fit="{{ true }}" hint-size="100%,200px">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+                <sc-for list="{{ briefing }}" as="b" hint-placeholder-count="4">
+                  <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.BriefingCard" kind="{{ b.kind }}" icon="{{ b.icon }}" pill="{{ b.pill }}" hue="{{ b.hue }}" title="{{ b.title }}" body="{{ b.body }}" hint-size="100%,150px"></x-import>
+                </sc-for>
+              </div>
+            </x-import>
+          </div>
+          <div style="grid-column:1 / span 12">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Panel" title="Where the money goes" icon="flow" href="/cashflow" customising="{{ customising }}" fit="{{ true }}" hint-size="100%,600px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Segmented" options="{{ periodOptions }}" value="{{ period }}" on-change="{{ setPeriod }}" hint-size="320px,36px"></x-import>
+                <span style="font-size:13px;color:var(--fg3)">{{ periodLabel }}</span>
+              </div>
+              <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;gap:28px;padding:12px 16px 0">
+                  <sc-for list="{{ flowTotals }}" as="t" hint-placeholder-count="4">
+                    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)">{{ t.label }}</span><span style="font-family:var(--font-mono);font-size:19px;font-weight:600;color:{{ t.color }}">{{ t.value }}<span style="font-size:12px;color:var(--fg3);margin-left:5px">Kč</span></span></div>
+                  </sc-for>
+                </div>
+                <div style="display:grid;grid-template-columns:150px 1fr 170px;gap:12px;align-items:stretch;padding:0 16px;min-height:300px">
+                  <div style="display:flex;flex-direction:column;justify-content:space-around">
+                    <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
+                      <div style="text-align:right;display:flex;gap:10px;align-items:center;justify-content:flex-end"><span><div style="font-size:13px;color:var(--fg1)">{{ s.name }}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--fg3)">{{ s.value }}</div></span><span style="width:11px;height:{{ s.h }};border-radius:2px;background:{{ s.color }}"></span></div>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px;justify-content:center">
+                    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="6">
+                      <div style="height:{{ g.h }};background:{{ g.fill }};border-right:11px solid {{ g.color }};border-radius:2px;display:flex;align-items:center;padding-left:12px"><span style="font-size:13px;color:var(--fg1);text-shadow:0 0 8px var(--bg),0 0 8px var(--bg),0 0 4px var(--bg),0 0 2px var(--bg)">{{ g.name }}</span></div>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;flex-direction:column;justify-content:space-around;font-size:12.5px;color:var(--fg1)">
+                    <sc-for list="{{ leaves }}" as="l" hint-placeholder-count="12"><span>{{ l.name }}</span></sc-for>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(174px,1fr));gap:16px;padding:14px 16px 8px;border-top:1px solid var(--bd)">
+                  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="6">
+                    <div><div style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--fg1)"><span style="width:8px;height:8px;border-radius:50%;background:{{ g.color }}"></span>{{ g.name }}<span style="font-family:var(--font-mono);color:var(--fg3);font-size:12px">{{ g.pct }}%</span></div><div style="font-size:12px;color:var(--fg3);margin-top:4px;display:flex;flex-direction:column;gap:2px"><sc-for list="{{ g.leaves }}" as="l" hint-placeholder-count="2"><span>{{ l.name }}</span></sc-for></div></div>
+                  </sc-for>
+                </div>
+              </div>
+            </x-import>
+          </div>
+          <div style="grid-column:1 / span 6">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Panel" title="What it is made of" icon="layers" customising="{{ customising }}" fit="{{ true }}" hint-size="100%,240px">
+              <sc-for list="{{ composition }}" as="c" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:5px;padding:7px 0;border-top:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--fg2)">{{ c.name }}</span><span style="font-family:var(--font-mono);color:{{ c.color }};font-weight:600">{{ c.value }}</span></div><div style="height:6px;border-radius:3px;background:var(--card3);overflow:hidden"><div style="width:{{ c.w }};height:100%;background:{{ c.color }}"></div></div></div>
+              </sc-for>
+            </x-import>
+          </div>
+          <div style="grid-column:7 / span 6">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Panel" title="Next 30 days" icon="calendar" href="/calendar" customising="{{ customising }}" fit="{{ true }}" hint-size="100%,240px">
+              <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:90px 1fr auto;gap:10px;padding:7px 0;border-top:1px solid var(--bd);font-size:13px"><span style="font-family:var(--font-mono);color:var(--fg3);font-size:12px">{{ u.date }}</span><span style="color:var(--fg1)">{{ u.label }}</span><span style="font-family:var(--font-mono);color:{{ u.color }}">{{ u.amount }}</span></div>
+              </sc-for>
+            </x-import>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- Transactions -->
+    <sc-if value="{{ isTransactions }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Transactions" style="display:flex;flex-direction:column;gap:26px">
+        <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Search" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" placeholder="counterparty, note, symbol" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="From" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" placeholder="dd/mm/yyyy" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="To" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" placeholder="dd/mm/yyyy" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Account" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Select" options="{{ accountOptions }}" hint-size="100%,36px"></x-import></x-import>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:12px">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Category" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Select" options="{{ categoryOptions }}" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Direction" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Select" options="{{ directionOptions }}" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Min Kč" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" placeholder="0" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Max Kč" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" placeholder="∞" hint-size="100%,36px"></x-import></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="State" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Select" options="{{ stateOptions }}" hint-size="100%,36px"></x-import></x-import>
+          </div>
+          <div style="display:flex;gap:16px;align-items:end;margin-top:12px">
+            <div style="width:240px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Field" label="Read as" hint-size="100%,60px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Select" options="{{ readOptions }}" hint-size="100%,36px"></x-import></x-import></div>
+            <div style="padding-bottom:10px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Checkbox" label="Show own transfers" hint-size="auto,20px"></x-import></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Button" variant="primary" hint-size="auto,36px">Apply</x-import><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Button" hint-size="auto,36px">Clear</x-import></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Eyebrow" emoji="📒" label="Matching" caption="78 transactions · open a month to read it" hint-size="100%,20px"></x-import>
+          <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;overflow:hidden">
+            <div style="display:flex;justify-content:flex-end;padding:10px 14px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Segmented" options="{{ sizeOptions }}" value="{{ size }}" on-change="{{ setSize }}" hint-size="140px,36px"></x-import></div>
+            <div style="display:grid;grid-template-columns:1fr 160px 160px 160px;padding:10px 16px;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3)"><span>Month</span><span style="text-align:right"><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:var(--green);margin-right:6px"></span>In</span><span style="text-align:right"><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:var(--red);margin-right:6px"></span>Out</span><span style="text-align:right">Net</span></div>
+            <div style="display:grid;grid-template-columns:1fr 160px 160px 160px;padding:14px 16px;border-bottom:1px solid var(--bd);align-items:center"><span><div style="font-size:14px;color:var(--fg1)">All</div><div style="font-size:12px;color:var(--fg3)">6 months · 78 transactions</div></span><span style="font-family:var(--font-mono);text-align:right;color:var(--green)">471 000</span><span style="font-family:var(--font-mono);text-align:right;color:var(--red)">519 330</span><span style="font-family:var(--font-mono);text-align:right;color:var(--red)"><span style="color:var(--fg3);font-size:12px;margin-right:6px">Kč</span>−48 330</span></div>
+            <div style="display:grid;grid-template-columns:1fr 160px 160px 160px;padding:14px 16px;border-bottom:1px solid var(--bd);align-items:center;background:var(--card2);box-shadow:inset 3px 0 0 var(--teal)"><span><div style="font-size:14px;color:var(--fg1)">▾ August 2026</div><div style="font-size:12px;color:var(--fg3);padding-left:16px">13 transactions</div></span><span style="font-family:var(--font-mono);text-align:right;color:var(--green)">78 500</span><span style="font-family:var(--font-mono);text-align:right;color:var(--red)">86 555</span><span style="text-align:right"><span style="font-family:var(--font-mono);color:var(--red)"><span style="color:var(--fg3);font-size:12px;margin-right:6px">Kč</span>−8 055</span><div style="margin-top:6px;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--green) 47%,var(--red) 47%)"></div></span></div>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+              <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.TransactionRow" row="{{ r.row }}" open="{{ r.open }}" on-toggle="{{ r.toggle }}" last="{{ r.last }}" hint-size="100%,40px"></x-import>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- Accounts -->
+    <sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Accounts" style="display:flex;flex-direction:column;gap:26px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+          <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px">
+            <div style="padding-bottom:10px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Eyebrow" emoji="🏦" label="Accounts" caption="native currency · 318 365 Kč in total" hint-size="100%,20px"></x-import></div>
+            <sc-for list="{{ accounts }}" as="a" hint-placeholder-count="3">
+              <div>
+                <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.AccountRow" emoji="{{ a.emoji }}" name="{{ a.name }}" numbers="{{ a.numbers }}" meta="{{ a.meta }}" balance="{{ a.balance }}" base-equivalent="{{ a.baseEquivalent }}" hint-size="100%,60px"></x-import>
+                <div style="padding:12px 0;border-top:1px solid var(--bd)"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.DocumentsCard" bare="{{ true }}" heading="Statements and reports" documents="{{ a.docs }}" attach-candidates="{{ attachCandidates }}" hint-size="100%,60px"></x-import></div>
+              </div>
+            </sc-for>
+            <div style="padding-top:12px;border-top:1px solid var(--bd)"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Button" hint-size="auto,36px">➕ Add account</x-import></div>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px">
+            <div style="padding-bottom:4px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Eyebrow" emoji="🔁" label="Transfers between your own accounts" hint-size="100%,20px"></x-import></div>
+            <p style="margin:8px 0;font-size:13px;color:var(--fg3)">matched automatically · never counted as income or expense</p>
+            <p style="margin:0;font-size:13px;color:var(--fg3)">Matched pairs from imported statements will appear here.</p>
+          </div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px">
+          <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Eyebrow" emoji="🥧" label="Where the cash sits" hint-size="100%,20px"></x-import>
+          <div style="display:flex;gap:28px;align-items:center;margin-top:14px">
+            <div style="width:148px;height:148px;border-radius:50%;background:{{ donutGradient }};display:grid;place-items:center"><div style="width:96px;height:96px;border-radius:50%;background:var(--bg);display:grid;place-items:center"><span style="font-family:var(--font-mono);font-size:13px;font-weight:600">318 365</span></div></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ donut }}" as="d" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:10px;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:{{ d.color }}"></span><span style="color:var(--fg2);width:120px">{{ d.name }}</span><span style="font-family:var(--font-mono);color:var(--fg3)">{{ d.pct }}%</span></div></sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- Loans -->
+    <sc-if value="{{ isLoans }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Loans" style="display:flex;flex-direction:column;gap:26px">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Eyebrow" emoji="💳" label="What you owe" caption="1 loan" hint-size="100%,20px"></x-import>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.MetricTile" label="Total owed" value="9 270 000" unit="Kč" color="var(--red)" hint-size="100%,70px"></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.MetricTile" label="Monthly payments" value="54 456" unit="Kč" hint-size="100%,70px"></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.MetricTile" label="Interest this year" value="138 895.90" unit="Kč" color="var(--orange)" note="projected from 2026-09" hint-size="100%,70px"></x-import>
+            <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.MetricTile" label="Debt-free" value="2049" note="at current payments" hint-size="100%,70px"></x-import>
+          </div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><div style="font-size:16px;font-weight:600">Mortgage ČS</div><div style="font-size:13px;color:var(--fg3);margin-top:3px">Česká spořitelna · 4.44% · secured by Flat Vinohrady + Flat Karlín</div></div><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Pill" hue="green" hint-size="auto,20px">fixed to Aug 2028</x-import></div>
+          <div style="width:190px"><x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.Input" placeholder="Add tag…" hint-size="190px,36px"></x-import></div>
+          <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.DocumentsCard" bare="{{ true }}" documents="{{ noDocs }}" empty-text="Nothing filed about this loan yet — the agreement and each re-fix letter belong here." attach-candidates="{{ attachCandidates }}" add-href="/documents?add=1" hint-size="100%,60px"></x-import>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <div><div style="font-size:12px;color:var(--fg3)">Owed</div><div style="font-family:var(--font-mono);font-size:14px;color:var(--red)">9 270 000</div></div>
+            <div><div style="font-size:12px;color:var(--fg3)">Payment</div><div style="font-family:var(--font-mono);font-size:14px">54 456</div></div>
+            <div><div style="font-size:12px;color:var(--fg3)">Rate</div><div style="font-family:var(--font-mono);font-size:14px">4.44%</div></div>
+            <div><div style="font-size:12px;color:var(--fg3)">Ends</div><div style="font-family:var(--font-mono);font-size:14px">2049</div></div>
+          </div>
+          <div><div style="height:6px;border-radius:3px;background:var(--card3);overflow:hidden"><div style="width:6.4%;height:100%;background:var(--green)"></div></div><div style="font-size:12px;color:var(--fg3);margin-top:6px">630 000 of 9 900 000 repaid</div></div>
+          <a href="#" style="font-size:13px">Schedule &amp; changes ▾</a>
+        </div>
+        <div style="border:1px dashed var(--bd2);border-radius:10px;padding:20px 24px"><div style="font-size:16px;font-weight:500">➕ Add loan</div><div style="font-size:13px;color:var(--fg3);margin-top:4px">Mortgage, car, consumer, or a loan to family. Payments then match themselves from your statements.</div></div>
+      </div>
+    </sc-if>
+  </main>
+  <x-import component-from-global-scope="ContinuumDesignSystem_bfc9d5.QuickAdd" hint-size="52px,52px"></x-import>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'&quot;,&quot;section&quot;:&quot;Theme&quot;}}">
+class Component extends DCLogic {
+  state = { signedIn: true, screen: 'overview', theme: null, period: 'ytd', customising: false, banner: true, size: '25', open: 1, who: 0 };
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  theme() { return this.state.theme ?? this.props.theme ?? 'dark'; }
+  applyTheme() {
+    if (this.theme() === 'light') document.documentElement.setAttribute('data-ledger-theme', 'light');
+    else document.documentElement.removeAttribute('data-ledger-theme');
+  }
+  renderVals() {
+    const D = window.CONTINUUM_DEMO || {};
+    const s = this.state;
+    const MONEY_TABS = ['Cash flow', 'Accounts', 'Transactions', 'Salary', 'Tax', 'Import', 'Rules'];
+    const SCREENS = {
+      overview: { area: 'overview', icon: 'compass', hue: 'brand', title: 'Overview', caption: 'August 2026 · as of the latest statement', tabs: [] },
+      transactions: { area: 'money', icon: 'ledger', hue: 'teal', title: 'Transactions', caption: 'Every row the ledger holds. Search it, narrow it, file what the rules missed.', tabs: MONEY_TABS },
+      accounts: { area: 'money', icon: 'bank', hue: 'teal', title: 'Accounts', caption: 'Balances stay in their own currency. Only totals convert.', tabs: MONEY_TABS },
+      loans: { area: 'assets', icon: 'card', hue: 'purple', title: 'Loans', caption: 'Every rate regime on record — a re-fix never rewrites booked interest.', tabs: ['Property', 'Investments', 'Loans'] }
+    };
+    const S = SCREENS[s.screen];
+    const AREA_HOME = { overview: 'overview', money: 'transactions', assets: 'loans' };
+    const TAB_TO = { Transactions: 'transactions', Accounts: 'accounts', Loans: 'loans' };
+    const flow = D.flow || { sources: [], groups: [] };
+    const people = [['JN', 'Jana Nováková'], ['PN', 'Petr Novák']].map(([initials, name], i) => ({
+      initials, name, pick: () => this.setState({ who: i }),
+      border: s.who === i ? 'var(--bd2)' : 'var(--bd)', bg: s.who === i ? 'var(--card2)' : 'transparent', color: s.who === i ? 'var(--fg1)' : 'var(--fg2)'
+    }));
+    const txns = (D.transactions || []).slice(0, s.size === '5' ? 5 : undefined);
+    return {
+      signedIn: s.signedIn, signedOut: !s.signedIn, people,
+      signIn: () => this.setState({ signedIn: true }),
+      S, area: S.area, badge: 3, theme: this.theme(),
+      setTheme: (t) => this.setState({ theme: t }),
+      goArea: (k) => { if (AREA_HOME[k]) this.setState({ screen: AREA_HOME[k] }); },
+      goTab: (t) => { if (TAB_TO[t]) this.setState({ screen: TAB_TO[t] }); },
+      banner: s.banner, dismissBanner: () => this.setState({ banner: false }),
+      isOverview: s.screen === 'overview', isTransactions: s.screen === 'transactions', isAccounts: s.screen === 'accounts', isLoans: s.screen === 'loans',
+      customising: s.customising, customiseLabel: s.customising ? 'Done' : 'Customise', toggleCustomise: () => this.setState({ customising: !s.customising }),
+      briefing: D.briefing || [],
+      periodOptions: [{ value: 'ytd', label: 'Year to date' }, { value: 'm', label: 'This month' }, { value: '12', label: '12 months' }],
+      period: s.period, setPeriod: (p) => this.setState({ period: p }),
+      periodLabel: s.period === 'm' ? 'August 2026' : s.period === '12' ? 'September 2025 – August 2026' : flow.period,
+      flowTotals: [['In', flow.in, 'var(--green)'], ['Out', flow.out, 'var(--fg1)'], ['Saved', flow.saved, 'var(--green)'], ['Kept', flow.kept, 'var(--red)']].map(([label, value, color]) => ({ label, value, color })),
+      sources: flow.sources.map(([name, value, p]) => ({ name, value, h: (24 + p * 2) + 'px', color: name === 'From reserves' ? 'var(--series-taxes)' : 'var(--series-income)' })),
+      groups: flow.groups.map(([name, tok, pct, leaves]) => ({ name, pct, h: (pct * 4.2) + 'px', color: 'var(' + tok + ')', fill: 'color-mix(in srgb, var(' + tok + ') 45%, transparent)', leaves: leaves.map((l) => ({ name: l })) })),
+      leaves: flow.groups.flatMap(([, , , leaves]) => leaves).map((l) => ({ name: l })),
+      composition: (D.composition || []).map(([name, value, tok, w]) => ({ name, value, color: 'var(' + tok + ')', w: w + '%' })),
+      upcoming: (D.upcoming || []).map(([date, label, amount, neg]) => ({ date, label, amount, color: neg ? 'var(--red)' : 'var(--green)' })),
+      accountOptions: ['All accounts', 'Fio běžný', 'Revolut', 'XTB portfolio'], categoryOptions: ['Any category', 'Uncategorised', 'Groceries', 'Housing'],
+      directionOptions: ['In and out', 'Money in', 'Money out'], stateOptions: ['Any state', 'filed by rule', 'needs a look', 'confirmed'],
+      readOptions: ['However it was read', 'Exactly as printed', 'By the running balance'],
+      sizeOptions: [{ value: '5', label: '5' }, { value: '25', label: '25' }, { value: '50', label: '50' }], size: s.size, setSize: (v) => this.setState({ size: v }),
+      rows: txns.map((row, i) => ({ row, open: s.open === i, toggle: () => this.setState({ open: s.open === i ? -1 : i }), last: i === txns.length - 1 })),
+      accounts: (D.accounts || []).map((a) => ({ ...a, numbers: a.numbers || [] })),
+      attachCandidates: ['Attach a document you already have…'], noDocs: [],
+      donut: (D.donut || []).map(([name, pct, color]) => ({ name, pct: pct.toFixed(1), color })),
+      donutGradient: 'conic-gradient(' + (D.donut || []).map(([, p, c], i, a) => { const from = a.slice(0, i).reduce((t, x) => t + x[1], 0); return c + ' ' + from + '% ' + (from + p) + '%'; }).join(', ') + ')'
+    };
+  }
+}
+</script>
+</body>
+</html>

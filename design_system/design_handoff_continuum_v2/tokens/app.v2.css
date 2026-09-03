@@ -1,0 +1,103 @@
+/* Continuum v2 — token additions. Loads AFTER app.css. Adds tokens only, except under html[data-ledger-theme='light'],
+   where it overrides the light surface set (bg/card/surface/bd/fg2/fg3, shadows incl.
+   --shadow-float, tile alphas, washes, hero). Dark values of app.css are untouched. */
+
+:root {
+	/* Geometry. Cards and tiles step up two sizes; controls one. */
+	--radius-card: var(--radius-2xl); /* 16 */
+	--radius-tile: var(--radius-xl); /* 12 */
+	--radius-ctl: var(--radius-lg); /* 10 */
+
+	/* Surfaces. One step brighter than --card so a shadow has something to lift. */
+	--surface: rgba(255, 255, 255, 0.045);
+	--surface-2: rgba(255, 255, 255, 0.075);
+	--surface-3: rgba(255, 255, 255, 0.11);
+
+	/* Elevation in the flow — allowed in v2, but one value, and quiet. */
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.28), 0 12px 32px -16px rgb(0 0 0 / 0.55);
+	--shadow-hero: 0 18px 44px -22px color-mix(in srgb, var(--brand) 70%, transparent);
+
+	/* Motion. One easing, two durations. Press stays at 90ms. */
+	--ease: cubic-bezier(0.2, 0, 0.2, 1);
+	--dur: 150ms;
+	--dur-slow: 260ms;
+
+	/* Icon tiles: a hue mixed into the surface behind a stroke icon. */
+	--tile-alpha: 16%;
+	--tile-alpha-active: 28%;
+
+	/* Headline figures use the sans; table figures stay mono. */
+	--font-display: var(--font-sans);
+	--display-tracking: -0.03em;
+
+	/* Net-worth hero and area washes. */
+	--hero-bg: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--brand) 46%, var(--surface)),
+		color-mix(in srgb, var(--indigo) 26%, var(--surface)) 62%,
+		color-mix(in srgb, var(--teal) 18%, var(--surface))
+	);
+}
+
+html[data-ledger-theme='light'] {
+	/* Paper a step darker than the cards, so white cards read as cards and not
+	   as more page. Cooler than app.css's oat so the hue washes stay legible. */
+	--bg: #eeeae2;
+	--bg2: #e6e1d7;
+	--side: #f5f2ec;
+	--card: #f9f7f2;
+	--card2: #f1ede5;
+	--card3: #e6e0d4;
+	--surface: #ffffff;
+	--surface-2: #f3efe7;
+	--surface-3: #e4ded2;
+	--bd: rgb(60 52 40 / 0.11);
+	--bd2: rgb(60 52 40 / 0.22);
+	--fg2: #3d3a34;
+	--fg3: #75705f;
+	--shadow-card: 0 1px 2px rgb(60 52 40 / 0.08), 0 14px 36px -18px rgb(60 52 40 / 0.32);
+	--shadow-hero: 0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent);
+	--shadow-float: 0 8px 28px -8px rgb(60 52 40 / 0.35), 0 1px 3px rgb(60 52 40 / 0.12);
+	--tile-alpha: 17%;
+	--tile-alpha-active: 28%;
+	/* Washes mixed from the hue into the white card, at a strength that survives
+	   a bright screen — the 6% dark values vanish on paper. */
+	--teal-wash: color-mix(in srgb, var(--teal) 11%, #fff);
+	--purple-wash: color-mix(in srgb, var(--purple) 11%, #fff);
+	--blue-wash: color-mix(in srgb, var(--blue) 11%, #fff);
+	--orange-wash: color-mix(in srgb, var(--orange) 12%, #fff);
+	--indigo-wash: color-mix(in srgb, var(--indigo) 11%, #fff);
+	--green-wash: color-mix(in srgb, var(--green) 12%, #fff);
+	--yellow-wash: color-mix(in srgb, var(--yellow) 16%, #fff);
+	--red-wash: color-mix(in srgb, var(--red) 10%, #fff);
+	--hero-bg: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--brand) 92%, #0e1a2b),
+		color-mix(in srgb, var(--indigo) 78%, #1a1436) 62%,
+		color-mix(in srgb, var(--teal) 72%, #0f2a2a)
+	);
+}
+
+/* Shared v2 idioms — see handoff/CHANGES.md for where each replaces what. */
+.v2-card {
+	background: var(--surface);
+	border: 1px solid var(--bd);
+	border-radius: var(--radius-card);
+	box-shadow: var(--shadow-card);
+	padding: 18px 20px;
+}
+.v2-tile {
+	display: grid;
+	place-items: center;
+	border-radius: var(--radius-tile);
+	background: color-mix(in srgb, var(--tile-hue, var(--fg3)) var(--tile-alpha), transparent);
+	color: var(--tile-hue, var(--fg3));
+	flex: none;
+}
+.v2-display {
+	font-family: var(--font-display);
+	font-weight: 650;
+	letter-spacing: var(--display-tracking);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.05;
+}

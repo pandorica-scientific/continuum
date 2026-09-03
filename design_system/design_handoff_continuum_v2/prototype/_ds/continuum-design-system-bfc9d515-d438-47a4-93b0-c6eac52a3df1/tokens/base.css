@@ -1,0 +1,27 @@
+/* Base layer and shared primitives, lifted from app.css so plain HTML in a consuming project reads like the product. */
+html{background:var(--bg);scrollbar-gutter:stable}
+body{margin:0;background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);background-attachment:fixed;color:var(--fg1);font-family:var(--font-sans);font-size:var(--text-xl);line-height:1.55;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+input,select,button,textarea{font-family:inherit}
+input::placeholder{color:var(--fg3)}
+input[type='checkbox'],input[type='radio']{accent-color:var(--blue)}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:8px}::-webkit-scrollbar-track{background:transparent}
+.mono{font-family:var(--font-mono)}
+.quiet{color:var(--fg3);font-size:var(--text-sm)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}
+.eyebrow{font-size:var(--text-xs);letter-spacing:0.1em;text-transform:uppercase;color:var(--fg3);min-width:0}
+.eyebrow-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.eyebrow-caption{font-size:var(--text-md);color:var(--fg3)}
+.section{display:flex;flex-direction:column;gap:12px}
+input:where(:not([type='checkbox'],[type='radio'],[type='range'])),select,textarea{border:1px solid var(--bd2);background:var(--card);color:var(--fg1);border-radius:var(--radius-md);padding:var(--space-4) 11px;font-size:var(--text-md);font-family:inherit;line-height:1.35;min-height:var(--control-h)}
+.field{display:flex;flex-direction:column;gap:var(--space-3);font-size:var(--text-sm);color:var(--fg3);min-width:0}
+.btn{border:1px solid var(--bd2);background:var(--card);color:var(--fg1);border-radius:8px;padding:7px 13px;font-size:var(--text-md);cursor:pointer;white-space:nowrap;min-height:var(--control-h);line-height:1.35;display:inline-flex;align-items:center;justify-content:center;gap:var(--space-3);transition:background-color 90ms ease-out,transform 90ms ease-out}
+.btn:hover{background:var(--card2)}.btn:active:not(:disabled){background:var(--card3);transform:translateY(1px)}.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}.btn:disabled{opacity:0.45;cursor:not-allowed}
+.btn-primary{border:1px solid var(--blue);background:var(--blue);color:var(--fg-inverse)}.btn-primary:hover{background:var(--blue);opacity:0.9}.btn-primary:active:not(:disabled){background:var(--blue);opacity:0.78;transform:translateY(1px)}
+.icon-btn{background:none;border:1px solid var(--bd);border-radius:var(--radius-md);color:var(--fg3);cursor:pointer;display:inline-flex;align-items:center;padding:5px 8px}.icon-btn:hover,.icon-btn:focus-visible,.icon-btn[aria-expanded='true']{border-color:var(--blue);color:var(--fg1)}
+.chips{display:flex;flex-wrap:wrap;gap:var(--space-3)}
+.pick-chip{position:relative;display:inline-flex;align-items:center;height:28px;padding:0 var(--space-6);border:1px solid var(--bd);border-radius:var(--radius-chip);background:var(--card);color:var(--fg2);font-size:var(--text-sm);cursor:pointer;white-space:nowrap}
+.pick-chip input{position:absolute;inset:0;opacity:0;margin:0;height:auto;padding:0;cursor:pointer}.pick-chip:hover{background:var(--card2)}.pick-chip:has(input:checked){background:var(--card3);border-color:var(--bd2);color:var(--fg1)}
+.chip-x{border:0;padding:0;background:none;color:var(--fg3);font-size:var(--text-xs);line-height:1;cursor:pointer}.chip-x:hover{color:var(--fg1)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}.btn,button{transition-duration:90ms!important}.btn:active:not(:disabled){transform:none}}
