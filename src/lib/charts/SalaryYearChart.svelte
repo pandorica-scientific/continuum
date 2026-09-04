@@ -113,7 +113,12 @@
 
 <section class="card chart">
 	<div class="head">
-		<Eyebrow hue="--teal" emoji="💼" label={LABEL[mode]} />
+		<Eyebrow
+			hue="--teal"
+			emoji="💼"
+			label={LABEL[mode]}
+			caption={mode === 'change' ? 'per cent on the year before' : axisUnit}
+		/>
 		<Segmented
 			options={[
 				{ value: 'avg', label: 'Average month' },
@@ -315,8 +320,10 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	/* At the end of the keys' own row where it fits, on its own line where it
+	   does not — `margin-left: auto` against a wrapping flex row does both. */
 	.chart :global(.footnote) {
-		flex-basis: 100%;
+		margin-left: auto;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		line-height: 1.5;

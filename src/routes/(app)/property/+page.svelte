@@ -184,109 +184,6 @@
 		<FigureGrid figures={data.detail.metrics} recordId={data.detail.id} action="?/setFigure" />
 	</section>
 
-	<section class="card stack">
-		<div class="eyebrow-row">
-			<Eyebrow hue="--purple" emoji="📈" label="What it has been worth" />
-			<span class="eyebrow-caption">
-				{data.detail.valueSeries.length > 1
-					? `${data.detail.valueSeries.length} valuations`
-					: 'add a second valuation to see the line'}
-			</span>
-		</div>
-
-		{#if valueChart}
-			<div class="vchart">
-				{#each valueChart.axis as a (a.top)}
-					<span class="vaxis mono" style:top={a.top}>{a.label}</span>
-				{/each}
-				<svg viewBox="0 0 800 160" preserveAspectRatio="none">
-					{#each [0, 80, 160] as gy (gy)}
-						<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
-					{/each}
-					<polyline
-						points={valueChart.line}
-						fill="none"
-						stroke="var(--purple)"
-						stroke-width="2.5"
-						stroke-linejoin="round"
-						vector-effect="non-scaling-stroke"
-					/>
-				</svg>
-			</div>
-			<div class="vyears mono">
-				<span>{data.detail.valueSeries[0].on}</span>
-				<span>{data.detail.valueSeries[data.detail.valueSeries.length - 1].on}</span>
-			</div>
-		{/if}
-
-		<ul class="vlist">
-			{#each [...data.detail.valueSeries].reverse() as v (v.on)}
-				<li>
-					<span class="mono">{v.on}</span>
-					<span class="vsource">{v.source}</span>
-					<span class="mono vvalue">{v.value}</span>
-				</li>
-			{:else}
-				<li class="quiet">No valuations yet — the first one starts the line.</li>
-			{/each}
-		</ul>
-
-		<form method="POST" action="?/addValuation" use:enhance class="vform">
-			<input type="hidden" name="propertyId" value={data.detail.id} />
-			<input type="hidden" name="currency" value={data.detail.currency} />
-			<label class="field"><span>On</span><input name="valuedOn" type="date" required /></label>
-			<label class="field"><span>Worth</span><input name="value" inputmode="decimal" /></label>
-			<label class="field">
-				<span>From</span>
-				<select name="source">
-					<option value="estimate">An estimate</option>
-					<option value="appraisal">An appraisal</option>
-					<option value="index">A price index</option>
-					<option value="purchase">What was paid</option>
-				</select>
-			</label>
-			<button type="submit" class="btn btn-primary">Add</button>
-		</form>
-		<!-- A past date leaves today's figure alone, which is what makes entering
-		     the history of a flat owned for years safe. -->
-		<span class="quiet">
-			Dating one in the past adds to the history without changing what the flat is worth today.
-		</span>
-	</section>
-
-	<section class="card stack">
-		<Eyebrow hue="--purple" emoji="🧾" label="What it cost to buy" />
-		<!-- Money in is the household's OWN cash: the deposit plus the costs of
-		     buying. The price itself is mostly the bank's, and the part that becomes
-		     theirs arrives as the mortgage is repaid — which the loan already
-		     records. Counting the price here would double it. -->
-		<form method="POST" action="?/setOpening" use:enhance class="vform">
-			<input type="hidden" name="propertyId" value={data.detail.id} />
-			<input type="hidden" name="currency" value={data.detail.currency} />
-			<label class="field">
-				<span>Bought on</span>
-				<input name="purchasedOn" type="date" value={data.detail.opening?.purchasedOn ?? ''} />
-			</label>
-			<label class="field">
-				<span>Price</span>
-				<input name="price" inputmode="decimal" value={data.detail.opening?.price ?? ''} />
-			</label>
-			<label class="field">
-				<span>Fees &amp; tax</span>
-				<input name="costs" inputmode="decimal" value={data.detail.opening?.costs ?? ''} />
-			</label>
-			<label class="field">
-				<span>Deposit</span>
-				<input name="deposit" inputmode="decimal" value={data.detail.opening?.deposit ?? ''} />
-			</label>
-			<button type="submit" class="btn btn-primary">Save</button>
-		</form>
-		<span class="quiet">
-			Money in becomes the deposit plus the fees — your own cash. The rest of the price is the
-			bank's, and becomes yours as the mortgage is repaid.
-		</span>
-	</section>
-
 	<section class="two-col">
 		<div class="card stack">
 			<div class="eyebrow-row">
@@ -583,6 +480,108 @@
 				isAdmin={data.isAdmin}
 			/>
 		</div>
+	</section>
+	<section class="card stack">
+		<div class="eyebrow-row">
+			<Eyebrow hue="--purple" emoji="📈" label="What it has been worth" />
+			<span class="eyebrow-caption">
+				{data.detail.valueSeries.length > 1
+					? `${data.detail.valueSeries.length} valuations`
+					: 'add a second valuation to see the line'}
+			</span>
+		</div>
+
+		{#if valueChart}
+			<div class="vchart">
+				{#each valueChart.axis as a (a.top)}
+					<span class="vaxis mono" style:top={a.top}>{a.label}</span>
+				{/each}
+				<svg viewBox="0 0 800 160" preserveAspectRatio="none">
+					{#each [0, 80, 160] as gy (gy)}
+						<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+					{/each}
+					<polyline
+						points={valueChart.line}
+						fill="none"
+						stroke="var(--purple)"
+						stroke-width="2.5"
+						stroke-linejoin="round"
+						vector-effect="non-scaling-stroke"
+					/>
+				</svg>
+			</div>
+			<div class="vyears mono">
+				<span>{data.detail.valueSeries[0].on}</span>
+				<span>{data.detail.valueSeries[data.detail.valueSeries.length - 1].on}</span>
+			</div>
+		{/if}
+
+		<ul class="vlist">
+			{#each [...data.detail.valueSeries].reverse() as v (v.on)}
+				<li>
+					<span class="mono">{v.on}</span>
+					<span class="vsource">{v.source}</span>
+					<span class="mono vvalue">{v.value}</span>
+				</li>
+			{:else}
+				<li class="quiet">No valuations yet — the first one starts the line.</li>
+			{/each}
+		</ul>
+
+		<form method="POST" action="?/addValuation" use:enhance class="vform">
+			<input type="hidden" name="propertyId" value={data.detail.id} />
+			<input type="hidden" name="currency" value={data.detail.currency} />
+			<label class="field"><span>On</span><input name="valuedOn" type="date" required /></label>
+			<label class="field"><span>Worth</span><input name="value" inputmode="decimal" /></label>
+			<label class="field">
+				<span>From</span>
+				<select name="source">
+					<option value="estimate">An estimate</option>
+					<option value="appraisal">An appraisal</option>
+					<option value="index">A price index</option>
+					<option value="purchase">What was paid</option>
+				</select>
+			</label>
+			<button type="submit" class="btn btn-primary">Add</button>
+		</form>
+		<!-- A past date leaves today's figure alone, which is what makes entering
+		     the history of a flat owned for years safe. -->
+		<span class="quiet">
+			Dating one in the past adds to the history without changing what the flat is worth today.
+		</span>
+	</section>
+
+	<section class="card stack">
+		<Eyebrow hue="--purple" emoji="🧾" label="What it cost to buy" />
+		<!-- Money in is the household's OWN cash: the deposit plus the costs of
+		     buying. The price itself is mostly the bank's, and the part that becomes
+		     theirs arrives as the mortgage is repaid — which the loan already
+		     records. Counting the price here would double it. -->
+		<form method="POST" action="?/setOpening" use:enhance class="vform">
+			<input type="hidden" name="propertyId" value={data.detail.id} />
+			<input type="hidden" name="currency" value={data.detail.currency} />
+			<label class="field">
+				<span>Bought on</span>
+				<input name="purchasedOn" type="date" value={data.detail.opening?.purchasedOn ?? ''} />
+			</label>
+			<label class="field">
+				<span>Price</span>
+				<input name="price" inputmode="decimal" value={data.detail.opening?.price ?? ''} />
+			</label>
+			<label class="field">
+				<span>Fees &amp; tax</span>
+				<input name="costs" inputmode="decimal" value={data.detail.opening?.costs ?? ''} />
+			</label>
+			<label class="field">
+				<span>Deposit</span>
+				<input name="deposit" inputmode="decimal" value={data.detail.opening?.deposit ?? ''} />
+			</label>
+			<button type="submit" class="btn btn-primary">Save</button>
+		</form>
+		<span class="quiet">
+			Money in becomes the deposit plus the fees — your own cash. The rest of the price is the
+			bank's, and becomes yours as the mortgage is repaid.
+		</span>
 	</section>
 {:else}
 	<section class="card">

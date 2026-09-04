@@ -136,6 +136,7 @@
 							</span>
 						{/if}
 					</div>
+					<button class="btn" type="button" onclick={() => (opened = contact.id)}>Edit</button>
 				</div>
 
 				<div class="reach">
@@ -148,8 +149,6 @@
 						{#each labelsFor(contact) as label, i (i)}<span class="chip">{label}</span>{/each}
 					</div>
 				{/if}
-
-				<button class="btn" type="button" onclick={() => (opened = contact.id)}>Edit</button>
 			</article>
 		{/if}
 	{/each}
@@ -172,7 +171,7 @@
 	   than the Edit button was. */
 	/* No `align-items: start`: two cards side by side at different heights read
 	   as a broken grid, and a contact with an email had 60px more card than one
-	   without. They stretch, and Edit sits at the foot of whichever is taller. */
+	   without. They stretch, so a row of cards has one bottom edge. */
 	.cards {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -184,9 +183,9 @@
 	.cards > .empty {
 		grid-column: 1 / -1;
 	}
-	/* A column, not a grid: the Edit button has to sit at the FOOT of whichever
-	   card in the row is tallest, and `margin-top: auto` cannot push a grid item
-	   when the rows are packed to the top. */
+	/* A column. Edit sits in the head beside the name, which is where the design
+	   puts it and what makes the button land in the same place on every card
+	   whatever else the card happens to hold. */
 	.contact-row {
 		display: flex;
 		flex-direction: column;
@@ -195,7 +194,7 @@
 	}
 	.c-head {
 		display: grid;
-		grid-template-columns: 44px minmax(0, 1fr);
+		grid-template-columns: 44px minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--space-6);
 		min-width: 0;
@@ -248,12 +247,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
-	}
-	/* The last thing in the column, pushed down by whatever space is left — so
-	   the button is at the same height on every card in the row. */
-	.contact-row > :global(.btn) {
-		align-self: flex-start;
-		margin-top: auto;
 	}
 	.reach :global(a) {
 		color: var(--blue);

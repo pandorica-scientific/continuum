@@ -29,3 +29,38 @@ export function deltaSinceMonthStart(
 		currentMinor - convert(baseline.valueMinor, baseline.currency, currentCurrency, baseline.day)
 	);
 }
+
+/**
+ * How big this month's move is against the biggest month on record.
+ *
+ * The pill in the sidebar carries a fill, and the fill has to mean something.
+ * A share of net worth is useless — a good month moves a fraction of a per
+ * cent of a six-figure total, and the bar would never leave zero. A share of
+ * the LARGEST monthly move the household has had is the comparison a person
+ * actually makes: "is this a big month for us, or a quiet one".
+ *
+ * Returns 0–1, or null when there is nothing to compare against — one month of
+ * history cannot say whether a month was big.
+ */
+export function deltaShareOfBiggest(
+	currentDeltaMinor: bigint | null,
+	monthlyDeltasMinor: readonly bigint[]
+): number | null {
+	if (currentDeltaMinor === null) return null;
+	const abs = (v: bigint) => (v < 0n ? -v : v);
+	const biggest = monthlyDeltasMinor.reduce((most, d) => (abs(d) > most ? abs(d) : most), 0n);
+	if (biggest === 0n) return null;
+	const share = Number(abs(currentDeltaMinor)) / Number(biggest);
+	return Math.max(0, Math.min(1, share));
+}
+
+/**
+ * Month-on-month change, from one snapshot per month in ascending order.
+ *
+ * The first month has nothing before it, so it produces no delta rather than a
+ * delta equal to its own value — which would make the first month on record the
+ * biggest one forever.
+ */
+export function monthlyDeltas(points: readonly { valueMinor: bigint }[]): bigint[] {
+	return points.slice(1).map((point, i) => point.valueMinor - points[i].valueMinor);
+}

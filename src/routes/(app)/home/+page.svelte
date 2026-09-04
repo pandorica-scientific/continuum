@@ -159,7 +159,7 @@
 		<section class="card stack">
 			<div class="eyebrow-row">
 				<Eyebrow hue="--orange" emoji="⚡" label="Energy into the budget" />
-				<span class="eyebrow-caption">last {data.energyDays.length} days · orange ran high</span>
+				<span class="eyebrow-caption">kWh a day · above the average in orange</span>
 			</div>
 			<div class="bars">
 				{#each data.energyDays as d, i (d.day)}

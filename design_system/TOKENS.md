@@ -422,3 +422,15 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 | `--display-figure` | `24px` | — |
 | `--display-sm` | `20px` | — |
 | `--display-xs` | `17px` | — |
+
+## Worn by the net-worth hero, the sign-in panel and the quick-add
+
+> Worn by the net-worth hero, the sign-in panel and the quick-add.
+> The angle is a knob because the same three colours have to flow across a
+> wide sidebar card and DOWN a tall sign-in panel: at 135deg on something
+> tall and narrow the teal end lands in a corner and reads as a stain
+> rather than as the end of a gradient.
+
+| Token | Dark | Light |
+|---|---|---|
+| `--hero-angle` | `135deg` | — |

@@ -165,7 +165,10 @@
 				aria-expanded={open}
 			>
 				<span class="month">
-					<span class="chevron" class:open>{open ? '▼' : '▶'}</span>
+					<!-- A 34px tile, not a bare glyph: it is the row's grip, and at 9px
+					     the chevron was a target nobody could aim at. Teal when open,
+					     which is the one place this screen's area colour appears. -->
+					<span class="chevron" class:open aria-hidden="true">{open ? '▾' : '▸'}</span>
 					<span class="m-name">
 						<span class="m-label">{row.label}</span>
 						<span class="c-sub">
@@ -320,7 +323,7 @@
 	.month {
 		display: flex;
 		align-items: center;
-		gap: var(--space-4);
+		gap: var(--space-5);
 		min-width: 0;
 	}
 	.m-name {
@@ -330,16 +333,27 @@
 		min-width: 0;
 	}
 	.m-label {
-		font-size: var(--text-md);
+		font-size: var(--text-lg);
+		font-weight: 600;
 		color: var(--fg1);
 	}
 	.chevron {
-		font-size: 9px;
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: var(--radius-lg);
+		background: var(--surface-2);
 		color: var(--fg3);
+		font-size: var(--text-sm);
 		flex: none;
+		transition:
+			background-color var(--dur) var(--ease),
+			color var(--dur) var(--ease);
 	}
 	.chevron.open {
-		color: var(--blue);
+		background: color-mix(in srgb, var(--teal) var(--tile-alpha-active), transparent);
+		color: var(--teal);
 	}
 	.cell {
 		display: flex;

@@ -668,21 +668,33 @@
 		font-size: var(--text-xs);
 	}
 	/* A slot is a cell with a name in it. A nameless square says nothing about
-	   WHICH paper is missing, which is the only thing a slot is for. */
-	.slot {
+	   WHICH paper is missing, which is the only thing a slot is for.
+
+	   `.slot.cell` and not `.slot`: `.cell` pins a ribbon square to 28px and is
+	   declared further down, so at equal specificity it won and the two-line
+	   face hung 16px out of its own lane — across the next lane's rule. */
+	.slot.cell {
 		height: auto;
 	}
-	.slot-face {
+	/* Two selectors deep on purpose: `.filled` and `.empty` are the RIBBON's
+	   cells — a 28px box with its contents centred — and they are declared after
+	   this. A slot is a cell with a name and a date in it, so it needs its own
+	   height and its own alignment, and (0,2,0) is what beats them. Without this
+	   the name sat centred in 28px and the date fell out below the box. */
+	.slot .slot-face {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		justify-content: center;
 		gap: 1px;
 		width: 100%;
+		height: auto;
+		min-height: 28px;
 		padding: var(--space-4) var(--space-5);
 		border-radius: var(--radius-sm);
 		font-size: var(--text-sm);
 		text-align: left;
+		place-items: stretch;
 	}
 	.slot-name {
 		color: var(--fg1);

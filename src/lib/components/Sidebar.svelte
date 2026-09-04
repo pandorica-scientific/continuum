@@ -19,6 +19,8 @@
 		netWorth: string | null;
 		netWorthDelta: string | null;
 		netWorthDeltaPositive: boolean;
+		/** How big this month's change is against the biggest on record, 0–1. */
+		netWorthDeltaShare: number | null;
 		baseCurrency: string;
 		importBadge: number;
 		version: string;
@@ -33,6 +35,7 @@
 		netWorth,
 		netWorthDelta,
 		netWorthDeltaPositive,
+		netWorthDeltaShare,
 		baseCurrency,
 		importBadge,
 		version,
@@ -121,7 +124,24 @@
 			<span class="hero-figure display">{netWorth}<span class="hero-ccy">{baseCurrency}</span></span
 			>
 			{#if netWorthDelta}
-				<span class="hero-delta mono" class:down={!netWorthDeltaPositive}>{netWorthDelta}</span>
+				<!-- The pill carries a fill, and the fill is the month measured against
+				     the biggest month on record. A share of net worth would be useless
+				     here — a good month moves a fraction of a per cent of a six-figure
+				     total — and "is this a big month for us" is the comparison a person
+				     actually makes. It grows from nothing on arrival, which is the one
+				     piece of motion on the panel. -->
+				<span
+					class="hero-delta mono"
+					class:down={!netWorthDeltaPositive}
+					title={netWorthDeltaShare === null
+						? undefined
+						: `${Math.round(netWorthDeltaShare * 100)}% of the biggest month on record`}
+				>
+					{#if netWorthDeltaShare !== null}
+						<span class="delta-fill" style:--share="{netWorthDeltaShare * 100}%"></span>
+					{/if}
+					<span class="delta-value">{netWorthDelta}</span>
+				</span>
 				<span class="hero-note">this month</span>
 			{/if}
 		</div>
@@ -306,14 +326,36 @@
 	   unreadable, and the sign is already in the number. Down gets a tint of
 	   red behind it rather than red text, for the same reason. */
 	.hero-delta {
+		position: relative;
 		justify-self: start;
 		font-size: var(--text-xs);
 		padding: 2px var(--space-4);
 		border-radius: var(--radius-pill);
 		background: rgba(255, 255, 255, 0.16);
+		overflow: hidden;
+		isolation: isolate;
 	}
-	.hero-delta.down {
-		background: color-mix(in srgb, var(--red) 40%, rgba(255, 255, 255, 0.16));
+	/* Green for a month that added, red for one that took away. Translucent, so
+	   the gradient behind it still reads as the panel's own ground. */
+	.delta-fill {
+		position: absolute;
+		inset: 0;
+		width: var(--share);
+		background: color-mix(in srgb, var(--green) 55%, transparent);
+		border-radius: inherit;
+		z-index: -1;
+		animation: delta-grow var(--dur-slow) var(--ease);
+	}
+	.hero-delta.down .delta-fill {
+		background: color-mix(in srgb, var(--red) 55%, transparent);
+	}
+	.delta-value {
+		position: relative;
+	}
+	@keyframes delta-grow {
+		from {
+			width: 0;
+		}
 	}
 	.hero-note {
 		font-size: var(--text-xs);

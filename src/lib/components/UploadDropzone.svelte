@@ -13,6 +13,7 @@
 		description,
 		reportErrors = true,
 		hero = false,
+		heroNote,
 		formats = [],
 		name,
 		onfiles
@@ -40,6 +41,8 @@
 		 * one field beside a date and a subject, and stays the compact one.
 		 */
 		hero?: boolean;
+		/** The line under the title, saying what happens to what is dropped. */
+		heroNote?: string;
 		/** Format names printed as chips under the title. Hero only. */
 		formats?: string[];
 		/**
@@ -214,6 +217,9 @@
 		<span class="hero-tile"><Icon name="inbox" size={24} /></span>
 	{/if}
 	<span class="title">{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}</span>
+	{#if hero && heroNote && !busy}
+		<span class="hero-note">{heroNote}</span>
+	{/if}
 	{#if hero && formats.length > 0 && !busy}
 		<span class="formats">
 			{#each formats as f (f)}<span class="format mono">{f}</span>{/each}
@@ -351,7 +357,7 @@
 		gap: var(--space-5);
 		padding: 34px var(--space-8);
 		border-radius: var(--radius-card);
-		border-color: color-mix(in srgb, var(--teal) 40%, transparent);
+		border-color: color-mix(in srgb, var(--teal) 45%, var(--bd2));
 		background: var(--teal-wash);
 		text-align: center;
 	}
@@ -360,13 +366,18 @@
 		font-weight: 600;
 		color: var(--fg1);
 	}
+	.hero-note {
+		font-size: 12.5px;
+		color: var(--fg3);
+		line-height: 1.5;
+	}
 	.hero-tile {
 		display: grid;
 		place-items: center;
 		width: 48px;
 		height: 48px;
 		border-radius: 14px;
-		background: color-mix(in srgb, var(--teal) var(--tile-alpha), transparent);
+		background: color-mix(in srgb, var(--teal) var(--tile-alpha-active), transparent);
 		color: var(--teal);
 	}
 	.formats {

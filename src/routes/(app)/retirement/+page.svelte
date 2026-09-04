@@ -160,25 +160,6 @@
 {#if saveError}<p class="save-error" role="alert">Could not save assumptions: {saveError}</p>{/if}
 
 <section class="verdict">
-	<div class="verdict-text">
-		<p>
-			If you stopped working today, your capital would pay about
-			<span class="mono chip">{money(model.rows[0].draw)} {unit}</span> a month and the state
-			pension would add
-			<span class="mono chip"
-				>{model.rows[0].pension ? `${money(model.rows[0].pension)} ${unit}` : 'nothing yet'}</span
-			>. That covers
-			<span class="mono chip">{coveredPct}%</span>
-			of the {money(cfg.spend)}
-			{unit} you say you would need.
-		</p>
-		<span class="verdict-line">{verdict}</span>
-	</div>
-
-	<!-- The one figure this screen exists to produce, drawn as well as said.
-	     A stroke arc rather than a filled wedge: the arc's own thickness is
-	     constant, so a small share still reads as a share rather than as a
-	     sliver of a pie that is mostly empty. -->
 	<div class="gauge">
 		<svg
 			viewBox="0 0 124 124"
@@ -208,249 +189,275 @@
 		<span class="gauge-figure display">{coveredPct}<span class="gauge-pct">%</span></span>
 		<span class="gauge-note">covered today</span>
 	</div>
+	<div class="verdict-text">
+		<p>
+			If you stopped working today, your capital would pay about
+			<span class="mono chip">{money(model.rows[0].draw)} {unit}</span> a month and the state
+			pension would add
+			<span class="mono chip"
+				>{model.rows[0].pension ? `${money(model.rows[0].pension)} ${unit}` : 'nothing yet'}</span
+			>. That covers
+			<span class="mono chip">{coveredPct}%</span>
+			of the {money(cfg.spend)}
+			{unit} you say you would need.
+		</p>
+		<span class="verdict-line">{verdict}</span>
+	</div>
+
+	<!-- The one figure this screen exists to produce, drawn as well as said.
+	     A stroke arc rather than a filled wedge: the arc's own thickness is
+	     constant, so a small share still reads as a share rather than as a
+	     sliver of a pie that is mostly empty. -->
 </section>
 
-<section class="card stack">
-	<div class="eyebrow-row">
-		<Eyebrow hue="--blue" emoji="🎛️" label="What you assume" />
-		<span class="eyebrow-caption">
-			capital, savings rate, mortgages and rent are read from your own data
-		</span>
-	</div>
-	<div class="controls">
-		<label>
-			<span>Monthly spending you would need</span>
-			<input
-				class="mono"
-				type="number"
-				min="0"
-				step="1000"
-				bind:value={cfg.spend}
-				oninput={persist}
-			/>
-		</label>
-		<div class="control">
-			<span>Withdrawal rate</span>
-			<div class="seg">
-				{#each [3, 3.5, 4] as rate (rate)}
-					<button
-						type="button"
-						class="mono"
-						class:active={cfg.swr === rate}
-						onclick={() => {
-							cfg.swr = rate;
-							persist();
-						}}
-					>
-						{rate.toFixed(1)}%
-					</button>
-				{/each}
-			</div>
-		</div>
-		<label>
-			<span class="split"
-				><span>Real return until then</span><span class="mono value"
-					>{cfg.realReturn.toFixed(1)}%</span
-				></span
-			>
-			<input
-				type="range"
-				min="0"
-				max="8"
-				step="0.5"
-				bind:value={cfg.realReturn}
-				oninput={persist}
-			/>
-		</label>
-		<label>
-			<span class="split"
-				><span>Yearly contributions grow</span><span class="mono value"
-					>{cfg.contributionGrowth.toFixed(1)}%</span
-				></span
-			>
-			<input
-				type="range"
-				min="-5"
-				max="10"
-				step="0.5"
-				bind:value={cfg.contributionGrowth}
-				oninput={persist}
-			/>
-		</label>
-		<label>
-			<span class="split"
-				><span>Property values grow</span><span class="mono value"
-					>{cfg.propertyGrowth.toFixed(1)}%</span
-				></span
-			>
-			<input
-				type="range"
-				min="-5"
-				max="10"
-				step="0.5"
-				bind:value={cfg.propertyGrowth}
-				oninput={persist}
-			/>
-		</label>
-		<div class="control wide">
-			<span>The flats, once you retire</span>
-			<div class="seg">
-				{#each [['keep', 'Keep, live in it'], ['rent', 'Rent it out'], ['sell', 'Sell and invest']] as [value, label] (value)}
-					<button
-						type="button"
-						class:active={cfg.plan === value}
-						onclick={() => {
-							cfg.plan = value as RetireConfig['plan'];
-							persist();
-						}}
-					>
-						{label}
-					</button>
-				{/each}
-			</div>
-		</div>
-		<label>
-			<span>{data.personNames[0]} · pension / month</span>
-			<input
-				class="mono"
-				type="number"
-				min="0"
-				step="500"
-				bind:value={cfg.pensionOne}
-				oninput={persist}
-			/>
-		</label>
-		<label>
-			<span>{data.personNames[1]} · pension / month</span>
-			<input
-				class="mono"
-				type="number"
-				min="0"
-				step="500"
-				bind:value={cfg.pensionTwo}
-				oninput={persist}
-			/>
-		</label>
-		<label>
-			<span>{data.personNames[0]} · starts at</span>
-			<input
-				class="mono"
-				type="number"
-				min={MIN_RETIREMENT_AGE}
-				max={MAX_RETIREMENT_AGE}
-				step="1"
-				bind:value={cfg.ageOne}
-				oninput={persist}
-			/>
-		</label>
-		<label>
-			<span>{data.personNames[1]} · starts at</span>
-			<input
-				class="mono"
-				type="number"
-				min={MIN_RETIREMENT_AGE}
-				max={MAX_RETIREMENT_AGE}
-				step="1"
-				bind:value={cfg.ageTwo}
-				oninput={persist}
-			/>
-		</label>
-	</div>
-	<span class="quiet">
-		Pension figures are rough placeholders until you paste the real ones from your ČSSZ personal
-		account.
-	</span>
-</section>
-
-<section class="card stack">
-	<Eyebrow hue="--blue" emoji="📋" label="Where that leaves you" />
-	<div class="table">
-		<div class="t-head">
-			<span>When</span><span class="r">Ages</span><span class="r">Capital</span><span class="r"
-				>Flat equity</span
-			><span class="r">Monthly income</span><span class="r">Against target</span>
-		</div>
-		{#each model.rows as row (row.t)}
-			<div class="t-row" class:now={row.t === 0}>
-				<span>{row.t === 0 ? 'today' : `in ${row.t} years`}</span>
-				<span class="mono r">{row.a1} / {row.a2}</span>
-				<span class="mono r">{money(row.capital)}</span>
-				<span class="mono r">{money(row.equity)}</span>
-				<span class="mono r">{money(row.total)}</span>
-				<span class="mono r" style:color={row.gap >= 0 ? 'var(--green)' : 'var(--red)'}>
-					{row.gap >= 0 ? '+' : '−'}{money(Math.abs(row.gap))}
+<!-- The assumptions beside the picture they change, not above it: every control
+     on the left moves the line and the table on the right, and a person tuning
+     one wants to watch the other rather than scroll between them. -->
+<div class="model">
+	<div class="assume">
+		<section class="card stack">
+			<div class="eyebrow-row">
+				<Eyebrow hue="--blue" emoji="🎛️" label="What you assume" />
+				<span class="eyebrow-caption">
+					capital, savings rate, mortgages and rent are read from your own data
 				</span>
 			</div>
-		{/each}
-	</div>
-</section>
-
-<section class="card stack">
-	<div class="eyebrow-row">
-		<Eyebrow hue="--blue" emoji="📈" label="The pot against what the target requires" />
-		<span class="eyebrow-caption">millions {unit} · twenty years out</span>
-	</div>
-	<div class="chart">
-		{#each chart.axis as a (a.top)}
-			<span class="axis mono" style:top={a.top}>{a.label}</span>
-		{/each}
-		<svg viewBox="0 0 800 200" preserveAspectRatio="none">
-			{#each [0, 100] as gy (gy)}
-				<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
-			{/each}
-			<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
-			{#if chart.crossing}
-				<line
-					x1={chart.crossing.x}
-					y1="0"
-					x2={chart.crossing.x}
-					y2="200"
-					stroke="var(--green)"
-					stroke-width="1"
-					stroke-dasharray="4 4"
-					vector-effect="non-scaling-stroke"
-					opacity="0.6"
-				/>
-			{/if}
-			<polyline
-				points={chart.required}
-				fill="none"
-				stroke="var(--fg3)"
-				stroke-width="2"
-				stroke-dasharray="6 4"
-				vector-effect="non-scaling-stroke"
-			/>
-			<polyline
-				points={chart.pot}
-				fill="none"
-				stroke="var(--teal)"
-				stroke-width="2.5"
-				stroke-linejoin="round"
-				vector-effect="non-scaling-stroke"
-			/>
-		</svg>
-	</div>
-	<div class="years mono">
-		{#each chart.years as year (year.label)}
-			<span class="year" style:left={year.left}>{year.label}</span>
-		{/each}
-		{#if chart.crossing}
-			<span class="year crossing" style:left={chart.crossing.left}>
-				{chart.crossing.label}
+			<div class="controls">
+				<label>
+					<span>Monthly spending you would need</span>
+					<input
+						class="mono"
+						type="number"
+						min="0"
+						step="1000"
+						bind:value={cfg.spend}
+						oninput={persist}
+					/>
+				</label>
+				<div class="control">
+					<span>Withdrawal rate</span>
+					<div class="seg">
+						{#each [3, 3.5, 4] as rate (rate)}
+							<button
+								type="button"
+								class="mono"
+								class:active={cfg.swr === rate}
+								onclick={() => {
+									cfg.swr = rate;
+									persist();
+								}}
+							>
+								{rate.toFixed(1)}%
+							</button>
+						{/each}
+					</div>
+				</div>
+				<label>
+					<span class="split"
+						><span>Real return until then</span><span class="mono value"
+							>{cfg.realReturn.toFixed(1)}%</span
+						></span
+					>
+					<input
+						type="range"
+						min="0"
+						max="8"
+						step="0.5"
+						bind:value={cfg.realReturn}
+						oninput={persist}
+					/>
+				</label>
+				<label>
+					<span class="split"
+						><span>Yearly contributions grow</span><span class="mono value"
+							>{cfg.contributionGrowth.toFixed(1)}%</span
+						></span
+					>
+					<input
+						type="range"
+						min="-5"
+						max="10"
+						step="0.5"
+						bind:value={cfg.contributionGrowth}
+						oninput={persist}
+					/>
+				</label>
+				<label>
+					<span class="split"
+						><span>Property values grow</span><span class="mono value"
+							>{cfg.propertyGrowth.toFixed(1)}%</span
+						></span
+					>
+					<input
+						type="range"
+						min="-5"
+						max="10"
+						step="0.5"
+						bind:value={cfg.propertyGrowth}
+						oninput={persist}
+					/>
+				</label>
+				<div class="control wide">
+					<span>The flats, once you retire</span>
+					<div class="seg">
+						{#each [['keep', 'Keep, live in it'], ['rent', 'Rent it out'], ['sell', 'Sell and invest']] as [value, label] (value)}
+							<button
+								type="button"
+								class:active={cfg.plan === value}
+								onclick={() => {
+									cfg.plan = value as RetireConfig['plan'];
+									persist();
+								}}
+							>
+								{label}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<label>
+					<span>{data.personNames[0]} · pension / month</span>
+					<input
+						class="mono"
+						type="number"
+						min="0"
+						step="500"
+						bind:value={cfg.pensionOne}
+						oninput={persist}
+					/>
+				</label>
+				<label>
+					<span>{data.personNames[1]} · pension / month</span>
+					<input
+						class="mono"
+						type="number"
+						min="0"
+						step="500"
+						bind:value={cfg.pensionTwo}
+						oninput={persist}
+					/>
+				</label>
+				<label>
+					<span>{data.personNames[0]} · starts at</span>
+					<input
+						class="mono"
+						type="number"
+						min={MIN_RETIREMENT_AGE}
+						max={MAX_RETIREMENT_AGE}
+						step="1"
+						bind:value={cfg.ageOne}
+						oninput={persist}
+					/>
+				</label>
+				<label>
+					<span>{data.personNames[1]} · starts at</span>
+					<input
+						class="mono"
+						type="number"
+						min={MIN_RETIREMENT_AGE}
+						max={MAX_RETIREMENT_AGE}
+						step="1"
+						bind:value={cfg.ageTwo}
+						oninput={persist}
+					/>
+				</label>
+			</div>
+			<span class="quiet">
+				Pension figures are rough placeholders until you paste the real ones from your ČSSZ personal
+				account.
 			</span>
-		{/if}
+		</section>
 	</div>
-	<div class="legend">
-		<span class="l"
-			><span class="swatch" style="border-top: 2.5px solid var(--teal);"></span>your pot</span
-		>
-		<span class="l"
-			><span class="swatch" style="border-top: 2px dashed var(--fg3);"></span>required for the
-			target</span
-		>
-		<span class="l-note">{verdict}</span>
+	<div class="output">
+		<section class="card stack">
+			<div class="eyebrow-row">
+				<Eyebrow hue="--blue" emoji="📈" label="The pot against what the target requires" />
+				<span class="eyebrow-caption">millions {unit} · twenty years out</span>
+			</div>
+			<div class="chart">
+				{#each chart.axis as a (a.top)}
+					<span class="axis mono" style:top={a.top}>{a.label}</span>
+				{/each}
+				<svg viewBox="0 0 800 200" preserveAspectRatio="none">
+					{#each [0, 100] as gy (gy)}
+						<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
+					{/each}
+					<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
+					{#if chart.crossing}
+						<line
+							x1={chart.crossing.x}
+							y1="0"
+							x2={chart.crossing.x}
+							y2="200"
+							stroke="var(--green)"
+							stroke-width="1"
+							stroke-dasharray="4 4"
+							vector-effect="non-scaling-stroke"
+							opacity="0.6"
+						/>
+					{/if}
+					<polyline
+						points={chart.required}
+						fill="none"
+						stroke="var(--fg3)"
+						stroke-width="2"
+						stroke-dasharray="6 4"
+						vector-effect="non-scaling-stroke"
+					/>
+					<polyline
+						points={chart.pot}
+						fill="none"
+						stroke="var(--teal)"
+						stroke-width="2.5"
+						stroke-linejoin="round"
+						vector-effect="non-scaling-stroke"
+					/>
+				</svg>
+			</div>
+			<div class="years mono">
+				{#each chart.years as year (year.label)}
+					<span class="year" style:left={year.left}>{year.label}</span>
+				{/each}
+				{#if chart.crossing}
+					<span class="year crossing" style:left={chart.crossing.left}>
+						{chart.crossing.label}
+					</span>
+				{/if}
+			</div>
+			<div class="legend">
+				<span class="l"
+					><span class="swatch" style="border-top: 2.5px solid var(--teal);"></span>your pot</span
+				>
+				<span class="l"
+					><span class="swatch" style="border-top: 2px dashed var(--fg3);"></span>required for the
+					target</span
+				>
+				<span class="l-note">{verdict}</span>
+			</div>
+		</section>
+		<section class="card stack">
+			<Eyebrow hue="--blue" emoji="📋" label="Where that leaves you" />
+			<div class="table">
+				<div class="t-head">
+					<span>When</span><span class="r">Ages</span><span class="r">Capital</span><span class="r"
+						>Flat equity</span
+					><span class="r">Monthly income</span><span class="r">Against target</span>
+				</div>
+				{#each model.rows as row (row.t)}
+					<div class="t-row" class:now={row.t === 0}>
+						<span>{row.t === 0 ? 'today' : `in ${row.t} years`}</span>
+						<span class="mono r">{row.a1} / {row.a2}</span>
+						<span class="mono r">{money(row.capital)}</span>
+						<span class="mono r">{money(row.equity)}</span>
+						<span class="mono r">{money(row.total)}</span>
+						<span class="mono r" style:color={row.gap >= 0 ? 'var(--green)' : 'var(--red)'}>
+							{row.gap >= 0 ? '+' : '−'}{money(Math.abs(row.gap))}
+						</span>
+					</div>
+				{/each}
+			</div>
+		</section>
 	</div>
-</section>
+</div>
 
 <style>
 	.save-error {
@@ -491,6 +498,26 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		margin-top: 2px;
+	}
+	/* The controls beside the picture they change. 380px is the design's: enough
+	   for a labelled number field and a segmented control, and no more. */
+	.model {
+		display: grid;
+		grid-template-columns: 380px minmax(0, 1fr);
+		gap: var(--space-8);
+		align-items: start;
+	}
+	.assume,
+	.output {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-8);
+		min-width: 0;
+	}
+	@media (max-width: 1279px) {
+		.model {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 	.verdict-text {
 		display: flex;

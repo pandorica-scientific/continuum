@@ -85,7 +85,9 @@
 			: []),
 		{
 			key: 'blended',
-			colorVar: '--fg1',
+			// Yellow, because that is the colour a rate wears everywhere else on
+			// this screen — the blended-rate tile and each row's own percentage.
+			colorVar: '--yellow',
 			endLabel: 'all',
 			points: years.map((y) => ({ value: y.ratePct }))
 		}
@@ -107,6 +109,7 @@
 			hue="--teal"
 			emoji="📈"
 			label={mode === 'stack' ? 'Earned & paid' : 'Effective rate'}
+			caption={mode === 'stack' ? axisUnit : 'blended, per jurisdiction'}
 		/>
 		<div class="controls">
 			<Segmented
@@ -310,7 +313,7 @@
 		background: repeating-linear-gradient(45deg, var(--fg3) 0 2px, transparent 2px 5px);
 	}
 	.chart :global(.swatch.rate-key) {
-		background: var(--fg1);
+		background: var(--yellow);
 		height: 3px;
 		border-radius: var(--radius-pill);
 	}
@@ -322,8 +325,10 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	/* At the end of the keys' own row where it fits, on its own line where it
+	   does not — `margin-left: auto` against a wrapping flex row does both. */
 	.chart :global(.footnote) {
-		flex-basis: 100%;
+		margin-left: auto;
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		line-height: 1.5;

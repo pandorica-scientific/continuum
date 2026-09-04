@@ -11,6 +11,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import Field from '$lib/components/Field.svelte';
 
 	let { data, form } = $props();
@@ -135,6 +136,7 @@
 		accept=".csv,.tsv,.txt,.pdf,.xlsx,.xls,.xml,.camt,.gpc,.abo,.sta,.mt940,.ofx,.qfx,.png,.jpg,.jpeg,.tiff"
 		multiple={true}
 		idleText="Drop statements here, or click to browse"
+		heroNote="Read exactly as your bank wrote them, then checked against their own balances."
 		busyText="Reading statements…"
 		description="A CSV, spreadsheet or PDF from any bank — the layout is worked out from the file and checked against the statement's own balances, so no per-bank setup is needed. CAMT.053, MT940, OFX/QFX and ABO/GPC exports are read directly. A photograph or scan is read from the page image, in the background. Several files at once. Transfers between your own accounts are paired and dropped, and categories come from what you corrected last time."
 		onfiles={uploadFiles}
@@ -383,30 +385,47 @@
 
 <SummaryBand
 	tiles={[
-		{ label: 'Files this month', value: String(data.stats.filesThisMonth) },
-		{ label: 'Transactions read', value: String(data.stats.transactionsRead) },
+		{ label: 'Files this month', value: String(data.stats.filesThisMonth), wash: 'teal' },
+		{ label: 'Transactions read', value: String(data.stats.transactionsRead), wash: 'blue' },
 		{
 			label: 'Filed automatically',
 			value: data.stats.autoPct === null ? '—' : `${data.stats.autoPct}%`,
-			note: 'corrections teach the categoriser'
+			note: 'corrections teach the categoriser',
+			wash: 'green'
 		},
 		{
 			label: 'Transfers paired',
 			value: String(data.stats.transfersPaired),
-			note: 'excluded from income and spending'
+			note: 'excluded from income and spending',
+			wash: 'purple'
 		}
 	]}
 />
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow hue="--teal" emoji="🧐" label="Needs a decision" />
+		<Eyebrow hue="--yellow" emoji="🧐" label="Needs a decision" />
 		<span class="eyebrow-caption">
 			{data.review.length === 0
-				? 'nothing waiting — everything filed itself'
+				? 'nothing waiting'
 				: `${data.review.length} rows the categoriser will not guess at`}
 		</span>
 	</div>
+
+	{#if data.review.length === 0}
+		<!-- The empty state IS the good state, so it is drawn as one: a green card
+		     saying what happened, not a grey line saying nothing did. -->
+		<div class="all-filed">
+			<span class="filed-tile"><Icon name="check" size={20} /></span>
+			<span class="filed-text">
+				<span class="filed-title">Everything filed itself</span>
+				<span class="filed-note">
+					Only genuinely ambiguous rows appear here — a date column where every reading is valid, a
+					counterparty no rule knows.
+				</span>
+			</span>
+		</div>
+	{/if}
 
 	{#each data.review as r (r.id)}
 		<div class="card review-row">
@@ -576,6 +595,42 @@
 {/if}
 
 <style>
+	/* The empty state is the answer, not the absence of one. */
+	.all-filed {
+		display: flex;
+		align-items: center;
+		gap: var(--space-7);
+		padding: 18px;
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-tile);
+		background: var(--green-wash);
+	}
+	.filed-tile {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: var(--radius-xl);
+		background: color-mix(in srgb, var(--green) var(--tile-alpha-active), transparent);
+		color: var(--green);
+		flex: none;
+	}
+	.filed-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+	}
+	.filed-title {
+		font-size: var(--text-lg);
+		font-weight: 600;
+	}
+	.filed-note {
+		font-size: 12.5px;
+		color: var(--fg3);
+		line-height: 1.5;
+	}
+
 	.whose {
 		display: inline-flex;
 		align-items: center;

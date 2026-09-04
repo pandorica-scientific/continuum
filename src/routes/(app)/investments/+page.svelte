@@ -131,25 +131,29 @@
 				unit: data.accountUnit,
 				note: data.metrics.portfolioBase
 					? `≈ ${data.metrics.portfolioBase} ${data.unit}`
-					: undefined
+					: undefined,
+				wash: 'purple'
 			},
 			{
 				label: 'Money in',
 				value: data.metrics.moneyIn,
 				unit: data.accountUnit,
-				note: data.metrics.since ? `since ${data.metrics.since}` : undefined
+				note: data.metrics.since ? `since ${data.metrics.since}` : undefined,
+				wash: 'teal'
 			},
 			{
 				label: 'Gain',
 				value: data.metrics.gain,
 				unit: data.accountUnit,
 				color: data.metrics.gainPositive ? 'var(--green)' : 'var(--red)',
-				note: data.metrics.gainPct ?? undefined
+				note: data.metrics.gainPct ?? undefined,
+				wash: data.metrics.gainPositive ? 'green' : 'red'
 			},
 			{
 				label: 'Annualised',
 				value: data.metrics.annualised ?? '—',
-				note: 'nominal, on money in'
+				note: 'nominal, on money in',
+				wash: 'teal'
 			},
 			{
 				label: `Tax on ${data.tax.year} gains`,
@@ -351,14 +355,19 @@
 <div class="own-row">
 	{#if data.donut.length}
 		<section class="card own">
-			<Eyebrow hue="--purple" emoji="🥧" label="What you own" />
+			<Eyebrow hue="--purple" emoji="🥧" label="What you own">
+				{#snippet right()}
+					<span class="quiet"
+						>{data.donut.length}
+						{data.donut.length === 1 ? 'holding' : 'holdings'}</span
+					>
+				{/snippet}
+			</Eyebrow>
 			<div class="donut-wrap">
 				<div
 					class="donut"
 					style:background={`conic-gradient(${data.donut.map((s) => `${s.color} ${s.from}% ${s.to}%`).join(', ')})`}
-				>
-					<div class="hole"><span class="mono">{data.donut.length}</span></div>
-				</div>
+				></div>
 				<div class="legend-col">
 					{#each data.donut as s, i (i)}
 						<div class="legend-row">
@@ -555,7 +564,7 @@
 	}
 	.own-row {
 		display: grid;
-		grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
+		grid-template-columns: minmax(260px, 1fr) minmax(0, 1.4fr);
 		gap: var(--space-8);
 		align-items: start;
 	}
@@ -589,15 +598,8 @@
 		display: grid;
 		place-items: center;
 	}
-	.hole {
-		width: 58%;
-		aspect-ratio: 1;
-		border-radius: 50%;
-		background: var(--bg2);
-		display: grid;
-		place-items: center;
-		font-size: var(--text-md);
-	}
+	/* A pie, not a donut — the same change Accounts made. The hole held the
+	   holding COUNT, which is now in the panel header where a count belongs. */
 	.legend-col {
 		flex: 1 1 240px;
 		display: flex;

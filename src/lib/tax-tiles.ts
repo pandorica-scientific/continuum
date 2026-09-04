@@ -61,6 +61,7 @@ export function taxSummaryTiles(years: SerialisedYear[], currency: string): Tile
 
 	return [
 		{
+			wash: 'teal',
 			label: empty ? 'Earned' : `Earned since ${years[0].year}`,
 			value: empty ? '—' : formatMinor(gross, currency),
 			unit: empty ? undefined : symbol,
@@ -69,6 +70,7 @@ export function taxSummaryTiles(years: SerialisedYear[], currency: string): Tile
 				: `across ${jurisdictions} ${jurisdictions === 1 ? 'jurisdiction' : 'jurisdictions'}`
 		},
 		{
+			wash: 'red',
 			label: 'Tax paid',
 			value: empty ? '—' : formatMinor(tax, currency),
 			unit: empty ? undefined : symbol,
@@ -78,12 +80,14 @@ export function taxSummaryTiles(years: SerialisedYear[], currency: string): Tile
 			color: empty ? undefined : 'var(--red)'
 		},
 		{
+			wash: 'yellow',
 			label: 'Blended rate',
 			value: blended === null ? '—' : `${blended.toFixed(2)}%`,
 			note: 'lifetime, weighted by income',
 			color: blended === null ? undefined : 'var(--yellow)'
 		},
 		{
+			wash: 'green',
 			label: latest ? `Latest year · ${latest.year}` : 'Latest year',
 			value: latest ? formatMinor(BigInt(latest.grossMinor), currency) : '—',
 			unit: latest ? symbol : undefined,

@@ -82,6 +82,7 @@ export function salarySummaryTiles(
 	const incomplete = latest && !latest.netComplete ? '⚠ ' : '';
 
 	const earned: Tile = {
+		wash: 'teal',
 		label: empty ? 'Earned' : `Earned since ${rows[0].year}`,
 		value: empty ? '—' : money(totalGross),
 		unit: empty ? undefined : symbol,
@@ -92,6 +93,7 @@ export function salarySummaryTiles(
 		return [
 			earned,
 			{
+				wash: 'teal',
 				label: 'Average year',
 				value: money(avgYearGross),
 				unit: avgYearGross === null ? undefined : symbol,
@@ -100,6 +102,7 @@ export function salarySummaryTiles(
 					: `gross · ${money(avgYearNet)} net, over ${rows.length} ${rows.length === 1 ? 'year' : 'years'}`
 			},
 			{
+				wash: 'green',
 				label: latest ? `Last year · ${latest.year}` : 'Last year',
 				value: money(latest?.gross ?? null),
 				unit: latest ? symbol : undefined,
@@ -111,6 +114,7 @@ export function salarySummaryTiles(
 	return [
 		earned,
 		{
+			wash: 'teal',
 			label: 'Average month',
 			value: money(avgMonthGross),
 			unit: avgMonthGross === null ? undefined : symbol,
@@ -119,6 +123,7 @@ export function salarySummaryTiles(
 				: `gross · ${money(avgMonthNet)} net, over ${grossMonths} ${grossMonths === 1 ? 'month' : 'months'}`
 		},
 		{
+			wash: 'green',
 			label: 'Last increase',
 			value: increase === null ? '—' : `+${increase.pct}%`,
 			note:
@@ -130,6 +135,7 @@ export function salarySummaryTiles(
 			color: increase === null ? undefined : 'var(--green)'
 		},
 		{
+			wash: 'teal',
 			label: latest ? `Average month, ${latest.year}` : 'Average month, latest year',
 			value: money(latestAvgGross),
 			unit: latestAvgGross === null ? undefined : symbol,

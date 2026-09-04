@@ -307,11 +307,15 @@
 		gap: var(--space-6);
 		min-width: 0;
 	}
+	/* Ruled off from the plot, the way the design draws it: the keys are a
+	   caption on the picture above them, not another row of the panel. */
 	.legend {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-4) var(--space-7);
+		border-top: 1px solid var(--bd);
+		padding-top: var(--space-6);
 	}
 	.chart {
 		position: relative;

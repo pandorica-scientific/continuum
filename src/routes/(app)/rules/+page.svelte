@@ -7,13 +7,11 @@
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
 	import ActionError from '$lib/components/ActionError.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
-	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import ControlRow from '$lib/components/ControlRow.svelte';
 	import IconTile from '$lib/components/IconTile.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import type { Tile } from '$lib/components/tiles';
 	import { groupNote, groupRules, trustTone, type RuleFilter } from '$lib/rules/grouping';
 
 	let { data, form } = $props();
@@ -50,22 +48,6 @@
 		body.set('pct', String(floor));
 		void fetch('?/threshold', { method: 'POST', body }).then(() => invalidateAll());
 	}
-
-	const bandTiles = $derived<Tile[]>([
-		{ label: 'Rules', value: String(data.rules.length), note: 'filing on their own or waiting' },
-		{
-			label: 'Below the floor',
-			value: String(data.rules.filter((r) => !r.trusted).length),
-			// Coloured only when it is a task: a nought here is the state to be in.
-			color: data.rules.some((r) => !r.trusted) ? 'var(--yellow)' : undefined,
-			note: 'not trusted enough to file'
-		},
-		{
-			label: 'Disabled',
-			value: String(data.rules.filter((r) => !r.enabled).length),
-			note: 'kept, but never applied'
-		}
-	]);
 
 	interface DraftCondition {
 		field: string;
@@ -114,7 +96,11 @@
 	{/snippet}
 </ScreenHeader>
 
-<SummaryBand tiles={bandTiles} />
+<p class="count-line">
+	{data.rules.length}
+	{data.rules.length === 1 ? 'rule' : 'rules'} · filing at
+	<span class="mono floor-inline">{floor}%</span> confidence and above
+</p>
 
 {#if form?.message}
 	<div class="error">{form.message}</div>
@@ -158,6 +144,11 @@
 		<span class="quiet">A rule at or above this files on its own.</span>
 	</div>
 	<div class="floor-body">
+		<span class="mono floor-end">0%</span>
+		<!-- A native range, restyled. The track is drawn on the input itself so the
+		     fill runs yellow to green up to the thumb: what a rule needs before it
+		     files on its own is a scale, not a switch, and the gradient says which
+		     end is "barely trusted". -->
 		<input
 			type="range"
 			min="5"
@@ -165,8 +156,10 @@
 			step="5"
 			bind:value={floor}
 			aria-label="Confidence floor"
+			style:--fill="{floor}%"
 			onchange={saveFloor}
 		/>
+		<span class="mono floor-end">100%</span>
 		<span class="floor-value display">{floor}<span class="floor-pct">%</span></span>
 	</div>
 	<p class="scope-note">
@@ -184,8 +177,8 @@
 {:else}
 	<section class="table" aria-label="Rules by category">
 		<div class="thead">
-			<span>Rule</span>
-			<span>Trust</span>
+			<span>Category · rule</span>
+			<span>Trust (avg)</span>
 			<span class="kept">Kept · overridden</span>
 			<span></span>
 		</div>
@@ -640,16 +633,74 @@
 		align-items: center;
 		gap: var(--space-7);
 	}
-	/* The fill is a gradient from the colour of "barely trusted" to the colour
-	   of "trusted", so the track itself says which end is which. */
+	.floor-end {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		flex: none;
+	}
 	.floor-body input[type='range'] {
 		flex: 1;
 		min-width: 0;
-		accent-color: var(--yellow);
+		height: 18px;
+		margin: 0;
+		padding: 0;
+		background: none;
+		appearance: none;
+		cursor: pointer;
+	}
+	/* One track rule per engine: the fill has to be painted ON the track, and
+	   the two browsers do not share a pseudo-element for it. */
+	.floor-body input[type='range']::-webkit-slider-runnable-track {
+		height: 8px;
+		border-radius: var(--radius-xs);
+		background:
+			linear-gradient(90deg, var(--yellow), var(--green)) 0 / var(--fill) 100% no-repeat,
+			var(--card3);
+	}
+	.floor-body input[type='range']::-moz-range-track {
+		height: 8px;
+		border-radius: var(--radius-xs);
+		background:
+			linear-gradient(90deg, var(--yellow), var(--green)) 0 / var(--fill) 100% no-repeat,
+			var(--card3);
+	}
+	/* The ring is the page's own ground, so the thumb reads as sitting on the
+	   track rather than being part of it. */
+	.floor-body input[type='range']::-webkit-slider-thumb {
+		appearance: none;
+		width: 18px;
+		height: 18px;
+		margin-top: -5px;
+		border-radius: var(--radius-pill);
+		background: var(--fg1);
+		border: 3px solid var(--bg);
+		box-shadow: var(--shadow-raise);
+	}
+	.floor-body input[type='range']::-moz-range-thumb {
+		width: 18px;
+		height: 18px;
+		border: 3px solid var(--bg);
+		border-radius: var(--radius-pill);
+		background: var(--fg1);
+		box-shadow: var(--shadow-raise);
+	}
+	.floor-body input[type='range']:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 4px;
 	}
 	.floor-value {
 		font-size: var(--text-3xl);
+		min-width: 56px;
+		text-align: right;
 		flex: none;
+	}
+	.count-line {
+		margin: 0;
+		font-size: var(--text-md);
+		color: var(--fg2);
+	}
+	.floor-inline {
+		color: var(--fg1);
 	}
 	.floor-pct {
 		font-size: var(--text-lg);

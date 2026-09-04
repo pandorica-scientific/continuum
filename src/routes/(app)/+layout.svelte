@@ -123,6 +123,7 @@
 			netWorth={data.netWorth}
 			netWorthDelta={data.netWorthDelta}
 			netWorthDeltaPositive={data.netWorthDeltaPositive}
+			netWorthDeltaShare={data.netWorthDeltaShare}
 			baseCurrency={data.baseCurrency}
 			importBadge={data.importBadge}
 			version={data.version}
@@ -236,15 +237,20 @@
 					{/each}
 				</div>
 			{/if}
-			<button
-				type="button"
-				class="quick-add"
-				aria-label="Quick add"
-				aria-expanded={quickOpen}
-				onclick={() => (quickPinned = !quickPinned)}
-			>
-				<Icon name="plus" size={22} />
-			</button>
+			<!-- The rotation lives on the wrapper and the scale on the button, so the
+			     two transforms do not overwrite each other: open rotates, hover
+			     grows, and both can be true at once. -->
+			<span class="quick-spin" class:open={quickOpen}>
+				<button
+					type="button"
+					class="quick-add"
+					aria-label="Quick add"
+					aria-expanded={quickOpen}
+					onclick={() => (quickPinned = !quickPinned)}
+				>
+					<Icon name="plus" size={20} />
+				</button>
+			</span>
 		</div>
 	{/if}
 
@@ -360,32 +366,41 @@
 		text-decoration: none;
 	}
 
-	/* The one control that is lit rather than drawn: it wears the hero's own
-	   gradient and shadow, so the thing that adds to the ledger and the figure
-	   the ledger adds up are visibly the same colour. */
+	.quick-spin {
+		display: block;
+		transition: transform var(--dur) var(--ease);
+	}
+	/* The plus becomes the ✕ that closes it. One glyph, rotated, rather than a
+	   second icon swapped in — the rotation says the two are the same control. */
+	.quick-spin.open {
+		transform: rotate(45deg);
+	}
+	/* Small at rest and full size under the pointer. It sits over the corner of
+	   every screen, and at full size it covered a table's last row and the
+	   corner of the Documents rail — so it stays out of the way until it is
+	   being reached for. */
 	.quick-add {
 		display: grid;
 		place-items: center;
 		border: none;
 		cursor: pointer;
-		width: 52px;
-		height: 52px;
+		width: 36px;
+		height: 36px;
 		border-radius: var(--radius-pill);
-		background: var(--hero-bg);
+		background: var(--brand);
 		box-shadow: var(--shadow-hero);
 		color: #fff;
+		transform: scale(1);
 		transition:
 			transform var(--dur) var(--ease),
 			filter var(--dur) var(--ease);
 	}
-	.quick-add:hover {
+	.quick-add:hover,
+	.quick-add:focus-visible,
+	.quick-spin.open .quick-add {
 		text-decoration: none;
-		filter: brightness(1.12);
-	}
-	/* The plus becomes the ✕ that closes it. One glyph, rotated, rather than a
-	   second icon swapped in — the rotation says the two are the same control. */
-	.quick-add[aria-expanded='true'] {
-		transform: rotate(45deg);
+		transform: scale(1.45);
+		filter: brightness(1.1);
 	}
 
 	/* Wash, tile and hue border rather than a grey card with a coloured edge.
@@ -479,9 +494,12 @@
 			right: 18px;
 			bottom: 86px;
 		}
+		/* No hover on a phone, so it never grows: full size at rest instead,
+		   and still clear of the bottom bar. */
 		.quick-add {
 			width: 46px;
 			height: 46px;
+			transform: none;
 		}
 	}
 </style>

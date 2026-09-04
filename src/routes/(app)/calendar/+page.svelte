@@ -430,7 +430,7 @@
 	}
 	.layout {
 		display: grid;
-		grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+		grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
 		gap: var(--space-8);
 		align-items: start;
 	}

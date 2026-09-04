@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { asc, desc, lt } from 'drizzle-orm';
+import { asc, desc, lt, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import {
 	loanProperty,
@@ -9,7 +9,7 @@ import {
 } from '$lib/server/db/schema';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { getBaseCurrency } from '$lib/server/settings';
-import { deltaSinceMonthStart } from '$lib/networth/history';
+import { deltaShareOfBiggest, deltaSinceMonthStart, monthlyDeltas } from '$lib/networth/history';
 
 interface NetWorthGroup {
 	key: string;
@@ -31,6 +31,13 @@ export interface NetWorth {
 	liabilitiesMinor: bigint;
 	/** change since the first snapshot of this calendar month, if known */
 	deltaThisMonthMinor: bigint | null;
+	/**
+	 * How big that change is against the biggest month on record, 0–1.
+	 *
+	 * What the sidebar's pill fills to. Null until there are two months to
+	 * compare — one month of history cannot say whether a month was big.
+	 */
+	deltaShare: number | null;
 }
 
 /**
@@ -173,7 +180,7 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 	// scheduler and is not its own comparison baseline. Two single indexed reads
 	// rather than loading the month.
 	const monthStart = today.slice(0, 8) + '01';
-	const [priorMonth, oldest] = await Promise.all([
+	const [priorMonth, oldest, monthEnds] = await Promise.all([
 		handle
 			.select()
 			.from(netWorthSnapshot)
@@ -185,7 +192,23 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 			.from(netWorthSnapshot)
 			.where(lt(netWorthSnapshot.day, today))
 			.orderBy(asc(netWorthSnapshot.day))
-			.limit(1)
+			.limit(1),
+		// One row per month — the last snapshot in each — for the thirteen months
+		// behind us. Thirteen because twelve deltas need thirteen ends. It is a
+		// grouped read of an indexed column and returns at most thirteen rows,
+		// which is what makes it affordable on a layout that runs everywhere.
+		handle
+			// `to_char`, not `substring`: `day` is a date column, and substring on a
+			// date needs an explicit cast that Postgres will not infer.
+			.select({
+				month: sql<string>`to_char(${netWorthSnapshot.day}, 'YYYY-MM')`,
+				valueMinor: sql<string>`(array_agg(${netWorthSnapshot.valueMinor} order by ${netWorthSnapshot.day} desc))[1]`
+			})
+			.from(netWorthSnapshot)
+			.where(lt(netWorthSnapshot.day, monthStart))
+			.groupBy(sql`to_char(${netWorthSnapshot.day}, 'YYYY-MM')`)
+			.orderBy(sql`to_char(${netWorthSnapshot.day}, 'YYYY-MM') desc`)
+			.limit(13)
 	]);
 	const deltaThisMonthMinor = deltaSinceMonthStart(
 		totalMinor,
@@ -195,7 +218,18 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 		(amount, from, to, day) => convertOrFace(rates, amount, from, to, day)
 	);
 
-	return { baseCurrency, totalMinor, groups, assetsMinor, liabilitiesMinor, deltaThisMonthMinor };
+	// Oldest first, so a delta is this month minus the one before it.
+	const history = [...monthEnds].reverse().map((row) => ({ valueMinor: BigInt(row.valueMinor) }));
+
+	return {
+		baseCurrency,
+		totalMinor,
+		groups,
+		assetsMinor,
+		liabilitiesMinor,
+		deltaThisMonthMinor,
+		deltaShare: deltaShareOfBiggest(deltaThisMonthMinor, monthlyDeltas(history))
+	};
 }
 
 /**

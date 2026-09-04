@@ -30,12 +30,26 @@
 - 📸 **The README's screenshots are the new UI**, in both themes
 - 🎚️ **One switch component**, where the same track, knob and thirty lines of CSS were written out three times across Settings and Calendar
 - 🎨 **A register row leads with its category's colour** — an 8×22 bar down the left, so a month of spending is scannable before a word of it is read
+- 🏷️ **A transaction's category is a chip in its own hue**, beside the merchant rather than a grey word three columns to the right
+- 🏦 **Accounts is two columns of cards** — one card per account with its emoji tile, share bar and display balance, beside the pie and the transfers; statements moved behind the pencil, where they no longer push the next account off the screen
+- 📅 **A month in the register opens from a 34px tile**, teal when it is the one you are reading, in place of a 9px chevron nobody could aim at
+- 📉 **A loan draws its whole term as one band** — what is behind you, the rate you are on, and the years past the last date anybody has agreed a rate for, hatched
+- 🎚️ **The confidence floor is the design's slider** — an 8px track filling yellow to green, with the value beside it
+- 🎯 **Retirement puts the assumptions beside the picture they change** — a 380px column of controls against the chart and the table, with the gauge leading the verdict
+- 🏠 **Property opens on the flat itself** — its shape and its bills, with the valuation history and what it cost to buy below them rather than in the way
+- 🥧 **The holdings chart is a pie**, its count in the panel header
+- 📊 **A chart's keys are ruled off from its plot**, with the footnote at the end of that row where it fits — the design draws the legend as a caption on the picture, not as another row of the panel
+- 🟡 **The effective-rate line is yellow**, the colour a rate wears everywhere else on the Tax screen
+- ➕ **The quick-add button is 36px at rest** and grows to full size under the pointer or while its menu is open — at full size it sat over the last row of a table and the corner of the Documents rail
+- 📶 **The net-worth pill fills with its own month** — green or red across as much of the pill as this month is of the biggest month on record, growing from nothing on arrival, so a good month is visible before the figure is read
 
 ### 🐛 Fixed
 
 - 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
+- 🔧 **A dossier's `once` slot fits its own box** — the ribbon's 28px centred cell was winning over the slot's own layout, so the name sat centred and the date fell out below it
 - 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`
 - 🟢 **The green pill clears AA on light paper again** — the ink is darkened rather than the tint lightened, per the rule the palette already states
+- 📏 **A `once` slot stays inside its own lane** — `.cell` pins a ribbon square to 28px and won at equal specificity, so a named two-line slot hung out of its lane and the next lane's rule was drawn across it
 
 ### ⬆️ Upgrading
 
