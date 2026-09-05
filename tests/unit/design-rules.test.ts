@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { RuleTester } from 'eslint';
 import noRawShadow, { ALLOWED } from '../../eslint-rules/no-raw-shadow.js';
 import opaqueFloatingSurface from '../../eslint-rules/opaque-floating-surface.js';
+import noEmojiEyebrow from '../../eslint-rules/no-emoji-eyebrow.js';
 
 /**
  * The two design rules that used to be prose, and the tokens they enforce.
@@ -113,6 +114,45 @@ describe('design/opaque-floating-surface', () => {
 					{
 						code: 'const c = `<style>.a{position:fixed;background:var(--card);}</style>`;',
 						errors: [{ messageId: 'translucentFloat' }]
+					}
+				]
+			)
+		).not.toThrow();
+	});
+});
+
+describe('design/no-emoji-eyebrow', () => {
+	// A tester of its own: RuleTester remembers the cases it has run for a rule
+	// name, and a second `run` for the same name is checked against the first.
+	const run = (valid: unknown[], invalid: unknown[]) =>
+		new RuleTester().run('no-emoji-eyebrow', noEmojiEyebrow as never, { valid, invalid } as never);
+
+	it('accepts an Eyebrow with a stroke icon, or none', () => {
+		expect(() =>
+			run(
+				[
+					{ code: 'const c = `<Eyebrow hue="--teal" icon="chart" label="X" />`;' },
+					{ code: 'const c = `<Eyebrow label="X" />`;' },
+					// A tile that IS data keeps its emoji; the rule is about Eyebrow only.
+					{ code: 'const c = `<IconTile emoji="🏦" size={30} />`;' }
+				],
+				[]
+			)
+		).not.toThrow();
+	});
+
+	it('rejects an Eyebrow with an emoji', () => {
+		expect(() =>
+			run(
+				[],
+				[
+					{
+						code: 'const c = `<Eyebrow hue="--teal" emoji="📊" label="X" />`;',
+						errors: [{ messageId: 'emojiEyebrow' }]
+					},
+					{
+						code: 'const c = `<Eyebrow\n\temoji={mark}\n\tlabel="X" />`;',
+						errors: [{ messageId: 'emojiEyebrow' }]
 					}
 				]
 			)

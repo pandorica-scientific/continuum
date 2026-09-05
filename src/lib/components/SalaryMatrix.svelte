@@ -57,6 +57,8 @@
 		DEFAULT_LIST_PAGE_SIZE,
 		LIST_PAGE_SIZES
 	} from '$lib/components/PageSize.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import type { Column, Group } from '$lib/components/data-table';
 
 	interface SerialisedSalaryYear {
 		year: number;
@@ -134,6 +136,40 @@
 	const lifetimeAvg = $derived(
 		lifetime.grossMonths === 0 ? null : lifetime.gross / BigInt(lifetime.grossMonths)
 	);
+
+	// The one table's columns. Base and bonus are the two flexible ones; a
+	// phone keeps the year, the gross and the net, which is the sentence a year
+	// is: what it came to, and what survived tax.
+	const TABLE_COLUMNS = $derived<Column[]>([
+		{ key: 'year', label: 'Year', width: `${YEAR}px` },
+		{
+			key: 'base',
+			label: 'Base',
+			align: 'end',
+			width: `minmax(${FLEX_MIN}px, 1fr)`,
+			hideBelow: 760
+		},
+		{
+			key: 'bonus',
+			label: 'Bonus',
+			align: 'end',
+			width: `minmax(${FLEX_MIN}px, 1fr)`,
+			hideBelow: 900
+		},
+		{ key: 'gross', label: `Gross · ${symbol}`, align: 'end', width: `${GROSS}px` },
+		{ key: 'avg', label: 'Avg month', align: 'end', width: `${AVG}px`, hideBelow: 900 },
+		{ key: 'net', label: 'After tax · net', align: 'end', width: `${NET}px` }
+	]);
+	const byYear = $derived(new Map(rows.map((r) => [String(r.year), r])));
+	// One pseudo-row per open year: the detail the screen renders under it is
+	// a block of its own (the payslips), not cells on this grid.
+	const tableGroups = $derived<Group<{ year: number }>[]>(
+		rows.map((r) => ({
+			key: String(r.year),
+			open: openYear === r.year,
+			rows: openYear === r.year ? [{ year: r.year }] : []
+		}))
+	);
 </script>
 
 <div class="matrix" style:--row-cols={COLUMNS} style:--row-min={MIN_WIDTH}>
@@ -145,31 +181,21 @@
 		</div>
 	{/if}
 
-	<div class="scroll">
-		<!-- One label, over the column that needs it. Base, bonus and gross
-		     already say what they are and that they add up; net is the one figure
-		     whose relation to the others is not visible from its name, so it gets
-		     the heading and the rule beside it. -->
-		<div class="group">
-			<span class="g-cell span5"></span>
-			<span class="g-cell divide">After tax</span>
-		</div>
-
-		<div class="head">
-			<span class="h-cell">Year</span>
-			<span class="h-cell right"><span class="swatch base"></span>Base</span>
-			<span class="h-cell right"><span class="swatch bonus"></span>Bonus</span>
-			<span class="h-cell right">Gross · {symbol}</span>
-			<span class="h-cell right">Avg month</span>
-			<span class="h-cell right divide">Net</span>
-		</div>
-
-		{#if ordered.length > 0}
-			<div class="summary">
-				<span class="f-cell">
-					<span class="f-label">All</span>
-					<span class="c-sub">{years.length} {years.length === 1 ? 'year' : 'years'}</span>
-				</span>
+	<DataTable
+		columns={TABLE_COLUMNS}
+		groups={tableGroups}
+		hue="--green"
+		label="Salary by year"
+		rowKey={(r) => String(r.year)}
+		ontoggle={(key) => onToggle(Number(key))}
+		rowLayout="block"
+	>
+		{#snippet summary(visible)}
+			<span class="f-cell">
+				<span class="f-label">All</span>
+				<span class="c-sub">{years.length} {years.length === 1 ? 'year' : 'years'}</span>
+			</span>
+			{#if visible.has('base')}
 				<span class="f-cell right">
 					<span class="mono">{compactMinor(lifetime.base, currency)}</span>
 					<span class="c-sub">
@@ -177,6 +203,8 @@
 						{lifetime.grossMonths === 1 ? 'month' : 'months'}
 					</span>
 				</span>
+			{/if}
+			{#if visible.has('bonus')}
 				<span class="f-cell right">
 					<span class="mono">{compactMinor(lifetime.bonus, currency)}</span>
 					<span class="c-sub">
@@ -184,10 +212,12 @@
 						{years.length === 1 ? 'year' : 'years'}
 					</span>
 				</span>
-				<span class="f-cell right">
-					<span class="mono t-value">{formatMinor(lifetime.gross, currency)}</span>
-					<span class="c-sub">every month recorded</span>
-				</span>
+			{/if}
+			<span class="f-cell right">
+				<span class="display t-value">{formatMinor(lifetime.gross, currency)}</span>
+				<span class="c-sub">every month recorded</span>
+			</span>
+			{#if visible.has('avg')}
 				<span class="f-cell right">
 					<span class="mono">
 						{lifetimeAvg === null ? '·' : compactMinor(lifetimeAvg, currency)}
@@ -197,39 +227,26 @@
 						{lifetime.grossMonths === 1 ? 'month' : 'months'}
 					</span>
 				</span>
-				<span class="f-cell right divide">
-					<span class="mono">{compactMinor(lifetime.net, currency)}</span>
-					<span class="c-sub">
-						over {lifetime.netMonths}
-						{lifetime.netMonths === 1 ? 'month' : 'months'}
-					</span>
+			{/if}
+			<span class="f-cell right">
+				<span class="mono">{compactMinor(lifetime.net, currency)}</span>
+				<span class="c-sub">
+					over {lifetime.netMonths}
+					{lifetime.netMonths === 1 ? 'month' : 'months'}
 				</span>
-			</div>
-		{/if}
+			</span>
+		{/snippet}
 
-		{#each rows as row (row.year)}
-			{@const open = openYear === row.year}
+		{#snippet head(group, visible)}
+			{@const row = byYear.get(group.key)!}
 			{@const gross = BigInt(row.grossTotalMinor)}
 			{@const bonus = BigInt(row.bonusTotalMinor)}
-			<div
-				class="row"
-				class:open
-				role="button"
-				tabindex="0"
-				aria-expanded={open}
-				onclick={() => onToggle(row.year)}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						onToggle(row.year);
-					}
-				}}
-			>
-				<span class="year mono">
-					<span class="chevron" class:open>{open ? '▼' : '▶'}</span>
-					{row.year}
-				</span>
+			<span class="year mono">
+				<span class="chevron" class:open={group.open}>{group.open ? '▼' : '▶'}</span>
+				{row.year}
+			</span>
 
+			{#if visible.has('base')}
 				<span class="cell right">
 					<span class="mono c-value">{compactMinor(BigInt(row.baseTotalMinor), currency)}</span>
 					{#if row.baseDeltaPct !== null}
@@ -242,7 +259,9 @@
 						<span class="c-sub quiet">—</span>
 					{/if}
 				</span>
+			{/if}
 
+			{#if visible.has('bonus')}
 				<span class="cell right">
 					{#if bonus > 0n}
 						<span class="mono c-value">{compactMinor(bonus, currency)}</span>
@@ -254,22 +273,24 @@
 						<span class="c-sub quiet">not itemised</span>
 					{/if}
 				</span>
+			{/if}
 
-				<!-- Gross carries the weight: it is what base and bonus add up to, and
-				     the one column where every row shares a currency — so the only one
-				     where comparing bar lengths is honest. -->
-				<span class="cell right gross">
-					<span class="mono t-value">{formatMinor(gross, currency)}</span>
-					<span class="track">
-						<span
-							class="fill"
-							style:width="{ceiling === 0n
-								? 0
-								: Math.max(2, (Number(gross) / Number(ceiling)) * 100)}%"
-						></span>
-					</span>
+			<!-- Gross carries the weight: it is what base and bonus add up to, and
+			     the one column where every row shares a currency — so the only one
+			     where comparing bar lengths is honest. -->
+			<span class="cell right gross">
+				<span class="display t-value">{formatMinor(gross, currency)}</span>
+				<span class="track">
+					<span
+						class="fill"
+						style:width="{ceiling === 0n
+							? 0
+							: Math.max(2, (Number(gross) / Number(ceiling)) * 100)}%"
+					></span>
 				</span>
+			</span>
 
+			{#if visible.has('avg')}
 				<span class="cell right">
 					{#if row.grossAvgMinor !== null}
 						<span class="mono c-value">
@@ -286,133 +307,48 @@
 						<span class="absent">·</span>
 					{/if}
 				</span>
-
-				<span class="cell right divide">
-					{#if row.netMonths > 0}
-						<span class="mono c-value">{compactMinor(BigInt(row.netTotalMinor), currency)}</span>
-						<!-- "3 of 12 months" rather than a warning triangle: an annual total
-						     over three months is a partial year, not a collapse, and saying
-						     which is more use than flagging that something is off. -->
-						<span class="c-sub" class:partial={!row.netComplete}>
-							{row.netComplete ? `over ${row.netMonths} months` : `${row.netMonths} of 12 months`}
-						</span>
-					{:else}
-						<span class="absent">·</span>
-						<span class="c-sub quiet">no credits filed</span>
-					{/if}
-				</span>
-			</div>
-
-			{#if open && detail}
-				{@render detail(row.year)}
 			{/if}
-		{/each}
-	</div>
 
-	<!-- Shown whenever the record is longer than the smallest page size, even
-	     when the current size fits it all: the size switcher lives here, and
-	     hiding it would leave no way back to a smaller page. -->
-	{#if ordered.length > LIST_PAGE_SIZES[0]}
-		<ListPager bind:page {pages} range={pageRange} />
-	{/if}
+			<span class="cell right">
+				{#if row.netMonths > 0}
+					<span class="mono c-value">{compactMinor(BigInt(row.netTotalMinor), currency)}</span>
+					<!-- "3 of 12 months" rather than a warning triangle: an annual total
+					     over three months is a partial year, not a collapse, and saying
+					     which is more use than flagging that something is off. -->
+					<span class="c-sub" class:partial={!row.netComplete}>
+						{row.netComplete ? `over ${row.netMonths} months` : `${row.netMonths} of 12 months`}
+					</span>
+				{:else}
+					<span class="absent">·</span>
+					<span class="c-sub quiet">no credits filed</span>
+				{/if}
+			</span>
+		{/snippet}
+
+		{#snippet row(r)}
+			{#if detail}{@render detail(r.year)}{/if}
+		{/snippet}
+
+		{#snippet foot()}
+			<!-- Shown whenever the record is longer than the smallest page size, even
+			     when the current size fits it all: the size switcher lives here, and
+			     hiding it would leave no way back to a smaller page. -->
+			{#if ordered.length > LIST_PAGE_SIZES[0]}
+				<ListPager bind:page {pages} range={pageRange} />
+			{/if}
+		{/snippet}
+	</DataTable>
 </div>
 
 <style>
 	.matrix {
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-card);
-		overflow: hidden;
-		background: var(--surface);
-	}
-	/* Below roughly 900px the columns stop fitting. The grid scrolls rather than
-	   reflowing into cards — cards are what this replaced. */
-	.scroll {
-		overflow-x: auto;
-		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 	.tools {
 		display: flex;
 		justify-content: flex-end;
-		padding: 8px var(--space-6);
-		border-bottom: 1px solid var(--bd2);
-	}
-	.group,
-	.head,
-	.row,
-	.summary {
-		display: grid;
-		grid-template-columns: var(--row-cols);
-		align-items: center;
-		gap: var(--space-5);
-		padding: 10px var(--space-6);
-		min-width: var(--row-min);
-	}
-	/* The tier that says which side of tax a column is on. */
-	.group {
-		background: var(--card2);
-		padding-bottom: 0;
-	}
-	.g-cell {
-		font-size: var(--text-xs);
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		opacity: 0.7;
-	}
-	.g-cell.span5 {
-		grid-column: span 5;
-	}
-	.head {
-		background: var(--card2);
-		border-bottom: 1px solid var(--bd2);
-		padding-top: 4px;
-	}
-	/* One rule down the table, separating what was earned from what survived
-	   tax. Six equal columns made those read as six comparable quantities.
-	   Centred in the gutter rather than pulled to its far edge, which put the
-	   line hard against the previous column's last character. */
-	.divide {
-		border-left: 1px solid var(--bd2);
-		padding-left: calc(var(--space-5) / 2);
-		margin-left: calc(var(--space-5) / -2);
-	}
-	/* Right-aligned, so the heading sits over the figures it names rather than
-	   against the rule beside a column of right-aligned numbers. */
-	.g-cell.divide {
-		text-align: right;
-	}
-	.h-cell {
-		font-size: var(--text-xs);
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		/* A flex item's automatic minimum is its content, so without this a
-		   heading wider than its column spills into the one beside it rather
-		   than being held inside its own track. */
-		min-width: 0;
-	}
-	.h-cell.right {
-		justify-content: flex-end;
-	}
-	.swatch {
-		width: 9px;
-		height: 9px;
-		border-radius: 2px;
-		flex: none;
-	}
-	.swatch.base {
-		background: var(--series-health-soft);
-	}
-	.swatch.bonus {
-		background: var(--orange);
-	}
-	/* Above the years, so its rule is beneath it rather than over it. */
-	.summary {
-		background: var(--card2);
-		border-bottom: 1px solid var(--bd2);
 	}
 	.f-cell {
 		display: flex;
@@ -423,25 +359,11 @@
 		min-width: 0;
 	}
 	.f-label {
-		font-size: var(--text-lg, var(--text-md));
+		font-size: var(--text-lg);
 		color: var(--fg1);
 	}
 	.f-cell.right {
 		align-items: flex-end;
-	}
-	.row {
-		border-bottom: 1px solid var(--bd2);
-		cursor: pointer;
-		/* Reserved on every row so opening one does not shift its figures
-		   sideways by the width of the accent. */
-		box-shadow: inset 3px 0 0 transparent;
-	}
-	.row:hover {
-		background: var(--card2);
-	}
-	.row.open {
-		background: var(--card2);
-		box-shadow: inset 3px 0 0 var(--green);
 	}
 	.year {
 		display: flex;
@@ -454,6 +376,9 @@
 		font-size: 9px;
 		color: var(--fg3);
 	}
+	.chevron.open {
+		color: var(--green);
+	}
 	.cell {
 		display: flex;
 		flex-direction: column;
@@ -462,6 +387,7 @@
 	}
 	.cell.right {
 		align-items: flex-end;
+		text-align: right;
 	}
 	.c-value {
 		font-size: var(--text-md);
@@ -488,10 +414,8 @@
 		color: var(--fg3);
 	}
 	.t-value {
-		font-size: var(--text-lg, var(--text-md));
-		font-weight: 600;
+		font-size: var(--text-lg);
 		color: var(--fg1);
-		letter-spacing: 0.01em;
 	}
 	.cell.gross {
 		gap: 5px;
@@ -499,7 +423,7 @@
 	.track {
 		width: 100%;
 		height: 3px;
-		border-radius: 2px;
+		border-radius: var(--radius-xs);
 		background: var(--bd2);
 		margin-top: 3px;
 		overflow: hidden;
@@ -508,8 +432,5 @@
 		display: block;
 		height: 100%;
 		background: var(--series-health-soft);
-	}
-	.absent {
-		color: var(--fg3);
 	}
 </style>

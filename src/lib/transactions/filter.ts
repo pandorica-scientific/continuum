@@ -74,7 +74,7 @@ export interface RegisterFilter {
 export const PAGE_SIZES = [10, 25, 50] as const;
 
 /** Used when the URL says nothing. */
-export const DEFAULT_PAGE_SIZE = 10;
+export const DEFAULT_PAGE_SIZE = 25;
 
 /**
  * The review states the schema allows; anything else in the URL is noise.

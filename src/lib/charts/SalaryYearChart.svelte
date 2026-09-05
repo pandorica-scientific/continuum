@@ -115,7 +115,7 @@
 	<div class="head">
 		<Eyebrow
 			hue="--teal"
-			emoji="💼"
+			icon="wallet"
 			label={LABEL[mode]}
 			caption={mode === 'change' ? 'per cent on the year before' : axisUnit}
 		/>

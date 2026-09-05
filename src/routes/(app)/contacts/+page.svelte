@@ -78,7 +78,7 @@
 	<ActionError message={form?.message ?? null} />
 
 	<div class="eyebrow-row">
-		<Eyebrow hue="--indigo" emoji="📇" label="Address book" />
+		<Eyebrow hue="--indigo" icon="people" label="Address book" />
 		<span class="eyebrow-caption">
 			{data.contacts.length}
 			{data.contacts.length === 1 ? 'contact' : 'contacts'}

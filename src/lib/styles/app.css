@@ -298,11 +298,29 @@
 	--surface-2: rgba(255, 255, 255, 0.075);
 	--surface-3: rgba(255, 255, 255, 0.11);
 
+	/* The one table's two grounds: the header strip, and the group somebody
+	   has opened. Named so the seven screens that draw lists say the same
+	   thing rather than seven readings of --surface-2. */
+	--table-head: var(--surface-2);
+	--table-open: var(--surface-3);
+
 	/* Elevation in the flow. The rule until now was that nothing in the flow is
 	   raised; v2 allows exactly one quiet value for a card, plus one for the two
 	   things that are meant to read as lit — the net-worth hero and quick-add. */
 	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.28), 0 12px 32px -16px rgb(0 0 0 / 0.55);
 	--shadow-hero: 0 18px 44px -22px color-mix(in srgb, var(--brand) 70%, transparent);
+
+	/* The net-worth tide's two inks. Fixed in both themes on purpose: the hero
+	   is dark in both, and the light theme's --green is darkened for AA on
+	   white cards — on navy it disappears. These are the dark-theme green and
+	   red, named so the sidebar does not carry the literals. */
+	--tide-up: #2ecc71;
+	--tide-down: #ef6a5c;
+
+	/* The chevron a select draws, in --fg3 of this theme. A data URI cannot
+	   read a custom property, so the ink is written out here — the one place a
+	   colour may be. */
+	--select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2399a4b3' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
 
 	/* Motion. The easing is the one already here under its v2 name; two
 	   durations join the 90ms press, which is unchanged. */
@@ -542,6 +560,8 @@ html[data-ledger-theme='light'] {
 	--surface: #ffffff;
 	--surface-2: #f3efe7;
 	--surface-3: #e4ded2;
+	--table-head: #f3efe7;
+	--table-open: #e9e4da;
 	--bd: rgb(60 52 40 / 0.11);
 	--bd2: rgb(60 52 40 / 0.22);
 	--fg2: #3d3a34;
@@ -551,6 +571,7 @@ html[data-ledger-theme='light'] {
 	   reads as grey dirt under the card. */
 	--shadow-card: 0 1px 2px rgb(60 52 40 / 0.08), 0 14px 36px -18px rgb(60 52 40 / 0.32);
 	--shadow-hero: 0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent);
+	--select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2375705f' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
 	--shadow-float: 0 8px 28px -8px rgb(60 52 40 / 0.35), 0 1px 3px rgb(60 52 40 / 0.12);
 	--tile-alpha: 17%;
 	--tile-alpha-active: 28%;
@@ -809,6 +830,63 @@ textarea {
 	 */
 	line-height: 1.35;
 	min-height: var(--control-h);
+}
+
+/* A select is the one control the browser insists on decorating — its own
+   arrow, its own bevel, a different one per platform — and every screen with
+   one showed the platform's idea of a menu next to the app's idea of a field.
+   `appearance: none` hands it back, and the chevron is the stroke set's own,
+   from a token (`--select-chevron`, one per theme, because a data URI cannot
+   read currentColor). The dropdown list itself is still the platform's; the
+   `option` rule only keeps its ink and ground legible in the dark theme. */
+select {
+	appearance: none;
+	-webkit-appearance: none;
+	padding-right: calc(11px + 14px + var(--space-4));
+	background-color: var(--card);
+	background-image: var(--select-chevron);
+	background-repeat: no-repeat;
+	background-position: right 11px center;
+	background-size: 14px 14px;
+	cursor: pointer;
+	transition: background-color var(--dur) var(--ease);
+}
+select:hover:not(:disabled) {
+	background-color: var(--surface-2);
+}
+select:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+select option {
+	color: var(--fg1);
+	background: var(--bg2);
+}
+
+/* The first thing the keyboard reaches. Off-screen until it has focus, then a
+   primary button at the top-left over everything: nine sidebar rows on every
+   screen is a long way to tab to the first heading. */
+.skip-link {
+	position: absolute;
+	top: var(--space-4);
+	left: var(--space-4);
+	z-index: 100;
+	padding: var(--space-4) var(--space-6);
+	border-radius: var(--radius-ctl);
+	background: var(--blue);
+	color: var(--fg-inverse);
+	font-weight: 600;
+	font-size: var(--text-md);
+	text-decoration: none;
+	transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+	transform: none;
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+main:focus {
+	outline: none;
 }
 
 /* `.field` was already a convention — defined independently in five files.

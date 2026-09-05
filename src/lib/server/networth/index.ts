@@ -228,7 +228,7 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 		assetsMinor,
 		liabilitiesMinor,
 		deltaThisMonthMinor,
-		deltaShare: deltaShareOfBiggest(deltaThisMonthMinor, monthlyDeltas(history))
+		deltaShare: deltaShareOfBiggest(deltaThisMonthMinor, monthlyDeltas(history), totalMinor)
 	};
 }
 

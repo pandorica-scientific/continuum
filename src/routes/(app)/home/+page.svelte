@@ -44,7 +44,7 @@
 {#if !data.configured}
 	<section class="card setup">
 		<div class="eyebrow-row">
-			<Eyebrow hue="--orange" emoji="🔌" label="Connect your smart home" />
+			<Eyebrow hue="--orange" icon="bolt" label="Connect your smart home" />
 			<InfoHint label="What connecting a smart home does">
 				Continuum reads energy, water, climate and sensors, controls devices, and feeds the lived-in
 				flat's meter readings into its bills. Platforms plug in behind one interface — Home
@@ -94,7 +94,7 @@
 	</section>
 {:else if 'unreachable' in data && data.unreachable}
 	<section class="card setup">
-		<Eyebrow hue="--orange" emoji="⚠️" label={`${data.providerLabel} is not answering`} />
+		<Eyebrow hue="--orange" icon="alert" label={`${data.providerLabel} is not answering`} />
 		<p class="quiet">{data.unreachable}</p>
 		<form method="POST" action="?/disconnect" use:enhance>
 			<button type="submit" class="btn">Disconnect and reconfigure</button>
@@ -123,7 +123,7 @@
 
 	<section class="section">
 		<div class="eyebrow-row">
-			<Eyebrow hue="--orange" emoji="🛋️" label="Rooms" />
+			<Eyebrow hue="--orange" icon="house" label="Rooms" />
 			<span class="eyebrow-caption">{data.providerLabel} · devices toggle in place</span>
 		</div>
 		<div class="rooms">
@@ -158,7 +158,7 @@
 	{#if 'energyDays' in data && data.energyDays.length}
 		<section class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow hue="--orange" emoji="⚡" label="Energy into the budget" />
+				<Eyebrow hue="--orange" icon="bolt" label="Energy into the budget" />
 				<span class="eyebrow-caption">kWh a day · above the average in orange</span>
 			</div>
 			<div class="bars">
@@ -182,7 +182,7 @@
 	{#if 'week' in data && data.week.length}
 		<section class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow hue="--orange" emoji="🗓️" label="This week at home" />
+				<Eyebrow hue="--orange" icon="calendar" label="This week at home" />
 				<a href="/calendar" class="open-link">Open calendar →</a>
 			</div>
 			{#each data.week as e (e.date + e.label)}

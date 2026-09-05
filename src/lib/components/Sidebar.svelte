@@ -23,6 +23,8 @@
 		netWorthDeltaShare: number | null;
 		baseCurrency: string;
 		importBadge: number;
+		/** A currency converts at an approximate rate; the note is in Settings › Money. */
+		approximateRates?: boolean;
 		version: string;
 		runtime: 'docker' | 'node';
 		onNavigate?: () => void;
@@ -38,6 +40,7 @@
 		netWorthDeltaShare,
 		baseCurrency,
 		importBadge,
+		approximateRates = false,
 		version,
 		runtime,
 		onNavigate
@@ -172,15 +175,23 @@
 				     strength and the shared primitive has nothing to share. -->
 				<span class="nav-tile"><Icon name={area.icon} size={17} /></span>
 				<span class="label">{area.label}</span>
-				{#if area.key === badgeArea && importBadge > 0}
+				{#if area.key === badgeArea && (importBadge > 0 || approximateRates)}
 					<!-- A dot, not a count. The number was never acted on — it said
 					     "something is waiting", which is what a dot says in a tenth of
 					     the space, and the rail has no room for the digits at all.
-					     The count survives for anyone not looking at the screen. -->
+					     The count survives for anyone not looking at the screen.
+					     The same dot says an exchange rate is approximate: the banner
+					     that used to say so sat above every screen's title and was
+					     dismissed without being read; the note is in Settings › Money. -->
 					<span
 						class="badge"
 						role="status"
-						aria-label="{importBadge} transactions waiting to be reviewed"
+						aria-label={[
+							importBadge > 0 ? `${importBadge} transactions waiting to be reviewed` : null,
+							approximateRates ? 'an exchange rate is approximate — see Settings' : null
+						]
+							.filter(Boolean)
+							.join('; ')}
 					></span>
 				{/if}
 			</a>
@@ -364,15 +375,16 @@
 		height: 46px;
 		overflow: hidden;
 		pointer-events: none;
-		/* Fixed, for the reason the type above is fixed white: this panel is dark
-		   in both themes, and the light theme's --green is darkened for AA on
-		   white cards — on navy it disappears. Same hues, at dark-theme weight. */
-		--tide-ink: #2ecc71;
-		/* Faint for a month that barely moved, strong for a record one. */
-		opacity: calc(0.45 + 0.5 * var(--share));
+		/* From the two tide tokens, which app.css fixes in both themes for the
+		   reason the type above is fixed white: this panel is dark in both. */
+		--tide-ink: var(--tide-up);
+		/* Faint for a month that barely moved, strong for a record one — but
+		   never so faint it reads as a rendering fault; the floor is where a
+		   quiet month is still visibly a tide. */
+		opacity: calc(0.6 + 0.4 * var(--share));
 	}
 	.hero.down .tide {
-		--tide-ink: #ef6a5c;
+		--tide-ink: var(--tide-down);
 	}
 	/* Far wider than the panel on purpose: only the top of a very large circle
 	   crosses the band, so the edge reads as a swell and not as a bubble. */
@@ -392,14 +404,19 @@
 		   to the corner and the edge never reaches transparent. */
 		background: radial-gradient(
 			circle closest-side,
-			color-mix(in srgb, var(--tide-ink) 80%, transparent) 0 94.5%,
-			color-mix(in srgb, var(--tide-ink) 46%, transparent) 97.5%,
+			color-mix(in srgb, var(--tide-ink) 92%, transparent) 0 94%,
+			color-mix(in srgb, var(--tide-ink) 55%, transparent) 97.5%,
 			transparent 100%
 		);
-		/* Sunk so that between 8px and 38px of it shows, by the size of the
+		/* Sunk so that between 10px and 40px of it shows, by the size of the
 		   month. */
-		bottom: calc(-520px + 8px + 30px * var(--share));
-		animation: tide-roll 11s linear infinite;
+		bottom: calc(-520px + 10px + 30px * var(--share));
+		/* Two motions on one element: the turn that makes the crest, and a slow
+		   drift across the band so the crest visibly travels rather than only
+		   changing shape in place — the difference between a tide and a stain. */
+		animation:
+			tide-roll 9s linear infinite,
+			tide-drift 6.5s ease-in-out infinite alternate;
 	}
 	.swell.alt {
 		width: 480px;
@@ -408,13 +425,20 @@
 		border-radius: 47%;
 		background: radial-gradient(
 			circle closest-side,
-			color-mix(in srgb, var(--tide-ink) 52%, transparent) 0 94%,
-			color-mix(in srgb, var(--tide-ink) 28%, transparent) 97.5%,
+			color-mix(in srgb, var(--tide-ink) 62%, transparent) 0 94%,
+			color-mix(in srgb, var(--tide-ink) 34%, transparent) 97.5%,
 			transparent 100%
 		);
-		bottom: calc(-480px + 4px + 26px * var(--share));
-		animation-duration: 7.5s;
-		animation-direction: reverse;
+		bottom: calc(-480px + 6px + 26px * var(--share));
+		animation:
+			tide-roll 7s linear infinite reverse,
+			tide-drift 5s ease-in-out infinite alternate-reverse;
+	}
+	/* The drift moves the wrapper the swell turns inside, so the two
+	   transforms do not fight over one property: the swell rotates, its
+	   position slides. */
+	.swell {
+		animation-composition: add;
 	}
 	@keyframes tide-roll {
 		from {
@@ -422,6 +446,14 @@
 		}
 		to {
 			transform: rotate(1turn);
+		}
+	}
+	@keyframes tide-drift {
+		from {
+			transform: translateX(-22px);
+		}
+		to {
+			transform: translateX(22px);
 		}
 	}
 

@@ -10,6 +10,25 @@
  */
 export const BRIEFING_STRIP_SIZE = 4;
 
+/**
+ * Which cards the strip draws, and whether it draws the "more" tile.
+ *
+ * The tile takes a card's place on the first row rather than sitting under
+ * it as a button: `size` is the number of cells in the row, so when there is
+ * more than a row's worth the last cell is the way through to the rest.
+ * Exactly a row's worth shows every card and no tile — a tile promising one
+ * more card would be one click for nothing.
+ */
+export function stripItems<T>(
+	items: readonly T[],
+	size: number,
+	expanded: boolean
+): { shown: T[]; hidden: number } {
+	if (expanded || items.length <= size) return { shown: [...items], hidden: 0 };
+	const shown = items.slice(0, size - 1);
+	return { shown, hidden: items.length - shown.length };
+}
+
 interface EffectiveSpendingLine {
 	day: string;
 	currency: string;

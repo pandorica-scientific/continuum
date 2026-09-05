@@ -9,7 +9,7 @@
 	// transactions, and a transaction opens into everything you can do to it —
 	// the same three tiers the Tax and Salary screens are built on.
 	//
-	// The two pagers are independent. MonthMatrix walks months in local state;
+	// The two pagers are independent. The month list is walked in local state;
 	// the transactions inside the open month are paged by the URL, because they
 	// are fetched a month at a time. Paging one leaves the other where it was.
 	import { deserialize } from '$app/forms';
@@ -19,7 +19,13 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Field from '$lib/components/Field.svelte';
-	import MonthMatrix from '$lib/components/MonthMatrix.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import ListPager from '$lib/components/ListPager.svelte';
+	import PageSize, {
+		DEFAULT_LIST_PAGE_SIZE,
+		LIST_PAGE_SIZES
+	} from '$lib/components/PageSize.svelte';
+	import type { Column, Group } from '$lib/components/data-table';
 	import ReceiptsDialog from '$lib/components/ReceiptsDialog.svelte';
 	import SplitDialog from '$lib/components/SplitDialog.svelte';
 	import TransactionRow from '$lib/components/TransactionRow.svelte';
@@ -31,7 +37,57 @@
 	let { data, form } = $props();
 
 	type Row = (typeof data.rows)[number];
+	type Month = (typeof data.months)[number];
 	let splitting = $state<Row | null>(null);
+
+	// The month list, paged locally the way the Tax and Salary tables page
+	// theirs. A record that shrank must not strand the view on a page that no
+	// longer exists; an open month has to be reachable, so the page follows it
+	// when it CHANGES and not otherwise, or paging away would be impossible.
+	let monthSize = $state<number>(DEFAULT_LIST_PAGE_SIZE);
+	let monthPage = $state(0);
+	const monthPages = $derived(Math.max(1, Math.ceil(data.months.length / monthSize)));
+	$effect(() => {
+		if (monthPage > monthPages - 1) monthPage = 0;
+	});
+	let followedOpen: string | null = null;
+	$effect(() => {
+		if (data.openMonth === followedOpen) return;
+		followedOpen = data.openMonth;
+		if (!data.openMonth) return;
+		const index = data.months.findIndex((m) => m.month === data.openMonth);
+		if (index >= 0) monthPage = Math.floor(index / monthSize);
+	});
+	const monthWindow = $derived(
+		data.months.slice(monthPage * monthSize, monthPage * monthSize + monthSize)
+	);
+	const monthRange = $derived(
+		monthWindow.length === 0
+			? ''
+			: monthWindow.length === 1
+				? monthWindow[0].month
+				: `${monthWindow.at(-1)!.month} – ${monthWindow[0].month}`
+	);
+
+	// 190px month, one fraction each for in and out, 210px for the net. The two
+	// flexible columns carry a minimum rather than a floor of zero, so a heading
+	// can never be squeezed narrower than the word it prints. A phone keeps the
+	// month and the net; the bar on the net already says in against out.
+	const COLUMNS: Column[] = [
+		{ key: 'month', label: 'Month', width: 'minmax(190px, 1.4fr)' },
+		{ key: 'in', label: 'In', align: 'end', width: 'minmax(120px, 1fr)', hideBelow: 760 },
+		{ key: 'out', label: 'Out', align: 'end', width: 'minmax(120px, 1fr)', hideBelow: 760 },
+		{ key: 'net', label: 'Net', align: 'end', width: 'minmax(150px, 210px)' }
+	];
+	const monthByKey = $derived(new Map(data.months.map((m) => [m.month, m])));
+	const groups = $derived<Group<Row>[]>(
+		monthWindow.map((m) => ({
+			key: m.month,
+			open: m.month === data.openMonth,
+			rows: m.month === data.openMonth ? data.rows : []
+		}))
+	);
+	const monthOf = (group: Group<Row>): Month => monthByKey.get(group.key)!;
 
 	// Which transaction is expanded. Local, not the URL: a month's rows are
 	// already on the page, so opening one asks the server for nothing — and the
@@ -370,85 +426,181 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow hue="--teal" emoji="📒" label="Matching" />
+		<Eyebrow hue="--teal" icon="ledger" label="Matching" />
 		<span class="eyebrow-caption">
 			{data.total}
 			{data.total === 1 ? 'transaction' : 'transactions'} · open a month to read it
 		</span>
 	</div>
 
-	{#if data.months.length === 0}
-		<p class="empty">Nothing matches. Widen the dates, or clear the filters.</p>
-	{:else}
-		<MonthMatrix
-			months={data.months}
-			openMonth={data.openMonth}
-			totals={data.totals}
-			total={data.total}
-		>
-			{#snippet detail(month)}
-				<div class="rows">
-					{#each data.rows as r (r.id)}
-						<TransactionRow
-							row={r}
-							categories={data.categories}
-							loans={data.loans}
-							knownTags={data.knownTags}
-							proofLabel={r.proofClass ? data.proofLabels[r.proofClass] : null}
-							open={openRow === r.id}
-							error={form?.id === r.id ? (form.message ?? null) : null}
-							ontoggle={() => (openRow = openRow === r.id ? null : r.id)}
-							onsplit={() => (splitting = r)}
-							onreceipts={() => (attachingId = r.id)}
-						/>
-					{:else}
-						<p class="empty-month">Nothing in {month} matches the filters above.</p>
-					{/each}
-
-					<div class="month-foot">
-						<!-- Links, not a control that posts: every other part of this view
-						     lives in the URL, so page size does too and a narrowed view
-						     stays shareable at the size it was read in. -->
-						<span class="per-page" role="group" aria-label="Transactions per page">
-							{#each data.pageSizes as p (p.size)}
-								<a
-									class="per"
-									class:active={p.active}
-									href={p.href}
-									data-sveltekit-noscroll
-									aria-current={p.active ? 'true' : undefined}
-								>
-									{p.size}
-								</a>
-							{/each}
-						</span>
-						<span class="mono range">
-							{#if data.monthTotal > 0}
-								{rowFrom}–{rowTo} of {data.monthTotal}
-							{/if}
-						</span>
-						{#if data.pageCount > 1}
-							<span class="nav">
-								<a
-									class="btn"
-									class:disabled={data.filter.page <= 1}
-									href={data.prevHref}
-									data-sveltekit-noscroll>← Newer</a
-								>
-								<span class="mono">Page {data.filter.page} of {data.pageCount}</span>
-								<a
-									class="btn"
-									class:disabled={data.filter.page >= data.pageCount}
-									href={data.nextHref}
-									data-sveltekit-noscroll>Older →</a
-								>
-							</span>
-						{/if}
-					</div>
-				</div>
-			{/snippet}
-		</MonthMatrix>
+	{#if data.months.length > LIST_PAGE_SIZES[0]}
+		<!-- Above the rows it sizes: how much to show is a decision made before
+		     reading, while which page to read is one made after. -->
+		<div class="tools">
+			<PageSize bind:size={monthSize} onchange={() => (monthPage = 0)} label="months" />
+		</div>
 	{/if}
+
+	<DataTable
+		columns={COLUMNS}
+		{groups}
+		hue="--teal"
+		label="Transactions by month"
+		rowKey={(r) => r.id}
+		href={(group) => monthOf(group).href}
+		rowLayout="block"
+	>
+		{#snippet summary(visible)}
+			<span class="f-cell">
+				<span class="f-label">All</span>
+				<span class="c-sub">
+					{data.months.length}
+					{data.months.length === 1 ? 'month' : 'months'} · {data.total}
+					{data.total === 1 ? 'transaction' : 'transactions'}
+				</span>
+			</span>
+			{#if visible.has('in')}
+				<span class="f-cell right">
+					{#each data.totals as t (t.currency)}
+						<span class="mono in">{t.in}</span>
+					{/each}
+				</span>
+			{/if}
+			{#if visible.has('out')}
+				<span class="f-cell right">
+					{#each data.totals as t (t.currency)}
+						<span class="mono out">{t.out}</span>
+					{/each}
+				</span>
+			{/if}
+			<span class="f-cell right">
+				{#each data.totals as t (t.currency)}
+					<span class="net-line">
+						<span class="c-sub">{t.currency}</span>
+						<span class="display t-value" class:short={t.negative}>{t.net}</span>
+					</span>
+				{/each}
+			</span>
+		{/snippet}
+
+		{#snippet head(group, visible)}
+			{@const m = monthOf(group)}
+			<span class="month">
+				<!-- A 34px tile, not a bare glyph: it is the row's grip, and at 9px
+				     the chevron was a target nobody could aim at. Teal when open,
+				     which is the one place this screen's area colour appears. -->
+				<span class="chevron" class:open={group.open} aria-hidden="true"
+					>{group.open ? '▾' : '▸'}</span
+				>
+				<span class="m-name">
+					<span class="m-label">{m.label}</span>
+					<span class="c-sub">
+						{m.count}
+						{m.count === 1 ? 'transaction' : 'transactions'}
+					</span>
+				</span>
+			</span>
+			{#if visible.has('in')}
+				<span class="cell right">
+					{#each m.currencies as c (c.currency)}
+						<span class="mono c-value in">{c.in}</span>
+					{/each}
+				</span>
+			{/if}
+			{#if visible.has('out')}
+				<span class="cell right">
+					{#each m.currencies as c (c.currency)}
+						<span class="mono c-value out">{c.out}</span>
+					{/each}
+				</span>
+			{/if}
+			<span class="cell right net">
+				{#each m.currencies as c (c.currency)}
+					<span class="net-line">
+						<span class="c-sub">{c.currency}</span>
+						<span class="display t-value" class:short={c.negative}>{c.net}</span>
+					</span>
+					<!-- In beside out, both scaled against the widest month IN THE SAME
+					     currency — the one scale on which two months can honestly be
+					     compared. A month in another currency gets its own. -->
+					<span class="track" aria-hidden="true">
+						<span class="fill in" style:width="{c.inPct}%"></span>
+						<span class="fill out" style:width="{c.outPct}%"></span>
+					</span>
+				{/each}
+			</span>
+		{/snippet}
+
+		{#snippet aside(group)}
+			{#if data.rows.length === 0}
+				<span class="empty-month">Nothing in {monthOf(group).label} matches the filters above.</span
+				>
+			{/if}
+			<!-- Links, not a control that posts: every other part of this view
+			     lives in the URL, so page size does too and a narrowed view
+			     stays shareable at the size it was read in. -->
+			<span class="per-page" role="group" aria-label="Transactions per page">
+				{#each data.pageSizes as p (p.size)}
+					<a
+						class="per"
+						class:active={p.active}
+						href={p.href}
+						data-sveltekit-noscroll
+						aria-current={p.active ? 'true' : undefined}
+					>
+						{p.size}
+					</a>
+				{/each}
+			</span>
+			<span class="mono range">
+				{#if data.monthTotal > 0}
+					{rowFrom}–{rowTo} of {data.monthTotal}
+				{/if}
+			</span>
+			{#if data.pageCount > 1}
+				<span class="nav">
+					<a
+						class="btn small"
+						class:disabled={data.filter.page <= 1}
+						href={data.prevHref}
+						data-sveltekit-noscroll>← Newer</a
+					>
+					<span class="mono">Page {data.filter.page} of {data.pageCount}</span>
+					<a
+						class="btn small"
+						class:disabled={data.filter.page >= data.pageCount}
+						href={data.nextHref}
+						data-sveltekit-noscroll>Older →</a
+					>
+				</span>
+			{/if}
+		{/snippet}
+
+		{#snippet row(r)}
+			<TransactionRow
+				row={r}
+				categories={data.categories}
+				loans={data.loans}
+				knownTags={data.knownTags}
+				proofLabel={r.proofClass ? data.proofLabels[r.proofClass] : null}
+				open={openRow === r.id}
+				error={form?.id === r.id ? (form.message ?? null) : null}
+				ontoggle={() => (openRow = openRow === r.id ? null : r.id)}
+				onsplit={() => (splitting = r)}
+				onreceipts={() => (attachingId = r.id)}
+			/>
+		{/snippet}
+
+		{#snippet empty()}
+			Nothing matches. Widen the dates, or clear the filters.
+		{/snippet}
+
+		{#snippet foot()}
+			{#if data.months.length > LIST_PAGE_SIZES[0]}
+				<ListPager bind:page={monthPage} pages={monthPages} range={monthRange} />
+			{/if}
+		{/snippet}
+	</DataTable>
 
 	{#if splitting}
 		<!-- Keyed so the editor always remounts with the row it was opened for,
@@ -624,31 +776,114 @@
 		color: var(--fg1);
 		text-decoration: none;
 	}
-	/* The open month's transactions, seated inside the table rather than in
-	   cards of their own — the row above them is the thing they belong to.
-	   `--row-min` is the matrix's and inherits down to here, so scrolling the
-	   table sideways does not leave these rows ending short of the month row
-	   above them. */
-	.rows {
-		background: var(--card);
-		border-bottom: 1px solid var(--bd2);
-		min-width: var(--row-min);
+	.tools {
+		display: flex;
+		justify-content: flex-end;
 	}
 	.empty-month {
-		margin: 0;
-		padding: var(--space-6);
+		margin-right: auto;
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	.month-foot {
+	/* The month row's cells. The table draws the grid; these are what sits
+	   in it, and they read the same in the head row and the summary row. */
+	.month {
 		display: flex;
 		align-items: center;
 		gap: var(--space-5);
-		flex-wrap: wrap;
-		padding: 8px var(--space-6);
-		border-top: 1px solid var(--bd2);
-		font-size: var(--text-sm);
+		min-width: 0;
+	}
+	.m-name,
+	.f-cell,
+	.cell {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	.f-cell {
+		font-size: var(--text-md);
+		color: var(--fg2);
+	}
+	.f-label {
+		font-size: var(--text-lg);
+		color: var(--fg1);
+	}
+	.right {
+		align-items: flex-end;
+		text-align: right;
+	}
+	.m-label {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--fg1);
+	}
+	.chevron {
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: var(--radius-lg);
+		background: var(--surface-2);
 		color: var(--fg3);
+		font-size: var(--text-sm);
+		flex: none;
+		transition:
+			background-color var(--dur) var(--ease),
+			color var(--dur) var(--ease);
+	}
+	.chevron.open {
+		background: color-mix(in srgb, var(--teal) var(--tile-alpha-active), transparent);
+		color: var(--teal);
+	}
+	.c-value {
+		font-size: var(--text-md);
+	}
+	.c-sub {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.in {
+		color: var(--green);
+	}
+	.out {
+		color: var(--red);
+	}
+	.net-line {
+		display: flex;
+		align-items: baseline;
+		justify-content: flex-end;
+		gap: var(--space-3);
+		min-width: 0;
+	}
+	.t-value {
+		font-size: var(--text-lg);
+		color: var(--fg1);
+	}
+	/* Red only when the month ran short. Every other month is the ordinary
+	   case, and colouring all of them would leave nothing for the exception. */
+	.t-value.short {
+		color: var(--red);
+	}
+	.track {
+		display: flex;
+		width: 120px;
+		max-width: 100%;
+		height: 3px;
+		border-radius: var(--radius-xs);
+		background: var(--bd2);
+		margin-top: var(--space-2);
+		overflow: hidden;
+	}
+	.fill {
+		display: block;
+		height: 100%;
+	}
+	.fill.in {
+		background: var(--green);
+	}
+	.fill.out {
+		background: var(--red);
 	}
 	.range {
 		font-size: var(--text-xs);
@@ -688,20 +923,9 @@
 		background: var(--card2);
 		color: var(--fg1);
 	}
-	.empty {
-		color: var(--fg3);
-		font-size: var(--text-md);
-	}
 	@media (max-width: 640px) {
 		.f-wide {
 			grid-column: auto;
-		}
-	}
-	/* The matrix stops scrolling sideways at this width and lays its months out
-	   as rows instead, so the transactions under one must stop too. */
-	@media (max-width: 720px) {
-		.rows {
-			min-width: 0;
 		}
 	}
 </style>

@@ -750,3 +750,21 @@ export function pathRibbons(ribbons: readonly SankeyRibbon[], key: string | null
 	walk([key], false);
 	return lit;
 }
+
+/**
+ * The whole route through a ribbon: everything upstream of where it starts and
+ * everything downstream of where it ends, plus the band itself.
+ *
+ * Standing on a band used to light that band alone — the finer answer, but
+ * the one nobody was asking: a reader who points at the flow between
+ * "Housing" and "Mortgage" wants to see which salary it came out of, the same
+ * as when they point at "Housing" itself. Both ends' paths, unioned.
+ */
+export function ribbonRoute(ribbons: readonly SankeyRibbon[], index: number | null): Set<number> {
+	if (index === null || index < 0 || index >= ribbons.length) return new Set();
+	const ribbon = ribbons[index];
+	const lit = new Set<number>([index]);
+	for (const i of pathRibbons(ribbons, ribbon.from)) lit.add(i);
+	for (const i of pathRibbons(ribbons, ribbon.to)) lit.add(i);
+	return lit;
+}

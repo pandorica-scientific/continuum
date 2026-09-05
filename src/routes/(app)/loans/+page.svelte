@@ -65,7 +65,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow hue="--purple" emoji="💳" label="What you owe" />
+		<Eyebrow hue="--purple" icon="card" label="What you owe" />
 		<span class="eyebrow-caption">
 			{data.count === 0
 				? 'no loans on record yet'
@@ -192,7 +192,7 @@
 
 					{#if l.chart.length}
 						<div class="eyebrow-row">
-							<Eyebrow hue="--purple" emoji="📊" label="Interest vs principal" />
+							<Eyebrow hue="--purple" icon="chart" label="Interest vs principal" />
 							<span class="eyebrow-caption">{l.chartNote}</span>
 						</div>
 						<LoanSchedule years={l.chart} currency={l.currency} />

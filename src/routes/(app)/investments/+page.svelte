@@ -114,7 +114,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow hue="--purple" emoji="💼" label="Portfolio" />
+		<Eyebrow hue="--purple" icon="wallet" label="Portfolio" />
 		<span class="eyebrow-caption">
 			{data.asOf ? `from the report of ${data.asOf}` : 'upload the first report below'}
 		</span>
@@ -168,7 +168,7 @@
 
 	{#if data.tax.configured && data.tax.disposals > 0}
 		<div class="card tax-detail">
-			<Eyebrow hue="--purple" emoji="🧾" label="How that is worked out" />
+			<Eyebrow hue="--purple" icon="receipt" label="How that is worked out" />
 			<dl class="tax-lines">
 				<dt>Realised in {data.tax.year}</dt>
 				<dd class="mono" style:color={data.tax.realisedPositive ? 'var(--green)' : 'var(--red)'}>
@@ -207,7 +207,7 @@
 				update({ reset: false })}
 		class="card tax-form"
 	>
-		<Eyebrow hue="--purple" emoji="⚖️" label="How gains are taxed here" />
+		<Eyebrow hue="--purple" icon="sliders" label="How gains are taxed here" />
 		<div class="tax-fields">
 			<label class="field">
 				<span>Rate on realised gains</span>
@@ -241,7 +241,7 @@
 {#if chart}
 	<section class="card chart-card">
 		<div class="eyebrow-row">
-			<Eyebrow hue="--purple" emoji="📈" label="Value against money in" />
+			<Eyebrow hue="--purple" icon="trend" label="Value against money in" />
 			<span class="eyebrow-caption">
 				{data.accountUnit} · benchmarks use the same contribution dates
 			</span>
@@ -355,7 +355,7 @@
 <div class="own-row">
 	{#if data.donut.length}
 		<section class="card own">
-			<Eyebrow hue="--purple" emoji="🥧" label="What you own">
+			<Eyebrow hue="--purple" icon="chart" label="What you own">
 				{#snippet right()}
 					<span class="quiet"
 						>{data.donut.length}
@@ -384,7 +384,7 @@
 
 	<section class="card holdings">
 		<div class="eyebrow-row" style="padding-bottom: 8px;">
-			<Eyebrow hue="--purple" emoji="📋" label="Holdings" />
+			<Eyebrow hue="--purple" icon="ledger" label="Holdings" />
 			<span class="eyebrow-caption">duplicates dropped by operation id</span>
 		</div>
 		{#if data.holdings.length}

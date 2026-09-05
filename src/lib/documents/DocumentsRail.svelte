@@ -625,12 +625,6 @@
 	.shelf-dialog select {
 		flex: 1;
 		height: var(--control-h);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		background: var(--card);
-		color: var(--fg1);
-		padding: 0 10px;
-		font-size: var(--text-md);
 	}
 	.shelf-dialog-field {
 		display: flex;

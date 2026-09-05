@@ -24,6 +24,15 @@ describe('how big this month is against the biggest', () => {
 		expect(deltaShareOfBiggest(-200n, [100n, -200n])).toBe(1);
 	});
 
+	it('measures the first month against net worth when nothing is on record', () => {
+		// A household in its first month has a delta and no history; the tide
+		// still has to draw something, and net worth is the only scale there is.
+		expect(deltaShareOfBiggest(50_000_00n, [], 1_000_000_00n)).toBeCloseTo(0.05);
+		expect(deltaShareOfBiggest(-2_000_000_00n, [], 1_000_000_00n)).toBe(1);
+		// History wins over net worth once there is any.
+		expect(deltaShareOfBiggest(50n, [100n], 1_000_000n)).toBeCloseTo(0.5);
+	});
+
 	it('says nothing when there is nothing to compare against', () => {
 		expect(deltaShareOfBiggest(50n, [])).toBeNull();
 		expect(deltaShareOfBiggest(50n, [0n])).toBeNull();

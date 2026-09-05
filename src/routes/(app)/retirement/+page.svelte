@@ -217,7 +217,7 @@
 	<div class="assume">
 		<section class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow hue="--blue" emoji="🎛️" label="What you assume" />
+				<Eyebrow hue="--blue" icon="sliders" label="What you assume" />
 				<span class="eyebrow-caption">
 					capital, savings rate, mortgages and rent are read from your own data
 				</span>
@@ -370,7 +370,7 @@
 	<div class="output">
 		<section class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow hue="--blue" emoji="📈" label="The pot against what the target requires" />
+				<Eyebrow hue="--blue" icon="trend" label="The pot against what the target requires" />
 				<span class="eyebrow-caption">millions {unit} · twenty years out</span>
 			</div>
 			<div class="chart">
@@ -435,7 +435,7 @@
 			</div>
 		</section>
 		<section class="card stack">
-			<Eyebrow hue="--blue" emoji="📋" label="Where that leaves you" />
+			<Eyebrow hue="--blue" icon="ledger" label="Where that leaves you" />
 			<div class="table">
 				<div class="t-head">
 					<span>When</span><span class="r">Ages</span><span class="r">Capital</span><span class="r"

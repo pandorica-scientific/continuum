@@ -4,6 +4,7 @@
 		buildSankey,
 		estimateText,
 		pathRibbons,
+		ribbonRoute,
 		type MeasureText,
 		type SankeyNode,
 		type SankeyRibbon
@@ -200,16 +201,19 @@
 	 * "Bills" it showed the money arriving and the money leaving, but not which
 	 * salary two columns left it came from. See `pathRibbons`.
 	 */
-	const litPath = $derived(pathRibbons(layout.ribbons, hoveredKey));
+	const litPath = $derived(
+		hoveredRibbon !== null
+			? ribbonRoute(layout.ribbons, hoveredRibbon)
+			: pathRibbons(layout.ribbons, hoveredKey)
+	);
+	const reading = $derived(hoveredRibbon !== null || hoveredKey !== null);
 
 	const ribbonOpacity = (index: number) => {
-		if (hoveredRibbon !== null) return index === hoveredRibbon ? RIBBON_LIT : RIBBON_DIM;
-		if (hoveredKey === null) return RIBBON_OPACITY;
+		if (!reading) return RIBBON_OPACITY;
 		return litPath.has(index) ? RIBBON_LIT : RIBBON_DIM;
 	};
 
-	const isLit = (index: number) =>
-		hoveredRibbon !== null ? index === hoveredRibbon : hoveredKey !== null && litPath.has(index);
+	const isLit = (index: number) => reading && litPath.has(index);
 
 	/**
 	 * One gradient per colour, not per band.

@@ -149,7 +149,7 @@
 {#if data.detail}
 	<section class="section">
 		<div class="eyebrow-row">
-			<Eyebrow hue="--purple" emoji="🏢" label="This flat" />
+			<Eyebrow hue="--purple" icon="buildings" label="This flat" />
 			<span class="eyebrow-caption">{data.detail.sizeLabel || data.detail.name}</span>
 			<span class="p-tags">
 				{#each data.detail.tags as t (t)}
@@ -187,7 +187,7 @@
 	<section class="two-col">
 		<div class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow hue="--purple" emoji="📐" label="Floor plan" />
+				<Eyebrow hue="--purple" icon="buildings" label="Floor plan" />
 				<button type="button" class="btn plan-edit" onclick={() => (editingPlan = !editingPlan)}>
 					{editingPlan
 						? 'Close editor'
@@ -248,7 +248,7 @@
 				{#if data.detail.lease}
 					<div class="card stack">
 						<div class="eyebrow-row">
-							<Eyebrow hue="--purple" emoji="🔑" label="Tenancy" />
+							<Eyebrow hue="--purple" icon="key" label="Tenancy" />
 							<Pill hue={data.detail.lease.hue}>{data.detail.lease.state}</Pill>
 						</div>
 						<div class="tenant">
@@ -362,7 +362,7 @@
 				{/if}
 			{:else}
 				<div class="card stack">
-					<Eyebrow hue="--purple" emoji="🏠" label="You live here" />
+					<Eyebrow hue="--purple" icon="house" label="You live here" />
 					<span class="quiet">
 						Home Assistant is bound to this flat, so its energy and water readings become the bills
 						you see below — no meter typing. The integration lands in Phase 4.
@@ -372,7 +372,7 @@
 
 			<div class="card stack">
 				<div class="eyebrow-row">
-					<Eyebrow hue="--purple" emoji="🧾" label="Monthly bills" />
+					<Eyebrow hue="--purple" icon="receipt" label="Monthly bills" />
 					<span class="mono eyebrow-caption">{data.detail.billsTotal}</span>
 				</div>
 				{#each data.detail.bills as bill (bill.id)}
@@ -446,7 +446,7 @@
 			{#if data.detail.mortgage}
 				<div class="card stack">
 					<div class="eyebrow-row">
-						<Eyebrow hue="--purple" emoji="🏦" label="Mortgage" />
+						<Eyebrow hue="--purple" icon="bank" label="Mortgage" />
 						<span class="eyebrow-caption" style="color: var(--yellow);"
 							>{data.detail.mortgage.fixation}</span
 						>
@@ -461,7 +461,7 @@
 				</div>
 			{:else}
 				<div class="card stack">
-					<Eyebrow hue="--purple" emoji="🏦" label="Mortgage" />
+					<Eyebrow hue="--purple" icon="bank" label="Mortgage" />
 					<span class="quiet">
 						Add the mortgage on the <a href="/loans">Loans screen</a> and link it to this flat to see
 						equity and the repayment schedule here.
@@ -483,7 +483,7 @@
 	</section>
 	<section class="card stack">
 		<div class="eyebrow-row">
-			<Eyebrow hue="--purple" emoji="📈" label="What it has been worth" />
+			<Eyebrow hue="--purple" icon="trend" label="What it has been worth" />
 			<span class="eyebrow-caption">
 				{data.detail.valueSeries.length > 1
 					? `${data.detail.valueSeries.length} valuations`
@@ -552,7 +552,7 @@
 	</section>
 
 	<section class="card stack">
-		<Eyebrow hue="--purple" emoji="🧾" label="What it cost to buy" />
+		<Eyebrow hue="--purple" icon="receipt" label="What it cost to buy" />
 		<!-- Money in is the household's OWN cash: the deposit plus the costs of
 		     buying. The price itself is mostly the bank's, and the part that becomes
 		     theirs arrives as the mortgage is repaid — which the loan already

@@ -1573,11 +1573,8 @@
 		padding: 0 12px 0 34px;
 		font-size: var(--text-md);
 	}
-	.sort,
-	.bulk select,
 	.bulk input,
 	.sec input,
-	.sec select,
 	.sec textarea {
 		height: var(--control-h);
 		border: 1px solid var(--bd2);
@@ -1586,6 +1583,13 @@
 		color: var(--fg1);
 		padding: 0 10px;
 		font-size: var(--text-md);
+	}
+	/* Selects take the shared skin from app.css; only the height is this
+	   screen's, so the row of filters sits level. */
+	.sort,
+	.bulk select,
+	.sec select {
+		height: var(--control-h);
 	}
 	.sec textarea {
 		height: auto;
@@ -1668,12 +1672,6 @@
 	}
 	.filter {
 		height: var(--control-h);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		background: var(--card);
-		color: var(--fg1);
-		padding: 0 10px;
-		font-size: var(--text-md);
 		max-width: 240px;
 	}
 	.tag-filter {

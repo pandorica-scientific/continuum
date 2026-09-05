@@ -5,7 +5,6 @@
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import IconTile from '$lib/components/IconTile.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import InfoHint from '$lib/components/InfoHint.svelte';
 	import FileViewer from '$lib/components/FileViewer.svelte';
 	import type { ViewerSource } from '$lib/ui/file-viewer';
 	import type { IconName } from '$lib/icons';
@@ -20,44 +19,6 @@
 	// wired once, on the shell, rather than screen by screen. See
 	// $lib/actions/file-preview for why it is delegated.
 	let openFile = $state<{ source: ViewerSource; title: string } | null>(null);
-
-	// Pinned and hovered are separate states, exactly as InfoHint keeps them.
-	// One shared flag looks fine until a pointer arrives: hovering opens the
-	// menu, and the click that follows then toggles it straight shut.
-	// Dismissing is remembered against WHICH currencies were flagged, so hiding
-	// today's warning does not hide a different one tomorrow — and it is kept in
-	// localStorage, because a banner that comes back on every page load has not
-	// really been dismissed.
-	// Which currencies this warning is about, AND WHY — the two buckets are kept
-	// apart in the key, not merged into one list. Flattened, a dismissal of the
-	// harmless "converts at the oldest rate on record" warning for EUR produced
-	// the key 'EUR', so when the refresh later failed and EUR moved to "no rate at
-	// all" the key was still 'EUR', the banner never drew, and net worth counted
-	// EUR holdings at face value with nothing on screen to say so — for a year,
-	// which is how long the cookie lasts.
-	const warningKey = $derived(
-		[
-			`none:${[...data.missingRates.none].sort().join(',')}`,
-			`carried:${[...data.missingRates.carried].sort().join(',')}`
-		].join('|')
-	);
-	const anyMissingRates = $derived(
-		data.missingRates.none.length + data.missingRates.carried.length > 0
-	);
-
-	// Seeded from the SERVER, not from localStorage. localStorage is invisible
-	// during rendering, so the banner drew, hydrated, and vanished — a flash on
-	// every page load of a thing already dismissed. A cookie the server can read
-	// means it is simply never rendered.
-	let rateDismissed = $derived(data.rateWarningDismissed);
-	const showRateWarning = $derived(anyMissingRates && rateDismissed !== warningKey);
-
-	function dismissRateWarning() {
-		rateDismissed = warningKey;
-		// A year: the same currencies will still be approximate tomorrow, and being
-		// asked again next week is the thing being dismissed.
-		document.cookie = `continuum_rate_dismissed=${encodeURIComponent(warningKey)}; path=/; max-age=31536000; samesite=lax`;
-	}
 
 	let quickPinned = $state(false);
 	let quickHovering = $state(false);
@@ -107,6 +68,7 @@
 	);
 </script>
 
+<a class="skip-link" href="#content">Skip to content</a>
 <div class="shell" use:filePreview={{ open: (source, title) => (openFile = { source, title }) }}>
 	<div
 		class="side"
@@ -126,6 +88,7 @@
 			netWorthDeltaShare={data.netWorthDeltaShare}
 			baseCurrency={data.baseCurrency}
 			importBadge={data.importBadge}
+			approximateRates={data.missingRates.none.length + data.missingRates.carried.length > 0}
 			version={data.version}
 			runtime={data.runtime}
 			onNavigate={() => (drawerOpen = false)}
@@ -141,7 +104,7 @@
 		></button>
 	{/if}
 
-	<main>
+	<main id="content" tabindex="-1">
 		<!-- The brand, on a phone only. The sidebar it normally lives in is a
 		     drawer down here, so without this the app has no name on screen. -->
 		<div class="phone-brand">
@@ -155,44 +118,6 @@
 		     The trade is deliberate and worth naming: somebody who did not turn it
 		     on will not be reminded unless they visit Settings. Against that, a
 		     warning on every screen forever is one nobody reads. -->
-		{#if showRateWarning}
-			<!-- The FACT stays on screen: a figure being approximate is exactly the
-			     kind of thing that must not hide behind an icon. Only the reason
-			     moves — and the two reasons want different advice, so they are told
-			     apart rather than lumped under one line about the internet. -->
-			<p class="rate-warning" role="status">
-				<span>
-					Approximate exchange rate for {[
-						...data.missingRates.none,
-						...data.missingRates.carried
-					].join(', ')}.
-				</span>
-				<InfoHint label="Why this rate is approximate">
-					{#if data.missingRates.none.length > 0}
-						<strong class="warn">
-							No rate at all is stored for {data.missingRates.none.join(', ')}, so those amounts are
-							counted at face value.
-						</strong>
-						Check the internet connection — rates come from the Czech National Bank and refresh every
-						six hours.
-					{/if}
-					{#if data.missingRates.carried.length > 0}
-						{data.missingRates.carried.join(', ')} converts at the oldest rate on record, because the
-						figures involved are dated before this instance's first stored fixing. That happens to any
-						ledger holding history older than itself, and there is nothing to fix — the Czech National
-						Bank publishes forward, so past days cannot gain a rate of their own.
-					{/if}
-				</InfoHint>
-				<button
-					type="button"
-					class="rate-dismiss"
-					aria-label="Dismiss"
-					onclick={dismissRateWarning}
-				>
-					×
-				</button>
-			</p>
-		{/if}
 		{@render children()}
 	</main>
 
@@ -401,43 +326,6 @@
 		text-decoration: none;
 		transform: scale(1.45);
 		filter: brightness(1.1);
-	}
-
-	/* Wash, tile and hue border rather than a grey card with a coloured edge.
-	   The 3px left edge it replaces was the only one of its kind in the app. */
-	.rate-warning {
-		display: flex;
-		align-items: center;
-		gap: var(--space-5);
-		margin: 0;
-		padding: var(--space-6) var(--space-7);
-		border: 1px solid color-mix(in srgb, var(--orange) 35%, transparent);
-		border-radius: var(--radius-card);
-		background: var(--orange-wash);
-		color: var(--fg2);
-		font-size: var(--text-md);
-		line-height: 1.5;
-	}
-
-	.rate-dismiss {
-		margin-left: auto;
-		border: none;
-		background: none;
-		color: var(--fg3);
-		font-size: var(--text-2xl);
-		line-height: 1;
-		padding: 0 4px;
-		cursor: pointer;
-	}
-
-	.rate-dismiss:hover {
-		color: var(--fg1);
-	}
-
-	.warn {
-		display: block;
-		color: var(--red);
-		margin-bottom: 6px;
 	}
 
 	/* ── Rail: a tablet ──────────────────────────────────────────────────── */

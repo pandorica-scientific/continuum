@@ -16,6 +16,8 @@
 		DEFAULT_LIST_PAGE_SIZE,
 		LIST_PAGE_SIZES
 	} from '$lib/components/PageSize.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import type { Column, Group } from '$lib/components/data-table';
 
 	interface Country {
 		code: string;
@@ -89,7 +91,7 @@
 
 	/** Lifetime total per jurisdiction, and how many years it filed. Over the
 	 *  whole record — a total that counted only the page is not a lifetime one. */
-	const summary = $derived(
+	const perCountry = $derived(
 		countries.map((c) => {
 			const filings = years.map((y) => cellFor(y, c.code)).filter((x) => x !== null);
 			return {
@@ -128,6 +130,29 @@
 	const minWidth = $derived(
 		`max(620px, calc(${YEAR + TOTAL + countries.length * COUNTRY_MIN}px + ${countries.length + 1} * var(--space-5) + 2 * var(--space-6)))`
 	);
+
+	// The one table's columns: the year, one per jurisdiction, the total. A
+	// phone keeps the year and the total; the jurisdictions are what the open
+	// year's cards say.
+	const tableColumns = $derived<Column[]>([
+		{ key: 'year', label: 'Year', width: `${YEAR}px` },
+		...countries.map((c) => ({
+			key: `country:${c.code}`,
+			label: c.name,
+			align: 'end' as const,
+			width: `minmax(${COUNTRY_MIN}px, 1fr)`,
+			hideBelow: 760 as const
+		})),
+		{ key: 'total', label: `Year total · ${symbol}`, align: 'end', width: `${TOTAL}px` }
+	]);
+	const byYear = $derived(new Map(rows.map((r) => [String(r.year), r])));
+	const tableGroups = $derived<Group<{ year: number }>[]>(
+		rows.map((r) => ({
+			key: String(r.year),
+			open: openYear === r.year,
+			rows: openYear === r.year ? [{ year: r.year }] : []
+		}))
+	);
 </script>
 
 <div class="matrix" style:--row-cols={columns} style:--row-min={minWidth}>
@@ -139,56 +164,40 @@
 		</div>
 	{/if}
 
-	<div class="scroll">
-		<div class="head">
-			<span class="h-cell">Year</span>
-			{#each countries as c (c.code)}
-				<span class="h-cell right">
-					<span class="swatch" style="background: var({c.token})"></span>
-					{c.name}
-				</span>
-			{/each}
-			<span class="h-cell right">Year total · {symbol}</span>
-		</div>
-
-		{#if ordered.length > 0}
-			<div class="summary">
-				<span class="f-cell">All</span>
-				{#each summary as f (f.code)}
+	<DataTable
+		columns={tableColumns}
+		groups={tableGroups}
+		hue="--teal"
+		label="Tax by year"
+		rowKey={(r) => String(r.year)}
+		ontoggle={(key) => onToggle(Number(key))}
+		rowLayout="block"
+	>
+		{#snippet summary(visible)}
+			<span class="f-cell">All</span>
+			{#each perCountry as f (f.code)}
+				{#if visible.has(`country:${f.code}`)}
 					<span class="f-cell right">
 						<span class="mono">{compactMinor(f.grossMinor, currency)}</span>
 						<span class="c-rate">{f.count} {f.count === 1 ? 'year' : 'years'}</span>
 					</span>
-				{/each}
-				<span class="f-cell right">
-					<span class="c-rate">{blended === null ? '—' : `${blended.toFixed(2)}%`}</span>
-					<span class="mono t-value">{formatMinor(totalGross, currency)}</span>
-				</span>
-			</div>
-		{/if}
+				{/if}
+			{/each}
+			<span class="f-cell right">
+				<span class="c-rate">{blended === null ? '—' : `${blended.toFixed(2)}%`}</span>
+				<span class="display t-value">{formatMinor(totalGross, currency)}</span>
+			</span>
+		{/snippet}
 
-		{#each rows as row (row.year)}
-			{@const open = openYear === row.year}
-			<div
-				class="row"
-				class:open
-				role="button"
-				tabindex="0"
-				aria-expanded={open}
-				onclick={() => onToggle(row.year)}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						onToggle(row.year);
-					}
-				}}
-			>
-				<span class="year mono">
-					<span class="chevron" class:open>{open ? '▼' : '▶'}</span>
-					{row.year}
-				</span>
+		{#snippet head(group, visible)}
+			{@const row = byYear.get(group.key)!}
+			<span class="year mono">
+				<span class="chevron" class:open={group.open}>{group.open ? '▼' : '▶'}</span>
+				{row.year}
+			</span>
 
-				{#each countries as c (c.code)}
+			{#each countries as c (c.code)}
+				{#if visible.has(`country:${c.code}`)}
 					{@const cell = cellFor(row, c.code)}
 					<span class="cell right" class:flagged={cell && flagged(cell.grossMinor)}>
 						{#if cell}
@@ -203,105 +212,50 @@
 							<span class="absent">·</span>
 						{/if}
 					</span>
-				{/each}
+				{/if}
+			{/each}
 
-				<span class="cell right total">
-					<span class="c-rate">{row.ratePct === null ? '—' : `${row.ratePct.toFixed(2)}%`}</span>
-					<span class="mono t-value">{formatMinor(BigInt(row.grossMinor), currency)}</span>
-					<!-- The magnitude bar lives ONLY here. This is the one column where
-					     every row is in the same currency, so the only one where
-					     comparing bar lengths is honest. -->
-					<span class="track">
-						<span
-							class="fill"
-							style:width="{ceiling === 0n
-								? 0
-								: Math.max(2, (Number(BigInt(row.grossMinor)) / Number(ceiling)) * 100)}%"
-						></span>
-					</span>
+			<span class="cell right total">
+				<span class="c-rate">{row.ratePct === null ? '—' : `${row.ratePct.toFixed(2)}%`}</span>
+				<span class="display t-value">{formatMinor(BigInt(row.grossMinor), currency)}</span>
+				<!-- The magnitude bar lives ONLY here. This is the one column where
+				     every row is in the same currency, so the only one where
+				     comparing bar lengths is honest. -->
+				<span class="track">
+					<span
+						class="fill"
+						style:width="{ceiling === 0n
+							? 0
+							: Math.max(2, (Number(BigInt(row.grossMinor)) / Number(ceiling)) * 100)}%"
+					></span>
 				</span>
-			</div>
+			</span>
+		{/snippet}
 
-			{#if open && detail}
-				{@render detail(row.year)}
+		{#snippet row(r)}
+			{#if detail}{@render detail(r.year)}{/if}
+		{/snippet}
+
+		{#snippet foot()}
+			{#if ordered.length > LIST_PAGE_SIZES[0]}
+				<ListPager bind:page {pages} range={pageRange} />
 			{/if}
-		{/each}
-	</div>
-
-	<!-- Shown whenever the record is longer than the smallest page size, even
-	     when the current size fits it all: the size switcher lives here, and
-	     hiding it would leave no way back to a smaller page. -->
-	{#if ordered.length > LIST_PAGE_SIZES[0]}
-		<ListPager bind:page {pages} range={pageRange} />
-	{/if}
+		{/snippet}
+	</DataTable>
 </div>
 
 <style>
 	.matrix {
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-card);
-		overflow: hidden;
-		background: var(--surface);
-	}
-	/* Below roughly 900px the jurisdiction columns stop fitting. The grid
-	   scrolls rather than reflowing into cards — cards are what this replaced. */
-	.scroll {
-		overflow-x: auto;
-		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 	.tools {
 		display: flex;
 		justify-content: flex-end;
-		padding: 8px var(--space-6);
-		border-bottom: 1px solid var(--bd2);
-	}
-	.head,
-	.row,
-	.summary {
-		display: grid;
-		grid-template-columns: var(--row-cols);
-		align-items: center;
-		gap: var(--space-5);
-		padding: 10px var(--space-6);
-		min-width: var(--row-min);
-	}
-	.head {
-		background: var(--card2);
-		border-bottom: 1px solid var(--bd2);
-	}
-	.h-cell {
-		font-size: var(--text-xs);
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		min-width: 0;
 	}
 	.right {
-		justify-content: flex-end;
 		text-align: right;
-	}
-	.swatch {
-		width: 8px;
-		height: 8px;
-		border-radius: var(--radius-xs);
-		flex: none;
-	}
-	.row {
-		border-bottom: 1px solid var(--bd);
-		cursor: pointer;
-		box-shadow: inset 3px 0 0 transparent;
-		width: 100%;
-		text-align: left;
-		background: transparent;
-	}
-	.row:hover {
-		background: var(--card2);
-	}
-	.row.open {
-		box-shadow: inset 3px 0 0 var(--teal);
 	}
 	.year {
 		font-size: var(--text-lg);
@@ -317,11 +271,20 @@
 	.chevron.open {
 		color: var(--teal);
 	}
-	.cell {
+	.cell,
+	.f-cell {
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
 		min-width: 0;
+	}
+	.cell.right,
+	.f-cell.right {
+		align-items: flex-end;
+	}
+	.f-cell {
+		font-size: var(--text-md);
+		color: var(--fg2);
 	}
 	.c-gross {
 		font-size: var(--text-md);
@@ -338,10 +301,12 @@
 	.absent {
 		color: var(--bd2);
 	}
+	.t-value {
+		font-size: var(--text-lg);
+		color: var(--fg1);
+	}
 	.total .t-value {
 		font-size: var(--text-xl);
-		font-weight: 600;
-		color: var(--fg1);
 	}
 	.track {
 		width: 100%;
@@ -355,18 +320,5 @@
 		display: block;
 		height: 100%;
 		background: var(--teal);
-	}
-	/* Above the years now, so its rule is beneath it rather than over it. */
-	.summary {
-		background: var(--card2);
-		border-bottom: 1px solid var(--bd2);
-	}
-	.f-cell {
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		font-size: var(--text-md);
-		color: var(--fg2);
-		min-width: 0;
 	}
 </style>

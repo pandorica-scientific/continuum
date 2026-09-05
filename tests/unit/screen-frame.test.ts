@@ -42,4 +42,12 @@ describe('the screen frame', () => {
 			if (source.includes('<MetricTile')) expect(source, path).toContain('<SummaryBand');
 		}
 	});
+
+	it('the layout has a skip link to the content', () => {
+		// Nine sidebar rows on every screen is a long way to tab to the first
+		// heading. The link is the first focusable thing in the shell.
+		const layout = readFileSync('src/routes/(app)/+layout.svelte', 'utf8');
+		expect(layout).toMatch(/<a class="skip-link" href="#content">/);
+		expect(layout).toMatch(/<main id="content"/);
+	});
 });

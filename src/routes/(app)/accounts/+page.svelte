@@ -246,7 +246,7 @@
 
 	<div class="right">
 		<section class="card sits">
-			<Eyebrow hue="--teal" emoji="🥧" label="Where the cash sits">
+			<Eyebrow hue="--teal" icon="chart" label="Where the cash sits">
 				{#snippet right()}
 					<!-- The total moves out of the hole and into the header. It was set in
 					     13px type inside an 88px disc, which is the smallest a figure this
@@ -274,7 +274,7 @@
 		</section>
 
 		<section class="card transfers">
-			<Eyebrow hue="--teal" emoji="🔁" label="Transfers between your own accounts" />
+			<Eyebrow hue="--teal" icon="rotate" label="Transfers between your own accounts" />
 			<p class="transfers-note">Matched automatically, never counted as income or expense.</p>
 			{#each data.transfers as t (t.id)}
 				<div class="transfer-row">

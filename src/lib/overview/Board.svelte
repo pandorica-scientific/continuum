@@ -22,7 +22,8 @@
 		panels,
 		currency,
 		available,
-		firstRun
+		firstRun,
+		customising = $bindable(false)
 	}: {
 		layout: OverviewPlacement[];
 		// Panel data is keyed by panel key; each component types its own shape.
@@ -33,6 +34,9 @@
 		/** This person has never stored an arrangement, so the empty board is a
 		 *  question rather than a state they put it in. */
 		firstRun: boolean;
+		/** Owned by the screen, which draws the Customise button in its header;
+		 *  the board reads it and clears it when Done is pressed from the tray. */
+		customising?: boolean;
 	} = $props();
 
 	const ROW = 40;
@@ -53,7 +57,6 @@
 	// the loader this person now has a stored arrangement, and the picker must
 	// not disappear underneath the panel they just chose.
 	let untouched = $state(untrack(() => firstRun));
-	let customising = $state(false);
 	let narrow = $state(false);
 	let failed = $state(false);
 	let board = $state<HTMLDivElement | null>(null);
@@ -236,22 +239,25 @@
 
 <svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
 
-<div class="bar">
-	<button type="button" class="primary" onclick={() => (customising = !customising)}>
-		{customising ? 'Done' : 'Customise'}
-	</button>
-	{#if customising}
-		<button type="button" onclick={reset}>Reset to the suggested board</button>
-		{#if narrow}
-			<span class="note">
-				There is one board. Reordering here also changes how it is arranged on a wider screen.
-			</span>
+{#if customising || failed}
+	<!-- The Customise button itself is in the screen header, beside the title,
+	     where the handoff puts a screen's one action. This bar holds only what
+	     is said while arranging. -->
+	<div class="bar">
+		{#if customising}
+			<button type="button" onclick={reset}>Reset to the suggested board</button>
+			{#if narrow}
+				<span class="note">
+					There is one board. Reordering here also changes how it is arranged on a wider screen.
+				</span>
+			{/if}
 		{/if}
-	{/if}
-	{#if failed}
-		<span class="failed">That change has not been saved. It will be retried on the next one.</span>
-	{/if}
-</div>
+		{#if failed}
+			<span class="failed">That change has not been saved. It will be retried on the next one.</span
+			>
+		{/if}
+	</div>
+{/if}
 
 {#if customising && unplaced.length}
 	<div class="tray">
@@ -373,9 +379,6 @@
 	.bar button:hover {
 		background: var(--card3);
 	}
-	.bar button.primary {
-		color: var(--fg1);
-	}
 	.note,
 	.failed {
 		font-size: var(--text-sm);
@@ -407,10 +410,13 @@
 		text-transform: uppercase;
 		color: var(--fg3);
 	}
+	/* Rows are a floor, not a size: a panel that has asked to grow (see
+	   Panel's `[data-grow]`) makes its rows taller and everything below moves
+	   down, which is what "expand to show all" has to mean on a board. */
 	.board {
 		display: grid;
 		grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
-		grid-auto-rows: var(--row);
+		grid-auto-rows: minmax(var(--row), auto);
 		gap: var(--gap);
 	}
 	/* One column, natural height: fixed row pitch and inner scrollbars are

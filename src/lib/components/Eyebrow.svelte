@@ -1,31 +1,38 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import type { Snippet } from 'svelte';
+	import IconTile from './IconTile.svelte';
+	import type { IconName } from '$lib/icons';
 
 	/**
 	 * The head of a section: a mark, a name, and a quiet line beside it.
 	 *
 	 * Named `Eyebrow` for what it used to be — tracked-out capitals above a
 	 * card, on every card, on every screen. v0.8.1 keeps the component and its
-	 * sixteen call sites and changes what it draws: sentence case at panel-title
-	 * weight, behind a 26px tile carrying the section's own emoji. Uppercase
-	 * survives only where it is genuinely a label rather than a title — a table
-	 * column head, the hero's "Net worth" — which is what `.eyebrow` in app.css
-	 * is still for.
+	 * call sites and changes what it draws: sentence case at panel-title
+	 * weight, behind a 26px tile carrying a stroke icon in the section's hue.
+	 * Uppercase survives only where it is genuinely a label rather than a
+	 * title — a table column head, the hero's "Net worth" — which is what
+	 * `.eyebrow` in app.css is still for.
+	 *
+	 * An icon, never an emoji: the handoff's rule is that emoji survive only
+	 * where the household chose them — a shelf, an account — and a 📊 the code
+	 * picked for a chart is drawn by the platform, differs per device and
+	 * ignores `color`. `design/no-emoji-eyebrow` holds the line.
 	 *
 	 * A tile rather than a bare glyph so the mark has the same footprint on
-	 * every section, including the ones with no emoji at all: without it, the
+	 * every section, including the ones with no icon at all: without it, the
 	 * titles on one screen sit at two different left edges.
 	 */
 	let {
-		emoji,
+		icon,
 		label,
 		caption,
 		/** A palette token whose wash grounds the tile. */
 		hue = '--fg3',
 		right
 	}: {
-		emoji?: string;
+		icon?: IconName;
 		label: string;
 		caption?: string;
 		hue?: string;
@@ -35,8 +42,8 @@
 
 <div class="eyebrow-row">
 	<span class="head">
-		{#if emoji}
-			<span class="mark" style:--head-hue="var({hue})" aria-hidden="true">{emoji}</span>
+		{#if icon}
+			<IconTile {hue} {icon} size={26} />
 		{/if}
 		<span class="title">{label}</span>
 	</span>
@@ -53,17 +60,6 @@
 		align-items: center;
 		gap: var(--space-5);
 		min-width: 0;
-	}
-	.mark {
-		display: grid;
-		place-items: center;
-		width: 26px;
-		height: 26px;
-		border-radius: var(--radius-md);
-		background: color-mix(in srgb, var(--head-hue) var(--tile-alpha), transparent);
-		font-size: var(--text-md);
-		line-height: 1;
-		flex: none;
 	}
 	.title {
 		font-size: var(--text-lg);

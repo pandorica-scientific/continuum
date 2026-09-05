@@ -16,9 +16,25 @@
 			: 'No statements yet · the panels you chose, arranged the way you left them'
 	);
 	const available = $derived((key: string) => panelAvailable(key, data.modules));
+
+	// The board's one mode, owned here so the button that flips it can sit in
+	// the header beside the title rather than in a bar of its own under it.
+	let customising = $state(false);
 </script>
 
-<ScreenHeader title="Overview" {caption} />
+<ScreenHeader title="Overview" {caption}>
+	{#snippet actions()}
+		<button
+			type="button"
+			class="btn"
+			class:on={customising}
+			aria-pressed={customising}
+			onclick={() => (customising = !customising)}
+		>
+			{customising ? 'Done' : 'Customise'}
+		</button>
+	{/snippet}
+</ScreenHeader>
 
 <!--
 	Deliberately not wrapped in {#key data.layout}: the loader builds a fresh
@@ -33,4 +49,14 @@
 	currency={data.baseCurrency}
 	{available}
 	firstRun={data.firstRun}
+	bind:customising
 />
+
+<style>
+	/* Pressed while the board is being arranged: the mode is on the button as
+	   well as on every panel's brand edge. */
+	.btn.on {
+		background: var(--surface-3);
+		color: var(--fg1);
+	}
+</style>

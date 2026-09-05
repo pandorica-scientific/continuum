@@ -44,13 +44,21 @@ export function deltaSinceMonthStart(
  */
 export function deltaShareOfBiggest(
 	currentDeltaMinor: bigint | null,
-	monthlyDeltasMinor: readonly bigint[]
+	monthlyDeltasMinor: readonly bigint[],
+	/**
+	 * Net worth itself, for a household with no month on record yet. The first
+	 * month has nothing to be measured against, and a tide that waits a month
+	 * to appear reads as a tide that does not work; against net worth a normal
+	 * month is a low swell, which is the honest picture.
+	 */
+	totalMinor: bigint | null = null
 ): number | null {
 	if (currentDeltaMinor === null) return null;
 	const abs = (v: bigint) => (v < 0n ? -v : v);
 	const biggest = monthlyDeltasMinor.reduce((most, d) => (abs(d) > most ? abs(d) : most), 0n);
-	if (biggest === 0n) return null;
-	const share = Number(abs(currentDeltaMinor)) / Number(biggest);
+	const against = biggest === 0n ? (totalMinor === null ? 0n : abs(totalMinor)) : biggest;
+	if (against === 0n) return null;
+	const share = Number(abs(currentDeltaMinor)) / Number(against);
 	return Math.max(0, Math.min(1, share));
 }
 

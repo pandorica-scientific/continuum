@@ -246,7 +246,7 @@
 
 	<div class="side">
 		<div class="card stack">
-			<Eyebrow hue="--indigo" emoji="🤖" label="What the ledger puts here by itself" />
+			<Eyebrow hue="--indigo" icon="bolt" label="What the ledger puts here by itself" />
 			{#each data.rules as rule (rule.key)}
 				<form method="POST" action="?/toggleRule" use:enhance class="rule">
 					<input type="hidden" name="key" value={rule.key} />
@@ -261,7 +261,7 @@
 
 		<div class="card stack">
 			<div class="eyebrow-row">
-				<Eyebrow hue="--indigo" emoji="🔗" label="Connected calendars" />
+				<Eyebrow hue="--indigo" icon="calendar" label="Connected calendars" />
 				<InfoHint label="What connecting a calendar does">
 					<strong class="warn">Two-way: what you write here appears there, and back.</strong>
 					<ol class="steps">

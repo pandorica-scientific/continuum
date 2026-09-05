@@ -4,6 +4,7 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import noRawGeometry from './eslint-rules/no-raw-geometry.js';
 import noRawShadow from './eslint-rules/no-raw-shadow.js';
+import noEmojiEyebrow from './eslint-rules/no-emoji-eyebrow.js';
 import opaqueFloatingSurface from './eslint-rules/opaque-floating-surface.js';
 
 const LICENCE_HEADER = '// SPDX-License-Identifier: AGPL-3.0-or-later';
@@ -99,6 +100,7 @@ export default ts.config(
 				rules: {
 					'no-raw-geometry': noRawGeometry,
 					'no-raw-shadow': noRawShadow,
+					'no-emoji-eyebrow': noEmojiEyebrow,
 					'opaque-floating-surface': opaqueFloatingSurface
 				}
 			}
@@ -106,6 +108,7 @@ export default ts.config(
 		rules: {
 			'design/no-raw-geometry': 'error',
 			'design/no-raw-shadow': 'error',
+			'design/no-emoji-eyebrow': 'error',
 			'design/opaque-floating-surface': 'error'
 		}
 	},

@@ -222,7 +222,7 @@
 	<section class="section">
 		<Eyebrow
 			hue="--teal"
-			emoji="🧩"
+			icon="layers"
 			label="Map this layout"
 			caption="say what the columns are — the balances still decide whether it adds up"
 		/>
@@ -330,7 +330,7 @@
 	<section class="section">
 		<Eyebrow
 			hue="--teal"
-			emoji="🧾"
+			icon="receipt"
 			label="Recent imports"
 			caption="what each statement was checked against"
 		/>
@@ -404,7 +404,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow hue="--yellow" emoji="🧐" label="Needs a decision" />
+		<Eyebrow hue="--yellow" icon="alert" label="Needs a decision" />
 		<span class="eyebrow-caption">
 			{data.review.length === 0
 				? 'nothing waiting'
@@ -678,14 +678,6 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	.assign select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 7px 11px;
-		font-size: var(--text-md);
-	}
 	.assign-note {
 		font-size: var(--text-xs);
 	}
@@ -939,14 +931,6 @@
 		display: flex;
 		gap: var(--space-4);
 		flex-wrap: wrap;
-	}
-	select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 7px 11px;
-		font-size: var(--text-md);
 	}
 	@media (max-width: 640px) {
 		.r-facts {

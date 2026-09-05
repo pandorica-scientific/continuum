@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { pathRibbons, type SankeyRibbon } from '../../src/lib/charts/sankey';
+import { pathRibbons, ribbonRoute, type SankeyRibbon } from '../../src/lib/charts/sankey';
 
 /** Only the two fields the walk reads; the geometry is irrelevant to it. */
 function link(from: string, to: string): SankeyRibbon {
@@ -52,5 +52,16 @@ describe('lighting a path through the Sankey', () => {
 
 	it('says nothing about a key that is not in the graph', () => {
 		expect(pathRibbons(ribbons, 'nowhere').size).toBe(0);
+	});
+
+	it('lights the whole route through a band, both ways', () => {
+		// Pointing at in → bills: the salary before it and the rent after it.
+		expect([...ribbonRoute(ribbons, 1)].sort()).toEqual([0, 1, 2]);
+		expect(ribbonRoute(ribbons, 1).has(3)).toBe(false);
+	});
+
+	it('lights nothing for no band, or a band that is not there', () => {
+		expect(ribbonRoute(ribbons, null).size).toBe(0);
+		expect(ribbonRoute(ribbons, 9).size).toBe(0);
 	});
 });

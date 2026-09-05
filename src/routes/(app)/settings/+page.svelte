@@ -369,7 +369,7 @@
 			<section class="section" hidden={active !== 'modules'}>
 				<Eyebrow
 					hue="--brand"
-					emoji="🧩"
+					icon="layers"
 					label="Modules"
 					caption="Everything is optional. Switch off what you do not have and it leaves the sidebar entirely."
 				/>
@@ -392,7 +392,7 @@
 			<section class="section" hidden={active !== 'currencies'}>
 				<Eyebrow
 					hue="--brand"
-					emoji="💱"
+					icon="coins"
 					label="Currencies"
 					caption="Balances stay in their own currency everywhere. Only the totals at the top of a screen convert, at the day's rate."
 				/>
@@ -408,13 +408,40 @@
 						<button type="submit" class="btn">Save</button>
 					</form>
 				</div>
+				{#if data.missingRates.none.length + data.missingRates.carried.length > 0}
+					<!-- Used to be a banner above every screen's title, dismissed
+					     without being read. The FACT stays where a figure is approximate
+					     — the sidebar's Money row carries a dot — and the reason lives
+					     here, where the base currency it concerns is set. -->
+					<div class="card rate-note" role="status">
+						<Eyebrow hue="--yellow" icon="alert" label="Approximate exchange rates" />
+						{#if data.missingRates.none.length > 0}
+							<p>
+								<strong class="warn">
+									No rate at all is stored for {data.missingRates.none.join(', ')}, so those amounts
+									are counted at face value.
+								</strong>
+								Check the internet connection — rates come from the Czech National Bank and refresh every
+								six hours.
+							</p>
+						{/if}
+						{#if data.missingRates.carried.length > 0}
+							<p>
+								{data.missingRates.carried.join(', ')} converts at the oldest rate on record, because
+								the figures involved are dated before this instance's first stored fixing. That happens
+								to any ledger holding history older than itself, and there is nothing to fix — the Czech
+								National Bank publishes forward, so past days cannot gain a rate of their own.
+							</p>
+						{/if}
+					</div>
+				{/if}
 			</section>
 		{/if}
 
 		<section class="section" hidden={active !== 'household'}>
 			<Eyebrow
 				hue="--brand"
-				emoji="👥"
+				icon="people"
 				label="Household"
 				caption="People can sign in and own accounts and documents."
 			/>
@@ -464,7 +491,7 @@
 				<div class="eyebrow-row">
 					<Eyebrow
 						hue="--brand"
-						emoji="🛟"
+						icon="inbox"
 						label="Backups (one restorable dump plus every uploaded file)"
 					/>
 					<InfoHint label="How backups work">
@@ -539,7 +566,7 @@
 			<section class="section" hidden={active !== 'hosting'}>
 				<Eyebrow
 					hue="--brand"
-					emoji="🐳"
+					icon="gear"
 					label="Self-hosting"
 					caption="Live facts about this installation — nothing here calls home."
 				/>
@@ -607,7 +634,7 @@
 		{#if data.isAdmin}
 			<section class="section" hidden={active !== 'calendars'} id="calendars">
 				<div class="eyebrow-row">
-					<Eyebrow hue="--brand" emoji="📆" label="Connected calendars" />
+					<Eyebrow hue="--brand" icon="calendar" label="Connected calendars" />
 					<span class="eyebrow-caption">two-way sync with iCloud and other CalDAV servers</span>
 				</div>
 
@@ -819,7 +846,7 @@
 				<div class="eyebrow-row">
 					<Eyebrow
 						hue="--brand"
-						emoji="🔌"
+						icon="bolt"
 						label="API tokens (read-only access to the whole ledger)"
 					/>
 					<InfoHint label="What an API token can do">
@@ -862,7 +889,7 @@
 			<section class="section" hidden={active !== 'categories'}>
 				<Eyebrow
 					hue="--brand"
-					emoji="🗂️"
+					icon="folders"
 					label="Categories"
 					caption="What your spending is filed under. Nothing here is fixed — a household that does not drive can delete Transport."
 				/>
@@ -986,7 +1013,7 @@
 			<section class="section" hidden={active !== 'open'}>
 				<Eyebrow
 					hue="--brand"
-					emoji="🚪"
+					icon="lock"
 					label="Open this instance"
 					caption="Sign in with no password and no passkey — for everyone, on every address."
 				/>
@@ -1594,5 +1621,23 @@
 		.password-form {
 			grid-template-columns: minmax(0, 1fr);
 		}
+	}
+	.rate-note {
+		background: var(--yellow-wash);
+		border-color: color-mix(in srgb, var(--yellow) 35%, transparent);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		font-size: var(--text-md);
+		line-height: 1.5;
+		color: var(--fg2);
+	}
+	.rate-note p {
+		margin: 0;
+	}
+	.rate-note .warn {
+		display: block;
+		color: var(--red);
+		margin-bottom: var(--space-3);
 	}
 </style>

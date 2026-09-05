@@ -192,12 +192,6 @@
 	}
 	.split-form input,
 	.split-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 8px 11px;
-		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.foot {

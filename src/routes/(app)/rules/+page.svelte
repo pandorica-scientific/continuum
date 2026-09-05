@@ -9,6 +9,8 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import ControlRow from '$lib/components/ControlRow.svelte';
 	import IconTile from '$lib/components/IconTile.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import type { Column, Group } from '$lib/components/data-table';
 	import Icon from '$lib/components/Icon.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -32,6 +34,20 @@
 	];
 
 	const groups = $derived(groupRules(data.rules, filter, query));
+	type RuleLine = (typeof groups)[number]['rules'][number];
+	const groupByKey = $derived(new Map(groups.map((g) => [g.key, g])));
+	const tableGroups = $derived<Group<RuleLine>[]>(
+		groups.map((g) => ({ key: g.key, open: open.has(g.key), rows: g.rules }))
+	);
+	// The handoff's grid: name, trust, kept · overridden, then the actions. A
+	// phone keeps the name and the trust bar; the counts are a detail behind a
+	// wider screen.
+	const COLUMNS: Column[] = [
+		{ key: 'name', label: 'Category · rule', width: 'minmax(0, 1.6fr)' },
+		{ key: 'trust', label: 'Trust (avg)', width: '170px' },
+		{ key: 'kept', label: 'Kept · overridden', width: '160px', hideBelow: 900 },
+		{ key: 'actions', label: '', width: '130px', hideBelow: 900 }
+	];
 
 	function toggle(key: string) {
 		if (open.has(key)) open.delete(key);
@@ -117,6 +133,8 @@
 				aria-label="Search rules"
 			/>
 		</label>
+	{/snippet}
+	{#snippet right()}
 		<div class="chips-row" role="group" aria-label="Filter rules">
 			{#each FILTERS as chip (chip.value)}
 				<button
@@ -175,92 +193,89 @@
 			: 'No rule matches that.'}
 	</p>
 {:else}
-	<section class="table" aria-label="Rules by category">
-		<div class="thead">
-			<span>Category · rule</span>
-			<span>Trust (avg)</span>
-			<span class="kept">Kept · overridden</span>
-			<span></span>
-		</div>
-		{#each groups as group (group.key)}
-			{@const note = groupNote(group)}
+	<DataTable
+		columns={COLUMNS}
+		groups={tableGroups}
+		hue="--teal"
+		label="Rules by category"
+		rowKey={(r) => r.id}
+		ontoggle={toggle}
+	>
+		{#snippet head(group, visible)}
+			{@const g = groupByKey.get(group.key)!}
+			{@const note = groupNote(g)}
 			<!-- Collapsed by default. The header answers the question people come
 			     to this screen with — "is anything filing wrongly?" — so opening a
 			     group is for acting on an answer already given. -->
-			<button
-				type="button"
-				class="group"
-				aria-expanded={open.has(group.key)}
-				onclick={() => toggle(group.key)}
-			>
-				<span class="g-name">
-					<span class="chev" aria-hidden="true">{open.has(group.key) ? '▾' : '▸'}</span>
-					<span class="swatch" style:background="var({group.color})"></span>
-					<span class="g-label">{group.label}</span>
-					{#if note}<span class="g-note">{note}</span>{/if}
-					<span class="mono g-count">{group.rules.length}</span>
-				</span>
-				<span class="trust">
-					<span class="bar"
-						><span
-							class="fill"
-							style:width="{group.averagePct}%"
-							style:background="var({trustTone(group.averagePct)})"
-						></span></span
-					>
-					<span class="mono pct">{group.averagePct}%</span>
-				</span>
-				<span class="mono kept">{group.accepted} · {group.corrected}</span>
-				<span></span>
-			</button>
-
-			{#if open.has(group.key)}
-				{#each group.rules as r (r.id)}
-					<div class="rule" class:off={!r.enabled}>
-						<span class="r-name">
-							<span class="r-title">
-								{r.name}
-								{#if !r.enabled}<Pill hue="grey">disabled</Pill>{/if}
-							</span>
-							<span class="r-when">{r.conditions.join(' · ')}</span>
-							<span class="r-files">
-								{#if r.category}files as <strong>{r.category}</strong>{/if}
-								{#if r.tags.length > 0}· tags {r.tags.join(', ')}{/if}
-								· {r.provenance}
-							</span>
-						</span>
-						<span class="trust">
-							<span class="bar"
-								><span
-									class="fill"
-									style:width="{r.confidencePct}%"
-									style:background="var({trustTone(r.confidencePct)})"
-								></span></span
-							>
-							<span class="mono pct">{r.confidencePct}%</span>
-						</span>
-						<span class="mono kept">
-							{#if r.startsTrusted && r.accepted === 0 && r.corrected === 0}
-								starts trusted
-							{:else}
-								{r.accepted} · {r.corrected}
-							{/if}
-						</span>
-						<span class="r-buttons">
-							<form method="POST" action="?/toggle" use:enhance>
-								<input type="hidden" name="id" value={r.id} />
-								<button type="submit" class="btn small">{r.enabled ? 'Disable' : 'Enable'}</button>
-							</form>
-							<form method="POST" action="?/remove" use:enhance>
-								<input type="hidden" name="id" value={r.id} />
-								<button type="submit" class="btn small danger">Delete</button>
-							</form>
-						</span>
-					</div>
-				{/each}
+			<span class="g-name">
+				<span class="chev" aria-hidden="true">{group.open ? '▾' : '▸'}</span>
+				<span class="swatch" style:background="var({g.color})"></span>
+				<span class="g-label">{g.label}</span>
+				{#if note}<span class="g-note">{note}</span>{/if}
+				<span class="mono g-count">{g.rules.length} {g.rules.length === 1 ? 'rule' : 'rules'}</span>
+			</span>
+			<span class="trust">
+				<span class="bar"
+					><span
+						class="fill"
+						style:width="{g.averagePct}%"
+						style:background="var({trustTone(g.averagePct)})"
+					></span></span
+				>
+				<span class="mono pct">{g.averagePct}%</span>
+			</span>
+			{#if visible.has('kept')}
+				<span class="mono kept">{g.accepted} · {g.corrected}</span>
 			{/if}
-		{/each}
-	</section>
+			{#if visible.has('actions')}<span></span>{/if}
+		{/snippet}
+
+		{#snippet row(r, _group, visible)}
+			<span class="r-name" class:off={!r.enabled}>
+				<span class="r-title">
+					{r.name}
+					{#if !r.enabled}<Pill hue="grey">disabled</Pill>{/if}
+				</span>
+				<span class="r-when">{r.conditions.join(' · ')}</span>
+				<span class="r-files">
+					{#if r.category}files as <strong>{r.category}</strong>{/if}
+					{#if r.tags.length > 0}· tags {r.tags.join(', ')}{/if}
+					· {r.provenance}
+				</span>
+			</span>
+			<span class="trust" class:off={!r.enabled}>
+				<span class="bar"
+					><span
+						class="fill"
+						style:width="{r.confidencePct}%"
+						style:background="var({trustTone(r.confidencePct)})"
+					></span></span
+				>
+				<span class="mono pct">{r.confidencePct}%</span>
+			</span>
+			{#if visible.has('kept')}
+				<span class="mono kept" class:off={!r.enabled}>
+					{#if r.startsTrusted && r.accepted === 0 && r.corrected === 0}
+						starts trusted
+					{:else}
+						{r.accepted} · {r.corrected}
+					{/if}
+				</span>
+			{/if}
+			{#if visible.has('actions')}
+				<span class="r-buttons">
+					<form method="POST" action="?/toggle" use:enhance>
+						<input type="hidden" name="id" value={r.id} />
+						<button type="submit" class="btn small">{r.enabled ? 'Disable' : 'Enable'}</button>
+					</form>
+					<form method="POST" action="?/remove" use:enhance>
+						<input type="hidden" name="id" value={r.id} />
+						<button type="submit" class="btn small danger">Delete</button>
+					</form>
+				</span>
+			{/if}
+		{/snippet}
+	</DataTable>
 {/if}
 
 {#if editing}
@@ -397,51 +412,6 @@
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
-	/* One grid, shared by the group headers and the rule rows under them, so a
-	   trust bar in a header sits directly above the bars it averages. */
-	.table {
-		display: flex;
-		flex-direction: column;
-		background: var(--surface);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		overflow: hidden;
-	}
-	.thead,
-	.group,
-	.rule {
-		display: grid;
-		grid-template-columns: minmax(0, 1.6fr) 170px 160px 130px;
-		align-items: center;
-		gap: var(--space-6);
-		padding: var(--space-5) 18px;
-		text-align: left;
-	}
-	.thead {
-		font-size: var(--text-xs);
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		border-bottom: 1px solid var(--bd);
-	}
-	.group {
-		border: 0;
-		border-top: 1px solid var(--bd);
-		background: var(--surface-2);
-		color: var(--fg1);
-		font-family: inherit;
-		font-size: var(--text-md);
-		cursor: pointer;
-		width: 100%;
-		transition: background-color var(--dur) var(--ease);
-	}
-	.thead + .group {
-		border-top: 0;
-	}
-	.group:hover {
-		background: var(--surface-3);
-	}
 	.g-name {
 		display: flex;
 		align-items: center;
@@ -475,13 +445,9 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
-	.rule {
-		border-top: 1px solid var(--bd);
-		font-size: var(--text-md);
-	}
 	/* Kept and never applied. Dimmed rather than hidden: a disabled rule is the
 	   explanation for something that stopped filing. */
-	.rule.off {
+	.off {
 		opacity: 0.55;
 	}
 	.r-name {
@@ -489,6 +455,7 @@
 		flex-direction: column;
 		gap: var(--space-1);
 		min-width: 0;
+		font-size: var(--text-md);
 		/* Indented to the group's label, so the hierarchy is legible without a
 		   second border down the left of the table. */
 		padding-left: 42px;
@@ -530,10 +497,13 @@
 		width: 34px;
 		text-align: right;
 	}
+	/* `12 · 0` with room around the dot: two counts read as one number when
+	   the separator is crushed between them. */
 	.kept {
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
+		word-spacing: var(--space-2);
 	}
 	.r-buttons {
 		display: flex;
@@ -556,7 +526,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
-		flex: 1 1 220px;
+		flex: 1 1 auto;
 		min-width: 0;
 		max-width: 320px;
 		height: 38px;
@@ -717,24 +687,7 @@
 		color: var(--fg3);
 	}
 
-	/* The two narrow columns go first: on a phone a rule is its name and what it
-	   files as, and the counts are a detail behind a wider screen. */
 	@media (max-width: 899px) {
-		.thead,
-		.group,
-		.rule {
-			grid-template-columns: minmax(0, 1fr) 120px;
-		}
-		.thead .kept,
-		.group .kept,
-		.rule .kept,
-		.trust {
-			display: none;
-		}
-		.group .trust,
-		.rule .trust {
-			display: flex;
-		}
 		.r-name {
 			padding-left: var(--space-8);
 		}
@@ -754,12 +707,6 @@
 	}
 	.rule-form input,
 	.rule-form select {
-		border: 1px solid var(--bd2);
-		background: var(--card);
-		color: var(--fg1);
-		border-radius: var(--radius-md);
-		padding: 8px 11px;
-		font-size: var(--text-md);
 		min-width: 0;
 	}
 	.condition {

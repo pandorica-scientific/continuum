@@ -34,4 +34,9 @@
 		flex-direction: column;
 		gap: var(--space-6);
 	}
+	/* The period control sits on the panel's right, under its title, as the
+	   handoff's head row draws it; the caption it carries names the window. */
+	.flow > :global(.row) {
+		justify-content: flex-end;
+	}
 </style>

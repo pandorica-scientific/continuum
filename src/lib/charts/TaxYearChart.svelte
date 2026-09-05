@@ -107,7 +107,7 @@
 	<div class="head">
 		<Eyebrow
 			hue="--teal"
-			emoji="📈"
+			icon="trend"
 			label={mode === 'stack' ? 'Earned & paid' : 'Effective rate'}
 			caption={mode === 'stack' ? axisUnit : 'blended, per jurisdiction'}
 		/>
