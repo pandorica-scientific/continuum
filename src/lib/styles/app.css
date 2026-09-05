@@ -581,7 +581,7 @@ html[data-ledger-theme='light'] {
 	   reads as grey dirt under the card. */
 	--shadow-card: 0 1px 2px rgb(60 52 40 / 0.08), 0 14px 36px -18px rgb(60 52 40 / 0.32);
 	--shadow-hero: 0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent);
-	--select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2375705f' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+	--select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6559' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
 	--shadow-float: 0 8px 28px -8px rgb(60 52 40 / 0.35), 0 1px 3px rgb(60 52 40 / 0.12);
 	--series-ink-mix: 50%;
 	--tile-alpha: 17%;

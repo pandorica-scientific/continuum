@@ -23,7 +23,7 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 | `--bd2` | `rgba(255, 255, 255, 0.18)` | `rgb(60 52 40 / 0.22)` |
 | `--fg1` | `#e6e9ef` | `#1c1a16` |
 | `--fg2` | `#c5ccd6` | `#3d3a34` |
-| `--fg3` | `#99a4b3` | `#75705f` |
+| `--fg3` | `#99a4b3` | `#6b6559` |
 | `--fg-inverse` | `#0e1117` | `#ffffff` |
 | `--green` | `#2ecc71` | `#0d7245` |
 | `--red` | `#ef6a5c` | `#bd2e21` |
@@ -369,6 +369,17 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 | `--surface-2` | `rgba(255, 255, 255, 0.075)` | `#f3efe7` |
 | `--surface-3` | `rgba(255, 255, 255, 0.11)` | `#e4ded2` |
 
+## The one table's two grounds
+
+> The one table's two grounds: the header strip, and the group somebody
+> has opened. Named so the seven screens that draw lists say the same
+> thing rather than seven readings of --surface-2.
+
+| Token | Dark | Light |
+|---|---|---|
+| `--table-head` | `var(--surface-2)` | `#f3efe7` |
+| `--table-open` | `var(--surface-3)` | `#e9e4da` |
+
 ## Elevation in the flow
 
 > Elevation in the flow. The rule until now was that nothing in the flow is
@@ -379,6 +390,28 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 |---|---|---|
 | `--shadow-card` | `0 1px 2px rgb(0 0 0 / 0.28), 0 12px 32px -16px rgb(0 0 0 / 0.55)` | `0 1px 2px rgb(60 52 40 / 0.08), 0 14px 36px -18px rgb(60 52 40 / 0.32)` |
 | `--shadow-hero` | `0 18px 44px -22px color-mix(in srgb, var(--brand) 70%, transparent)` | `0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent)` |
+
+## The net-worth tide's two inks
+
+> The net-worth tide's two inks. Fixed in both themes on purpose: the hero
+> is dark in both, and the light theme's --green is darkened for AA on
+> white cards — on navy it disappears. These are the dark-theme green and
+> red, named so the sidebar does not carry the literals.
+
+| Token | Dark | Light |
+|---|---|---|
+| `--tide-up` | `#2ecc71` | — |
+| `--tide-down` | `#ef6a5c` | — |
+
+## The chevron a select draws, in --fg3 of this theme
+
+> The chevron a select draws, in --fg3 of this theme. A data URI cannot
+> read a custom property, so the ink is written out here — the one place a
+> colour may be.
+
+| Token | Dark | Light |
+|---|---|---|
+| `--select-chevron` | `url("data:image/svg+xml` | `url("data:image/svg+xml` |
 
 ## Motion
 
@@ -394,9 +427,17 @@ The stylesheet is the source of truth. Every note below is its own comment, kept
 ## An icon tile is a hue mixed into the ground behind a stroke icon
 
 > An icon tile is a hue mixed into the ground behind a stroke icon.
+>
+> How much of --fg1 to mix into a series hue used as INK — a category
+> chip, a share chip, a tag's name, an initials avatar. The bright series
+> colours are right for a bar and wrong for eleven-pixel text on their own
+> tint: on the light theme they sit at 2.2–2.5:1. Zero in the dark theme,
+> where the same hues clear AA on the dark tints; the light theme darkens
+> them here rather than re-mixing the tint, which the guidelines forbid.
 
 | Token | Dark | Light |
 |---|---|---|
+| `--series-ink-mix` | `0%` | `50%` |
 | `--tile-alpha` | `16%` | `17%` |
 | `--tile-alpha-active` | `28%` | `28%` |
 
