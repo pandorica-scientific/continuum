@@ -66,6 +66,13 @@
 		const actualPoints = data.series
 			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
+		// Where the actual line starts and stops, so the fill under it closes
+		// at its own ends rather than at the plot's: a series with no value for
+		// its first months drew a wedge from the corner up to the first point.
+		const actualIndexes = data.series.map((p, i) => (p.actual === null ? null : i));
+		const firstActual = actualIndexes.find((i) => i !== null) ?? 0;
+		const lastActual = [...actualIndexes].reverse().find((i) => i !== null) ?? 0;
+		const actualSpan = { x0: x(firstActual).toFixed(1), x1: x(lastActual).toFixed(1) };
 		// A rule where each year begins, so the labels beneath the plot have
 		// something to point at. Drawn at the FIRST month of each year rather than
 		// spaced evenly: the series can start mid-year, and an evenly spaced rule
@@ -95,6 +102,7 @@
 			bench10: line((p) => p.bench10),
 			actual: line((p) => p.actual),
 			actualPoints,
+			actualSpan,
 			years,
 			yearLines,
 			axis
@@ -256,7 +264,11 @@
 							<stop offset="1" style="stop-color: var(--teal); stop-opacity: 0" />
 						</linearGradient>
 					</defs>
-					<polygon points="{chart.actual} 800,200 0,200" fill="url(#inv-actual)" stroke="none" />
+					<polygon
+						points="{chart.actual} {chart.actualSpan.x1},200 {chart.actualSpan.x0},200"
+						fill="url(#inv-actual)"
+						stroke="none"
+					/>
 					<polyline
 						points={chart.actual}
 						fill="none"

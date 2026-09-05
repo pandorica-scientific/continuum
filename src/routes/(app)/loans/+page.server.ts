@@ -248,9 +248,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// projects — `debtFreeYear` — and the band is about the SHAPE of the
 			// term, so a projected end is a truthful whole to take shares of.
 			band: fixationBand(periods, bandEnd, today()),
+			// Earliest period first, whatever order the rows arrived in: the band
+			// sorts its own copy, and a caption reading a later year than the
+			// band's first segment would label it wrongly.
 			bandRange:
 				periods.length > 0 && bandEnd
-					? `${periods[0].startsOn.slice(0, 4)} → ${bandEnd.slice(0, 4)}`
+					? `${[...periods].sort((a, b) => a.startsOn.localeCompare(b.startsOn))[0].startsOn.slice(0, 4)} → ${bandEnd.slice(0, 4)}`
 					: null,
 			facts: [
 				{ label: 'Owed', value: formatMinor(l.owedMinor, l.currency), color: 'var(--red)' },

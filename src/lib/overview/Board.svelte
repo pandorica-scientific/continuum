@@ -330,6 +330,7 @@
 					icon={panel.icon}
 					hue={panel.hue}
 					href={panel.href}
+					headControls={panel.headControls}
 					{customising}
 					{narrow}
 					dragging={gesture?.key === placement.k && gesture.live}

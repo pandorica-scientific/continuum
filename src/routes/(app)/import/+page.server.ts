@@ -23,8 +23,8 @@ import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import { createCategory, createCategoryGroup, taxonomyKey } from '$lib/server/categorize/taxonomy';
 import { asEnumValue, ENUMS } from '$lib/enums';
 import { daysBetween } from '$lib/dates';
-import { loadCoverage } from '$lib/server/statements/coverage-load';
-import { cadenceOf } from '$lib/statements/coverage';
+import { cadenceWord, statementStatus } from '$lib/statements/cadence';
+import { localToday } from '$lib/dates';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -41,9 +41,6 @@ function isoDay(value: string | null): string | null {
 		? null
 		: value;
 }
-
-/** Days past the last statement before an account is called overdue: a month, plus the post. */
-const STATEMENT_OVERDUE_DAYS = 35;
 
 export const load: PageServerLoad = async ({ url }) => {
 	const monthStart = new Date();
@@ -158,33 +155,36 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Where each account's record stops. A statement is monthly for almost every
 	// bank, so a gap past a month and a few days of post is a statement that
 	// has not been imported — the one thing this screen exists to receive.
-	const todayIso = new Date().toISOString().slice(0, 10);
-	// The rhythm each account's statements arrive in, read off the Statements
-	// shelf's own bands for this year: a quarterly account thirty days past
-	// its last statement is not late, and the row should say so.
-	const coverage = await loadCoverage(Number(todayIso.slice(0, 4)), todayIso);
-	const cadence = new Map<string, ReturnType<typeof cadenceOf>>();
-	for (const row of coverage.rows) cadence.set(row.accountId, cadenceOf(row.boxes));
-	for (const row of coverage.yearly?.rows ?? []) {
-		if (!cadence.get(row.accountId)) cadence.set(row.accountId, cadenceOf(row.boxes, 'yearly'));
+	// Local calendar date, as a statement's own date is: the UTC day is a day
+	// behind Prague every evening, which read as "-1 days" on a fresh statement.
+	const todayIso = localToday();
+	// Whether an account is overdue, and the word for its rhythm, both come
+	// from the same arithmetic the Overview's Statements panel uses — the gap
+	// between this account's own imports, with room for a late upload — so the
+	// two screens agree. An account never imported is not overdue: nothing
+	// was promised, so nothing is late.
+	const uploads = await db
+		.select({ accountId: importFile.accountId, uploadedAt: importFile.uploadedAt })
+		.from(importFile)
+		.where(isNotNull(importFile.accountId));
+	const uploadDays = new Map<string, string[]>();
+	for (const upload of uploads) {
+		if (!upload.accountId) continue;
+		const days = uploadDays.get(upload.accountId) ?? [];
+		days.push(upload.uploadedAt.toISOString().slice(0, 10));
+		uploadDays.set(upload.accountId, days);
 	}
-	const OVERDUE_AFTER: Record<string, number> = {
-		monthly: STATEMENT_OVERDUE_DAYS,
-		quarterly: 95,
-		'half-yearly': 185,
-		yearly: 370
-	};
 	const statements = accounts.map((a) => {
-		const days = a.balanceAsOf ? daysBetween(a.balanceAsOf, todayIso) : null;
-		const rhythm = cadence.get(a.id) ?? null;
+		const days = uploadDays.get(a.id) ?? [];
+		const status = statementStatus(days, todayIso);
 		return {
 			id: a.id,
 			name: a.name,
 			emoji: a.emoji || '🏦',
 			to: a.balanceAsOf,
-			days,
-			cadence: rhythm,
-			overdue: days === null || days > (rhythm ? OVERDUE_AFTER[rhythm] : STATEMENT_OVERDUE_DAYS)
+			days: a.balanceAsOf ? daysBetween(a.balanceAsOf, todayIso) : status.daysSince,
+			cadence: cadenceWord(days),
+			overdue: status.stale
 		};
 	});
 

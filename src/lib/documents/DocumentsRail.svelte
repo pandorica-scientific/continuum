@@ -16,6 +16,8 @@
 	// survive a navigation, and hoisting it would have put ten `$state` lines and
 	// two `$effect`s on the page for the rail's benefit alone.
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import Icon from '$lib/components/Icon.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
@@ -93,10 +95,21 @@
 		data
 	}: {
 		data: RailData;
-		/** Kept for the page that passes it; the rows are links now and write
-		 *  the URL themselves, so the rail no longer needs the page's writer. */
-		navigate?: (next: Record<string, string | string[] | null>) => void;
 	} = $props();
+
+	/** A row's address: the current query with shelf and view changed and the
+	 *  open document dropped, so a search, a filter or the archived toggle
+	 *  survive a change of shelf — what the page's `navigate()` preserves too. */
+	function hrefFor(next: Record<string, string | null>): string {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		params.delete('doc');
+		for (const [key, value] of Object.entries(next)) {
+			params.delete(key);
+			if (value !== null && value !== '') params.set(key, value);
+		}
+		const query = params.toString();
+		return query ? `/documents?${query}` : '/documents';
+	}
 
 	let editingRail = $state(false);
 	let railOrder = $state<string[]>([]);
@@ -182,7 +195,7 @@
 			class="rail-item inbox"
 			class:active={data.view !== 'tags' && data.shelf === s.key}
 			aria-current={data.view !== 'tags' && data.shelf === s.key ? 'page' : undefined}
-			href="/documents?shelf={s.key}"
+			href={hrefFor({ shelf: s.key, view: null })}
 			data-sveltekit-noscroll
 		>
 			<span class="rail-label"
@@ -260,7 +273,7 @@
 					class="rail-item"
 					class:active={data.view !== 'tags' && data.shelf === s.key}
 					aria-current={data.view !== 'tags' && data.shelf === s.key ? 'page' : undefined}
-					href="/documents?shelf={s.key}"
+					href={hrefFor({ shelf: s.key, view: null })}
 					data-sveltekit-noscroll
 				>
 					<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
@@ -280,7 +293,7 @@
 			class="rail-item"
 			class:active={data.view !== 'tags' && data.shelf === 'all'}
 			aria-current={data.view !== 'tags' && data.shelf === 'all' ? 'page' : undefined}
-			href="/documents"
+			href={hrefFor({ shelf: null, view: null })}
 			data-sveltekit-noscroll
 		>
 			<span class="rail-label">{s.label}</span>
@@ -294,7 +307,7 @@
 		class="rail-item"
 		class:active={data.view === 'tags'}
 		aria-current={data.view === 'tags' ? 'page' : undefined}
-		href="/documents?view=tags"
+		href={hrefFor({ view: 'tags' })}
 		data-sveltekit-noscroll
 	>
 		<span class="rail-label"><span class="rail-emoji">🏷️</span>Tags</span>

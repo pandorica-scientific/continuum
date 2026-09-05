@@ -73,6 +73,13 @@
 - 🔎 **The light theme's quiet ink clears AA** — `--fg3` was 4.2–4.4:1 on the light surfaces, which was every note, count and label on the light theme failing by a hair; series hues used as ink take `--series-ink-mix` on light
 - 🖱️ **The Overview scrolls from anywhere** — a panel whose content fitted was still a scroll container with `overscroll-behavior: contain`, so the wheel over most of the board went nowhere; panels grow with their content instead
 - 🎯 **The Retirement gauge's figure is centred in its ring** — the figure and its note were centred in two rows rather than as one block
+- 🧾 **Accounts' add and edit forms have their styles back** — the restyle dropped seven rules the markup still used
+- 📊 **"Where it went" shares are shares of what was spent** — the loader's figure is a share of income, which left the bar short in a saving month and past full in a drawdown one
+- 🗓️ **Import calls an account overdue by its own import rhythm**, never one that was never imported, and counts days on the local calendar rather than UTC
+- 🔗 **A Documents shelf link keeps the search, filters and archived toggle** it used to drop
+- 🏦 **The fixation caption's first year is the earliest period** whatever order the rows arrive in
+- 📈 **The Investments fill starts where the actual line does**, not at the plot's corner
+- 🎨 **The browser's own chrome takes the light theme's new paper colour** on first load
 - 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
 - 🔧 **A dossier's `once` slot fits its own box** — the ribbon's 28px centred cell was winning over the slot's own layout, so the name sat centred and the date fell out below it
 - 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`

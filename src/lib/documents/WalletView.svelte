@@ -20,6 +20,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import Pill from '$lib/components/Pill.svelte';
+	import type { Hue } from '$lib/ui/hue';
 	import { documentArtUrl } from '$lib/documents/art';
 	import { flagEmoji, isEuCountry } from '$lib/countries';
 	import { identityKindLabel } from '$lib/documents';
@@ -239,7 +240,7 @@
 						</span>
 						{#if chip}
 							{#if chip.hue}
-								<Pill hue={chip.hue as 'green' | 'yellow' | 'red' | 'blue' | 'grey'}>{chip.text}</Pill>
+								<Pill hue={chip.hue as Hue}>{chip.text}</Pill>
 							{:else}
 								<span class="mono quiet-date">{chip.text}</span>
 							{/if}

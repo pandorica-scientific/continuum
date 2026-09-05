@@ -74,11 +74,12 @@
 	// Which gallery is open: a room by its index, the unassigned photos, or
 	// none. The floor plan is the index — press a room, see its pictures.
 	let gallery = $state<number | 'unassigned' | null>(null);
+	const unassigned = $derived(data.detail ? unassignedPhotos(data.detail.images) : []);
 	const galleryPhotos = $derived(
 		!data.detail
 			? []
 			: gallery === 'unassigned'
-				? unassignedPhotos(data.detail.images)
+				? unassigned
 				: gallery === null
 					? []
 					: roomPhotos(data.detail.images, gallery)
@@ -243,10 +244,10 @@
 				     What is not in a room yet is one press away, and says how much. -->
 				<div class="plan-foot">
 					<span class="quiet">Press a room to see or add its photos.</span>
-					{#if unassignedPhotos(data.detail.images).length > 0}
+					{#if unassigned.length > 0}
 						<button type="button" class="btn small" onclick={() => (gallery = 'unassigned')}>
-							{unassignedPhotos(data.detail.images).length}
-							{unassignedPhotos(data.detail.images).length === 1 ? 'photo' : 'photos'} not in a room
+							{unassigned.length}
+							{unassigned.length === 1 ? 'photo' : 'photos'} not in a room
 						</button>
 					{:else}
 						<button type="button" class="btn small" onclick={() => (gallery = 'unassigned')}>

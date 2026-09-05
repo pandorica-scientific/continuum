@@ -47,10 +47,13 @@
 		{/if}
 		<span class="title">{label}</span>
 	</span>
+	<!-- Both, not either: a caption names the window, a `right` snippet holds
+	     a control or a legend, and a head can carry the two side by side. -->
+	{#if caption}
+		<span class="eyebrow-caption">{caption}</span>
+	{/if}
 	{#if right}
 		{@render right()}
-	{:else if caption}
-		<span class="eyebrow-caption">{caption}</span>
 	{/if}
 </div>
 

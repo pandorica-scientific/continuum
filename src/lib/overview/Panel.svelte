@@ -22,6 +22,7 @@
 		onpointerdown,
 		onresizestart,
 		controls,
+		headControls,
 		children
 	}: {
 		title: string;
@@ -43,8 +44,11 @@
 		onmovedown?: () => void;
 		onpointerdown?: (event: PointerEvent) => void;
 		onresizestart?: (event: PointerEvent) => void;
-		/** A control on the head row, left of "Open →": the flow panel's period. */
+		/** A control on the head row, left of "Open →": the flow panel's period.
+		 *  Drawn only when `headControls` names one — a snippet reference is
+		 *  truthy whatever it renders, so the board cannot pass "none" by it. */
 		controls?: Snippet;
+		headControls?: 'period';
 		children: Snippet;
 	} = $props();
 </script>
@@ -81,7 +85,7 @@
 				>
 			</span>
 		{:else}
-			{#if controls}
+			{#if controls && headControls}
 				<span class="head-controls">{@render controls()}</span>
 			{/if}
 		{/if}

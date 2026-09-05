@@ -599,4 +599,69 @@
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		}
 	}
+	/* Restored: the v2 restyle dropped these while the markup kept using them,
+	   so the edit and add forms laid out as unstyled blocks. */
+	.edit-form {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: var(--space-6);
+		padding: var(--space-6) 0;
+		border-top: 1px solid var(--bd);
+	}
+	.edit-actions {
+		display: flex;
+		align-items: flex-end;
+		justify-content: flex-end;
+		gap: var(--space-4);
+	}
+	.error {
+		border: 1px solid var(--red);
+		background: var(--red-tint);
+		color: var(--red);
+		border-radius: var(--radius-xl);
+		padding: 9px 14px;
+		font-size: var(--text-md);
+	}
+	.empty {
+		margin: 0;
+		padding: 10px 0;
+		font-size: var(--text-md);
+		color: var(--fg3);
+	}
+	.add-form {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr) auto;
+		gap: var(--space-4);
+		padding-top: 11px;
+		border-top: 1px solid var(--bd);
+	}
+	.bank-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-6);
+	}
+	.bank-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.bank-form .row {
+		display: flex;
+		gap: var(--space-4);
+	}
+	.numbers-field {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: 0;
+	}
+	.numbers-field input {
+		flex: 1;
+	}
+	.add-form input,
+	.add-form select {
+		min-width: 0;
+	}
 </style>

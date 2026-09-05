@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { cadenceOf, type CoverageBox } from '$lib/statements/coverage';
+import { cadenceWord } from '$lib/statements/cadence';
 
-const box = (state: CoverageBox['state'], months: number): CoverageBox =>
-	({ state, startMonth: 0, months, documentIds: [] }) as CoverageBox;
-
-describe("an account's statement cadence", () => {
-	it('is the band width that occurs most', () => {
-		expect(cadenceOf([box('filed', 1), box('filed', 1), box('gap', 1)])).toBe('monthly');
-		expect(cadenceOf([box('filed', 3), box('filed', 3), box('filed', 1)])).toBe('quarterly');
+describe("the word for an account's import rhythm", () => {
+	it('reads the median gap between imports', () => {
+		expect(cadenceWord(['2026-01-05', '2026-02-06', '2026-03-04', '2026-04-07'])).toBe('monthly');
+		expect(cadenceWord(['2025-01-10', '2025-04-12', '2025-07-09', '2025-10-11'])).toBe('quarterly');
+		expect(cadenceWord(['2024-03-01', '2025-03-03', '2026-03-02'])).toBe('yearly');
 	});
-	it('names nothing for an account with nothing filed', () => {
-		expect(cadenceOf([box('gap', 1), box('not-arrived', 1)])).toBeNull();
-	});
-	it('reads the yearly band as yearly', () => {
-		expect(cadenceOf([box('filed', 1)], 'yearly')).toBe('yearly');
+	it('names nothing before three imports', () => {
+		expect(cadenceWord(['2026-01-05', '2026-02-06'])).toBeNull();
+		expect(cadenceWord([])).toBeNull();
 	});
 });

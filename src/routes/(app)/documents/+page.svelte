@@ -491,7 +491,7 @@
 {/if}
 
 <section class="layout" class:with-inspector={data.selected}>
-	<DocumentsRail {data} {navigate} />
+	<DocumentsRail {data} />
 
 	<div class="area">
 		{#if data.view === 'tags' && data.tagsScreen}

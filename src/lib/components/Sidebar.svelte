@@ -90,8 +90,13 @@
 		page.url.pathname === SETTINGS_PATH || page.url.pathname.startsWith(SETTINGS_PATH + '/')
 	);
 
+	// The Money area, or wherever Import lives if the registry moves it. Not
+	// undefined when Import is switched off: the same dot says a rate is
+	// approximate, and that is true of the totals whether or not anything is
+	// being imported.
 	const badgeArea = $derived(
-		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key
+		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key ??
+			areas.find((area) => area.key === 'money')?.key
 	);
 
 	const initials = $derived(signedIn?.initials || signedIn?.name.slice(0, 1).toUpperCase() || '·');

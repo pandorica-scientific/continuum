@@ -24,16 +24,22 @@
 	// nothing this window is a row saying nothing, and the reserves the
 	// waterfall lists as a stage are where money came FROM — they are told on
 	// the right.
-	const groups = $derived(
-		data.flow.breakdown
+	// The share is of what went OUT, worked out here from the rows shown: the
+	// loader's `pct` is a share of income, which is what the Overview's waterfall
+	// draws, and on this list it would leave the bar short in a saving month and
+	// past full in a drawdown one.
+	const groups = $derived.by(() => {
+		const spent = data.flow.breakdown
 			.map((g) => ({
 				...g,
 				value: g.leaves.reduce((sum, leaf) => sum + leaf.value, 0),
 				leafLine: g.leaves.map((leaf) => leaf.name).join(' · ')
 			}))
 			.filter((g) => g.value > 0)
-			.sort((a, b) => b.value - a.value)
-	);
+			.sort((a, b) => b.value - a.value);
+		const total = spent.reduce((sum, g) => sum + g.value, 0);
+		return spent.map((g) => ({ ...g, pct: total > 0 ? Math.round((g.value / total) * 100) : 0 }));
+	});
 
 	const drawdown = $derived(data.flow.totals.kept < 0 ? -data.flow.totals.kept : 0);
 	const sources = $derived(

@@ -5,6 +5,7 @@
 	import TagInput from '$lib/components/TagInput.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import IconTile from '$lib/components/IconTile.svelte';
@@ -176,6 +177,18 @@
 				>
 					Edit…
 				</button>
+				<button
+					type="button"
+					class="btn"
+					onclick={() => (open = l.id)}
+					aria-label="Documents filed about {l.name}"
+				>
+					<Icon name="folders" size={14} />
+					Documents
+				</button>
+				<span class="mini-note"
+					>Repay and re-fix preview their effect on the chart before saving</span
+				>
 			</div>
 			{#if open === l.id}
 				<div class="detail">
