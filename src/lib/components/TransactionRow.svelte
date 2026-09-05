@@ -197,7 +197,11 @@
 			     what the row IS, and it is the answer to "have I recorded this one
 			     yet" that a person is scanning the month for. -->
 			{#if row.loanPayment}
-				<Pill hue="teal">Loan payment · {row.loanPayment.loanName}</Pill>
+				<!-- The full name is in the title; the pill itself truncates to its
+				     column, or a long loan name runs under the amount beside it. -->
+				<span class="mark" title="Loan payment · {row.loanPayment.loanName}">
+					<Pill hue="teal">Loan · {row.loanPayment.loanName}</Pill>
+				</span>
 			{/if}
 			{#if row.documents.length > 0}
 				<span class="clip" title="{row.documents.length} filed against this row">
@@ -518,6 +522,21 @@
 		justify-content: flex-end;
 		gap: var(--space-3);
 		line-height: 1;
+		min-width: 0;
+	}
+	/* A pill is a state word and stays whole; a pill carrying a NAME can be
+	   any length, so it is cut to the column with an ellipsis and the full
+	   text lives on the title. */
+	.mark {
+		display: inline-flex;
+		min-width: 0;
+		max-width: 100%;
+	}
+	.mark :global(.pill) {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.clip {
 		font-size: var(--text-xs);
