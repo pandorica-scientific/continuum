@@ -2,8 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RuleTester } from 'eslint';
-import noRawShadow from '../../eslint-rules/no-raw-shadow.js';
+import noRawShadow, { ALLOWED } from '../../eslint-rules/no-raw-shadow.js';
 import opaqueFloatingSurface from '../../eslint-rules/opaque-floating-surface.js';
+import noEmojiEyebrow from '../../eslint-rules/no-emoji-eyebrow.js';
 
 /**
  * The two design rules that used to be prose, and the tokens they enforce.
@@ -25,12 +26,14 @@ describe('design/no-raw-shadow', () => {
 	const run = (valid: unknown[], invalid: unknown[]) =>
 		tester.run('no-raw-shadow', noRawShadow as never, { valid, invalid } as never);
 
-	it('accepts the two elevation tokens', () => {
+	it('accepts the elevation tokens', () => {
 		expect(() =>
 			run(
 				[
 					{ code: 'const c = `<style>.a{box-shadow:var(--shadow-float);}</style>`;' },
 					{ code: 'const c = `<style>.a{box-shadow:var(--shadow-raise);}</style>`;' },
+					{ code: 'const c = `<style>.a{box-shadow:var(--shadow-card);}</style>`;' },
+					{ code: 'const c = `<style>.a{box-shadow:var(--shadow-hero);}</style>`;' },
 					{ code: 'const c = `<style>.a{box-shadow:none;}</style>`;' }
 				],
 				[]
@@ -118,14 +121,55 @@ describe('design/opaque-floating-surface', () => {
 	});
 });
 
+describe('design/no-emoji-eyebrow', () => {
+	// A tester of its own: RuleTester remembers the cases it has run for a rule
+	// name, and a second `run` for the same name is checked against the first.
+	const run = (valid: unknown[], invalid: unknown[]) =>
+		new RuleTester().run('no-emoji-eyebrow', noEmojiEyebrow as never, { valid, invalid } as never);
+
+	it('accepts an Eyebrow with a stroke icon, or none', () => {
+		expect(() =>
+			run(
+				[
+					{ code: 'const c = `<Eyebrow hue="--teal" icon="chart" label="X" />`;' },
+					{ code: 'const c = `<Eyebrow label="X" />`;' },
+					// A tile that IS data keeps its emoji; the rule is about Eyebrow only.
+					{ code: 'const c = `<IconTile emoji="🏦" size={30} />`;' }
+				],
+				[]
+			)
+		).not.toThrow();
+	});
+
+	it('rejects an Eyebrow with an emoji', () => {
+		expect(() =>
+			run(
+				[],
+				[
+					{
+						code: 'const c = `<Eyebrow hue="--teal" emoji="📊" label="X" />`;',
+						errors: [{ messageId: 'emojiEyebrow' }]
+					},
+					{
+						code: 'const c = `<Eyebrow\n\temoji={mark}\n\tlabel="X" />`;',
+						errors: [{ messageId: 'emojiEyebrow' }]
+					}
+				]
+			)
+		).not.toThrow();
+	});
+});
+
 describe('the elevation tokens', () => {
-	it('defines exactly the two the rule allows', () => {
+	it('defines exactly the ones the rule allows', () => {
 		// A lint rule that has drifted from the tokens it enforces is worse than
 		// no lint rule — the same reason `no-raw-geometry.test.ts` reads app.css.
+		// Read from the rule's own list rather than restated here, so adding a
+		// fifth elevation token cannot pass by updating one of the two copies.
 		const css = readFileSync('src/lib/styles/app.css', 'utf8');
-		expect(css).toMatch(/--shadow-float:\s*[^;]+;/);
-		expect(css).toMatch(/--shadow-raise:\s*[^;]+;/);
+		const allowed = ALLOWED.map((v) => `${v.slice('var('.length, -1)}:`).sort();
+		for (const name of allowed) expect(css).toMatch(new RegExp(`${name}\\s*[^;]+;`));
 		const defined = [...css.matchAll(/--shadow-[a-z-]+:/g)].map((m) => m[0]);
-		expect([...new Set(defined)].sort()).toEqual(['--shadow-float:', '--shadow-raise:']);
+		expect([...new Set(defined)].sort()).toEqual(allowed);
 	});
 });

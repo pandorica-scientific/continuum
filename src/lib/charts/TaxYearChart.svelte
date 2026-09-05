@@ -6,37 +6,22 @@
 	// year's gross: its foot is the tax, hatched, and what stands above is what
 	// was kept. In `rate`, the bars give way to one line per jurisdiction.
 	//
-	// Three constraints here are SVG facts, not preferences:
+	// Both are drawn by the shared LineChart now. This file used to carry its own
+	// letterboxed viewBox with HTML axis labels positioned in percentages over
+	// it, and SalaryYearChart carried a second copy of the same arrangement; the
+	// two had already drifted on bar width and readout placement. What is left
+	// here is what a TAX bar means — the hatched foot, the jurisdictions, and the
+	// blended rate that is the honest line whatever the currency.
 	//
-	//  1. An SVG attribute does not resolve var(). fill="var(--x)" paints
-	//     nothing, so every fill, stroke and stop-color goes through `style`.
-	//     A url(#id) reference is fine as an attribute.
-	//  2. A fixed pixel height letterboxes the viewBox — it scales to fit and
-	//     centres, so anything positioned in percentages drifts. The wrapper is
-	//     pinned to the viewBox's aspect ratio and the SVG fills it.
-	//  3. Axis labels are HTML, absolutely positioned. They are selectable,
-	//     inherit the page's font stack, and need no fill of their own.
+	// One SVG fact still governs the fills below: an SVG attribute does not
+	// resolve var(), so `fill` goes through `style` in the defs, and the bars
+	// refer to those defs by `url(#id)`, which IS legal as an attribute.
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
-	import { compactAxis, displayCurrency, formatMinor } from '$lib/money';
-	import {
-		MONEY_BOTTOM,
-		MONEY_TITLE_PCT,
-		MONEY_TOP,
-		RATE_BOTTOM_Y,
-		RATE_TITLE_PCT,
-		RATE_TOP_PCT,
-		TALL_TITLE_PCT,
-		VIEW_H,
-		barWidth,
-		maxGross,
-		rateBand,
-		rateRuns,
-		rateY,
-		segments,
-		type SerialisedYear
-	} from '$lib/charts/tax-chart-geometry';
-	import { VIEW_W, X_LEFT, X_RIGHT, slotFor } from '$lib/charts/plot';
+	import LineChart from './LineChart.svelte';
+	import type { BarSlot, LineSeries } from './line';
+	import { displayCurrency, formatMinor } from '$lib/money';
+	import { maxGross, taxBarSegments, type SerialisedYear } from '$lib/charts/tax-chart-geometry';
 
 	let {
 		years,
@@ -54,7 +39,6 @@
 		onchange: (next: { mode?: 'stack' | 'rate'; currency?: string }) => void;
 	} = $props();
 
-	let hover = $state<number | null>(null);
 	// Writable derived: the segmented control binds to it, and a new currency
 	// arriving from the server after a save overwrites what was bound.
 	let displayCurrencyCode = $derived(currency);
@@ -62,72 +46,71 @@
 	const hues = $derived(new Map(countries.map((c) => [c.code, c.token])));
 	const nameOf = $derived(new Map(countries.map((c) => [c.code, c.name])));
 	const ceiling = $derived(maxGross(years));
-	const width = $derived(barWidth(Math.max(years.length, 1)));
 
 	/** Only the jurisdictions that actually appear, so the legend has no ghosts. */
 	const present = $derived(
 		countries.filter((c) => years.some((y) => y.byCountry.some((b) => b.country === c.code)))
 	);
 
-	const bars = $derived(
-		years.map((row, i) => ({
-			row,
-			x: slotFor(i, years.length),
-			segments: segments(row, ceiling, hues)
-		}))
+	/**
+	 * All the tax first, then all the kept — so the hatched foot is one block
+	 * rather than interleaved with what was kept. Values are minor units; the
+	 * axis divides them down for its own labels.
+	 */
+	const barSlots = $derived<BarSlot[]>(
+		mode === 'rate' ? [] : years.map((row) => ({ segments: taxBarSegments(row, hues) }))
 	);
 
-	// In rate mode the line owns the whole plot; in stack mode it shares the
-	// strip beneath the bars.
-	const band = $derived(rateBand(mode));
-	const blendedRun = $derived(
-		years
-			.map((row, i) => ({ row, i }))
-			.filter(({ row }) => row.ratePct !== null)
-			.map(({ row, i }) => ({ x: slotFor(i, years.length), y: rateY(row.ratePct!, band) }))
-	);
-
-	const path = (points: { x: number; y: number }[]) =>
-		points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
-
-	// Gridlines at quarters of the money panel, and at 5% steps of the rate
-	// strip. Both derived from the panel, so a changed viewBox moves them too.
-	// Labels come from compactAxis rather than per-tick formatting: at some
-	// magnitudes whole thousands collapse and two gridlines read the same.
-	const moneyGrid = $derived.by(() => {
-		const fractions = [0, 0.25, 0.5, 0.75, 1];
-		const values = fractions.map((f) => BigInt(Math.round(Number(ceiling) * f)));
-		const labels = compactAxis(values, currency);
-		return fractions.map((f, i) => ({
-			y: MONEY_BOTTOM - f * (MONEY_BOTTOM - MONEY_TOP),
-			label: f,
-			text: labels[i]
-		}));
-	});
-	const rateGrid = $derived(
-		(mode === 'rate' ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1]).map((f) => ({
-			y: band[1] - f * (band[1] - band[0]),
-			pct: Math.round(f * RATE_TOP_PCT)
-		}))
-	);
+	/**
+	 * One line per jurisdiction, plus the household's blended rate.
+	 *
+	 * A null breaks the line rather than bridging it: a year somebody lived
+	 * elsewhere is not a year their rate quietly held steady — the rule
+	 * `rateRuns` was written for, now enforced by the engine's own null
+	 * handling.
+	 *
+	 * In `stack` mode only the blended line is drawn; four jurisdiction lines
+	 * over a stack of bars is two charts fighting for one band.
+	 */
+	const series = $derived<LineSeries[]>([
+		...(mode === 'rate'
+			? present.map((c) => ({
+					key: c.code,
+					colorVar: c.token,
+					endLabel: c.code,
+					points: years.map((y) => ({
+						value: y.byCountry.find((b) => b.country === c.code)?.ratePct ?? null
+					}))
+				}))
+			: []),
+		{
+			key: 'blended',
+			// Yellow, because that is the colour a rate wears everywhere else on
+			// this screen — the blended-rate tile and each row's own percentage.
+			colorVar: '--yellow',
+			endLabel: 'all',
+			points: years.map((y) => ({ value: y.ratePct }))
+		}
+	]);
 
 	/** The y-axis unit follows the display currency's own magnitude. */
-	const axisUnit = $derived.by(() => {
+	const unitStep = $derived.by(() => {
 		const top = Number(ceiling) / 100;
-		const symbol = displayCurrency(currency);
-		if (top >= 1_000_000) return `Millions ${symbol}`;
-		if (top >= 1_000) return `Thousands ${symbol}`;
-		return symbol;
+		if (top >= 1_000_000) return { divisor: 1_000_000 * 100, label: 'Millions' };
+		if (top >= 1_000) return { divisor: 1_000 * 100, label: 'Thousands' };
+		return { divisor: 100, label: '' };
 	});
-
-	const hovered = $derived(hover === null ? null : (years[hover] ?? null));
-	/** Past the midpoint the readout flips, so it never runs off the right edge. */
-	const flip = $derived(hover !== null && hover >= years.length / 2);
+	const axisUnit = $derived(`${unitStep.label} ${displayCurrency(currency)}`.trim());
 </script>
 
 <section class="card chart">
 	<div class="head">
-		<Eyebrow emoji="📈" label={mode === 'stack' ? 'Earned & paid' : 'Effective rate'} />
+		<Eyebrow
+			hue="--teal"
+			icon="trend"
+			label={mode === 'stack' ? 'Earned & paid' : 'Effective rate'}
+			caption={mode === 'stack' ? axisUnit : 'blended, per jurisdiction'}
+		/>
 		<div class="controls">
 			<Segmented
 				options={[
@@ -150,227 +133,102 @@
 	{#if years.length === 0}
 		<p class="empty">Nothing filed yet — the chart draws itself once a statement is recorded.</p>
 	{:else}
-		<!-- Scrolls sideways rather than shrinking. The geometry is a fixed
-		     viewBox, so a narrower card is a shorter chart too, and on a phone the
-		     panel collapsed to about a hundred pixels — with eight axis values
-		     printed over one another inside it. The matrices answer "this does not
-		     fit a phone" the same way. -->
-		<div class="plot-scroll">
-			<div class="plot">
-				<svg viewBox="0 0 {VIEW_W} {VIEW_H}" role="img" aria-label="Tax by year">
-					<defs>
-						<filter id="tax-bar-shadow" x="-50%" y="-50%" width="200%" height="200%">
-							<feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3" />
-						</filter>
-						{#each present as c (c.code)}
-							<linearGradient id="tax-fill-{c.code}" x1="0" y1="0" x2="0" y2="1">
-								<stop offset="0" style="stop-color: var({c.token}); stop-opacity: 0.62" />
-								<stop offset="1" style="stop-color: var({c.token}); stop-opacity: 0.42" />
-							</linearGradient>
-							<pattern
-								id="tax-hatch-{c.code}"
-								width="7"
-								height="7"
-								patternUnits="userSpaceOnUse"
-								patternTransform="rotate(45)"
-							>
-								<rect width="7" height="7" style="fill: var({c.token}); fill-opacity: 0.12" />
-								<line
-									x1="0"
-									y1="0"
-									x2="0"
-									y2="7"
-									style="stroke: var({c.token}); stroke-opacity: 0.5; stroke-width: 2.6"
-								/>
-							</pattern>
-						{/each}
-					</defs>
-
-					<!-- gridlines -->
-					{#if mode === 'stack'}
-						{#each moneyGrid as g (g.label)}
-							<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
-							<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
-						{/each}
-					{/if}
-					{#each rateGrid as g (g.pct)}
-						<line x1={X_LEFT} y1={g.y} x2={X_RIGHT} y2={g.y} class="grid" />
-						<line x1={X_LEFT - 5} y1={g.y} x2={X_LEFT} y2={g.y} class="tick" />
-					{/each}
-
-					<!-- spines -->
-					{#if mode === 'stack'}
-						<line x1={X_LEFT} y1={MONEY_TOP} x2={X_LEFT} y2={MONEY_BOTTOM} class="spine" />
-						<line x1={X_LEFT} y1={MONEY_BOTTOM} x2={X_RIGHT} y2={MONEY_BOTTOM} class="spine" />
-					{/if}
-					<line x1={X_LEFT} y1={band[0]} x2={X_LEFT} y2={band[1]} class="spine" />
-					<line x1={X_LEFT} y1={band[1]} x2={X_RIGHT} y2={band[1]} class="spine" />
-
-					{#if mode === 'stack'}
-						{#each bars as bar (bar.row.year)}
-							{#each bar.segments as seg, i (i)}
-								<rect
-									x={bar.x - width / 2}
-									y={seg.y}
-									{width}
-									height={seg.height}
-									rx="2"
-									filter="url(#tax-bar-shadow)"
-									style="fill: url(#tax-{seg.hatched
-										? 'hatch'
-										: 'fill'}-{seg.country}); {seg.stroked
-										? `stroke: var(${seg.token}); stroke-width: 1`
-										: 'stroke: none'}"
-								/>
-							{/each}
-						{/each}
-					{:else}
-						{#each present as c (c.code)}
-							{#each rateRuns(years, c.code, band) as run, i (i)}
-								{#if run.length > 1}
-									<path d={path(run)} class="rate-line" style="stroke: var({c.token})" />
-								{/if}
-								{#each run as p (p.year)}
-									<circle cx={p.x} cy={p.y} r="3.5" style="fill: var({c.token})" class="dot" />
-								{/each}
-							{/each}
-						{/each}
-					{/if}
-
-					<!-- the household's blended rate, always -->
-					{#if blendedRun.length > 1}
-						<path
-							d={path(blendedRun)}
-							class="blended"
-							style="stroke-width: {mode === 'rate' ? 3 : 2}"
-						/>
-					{/if}
-					{#each blendedRun as p, i (i)}
-						<circle cx={p.x} cy={p.y} r="3.5" class="blended-dot" />
-					{/each}
-
-					<!-- the hovered year's guide -->
-					{#if hover !== null}
+		<LineChart
+			{series}
+			bars={barSlots}
+			labels={years.map((y) => String(y.year))}
+			height={mode === 'rate' ? 300 : 340}
+			title="Tax by year"
+			description="Each bar is a year's gross, with the tax paid hatched at its foot, and the effective rate beneath."
+			format={(v) => `${Math.round(v)}%`}
+			barFormat={(v) => String(Math.round(v / unitStep.divisor))}
+			axisTitle="Rate"
+			barAxisTitle={axisUnit}
+			slotLabel={(i) => `${years[i].year} figures`}
+		>
+			{#snippet defs()}
+				{#each present as c (c.code)}
+					<linearGradient id="tax-fill-{c.code}" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0" style="stop-color: var({c.token}); stop-opacity: 0.62" />
+						<stop offset="1" style="stop-color: var({c.token}); stop-opacity: 0.42" />
+					</linearGradient>
+					<pattern
+						id="tax-hatch-{c.code}"
+						width="7"
+						height="7"
+						patternUnits="userSpaceOnUse"
+						patternTransform="rotate(45)"
+					>
+						<rect width="7" height="7" style="fill: var({c.token}); fill-opacity: 0.12" />
 						<line
-							x1={slotFor(hover, years.length)}
-							y1={mode === 'stack' ? MONEY_TOP : band[0]}
-							x2={slotFor(hover, years.length)}
-							y2={band[1]}
-							class="guide"
+							x1="0"
+							y1="0"
+							x2="0"
+							y2="7"
+							style="stroke: var({c.token}); stroke-opacity: 0.5; stroke-width: 2.6"
 						/>
-					{/if}
-				</svg>
-
-				<!-- Axis labels as HTML. See the header comment. -->
-				{#if mode === 'stack'}
-					<span class="axis-title" style:top="{MONEY_TITLE_PCT}%">{axisUnit}</span>
-					{#each moneyGrid as g (g.label)}
-						<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.text}</span>
-					{/each}
-				{/if}
-				<span class="axis-title" style:top="{mode === 'rate' ? TALL_TITLE_PCT : RATE_TITLE_PCT}%"
-					>Rate</span
-				>
-				{#each rateGrid as g (g.pct)}
-					<span class="axis-value" style:top="{(g.y / VIEW_H) * 100}%">{g.pct}%</span>
+					</pattern>
 				{/each}
-				{#each years as y, i (y.year)}
-					<span
-						class="axis-year mono"
-						style:left="{(slotFor(i, years.length) / VIEW_W) * 100}%"
-						style:top="{(RATE_BOTTOM_Y / VIEW_H) * 100}%">{y.year}</span
-					>
-				{/each}
+			{/snippet}
 
-				<!--
-				One hit area per year, not per mark: a per-mark tooltip cannot answer
-				"which country is this AND what were the others that year". The spans
-				sit above the SVG and cover it, which is also why no mark carries an
-				SVG <title> — it would be an unreachable second tooltip.
-			-->
-				{#each years as y, i (y.year)}
-					<button
-						type="button"
-						class="hit"
-						style:left="{((slotFor(i, years.length) - (X_RIGHT - X_LEFT) / years.length / 2) /
-							VIEW_W) *
-							100}%"
-						style:width="{((X_RIGHT - X_LEFT) / years.length / VIEW_W) * 100}%"
-						onmouseenter={() => (hover = i)}
-						onmouseleave={() => (hover = null)}
-						onfocus={() => (hover = i)}
-						onblur={() => (hover = null)}
-						aria-label="{y.year} figures"
-					></button>
-				{/each}
-
-				{#if hovered}
-					<!--
-					The offset is folded into the positioning value rather than written
-					as translateX(calc(-100% - 12px)) — a calc() inside an interpolated
-					style value may not survive the parser, and the flip silently stops.
-				-->
-					<div
-						class="readout"
-						class:flip
-						style:left="{(slotFor(hover!, years.length) / VIEW_W) * 100}%"
-					>
-						<span class="r-year mono">{hovered.year}</span>
-						{#each hovered.byCountry as c (c.country)}
-							<div class="r-row">
-								<span class="swatch" style="background: var({hues.get(c.country)})"></span>
-								<span class="r-name">{nameOf.get(c.country) ?? c.country}</span>
-								<span class="mono r-rate"
-									>{c.ratePct === null ? '—' : `${c.ratePct.toFixed(2)}%`}</span
-								>
-							</div>
-							<div class="r-figures">
-								earned <strong class="mono">{formatMinor(BigInt(c.grossMinor), currency)}</strong>
-								· tax <strong class="mono">{formatMinor(BigInt(c.taxMinor), currency)}</strong>
-								{#each c.native ?? [] as n, i (i)}
-									<span class="r-filed"
-										>filed {formatMinor(BigInt(n.grossMinor), n.currency)}
-										{displayCurrency(n.currency)}</span
-									>
-								{/each}
-							</div>
+			<!-- One readout per year, not per mark: a per-mark tooltip cannot answer
+			     "which country is this AND what were the others that year". -->
+			{#snippet readout(i)}
+				{@const row = years[i]}
+				<span class="r-year mono">{row.year}</span>
+				{#each row.byCountry as c (c.country)}
+					<div class="r-row">
+						<span class="swatch" style="background: var({hues.get(c.country)})"></span>
+						<span class="r-name">{nameOf.get(c.country) ?? c.country}</span>
+						<span class="mono r-rate">{c.ratePct === null ? '—' : `${c.ratePct.toFixed(2)}%`}</span>
+					</div>
+					<div class="r-figures">
+						earned <strong class="mono">{formatMinor(BigInt(c.grossMinor), currency)}</strong>
+						· tax <strong class="mono">{formatMinor(BigInt(c.taxMinor), currency)}</strong>
+						{#each c.native ?? [] as n, j (j)}
+							<span class="r-filed"
+								>filed {formatMinor(BigInt(n.grossMinor), n.currency)}
+								{displayCurrency(n.currency)}</span
+							>
 						{/each}
-						{#if hovered.byCountry.length > 1}
-							<div class="r-total">
-								<span>all</span>
-								<strong class="mono">{formatMinor(BigInt(hovered.grossMinor), currency)}</strong>
-								<span class="mono"
-									>{hovered.ratePct === null ? '—' : `${hovered.ratePct.toFixed(2)}%`}</span
-								>
-							</div>
-						{/if}
+					</div>
+				{/each}
+				{#if row.byCountry.length > 1}
+					<div class="r-total">
+						<span>all</span>
+						<strong class="mono">{formatMinor(BigInt(row.grossMinor), currency)}</strong>
+						<span class="mono">{row.ratePct === null ? '—' : `${row.ratePct.toFixed(2)}%`}</span>
 					</div>
 				{/if}
-			</div>
-		</div>
+			{/snippet}
 
-		<span class="axis-caption">Tax year</span>
-		<div class="legend">
-			{#each present as c (c.code)}
+			{#snippet legend()}
+				{#each present as c (c.code)}
+					<span class="key">
+						<span class="swatch" style="background: var({c.token})"></span>
+						{c.name}
+					</span>
+				{/each}
+				<!-- Only where there are bars to describe. In rate mode the
+				     jurisdiction keys still mean the lines, but this one named a
+				     texture that is not on screen. -->
+				{#if mode === 'stack'}
+					<span class="key">
+						<span class="swatch dashed"></span>
+						bar = earned · hatched foot = tax paid
+					</span>
+				{/if}
 				<span class="key">
-					<span class="swatch" style="background: var({c.token})"></span>
-					{c.name}
+					<span class="swatch rate-key"></span>
+					effective rate
 				</span>
-			{/each}
-			<span class="key">
-				<span class="swatch dashed"></span>
-				bar = earned · hatched foot = tax paid
-			</span>
-			<span class="key">
-				<span class="swatch rate-key"></span>
-				effective rate
-			</span>
-			<span class="footnote">
-				{mode === 'stack'
-					? "Converted at each year's closing rate — comparison, not a filed figure"
-					: 'Rates need no conversion, which is why this line was always the honest one'}
-			</span>
-		</div>
+				<span class="footnote">
+					{mode === 'stack'
+						? "Converted at each year's closing rate — comparison, not a filed figure"
+						: 'Rates need no conversion, which is why this line was always the honest one'}
+				</span>
+			{/snippet}
+		</LineChart>
 	{/if}
 </section>
 
@@ -393,225 +251,86 @@
 		flex-wrap: wrap;
 	}
 	.empty {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	/* Pinned to the viewBox. A fixed pixel height would letterbox it and every
-	   percentage-positioned label would drift. */
-	.plot-scroll {
-		overflow-x: auto;
-		/* The rotated axis title steps out into this padding when the gutter it
-		   normally sits in is too narrow to hold it beside the value nearest it —
-		   see the container query below. The negative margin gives the space back,
-		   so on a wide card the plot occupies exactly the pixels it always did.
-
-		   A container, so that decision is made from the width the PLOT actually
-		   gets rather than the viewport's: the same viewport gives this card very
-		   different widths with and without the sidebar. */
-		container-type: inline-size;
-		padding-left: 16px;
-		margin-left: -16px;
-	}
-	.plot {
-		position: relative;
-		width: 100%;
-		/* The width at which the two stacked bands still have room for their axis
-		   values — roughly what the chart already gets on a tablet. */
-		min-width: 640px;
-		aspect-ratio: 1000 / 322;
-	}
-	svg {
-		width: 100%;
-		height: 100%;
-		display: block;
-		overflow: visible;
-	}
-	.grid {
-		stroke: var(--bd);
-		stroke-width: 1;
-	}
-	.tick {
-		stroke: var(--bd2);
-		stroke-width: 1;
-	}
-	.spine {
-		stroke: var(--bd2);
-		stroke-width: 1;
-	}
-	.rate-line {
-		fill: none;
-		stroke-width: 2;
-		stroke-linejoin: round;
-	}
-	.dot {
-		stroke: var(--bg);
-		stroke-width: 1.5;
-	}
-	.blended {
-		fill: none;
-		stroke: var(--yellow);
-		stroke-linejoin: round;
-	}
-	.blended-dot {
-		fill: var(--yellow);
-		stroke: var(--bg);
-		stroke-width: 1.5;
-	}
-	.guide {
-		stroke: var(--bd2);
-		stroke-width: 1;
-	}
-	.axis-title {
-		position: absolute;
-		left: 0;
-		font-size: var(--text-xs);
-		color: var(--fg3);
-		transform-origin: left top;
-		/* Rotated about its top-left, so the text runs UP from the anchor; the
-		   translate slides it back down by half its own length, centring it on
-		   the band `top` names. The anchors are derived in the geometry module —
-		   they used to be eyeballed percentages that missed both band centres. */
-		transform: rotate(-90deg) translateX(-50%);
-		white-space: nowrap;
-	}
-	/* Snug against the plot's left edge, inside the gutter the axis values are
-	   right-aligned in. That gutter is a PERCENTAGE of the plot's width while the
-	   text in it is a fixed size, so below the width below it stops holding both
-	   and the title lands on top of the value beside it — "Millions Kč" printed
-	   through "2.6M". Only then does the title step out.
-
-	   1024px is where a five-character value and the title's own band still
-	   clear each other: the gutter is 5.2% of the plot, so about 53px, against
-	   33px of value and 15px of rotated title. */
-	@container (max-width: 1024px) {
-		.axis-title {
-			left: -16px;
-		}
-	}
-	.axis-value {
-		position: absolute;
-		right: calc(100% - 5.2%);
-		transform: translateY(-50%);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-		font-family: var(--font-mono);
-		white-space: nowrap;
-	}
-	.axis-year {
-		position: absolute;
-		transform: translate(-50%, 6px);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	/* Below the plot, in the flow, rather than hanging off its bottom edge.
-	   Absolutely positioned at `bottom: -8%` it stuck out of the scroll
-	   container, and a scroll container clips or scrolls what leaves it — so the
-	   chart grew a vertical scrollbar of its own and could be dragged up and
-	   down inside the card. */
-	.axis-caption {
-		display: block;
-		margin-top: var(--space-3);
-		text-align: center;
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	.hit {
-		position: absolute;
-		top: 0;
-		height: 91%;
-		border: 0;
-		padding: 0;
-		background: transparent;
-		cursor: default;
-	}
-	.readout {
-		position: absolute;
-		top: 4%;
-		/* The flip's offset lives in these two rules, not in a calc() inside an
-		   interpolated style value — that silently fails to parse. */
-		margin-left: 12px;
-		transform: none;
-		min-width: 250px;
-		background: var(--bg2);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-float);
-		padding: var(--space-5) var(--space-6);
-		pointer-events: none;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		z-index: 2;
-	}
-	.readout.flip {
-		margin-left: -12px;
-		transform: translateX(-100%);
-	}
-	.r-year {
-		font-size: var(--text-sm);
-		color: var(--fg3);
-	}
-	.r-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
+		margin: 0;
 		font-size: var(--text-md);
+		color: var(--fg3);
+		line-height: 1.55;
+	}
+
+	/* The readout's and legend's own rows. `:global` because that markup is
+	   rendered inside LineChart, which scopes its own styles and not these. */
+	.chart :global(.r-year) {
+		display: block;
+		font-size: var(--text-xs);
+		color: var(--fg3);
+		margin-bottom: var(--space-3);
+	}
+	.chart :global(.r-row) {
+		display: grid;
+		grid-template-columns: 10px minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-4);
 		color: var(--fg1);
 	}
-	.r-rate {
-		margin-left: auto;
-		color: var(--yellow);
+	.chart :global(.r-name) {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
-	.r-figures {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-3);
+	.chart :global(.r-rate) {
+		font-size: var(--text-xs);
+	}
+	/* Indented under the country it belongs to, so a two-jurisdiction year is
+	   two blocks rather than four unattributed lines. */
+	.chart :global(.r-figures) {
+		padding: 0 0 var(--space-4) 22px;
 		font-size: var(--text-xs);
 		color: var(--fg3);
-		padding-left: 17px;
+		line-height: 1.5;
 	}
-	.r-filed {
-		width: 100%;
+	.chart :global(.r-filed) {
+		display: block;
+		opacity: 0.85;
 	}
-	.r-total {
-		display: flex;
+	.chart :global(.r-total) {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		gap: var(--space-4);
+		padding-top: var(--space-3);
 		border-top: 1px solid var(--bd);
-		padding-top: 6px;
-		font-size: var(--text-sm);
+		font-size: var(--text-xs);
 		color: var(--fg2);
 	}
-	.legend {
-		display: flex;
-		align-items: center;
-		gap: var(--space-6);
-		flex-wrap: wrap;
-		border-top: 1px solid var(--bd);
-		padding-top: var(--space-6);
-	}
-	.key {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	.swatch {
+
+	.chart :global(.swatch) {
 		width: 10px;
 		height: 10px;
 		border-radius: var(--radius-xs);
 		flex: none;
 	}
-	.swatch.dashed {
-		border: 1px dashed var(--fg3);
-		background: transparent;
+	/* The two keys that stand for a texture rather than a colour. */
+	.chart :global(.swatch.dashed) {
+		background: repeating-linear-gradient(45deg, var(--fg3) 0 2px, transparent 2px 5px);
 	}
-	.swatch.rate-key {
+	.chart :global(.swatch.rate-key) {
 		background: var(--yellow);
+		height: 3px;
+		border-radius: var(--radius-pill);
 	}
-	.footnote {
+
+	.chart :global(.key) {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	/* At the end of the keys' own row where it fits, on its own line where it
+	   does not — `margin-left: auto` against a wrapping flex row does both. */
+	.chart :global(.footnote) {
 		margin-left: auto;
 		font-size: var(--text-xs);
 		color: var(--fg3);
+		line-height: 1.5;
 	}
 </style>

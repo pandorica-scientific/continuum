@@ -3,6 +3,8 @@
 	import {
 		buildSankey,
 		estimateText,
+		pathRibbons,
+		ribbonRoute,
 		type MeasureText,
 		type SankeyNode,
 		type SankeyRibbon
@@ -192,11 +194,37 @@
 		hoveredRibbon = null;
 	}
 
-	const ribbonOpacity = (ribbon: SankeyRibbon, index: number) => {
-		if (hoveredRibbon !== null) return index === hoveredRibbon ? RIBBON_LIT : RIBBON_DIM;
-		if (hoveredKey === null) return RIBBON_OPACITY;
-		return ribbon.from === hoveredKey || ribbon.to === hoveredKey ? RIBBON_LIT : RIBBON_DIM;
+	/**
+	 * The whole route through the block being read, not only what touches it.
+	 *
+	 * Lighting the adjacent bands answered half the question — standing on
+	 * "Bills" it showed the money arriving and the money leaving, but not which
+	 * salary two columns left it came from. See `pathRibbons`.
+	 */
+	const litPath = $derived(
+		hoveredRibbon !== null
+			? ribbonRoute(layout.ribbons, hoveredRibbon)
+			: pathRibbons(layout.ribbons, hoveredKey)
+	);
+	const reading = $derived(hoveredRibbon !== null || hoveredKey !== null);
+
+	const ribbonOpacity = (index: number) => {
+		if (!reading) return RIBBON_OPACITY;
+		return litPath.has(index) ? RIBBON_LIT : RIBBON_DIM;
 	};
+
+	const isLit = (index: number) => reading && litPath.has(index);
+
+	/**
+	 * One gradient per colour, not per band.
+	 *
+	 * A ribbon is filled with its series colour ramping from 22% to 62% along
+	 * its run, so a band reads as flowing rather than as a static shape. Bands
+	 * of the same colour share a definition: a household with forty links would
+	 * otherwise put forty identical gradients in the document.
+	 */
+	const gradients = $derived([...new Set(layout.ribbons.map((r) => r.colorVar))]);
+	const gradientId = (colorVar: string) => `${uid}-flow-${colorVar.replace(/[^a-z0-9]/gi, '')}`;
 </script>
 
 <!-- The block itself, without the wrapper that gives it its meaning: a link
@@ -229,11 +257,22 @@
 			     two blocks it joins, and both are in the reading order already. So
 			     they are skipped rather than read out as a run of unnamed shapes,
 			     and the figure along one is on hover. -->
+			<defs>
+				{#each gradients as colorVar (colorVar)}
+					<linearGradient id={gradientId(colorVar)} x1="0" y1="0" x2="1" y2="0">
+						<stop offset="0" stop-color="var({colorVar})" stop-opacity="0.22" />
+						<stop offset="1" stop-color="var({colorVar})" stop-opacity="0.62" />
+					</linearGradient>
+				{/each}
+			</defs>
 			{#each layout.ribbons as ribbon, i (i)}
 				<path
 					d={ribbon.d}
-					fill="var({ribbon.colorVar})"
-					fill-opacity={ribbonOpacity(ribbon, i)}
+					fill="url(#{gradientId(ribbon.colorVar)})"
+					opacity={ribbonOpacity(i)}
+					class="ribbon"
+					class:lit={isLit(i)}
+					class:alt={i % 2 === 1}
 					aria-hidden="true"
 					onpointerenter={() => enterRibbon(ribbon, i)}
 					onpointerleave={leave}
@@ -313,6 +352,50 @@
 </div>
 
 <style>
+	/* The band settles into and out of the lit state rather than snapping, which
+	   is what makes following a route across four columns feel continuous. */
+	.ribbon {
+		transition: opacity var(--dur) var(--ease);
+	}
+	/* The flame. A lit band breathes very slightly, on two offset cycles so a
+	   run of bands does not pulse in lockstep — that reads as a loading state
+	   rather than as something alive. Amplitude is deliberately small: this is
+	   texture on an answer, not an animation competing with it. */
+	.ribbon.lit {
+		animation: v2-flame-a 2.4s var(--ease) infinite;
+	}
+	.ribbon.lit.alt {
+		animation-name: v2-flame-b;
+		animation-duration: 3.1s;
+	}
+	@keyframes v2-flame-a {
+		0%,
+		100% {
+			opacity: 0.7;
+		}
+		50% {
+			opacity: 0.92;
+		}
+	}
+	@keyframes v2-flame-b {
+		0%,
+		100% {
+			opacity: 0.78;
+		}
+		45% {
+			opacity: 1;
+		}
+	}
+	/* app.css collapses every animation to 1ms, which would leave a lit band
+	   frozen at whatever frame it stopped on. Stated here so the band simply
+	   stays lit instead. */
+	@media (prefers-reduced-motion: reduce) {
+		.ribbon.lit,
+		.ribbon.lit.alt {
+			animation: none;
+		}
+	}
+
 	.sankey {
 		position: relative;
 		width: 100%;

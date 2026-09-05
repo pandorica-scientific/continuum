@@ -47,7 +47,7 @@ export const EMPTY_FACTS: ShelfFacts = {
 };
 
 /** `2027-01-31` → `31 Jan 2027`, the way a row's expiry pill reads it. */
-export function formatDay(iso: string): string {
+function formatDay(iso: string): string {
 	return new Intl.DateTimeFormat('en-GB', {
 		day: 'numeric',
 		month: 'short',

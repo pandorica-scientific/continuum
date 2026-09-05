@@ -33,6 +33,35 @@
 
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
+
+/**
+ * The AA pass, on the same run.
+ *
+ * `docs/ui-guidelines.md` demands AA contrast on every pill and tile in both
+ * themes, and nothing checked it: a screenshot is looked at, not measured.
+ * Every web capture is also handed to axe, and a `color-contrast` violation
+ * fails the run — the one rule a design pass can break without noticing.
+ * Off with SHOT_AXE=off, for iterating on a layout that is not done yet.
+ * Installed for the run beside playwright: `npm install --no-save playwright
+ * @axe-core/playwright`.
+ */
+const AXE = process.env.SHOT_AXE !== 'off';
+const AxeBuilder = AXE ? (await import('@axe-core/playwright')).default : null;
+/** @type {{ screen: string, theme: string, id: string, nodes: number, help: string }[]} */
+const violations = [];
+
+async function audit(page, screen, theme) {
+	if (!AxeBuilder) return;
+	const results = await new AxeBuilder({ page })
+		.withTags(['wcag2a', 'wcag2aa'])
+		// Scans and photographs are content, not chrome, and axe reads a
+		// scanned page image as an image with no text alternative.
+		.exclude('img')
+		.analyze();
+	for (const v of results.violations) {
+		violations.push({ screen, theme, id: v.id, nodes: v.nodes.length, help: v.help });
+	}
+}
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -79,7 +108,8 @@ const SCREENS = [
 	{ name: 'overview', path: '/overview', settle: 900, phone: true },
 	{ name: 'cashflow', path: '/cashflow', settle: 900 },
 	{ name: 'accounts', path: '/accounts', settle: 600 },
-	{ name: 'transactions', path: '/transactions', phone: true, open: '.matrix a.row', settle: 400 },
+	// The newest month opens by itself since v0.8.1; nothing to click.
+	{ name: 'transactions', path: '/transactions', phone: true, settle: 400 },
 	{ name: 'import', path: '/import' },
 	{ name: 'rules', path: '/rules' },
 	{ name: 'tags', path: '/tags', settle: 600 },
@@ -119,7 +149,10 @@ async function signIn(page) {
 	// person by their name, then type the password.
 	const person = page.locator(`button:has-text("${PERSON}"), label:has-text("${PERSON}")`).first();
 	if (await person.count()) await person.click();
-	await page.locator('input[name="password"]').fill(PASSWORD);
+	// An open instance asks for nobody's password: the field is not drawn, and
+	// waiting for it is how a demo run used to stall on the sign-in page.
+	const password = page.locator('input[name="password"]');
+	if (await password.count()) await password.fill(PASSWORD);
 	await page.locator('button[type="submit"]:has-text("Sign in")').click();
 	await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 });
 }
@@ -212,6 +245,7 @@ async function capture(browser, device, theme) {
 		const file = `${OUT}/${screen.name}-${theme}-${device.name}.png`;
 		await page.screenshot({ path: file });
 		process.stdout.write(`  ${screen.name}-${theme}-${device.name}\n`);
+		if (!device.mobile) await audit(page, screen.name, theme);
 	}
 
 	await context.close();
@@ -238,3 +272,26 @@ const shots =
 		0
 	);
 console.log(`\n${shots} screenshots → docs/screenshots/`);
+
+if (AXE) {
+	const contrast = violations.filter((v) => v.id === 'color-contrast');
+	const other = violations.filter((v) => v.id !== 'color-contrast');
+	if (violations.length === 0) {
+		console.log('axe: no WCAG 2 A/AA violations on any screen, either theme');
+	} else {
+		console.log(`\naxe: ${violations.length} violation(s)`);
+		for (const v of violations) {
+			console.log(`  ${v.screen} · ${v.theme} · ${v.id} × ${v.nodes} — ${v.help}`);
+		}
+	}
+	// Contrast is the rule the guidelines name; the rest are reported and
+	// left to a person, since an aria finding on a chart is often a judgement.
+	if (contrast.length > 0) {
+		console.error(
+			`\n${contrast.length} contrast violation(s) — the guidelines require AA on every pill and tile.`
+		);
+		process.exitCode = 1;
+	} else if (other.length > 0) {
+		console.log('(no contrast violations; the findings above are advisory)');
+	}
+}

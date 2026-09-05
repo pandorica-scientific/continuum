@@ -5,7 +5,7 @@ import { fail } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
-import { rule, ruleTag, tag } from '$lib/server/db/schema';
+import { rule, ruleTag, settings, tag } from '$lib/server/db/schema';
 import { autoThreshold, previewMatches } from '$lib/server/rules';
 import { pairAndCategorise } from '$lib/server/import/pairing-run';
 import { mutateRuleAndReplay, saveRuleDefinition } from '$lib/server/rules/mutations';
@@ -53,6 +53,14 @@ export const load: PageServerLoad = async ({ url }) => {
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 	const tagName = new Map(tags.map((t) => [t.id, t.name]));
 
+	// A rule's colour comes from its category's GROUP, which is where the
+	// palette token lives — see `categoryGroup.colorToken`. The screen groups on
+	// the same axis, so the swatch beside a group header and the swatch beside
+	// the same category in the register are the one colour.
+	const groups = await loadCategoryGroups();
+	const groupByKey = new Map(groups.map((g) => [g.key, g]));
+	const groupOfCategory = new Map(categories.map((c) => [c.id, groupByKey.get(c.groupKey)]));
+
 	return {
 		/**
 		 * What a rule should be about, when the register sent you here.
@@ -92,6 +100,9 @@ export const load: PageServerLoad = async ({ url }) => {
 						.filter((t) => t.ruleId === r.id)
 						.map((t) => tagName.get(t.tagId) ?? '')
 						.filter(Boolean),
+					groupKey: r.categoryId ? (groupOfCategory.get(r.categoryId)?.key ?? null) : null,
+					groupLabel: r.categoryId ? (groupOfCategory.get(r.categoryId)?.label ?? null) : null,
+					groupColor: r.categoryId ? (groupOfCategory.get(r.categoryId)?.colorToken ?? null) : null,
 					accepted: Math.max(0, r.acceptedCount - priorShare),
 					corrected: r.correctedCount,
 					startsTrusted: priorShare > 0,
@@ -102,7 +113,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			// Most-corrected first: a rule that keeps being overridden is the one
 			// worth looking at.
 			.sort((a, b) => b.corrected - a.corrected || a.name.localeCompare(b.name)),
-		categories: (await loadCategoryGroups())
+		categories: groups
 			.map((group) => ({
 				key: group.key,
 				label: group.label,
@@ -156,6 +167,30 @@ async function conditionsFromForm(form: FormData): Promise<Condition[] | null> {
 }
 
 export const actions: Actions = {
+	/**
+	 * Move the confidence floor.
+	 *
+	 * The threshold has been a stored setting since rules existed, with nothing
+	 * in the product able to change it — so every household ran on the default
+	 * and the number printed at the top of this screen was a fact nobody could
+	 * act on. Clamped rather than validated into an error: a slider cannot
+	 * produce anything else, and a hand-posted 900 should land at the ceiling
+	 * rather than fail.
+	 */
+	threshold: async ({ request }) => {
+		const form = await request.formData();
+		const pct = Number(form.get('pct'));
+		if (!Number.isFinite(pct)) return fail(400, { message: 'That is not a percentage.' });
+		const value = Math.min(95, Math.max(5, Math.round(pct))) / 100;
+		await db
+			.insert(settings)
+			.values({ key: 'rules.autoThreshold', value })
+			.onConflictDoUpdate({ target: settings.key, set: { value } });
+		// Everything already filed keeps its filing; the floor decides what files
+		// NEXT, which is what the note under the slider says.
+		return { ok: true };
+	},
+
 	toggle: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));

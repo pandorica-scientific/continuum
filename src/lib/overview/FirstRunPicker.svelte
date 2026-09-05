@@ -64,9 +64,9 @@
 		align-items: flex-start;
 		gap: var(--space-5);
 		padding: var(--space-8);
-		background: var(--card);
+		background: var(--surface);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-card);
 	}
 	h2 {
 		margin: 0;

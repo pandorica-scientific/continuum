@@ -708,3 +708,63 @@ export function buildSankey(
 
 	return layout;
 }
+
+/**
+ * Every band on the same path as one block, in both directions.
+ *
+ * Lighting only the bands that TOUCH the block under the pointer answers half
+ * the question: standing on "Bills" it showed the money arriving and the money
+ * leaving, but not which salary it arrived from two columns to the left. A
+ * Sankey is read as a route, so the whole route lights — upstream to the
+ * sources that feed the block, downstream to the leaves it ends in.
+ *
+ * Two breadth-first walks over the link list rather than a graph structure: at
+ * this size (tens of links) the cost is nothing, and a second representation
+ * of the same edges is a second thing to keep in step with the layout.
+ */
+export function pathRibbons(ribbons: readonly SankeyRibbon[], key: string | null): Set<number> {
+	const lit = new Set<number>();
+	if (key === null) return lit;
+
+	// Upstream: anything that ends at a node we have reached.
+	const walk = (seeds: string[], stepBack: boolean) => {
+		const seen = new Set(seeds);
+		let frontier = seeds;
+		while (frontier.length > 0) {
+			const next: string[] = [];
+			for (let i = 0; i < ribbons.length; i++) {
+				const ribbon = ribbons[i];
+				const near = stepBack ? ribbon.to : ribbon.from;
+				const far = stepBack ? ribbon.from : ribbon.to;
+				if (!frontier.includes(near)) continue;
+				lit.add(i);
+				if (!seen.has(far)) {
+					seen.add(far);
+					next.push(far);
+				}
+			}
+			frontier = next;
+		}
+	};
+	walk([key], true);
+	walk([key], false);
+	return lit;
+}
+
+/**
+ * The whole route through a ribbon: everything upstream of where it starts and
+ * everything downstream of where it ends, plus the band itself.
+ *
+ * Standing on a band used to light that band alone — the finer answer, but
+ * the one nobody was asking: a reader who points at the flow between
+ * "Housing" and "Mortgage" wants to see which salary it came out of, the same
+ * as when they point at "Housing" itself. Both ends' paths, unioned.
+ */
+export function ribbonRoute(ribbons: readonly SankeyRibbon[], index: number | null): Set<number> {
+	if (index === null || index < 0 || index >= ribbons.length) return new Set();
+	const ribbon = ribbons[index];
+	const lit = new Set<number>([index]);
+	for (const i of pathRibbons(ribbons, ribbon.from)) lit.add(i);
+	for (const i of pathRibbons(ribbons, ribbon.to)) lit.add(i);
+	return lit;
+}

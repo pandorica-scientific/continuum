@@ -14,7 +14,7 @@
  * records a household creates by name should not behave differently depending
  * on which screen minted them.
  */
-import { and, asc, count, eq, isNotNull, sql } from 'drizzle-orm';
+import { asc, count, eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { uuidv7 } from 'uuidv7';
 import { db, type Queryable } from '$lib/server/db';
@@ -303,10 +303,6 @@ export async function addLane(
 	return { id };
 }
 
-export async function deleteLane(id: string, handle: Queryable = db): Promise<void> {
-	await handle.delete(lane).where(eq(lane.id, id));
-}
-
 /**
  * The organisation with this name, minting one where the household has none.
  *
@@ -448,15 +444,4 @@ export async function endEngagement(
 /** Remove a role period entered by mistake. Ending one is `endEngagement`. */
 export async function deleteEngagement(id: string, handle: Queryable = db): Promise<void> {
 	await handle.delete(engagement).where(eq(engagement.id, id));
-}
-
-/** Role periods with a document behind them, for the card's pinned contract. */
-export async function engagementsWithPaper(
-	organisationId: string,
-	handle: Queryable = db
-): Promise<{ id: string; documentId: string }[]> {
-	return handle
-		.select({ id: engagement.id, documentId: sql<string>`${engagement.documentId}` })
-		.from(engagement)
-		.where(and(eq(engagement.organisationId, organisationId), isNotNull(engagement.documentId)));
 }

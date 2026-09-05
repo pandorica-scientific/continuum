@@ -22,7 +22,16 @@
 // Read as TEXT, like the licence and geometry rules beside it: ESLint does not
 // parse CSS inside a Svelte component.
 
-const ALLOWED = ['var(--shadow-float)', 'var(--shadow-raise)'];
+export const ALLOWED = [
+	'var(--shadow-float)',
+	'var(--shadow-raise)',
+	// v2 (0.8.1): a card in the flow IS raised now, by one quiet value, and the
+	// hero and quick-add by a second that is lit rather than dropped. The rule
+	// this file was written to enforce has not changed — elevation still comes
+	// from a token — only the list of tokens it may come from.
+	'var(--shadow-card)',
+	'var(--shadow-hero)'
+];
 const EXEMPT = /\/\*\s*shadow-exempt\s*:\s*([^*]*?)\s*\*\//;
 
 /** @type {import('eslint').Rule.RuleModule} */

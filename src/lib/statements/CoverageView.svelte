@@ -13,6 +13,7 @@
 	// reaches. An EMPTY box is always one month, because nothing says whether a
 	// hole is one missing quarterly statement or three missing monthly ones —
 	// see `$lib/statements/coverage`, which decides all of it.
+	import { seriesFor } from '$lib/invest/series';
 	import Icon from '$lib/components/Icon.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import type { CoveragePayload } from '$lib/server/statements/coverage-load';
@@ -30,6 +31,18 @@
 		onyear: (year: number) => void;
 		ondecade: (firstYear: number) => void;
 	} = $props();
+
+	// One series colour per account, as the handoff draws the bands: a filled
+	// month is the account's colour rather than a grey box, so two rows are
+	// told apart by hue before they are read. Assigned over every row on the
+	// shelf, monthly and yearly alike, so an account keeps its colour across
+	// both bands.
+	const hueFor = $derived(
+		seriesFor([
+			...coverage.rows.map((r) => r.accountId),
+			...(coverage.yearly?.rows.map((r) => r.accountId) ?? [])
+		])
+	);
 
 	const MONTHS = [
 		'Jan',
@@ -213,7 +226,7 @@
 			</thead>
 			<tbody>
 				{#each coverage.rows as row (row.accountId)}
-					<tr>
+					<tr style:--row-hue="var({hueFor(row.accountId)})">
 						<th class="account" scope="row">
 							<span class="account-name">{row.label}</span>
 							{#if row.sublabel}<span class="mono account-tail">···· {row.sublabel}</span>{/if}
@@ -240,7 +253,7 @@
 										{/if}
 									</button>
 								{:else if box.state === 'before-account'}
-									<span class="empty" aria-label="Before this account existed"></span>
+									<span class="empty" role="img" aria-label="Before this account existed"></span>
 								{:else}
 									<a
 										class="empty-link"
@@ -307,7 +320,7 @@
 					</thead>
 					<tbody>
 						{#each coverage.yearly.rows as row (row.accountId)}
-							<tr>
+							<tr style:--row-hue="var({hueFor(row.accountId)})">
 								<th class="account" scope="row">
 									<span class="account-name">{row.label}</span>
 									{#if row.sublabel}<span class="mono account-tail">···· {row.sublabel}</span>{/if}
@@ -335,7 +348,8 @@
 												{/if}
 											</button>
 										{:else if box.state === 'before-account'}
-											<span class="empty" aria-label="Before this account existed"></span>
+											<span class="empty" role="img" aria-label="Before this account existed"
+											></span>
 										{:else}
 											<a
 												class="empty-link"
@@ -366,11 +380,11 @@
 	{/if}
 
 	<footer>
+		<!-- Three keys, not four: "before the account existed" is drawn faint
+		     enough to need no explaining, and a legend is read for the states
+		     that ask something of a person. -->
 		<span class="key"><span class="swatch filed"></span>filed</span>
 		<span class="key"><span class="swatch not-arrived"></span>not arrived yet</span>
-		<span class="key">
-			<span class="swatch before-account"></span>before the account existed
-		</span>
 		<span class="key">
 			<span class="swatch gap"></span>should be there and is not
 		</span>
@@ -381,8 +395,8 @@
 <style>
 	.coverage {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	header {
@@ -505,13 +519,15 @@
 		place-items: center;
 		width: 100%;
 		height: 30px;
-		border: 1px solid var(--bd2);
+		border: 1px solid color-mix(in srgb, var(--row-hue, var(--fg3)) 40%, transparent);
 		border-radius: var(--radius-sm);
-		background: var(--card3);
+		background: color-mix(in srgb, var(--row-hue, var(--fg3)) 45%, var(--surface));
+		color: var(--fg1);
 		cursor: pointer;
+		transition: filter var(--dur) var(--ease);
 	}
 	.filed-box:hover {
-		background: var(--card2);
+		filter: brightness(1.15);
 	}
 	/* A period holding more than one says so, and stays marked while its list is
 	   open — otherwise pressing a cell moves content in below with nothing
@@ -582,15 +598,11 @@
 		border-radius: var(--radius-xs);
 	}
 	.swatch.filed {
-		background: var(--card3);
-		border: 1px solid var(--bd2);
+		background: color-mix(in srgb, var(--teal) 45%, var(--surface));
+		border: 1px solid color-mix(in srgb, var(--teal) 40%, transparent);
 	}
 	.swatch.not-arrived {
 		border: 1px dashed var(--bd2);
-	}
-	.swatch.before-account {
-		border: 1px solid var(--bd);
-		opacity: 0.35;
 	}
 	.swatch.gap {
 		border: 1px solid var(--red);

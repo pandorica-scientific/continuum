@@ -12,14 +12,10 @@ import {
 import { brokerReports, uploadBrokerReport } from '$lib/server/invest/reports';
 import { documentsAbout } from '$lib/server/documents/targets';
 import { annualisedReturn, buildSeries } from '$lib/server/invest/series';
+import { seriesFor } from '$lib/invest/series';
 import { convertMinorSync, convertOrFace, loadRateTable } from '$lib/server/fx/table';
-import { getSetting, setSetting } from '$lib/server/settings';
-import {
-	DEFAULT_GAINS_POLICY,
-	parseGainsPolicy,
-	realisedGains,
-	type GainsPolicy
-} from '$lib/invest/gains';
+import { getSetting } from '$lib/server/settings';
+import { DEFAULT_GAINS_POLICY, realisedGains, type GainsPolicy } from '$lib/invest/gains';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
@@ -142,8 +138,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		accountCurrency
 	);
 
-	// Allocation donut: share of portfolio by holding, series colours in order.
-	const donutColors = ['--teal', '--blue', '--purple', '--orange', '--yellow', '--green', '--red'];
+	// One colour per holding, assigned by size and shared by the pie and the
+	// table: the swatch on a row IS its wedge, so the two must agree.
+	const colorFor = seriesFor(holdings.map((h) => h.ticker));
 	const donut = positiveDonutSlices(holdings, (holding) =>
 		convertOrFace(
 			rates,
@@ -152,14 +149,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			accountCurrency,
 			holding.valuedAt.toISOString().slice(0, 10)
 		)
-	).map(({ item: h, pct, from, to }, i) => {
+	).map(({ item: h, pct, from, to }) => {
 		return {
 			label: h.ticker,
 			name: h.name,
 			pct,
 			from,
 			to,
-			color: `var(${donutColors[i % donutColors.length]})`
+			color: `var(${colorFor(h.ticker)})`
 		};
 	});
 
@@ -175,6 +172,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		rows.push({
 			id: h.id,
 			ticker: h.ticker,
+			colorVar: colorFor(h.ticker),
 			name: h.name,
 			units: Number(h.units) % 1 === 0 ? String(Number(h.units)) : Number(h.units).toFixed(4),
 			value: `${formatMinor(h.valueMinor, h.currency)} ${displayCurrency(h.currency)}`,
@@ -240,23 +238,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	/** How this household is taxed on what it sells. Configured, never assumed. */
-	setTax: async ({ request }) => {
-		const form = await request.formData();
-		const current = await getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY);
-		const text = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value : null);
-		const parsed = parseGainsPolicy(
-			{
-				ratePct: text(form.get('ratePct')),
-				exemptLongHeld: form.get('exemptLongHeld') === 'on',
-				exemptAfterYears: text(form.get('exemptAfterYears'))
-			},
-			current
-		);
-		if ('message' in parsed) return fail(400, { message: parsed.message });
-		await setSetting('investTax', parsed.policy);
-		return { ok: true };
-	},
-
 	upload: async ({ request }) => {
 		const form = await request.formData();
 		const file = form.get('report');

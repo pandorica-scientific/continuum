@@ -156,22 +156,32 @@
 		>
 
 		<span class="t-name">
-			<span class="t-merchant">{row.merchant}</span>
-			{#if open}
+			<!-- The category's colour, leading the name rather than only sitting
+			     beside it three columns to the right. A bar and not a dot: at 8×22
+			     it reads down a list of forty rows as a stripe of colour, which is
+			     what makes a register scannable without reading a word of it. -->
+			<span class="cat-bar" style="background: var({row.categoryToken})" aria-hidden="true"></span>
+			<span class="t-names">
+				<span class="t-merchant">{row.merchant}</span>
+				<!-- Always, not only when the row is open: what account a payment came
+				     out of is half of what identifies it, and a register where every
+				     line says only a shop name cannot be checked against a statement. -->
 				<span class="t-sub">
 					{row.detail ?? row.account}
 					{#if row.detail}· {row.account}{/if}
 					{#if transferNote}· {transferNote}{/if}
 				</span>
-			{/if}
+			</span>
+		</span>
+
+		<!-- A chip in the category's own colour, not a word in a grey column. It is
+		     the same hue as the bar to its left, which is what ties the stripe down
+		     the register to a name. -->
+		<span class="t-category" style="--cat: var({row.categoryToken})">
+			{row.categoryLabel ?? 'Uncategorised'}
 		</span>
 
 		<span class="mono t-amount" class:negative={row.negative}>{row.amount}</span>
-
-		<span class="t-category">
-			<span class="dot" style="background: var({row.categoryToken})"></span>
-			<span class="t-cat-name">{row.categoryLabel ?? 'Uncategorised'}</span>
-		</span>
 
 		<span class="t-marks">
 			<!-- Amber is the only state that reaches the face. See the note at the
@@ -187,7 +197,11 @@
 			     what the row IS, and it is the answer to "have I recorded this one
 			     yet" that a person is scanning the month for. -->
 			{#if row.loanPayment}
-				<Pill hue="teal">Loan payment · {row.loanPayment.loanName}</Pill>
+				<!-- The full name is in the title; the pill itself truncates to its
+				     column, or a long loan name runs under the amount beside it. -->
+				<span class="mark" title="Loan payment · {row.loanPayment.loanName}">
+					<Pill hue="teal">Loan · {row.loanPayment.loanName}</Pill>
+				</span>
 			{/if}
 			{#if row.documents.length > 0}
 				<span class="clip" title="{row.documents.length} filed against this row">
@@ -413,7 +427,7 @@
 	   to scan one of those columns. */
 	.face {
 		display: grid;
-		grid-template-columns: 96px minmax(0, 1fr) 150px 150px auto;
+		grid-template-columns: 92px minmax(0, 1fr) 170px 130px 120px;
 		align-items: center;
 		gap: var(--space-5);
 		width: 100%;
@@ -427,7 +441,7 @@
 		cursor: pointer;
 	}
 	.face:hover {
-		background: var(--card3, var(--card2));
+		background: var(--surface-2);
 	}
 	.txn.open .face {
 		background: var(--card3, var(--card2));
@@ -438,11 +452,18 @@
 	}
 	.t-name {
 		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		min-width: 0;
+	}
+	.t-names {
+		display: flex;
 		flex-direction: column;
 		gap: 1px;
 		min-width: 0;
 	}
 	.t-merchant {
+		font-weight: 500;
 		font-size: var(--text-md);
 		color: var(--fg1);
 		overflow: hidden;
@@ -450,7 +471,7 @@
 		white-space: nowrap;
 	}
 	.t-sub {
-		font-size: var(--text-xs);
+		font-size: 11.5px;
 		color: var(--fg3);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -465,27 +486,35 @@
 		   otherwise run out of its cell and take the page into sideways scroll. */
 		overflow-wrap: anywhere;
 	}
+	.t-date {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
 	.t-amount.negative {
 		color: var(--red);
 	}
+	/* The chip: the category's own hue as ink on a 14% mix of itself. Its own
+	   colour rather than a neutral chip, because this is identity — which group
+	   the row files into — and not a state. */
 	.t-category {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: var(--space-3);
-		min-width: 0;
+		justify-self: start;
+		max-width: 100%;
+		padding: 3px 9px;
+		border-radius: var(--radius-pill);
+		background: color-mix(in srgb, var(--cat) 14%, transparent);
+		color: color-mix(in srgb, var(--fg1) var(--series-ink-mix), var(--cat));
 		font-size: var(--text-sm);
-		color: var(--fg2);
-	}
-	.dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex: none;
-	}
-	.t-cat-name {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.cat-bar {
+		width: 8px;
+		height: 22px;
+		border-radius: var(--radius-xs);
+		flex: none;
 	}
 	.t-marks {
 		display: flex;
@@ -493,6 +522,21 @@
 		justify-content: flex-end;
 		gap: var(--space-3);
 		line-height: 1;
+		min-width: 0;
+	}
+	/* A pill is a state word and stays whole; a pill carrying a NAME can be
+	   any length, so it is cut to the column with an ellipsis and the full
+	   text lives on the title. */
+	.mark {
+		display: inline-flex;
+		min-width: 0;
+		max-width: 100%;
+	}
+	.mark :global(.pill) {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.clip {
 		font-size: var(--text-xs);
@@ -644,10 +688,12 @@
 		/* Two lines rather than five squeezed columns: when, what and how much on
 		   the first, what it is filed as on the second. */
 		.face {
-			grid-template-columns: 96px minmax(0, 1fr) auto;
+			grid-template-columns: 84px minmax(0, 1fr) auto auto;
 		}
+		/* The chip is the first thing to go: the bar down the left already says
+		   which category this is, in the width of eight pixels. */
 		.t-category {
-			grid-column: 2;
+			display: none;
 		}
 		.t-marks {
 			grid-column: 3;

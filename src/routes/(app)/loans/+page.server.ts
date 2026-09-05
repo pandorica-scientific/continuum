@@ -21,6 +21,7 @@ import {
 } from '$lib/loans/amortise';
 import { DAY_COUNTS, type DayCount } from '$lib/loans';
 import { fixationPill } from '$lib/loans/pill';
+import { fixationBand } from '$lib/loans/fixation-band';
 import { anchorMonthFor, project } from '$lib/loans/simulate';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { updateLoanTags } from '$lib/server/tags';
@@ -165,6 +166,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 
 		const freeYear = debtFreeYear(terms, periods);
+		const bandEnd = l.endsOn ?? (freeYear !== null ? `${freeYear}-12-31` : null);
 		if (freeYear !== null && (latestDebtFree === null || freeYear > latestDebtFree)) {
 			latestDebtFree = freeYear;
 		}
@@ -239,6 +241,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.filter(Boolean)
 				.join(' · '),
 			pill: fixationPill(l.regime, periods, l.owedMinor <= 0n, today()),
+			// The whole term as one band: which rate is behind you, which you are on,
+			// and how much of the loan runs past the last date anybody has agreed a
+			// rate for. See `fixationBand` — that last part is the point of it.
+			// A loan that never had an agreed end date still has one the schedule
+			// projects — `debtFreeYear` — and the band is about the SHAPE of the
+			// term, so a projected end is a truthful whole to take shares of.
+			band: fixationBand(periods, bandEnd, today()),
+			// Earliest period first, whatever order the rows arrived in: the band
+			// sorts its own copy, and a caption reading a later year than the
+			// band's first segment would label it wrongly.
+			bandRange:
+				periods.length > 0 && bandEnd
+					? `${[...periods].sort((a, b) => a.startsOn.localeCompare(b.startsOn))[0].startsOn.slice(0, 4)} → ${bandEnd.slice(0, 4)}`
+					: null,
 			facts: [
 				{ label: 'Owed', value: formatMinor(l.owedMinor, l.currency), color: 'var(--red)' },
 				{ label: 'Payment', value: formatMinor(payment, l.currency), color: 'var(--fg1)' },

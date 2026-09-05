@@ -31,6 +31,7 @@ import {
 	loanEvent,
 	loanFixationPeriod,
 	loanProperty,
+	netWorthSnapshot,
 	person,
 	holding,
 	portfolioSnapshot,
@@ -1458,4 +1459,22 @@ export async function seedDemo(): Promise<void> {
 		amountMinor: 9100000n,
 		sort: 0
 	});
+
+	// Net-worth history, one snapshot per month-end, so the sidebar's delta
+	// pill and tide have a month to measure against on the first day rather
+	// than after the scheduler's first run. The values step towards today's
+	// total so this month reads as a normal, positive month — not the biggest
+	// on record, which would pin the tide at full height.
+	await db.insert(netWorthSnapshot).values(
+		[
+			[-4, 6_212_900_00n],
+			[-3, 6_301_450_00n],
+			[-2, 6_358_000_00n],
+			[-1, 6_435_000_00n]
+		].map(([offset, valueMinor]) => ({
+			day: lastDayOf(monthShift(thisMonth, Number(offset))),
+			valueMinor: valueMinor as bigint,
+			currency: 'CZK'
+		}))
+	);
 }

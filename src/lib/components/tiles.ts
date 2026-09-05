@@ -19,4 +19,11 @@ export interface Tile {
 	 * alarm about nothing.
 	 */
 	color?: string;
+	/**
+	 * A hue token name whose wash grounds the tile — `teal`, `green`, `red`.
+	 *
+	 * Identity, not state: it says WHICH figure this is among four in a row.
+	 * Left off, the tile sits on `--surface` like every other card.
+	 */
+	wash?: string;
 }

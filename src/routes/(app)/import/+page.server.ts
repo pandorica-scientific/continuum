@@ -22,6 +22,9 @@ import {
 import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import { createCategory, createCategoryGroup, taxonomyKey } from '$lib/server/categorize/taxonomy';
 import { asEnumValue, ENUMS } from '$lib/enums';
+import { daysBetween } from '$lib/dates';
+import { cadenceWord, statementStatus } from '$lib/statements/cadence';
+import { localToday } from '$lib/dates';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -128,7 +131,13 @@ export const load: PageServerLoad = async ({ url }) => {
 			.limit(50),
 		loadCategories(),
 		db
-			.select({ id: account.id, name: account.name, currency: account.currency })
+			.select({
+				id: account.id,
+				name: account.name,
+				currency: account.currency,
+				emoji: account.emoji,
+				balanceAsOf: account.balanceOn
+			})
 			.from(account)
 			.orderBy(account.createdAt, account.id),
 		loadCategoryGroups(),
@@ -143,7 +152,44 @@ export const load: PageServerLoad = async ({ url }) => {
 	const total = readAgg[0].count;
 	const auto = autoAgg[0].count;
 
+	// Where each account's record stops. A statement is monthly for almost every
+	// bank, so a gap past a month and a few days of post is a statement that
+	// has not been imported — the one thing this screen exists to receive.
+	// Local calendar date, as a statement's own date is: the UTC day is a day
+	// behind Prague every evening, which read as "-1 days" on a fresh statement.
+	const todayIso = localToday();
+	// Whether an account is overdue, and the word for its rhythm, both come
+	// from the same arithmetic the Overview's Statements panel uses — the gap
+	// between this account's own imports, with room for a late upload — so the
+	// two screens agree. An account never imported is not overdue: nothing
+	// was promised, so nothing is late.
+	const uploads = await db
+		.select({ accountId: importFile.accountId, uploadedAt: importFile.uploadedAt })
+		.from(importFile)
+		.where(isNotNull(importFile.accountId));
+	const uploadDays = new Map<string, string[]>();
+	for (const upload of uploads) {
+		if (!upload.accountId) continue;
+		const days = uploadDays.get(upload.accountId) ?? [];
+		days.push(upload.uploadedAt.toISOString().slice(0, 10));
+		uploadDays.set(upload.accountId, days);
+	}
+	const statements = accounts.map((a) => {
+		const days = uploadDays.get(a.id) ?? [];
+		const status = statementStatus(days, todayIso);
+		return {
+			id: a.id,
+			name: a.name,
+			emoji: a.emoji || '🏦',
+			to: a.balanceAsOf,
+			days: a.balanceAsOf ? daysBetween(a.balanceAsOf, todayIso) : status.daysSince,
+			cadence: cadenceWord(days),
+			overdue: status.stale
+		};
+	});
+
 	return {
+		statements,
 		// What the queue is doing, so the page can show depth and per-file
 		// progress rather than a spinner that says nothing.
 		queue: {

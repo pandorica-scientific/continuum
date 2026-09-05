@@ -382,6 +382,10 @@ export const transferPair = pgTable(
 // cannot recreate it, `db:generate` cannot notice it going missing, and a
 // database materialised with `drizzle-kit push` would have the table without
 // the constraint it exists to enforce. Apply migrations to build the schema.
+// `npm run scan:unused` reports this as unreferenced and it must stay exported
+// anyway: drizzle-kit builds the schema from what this module exports, so
+// un-exporting the table would take it out of the model — and the next
+// `db:generate` would emit a DROP for a table the trigger still writes to.
 export const transferPairLeg = pgTable(
 	'transfer_pair_leg',
 	{

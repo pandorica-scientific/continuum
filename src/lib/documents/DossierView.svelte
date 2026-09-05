@@ -392,10 +392,11 @@
 													{/if}
 												</button>
 											{:else if cell.state === 'before'}
-												<span class="faint" aria-label="Before this began"></span>
+												<span class="faint" role="img" aria-label="Before this began"></span>
 											{:else}
 												<span
 													class="empty"
+													role="img"
 													aria-label="{cell.state === 'gap'
 														? 'Missing'
 														: 'Not arrived yet'}: {columnLabel(lane, cell.key)}"
@@ -543,8 +544,8 @@
 
 	.proposals {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.proposals-head {
@@ -668,21 +669,33 @@
 		font-size: var(--text-xs);
 	}
 	/* A slot is a cell with a name in it. A nameless square says nothing about
-	   WHICH paper is missing, which is the only thing a slot is for. */
-	.slot {
+	   WHICH paper is missing, which is the only thing a slot is for.
+
+	   `.slot.cell` and not `.slot`: `.cell` pins a ribbon square to 28px and is
+	   declared further down, so at equal specificity it won and the two-line
+	   face hung 16px out of its own lane — across the next lane's rule. */
+	.slot.cell {
 		height: auto;
 	}
-	.slot-face {
+	/* Two selectors deep on purpose: `.filled` and `.empty` are the RIBBON's
+	   cells — a 28px box with its contents centred — and they are declared after
+	   this. A slot is a cell with a name and a date in it, so it needs its own
+	   height and its own alignment, and (0,2,0) is what beats them. Without this
+	   the name sat centred in 28px and the date fell out below the box. */
+	.slot .slot-face {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		justify-content: center;
 		gap: 1px;
 		width: 100%;
+		height: auto;
+		min-height: 28px;
 		padding: var(--space-4) var(--space-5);
 		border-radius: var(--radius-sm);
 		font-size: var(--text-sm);
 		text-align: left;
+		place-items: stretch;
 	}
 	.slot-name {
 		color: var(--fg1);
@@ -692,7 +705,7 @@
 	}
 	.slot-date {
 		font-size: var(--text-2xs);
-		color: var(--fg3);
+		color: var(--fg2);
 	}
 	.loose-type {
 		font-size: var(--text-xs);
@@ -739,24 +752,36 @@
 	}
 	.card {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-xl);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.card-head {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: var(--space-5);
-		padding: 12px 14px;
+		padding: var(--space-6) var(--space-7);
 		border-bottom: 1px solid var(--bd);
 	}
+	/* The card's own emoji in a 36px tile, the shape every other head on the
+	   product uses — a bare glyph put the name at a different left edge on
+	   every card, depending on how wide the emoji happened to render. */
 	.emoji {
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-lg);
+		background: var(--surface-2);
 		font-size: var(--text-xl);
+		line-height: 1;
+		flex: none;
 	}
 	h3 {
 		margin: 0;
-		font-size: var(--text-xl);
-		font-weight: 600;
+		font-size: 15px;
+		font-weight: 650;
+		letter-spacing: -0.01em;
 	}
 	.chip {
 		font-size: var(--text-2xs);
@@ -770,12 +795,19 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	/* The relationship line as a chip in the blue tint, as the handoff draws
+	   it: a role and a date are a fact about the card, not a sentence in it. */
 	.who {
-		margin: 0;
-		padding: 8px 14px 0;
-		display: flex;
-		gap: var(--space-5);
-		font-size: var(--text-base);
+		margin: 8px 14px 0;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-4);
+		padding: 3px 10px;
+		border-radius: var(--radius-pill);
+		background: var(--blue-tint);
+		color: var(--fg1);
+		font-size: var(--text-sm);
+		align-self: flex-start;
 	}
 	.role {
 		color: var(--fg1);

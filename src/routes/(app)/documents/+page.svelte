@@ -491,7 +491,7 @@
 {/if}
 
 <section class="layout" class:with-inspector={data.selected}>
-	<DocumentsRail {data} {navigate} />
+	<DocumentsRail {data} />
 
 	<div class="area">
 		{#if data.view === 'tags' && data.tagsScreen}
@@ -1573,11 +1573,8 @@
 		padding: 0 12px 0 34px;
 		font-size: var(--text-md);
 	}
-	.sort,
-	.bulk select,
 	.bulk input,
 	.sec input,
-	.sec select,
 	.sec textarea {
 		height: var(--control-h);
 		border: 1px solid var(--bd2);
@@ -1586,6 +1583,13 @@
 		color: var(--fg1);
 		padding: 0 10px;
 		font-size: var(--text-md);
+	}
+	/* Selects take the shared skin from app.css; only the height is this
+	   screen's, so the row of filters sits level. */
+	.sort,
+	.bulk select,
+	.sec select {
+		height: var(--control-h);
 	}
 	.sec textarea {
 		height: auto;
@@ -1607,8 +1611,8 @@
 		flex-direction: column;
 		gap: var(--space-5);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		padding: var(--space-7);
 	}
 	/* The inspector's own About block, in the capture card. No rule under it:
@@ -1668,12 +1672,6 @@
 	}
 	.filter {
 		height: var(--control-h);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		background: var(--card);
-		color: var(--fg1);
-		padding: 0 10px;
-		font-size: var(--text-md);
 		max-width: 240px;
 	}
 	.tag-filter {
@@ -1686,14 +1684,14 @@
 		gap: var(--space-5);
 		flex-wrap: wrap;
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		padding: var(--space-5) var(--space-7);
 	}
 	.matrix {
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.mhead,
@@ -1946,8 +1944,8 @@
 		gap: var(--space-5);
 		min-height: 160px;
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		padding: var(--space-7);
 	}
 	.h-key {
@@ -2009,8 +2007,8 @@
 		flex-direction: column;
 		gap: var(--space-6);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		background: var(--card);
+		border-radius: var(--radius-card);
+		background: var(--surface);
 		/* Bounded by the viewport, not by the list beside it: the sections scroll
 		   inside the panel, and the page never has to scroll to reach the note.
 		   dvh, so a phone's retreating browser chrome does not push the last

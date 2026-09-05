@@ -67,7 +67,7 @@ interface Screen {
  *  does not exist fails the build rather than rendering an invisible colour. */
 type AreaHue = 'brand' | 'teal' | 'purple' | 'blue' | 'orange' | 'indigo' | 'fg3';
 
-interface Area {
+export interface Area {
 	key: string;
 	label: string;
 	icon: IconName;

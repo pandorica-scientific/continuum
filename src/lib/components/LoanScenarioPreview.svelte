@@ -61,7 +61,7 @@
 		gap: var(--space-5);
 		background: var(--card2);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-card);
 		padding: 13px 15px;
 	}
 	.p-head {

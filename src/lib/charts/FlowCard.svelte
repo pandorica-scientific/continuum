@@ -75,11 +75,20 @@
 	}
 </script>
 
-{#snippet total(name: string, key: keyof FlowData['totals'], color: string | undefined)}
-	<div class="total">
-		<span class="eyebrow" style="letter-spacing: 0.07em;">{name}</span>
+{#snippet total(
+	name: string,
+	key: keyof FlowData['totals'],
+	color: string | undefined,
+	wash: string | undefined
+)}
+	<!-- A wash tile per total, as the handoff draws them: the hue that the
+	     figure means, mixed faintly into the ground, so In is green before it
+	     is read and Kept is red when it is a shortfall. Out has no hue: money
+	     leaving is not bad news, it is what money is for. -->
+	<div class="total" style:--wash={wash ?? 'var(--surface)'}>
+		<span class="t-name">{name}</span>
 		<span class="t-line">
-			<span class="mono t-value" style:color
+			<span class="display t-value" style:color
 				>{fmt(flow.totals[key])}<span class="t-unit">{unit}</span></span
 			>
 			{#if flow.previous}
@@ -97,10 +106,10 @@
 <div class="card flow-card">
 	<div class="head">
 		<div class="totals">
-			{@render total('In', 'in', 'var(--green)')}
-			{@render total('Out', 'out', undefined)}
-			{@render total('Saved', 'saved', 'var(--green)')}
-			{@render total('Kept', 'kept', `var(${keptTone})`)}
+			{@render total('In', 'in', 'var(--green)', 'var(--green-wash)')}
+			{@render total('Out', 'out', undefined, undefined)}
+			{@render total('Saved', 'saved', 'var(--teal)', 'var(--teal-wash)')}
+			{@render total('Kept', 'kept', `var(${keptTone})`, `var(${keptTone}-wash)`)}
 		</div>
 		<!--
 			Said once, under the row, rather than on every arrow: the card carries a
@@ -157,24 +166,32 @@
 		gap: var(--space-3);
 	}
 	.totals {
-		display: flex;
-		gap: 14px 28px;
-		flex-wrap: wrap;
-		align-items: baseline;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: var(--space-6);
 	}
 	.total {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
+		gap: var(--space-2);
+		padding: 12px 14px;
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-card);
+		background: var(--wash);
+		min-width: 0;
+	}
+	.t-name {
+		font-size: var(--text-sm);
+		color: var(--fg3);
 	}
 	.t-line {
 		display: flex;
 		align-items: baseline;
 		gap: var(--space-3);
+		flex-wrap: wrap;
 	}
 	.t-value {
 		font-size: var(--text-2xl);
-		font-weight: 600;
 		white-space: nowrap;
 	}
 	.t-unit {

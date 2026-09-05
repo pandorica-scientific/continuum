@@ -12,6 +12,9 @@
 		busyText = 'Uploading…',
 		description,
 		reportErrors = true,
+		hero = false,
+		heroNote,
+		formats = [],
 		name,
 		onfiles
 	}: {
@@ -29,6 +32,19 @@
 		 * error in two places reads as two separate failures.
 		 */
 		reportErrors?: boolean;
+		/**
+		 * The big version: an icon tile, a title and the formats spelled out.
+		 *
+		 * For a screen whose whole purpose IS the upload — Import — where the
+		 * control has room and where a person arriving for the first time needs
+		 * to be told what the app will accept. Everywhere else the dropzone is
+		 * one field beside a date and a subject, and stays the compact one.
+		 */
+		hero?: boolean;
+		/** The line under the title, saying what happens to what is dropped. */
+		heroNote?: string;
+		/** Format names printed as chips under the title. Hero only. */
+		formats?: string[];
 		/**
 		 * Field mode. The file stays on this component's own input and the
 		 * enclosing <form> posts it under this name, exactly as a raw
@@ -171,16 +187,20 @@
 	}
 </script>
 
+<!-- The zone is a drop target and a mouse target; the keyboard's way in is
+     the button inside it. It used to be a button itself, which put the camera
+     and scan buttons and the file field inside a control — one control to a
+     screen reader, and an invalid one. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
 	class="dropzone"
+	class:hero
 	class:dragging
 	class:busy
-	role="button"
-	tabindex="0"
 	aria-busy={busy}
 	title={description}
 	onclick={() => input?.click()}
-	onkeydown={(event) => (event.key === 'Enter' || event.key === ' ') && input?.click()}
 	ondragover={(event) => {
 		event.preventDefault();
 		dragging = true;
@@ -196,7 +216,28 @@
 		adopt(event.dataTransfer.files);
 	}}
 >
-	<span class="title">{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}</span>
+	{#if hero}
+		<span class="hero-tile"><Icon name="inbox" size={24} /></span>
+	{/if}
+	<button
+		type="button"
+		class="title"
+		onclick={(event) => {
+			// The zone's own click would open the browser a second time.
+			event.stopPropagation();
+			input?.click();
+		}}
+	>
+		{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}
+	</button>
+	{#if hero && heroNote && !busy}
+		<span class="hero-note">{heroNote}</span>
+	{/if}
+	{#if hero && formats.length > 0 && !busy}
+		<span class="formats">
+			{#each formats as f (f)}<span class="format mono">{f}</span>{/each}
+		</span>
+	{/if}
 	{#if !busy && !dragging}
 		{#if offersPhoto}
 			<button
@@ -263,6 +304,7 @@
 		{accept}
 		{multiple}
 		tabindex="-1"
+		aria-label={idleText}
 		onchange={() => input?.files?.length && void receive(input.files)}
 	/>
 </div>
@@ -309,15 +351,61 @@
 		min-height: var(--control-h);
 		padding: 7px 13px;
 		border: 1.5px dashed var(--bd2);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-ctl);
 		font-size: var(--text-md);
 		line-height: 1.35;
 		color: var(--fg2);
 		cursor: pointer;
 	}
 	.dropzone:hover {
-		border-color: var(--bd2);
+		border-color: color-mix(in srgb, var(--teal) 45%, transparent);
+		background: var(--teal-wash);
 		color: var(--fg1);
+	}
+	/* The one screen that IS an upload gets a target the size of the job.
+	   Teal because Import belongs to Money, and the ground says "drop here"
+	   before the sentence does. */
+	.dropzone.hero {
+		flex-direction: column;
+		justify-content: center;
+		gap: var(--space-5);
+		padding: 34px var(--space-8);
+		border-radius: var(--radius-card);
+		border-color: color-mix(in srgb, var(--teal) 45%, var(--bd2));
+		background: var(--teal-wash);
+		text-align: center;
+	}
+	.dropzone.hero .title {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--fg1);
+	}
+	.hero-note {
+		font-size: 12.5px;
+		color: var(--fg3);
+		line-height: 1.5;
+	}
+	.hero-tile {
+		display: grid;
+		place-items: center;
+		width: 48px;
+		height: 48px;
+		border-radius: 14px;
+		background: color-mix(in srgb, var(--teal) var(--tile-alpha-active), transparent);
+		color: var(--teal);
+	}
+	.formats {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-3);
+	}
+	.format {
+		font-size: var(--text-xs);
+		padding: 2px var(--space-5);
+		border-radius: var(--radius-pill);
+		background: var(--surface-2);
+		color: var(--fg3);
 	}
 	.dropzone:focus-visible {
 		outline: 2px solid var(--blue);
@@ -407,6 +495,21 @@
 			height: var(--touch-min);
 			margin: -6px -9px;
 		}
+	}
+	.title {
+		appearance: none;
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+		text-align: center;
+	}
+	.title:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
 	.title {
 		flex: 1 1 auto;

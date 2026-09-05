@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { carryRoomPhotos, dropImage, placeImage } from '$lib/property/media';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { contact, contactLink, property, propertyBill, tenancy } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
@@ -265,31 +266,9 @@ export async function setPropertyImage(
 		const row = rows[0];
 		if (!row) return missingProperty();
 
-		const images = { ...row.images, photos: row.images.photos.filter(Boolean) };
-		if (input.slot === 'plan') {
-			if ((images.plan ?? null) !== input.expectedImage) {
-				return { ok: false, status: 409, message: 'That image changed. Try again.' };
-			}
-			images.plan = input.storedName;
-		} else {
-			const match = input.slot.match(/^photo(\d+)$/);
-			if (!match) return { ok: false, status: 400, message: 'Unknown image slot.' };
-			const index = Number(match[1]);
-			if (!Number.isSafeInteger(index) || index > images.photos.length) {
-				return { ok: false, status: 400, message: 'Unknown image slot.' };
-			}
-			if (input.expectedImage === null) {
-				// A second append may arrive with the same stale final-slot index. It
-				// is still an append, never permission to overwrite the first file.
-				images.photos.push(input.storedName);
-			} else {
-				if (images.photos[index] !== input.expectedImage) {
-					return { ok: false, status: 409, message: 'That image changed. Try again.' };
-				}
-				images.photos[index] = input.storedName;
-			}
-		}
-
+		const placed = placeImage(row.images, input.slot, input.storedName, input.expectedImage);
+		if (!placed.ok) return { ok: false, status: placed.status, message: placed.message };
+		const images = placed.images;
 		await tx.update(property).set({ images }).where(eq(property.id, input.propertyId));
 		return { ok: true };
 	});
@@ -324,27 +303,11 @@ export async function removePropertyImage(
 		const row = rows[0];
 		if (!row) return { ok: false as const, status: 404 as const, message: 'Property not found.' };
 
-		const images = { ...row.images, photos: row.images.photos.filter(Boolean) };
-		const stale = {
-			ok: false as const,
-			status: 409 as const,
-			message: 'That image changed. Try again.'
-		};
-
-		if (input.slot === 'plan') {
-			if ((images.plan ?? null) !== input.expectedImage) return stale;
-			images.plan = undefined;
-		} else {
-			const match = input.slot.match(/^photo(\d+)$/);
-			if (!match)
-				return { ok: false as const, status: 400 as const, message: 'Unknown image slot.' };
-			const index = Number(match[1]);
-			if (images.photos[index] !== input.expectedImage) return stale;
-			// Splice, not a hole: the strip renders a dense list, and leaving an
-			// empty slot behind would shift every later photo's index.
-			images.photos.splice(index, 1);
+		const dropped = dropImage(row.images, input.slot, input.expectedImage);
+		if (!dropped.ok) {
+			return { ok: false as const, status: dropped.status, message: dropped.message };
 		}
-
+		const images = dropped.images;
 		await tx.update(property).set({ images }).where(eq(property.id, input.propertyId));
 		return { ok: true as const, removed: input.expectedImage };
 	});
@@ -365,9 +328,18 @@ export async function setPropertyDrawing(
 			.for('update');
 		const row = rows[0];
 		if (!row) return missingProperty();
+		// A redrawn plan keeps each room's photos; a room that was deleted hands
+		// its photos back to the unassigned list rather than losing them.
+		const carried = carryRoomPhotos(row.images.drawing, drawing);
 		await tx
 			.update(property)
-			.set({ images: { ...row.images, drawing: drawing.rooms.length ? drawing : undefined } })
+			.set({
+				images: {
+					...row.images,
+					photos: [...row.images.photos.filter(Boolean), ...carried.orphaned],
+					drawing: drawing.rooms.length ? carried.drawing : undefined
+				}
+			})
 			.where(eq(property.id, input.propertyId));
 		return { ok: true };
 	});

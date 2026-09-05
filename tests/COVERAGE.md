@@ -9,8 +9,8 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2847 static tests across 275 files, covering 229 modules.
-151 modules under `src/lib` are imported by no test.
+2880 static tests across 283 files, covering 230 modules.
+161 modules under `src/lib` are imported by no test.
 
 ## Modules
 
@@ -40,6 +40,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/briefing.ts`
 
+- `tests/unit/briefing-strip.test.ts` (unit, 4 tests)
 - `tests/unit/briefing.test.ts` (unit, 2 tests)
 
 ### `src/lib/budget.ts`
@@ -101,18 +102,9 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/unit/flow-graph.test.ts` (unit, 27 tests)
 - `tests/unit/sankey.test.ts` (unit, 26 tests)
 
-### `src/lib/charts/month-history-geometry.ts`
-
-- `tests/unit/month-history-geometry.test.ts` (unit, 16 tests)
-
-### `src/lib/charts/plot.ts`
-
-- `tests/unit/month-history-geometry.test.ts` (unit, 16 tests)
-- `tests/unit/tax-chart-geometry.test.ts` (unit, 22 tests)
-
 ### `src/lib/charts/salary-chart-geometry.ts`
 
-- `tests/unit/salary-chart-geometry.test.ts` (unit, 27 tests)
+- `tests/unit/salary-chart-geometry.test.ts` (unit, 10 tests)
 
 ### `src/lib/charts/sankey.ts`
 
@@ -120,7 +112,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/charts/tax-chart-geometry.ts`
 
-- `tests/unit/tax-chart-geometry.test.ts` (unit, 22 tests)
+- `tests/unit/tax-chart-geometry.test.ts` (unit, 7 tests)
 
 ### `src/lib/charts/ticks.ts`
 
@@ -129,6 +121,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/charts/tone.ts`
 
 - `tests/unit/flow-card-kept-colour.test.ts` (unit, 3 tests)
+
+### `src/lib/components/data-table.ts`
+
+- `tests/unit/data-table.test.ts` (unit, 3 tests)
 
 ### `src/lib/contacts/search.ts`
 
@@ -219,9 +215,14 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/unit/invest-gains.test.ts` (unit, 16 tests)
 
+### `src/lib/invest/series.ts`
+
+- `tests/unit/invest-series.test.ts` (unit, 2 tests)
+
 ### `src/lib/loans/amortise.ts`
 
 - `tests/unit/amortise.test.ts` (unit, 21 tests)
+- `tests/unit/fixation-band.test.ts` (unit, 10 tests)
 - `tests/unit/loan-pill.test.ts` (unit, 5 tests)
 - `tests/unit/payment-split.test.ts` (unit, 8 tests)
 - `tests/unit/refix-derive.test.ts` (unit, 5 tests)
@@ -230,6 +231,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/loans/derive.ts`
 
 - `tests/unit/refix-derive.test.ts` (unit, 5 tests)
+
+### `src/lib/loans/fixation-band.ts`
+
+- `tests/unit/fixation-band.test.ts` (unit, 10 tests)
 
 ### `src/lib/loans/form.ts`
 
@@ -271,6 +276,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/networth/history.ts`
 
+- `tests/unit/networth-delta-share.test.ts` (unit, 7 tests)
 - `tests/unit/networth-history.test.ts` (unit, 5 tests)
 
 ### `src/lib/organisations/lane-match.ts`
@@ -308,6 +314,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/property/finance.ts`
 
 - `tests/unit/property-finance.test.ts` (unit, 16 tests)
+
+### `src/lib/property/media.ts`
+
+- `tests/unit/property-media.test.ts` (unit, 10 tests)
 
 ### `src/lib/property/tenancy.ts`
 
@@ -1190,14 +1200,11 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/integration/one-sided-transfer.test.ts` (integration, 8 tests)
 
-### `src/lib/statements/cadence.ts`
-
-- `tests/unit/statement-cadence.test.ts` (unit, 4 tests)
-
 ### `src/lib/statements/coverage.ts`
 
 - `tests/integration/statement-period.test.ts` (integration, 4 tests)
 - `tests/unit/dossier-cells.test.ts` (unit, 7 tests)
+- `tests/unit/statement-cadence.test.ts` (unit, 3 tests)
 - `tests/unit/statement-coverage.test.ts` (unit, 19 tests)
 
 ### `src/lib/tag-hue.ts`
@@ -1257,20 +1264,27 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/actions/file-preview.ts`
 - `src/lib/actions/fit-chips.ts`
 - `src/lib/calendar/setup-steps.ts`
+- `src/lib/cashflow/group-icons.ts`
 - `src/lib/charts/Delta.svelte`
 - `src/lib/charts/FlowCard.svelte`
+- `src/lib/charts/LineChart.svelte`
 - `src/lib/charts/LoanSchedule.svelte`
-- `src/lib/charts/MonthHistoryChart.svelte`
+- `src/lib/charts/MonthPairs.svelte`
 - `src/lib/charts/PeriodControls.svelte`
 - `src/lib/charts/SalaryYearChart.svelte`
 - `src/lib/charts/Sankey.svelte`
+- `src/lib/charts/ShareBar.svelte`
 - `src/lib/charts/TaxYearChart.svelte`
+- `src/lib/charts/line.ts`
+- `src/lib/charts/plot.ts`
 - `src/lib/components/ActionError.svelte`
+- `src/lib/components/BottomBar.svelte`
 - `src/lib/components/BrandMark.svelte`
 - `src/lib/components/BulkPayslipDialog.svelte`
 - `src/lib/components/CategoryPicker.svelte`
 - `src/lib/components/ContactForm.svelte`
 - `src/lib/components/ControlRow.svelte`
+- `src/lib/components/DataTable.svelte`
 - `src/lib/components/DocumentsCard.svelte`
 - `src/lib/components/EmojiPicker.svelte`
 - `src/lib/components/ErrorScreen.svelte`
@@ -1283,6 +1297,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/components/FloorPlan.svelte`
 - `src/lib/components/FloorPlanEditor.svelte`
 - `src/lib/components/Icon.svelte`
+- `src/lib/components/IconTile.svelte`
 - `src/lib/components/ImageSlot.svelte`
 - `src/lib/components/InfoHint.svelte`
 - `src/lib/components/Lightbox.svelte`
@@ -1290,7 +1305,6 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/components/LoanScenarioPreview.svelte`
 - `src/lib/components/MetricTile.svelte`
 - `src/lib/components/Modal.svelte`
-- `src/lib/components/MonthMatrix.svelte`
 - `src/lib/components/OrganisationRow.svelte`
 - `src/lib/components/PageSize.svelte`
 - `src/lib/components/PasskeyButton.svelte`
@@ -1311,6 +1325,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/components/SplitDialog.svelte`
 - `src/lib/components/SubjectRow.svelte`
 - `src/lib/components/SummaryBand.svelte`
+- `src/lib/components/Switch.svelte`
 - `src/lib/components/TagField.svelte`
 - `src/lib/components/TagInput.svelte`
 - `src/lib/components/TagsPanel.svelte`
@@ -1351,6 +1366,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/overview/panels/StatementsPanel.svelte`
 - `src/lib/overview/panels/TaxPanel.svelte`
 - `src/lib/overview/panels/UpcomingPanel.svelte`
+- `src/lib/rules/grouping.ts`
 - `src/lib/scan/client/ScanCapture.svelte`
 - `src/lib/scan/client/ScanFlow.svelte`
 - `src/lib/scan/client/ScanPagePreview.svelte`
@@ -1401,6 +1417,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/server/system/policy.ts`
 - `src/lib/statements/CoverageView.svelte`
 - `src/lib/statements/PeriodListing.svelte`
+- `src/lib/statements/cadence.ts`
 - `src/lib/theme.ts`
 - `src/lib/transactions/roles.ts`
 - `src/lib/ui/hue.ts`

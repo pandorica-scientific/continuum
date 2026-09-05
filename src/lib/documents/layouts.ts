@@ -27,7 +27,12 @@ export interface LayoutRow extends DocRow {
 	restricted: boolean;
 	tags: string[];
 	about: AboutLink[];
-	identity: { kind: EnumValue<'document_identity.kind'>; country: string | null } | null;
+	identity: {
+		kind: EnumValue<'document_identity.kind'>;
+		country: string | null;
+		/** The document's own number, as typed; the face shows its last four. */
+		number: string | null;
+	} | null;
 }
 
 export interface LayoutSection<T> {

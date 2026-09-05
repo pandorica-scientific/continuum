@@ -186,6 +186,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		];
 	});
 
+	// The share and the colour each account is drawn in, taken from the donut
+	// rather than computed twice: the bar on an account's card and its wedge in
+	// the pie are the same figure, and two derivations of one number is how they
+	// end up disagreeing. A brokerage account has no wedge, so it has no bar.
+	const shareById = new Map(donut.map((d) => [d.id, { pct: d.pct, color: d.color }]));
+
 	return {
 		isAdmin: locals.person?.role === 'admin',
 		currencies: await availableCurrencies(),
@@ -194,7 +200,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		banks: orderBanksForChoosing(
 			banks.map((b) => ({ key: b.key, label: b.label, emoji: b.emoji }))
 		),
-		accounts: rows.map((r) => ({ ...r, balanceMinorBase: undefined })),
+		accounts: rows.map((r) => ({
+			...r,
+			balanceMinorBase: undefined,
+			share: shareById.get(r.id)?.pct ?? null,
+			color: shareById.get(r.id)?.color ?? 'var(--fg3)'
+		})),
 		people,
 		cashTotalFormatted: formatMinor(cashTotal, baseCurrency),
 		baseCurrencyDisplay: displayCurrency(baseCurrency),

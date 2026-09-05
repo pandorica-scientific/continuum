@@ -77,7 +77,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// per month and opens one at a time, so loading every row it lists a month
 	// for would mean fetching the whole ledger — with its splits, tags and
 	// receipts — to draw a table of totals.
-	const page = filter.month ? await registerPage(filter) : null;
+	// The newest month opens by itself when nothing names one: a register that
+	// landed on five closed rows and "open a month to read it" was a screen
+	// showing no transactions, on the screen that IS the transactions.
+	const openMonth = filter.month ?? months[0]?.month ?? null;
+	const page = openMonth ? await registerPage({ ...filter, month: openMonth }) : null;
 
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 	// A category's colour is its GROUP's: the dot on a row says which part of the
@@ -132,7 +136,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	/** Opens a month, or closes it when it is already the open one. */
 	const monthHref = (month: string) =>
 		href((params) => {
-			if (filter.month === month) params.delete('month');
+			if (openMonth === month) params.delete('month');
 			else params.set('month', month);
 			// The inner pager belongs to the month it was paging. Carrying page 4
 			// into a month with one page would open it on nothing at all.
@@ -171,7 +175,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			minMinor: filter.minMinor === null ? '' : formatMinor(filter.minMinor, baseCurrency),
 			maxMinor: filter.maxMinor === null ? '' : formatMinor(filter.maxMinor, baseCurrency)
 		},
-		openMonth: filter.month,
+		openMonth,
 		// A stage of the waterfall narrows the register by group, and the filter
 		// bar has no control that carries one — a group is a stage of a chart
 		// rather than a field. So the screen states it as a chip with a way out.

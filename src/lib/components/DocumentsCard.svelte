@@ -116,7 +116,7 @@
 </script>
 
 <div class={bare ? 'stack' : 'card stack'}>
-	<Eyebrow emoji="🗂️" label={heading}>
+	<Eyebrow hue="--fg3" icon="folders" label={heading}>
 		{#snippet right()}
 			<!-- The entity filter, not `?q=<name>`: a name round-trip matches every
 			     document whose name contains the string, which is a different set

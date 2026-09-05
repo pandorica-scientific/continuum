@@ -29,7 +29,7 @@ export const STALE_AFTER_DAYS = 45;
  * Three, because two imports are one gap and one gap is an accident. A median
  * needs something to be in the middle of.
  */
-export const MIN_IMPORTS_FOR_CADENCE = 3;
+const MIN_IMPORTS_FOR_CADENCE = 3;
 
 /**
  * How much later than the usual gap a statement may arrive before it is late.
@@ -38,7 +38,7 @@ export const MIN_IMPORTS_FOR_CADENCE = 3;
  * runs a week or two over, and a threshold with no slack in it would report
  * that as a problem every month.
  */
-export const CADENCE_SLACK = 1.5;
+const CADENCE_SLACK = 1.5;
 
 /** The middle value, or the mean of the two middle ones. */
 function median(values: number[]): number {
@@ -61,11 +61,17 @@ function median(values: number[]): number {
  * or it does not; how many arrived that afternoon says nothing about the rhythm.
  */
 export function staleAfter(uploadDays: readonly string[]): number {
-	const ordered = [...new Set(uploadDays)].sort();
-	if (ordered.length < MIN_IMPORTS_FOR_CADENCE) return STALE_AFTER_DAYS;
-	const gaps = ordered.slice(1).map((day, i) => daysBetween(ordered[i], day));
+	const gap = medianGap(uploadDays);
+	if (gap === null) return STALE_AFTER_DAYS;
 	// Whole days, because that is the unit the figure beside it is counted in.
-	return Math.round(median(gaps) * CADENCE_SLACK);
+	return Math.round(gap * CADENCE_SLACK);
+}
+
+/** The typical gap between this account's imports, or null before there is a rhythm. */
+function medianGap(uploadDays: readonly string[]): number | null {
+	const ordered = [...new Set(uploadDays)].sort();
+	if (ordered.length < MIN_IMPORTS_FOR_CADENCE) return null;
+	return median(ordered.slice(1).map((day, i) => daysBetween(ordered[i], day)));
 }
 
 export interface StatementStatus {
@@ -91,4 +97,20 @@ export function statementStatus(uploadDays: readonly string[], today: string): S
 	if (!lastOn) return { lastOn: null, daysSince: null, threshold, stale: false };
 	const daysSince = daysBetween(lastOn, today);
 	return { lastOn, daysSince, threshold, stale: daysSince > threshold };
+}
+
+/**
+ * The rhythm an account is imported at, as a word — read off the same gaps
+ * `staleAfter` reads, so the word and the overdue window never disagree.
+ * Null until there are enough imports to call it a rhythm.
+ */
+export function cadenceWord(
+	uploadDays: readonly string[]
+): 'monthly' | 'quarterly' | 'half-yearly' | 'yearly' | null {
+	const gap = medianGap(uploadDays);
+	if (gap === null) return null;
+	if (gap >= 270) return 'yearly';
+	if (gap >= 135) return 'half-yearly';
+	if (gap >= 60) return 'quarterly';
+	return 'monthly';
 }

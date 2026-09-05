@@ -13,8 +13,25 @@ import type { OverviewPlacement, PanelBounds } from './layout';
 
 export interface PanelDefinition {
 	key: string;
+	/**
+	 * A control the panel's head row carries, beside "Open →".
+	 *
+	 * Declared here rather than rendered by the panel's content, because the
+	 * head belongs to `Panel` and a snippet cannot travel upward out of the
+	 * content it is rendered in. `period` is the flow panel's window control.
+	 */
+	headControls?: 'period';
 	title: string;
 	icon: IconName;
+	/**
+	 * The panel's identity colour, worn by the tile before its title.
+	 *
+	 * Not the area's hue: a board is a page of panels rather than a screen
+	 * inside one area, and six teal tiles in a column say nothing. It is what
+	 * the panel is ABOUT — money teal, assets purple, a decision yellow — so a
+	 * person finds the panel they want by colour before reading a word.
+	 */
+	hue: string;
 	/**
 	 * One line saying what the panel actually draws, for the first-run picker
 	 * and nowhere else — a placed panel has its own contents to speak for it.
@@ -56,6 +73,7 @@ const MIN_H = 3;
 export const PANELS: PanelDefinition[] = [
 	{
 		key: 'briefing',
+		hue: 'yellow',
 		title: 'Needs you',
 		description: 'Whatever needs a decision today, and a quiet line on the days nothing does',
 		icon: 'bell',
@@ -81,6 +99,8 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'flow',
+		hue: 'teal',
+		headControls: 'period',
 		title: 'Where the money goes',
 		description: "The month's income traced through to what it was actually spent on",
 		icon: 'flow',
@@ -93,6 +113,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'composition',
+		hue: 'purple',
 		title: 'What it is made of',
 		description: 'Net worth split into cash, property and investments, against what is owed',
 		icon: 'layers',
@@ -104,6 +125,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'upcoming',
+		hue: 'indigo',
 		title: 'Next 30 days',
 		description: 'Bills, renewals and dates the calendar is holding for the month ahead',
 		icon: 'calendar',
@@ -119,6 +141,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'networth',
+		hue: 'blue',
 		title: 'Net worth over time',
 		description: 'The household total month by month, and how far it has moved',
 		icon: 'trend',
@@ -130,6 +153,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'accounts',
+		hue: 'teal',
 		title: 'Where the cash sits',
 		description: 'Every account and what is in it, each as a share of the cash total',
 		icon: 'bank',
@@ -142,6 +166,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'equity',
+		hue: 'purple',
 		title: 'Flats against mortgages',
 		description: 'What each flat is worth against what is still owed on it',
 		icon: 'buildings',
@@ -156,6 +181,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'energy',
+		hue: 'orange',
 		title: 'Energy this month',
 		description: "A bar a day of what the meters read, against the month's own average",
 		icon: 'bolt',
@@ -168,6 +194,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'investments',
+		hue: 'purple',
 		title: 'Portfolio',
 		description: 'What the portfolio is worth, what went into it, and what it has gained',
 		icon: 'chart',
@@ -180,6 +207,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'retirement',
+		hue: 'blue',
 		title: 'Retirement outlook',
 		description: 'Whether the pension is on course, in one line and one colour',
 		icon: 'target',
@@ -192,6 +220,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'tax',
+		hue: 'teal',
 		title: 'Tax position',
 		description: 'What each filer earned and paid for the year, and at what rate',
 		icon: 'receipt',
@@ -207,6 +236,7 @@ export const PANELS: PanelDefinition[] = [
 		// `cashSplit` was defined twice for different screens and the later
 		// definition silently won, so a panel rendered names with no figures.
 		key: 'activity',
+		hue: 'teal',
 		title: 'Recent activity',
 		description: 'The last transactions to land, newest first, with what each was filed as',
 		icon: 'ledger',
@@ -219,6 +249,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'savings',
+		hue: 'green',
 		title: 'Kept each month',
 		description: 'What was left over each month, and what share of income that came to',
 		icon: 'coins',
@@ -231,6 +262,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'paper',
+		hue: 'fg3',
 		title: 'Paper',
 		description: 'What is unfiled, what lapses soon, and which shelf the rest of it is on',
 		icon: 'folders',
@@ -243,6 +275,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'statements',
+		hue: 'fg3',
 		title: 'Statements',
 		description: 'Which accounts are up to date on statements, and which have gone quiet',
 		icon: 'inbox',
@@ -255,6 +288,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'salary',
+		hue: 'teal',
 		title: 'Salary',
 		description: 'The last month each person was paid for, against the month before it',
 		icon: 'wallet',
@@ -267,6 +301,7 @@ export const PANELS: PanelDefinition[] = [
 	},
 	{
 		key: 'debts',
+		hue: 'purple',
 		title: 'Debts',
 		description: 'Every loan, what is left on it, and when its rate stops being settled',
 		icon: 'card',
@@ -282,6 +317,7 @@ export const PANELS: PanelDefinition[] = [
 		// figure somebody set, and nobody set one. What this shows is the month
 		// against what the months before it usually cost.
 		key: 'budget',
+		hue: 'teal',
 		title: 'Month against its average',
 		description: "This month's spending beside what the twelve months before it usually cost",
 		icon: 'bars',

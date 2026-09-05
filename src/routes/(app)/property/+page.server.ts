@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { Figure } from '$lib/components/FigureGrid.svelte';
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
@@ -148,7 +149,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const owed = financials.owedPropertyMinor;
 		const equity = financials.equityMinor;
 
-		const metrics = [
+		const metrics: Figure[] = [
 			{
 				label: 'Est. value',
 				value: formatMinor(current.valueMinor, current.currency),
@@ -167,6 +168,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				label: 'Mortgage owed',
 				value: linkedLoans.length > 0 ? formatMinor(owed, current.currency) : '—',
 				color: 'var(--red)',
+				wash: 'red',
 				note:
 					linkedLoans.length > 0
 						? linkedLoans
@@ -181,6 +183,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				label: 'Equity',
 				value: formatMinor(equity, current.currency),
 				color: 'var(--green)',
+				wash: 'green',
 				note:
 					current.valueMinor > 0n
 						? `${Number((equity * 100n) / current.valueMinor)}% of value · value less what is owed`
@@ -196,6 +199,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 						? `${(Number((yearlyRent * 1000n) / current.valueMinor) / 10).toFixed(1)}%`
 						: '—',
 				color: 'var(--teal)',
+				wash: 'teal',
 				note: 'gross, on value'
 			});
 			const cashFlow = financials.cashFlowMinor;
@@ -203,6 +207,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				label: 'Cash flow',
 				value: formatMinor(cashFlow, current.currency, { signed: true }),
 				color: cashFlow >= 0n ? 'var(--green)' : 'var(--red)',
+				wash: cashFlow >= 0n ? 'green' : 'red',
 				note: 'monthly, after costs'
 			});
 		} else {
@@ -224,6 +229,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 						? `+${Number(((current.valueMinor - current.moneyInMinor) * 100n) / current.moneyInMinor)}%`
 						: '—',
 				color: 'var(--green)',
+				wash: 'green',
 				note: current.boughtYear ? `since ${current.boughtYear}` : ''
 			});
 		}

@@ -13,6 +13,7 @@ import {
 	recordFailure,
 	recordSuccess
 } from '$lib/server/auth/ratelimit';
+import { personHues } from '$lib/people';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -40,8 +41,11 @@ export const load: PageServerLoad = async ({ url }) => {
 	// one. Reading only the configuration put this button on every address the
 	// instance answers at, while exactly one of them can verify.
 	const passkeys = passkeysUsableFrom(url.origin, currentOrigin());
+	// The same colour each person is tagged with everywhere else in the app, so
+	// the picker on the way in matches the sidebar on the other side of it.
+	const hues = personHues(people.map((p) => p.id));
 	return {
-		people,
+		people: people.map((p) => ({ ...p, hue: hues.get(p.id) ?? '--fg3' })),
 		openMode,
 		passkeys: passkeys.usable,
 		passkeyWorksAt: passkeys.usable ? null : passkeys.worksAt

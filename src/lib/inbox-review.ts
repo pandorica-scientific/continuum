@@ -144,8 +144,6 @@ export function proposeType(session: ReviewSession, type: string | undefined): R
 	};
 }
 
-export const suggestedFields = (session: ReviewSession): StickyField[] => session.suggested;
-
 export const keptFields = (session: ReviewSession): StickyField[] => session.kept;
 
 /**

@@ -7,6 +7,7 @@
 	import Panel from './Panel.svelte';
 	import PanelChip from './PanelChip.svelte';
 	import PanelContent from './PanelContent.svelte';
+	import PeriodControls from '$lib/charts/PeriodControls.svelte';
 	import {
 		COLUMNS,
 		compact,
@@ -22,7 +23,8 @@
 		panels,
 		currency,
 		available,
-		firstRun
+		firstRun,
+		customising = $bindable(false)
 	}: {
 		layout: OverviewPlacement[];
 		// Panel data is keyed by panel key; each component types its own shape.
@@ -33,6 +35,9 @@
 		/** This person has never stored an arrangement, so the empty board is a
 		 *  question rather than a state they put it in. */
 		firstRun: boolean;
+		/** Owned by the screen, which draws the Customise button in its header;
+		 *  the board reads it and clears it when Done is pressed from the tray. */
+		customising?: boolean;
 	} = $props();
 
 	const ROW = 40;
@@ -53,7 +58,6 @@
 	// the loader this person now has a stored arrangement, and the picker must
 	// not disappear underneath the panel they just chose.
 	let untouched = $state(untrack(() => firstRun));
-	let customising = $state(false);
 	let narrow = $state(false);
 	let failed = $state(false);
 	let board = $state<HTMLDivElement | null>(null);
@@ -236,22 +240,25 @@
 
 <svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
 
-<div class="bar">
-	<button type="button" class="primary" onclick={() => (customising = !customising)}>
-		{customising ? 'Done' : 'Customise'}
-	</button>
-	{#if customising}
-		<button type="button" onclick={reset}>Reset to the suggested board</button>
-		{#if narrow}
-			<span class="note">
-				There is one board. Reordering here also changes how it is arranged on a wider screen.
-			</span>
+{#if customising || failed}
+	<!-- The Customise button itself is in the screen header, beside the title,
+	     where the handoff puts a screen's one action. This bar holds only what
+	     is said while arranging. -->
+	<div class="bar">
+		{#if customising}
+			<button type="button" onclick={reset}>Reset to the suggested board</button>
+			{#if narrow}
+				<span class="note">
+					There is one board. Reordering here also changes how it is arranged on a wider screen.
+				</span>
+			{/if}
 		{/if}
-	{/if}
-	{#if failed}
-		<span class="failed">That change has not been saved. It will be retried on the next one.</span>
-	{/if}
-</div>
+		{#if failed}
+			<span class="failed">That change has not been saved. It will be retried on the next one.</span
+			>
+		{/if}
+	</div>
+{/if}
 
 {#if customising && unplaced.length}
 	<div class="tray">
@@ -259,7 +266,12 @@
 		{#each unplaced as panel (panel.key)}
 			<!-- No description here: the board behind the tray is already showing
 			     what these panels look like. -->
-			<PanelChip icon={panel.icon} title={panel.title} onclick={() => add(panel.key)} />
+			<PanelChip
+				icon={panel.icon}
+				hue={panel.hue}
+				title={panel.title}
+				onclick={() => add(panel.key)}
+			/>
 		{/each}
 	</div>
 {/if}
@@ -316,7 +328,9 @@
 				<Panel
 					title={panel.title}
 					icon={panel.icon}
+					hue={panel.hue}
 					href={panel.href}
+					headControls={panel.headControls}
 					{customising}
 					{narrow}
 					dragging={gesture?.key === placement.k && gesture.live}
@@ -331,6 +345,20 @@
 					onpointerdown={(event) => begin('move', placement.k, event)}
 					onresizestart={(event) => begin('resize', placement.k, event)}
 				>
+					{#snippet controls()}
+						{#if panel.headControls === 'period' && panels[placement.k]}
+							<!-- The window comes out of the figures rather than off a prop
+							     of its own: the loader clamps the anchor against what the
+							     record holds, so the only period the control can show is
+							     the one the chart beneath it was drawn for. -->
+							<PeriodControls
+								period={panels[placement.k].period}
+								anchor={panels[placement.k].anchor}
+								bounds={panels[placement.k].bounds}
+								caption={panels[placement.k].caption}
+							/>
+						{/if}
+					{/snippet}
 					<PanelContent panelKey={placement.k} data={panels[placement.k]} {currency} />
 				</Panel>
 			{/if}
@@ -367,9 +395,6 @@
 	.bar button:hover {
 		background: var(--card3);
 	}
-	.bar button.primary {
-		color: var(--fg1);
-	}
 	.note,
 	.failed {
 		font-size: var(--text-sm);
@@ -381,16 +406,19 @@
 	}
 	/* The chips inside are PanelChip's, styling and all: the tray and the
 	   first-run picker offer the same thing and used to draw it twice. */
+	/* Dashed and brand-tinted: the tray only exists in customise mode, and the
+	   dashes say "a place things go" rather than "a card of content" — the same
+	   vocabulary as the dashed Add-a-shelf and Add-a-loan cards. */
 	.tray {
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
 		flex-wrap: wrap;
 		padding: var(--space-6) var(--space-7);
-		margin-bottom: 16px;
-		background: var(--card);
-		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
+		margin-bottom: var(--space-8);
+		background: color-mix(in srgb, var(--brand) 6%, transparent);
+		border: 1px dashed color-mix(in srgb, var(--brand) 45%, transparent);
+		border-radius: var(--radius-card);
 	}
 	.tray-label {
 		font-size: var(--text-xs);
@@ -398,10 +426,13 @@
 		text-transform: uppercase;
 		color: var(--fg3);
 	}
+	/* Rows are a floor, not a size: a panel taller than the rows it was given
+	   makes them taller and everything below moves down. Nothing on the board
+	   scrolls inside itself; the page is the one thing that scrolls. */
 	.board {
 		display: grid;
 		grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
-		grid-auto-rows: var(--row);
+		grid-auto-rows: minmax(var(--row), auto);
 		gap: var(--gap);
 	}
 	/* One column, natural height: fixed row pitch and inner scrollbars are

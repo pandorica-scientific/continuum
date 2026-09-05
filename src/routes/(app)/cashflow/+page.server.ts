@@ -4,6 +4,9 @@ import { parsePeriodParams } from '$lib/cashflow/period';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { PageServerLoad } from './$types';
 
+/** How many months the "Month by month" panel draws. */
+const HISTORY_MONTHS = 6;
+
 export const load: PageServerLoad = async ({ url }) => {
 	const { period, anchor } = parsePeriodParams(url.searchParams);
 	const [flow, history, baseCurrency] = await Promise.all([
@@ -17,18 +20,9 @@ export const load: PageServerLoad = async ({ url }) => {
 		.flatMap((g) => g.leaves.map((l) => ({ group: g.label, ...l })))
 		.sort((a, b) => b.value - a.value)[0];
 
-	const negativeMonths = history.filter((m) => m.spent > m.earned).length;
-	const savedRate =
-		history.length > 0
-			? Math.round(
-					(history.reduce((s, m) => s + (m.earned - m.spent), 0) /
-						Math.max(
-							history.reduce((s, m) => s + m.earned, 0),
-							1
-						)) *
-						100
-				)
-			: 0;
+	// The six months up to the one the screen is anchored on, so stepping the
+	// window back walks the bars back with it.
+	const upTo = flow.anchor ? history.filter((m) => m.month <= flow.anchor!) : history;
 
 	return {
 		flow,
@@ -39,10 +33,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			saved: flow.totals.saved,
 			biggest: biggest ?? null
 		},
-		history: {
-			months: history,
-			negativeMonths,
-			savedRate
-		}
+		history: upTo.slice(-HISTORY_MONTHS)
 	};
 };

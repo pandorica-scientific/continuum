@@ -421,7 +421,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	/** The two identity fields a row may show, or null when it has none. */
 	const identityFor = (documentId: string) => {
 		const row = identityByDoc.get(documentId);
-		return row ? { kind: row.kind, country: row.country } : null;
+		return row ? { kind: row.kind, country: row.country, number: row.number ?? null } : null;
 	};
 
 	// Searching happens in SQL, not over the loaded array: the tiers are what
@@ -624,7 +624,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			: {
 					emoji: '🗂️',
 					label: 'Everything',
-					count: everywhereCount,
+					// `everywhereCount` is a row array, not a number — line 719 already
+					// reads it as `everywhereCount[0]?.n`. Passed whole, the header
+					// rendered "[object Object] documents".
+					count: everywhereCount[0]?.n ?? 0,
 					question:
 						'One archive for the household. Shelf is where in life, type is what kind, links are what it concerns.'
 				},

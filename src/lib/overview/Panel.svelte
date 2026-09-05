@@ -1,12 +1,14 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import type { Snippet } from 'svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import IconTile from '$lib/components/IconTile.svelte';
 	import type { IconName } from '$lib/icons';
 
 	let {
 		title,
 		icon,
+		hue = '--fg3',
+		sub = null,
 		href = null,
 		customising = false,
 		dragging = false,
@@ -19,10 +21,16 @@
 		onmovedown,
 		onpointerdown,
 		onresizestart,
+		controls,
+		headControls,
 		children
 	}: {
 		title: string;
 		icon: IconName;
+		/** The panel's identity colour, from the registry. */
+		hue?: string;
+		/** A count or a period, right of the title and half its weight. */
+		sub?: string | null;
 		/** The screen this panel is a summary of, if it has one. */
 		href?: string | null;
 		customising?: boolean;
@@ -36,13 +44,25 @@
 		onmovedown?: () => void;
 		onpointerdown?: (event: PointerEvent) => void;
 		onresizestart?: (event: PointerEvent) => void;
+		/** A control on the head row, left of "Open →": the flow panel's period.
+		 *  Drawn only when `headControls` names one — a snippet reference is
+		 *  truthy whatever it renders, so the board cannot pass "none" by it. */
+		controls?: Snippet;
+		headControls?: 'period';
 		children: Snippet;
 	} = $props();
 </script>
 
 <section class="panel" class:customising class:dragging class:narrow>
 	<header>
-		<span class="eyebrow"><Icon name={icon} size={14} />{title}</span>
+		<!-- A tile and a sentence-case name, not an uppercase eyebrow. Eighteen
+		     tracked-out capitals were the loudest thing on a board whose whole
+		     job is to let figures be read. -->
+		<span class="head">
+			<IconTile {hue} {icon} size={26} />
+			<span class="name">{title}</span>
+			{#if sub}<span class="sub">{sub}</span>{/if}
+		</span>
 		{#if customising}
 			<span class="controls">
 				{#if widthBadge}<span class="mono badge">{widthBadge}</span>{/if}
@@ -64,7 +84,12 @@
 					>✕</button
 				>
 			</span>
-		{:else if href}
+		{:else}
+			{#if controls && headControls}
+				<span class="head-controls">{@render controls()}</span>
+			{/if}
+		{/if}
+		{#if !customising && href}
 			<!--
 				The one way through to the screen behind a panel. Three panels used to
 				put a link of their own at the foot of their body instead, which meant
@@ -108,16 +133,21 @@
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		background: var(--card);
+		background: var(--surface);
 		border: 1px solid var(--bd);
-		border-radius: var(--radius-lg);
-		padding: var(--space-7) var(--space-8);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		padding: 18px 20px;
+		/* Fills its rows and may exceed them: the stored height is a floor. */
 		height: 100%;
 		min-height: 0;
 		overflow: hidden;
 	}
+	/* The board being arranged is a mode, and the brand edge is what says so
+	   on every panel at once. It used to be --bd2, a shade off the resting
+	   border that nobody could see. */
 	.panel.customising {
-		border-color: var(--bd2);
+		border-color: var(--brand);
 	}
 	.panel.customising .body {
 		cursor: grab;
@@ -131,20 +161,28 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-5);
-		margin-bottom: 10px;
+		margin-bottom: var(--space-6);
 		flex: none;
 	}
-	.eyebrow {
+	.head {
 		display: flex;
 		align-items: center;
-		gap: 7px;
-		font-size: var(--text-xs);
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--fg3);
+		gap: var(--space-5);
+		min-width: 0;
+	}
+	.name {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--fg1);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.sub {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		white-space: nowrap;
+		flex: none;
 	}
 	.controls {
 		display: flex;
@@ -155,6 +193,13 @@
 	/* Quiet on purpose: it is on every panel, and ten links competing with the
 	   figures they sit above would be the loudest thing on the board. The hover
 	   is the whole affordance, so the global underline is taken off it. */
+	.head-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		margin-left: auto;
+		min-width: 0;
+	}
 	.open {
 		flex: none;
 		font-size: var(--text-sm);
@@ -190,16 +235,17 @@
 		color: var(--fg3);
 	}
 	/* Fixed box: content taller than the panel scrolls inside it. */
+	/* The body is not a scroller. It was one, with `overscroll-behavior:
+	   contain` so the wheel stopped at the panel's end — and a panel whose
+	   content FITS is still a scroll container, so the wheel over any panel
+	   went nowhere and the page could not be scrolled from most of the board.
+	   The board's rows grow with their content instead (`minmax(row, auto)`),
+	   so a tall panel makes a tall row and the page is the one thing that
+	   scrolls. */
 	.body {
 		flex: 1;
 		min-height: 0;
-		overflow-x: hidden;
-		overflow-y: auto;
-		/* Scrolling stops at this panel's own end. Without it the wheel is handed
-		   on to whatever scrolls behind, so reaching the bottom here quietly
-		   starts scrolling the page — and scrolling back moves the wrong one
-		   first. See docs/ui-guidelines.md. */
-		overscroll-behavior: contain;
+		overflow: visible;
 	}
 	.body.inert > :global(*) {
 		pointer-events: none;

@@ -2,6 +2,95 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.1 — 2026-09-03
+
+> The same app, in a warmer skin that says which screen you are on before you read a word.
+
+### ✨ Added
+
+- 🎨 **Every area has a colour, and wears it** — a hue tile before each screen title, panel head and nav row, so the shape of a screen is recognisable before any of it is read
+- 📐 **Three layouts from one markup** — a 264px sidebar on a monitor, a 76px icon rail on a tablet, and a bottom bar on a phone in place of the ☰ drawer
+- 💰 **Net worth is the one lit surface in the product** — a gradient panel with white type in both themes, where it used to be a card among cards
+- 📊 **Rules group by category and open closed** — a header row carries the count, the average trust and how often the group was overridden, so "is anything filing wrongly" is answered without opening one
+- 🎚️ **The confidence floor can be moved** — it has been a stored setting with nothing able to change it since rules existed
+- 🔎 **Transactions opens on four chips and a search box** — the eleven-field filter grid is one click away instead of the first thing on the screen
+- 📈 **One chart engine behind the salary and tax screens** — bars and lines, its own axis for each, round steps, gaps at null points, a hover readout and a series named at the end of its own line; the two screens each owned a copy of that arrangement and had already drifted on bar width and readout placement
+- 🔥 **Hovering a Sankey block lights its whole route** in both directions and dims the rest, with a slow flame on the lit bands
+- 🧮 **One table** — `DataTable` draws the header strip, the row line, the open group's ground and the summary row for Transactions, Rules, Salary, Tax, Retirement and Holdings, which each used to draw their own
+- 📷 **A room holds its photos** — press a room on the floor plan to see, add or remove its pictures, and the room says how many it has
+- 🌊 **The net-worth tide moves** — the swell under the figure drifts and turns, deeper for a bigger month, and appears from the household's first month rather than its second
+- 🔗 **Documents shelves are links** — a shelf can be opened in a new tab, bookmarked and reached with the back button
+- 🪪 **A wallet card says what it is** — country, kind, the last four of its number, whose it is and when it expires, with the state pill under the face
+- 📊 **Cash flow tells its own story** — six months of in beside out, where the money went by group, and where it came from, in place of a second copy of the Overview's waterfall
+- 🎯 **Retirement's three figures are tiles beside the sentence**, the assumptions are grouped into four questions, the chart is the shared engine with nice ticks and named lines, and the table carries a coverage bar
+- 🧾 **Import lists where each account's statements stop**, beside what still needs a decision
+- ♿ **A skip link** puts the content one Tab away
+- 🏷️ **Every page names its tab** — "Screen · Continuum" — and the audit finds no WCAG 2 A/AA violation on any screen in either theme
+- 🕰️ **Import says each account's rhythm** — monthly, quarterly, yearly, read off the Statements shelf's bands — and calls a quarterly account overdue at a quarter, not a month
+
+### 🔧 Changed
+
+- ⚙️ **Settings shows one section at a time** behind a nav of nine, where it was ten stacked sections and a scroll position
+- 🃏 **A card in the flow is raised** by one quiet shadow, and sits a step brighter than the page — the border alone could not hold an edge on light paper
+- 🔤 **Headline figures are set in the sans**, tightened and tabular; every figure in a table, every date and every ID stays mono
+- 🌗 **The light theme puts white cards on darker paper**, with washes remixed at 11–16% so an area's colour survives a bright screen
+- 🥧 **The cash-split chart is a pie again** — its hole held the total, which now sits in the panel header at four times the size
+- 🚪 **Sign-in is two columns above 900px**, with what is true about the instance beside the form
+- 📐 **Two chart geometry modules folded into one engine** — `salary-chart-geometry.ts` and `tax-chart-geometry.ts` keep what a bar means and hand the pixels to `charts/line.ts`, which is tested once instead of twice
+- 🧹 **Nineteen exports narrowed to the file that uses them** and six dead declarations removed; `npm run scan:unused` went from 117 names to 98, and every one still listed is a type naming an exported function's own signature
+- 📸 **The README's screenshots are the new UI**, in both themes
+- 🖼️ **Panel heads carry a stroke icon, never an emoji** — `design/no-emoji-eyebrow` fails a build that passes one
+- 🔽 **Every select wears the app's own chevron and ground**, in both themes, in place of the platform's
+- 📋 **Transactions lands on the newest month, open, at 25 rows** — it used to land on five closed months and no transactions
+- 💱 **Settings › Currencies is Settings › Money**, and holds the approximate-rate note and the gains-tax rule that used to sit on Investments; the rate banner above every screen is a dot on the Money row
+- 🏘️ **Property's flat header is the flat's name and size**, the figures are wash tiles in the display face, the floor plan's rooms are filled in the area's hue
+- 📈 **Holdings take the same colour as their wedge** in the pie beside them, and the "How that is worked out" panel is gone
+- 🏦 **Loans' actions are ghost buttons under the fixation band** — Schedule, Repay early, Re-fix, Edit
+- 📎 **Statements bands take each account's series colour**, and the legend is three keys
+- 🧭 **The Needs-you strip opens in place** — the "+N more" tile takes a card's cell and the board row grows, with no inner scroll
+- 🎨 **The two tide inks are tokens** (`--tide-up`, `--tide-down`) — the sidebar carried the literals
+- ✅ **The screenshot run audits contrast** — `scripts/take-screenshots.mjs` hands every web capture to axe and fails on a `color-contrast` violation
+- 🗓️ **The flow panel's period control sits in its head row**, beside "Open →", declared by the panel registry rather than drawn by the panel's body
+- 🏦 **Accounts' primary action is in the header**, and the total line runs over both columns so the pie starts level with the first card
+- ⬆️ **The upload zone is a drop target with a button inside it**, not a button holding buttons
+- 🎚️ **One switch component**, where the same track, knob and thirty lines of CSS were written out three times across Settings and Calendar
+- 🎨 **A register row leads with its category's colour** — an 8×22 bar down the left, so a month of spending is scannable before a word of it is read
+- 🏷️ **A transaction's category is a chip in its own hue**, beside the merchant rather than a grey word three columns to the right
+- 🏦 **Accounts is two columns of cards** — one card per account with its emoji tile, share bar and display balance, beside the pie and the transfers; statements moved behind the pencil, where they no longer push the next account off the screen
+- 📅 **A month in the register opens from a 34px tile**, teal when it is the one you are reading, in place of a 9px chevron nobody could aim at
+- 📉 **A loan draws its whole term as one band** — what is behind you, the rate you are on, and the years past the last date anybody has agreed a rate for, hatched
+- 🎚️ **The confidence floor is the design's slider** — an 8px track filling yellow to green, with the value beside it
+- 🎯 **Retirement puts the assumptions beside the picture they change** — a 380px column of controls against the chart and the table, with the gauge leading the verdict
+- 🏠 **Property opens on the flat itself** — its shape and its bills, with the valuation history and what it cost to buy below them rather than in the way
+- 🥧 **The holdings chart is a pie**, its count in the panel header
+- 📊 **A chart's keys are ruled off from its plot**, with the footnote at the end of that row where it fits — the design draws the legend as a caption on the picture, not as another row of the panel
+- 🟡 **The effective-rate line is yellow**, the colour a rate wears everywhere else on the Tax screen
+- ➕ **The quick-add button is 36px at rest** and grows to full size under the pointer or while its menu is open — at full size it sat over the last row of a table and the corner of the Documents rail
+- 🌊 **The net-worth panel carries the month as a tide** — a green swell along its foot for a month that added and a red one for a month that took away, rising and darkening with how big the month is against the biggest on record; two circles turning against each other roll it, and the water fades along its own curve rather than across a flat band
+
+### 🐛 Fixed
+
+- 🔎 **The light theme's quiet ink clears AA** — `--fg3` was 4.2–4.4:1 on the light surfaces, which was every note, count and label on the light theme failing by a hair; series hues used as ink take `--series-ink-mix` on light
+- 🖱️ **The Overview scrolls from anywhere** — a panel whose content fitted was still a scroll container with `overscroll-behavior: contain`, so the wheel over most of the board went nowhere; panels grow with their content instead
+- 🎯 **The Retirement gauge's figure is centred in its ring** — the figure and its note were centred in two rows rather than as one block
+- 🧾 **Accounts' add and edit forms have their styles back** — the restyle dropped seven rules the markup still used
+- 📊 **"Where it went" shares are shares of what was spent** — the loader's figure is a share of income, which left the bar short in a saving month and past full in a drawdown one
+- 🗓️ **Import calls an account overdue by its own import rhythm**, never one that was never imported, and counts days on the local calendar rather than UTC
+- 🔗 **A Documents shelf link keeps the search, filters and archived toggle** it used to drop
+- 🏦 **The fixation caption's first year is the earliest period** whatever order the rows arrive in
+- 📈 **The Investments fill starts where the actual line does**, not at the plot's corner
+- 🎨 **The browser's own chrome takes the light theme's new paper colour** on first load
+- 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
+- 🔧 **A dossier's `once` slot fits its own box** — the ribbon's 28px centred cell was winning over the slot's own layout, so the name sat centred and the date fell out below it
+- 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`
+- 🟢 **The green pill clears AA on light paper again** — the ink is darkened rather than the tint lightened, per the rule the palette already states
+- 📏 **A `once` slot stays inside its own lane** — `.cell` pins a ribbon square to 28px and won at equal specificity, so a named two-line slot hung out of its lane and the next lane's rule was drawn across it
+
+### ⬆️ Upgrading
+
+- No migration. This release changes no table, column or enum; the 0.8.0 database runs it unchanged.
+- One lint rule moved: `design/no-raw-shadow` now allows `--shadow-card` and `--shadow-hero` beside `--shadow-float` and `--shadow-raise`. A fork carrying its own elevation values will still fail the build, which is the point.
+
 ## 0.8.0 — 2026-09-02
 
 > Every shelf is a question, and the screen answers it.

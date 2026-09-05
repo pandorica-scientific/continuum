@@ -16,6 +16,8 @@
 	// survive a navigation, and hoisting it would have put ten `$state` lines and
 	// two `$effect`s on the page for the rail's benefit alone.
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import Icon from '$lib/components/Icon.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
@@ -90,13 +92,24 @@
 	}
 
 	let {
-		data,
-		/** The page's own URL writer: the rail navigates, it does not own the URL. */
-		navigate
+		data
 	}: {
 		data: RailData;
-		navigate: (next: Record<string, string | string[] | null>) => void;
 	} = $props();
+
+	/** A row's address: the current query with shelf and view changed and the
+	 *  open document dropped, so a search, a filter or the archived toggle
+	 *  survive a change of shelf — what the page's `navigate()` preserves too. */
+	function hrefFor(next: Record<string, string | null>): string {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		params.delete('doc');
+		for (const [key, value] of Object.entries(next)) {
+			params.delete(key);
+			if (value !== null && value !== '') params.set(key, value);
+		}
+		const query = params.toString();
+		return query ? `/documents?${query}` : '/documents';
+	}
 
 	let editingRail = $state(false);
 	let railOrder = $state<string[]>([]);
@@ -176,18 +189,21 @@
      places, and the second place had no room to say anything about them. -->
 <nav class="rail" aria-label="Shelves">
 	{#each data.shelves.filter((s) => s.key === 'inbox') as s (s.key)}
-		<button
-			type="button"
+		<!-- A link, not a button: a shelf is a place with an address, so it can
+		     be opened in a new tab, bookmarked, and reached with the back button. -->
+		<a
 			class="rail-item inbox"
 			class:active={data.view !== 'tags' && data.shelf === s.key}
-			onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
+			aria-current={data.view !== 'tags' && data.shelf === s.key ? 'page' : undefined}
+			href={hrefFor({ shelf: s.key, view: null })}
+			data-sveltekit-noscroll
 		>
 			<span class="rail-label"
 				>{#if s.emoji}<span class="rail-emoji">{s.emoji}</span>{/if}{s.label}</span
 			>
 			<!-- Amber only when there is something waiting: work, not an error. -->
 			<span class="mono rail-count" class:waiting={s.count > 0}>{s.count}</span>
-		</button>
+		</a>
 	{/each}
 
 	<div class="rail-divider"></div>
@@ -253,15 +269,16 @@
 	{:else}
 		<div class="rail-shelves">
 			{#each railShelves as s (s.key)}
-				<button
-					type="button"
+				<a
 					class="rail-item"
 					class:active={data.view !== 'tags' && data.shelf === s.key}
-					onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
+					aria-current={data.view !== 'tags' && data.shelf === s.key ? 'page' : undefined}
+					href={hrefFor({ shelf: s.key, view: null })}
+					data-sveltekit-noscroll
 				>
 					<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
 					<span class="mono rail-count">{s.count}</span>
-				</button>
+				</a>
 			{/each}
 		</div>
 	{/if}
@@ -272,28 +289,30 @@
 	     than the first: a shelf answers a question, and "all of it" is what you
 	     ask for when none of the questions is yours. -->
 	{#each data.shelves.filter((s) => s.key === 'all') as s (s.key)}
-		<button
-			type="button"
+		<a
 			class="rail-item"
 			class:active={data.view !== 'tags' && data.shelf === 'all'}
-			onclick={() => navigate({ shelf: null, doc: null, view: null })}
+			aria-current={data.view !== 'tags' && data.shelf === 'all' ? 'page' : undefined}
+			href={hrefFor({ shelf: null, view: null })}
+			data-sveltekit-noscroll
 		>
 			<span class="rail-label">{s.label}</span>
 			<span class="mono rail-count">{s.count}</span>
-		</button>
+		</a>
 	{/each}
 
 	<!-- Tags cut across documents and money alike; a household reaches for
 		     them from the paper far more often than from the register. -->
-	<button
-		type="button"
+	<a
 		class="rail-item"
 		class:active={data.view === 'tags'}
-		onclick={() => navigate({ view: 'tags', doc: null })}
+		aria-current={data.view === 'tags' ? 'page' : undefined}
+		href={hrefFor({ view: 'tags' })}
+		data-sveltekit-noscroll
 	>
 		<span class="rail-label"><span class="rail-emoji">🏷️</span>Tags</span>
 		<span class="mono rail-count">{data.knownTags.length}</span>
-	</button>
+	</a>
 </nav>
 
 {#if addingShelf}
@@ -494,20 +513,25 @@
 		gap: var(--space-5);
 		padding: var(--space-4) var(--space-5);
 		border: 0;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 		background: transparent;
 		color: var(--fg2);
 		font-size: var(--text-md);
 		text-align: left;
 		text-decoration: none;
+		transition: background-color var(--dur) var(--ease);
 		cursor: pointer;
 	}
 	.rail-item:hover {
-		background: var(--card2);
+		background: var(--surface-2);
+		text-decoration: none;
 	}
+	/* A lifted surface and the weight, not a darker card: the rail sits on the
+	   page's own ground, so a darker fill read as a hole rather than a row. */
 	.rail-item.active {
-		background: var(--card3);
+		background: var(--surface-2);
 		color: var(--fg1);
+		font-weight: 600;
 	}
 	.rail-label {
 		overflow: hidden;
@@ -524,7 +548,8 @@
 		text-align: center;
 	}
 	.rail-count {
-		font-size: var(--text-2xs);
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
 		color: var(--fg3);
 		font-variant-numeric: tabular-nums;
 	}
@@ -620,12 +645,6 @@
 	.shelf-dialog select {
 		flex: 1;
 		height: var(--control-h);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		background: var(--card);
-		color: var(--fg1);
-		padding: 0 10px;
-		font-size: var(--text-md);
 	}
 	.shelf-dialog-field {
 		display: flex;

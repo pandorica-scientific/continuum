@@ -5,8 +5,10 @@
 	import TagInput from '$lib/components/TagInput.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import Pill from '$lib/components/Pill.svelte';
+	import IconTile from '$lib/components/IconTile.svelte';
 	import LoanSchedule from '$lib/charts/LoanSchedule.svelte';
 	import RepayDialog from '$lib/components/RepayDialog.svelte';
 	import RefixDialog from '$lib/components/RefixDialog.svelte';
@@ -64,7 +66,7 @@
 
 <section class="section">
 	<div class="eyebrow-row">
-		<Eyebrow emoji="💳" label="What you owe" />
+		<Eyebrow hue="--purple" icon="card" label="What you owe" />
 		<span class="eyebrow-caption">
 			{data.count === 0
 				? 'no loans on record yet'
@@ -73,19 +75,32 @@
 	</div>
 	<SummaryBand
 		tiles={[
-			{ label: 'Total owed', value: data.metrics.totalOwed, unit: data.unit, color: 'var(--red)' },
-			{ label: 'Monthly payments', value: data.metrics.monthlyPayments, unit: data.unit },
+			{
+				label: 'Total owed',
+				value: data.metrics.totalOwed,
+				unit: data.unit,
+				color: 'var(--red)',
+				wash: 'red'
+			},
+			{
+				label: 'Monthly payments',
+				value: data.metrics.monthlyPayments,
+				unit: data.unit,
+				wash: 'purple'
+			},
 			{
 				label: 'Interest this year',
 				value: data.metrics.interestThisYear,
 				unit: data.unit,
 				color: 'var(--orange)',
-				note: data.metrics.interestNote
+				note: data.metrics.interestNote,
+				wash: 'orange'
 			},
 			{
 				label: 'Debt-free',
 				value: data.metrics.debtFree ? String(data.metrics.debtFree) : '—',
-				note: 'at current payments'
+				note: 'at current payments',
+				wash: 'green'
 			}
 		]}
 	/>
@@ -98,39 +113,13 @@
 		     four loans had to find the right one again. -->
 		<div class="card loan" id="loan-{l.id}">
 			<div class="head">
+				<IconTile hue="--purple" icon="card" size={44} />
 				<div class="names">
 					<span class="name">{l.name}</span>
 					<span class="sub">{l.sub}</span>
 				</div>
 				<Pill hue={l.pill.hue}>{l.pill.label}</Pill>
 			</div>
-			<div class="l-tags">
-				{#each l.tags as t (t)}
-					<form method="POST" action="?/tags" use:enhance class="tag-chip">
-						<input type="hidden" name="id" value={l.id} />
-						<input type="hidden" name="removeTag" value={t} />
-						<span>{t}</span>
-						<button type="submit" aria-label="Remove tag {t}">✕</button>
-					</form>
-				{/each}
-				<form method="POST" action="?/tags" use:enhance>
-					<input type="hidden" name="id" value={l.id} />
-					<TagInput transactionId={l.id} known={data.knownTags ?? []} />
-				</form>
-			</div>
-			<!-- Nested inside `.card loan`, so `bare` drops the card-in-card border
-			     and padding this component would otherwise add — the loan's own
-			     card already supplies both, and the flex gap keeps the spacing. -->
-			<DocumentsCard
-				bare
-				documents={l.documents}
-				target={{ id: l.id, kind: 'loan', label: l.name }}
-				emptyText="Nothing filed about this loan yet — the agreement and each re-fix letter belong here."
-				addHref={l.addDocumentHref}
-				attach={{ action: 'attachDocument', candidates: l.documentCandidates }}
-				detachAction="detachDocument"
-				isAdmin={data.isAdmin}
-			/>
 			<div class="facts">
 				{#each l.facts as f (f.label)}
 					<div class="fact">
@@ -140,43 +129,104 @@
 				{/each}
 			</div>
 			<div class="progress">
-				<div class="track"><div class="fill" style:width="{l.paidPct}%"></div></div>
 				<span class="note"
 					>{l.paidNote}{l.monthInterest ? ` · ${l.monthInterest} interest this month` : ''}</span
 				>
+				<div class="track"><div class="fill" style:width="{l.paidPct}%"></div></div>
 			</div>
-			<button
-				type="button"
-				class="detail-toggle"
-				onclick={() => (open = open === l.id ? null : l.id)}
-			>
-				{open === l.id ? 'Hide schedule & changes ▴' : 'Schedule & changes ▾'}
-			</button>
+
+			{#if l.band.length > 0}
+				<!-- The rate a mortgage is fixed at is the one fact that decides what it
+				     costs. A list of periods states that; a band shows it — above all
+				     how much of the term runs past the last date anybody has agreed a
+				     rate for, which on a 2049 mortgage fixed to 2028 is most of it. -->
+				<div class="fixation">
+					<div class="fix-caption">
+						<span>Fixation · <span class="fix-now">{l.pill.label}</span></span>
+						{#if l.bandRange}<span>{l.bandRange}</span>{/if}
+					</div>
+					<div class="band">
+						{#each l.band as seg, i (i)}
+							<span class="seg {seg.kind}" style:width="{seg.widthPct}%" title={seg.label}
+								>{seg.label}</span
+							>
+						{/each}
+					</div>
+				</div>
+			{/if}
+			<!-- Ghost buttons under the band, as the handoff draws them: what you
+			     can do to the loan is beside the loan, not behind a link. -->
+			<div class="loan-actions">
+				<button
+					type="button"
+					class="btn"
+					aria-expanded={open === l.id}
+					onclick={() => (open = open === l.id ? null : l.id)}
+				>
+					{open === l.id ? 'Hide schedule & changes ▴' : 'Schedule & changes ▾'}
+				</button>
+				<button type="button" class="btn" onclick={() => (repayFor = l.id)}>Repay early…</button>
+				<button type="button" class="btn" onclick={() => (refixFor = l.id)}>Re-fix…</button>
+				<button
+					type="button"
+					class="btn"
+					onclick={() => {
+						editFor = editFor === l.id ? null : l.id;
+						if (editFor) open = l.id;
+					}}
+				>
+					Edit…
+				</button>
+				<button
+					type="button"
+					class="btn"
+					onclick={() => (open = l.id)}
+					aria-label="Documents filed about {l.name}"
+				>
+					<Icon name="folders" size={14} />
+					Documents
+				</button>
+				<span class="mini-note"
+					>Repay and re-fix preview their effect on the chart before saving</span
+				>
+			</div>
 			{#if open === l.id}
 				<div class="detail">
+					<div class="l-tags">
+						{#each l.tags as t (t)}
+							<form method="POST" action="?/tags" use:enhance class="tag-chip">
+								<input type="hidden" name="id" value={l.id} />
+								<input type="hidden" name="removeTag" value={t} />
+								<span>{t}</span>
+								<button type="submit" aria-label="Remove tag {t}">✕</button>
+							</form>
+						{/each}
+						<form method="POST" action="?/tags" use:enhance>
+							<input type="hidden" name="id" value={l.id} />
+							<TagInput transactionId={l.id} known={data.knownTags ?? []} />
+						</form>
+					</div>
+					<!-- Nested inside `.card loan`, so `bare` drops the card-in-card border
+			     and padding this component would otherwise add — the loan's own
+			     card already supplies both, and the flex gap keeps the spacing. -->
+					<DocumentsCard
+						bare
+						documents={l.documents}
+						target={{ id: l.id, kind: 'loan', label: l.name }}
+						emptyText="Nothing filed about this loan yet — the agreement and each re-fix letter belong here."
+						addHref={l.addDocumentHref}
+						attach={{ action: 'attachDocument', candidates: l.documentCandidates }}
+						detachAction="detachDocument"
+						isAdmin={data.isAdmin}
+					/>
+
 					{#if l.chart.length}
 						<div class="eyebrow-row">
-							<Eyebrow emoji="📊" label="Interest vs principal" />
+							<Eyebrow hue="--purple" icon="chart" label="Interest vs principal" />
 							<span class="eyebrow-caption">{l.chartNote}</span>
 						</div>
 						<LoanSchedule years={l.chart} currency={l.currency} />
 					{/if}
-					<div class="actions-row">
-						<button type="button" class="btn" onclick={() => (repayFor = l.id)}>
-							💸 Record a repayment…
-						</button>
-						<button type="button" class="btn" onclick={() => (refixFor = l.id)}>
-							🔁 New fixation…
-						</button>
-						<button
-							type="button"
-							class="btn"
-							onclick={() => (editFor = editFor === l.id ? null : l.id)}
-						>
-							✏️ Edit details…
-						</button>
-						<span class="mini-note">both preview their effect on the chart before saving</span>
-					</div>
 
 					{#if editFor === l.id}
 						<!-- Description and security only. Rate, payment and balance are
@@ -448,10 +498,12 @@
 	}
 	.head {
 		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: var(--space-8);
+		align-items: center;
+		gap: var(--space-7);
 		flex-wrap: wrap;
+	}
+	.names {
+		flex: 1;
 	}
 	.names {
 		display: flex;
@@ -489,28 +541,82 @@
 		gap: var(--space-3);
 	}
 	.track {
-		height: 8px;
+		height: 10px;
 		background: var(--card3);
-		border-radius: var(--radius-xs);
+		border-radius: 5px;
 		overflow: hidden;
 	}
+	/* Green into teal: repaid runs from "money you handed over" to the colour
+	   the app uses for what has been put away, which is what a repayment is. */
 	.fill {
 		height: 100%;
-		background: var(--green);
-		border-radius: var(--radius-xs);
+		background: linear-gradient(
+			90deg,
+			var(--green),
+			color-mix(in srgb, var(--green) 70%, var(--teal))
+		);
+		border-radius: 5px;
+	}
+
+	.fixation {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.fix-caption {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-5);
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.fix-now {
+		color: var(--fg1);
+	}
+	.band {
+		display: flex;
+		gap: var(--space-1);
+		height: 26px;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.seg {
+		display: grid;
+		place-items: center;
+		padding: 0 var(--space-3);
+		overflow: hidden;
+	}
+	/* Paid, and behind you. */
+	.seg.past {
+		background: color-mix(in srgb, var(--fg3) 30%, transparent);
+		color: var(--fg2);
+	}
+	.seg.current {
+		background: color-mix(in srgb, var(--teal) 55%, transparent);
+		color: var(--fg1);
+	}
+	/* Hatched, because nothing is known about it: a flat fill would read as a
+	   third rate somebody had agreed. */
+	.seg.unknown {
+		background: repeating-linear-gradient(
+			45deg,
+			color-mix(in srgb, var(--purple) 22%, transparent) 0 6px,
+			transparent 6px 12px
+		);
+		color: var(--fg3);
 	}
 	.note {
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
-	.detail-toggle {
-		align-self: flex-start;
-		border: 0;
-		background: transparent;
-		color: var(--blue);
-		font-size: var(--text-sm);
-		cursor: pointer;
-		padding: 0;
+	.loan-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		flex-wrap: wrap;
 	}
 	.detail {
 		display: flex;
@@ -583,11 +689,13 @@
 	.e-amount {
 		font-size: var(--text-sm);
 	}
+	/* Dashed and purple: the vocabulary the Overview tray and the Add-a-shelf
+	   row use for "a place a new thing goes", in this area's own hue. */
 	.add-tile {
-		border: 1.5px dashed var(--bd2);
-		background: transparent;
-		border-radius: var(--radius-lg);
-		padding: 18px;
+		border: 1.5px dashed color-mix(in srgb, var(--purple) 40%, transparent);
+		background: color-mix(in srgb, var(--purple) 5%, transparent);
+		border-radius: var(--radius-card);
+		padding: 18px 20px;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
@@ -597,7 +705,7 @@
 		color: var(--fg2);
 	}
 	.add-tile:hover {
-		border-color: var(--blue);
+		border-color: var(--purple);
 	}
 	.a-title {
 		font-size: var(--text-lg);

@@ -19,7 +19,7 @@
  *   something in it. It is what makes filing to a shelf before its card exists
  *   a safe thing to do.
  */
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import {
 	account,
@@ -490,18 +490,6 @@ export async function loadDossier(
 /** Gaps and empty slots across the shelf — the band's `missing` figure. */
 export function dossierMissing(payload: DossierPayload): number {
 	return payload.cards.filter((c) => c.id !== null).reduce((n, card) => n + card.findings, 0);
-}
-
-/** Whether a dossier shelf has any paper at all, for its empty state. */
-export async function dossierShelfHasPaper(
-	shelfRow: ShelfRow,
-	handle: Queryable = db
-): Promise<boolean> {
-	const [row] = await handle
-		.select({ n: sql<number>`count(*)::int` })
-		.from(document)
-		.where(eq(document.shelfId, shelfRow.id));
-	return (row?.n ?? 0) > 0;
 }
 
 /** Re-exported so the queue can offer the same cards this draws. */
