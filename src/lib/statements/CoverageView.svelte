@@ -253,7 +253,7 @@
 										{/if}
 									</button>
 								{:else if box.state === 'before-account'}
-									<span class="empty" aria-label="Before this account existed"></span>
+									<span class="empty" role="img" aria-label="Before this account existed"></span>
 								{:else}
 									<a
 										class="empty-link"
@@ -348,7 +348,8 @@
 												{/if}
 											</button>
 										{:else if box.state === 'before-account'}
-											<span class="empty" aria-label="Before this account existed"></span>
+											<span class="empty" role="img" aria-label="Before this account existed"
+											></span>
 										{:else}
 											<a
 												class="empty-link"

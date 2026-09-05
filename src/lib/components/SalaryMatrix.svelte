@@ -407,8 +407,10 @@
 	.c-sub.partial {
 		color: var(--yellow);
 	}
+	/* "Quiet" by wording, not by fading: at eleven pixels any opacity on
+	   --fg3 drops it under AA on the light theme. */
 	.c-sub.quiet {
-		opacity: 0.85;
+		font-style: italic;
 	}
 	.absent {
 		color: var(--fg3);

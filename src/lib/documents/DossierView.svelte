@@ -392,10 +392,11 @@
 													{/if}
 												</button>
 											{:else if cell.state === 'before'}
-												<span class="faint" aria-label="Before this began"></span>
+												<span class="faint" role="img" aria-label="Before this began"></span>
 											{:else}
 												<span
 													class="empty"
+													role="img"
 													aria-label="{cell.state === 'gap'
 														? 'Missing'
 														: 'Not arrived yet'}: {columnLabel(lane, cell.key)}"

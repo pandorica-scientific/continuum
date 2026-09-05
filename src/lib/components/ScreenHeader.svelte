@@ -60,6 +60,13 @@
 	}
 </script>
 
+<!-- The tab's name, from the one component every screen renders: a title
+     per page used to be nowhere, and a browser tab reading only the address is
+     the first thing a screen reader announces. -->
+<svelte:head>
+	<title>{title} · Continuum</title>
+</svelte:head>
+
 <header>
 	<div class="titles">
 		<h1>

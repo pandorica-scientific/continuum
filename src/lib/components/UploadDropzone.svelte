@@ -187,17 +187,20 @@
 	}
 </script>
 
+<!-- The zone is a drop target and a mouse target; the keyboard's way in is
+     the button inside it. It used to be a button itself, which put the camera
+     and scan buttons and the file field inside a control — one control to a
+     screen reader, and an invalid one. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
 	class="dropzone"
 	class:hero
 	class:dragging
 	class:busy
-	role="button"
-	tabindex="0"
 	aria-busy={busy}
 	title={description}
 	onclick={() => input?.click()}
-	onkeydown={(event) => (event.key === 'Enter' || event.key === ' ') && input?.click()}
 	ondragover={(event) => {
 		event.preventDefault();
 		dragging = true;
@@ -216,7 +219,17 @@
 	{#if hero}
 		<span class="hero-tile"><Icon name="inbox" size={24} /></span>
 	{/if}
-	<span class="title">{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}</span>
+	<button
+		type="button"
+		class="title"
+		onclick={(event) => {
+			// The zone's own click would open the browser a second time.
+			event.stopPropagation();
+			input?.click();
+		}}
+	>
+		{busy ? busyText : chosen.length ? chosen.join(', ') : idleText}
+	</button>
 	{#if hero && heroNote && !busy}
 		<span class="hero-note">{heroNote}</span>
 	{/if}
@@ -291,6 +304,7 @@
 		{accept}
 		{multiple}
 		tabindex="-1"
+		aria-label={idleText}
 		onchange={() => input?.files?.length && void receive(input.files)}
 	/>
 </div>
@@ -481,6 +495,21 @@
 			height: var(--touch-min);
 			margin: -6px -9px;
 		}
+	}
+	.title {
+		appearance: none;
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+		text-align: center;
+	}
+	.title:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
 	.title {
 		flex: 1 1 auto;

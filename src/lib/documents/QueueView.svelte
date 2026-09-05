@@ -244,12 +244,12 @@
 			<div class="field expiry">
 				<span class="eyebrow">Expiry</span>
 				<div class="expiry-row">
-					<select name="expiryVerb">
+					<select name="expiryVerb" aria-label="What the date means">
 						{#each EXPIRY_VERBS as verb (verb)}
 							<option value={verb}>{verb} — {EXPIRY_VERB_MEANINGS[verb]}</option>
 						{/each}
 					</select>
-					<input type="date" name="expiresOn" />
+					<input type="date" name="expiresOn" aria-label="Expiry date" />
 				</div>
 			</div>
 
