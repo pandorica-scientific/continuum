@@ -252,14 +252,6 @@
 	.panel.narrow .body {
 		overflow: visible;
 	}
-	/* A panel whose content carries `data-grow` is sized by that content and
-	   never scrolls inside itself: the briefing, whose cards must all be on
-	   screen when the strip is opened. `:has()` rather than a prop, because
-	   the content is three components down from the header that would need
-	   to be told. */
-	.panel:has(:global([data-grow])) {
-		height: auto;
-	}
 	.handle {
 		position: absolute;
 		right: 2px;

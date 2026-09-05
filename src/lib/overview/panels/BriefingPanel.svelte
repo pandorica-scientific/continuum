@@ -17,7 +17,7 @@
 </script>
 
 {#if data.items.length}
-	<div class="strip" data-grow>
+	<div class="strip">
 		<div class="briefing">
 			<!-- Keyed by where it leads as well as by what it says: two documents
 			     expiring on the same day carry the same title, and a duplicate key

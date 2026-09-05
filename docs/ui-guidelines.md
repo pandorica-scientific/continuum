@@ -403,7 +403,9 @@ don't rediscover them.
   scrolls the archive behind it, and scrolling back moves the wrong one first. **Anything
   with `overflow-y: auto` sitting over other scrollable content gets
   `overscroll-behavior: contain`** — the inspector, the rail, the modal, the sidebar, and
-  every picker or chip list bounded by a `max-height`.
+  every picker or chip list bounded by a `max-height`. **Not an Overview panel.** A panel
+  whose content fits is still a scroll container, so `contain` there stopped the wheel
+  over most of the board; panels grow with their content and the page scrolls.
 
 ---
 

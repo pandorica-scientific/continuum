@@ -9,8 +9,8 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2869 static tests across 281 files, covering 229 modules.
-160 modules under `src/lib` are imported by no test.
+2880 static tests across 283 files, covering 230 modules.
+161 modules under `src/lib` are imported by no test.
 
 ## Modules
 
@@ -215,6 +215,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/unit/invest-gains.test.ts` (unit, 16 tests)
 
+### `src/lib/invest/series.ts`
+
+- `tests/unit/invest-series.test.ts` (unit, 2 tests)
+
 ### `src/lib/loans/amortise.ts`
 
 - `tests/unit/amortise.test.ts` (unit, 21 tests)
@@ -310,6 +314,10 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/property/finance.ts`
 
 - `tests/unit/property-finance.test.ts` (unit, 16 tests)
+
+### `src/lib/property/media.ts`
+
+- `tests/unit/property-media.test.ts` (unit, 10 tests)
 
 ### `src/lib/property/tenancy.ts`
 
@@ -1192,14 +1200,11 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/integration/one-sided-transfer.test.ts` (integration, 8 tests)
 
-### `src/lib/statements/cadence.ts`
-
-- `tests/unit/statement-cadence.test.ts` (unit, 4 tests)
-
 ### `src/lib/statements/coverage.ts`
 
 - `tests/integration/statement-period.test.ts` (integration, 4 tests)
 - `tests/unit/dossier-cells.test.ts` (unit, 7 tests)
+- `tests/unit/statement-cadence.test.ts` (unit, 3 tests)
 - `tests/unit/statement-coverage.test.ts` (unit, 19 tests)
 
 ### `src/lib/tag-hue.ts`
@@ -1412,6 +1417,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/server/system/policy.ts`
 - `src/lib/statements/CoverageView.svelte`
 - `src/lib/statements/PeriodListing.svelte`
+- `src/lib/statements/cadence.ts`
 - `src/lib/theme.ts`
 - `src/lib/transactions/roles.ts`
 - `src/lib/ui/hue.ts`

@@ -49,12 +49,6 @@ export function parseSlot(slot: string): Slot | null {
 	return null;
 }
 
-export function slotName(slot: Slot): string {
-	if (slot.kind === 'plan') return 'plan';
-	if (slot.kind === 'photo') return `photo${slot.index}`;
-	return `room${slot.room}:photo${slot.index}`;
-}
-
 /** The photos in one room, by its index in the drawing. Empty for a room with none. */
 export function roomPhotos(images: PropertyImages, room: number): string[] {
 	return images.drawing?.rooms[room]?.photos ?? [];

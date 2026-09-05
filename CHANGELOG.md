@@ -25,6 +25,8 @@
 - 🎯 **Retirement's three figures are tiles beside the sentence**, the assumptions are grouped into four questions, the chart is the shared engine with nice ticks and named lines, and the table carries a coverage bar
 - 🧾 **Import lists where each account's statements stop**, beside what still needs a decision
 - ♿ **A skip link** puts the content one Tab away
+- 🏷️ **Every page names its tab** — "Screen · Continuum" — and the audit finds no WCAG 2 A/AA violation on any screen in either theme
+- 🕰️ **Import says each account's rhythm** — monthly, quarterly, yearly, read off the Statements shelf's bands — and calls a quarterly account overdue at a quarter, not a month
 
 ### 🔧 Changed
 
@@ -48,6 +50,9 @@
 - 🧭 **The Needs-you strip opens in place** — the "+N more" tile takes a card's cell and the board row grows, with no inner scroll
 - 🎨 **The two tide inks are tokens** (`--tide-up`, `--tide-down`) — the sidebar carried the literals
 - ✅ **The screenshot run audits contrast** — `scripts/take-screenshots.mjs` hands every web capture to axe and fails on a `color-contrast` violation
+- 🗓️ **The flow panel's period control sits in its head row**, beside "Open →", declared by the panel registry rather than drawn by the panel's body
+- 🏦 **Accounts' primary action is in the header**, and the total line runs over both columns so the pie starts level with the first card
+- ⬆️ **The upload zone is a drop target with a button inside it**, not a button holding buttons
 - 🎚️ **One switch component**, where the same track, knob and thirty lines of CSS were written out three times across Settings and Calendar
 - 🎨 **A register row leads with its category's colour** — an 8×22 bar down the left, so a month of spending is scannable before a word of it is read
 - 🏷️ **A transaction's category is a chip in its own hue**, beside the merchant rather than a grey word three columns to the right
@@ -65,7 +70,9 @@
 
 ### 🐛 Fixed
 
-- 🔎 **The light theme's quiet ink clears AA** — `--fg3` was 4.2–4.4:1 on the light surfaces, which was every note, count and label on the light theme failing by a hair
+- 🔎 **The light theme's quiet ink clears AA** — `--fg3` was 4.2–4.4:1 on the light surfaces, which was every note, count and label on the light theme failing by a hair; series hues used as ink take `--series-ink-mix` on light
+- 🖱️ **The Overview scrolls from anywhere** — a panel whose content fitted was still a scroll container with `overscroll-behavior: contain`, so the wheel over most of the board went nowhere; panels grow with their content instead
+- 🎯 **The Retirement gauge's figure is centred in its ring** — the figure and its note were centred in two rows rather than as one block
 - 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
 - 🔧 **A dossier's `once` slot fits its own box** — the ribbon's 28px centred cell was winning over the slot's own layout, so the name sat centred and the date fell out below it
 - 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`

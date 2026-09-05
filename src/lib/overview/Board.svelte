@@ -425,9 +425,9 @@
 		text-transform: uppercase;
 		color: var(--fg3);
 	}
-	/* Rows are a floor, not a size: a panel that has asked to grow (see
-	   Panel's `[data-grow]`) makes its rows taller and everything below moves
-	   down, which is what "expand to show all" has to mean on a board. */
+	/* Rows are a floor, not a size: a panel taller than the rows it was given
+	   makes them taller and everything below moves down. Nothing on the board
+	   scrolls inside itself; the page is the one thing that scrolls. */
 	.board {
 		display: grid;
 		grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
