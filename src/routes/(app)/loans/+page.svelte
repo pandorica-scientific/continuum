@@ -153,13 +153,30 @@
 					</div>
 				</div>
 			{/if}
-			<button
-				type="button"
-				class="detail-toggle"
-				onclick={() => (open = open === l.id ? null : l.id)}
-			>
-				{open === l.id ? 'Hide schedule & changes ▴' : 'Schedule & changes ▾'}
-			</button>
+			<!-- Ghost buttons under the band, as the handoff draws them: what you
+			     can do to the loan is beside the loan, not behind a link. -->
+			<div class="loan-actions">
+				<button
+					type="button"
+					class="btn"
+					aria-expanded={open === l.id}
+					onclick={() => (open = open === l.id ? null : l.id)}
+				>
+					{open === l.id ? 'Hide schedule & changes ▴' : 'Schedule & changes ▾'}
+				</button>
+				<button type="button" class="btn" onclick={() => (repayFor = l.id)}>Repay early…</button>
+				<button type="button" class="btn" onclick={() => (refixFor = l.id)}>Re-fix…</button>
+				<button
+					type="button"
+					class="btn"
+					onclick={() => {
+						editFor = editFor === l.id ? null : l.id;
+						if (editFor) open = l.id;
+					}}
+				>
+					Edit…
+				</button>
+			</div>
 			{#if open === l.id}
 				<div class="detail">
 					<div class="l-tags">
@@ -197,22 +214,6 @@
 						</div>
 						<LoanSchedule years={l.chart} currency={l.currency} />
 					{/if}
-					<div class="actions-row">
-						<button type="button" class="btn" onclick={() => (repayFor = l.id)}>
-							💸 Record a repayment…
-						</button>
-						<button type="button" class="btn" onclick={() => (refixFor = l.id)}>
-							🔁 New fixation…
-						</button>
-						<button
-							type="button"
-							class="btn"
-							onclick={() => (editFor = editFor === l.id ? null : l.id)}
-						>
-							✏️ Edit details…
-						</button>
-						<span class="mini-note">both preview their effect on the chart before saving</span>
-					</div>
 
 					{#if editFor === l.id}
 						<!-- Description and security only. Rate, payment and balance are
@@ -598,14 +599,11 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
-	.detail-toggle {
-		align-self: flex-start;
-		border: 0;
-		background: transparent;
-		color: var(--blue);
-		font-size: var(--text-sm);
-		cursor: pointer;
-		padding: 0;
+	.loan-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		flex-wrap: wrap;
 	}
 	.detail {
 		display: flex;

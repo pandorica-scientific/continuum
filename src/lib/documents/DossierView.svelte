@@ -704,7 +704,7 @@
 	}
 	.slot-date {
 		font-size: var(--text-2xs);
-		color: var(--fg3);
+		color: var(--fg2);
 	}
 	.loose-type {
 		font-size: var(--text-xs);
@@ -794,12 +794,19 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	/* The relationship line as a chip in the blue tint, as the handoff draws
+	   it: a role and a date are a fact about the card, not a sentence in it. */
 	.who {
-		margin: 0;
-		padding: 8px 14px 0;
-		display: flex;
-		gap: var(--space-5);
-		font-size: var(--text-base);
+		margin: 8px 14px 0;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-4);
+		padding: 3px 10px;
+		border-radius: var(--radius-pill);
+		background: var(--blue-tint);
+		color: var(--fg1);
+		font-size: var(--text-sm);
+		align-self: flex-start;
 	}
 	.role {
 		color: var(--fg1);

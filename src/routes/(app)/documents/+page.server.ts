@@ -421,7 +421,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	/** The two identity fields a row may show, or null when it has none. */
 	const identityFor = (documentId: string) => {
 		const row = identityByDoc.get(documentId);
-		return row ? { kind: row.kind, country: row.country } : null;
+		return row ? { kind: row.kind, country: row.country, number: row.number ?? null } : null;
 	};
 
 	// Searching happens in SQL, not over the loaded array: the tiers are what

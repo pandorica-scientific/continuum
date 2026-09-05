@@ -2,11 +2,12 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
-	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table';
 
 	let { data, form } = $props();
 
@@ -16,11 +17,19 @@
 	let dismissed = $state<string | null>(null);
 	const errorMessage = $derived(form?.message && form.message !== dismissed ? form.message : null);
 
-	// The threshold field follows the checkbox as it is clicked, not as it was
-	// last saved. Reading `data` directly left the field disabled until a reload,
-	// and a disabled field is never posted — so switching the exemption on and
-	// typing a threshold in the same visit saved neither it nor the rate.
-	let exemptLongHeld = $derived(data.tax.exemptLongHeld);
+	const HOLDING_COLUMNS = $derived<Column[]>([
+		{ key: 'holding', label: 'Holding', width: 'minmax(0, 1.4fr)' },
+		{ key: 'units', label: 'Units', align: 'end', width: 'minmax(84px, auto)', hideBelow: 760 },
+		{ key: 'value', label: 'Value', align: 'end', width: 'minmax(110px, auto)' },
+		{
+			key: 'base',
+			label: `In ${data.unit}`,
+			align: 'end',
+			width: 'minmax(110px, auto)',
+			hideBelow: 900
+		},
+		{ key: 'gain', label: 'Gain', align: 'end', width: 'minmax(72px, auto)' }
+	]);
 
 	// FileList from a browse or a drop, File[] from the scan engine.
 	async function upload(files: FileList | File[]) {
@@ -161,81 +170,10 @@
 				unit: data.tax.configured ? data.accountUnit : undefined,
 				note: data.tax.configured
 					? `estimate · ${data.tax.ratePct}% of ${data.tax.taxable}`
-					: 'set a rate below'
+					: 'set a rate in Settings › Money'
 			}
 		]}
 	/>
-
-	{#if data.tax.configured && data.tax.disposals > 0}
-		<div class="card tax-detail">
-			<Eyebrow hue="--purple" icon="receipt" label="How that is worked out" />
-			<dl class="tax-lines">
-				<dt>Realised in {data.tax.year}</dt>
-				<dd class="mono" style:color={data.tax.realisedPositive ? 'var(--green)' : 'var(--red)'}>
-					{data.tax.realised}
-				</dd>
-				<dt>from {data.tax.disposals} {data.tax.disposals === 1 ? 'disposal' : 'disposals'}</dt>
-				<dd></dd>
-				{#if data.tax.exemptLongHeld}
-					<dt>
-						Exempt — held {data.tax.exemptAfterYears}+ years ({data.tax.exemptDisposals})
-					</dt>
-					<dd class="mono">−{data.tax.exempt}</dd>
-				{/if}
-				<dt class="total">Taxable</dt>
-				<dd class="mono total">{data.tax.taxable}</dd>
-				<dt class="total">At {data.tax.ratePct}%</dt>
-				<dd class="mono total">{data.tax.estimated}</dd>
-			</dl>
-			<p class="quiet">
-				An estimate from what your broker reported, nothing more. Losses carried forward from
-				earlier years, other income and allowances are not in it.
-			</p>
-		</div>
-	{/if}
-
-	<!-- reset: false. A successful submit otherwise resets the form, and a reset
-	     restores each field to its DOM default — which is empty, because Svelte
-	     sets a dynamic value as a property and never writes the attribute. The
-	     rate came back only because its value had changed and was re-applied;
-	     the threshold, unchanged at 3, was left blank the moment it saved. -->
-	<form
-		method="POST"
-		action="?/setTax"
-		use:enhance={() =>
-			async ({ update }) =>
-				update({ reset: false })}
-		class="card tax-form"
-	>
-		<Eyebrow hue="--purple" icon="sliders" label="How gains are taxed here" />
-		<div class="tax-fields">
-			<label class="field">
-				<span>Rate on realised gains</span>
-				<input name="ratePct" inputmode="decimal" value={data.tax.ratePct || ''} placeholder="15" />
-			</label>
-			<label class="toggle">
-				<input type="checkbox" name="exemptLongHeld" bind:checked={exemptLongHeld} />
-				<span>Exempt what was held a long time</span>
-			</label>
-			<label class="field">
-				<span>Exempt after (years)</span>
-				<input
-					name="exemptAfterYears"
-					inputmode="numeric"
-					value={data.tax.exemptAfterYears}
-					disabled={!exemptLongHeld}
-				/>
-			</label>
-			<button type="submit" class="btn btn-primary">Save</button>
-		</div>
-		<!-- Off unless switched on, because a holding-period exemption is a fact
-		     about one country. The Czech time test is three years; somewhere else
-		     it is a different number, or nothing at all. -->
-		<p class="quiet">
-			Both are yours to set. The exemption matches the Czech three-year time test when you turn it
-			on, and is off by default because it applies nowhere else.
-		</p>
-	</form>
 </section>
 
 {#if chart}
@@ -388,23 +326,28 @@
 			<span class="eyebrow-caption">duplicates dropped by operation id</span>
 		</div>
 		{#if data.holdings.length}
-			<div class="h-head">
-				<span>Holding</span><span class="r">Units</span><span class="r">Value</span><span class="r"
-					>In {data.unit}</span
-				><span class="r">Gain</span>
-			</div>
-			{#each data.holdings as h (h.id)}
-				<div class="h-row">
+			<DataTable
+				columns={HOLDING_COLUMNS}
+				groups={[{ key: 'all', open: true, rows: data.holdings }]}
+				flat
+				hue="--purple"
+				label="Holdings"
+				rowKey={(h) => h.id}
+			>
+				{#snippet row(h, visible)}
 					<div class="h-name">
-						<span class="mono ticker">{h.ticker}</span>
-						<span class="name">{h.name}</span>
+						<span class="swatch" style:background="var({h.colorVar})" aria-hidden="true"></span>
+						<span class="h-names">
+							<span class="mono ticker">{h.ticker}</span>
+							<span class="name">{h.name}</span>
+						</span>
 					</div>
-					<span class="mono r muted">{h.units}</span>
+					{#if visible.has('units')}<span class="mono r muted">{h.units}</span>{/if}
 					<span class="mono r">{h.value}</span>
-					<span class="mono r muted">{h.base}</span>
+					{#if visible.has('base')}<span class="mono r muted">{h.base}</span>{/if}
 					<span class="mono r" style:color={h.gainColor}>{h.gain}</span>
-				</div>
-			{/each}
+				{/snippet}
+			</DataTable>
 		{:else}
 			<p class="quiet">No holdings yet — upload a report below.</p>
 		{/if}
@@ -438,43 +381,6 @@
 />
 
 <style>
-	.tax-detail {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-	.tax-lines {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: var(--space-3) var(--space-8);
-		margin: 0;
-		font-size: var(--text-md);
-	}
-	.tax-lines dt {
-		color: var(--fg3);
-	}
-	.tax-lines dd {
-		margin: 0;
-		text-align: right;
-	}
-	.tax-lines .total {
-		color: var(--fg1);
-		font-weight: 500;
-		border-top: 1px solid var(--bd);
-		padding-top: var(--space-3);
-	}
-	.tax-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-	.tax-fields {
-		display: flex;
-		align-items: flex-end;
-		gap: var(--space-6);
-		flex-wrap: wrap;
-	}
-
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);
@@ -635,30 +541,25 @@
 		flex-direction: column;
 		gap: var(--space-2);
 	}
-	.h-head,
-	.h-row {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) repeat(4, minmax(84px, auto));
-		gap: var(--space-5) var(--space-7);
-		align-items: baseline;
-	}
-	.h-head {
-		padding: 0 0 8px;
-		font-size: var(--text-xs);
-		letter-spacing: 0.07em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		border-bottom: 1px solid var(--bd);
-	}
-	.h-row {
-		padding: 11px 0;
-		border-bottom: 1px solid var(--bd);
-	}
 	.h-name {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		min-width: 0;
+	}
+	.h-names {
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
 		min-width: 0;
+	}
+	/* The same colour as the wedge in the pie beside it. A bar and not a dot:
+	   8×22 reads down the list as a stripe of colour. */
+	.swatch {
+		width: 8px;
+		height: 22px;
+		border-radius: var(--radius-xs);
+		flex: none;
 	}
 	.ticker {
 		font-size: var(--text-md);
@@ -691,15 +592,5 @@
 	}
 	:global(.dropzone.dragging) {
 		background: var(--blue-tint);
-	}
-	@media (max-width: 720px) {
-		.h-head,
-		.h-row {
-			grid-template-columns: minmax(0, 1fr) repeat(2, minmax(70px, auto));
-		}
-		.h-head span:nth-child(2),
-		.h-row .muted:first-of-type {
-			display: none;
-		}
 	}
 </style>

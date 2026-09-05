@@ -110,7 +110,23 @@ and nothing else above its content:
   width. All the geometry is in `charts/line.ts`, which has no DOM and a test
   beside it.
 - **`Segmented`**, **`Pill`**, **`MetricTile`**, **`Eyebrow`** — restyled, same
-  contracts.
+  contracts. `Eyebrow` takes `icon`, a name from `src/lib/icons.ts`, and never
+  an emoji: an emoji is data the household chose (a shelf, an account), and
+  `design/no-emoji-eyebrow` fails a build that passes one.
+- **`DataTable`** — the one table. A screen brings `columns` (key, label,
+  width, `hideBelow`), `groups` (key, open, rows) and the cells as snippets;
+  the table draws the header strip (`--table-head`), the row line, the open
+  group's ground (`--table-open`) with the hue's edge, the summary row and the
+  hover. A group head is a button, or a link when `href` is given (the
+  register, whose open month lives in the URL). `rowLayout="block"` hands a
+  row the full width for a component with a grid of its own; `flat` draws
+  rows with no heads. Transactions, Rules, Salary, Tax, Retirement and
+  Holdings adopt it; a screen drawing its own `.thead` is the drift this
+  exists to stop.
+- **`select`** — skinned once in `app.css`: `appearance: none`, the stroke
+  chevron from `--select-chevron` (one per theme, the one place a colour is
+  written into a data URI), `--card` ground, hover `--surface-2`. A component
+  sets a select's width or height and nothing else.
 
 `tests/unit/screen-frame.test.ts` fails the build on a screen that draws its own
 row of figures — three screens had grown their own summary band at three
@@ -333,6 +349,15 @@ on a list row — says `min-height: auto` for itself. That is the opt-out, and i
 rare enough to notice.
 
 ---
+
+## The net-worth tide
+
+The hero's swell is two rotating near-circles in `--tide-up` or `--tide-down`,
+fixed in both themes because the panel is dark in both (the light theme's
+`--green` is darkened for AA on white and disappears on navy). It draws
+whenever a month's delta exists: against the biggest month on record, or
+against net worth itself in a household's first month. Reduced motion stops it
+after one frame.
 
 ## Before you call it done
 

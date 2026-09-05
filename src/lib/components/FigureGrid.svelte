@@ -15,6 +15,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
+	import Icon from './Icon.svelte';
 
 	export interface Figure {
 		label: string;
@@ -22,6 +23,8 @@
 		note?: string;
 		/** A token. Only where the figure is a state, never for decoration. */
 		color?: string;
+		/** A hue name whose wash grounds the tile — `green`, `red`, `teal`. */
+		wash?: string;
 		/** Present on the figures the record actually stores. */
 		edit?: { field: string; amount: string; valuedOn?: string | null };
 	}
@@ -55,7 +58,10 @@
 
 <div class="figures">
 	{#each figures as figure (figure.label)}
-		<div class="figure">
+		<div
+			class="figure"
+			style:--wash={figure.wash ? `var(--${figure.wash}-wash)` : 'var(--surface)'}
+		>
 			<span class="f-label">
 				{figure.label}
 				{#if figure.edit}
@@ -68,7 +74,7 @@
 						aria-label="Edit {figure.label}"
 						onclick={() => (editing = editing === figure.label ? null : figure.label)}
 					>
-						✏️
+						<Icon name="pencil" size={12} />
 					</button>
 				{/if}
 			</span>
@@ -88,7 +94,7 @@
 					</div>
 				</form>
 			{:else}
-				<span class="mono f-value" style:color={figure.color}>{figure.value}</span>
+				<span class="display f-value" style:color={figure.color}>{figure.value}</span>
 			{/if}
 			{#if figure.note}<span class="f-note">{figure.note}</span>{/if}
 		</div>
@@ -102,7 +108,7 @@
 		gap: var(--space-6);
 	}
 	.figure {
-		background: var(--surface);
+		background: var(--wash);
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-card);
 		padding: var(--space-6) var(--space-7);
@@ -116,7 +122,7 @@
 	}
 	.f-value {
 		font-size: var(--text-2xl);
-		font-weight: 600;
+		white-space: nowrap;
 	}
 	.f-note {
 		font-size: var(--text-xs);
@@ -127,8 +133,9 @@
 		border: 0;
 		padding: 0 0 0 4px;
 		cursor: pointer;
-		font-size: var(--text-2xs);
-		opacity: 0.65;
+		color: var(--fg3);
+		vertical-align: middle;
+		opacity: 0.75;
 	}
 	.pencil:hover {
 		opacity: 1;

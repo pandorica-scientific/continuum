@@ -50,8 +50,16 @@
 		 * its own (a transaction, which opens into a panel).
 		 */
 		rowLayout?: 'grid' | 'block';
-		head: Snippet<[Group<Row>, ReadonlySet<string>]>;
-		row: Snippet<[Row, Group<Row>, ReadonlySet<string>]>;
+		/**
+		 * No groups at all: every row of every group is drawn on the grid with
+		 * no head above it, for a list that is one flat run (holdings). The
+		 * `head` snippet is not rendered.
+		 */
+		flat?: boolean;
+		/** Extra class names for one row — `now` on the row that is today. */
+		rowClass?: (row: Row) => string | undefined;
+		head?: Snippet<[Group<Row>, ReadonlySet<string>]>;
+		row: Snippet<[Row, ReadonlySet<string>, Group<Row>]>;
 		/** Drawn under an open group's head, right-aligned: a page-size control, a caption. */
 		aside?: Snippet<[Group<Row>]>;
 		/** The row above the groups that totals them. */
@@ -71,6 +79,8 @@
 		ontoggle,
 		href,
 		rowLayout = 'grid',
+		flat = false,
+		rowClass,
 		head,
 		row,
 		aside,
@@ -104,25 +114,21 @@
 
 <section
 	class="dt"
-	role="table"
 	aria-label={label}
 	bind:this={box}
 	style:--dt-cols={template}
 	style:--dt-hue="var({token})"
 >
-	<div class="dt-head" role="row">
+	<div class="dt-head">
 		{#each visible as c (c.key)}
-			<span
-				class="dt-th"
-				class:end={c.align === 'end'}
-				class:center={c.align === 'center'}
-				role="columnheader">{c.label}</span
+			<span class="dt-th" class:end={c.align === 'end'} class:center={c.align === 'center'}
+				>{c.label}</span
 			>
 		{/each}
 	</div>
 
 	{#if summary}
-		<div class="dt-summary" role="row">{@render summary(visibleKeys)}</div>
+		<div class="dt-summary">{@render summary(visibleKeys)}</div>
 	{/if}
 
 	{#if groups.length === 0 && empty}
@@ -130,7 +136,13 @@
 	{/if}
 
 	{#each groups as group (group.key)}
-		{#if href}
+		{#if flat}
+			{#each group.rows as r (rowKey(r))}
+				<div class="dt-row {rowClass?.(r) ?? ''}" class:block={rowLayout === 'block'}>
+					{@render row(r, visibleKeys, group)}
+				</div>
+			{/each}
+		{:else if href}
 			<a
 				class="dt-group"
 				class:open={group.open}
@@ -139,7 +151,7 @@
 				data-sveltekit-keepfocus
 				aria-expanded={group.open}
 			>
-				{@render head(group, visibleKeys)}
+				{@render head?.(group, visibleKeys)}
 			</a>
 		{:else}
 			<button
@@ -149,16 +161,16 @@
 				aria-expanded={group.open}
 				onclick={() => ontoggle?.(group.key)}
 			>
-				{@render head(group, visibleKeys)}
+				{@render head?.(group, visibleKeys)}
 			</button>
 		{/if}
-		{#if group.open}
+		{#if group.open && !flat}
 			{#if aside}
 				<div class="dt-aside">{@render aside(group)}</div>
 			{/if}
 			{#each group.rows as r (rowKey(r))}
-				<div class="dt-row" class:block={rowLayout === 'block'} role="row">
-					{@render row(r, group, visibleKeys)}
+				<div class="dt-row {rowClass?.(r) ?? ''}" class:block={rowLayout === 'block'}>
+					{@render row(r, visibleKeys, group)}
 				</div>
 			{/each}
 		{/if}
@@ -269,6 +281,12 @@
 	}
 	.dt-row:hover {
 		background: var(--surface-2);
+	}
+	/* The row that is now: a step up and heavier, so a table of futures has
+	   a present to read them against. */
+	.dt-row.now {
+		background: var(--surface-2);
+		font-weight: 600;
 	}
 	/* A block row is the component's own: no grid, no padding, no hover of
 	   the table's — the component draws its face and its hover itself. */

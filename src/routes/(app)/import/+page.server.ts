@@ -22,6 +22,7 @@ import {
 import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import { createCategory, createCategoryGroup, taxonomyKey } from '$lib/server/categorize/taxonomy';
 import { asEnumValue, ENUMS } from '$lib/enums';
+import { daysBetween } from '$lib/dates';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -38,6 +39,9 @@ function isoDay(value: string | null): string | null {
 		? null
 		: value;
 }
+
+/** Days past the last statement before an account is called overdue: a month, plus the post. */
+const STATEMENT_OVERDUE_DAYS = 35;
 
 export const load: PageServerLoad = async ({ url }) => {
 	const monthStart = new Date();
@@ -128,7 +132,13 @@ export const load: PageServerLoad = async ({ url }) => {
 			.limit(50),
 		loadCategories(),
 		db
-			.select({ id: account.id, name: account.name, currency: account.currency })
+			.select({
+				id: account.id,
+				name: account.name,
+				currency: account.currency,
+				emoji: account.emoji,
+				balanceAsOf: account.balanceOn
+			})
 			.from(account)
 			.orderBy(account.createdAt, account.id),
 		loadCategoryGroups(),
@@ -143,7 +153,24 @@ export const load: PageServerLoad = async ({ url }) => {
 	const total = readAgg[0].count;
 	const auto = autoAgg[0].count;
 
+	// Where each account's record stops. A statement is monthly for almost every
+	// bank, so a gap past a month and a few days of post is a statement that
+	// has not been imported — the one thing this screen exists to receive.
+	const todayIso = new Date().toISOString().slice(0, 10);
+	const statements = accounts.map((a) => {
+		const days = a.balanceAsOf ? daysBetween(a.balanceAsOf, todayIso) : null;
+		return {
+			id: a.id,
+			name: a.name,
+			emoji: a.emoji || '🏦',
+			to: a.balanceAsOf,
+			days,
+			overdue: days === null || days > STATEMENT_OVERDUE_DAYS
+		};
+	});
+
 	return {
+		statements,
 		// What the queue is doing, so the page can show depth and per-file
 		// progress rather than a spinner that says nothing.
 		queue: {

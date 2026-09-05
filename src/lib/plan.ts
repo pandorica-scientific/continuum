@@ -8,6 +8,8 @@ export interface PlanRoom {
 	name: string;
 	/** grid cells as [x, y] pairs */
 	cells: [number, number][];
+	/** Stored photo names filed in this room; absent on a room with none. */
+	photos?: string[];
 }
 
 export interface PlanDrawing {
@@ -84,11 +86,17 @@ export function validateDrawing(raw: unknown): PlanDrawing | null {
 			return null;
 		}
 		if (cells.length === 0) continue;
+		// Photos survive a validation round-trip: the record is re-validated on
+		// every save, and a rule that dropped them would empty the gallery.
+		const photos = Array.isArray(room.photos)
+			? room.photos.filter((v): v is string => typeof v === 'string' && v.length > 0).slice(0, 60)
+			: undefined;
 		rooms.push({
 			name: String(room.name ?? '')
 				.slice(0, 40)
 				.trim(),
-			cells
+			cells,
+			...(photos && photos.length ? { photos } : {})
 		});
 	}
 	return { cellCm, rooms };

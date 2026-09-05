@@ -19,6 +19,7 @@
 	import EuMark from '$lib/components/EuMark.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
+	import Pill from '$lib/components/Pill.svelte';
 	import { documentArtUrl } from '$lib/documents/art';
 	import { flagEmoji, isEuCountry } from '$lib/countries';
 	import { identityKindLabel } from '$lib/documents';
@@ -80,7 +81,6 @@
 	 * a theme colour belongs.
 	 */
 	const SUPPORT = 'rgba(10, 13, 19, 0.62)';
-	const PILL_GROUND = 'rgba(10, 13, 19, 0.78)';
 	const INK = '#f2f5fa';
 	const INK_STRONG = 'rgba(242, 245, 250, 0.86)';
 	const INK_QUIET = 'rgba(242, 245, 250, 0.76)';
@@ -117,6 +117,19 @@
 	 * A slot that looks missing on most cards trains a reader to stop looking at
 	 * it, which costs the one card where it was red.
 	 */
+	/**
+	 * The number as a card prints it: the last four digits, the rest masked.
+	 *
+	 * A face is looked at over a shoulder; the whole number is in the inspector.
+	 * Four is what tells two passports apart without being the passport.
+	 */
+	function maskedNumber(number: string | null): string | null {
+		if (!number) return null;
+		const clean = number.replace(/\s+/g, '');
+		if (clean.length <= 4) return clean;
+		return `•••• •••• ${clean.slice(-4)}`;
+	}
+
 	function dateChip(row: LayoutRow): { text: string; hue: string | null } | null {
 		// `wide`, so the pill says what the date DOES as well as when: a card has
 		// room for `expires 4 Aug 2033`, and a bare date leaves a reader to guess
@@ -153,41 +166,43 @@
 		<div class="cards">
 			{#each section.items as row (row.id)}
 				{@const chip = dateChip(row)}
-				<button
-					type="button"
-					class="card-face"
-					class:selected={row.id === selectedId}
-					style:background-image="url({documentArtUrl(
-						row.identity?.country ?? null,
-						row.identity?.kind ?? null
-					)})"
-					onclick={() => onopen(row.id)}
-					aria-label="Open {row.name}"
-				>
-					<span class="overlay">
-						{#if row.identity?.country}
-							<span class="country" style:background={SUPPORT}>
-								<span class="flag">{flagEmoji(row.identity.country)}</span>
-								{#if isEuCountry(row.identity.country)}
-									<!-- The code goes inside the Union's ring, as it does on the
-									     document itself: an EU passport, licence or plate puts the
-									     member state's letters in the middle of the twelve stars,
-									     and a card that spelled them beside it instead would be
-									     the only one in the wallet that did. -->
-									<EuMark code={row.identity.country} size={24} />
+				{@const number = maskedNumber(row.identity?.number ?? null)}
+				<!-- The card and its caption: the face is what is recognised, the
+				     line under it is what is read. The state pill sits under the
+				     face rather than on it, where a traffic-light hue is legible
+				     against the app's own ground rather than a photograph. -->
+				<article class="wallet-card">
+					<button
+						type="button"
+						class="card-face"
+						class:selected={row.id === selectedId}
+						style:background-image="url({documentArtUrl(
+							row.identity?.country ?? null,
+							row.identity?.kind ?? null
+						)})"
+						onclick={() => onopen(row.id)}
+						aria-label="Open {row.name}"
+					>
+						<span class="overlay">
+							<span class="top">
+								{#if row.identity?.country}
+									<span class="country" style:background={SUPPORT}>
+										<span class="flag">{flagEmoji(row.identity.country)}</span>
+										{#if isEuCountry(row.identity.country)}
+											<!-- The code goes inside the Union's ring, as it does on the
+											     document itself: an EU passport, licence or plate puts the
+											     member state's letters in the middle of the twelve stars,
+											     and a card that spelled them beside it instead would be
+											     the only one in the wallet that did. -->
+											<EuMark code={row.identity.country} size={24} />
+										{:else}
+											<span class="mono code" style:color={INK_STRONG}>{row.identity.country}</span>
+										{/if}
+									</span>
 								{:else}
-									<span class="mono code" style:color={INK_STRONG}>{row.identity.country}</span>
+									<span class="country-gap"></span>
 								{/if}
-							</span>
-						{:else}
-							<!-- Keeps the name at the foot of the card whether or not there
-							     is a chip above it. -->
-							<span class="country-gap"></span>
-						{/if}
-
-						<span class="foot">
-							<span class="support" style:background={SUPPORT}>
-								<span class="name-line">
+								<span class="kind" style:background={SUPPORT}>
 									<span class="name" style:color={INK}>{cardTitle(row)}</span>
 									{#if row.restricted}
 										<span class="lock" style:color={INK_QUIET}>
@@ -196,20 +211,41 @@
 									{/if}
 								</span>
 							</span>
-							{#if chip}
-								<span
-									class="date mono"
-									style:background={PILL_GROUND}
-									style:color={chip.hue ? `var(--${chip.hue})` : INK_QUIET}
-									style:border-color={chip.hue ? `var(--${chip.hue})` : 'transparent'}
+
+							{#if number}
+								<span class="number mono" style:background={SUPPORT} style:color={INK}
+									>{number}</span
 								>
-									{#if chip.hue}<span class="dot" style:background="var(--{chip.hue})"></span>{/if}
-									{chip.text}
-								</span>
 							{/if}
+
+							<span class="foot">
+								{#if section.link}
+									<span class="holder" style:background={SUPPORT} style:color={INK_STRONG}
+										>{section.label.toUpperCase()}</span
+									>
+								{/if}
+								{#if row.expiresOn}
+									<span class="expires mono" style:background={SUPPORT} style:color={INK_QUIET}>
+										expires · {readableDate(row.expiresOn)}
+									</span>
+								{/if}
+							</span>
 						</span>
+					</button>
+					<span class="under">
+						<span class="title">
+							{cardTitle(row)}{#if row.identity?.country}
+								· {row.identity.country}{/if}
+						</span>
+						{#if chip}
+							{#if chip.hue}
+								<Pill hue={chip.hue as 'green' | 'yellow' | 'red' | 'blue' | 'grey'}>{chip.text}</Pill>
+							{:else}
+								<span class="mono quiet-date">{chip.text}</span>
+							{/if}
+						{/if}
 					</span>
-				</button>
+				</article>
 			{/each}
 		</div>
 	</section>
@@ -249,6 +285,9 @@
 	}
 	.card-face {
 		position: relative;
+		transition:
+			transform var(--dur) var(--ease),
+			border-color var(--dur) var(--ease);
 		/* ID-1, the shape every one of these documents actually is. */
 		aspect-ratio: 85.6 / 54;
 		overflow: hidden;
@@ -263,8 +302,66 @@
 		cursor: pointer;
 		text-align: left;
 	}
+	/* A card that opens something lifts, two pixels: enough to say "press me"
+	   on a face that is otherwise a picture. */
 	.card-face:hover {
 		border-color: var(--fg3);
+		transform: translateY(-2px);
+	}
+	.wallet-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		min-width: 0;
+	}
+	.under {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		min-width: 0;
+	}
+	.title {
+		font-size: var(--text-md);
+		font-weight: 500;
+		color: var(--fg1);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.quiet-date {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		width: 100%;
+	}
+	.kind {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 4px 9px;
+		border-radius: var(--radius-md);
+		max-width: 60%;
+	}
+	.number {
+		align-self: flex-start;
+		padding: 3px 9px;
+		border-radius: var(--radius-md);
+		font-size: var(--text-md);
+		letter-spacing: 0.08em;
+	}
+	.holder,
+	.expires {
+		padding: 3px 8px;
+		border-radius: var(--radius-md);
+		font-size: var(--text-2xs);
+		letter-spacing: 0.06em;
+		white-space: nowrap;
 	}
 	.card-face.selected {
 		border-color: var(--brand);
@@ -279,7 +376,6 @@
 		padding: 11px 12px 12px;
 	}
 	.country {
-		align-self: flex-end;
 		display: inline-flex;
 		flex-direction: row;
 		align-items: center;
@@ -306,30 +402,16 @@
 	}
 	.foot {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
+		align-items: center;
+		justify-content: space-between;
 		gap: var(--space-3);
-		max-width: 100%;
+		width: 100%;
 	}
 	/* A small panel, not a full-width bar: a bar would cover the one thing that
 	   makes the card recognisable at a glance. */
-	.support {
-		display: flex;
-		flex-direction: column;
-		max-width: 100%;
-		padding: 5px 9px 6px;
-		border-radius: var(--radius-md);
-	}
-	.name-line {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 5px;
-		min-width: 0;
-	}
 	.name {
 		overflow: hidden;
-		font-size: var(--text-xl);
+		font-size: var(--text-md);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		line-height: 1.25;
@@ -339,21 +421,5 @@
 	.lock {
 		display: inline-flex;
 		flex: none;
-	}
-	.date {
-		display: inline-flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 5px;
-		padding: 2px 9px;
-		border: 1px solid;
-		border-radius: var(--radius-pill);
-		font-size: var(--text-2xs);
-		white-space: nowrap;
-	}
-	.dot {
-		width: 5px;
-		height: 5px;
-		border-radius: var(--radius-pill);
 	}
 </style>

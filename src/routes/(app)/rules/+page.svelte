@@ -230,7 +230,7 @@
 			{#if visible.has('actions')}<span></span>{/if}
 		{/snippet}
 
-		{#snippet row(r, _group, visible)}
+		{#snippet row(r, visible)}
 			<span class="r-name" class:off={!r.enabled}>
 				<span class="r-title">
 					{r.name}

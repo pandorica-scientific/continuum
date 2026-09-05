@@ -500,7 +500,7 @@
 		padding: 3px 9px;
 		border-radius: var(--radius-pill);
 		background: color-mix(in srgb, var(--cat) 14%, transparent);
-		color: var(--cat);
+		color: color-mix(in srgb, var(--fg1) var(--series-ink-mix), var(--cat));
 		font-size: var(--text-sm);
 		overflow: hidden;
 		text-overflow: ellipsis;

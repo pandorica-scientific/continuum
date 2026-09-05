@@ -429,7 +429,7 @@
 		<Eyebrow hue="--teal" icon="ledger" label="Matching" />
 		<span class="eyebrow-caption">
 			{data.total}
-			{data.total === 1 ? 'transaction' : 'transactions'} · open a month to read it
+			{data.total === 1 ? 'transaction' : 'transactions'} · the newest month is open
 		</span>
 	</div>
 

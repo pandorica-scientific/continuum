@@ -6,6 +6,11 @@
 	import { sendActionForPageExit, submitAction } from '$lib/actions/result';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import LineChart from '$lib/charts/LineChart.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table';
+	import type { LineSeries } from '$lib/charts/line';
+	import { initialsFor } from '$lib/people';
 	import { MAX_RETIREMENT_AGE, MIN_RETIREMENT_AGE, retModel, type RetireConfig } from '$lib/retire';
 	import { displayCurrency } from '$lib/money';
 
@@ -85,40 +90,86 @@
 	});
 
 	// Chart geometry.
-	const CW = 800;
-	const CH = 200;
-	const chart = $derived.by(() => {
-		const max = Math.max(...model.chart.map((p) => Math.max(p.pot, p.required)), 1);
-		const x = (t: number) => (t / 20) * CW;
-		const y = (v: number) => CH - (v / max) * CH;
-		return {
-			pot: model.chart.map((p) => `${x(p.t).toFixed(1)},${y(p.pot).toFixed(1)}`).join(' '),
-			required: `0,${y(model.chart[0].required).toFixed(1)} ${CW},${y(model.chart[0].required).toFixed(1)}`,
-			axis: [0, 0.5, 1].map((f) => ({
-				top: `${f * 100}%`,
-				label: (((1 - f) * max) / 1e6).toFixed(1)
-			})),
-			// The horizontal scale carried no labels at all, so the one thing the
-			// chart is for — when the pot crosses the line — could be seen but not
-			// read off. Calendar years, not offsets: nobody thinks in "t + 13".
-			years: [0, 5, 10, 15, 20].map((t) => ({
-				left: `${(t / 20) * 100}%`,
-				label: String(data.inputs.year + t)
-			})),
-			// The crossing itself, marked where it falls inside the window.
-			crossing:
-				model.fire && model.fire.t >= 0 && model.fire.t <= 20
-					? {
-							left: `${(model.fire.t / 20) * 100}%`,
-							// Drawn inside the SVG, in its coordinates: the chart box is
-							// inset by the y-axis gutter, so a percentage against the
-							// container would sit to the right of the data it marks.
-							x: x(model.fire.t),
-							label: String(model.fire.year)
-						}
-					: null
-		};
-	});
+	/**
+	 * The pot against the target, as lines over the model's twenty years.
+	 *
+	 * Capital on its own, and capital with the flats' equity on top, unless the
+	 * plan already sells them into the pot; the target pot dashed, since it is
+	 * a reference and not a measurement. Equity is known every five years and
+	 * drawn straight between them.
+	 */
+	const equityAt = (t: number) => {
+		const rows = model.rows;
+		const after = rows.find((r) => r.t >= t) ?? rows[rows.length - 1];
+		const before = [...rows].reverse().find((r) => r.t <= t) ?? rows[0];
+		if (after.t === before.t) return after.equity;
+		const share = (t - before.t) / (after.t - before.t);
+		return before.equity + (after.equity - before.equity) * share;
+	};
+	const chartSeries = $derived<LineSeries[]>([
+		{
+			key: 'capital',
+			colorVar: '--blue',
+			endLabel: 'capital',
+			points: model.chart.map((p) => ({ value: p.pot }))
+		},
+		...(cfg.plan === 'sell'
+			? []
+			: [
+					{
+						key: 'flats',
+						colorVar: '--purple',
+						endLabel: 'with flats',
+						points: model.chart.map((p) => ({ value: p.pot + equityAt(p.t) }))
+					}
+				]),
+		{
+			key: 'required',
+			colorVar: '--fg3',
+			dashed: true,
+			endLabel: 'target pot',
+			points: model.chart.map((p) => ({ value: p.required }))
+		}
+	]);
+	const chartLabels = $derived(
+		model.chart.map((p) => (p.t % 5 === 0 ? String(data.inputs.year + p.t) : ''))
+	);
+	const millions = (v: number) => `${(v / 1e6).toFixed(1)} M`;
+
+	// The three figures the sentence is made of, as tiles beside it.
+	const requiredPot = $derived((cfg.spend * 12) / (cfg.swr / 100));
+	const yearsToPension = $derived(
+		Math.max(0, Math.min(cfg.ageOne - model.rows[0].a1, cfg.ageTwo - model.rows[0].a2))
+	);
+
+	// The two people, for the pension cards. Hues as the handoff assigns them.
+	const PERSON_HUES = ['--series-health', '--series-savings'];
+	const people = $derived(
+		[0, 1].map((i) => ({
+			name: data.personNames[i],
+			initials: initialsFor(data.personNames[i]),
+			hue: PERSON_HUES[i],
+			age: i === 0 ? model.rows[0].a1 : model.rows[0].a2,
+			startsAt: i === 0 ? cfg.ageOne : cfg.ageTwo
+		}))
+	);
+
+	const TABLE_COLUMNS: Column[] = [
+		{ key: 'when', label: 'When', width: 'minmax(90px, 1fr)' },
+		{ key: 'ages', label: 'Ages', align: 'end', width: '80px', hideBelow: 760 },
+		{ key: 'capital', label: 'Capital', align: 'end', width: 'minmax(110px, auto)' },
+		{
+			key: 'equity',
+			label: 'Flat equity',
+			align: 'end',
+			width: 'minmax(110px, auto)',
+			hideBelow: 760
+		},
+		{ key: 'income', label: 'Income / month', align: 'end', width: 'minmax(110px, auto)' },
+		{ key: 'target', label: 'Against target', align: 'end', width: 'minmax(150px, auto)' }
+	];
+	type Row = (typeof model.rows)[number];
+	const coverage = (row: Row) => Math.round((row.total / Math.max(cfg.spend, 1)) * 100);
 
 	/**
 	 * The gauge's arithmetic.
@@ -208,6 +259,31 @@
 	     A stroke arc rather than a filled wedge: the arc's own thickness is
 	     constant, so a small share still reads as a share rather than as a
 	     sliver of a pie that is mostly empty. -->
+	<div class="v-tiles">
+		<div class="v-tile">
+			<span class="v-label">Capital pays</span>
+			<span class="display v-value" style="color: var(--blue);"
+				>{money(model.rows[0].draw)}<span class="v-unit">{unit} / mo</span></span
+			>
+			<span class="v-note">at {cfg.swr}% of {money(model.chart[0].pot)}</span>
+		</div>
+		<div class="v-tile">
+			<span class="v-label">Pension adds</span>
+			<span class="display v-value"
+				>{money(model.rows[0].pension)}<span class="v-unit">{unit} / mo</span></span
+			>
+			<span class="v-note"
+				>{model.rows[0].pension > 0
+					? 'already drawing'
+					: `first in ${yearsToPension} ${yearsToPension === 1 ? 'year' : 'years'}`}</span
+			>
+		</div>
+		<div class="v-tile">
+			<span class="v-label">You need</span>
+			<span class="display v-value">{money(cfg.spend)}<span class="v-unit">{unit} / mo</span></span>
+			<span class="v-note">a pot of {millions(requiredPot)}</span>
+		</div>
+	</div>
 </section>
 
 <!-- The assumptions beside the picture they change, not above it: every control
@@ -222,83 +298,98 @@
 					capital, savings rate, mortgages and rent are read from your own data
 				</span>
 			</div>
-			<div class="controls">
-				<label>
-					<span>Monthly spending you would need</span>
-					<input
-						class="mono"
-						type="number"
-						min="0"
-						step="1000"
-						bind:value={cfg.spend}
-						oninput={persist}
-					/>
-				</label>
-				<div class="control">
-					<span>Withdrawal rate</span>
-					<div class="seg">
-						{#each [3, 3.5, 4] as rate (rate)}
-							<button
-								type="button"
-								class="mono"
-								class:active={cfg.swr === rate}
-								onclick={() => {
-									cfg.swr = rate;
-									persist();
-								}}
-							>
-								{rate.toFixed(1)}%
-							</button>
-						{/each}
+			<div class="groups">
+				<div class="group">
+					<span class="g-label">Target</span>
+					<div class="controls">
+						<label>
+							<span>Monthly spending you would need</span>
+							<span class="money-field">
+								<input
+									class="mono"
+									type="number"
+									min="0"
+									step="1000"
+									bind:value={cfg.spend}
+									oninput={persist}
+								/>
+								<span class="mono money-unit">{unit}</span>
+							</span>
+						</label>
+						<div class="control">
+							<span>Withdrawal rate</span>
+							<div class="seg">
+								{#each [3, 3.5, 4] as rate (rate)}
+									<button
+										type="button"
+										class="mono"
+										class:active={cfg.swr === rate}
+										onclick={() => {
+											cfg.swr = rate;
+											persist();
+										}}
+									>
+										{rate.toFixed(1)}%
+									</button>
+								{/each}
+							</div>
+						</div>
 					</div>
 				</div>
-				<label>
-					<span class="split"
-						><span>Real return until then</span><span class="mono value"
-							>{cfg.realReturn.toFixed(1)}%</span
-						></span
-					>
-					<input
-						type="range"
-						min="0"
-						max="8"
-						step="0.5"
-						bind:value={cfg.realReturn}
-						oninput={persist}
-					/>
-				</label>
-				<label>
-					<span class="split"
-						><span>Yearly contributions grow</span><span class="mono value"
-							>{cfg.contributionGrowth.toFixed(1)}%</span
-						></span
-					>
-					<input
-						type="range"
-						min="-5"
-						max="10"
-						step="0.5"
-						bind:value={cfg.contributionGrowth}
-						oninput={persist}
-					/>
-				</label>
-				<label>
-					<span class="split"
-						><span>Property values grow</span><span class="mono value"
-							>{cfg.propertyGrowth.toFixed(1)}%</span
-						></span
-					>
-					<input
-						type="range"
-						min="-5"
-						max="10"
-						step="0.5"
-						bind:value={cfg.propertyGrowth}
-						oninput={persist}
-					/>
-				</label>
-				<div class="control wide">
-					<span>The flats, once you retire</span>
+
+				<div class="group">
+					<span class="g-label">Growth · real, after inflation</span>
+					<div class="controls one">
+						<label>
+							<span class="split"
+								><span>Real return until then</span><span class="mono value"
+									>{cfg.realReturn.toFixed(1)}%</span
+								></span
+							>
+							<input
+								type="range"
+								min="0"
+								max="8"
+								step="0.5"
+								bind:value={cfg.realReturn}
+								oninput={persist}
+							/>
+						</label>
+						<label>
+							<span class="split"
+								><span>Yearly contributions grow</span><span class="mono value"
+									>{cfg.contributionGrowth.toFixed(1)}%</span
+								></span
+							>
+							<input
+								type="range"
+								min="-5"
+								max="10"
+								step="0.5"
+								bind:value={cfg.contributionGrowth}
+								oninput={persist}
+							/>
+						</label>
+						<label>
+							<span class="split"
+								><span>Property values grow</span><span class="mono value"
+									>{cfg.propertyGrowth.toFixed(1)}%</span
+								></span
+							>
+							<input
+								type="range"
+								min="-5"
+								max="10"
+								step="0.5"
+								bind:value={cfg.propertyGrowth}
+								oninput={persist}
+							/>
+						</label>
+					</div>
+				</div>
+
+				<div class="group">
+					<span class="g-label">The flats, once you retire</span>
 					<div class="seg">
 						{#each [['keep', 'Keep, live in it'], ['rent', 'Rent it out'], ['sell', 'Sell and invest']] as [value, label] (value)}
 							<button
@@ -313,53 +404,67 @@
 							</button>
 						{/each}
 					</div>
+					<span class="consequence">
+						{cfg.plan === 'keep'
+							? 'Equity stays in the walls. It is shown, but pays nothing.'
+							: cfg.plan === 'rent'
+								? 'Rent joins the monthly income once the first pension starts.'
+								: 'Equity joins the pot at the first pension and is drawn down with it.'}
+					</span>
 				</div>
-				<label>
-					<span>{data.personNames[0]} · pension / month</span>
-					<input
-						class="mono"
-						type="number"
-						min="0"
-						step="500"
-						bind:value={cfg.pensionOne}
-						oninput={persist}
-					/>
-				</label>
-				<label>
-					<span>{data.personNames[1]} · pension / month</span>
-					<input
-						class="mono"
-						type="number"
-						min="0"
-						step="500"
-						bind:value={cfg.pensionTwo}
-						oninput={persist}
-					/>
-				</label>
-				<label>
-					<span>{data.personNames[0]} · starts at</span>
-					<input
-						class="mono"
-						type="number"
-						min={MIN_RETIREMENT_AGE}
-						max={MAX_RETIREMENT_AGE}
-						step="1"
-						bind:value={cfg.ageOne}
-						oninput={persist}
-					/>
-				</label>
-				<label>
-					<span>{data.personNames[1]} · starts at</span>
-					<input
-						class="mono"
-						type="number"
-						min={MIN_RETIREMENT_AGE}
-						max={MAX_RETIREMENT_AGE}
-						step="1"
-						bind:value={cfg.ageTwo}
-						oninput={persist}
-					/>
-				</label>
+
+				<div class="group">
+					<span class="g-label">State pension</span>
+					{#each people as person, i (person.name)}
+						<div class="person">
+							<span class="avatar mono" style:--person-hue="var({person.hue})">
+								{person.initials}
+							</span>
+							<span class="p-names">
+								<span class="p-name">{person.name}</span>
+								<span class="p-sub">
+									{person.age} today · pension in {Math.max(0, person.startsAt - person.age)} years
+								</span>
+							</span>
+							<label class="p-field">
+								<span>a month</span>
+								<span class="money-field">
+									<input
+										class="mono"
+										type="number"
+										min="0"
+										step="500"
+										value={i === 0 ? cfg.pensionOne : cfg.pensionTwo}
+										oninput={(e) => {
+											const v = Number((e.currentTarget as HTMLInputElement).value);
+											if (i === 0) cfg.pensionOne = v;
+											else cfg.pensionTwo = v;
+											persist();
+										}}
+									/>
+									<span class="mono money-unit">{unit}</span>
+								</span>
+							</label>
+							<label class="p-field">
+								<span>from age</span>
+								<input
+									class="mono"
+									type="number"
+									min={MIN_RETIREMENT_AGE}
+									max={MAX_RETIREMENT_AGE}
+									step="1"
+									value={i === 0 ? cfg.ageOne : cfg.ageTwo}
+									oninput={(e) => {
+										const v = Number((e.currentTarget as HTMLInputElement).value);
+										if (i === 0) cfg.ageOne = v;
+										else cfg.ageTwo = v;
+										persist();
+									}}
+								/>
+							</label>
+						</div>
+					{/each}
+				</div>
 			</div>
 			<span class="quiet">
 				Pension figures are rough placeholders until you paste the real ones from your ČSSZ personal
@@ -373,88 +478,84 @@
 				<Eyebrow hue="--blue" icon="trend" label="The pot against what the target requires" />
 				<span class="eyebrow-caption">millions {unit} · twenty years out</span>
 			</div>
-			<div class="chart">
-				{#each chart.axis as a (a.top)}
-					<span class="axis mono" style:top={a.top}>{a.label}</span>
-				{/each}
-				<svg viewBox="0 0 800 200" preserveAspectRatio="none">
-					{#each [0, 100] as gy (gy)}
-						<line x1="0" y1={gy} x2="800" y2={gy} stroke="var(--bd)" stroke-width="1" />
-					{/each}
-					<line x1="0" y1="200" x2="800" y2="200" stroke="var(--bd2)" stroke-width="1" />
-					{#if chart.crossing}
-						<line
-							x1={chart.crossing.x}
-							y1="0"
-							x2={chart.crossing.x}
-							y2="200"
-							stroke="var(--green)"
-							stroke-width="1"
-							stroke-dasharray="4 4"
-							vector-effect="non-scaling-stroke"
-							opacity="0.6"
-						/>
+			<LineChart
+				series={chartSeries}
+				labels={chartLabels}
+				height={280}
+				title="The pot against what the target requires"
+				description="Capital, capital with the flats' equity, and the pot the target needs, year by year."
+				format={millions}
+				axisTitle="millions {unit}"
+				slotLabel={(i) => `${data.inputs.year + i}`}
+			>
+				{#snippet readout(i)}
+					<span class="mono">{data.inputs.year + i}</span>
+					<span>capital <span class="mono">{money(model.chart[i].pot)}</span></span>
+					{#if cfg.plan !== 'sell'}
+						<span
+							>with flats <span class="mono">{money(model.chart[i].pot + equityAt(i))}</span></span
+						>
 					{/if}
-					<polyline
-						points={chart.required}
-						fill="none"
-						stroke="var(--fg3)"
-						stroke-width="2"
-						stroke-dasharray="6 4"
-						vector-effect="non-scaling-stroke"
-					/>
-					<polyline
-						points={chart.pot}
-						fill="none"
-						stroke="var(--teal)"
-						stroke-width="2.5"
-						stroke-linejoin="round"
-						vector-effect="non-scaling-stroke"
-					/>
-				</svg>
-			</div>
-			<div class="years mono">
-				{#each chart.years as year (year.label)}
-					<span class="year" style:left={year.left}>{year.label}</span>
-				{/each}
-				{#if chart.crossing}
-					<span class="year crossing" style:left={chart.crossing.left}>
-						{chart.crossing.label}
-					</span>
-				{/if}
-			</div>
-			<div class="legend">
-				<span class="l"
-					><span class="swatch" style="border-top: 2.5px solid var(--teal);"></span>your pot</span
-				>
-				<span class="l"
-					><span class="swatch" style="border-top: 2px dashed var(--fg3);"></span>required for the
-					target</span
-				>
-				<span class="l-note">{verdict}</span>
-			</div>
+				{/snippet}
+				{#snippet legend()}
+					<span class="l"
+						><span class="swatch" style="border-top: 2.5px solid var(--blue);"></span>capital</span
+					>
+					{#if cfg.plan !== 'sell'}
+						<span class="l"
+							><span class="swatch" style="border-top: 2.5px solid var(--purple);"></span>capital +
+							flat equity</span
+						>
+					{/if}
+					<span class="l"
+						><span class="swatch" style="border-top: 2px dashed var(--fg3);"></span>pot the target
+						needs · <span class="mono">{millions(requiredPot)}</span></span
+					>
+					<span class="l-note">{verdict}</span>
+				{/snippet}
+			</LineChart>
 		</section>
 		<section class="card stack">
-			<Eyebrow hue="--blue" icon="ledger" label="Where that leaves you" />
-			<div class="table">
-				<div class="t-head">
-					<span>When</span><span class="r">Ages</span><span class="r">Capital</span><span class="r"
-						>Flat equity</span
-					><span class="r">Monthly income</span><span class="r">Against target</span>
-				</div>
-				{#each model.rows as row (row.t)}
-					<div class="t-row" class:now={row.t === 0}>
-						<span>{row.t === 0 ? 'today' : `in ${row.t} years`}</span>
-						<span class="mono r">{row.a1} / {row.a2}</span>
-						<span class="mono r">{money(row.capital)}</span>
-						<span class="mono r">{money(row.equity)}</span>
-						<span class="mono r">{money(row.total)}</span>
-						<span class="mono r" style:color={row.gap >= 0 ? 'var(--green)' : 'var(--red)'}>
-							{row.gap >= 0 ? '+' : '−'}{money(Math.abs(row.gap))}
-						</span>
-					</div>
-				{/each}
+			<div class="eyebrow-row">
+				<Eyebrow hue="--blue" icon="ledger" label="Where that leaves you" />
+				<span class="eyebrow-caption">today's money</span>
 			</div>
+			<DataTable
+				columns={TABLE_COLUMNS}
+				groups={[{ key: 'all', open: true, rows: model.rows }]}
+				flat
+				hue="--blue"
+				label="Where that leaves you"
+				rowKey={(r) => String(r.t)}
+				rowClass={(r) => (r.t === 0 ? 'now' : undefined)}
+			>
+				{#snippet row(r, visible)}
+					<span class="when">
+						{r.t === 0 ? 'today' : `in ${r.t} years`}
+						{#if r.pension > 0 && (r.t === 0 || model.rows.find((x) => x.t < r.t && x.pension > 0) === undefined)}
+							<span class="pension-note">pension starts</span>
+						{/if}
+					</span>
+					{#if visible.has('ages')}<span class="mono r">{r.a1} / {r.a2}</span>{/if}
+					<span class="mono r" class:short={r.capital < 0}>{money(r.capital)}</span>
+					{#if visible.has('equity')}<span class="mono r">{money(r.equity)}</span>{/if}
+					<span class="mono r">{money(r.total)}</span>
+					<span class="target r">
+						<span class="cover" aria-hidden="true">
+							<span
+								class="cover-fill"
+								style:width="{Math.min(100, coverage(r))}%"
+								style:background="var({coverage(r) >= 100
+									? '--green'
+									: coverage(r) >= 50
+										? '--yellow'
+										: '--red'})"
+							></span>
+						</span>
+						<span class="mono cover-pct">{coverage(r)}%</span>
+					</span>
+				{/snippet}
+			</DataTable>
 		</section>
 	</div>
 </div>
@@ -542,9 +643,181 @@
 	   squeezed into a third of a phone. */
 	@media (min-width: 1100px) {
 		.verdict {
-			grid-template-columns: 1.3fr minmax(200px, auto);
+			grid-template-columns: auto 1.3fr minmax(360px, 1fr);
 			align-items: center;
 		}
+	}
+	/* The three figures the sentence is made of, as tiles beside it: what the
+	   capital pays, what the pension adds, what is needed. */
+	.v-tiles {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--space-4);
+	}
+	.v-tile {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-5) var(--space-6);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-tile);
+		background: var(--surface);
+		min-width: 0;
+	}
+	.v-label,
+	.v-note {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.v-value {
+		font-size: var(--text-xl);
+		white-space: nowrap;
+	}
+	.v-unit {
+		font-size: var(--text-xs);
+		font-weight: 400;
+		letter-spacing: 0;
+		color: var(--fg3);
+		margin-left: var(--space-2);
+	}
+	@media (max-width: 720px) {
+		.v-tiles {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	/* The assumptions, in four groups: a heading each, so a wall of eleven
+	   controls reads as four questions. */
+	.groups {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-8);
+	}
+	.group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	.g-label {
+		font-size: var(--text-xs);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--fg3);
+	}
+	.controls.one {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.consequence {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		line-height: 1.5;
+	}
+	.money-field {
+		display: flex;
+		align-items: center;
+		gap: 0;
+	}
+	.money-field input {
+		border-radius: var(--radius-ctl) 0 0 var(--radius-ctl);
+		flex: 1;
+	}
+	.money-unit {
+		display: grid;
+		place-items: center;
+		min-height: var(--control-h);
+		padding: 0 var(--space-4);
+		border: 1px solid var(--bd2);
+		border-left: 0;
+		border-radius: 0 var(--radius-ctl) var(--radius-ctl) 0;
+		background: var(--surface-2);
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.person {
+		display: grid;
+		grid-template-columns: 30px minmax(0, 1fr);
+		grid-template-areas:
+			'avatar names'
+			'month month'
+			'age age';
+		gap: var(--space-4) var(--space-4);
+		padding: var(--space-5);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-tile);
+		background: var(--surface);
+	}
+	.avatar {
+		grid-area: avatar;
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--person-hue) 26%, transparent);
+		color: color-mix(in srgb, var(--fg1) var(--series-ink-mix), var(--person-hue));
+		font-size: var(--text-xs);
+		font-weight: 600;
+	}
+	.p-names {
+		grid-area: names;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	.p-name {
+		font-size: var(--text-md);
+		font-weight: 500;
+		color: var(--fg1);
+	}
+	.p-sub {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.p-field:nth-of-type(1) {
+		grid-area: month;
+	}
+	.p-field:nth-of-type(2) {
+		grid-area: age;
+	}
+	.when {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+	.pension-note {
+		font-size: var(--text-xs);
+		color: var(--blue);
+		font-weight: 400;
+	}
+	.r {
+		text-align: right;
+	}
+	.short {
+		color: var(--red);
+	}
+	.target {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--space-4);
+	}
+	.cover {
+		display: block;
+		width: 80px;
+		height: 5px;
+		border-radius: var(--radius-pill);
+		background: var(--card3);
+		overflow: hidden;
+	}
+	.cover-fill {
+		display: block;
+		height: 100%;
+		border-radius: var(--radius-pill);
+	}
+	.cover-pct {
+		min-width: 38px;
+		text-align: right;
+		font-size: var(--text-sm);
 	}
 	.verdict p {
 		margin: 0;
@@ -583,14 +856,6 @@
 		gap: 7px;
 		font-size: var(--text-sm);
 		color: var(--fg3);
-	}
-	.control.wide {
-		grid-column: span 2;
-	}
-	@media (max-width: 640px) {
-		.control.wide {
-			grid-column: span 1;
-		}
 	}
 	input[type='number'] {
 		border: 1px solid var(--bd2);
@@ -632,86 +897,11 @@
 		background: var(--blue);
 		color: var(--fg-inverse);
 	}
-	.table {
-		display: flex;
-		flex-direction: column;
-	}
-	.t-head,
-	.t-row {
-		display: grid;
-		grid-template-columns: minmax(80px, 1fr) repeat(5, minmax(90px, auto));
-		gap: var(--space-5) var(--space-7);
-		align-items: baseline;
-	}
-	.t-head {
-		font-size: var(--text-xs);
-		letter-spacing: 0.07em;
-		text-transform: uppercase;
-		color: var(--fg3);
-		padding-bottom: 8px;
-		border-bottom: 1px solid var(--bd);
-	}
-	.t-row {
-		padding: 10px 0;
-		border-bottom: 1px solid var(--bd);
-		font-size: var(--text-md);
-	}
-	.t-row.now {
-		background: var(--card2);
-	}
-	.r {
-		text-align: right;
-	}
-	.chart {
-		position: relative;
-		padding-left: 46px;
-	}
-	.axis {
-		position: absolute;
-		left: 0;
-		width: 36px;
-		text-align: right;
-		transform: translateY(-50%);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-	}
-	.years {
-		position: relative;
-		height: 16px;
-		margin-top: 4px;
-		/* .chart's left padding used to provide this, while this row lived inside
-		   it. That containment is also what made the axis labels — positioned as
-		   a percentage of .chart — resolve 20px too low, dropping "0.0" onto the
-		   first year. The row is a sibling now, so it needs its own gutter. */
-		margin-left: 46px;
-	}
-	.year {
-		position: absolute;
-		transform: translateX(-50%);
-		font-size: var(--text-xs);
-		color: var(--fg3);
-		white-space: nowrap;
-	}
-	/* The year the pot clears the target reads as state, not decoration. */
-	.year.crossing {
-		color: var(--green);
-		font-weight: 600;
-		top: 0;
-	}
 
 	svg {
 		width: 100%;
 		height: auto;
 		display: block;
-	}
-	.legend {
-		display: flex;
-		gap: 14px 18px;
-		flex-wrap: wrap;
-		font-size: var(--text-sm);
-		color: var(--fg2);
-		border-top: 1px solid var(--bd);
-		padding-top: 12px;
 	}
 	.l {
 		display: flex;
@@ -726,17 +916,5 @@
 		margin-left: auto;
 		color: var(--fg3);
 		font-size: var(--text-xs);
-	}
-	@media (max-width: 720px) {
-		.t-head,
-		.t-row {
-			grid-template-columns: minmax(70px, 1fr) repeat(3, minmax(80px, auto));
-		}
-		.t-head span:nth-child(2),
-		.t-row span:nth-child(2),
-		.t-head span:nth-child(4),
-		.t-row span:nth-child(4) {
-			display: none;
-		}
 	}
 </style>

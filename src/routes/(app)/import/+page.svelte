@@ -9,6 +9,8 @@
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Pill from '$lib/components/Pill.svelte';
+	import IconTile from '$lib/components/IconTile.svelte';
 	import { DATE_ORDER_CHOICES, DECIMAL_CHOICES, ROLE_CHOICES } from '$lib/transactions/roles';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -402,134 +404,167 @@
 	]}
 />
 
-<section class="section">
-	<div class="eyebrow-row">
-		<Eyebrow hue="--yellow" icon="alert" label="Needs a decision" />
-		<span class="eyebrow-caption">
-			{data.review.length === 0
-				? 'nothing waiting'
-				: `${data.review.length} rows the categoriser will not guess at`}
-		</span>
-	</div>
-
-	{#if data.review.length === 0}
-		<!-- The empty state IS the good state, so it is drawn as one: a green card
-		     saying what happened, not a grey line saying nothing did. -->
-		<div class="all-filed">
-			<span class="filed-tile"><Icon name="check" size={20} /></span>
-			<span class="filed-text">
-				<span class="filed-title">Everything filed itself</span>
-				<span class="filed-note">
-					Only genuinely ambiguous rows appear here — a date column where every reading is valid, a
-					counterparty no rule knows.
-				</span>
+<!-- Two panels side by side, as the handoff draws them: what still needs a
+     person, and where each account's record stops. -->
+<div class="decide">
+	<section class="section">
+		<div class="eyebrow-row">
+			<Eyebrow hue="--yellow" icon="alert" label="Needs a decision" />
+			<span class="eyebrow-caption">
+				{data.review.length === 0
+					? 'nothing waiting'
+					: `${data.review.length} rows the categoriser will not guess at`}
 			</span>
 		</div>
-	{/if}
 
-	{#each data.review as r (r.id)}
-		<div class="card review-row">
-			<div class="r-facts">
-				<span class="mono r-date">{r.date}</span>
-				<div class="r-mid">
-					<span class="r-merchant">{r.merchant}</span>
-					<span class="r-reason">{r.reason} · {r.account}</span>
-				</div>
-				<span class="mono r-amount" style:color={r.negative ? 'var(--fg1)' : 'var(--green)'}>
-					{r.amount}
+		{#if data.review.length === 0}
+			<!-- The empty state IS the good state, so it is drawn as one: a green card
+		     saying what happened, not a grey line saying nothing did. -->
+			<div class="all-filed">
+				<span class="filed-tile"><Icon name="check" size={20} /></span>
+				<span class="filed-text">
+					<span class="filed-title">Everything filed itself</span>
+					<span class="filed-note">
+						Only genuinely ambiguous rows appear here — a date column where every reading is valid,
+						a counterparty no rule knows.
+					</span>
 				</span>
 			</div>
-			<div class="r-actions">
-				{#if r.isTransfer}
-					<form method="POST" action="?/confirmTransfer" use:enhance>
-						<input type="hidden" name="id" value={r.id} />
-						<button type="submit" class="btn">✓ Own transfer</button>
-					</form>
-					<form method="POST" action="?/rejectTransfer" use:enhance>
-						<input type="hidden" name="id" value={r.id} />
-						<button type="submit" class="btn">✕ Not a transfer</button>
-					</form>
-				{:else}
-					<form method="POST" action="?/categorize" use:enhance class="cat-form">
-						<input type="hidden" name="id" value={r.id} />
-						<!-- Not a native select. Its popup is placed by the browser, and on
+		{/if}
+
+		{#each data.review as r (r.id)}
+			<div class="card review-row">
+				<div class="r-facts">
+					<span class="mono r-date">{r.date}</span>
+					<div class="r-mid">
+						<span class="r-merchant">{r.merchant}</span>
+						<span class="r-reason">{r.reason} · {r.account}</span>
+					</div>
+					<span class="mono r-amount" style:color={r.negative ? 'var(--fg1)' : 'var(--green)'}>
+						{r.amount}
+					</span>
+				</div>
+				<div class="r-actions">
+					{#if r.isTransfer}
+						<form method="POST" action="?/confirmTransfer" use:enhance>
+							<input type="hidden" name="id" value={r.id} />
+							<button type="submit" class="btn">✓ Own transfer</button>
+						</form>
+						<form method="POST" action="?/rejectTransfer" use:enhance>
+							<input type="hidden" name="id" value={r.id} />
+							<button type="submit" class="btn">✕ Not a transfer</button>
+						</form>
+					{:else}
+						<form method="POST" action="?/categorize" use:enhance class="cat-form">
+							<input type="hidden" name="id" value={r.id} />
+							<!-- Not a native select. Its popup is placed by the browser, and on
 						     this screen — a long queue of rows, each with a chooser — opening
 						     one near the bottom expanded downwards past the fold, so the
 						     categories were off-screen until you scrolled to find them.
 						     CategoryPicker measures the room it has and opens upwards when
 						     there is more above. Without a suggestion the value starts empty,
 						     so an unguessed row never looks as though it were already filed. -->
-						<CategoryPicker
-							name="categoryId"
-							groups={data.categories}
-							value={r.suggestedCategoryId}
-							onpick={(id) => (chosen[r.id] = id)}
-						/>
-						<!-- The one category that needs a second answer, and only when the
+							<CategoryPicker
+								name="categoryId"
+								groups={data.categories}
+								value={r.suggestedCategoryId}
+								onpick={(id) => (chosen[r.id] = id)}
+							/>
+							<!-- The one category that needs a second answer, and only when the
 						     account cannot give it: money into a JOINT account filed as
 						     salary belongs to somebody, and nothing here knows who. An
 						     account with an owner is never asked. -->
-						{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
-							<label class="whose">
-								<span>Whose?</span>
-								<select name="salaryPersonId" required>
-									<option value="" disabled selected>Pick a person</option>
-									{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-								</select>
-							</label>
-							<label class="whose remember">
-								<input type="checkbox" name="rememberWhose" checked />
-								<span>Remember for “{r.merchant}”</span>
-							</label>
-						{/if}
-						<!-- Disabled until something is chosen: the placeholder posts an empty
+							{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
+								<label class="whose">
+									<span>Whose?</span>
+									<select name="salaryPersonId" required>
+										<option value="" disabled selected>Pick a person</option>
+										{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+									</select>
+								</label>
+								<label class="whose remember">
+									<input type="checkbox" name="rememberWhose" checked />
+									<span>Remember for “{r.merchant}”</span>
+								</label>
+							{/if}
+							<!-- Disabled until something is chosen: the placeholder posts an empty
 						     category, which the action rejects with a message that used to have
 						     nowhere to appear. The row read as an unresponsive button. -->
-						<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
-					</form>
-					<!-- Reachable from the row that prompted it. Nothing fitting is felt
+							<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
+						</form>
+						<!-- Reachable from the row that prompted it. Nothing fitting is felt
 					     here, not on a settings screen. -->
-					<button type="button" class="btn" onclick={() => (addingCategory = true)}>
-						➕ New category…
-					</button>
-					<!-- The second answer to the same question, so it is marked as an
+						<button type="button" class="btn" onclick={() => (addingCategory = true)}>
+							➕ New category…
+						</button>
+						<!-- The second answer to the same question, so it is marked as an
 					     alternative rather than lined up as a fourth control. This is the
 					     case pairing cannot reach: money moved to an account whose
 					     statements never arrive, so there is no second leg to match and
 					     the row looks like unexplained spending. -->
-					<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
-						<input type="hidden" name="id" value={r.id} />
-						<InfoHint label="What “not spending” means">
-							Money moved between your own accounts is neither income nor spending, so this row
-							stops counting in either.
-							<br /><br />
-							Both sides are normally matched automatically when you import both statements. Use this
-							when the other account's statements never arrive — a savings account you do not import —
-							so there is no second half to match against.
-						</InfoHint>
-						<label class="os-phrase">
-							<span>Moved to</span>
-							<select name="toAccountId" required aria-label="Which of your accounts">
-								<option value="" disabled selected>which account?</option>
-								{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
-									<option value={a.id}>{a.name}</option>
-								{/each}
-							</select>
-						</label>
-						<!-- Named for what it does to the figures, not for what it is
+						<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
+							<input type="hidden" name="id" value={r.id} />
+							<InfoHint label="What “not spending” means">
+								Money moved between your own accounts is neither income nor spending, so this row
+								stops counting in either.
+								<br /><br />
+								Both sides are normally matched automatically when you import both statements. Use this
+								when the other account's statements never arrive — a savings account you do not import
+								— so there is no second half to match against.
+							</InfoHint>
+							<label class="os-phrase">
+								<span>Moved to</span>
+								<select name="toAccountId" required aria-label="Which of your accounts">
+									<option value="" disabled selected>which account?</option>
+									{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
+										<option value={a.id}>{a.name}</option>
+									{/each}
+								</select>
+							</label>
+							<!-- Named for what it does to the figures, not for what it is
 						     called internally: "It is a transfer" said nothing about why
 						     you would press it. -->
-						<button type="submit" class="btn">Not spending</button>
-					</form>
+							<button type="submit" class="btn">Not spending</button>
+						</form>
+					{/if}
+				</div>
+
+				{#if form?.message && form?.id === r.id}
+					<p class="row-error" role="alert">{form.message}</p>
 				{/if}
 			</div>
+		{/each}
+	</section>
 
-			{#if form?.message && form?.id === r.id}
-				<p class="row-error" role="alert">{form.message}</p>
-			{/if}
+	<section class="section">
+		<div class="eyebrow-row">
+			<Eyebrow hue="--teal" icon="receipt" label="Statements" />
+			<span class="eyebrow-caption">
+				{data.statements.length}
+				{data.statements.length === 1 ? 'account' : 'accounts'}
+			</span>
 		</div>
-	{/each}
-</section>
+		<div class="card statements">
+			{#each data.statements as a (a.id)}
+				<div class="stmt">
+					<IconTile hue="--teal" emoji={a.emoji} size={30} />
+					<span class="stmt-mid">
+						<span class="stmt-name">{a.name}</span>
+						<span class="stmt-sub">{a.to ? `statement to ${a.to}` : 'no statement yet'}</span>
+					</span>
+					{#if a.days !== null}
+						<span class="mono stmt-days">{a.days} {a.days === 1 ? 'day' : 'days'}</span>
+					{/if}
+					{#if a.overdue}<Pill hue="yellow">overdue</Pill>{/if}
+				</div>
+			{:else}
+				<p class="stmt-empty">
+					No accounts yet. Add one on the Accounts screen and its statements land here.
+				</p>
+			{/each}
+		</div>
+	</section>
+</div>
 
 {#if addingCategory}
 	<Modal title="New category" onclose={() => (addingCategory = false)}>
@@ -595,6 +630,57 @@
 {/if}
 
 <style>
+	.decide {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-7);
+		align-items: start;
+	}
+	@media (max-width: 899px) {
+		.decide {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	.statements {
+		display: flex;
+		flex-direction: column;
+		padding-top: var(--space-3);
+		padding-bottom: var(--space-3);
+	}
+	.stmt {
+		display: grid;
+		grid-template-columns: 30px minmax(0, 1fr) auto auto;
+		align-items: center;
+		gap: var(--space-5);
+		padding: var(--space-5) 0;
+		border-top: 1px solid var(--bd);
+	}
+	.stmt:first-child {
+		border-top: 0;
+	}
+	.stmt-mid {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+	}
+	.stmt-name {
+		font-size: var(--text-md);
+		font-weight: 500;
+	}
+	.stmt-sub {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.stmt-days {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.stmt-empty {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
 	/* The empty state is the answer, not the absence of one. */
 	.all-filed {
 		display: flex;

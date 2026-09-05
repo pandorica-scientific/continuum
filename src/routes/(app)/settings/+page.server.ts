@@ -44,7 +44,8 @@ import {
 } from '$lib/server/backup';
 import { importConfig as importConfigFile } from '$lib/server/system/config-file';
 import { availableCurrencies } from '$lib/server/fx/currencies';
-import { getBaseCurrency, getModules, setSetting } from '$lib/server/settings';
+import { getBaseCurrency, getModules, getSetting, setSetting } from '$lib/server/settings';
+import { DEFAULT_GAINS_POLICY, parseGainsPolicy, type GainsPolicy } from '$lib/invest/gains';
 import { getCalendarMarkers } from '$lib/server/calendar';
 import {
 	calendarProviderKinds,
@@ -169,7 +170,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		tokens,
 		calendarAccounts,
 		calendarMarkers,
-		calendarSyncMinutes
+		calendarSyncMinutes,
+		investTax
 	] = await Promise.all([
 		// All three render only inside the isAdmin branches of this page, so a
 		// member paid for three queries to fill sections their copy never draws.
@@ -215,7 +217,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// entered, and the account list names where the household's diary goes.
 		isAdmin ? listCalendarAccounts() : [],
 		isAdmin ? getCalendarMarkers() : true,
-		isAdmin ? getSyncIntervalMinutes() : 15
+		isAdmin ? getSyncIntervalMinutes() : 15,
+		// How realised gains are taxed. Beside the base currency because both
+		// are facts about the country the household is taxed in, and the form
+		// used to sit on the Investments screen where a setting read as a figure.
+		isAdmin ? getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY) : null
 	]);
 
 	const groups = await loadCategoryGroups();
@@ -253,6 +259,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		moduleToggles: modules,
 		baseCurrency,
 		currencies,
+		investTax,
 		people,
 		// The component needs to know who you are to decide which controls are
 		// yours and whether you may administer anyone.
@@ -523,6 +530,24 @@ export const actions = administered({
 			return fail(400, { message: 'Poll between 1 and 1440 minutes.' });
 		}
 		await setSetting('calendarSyncMinutes', Math.round(minutes));
+		return { ok: true };
+	},
+
+	/** How realised gains are taxed — the rate, and whether a long hold is exempt. */
+	setTax: async ({ request }) => {
+		const form = await request.formData();
+		const current = await getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY);
+		const text = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value : null);
+		const parsed = parseGainsPolicy(
+			{
+				ratePct: text(form.get('ratePct')),
+				exemptLongHeld: form.get('exemptLongHeld') === 'on',
+				exemptAfterYears: text(form.get('exemptAfterYears'))
+			},
+			current
+		);
+		if ('message' in parsed) return fail(400, { message: parsed.message });
+		await setSetting('investTax', parsed.policy);
 		return { ok: true };
 	},
 

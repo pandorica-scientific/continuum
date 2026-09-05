@@ -26,6 +26,11 @@
 
 	let { data, form } = $props();
 
+	// The threshold field follows the checkbox as it is clicked, not as it was
+	// last saved: a disabled field is never posted, so switching the exemption
+	// on and typing a threshold in the same visit must save both.
+	let exemptLongHeld = $derived(data.investTax?.exemptLongHeld ?? false);
+
 	/**
 	 * The nine things this screen configures, and which of them this person has.
 	 *
@@ -39,7 +44,7 @@
 				{ key: 'modules', label: 'Modules', icon: 'layers', hue: '--brand', when: data.isAdmin },
 				{
 					key: 'currencies',
-					label: 'Currencies',
+					label: 'Money',
 					icon: 'coins',
 					hue: '--teal',
 					when: data.isAdmin
@@ -393,8 +398,8 @@
 				<Eyebrow
 					hue="--brand"
 					icon="coins"
-					label="Currencies"
-					caption="Balances stay in their own currency everywhere. Only the totals at the top of a screen convert, at the day's rate."
+					label="Money"
+					caption="The currency everything converts to, the rates it converts at, and how gains are taxed."
 				/>
 				<div class="card">
 					<form method="POST" action="?/setBaseCurrency" use:enhance class="currency-form">
@@ -434,6 +439,55 @@
 							</p>
 						{/if}
 					</div>
+				{/if}
+				{#if data.investTax}
+					<!-- reset: false. A successful submit otherwise resets the form, and a
+					     reset restores each field to its DOM default — which is empty,
+					     because Svelte sets a dynamic value as a property and never writes
+					     the attribute. -->
+					<form
+						method="POST"
+						action="?/setTax"
+						use:enhance={() =>
+							async ({ update }) =>
+								update({ reset: false })}
+						class="card tax-form"
+					>
+						<Eyebrow hue="--purple" icon="sliders" label="How gains are taxed" />
+						<div class="tax-fields">
+							<label class="field">
+								<span>Rate on realised gains</span>
+								<input
+									name="ratePct"
+									inputmode="decimal"
+									value={data.investTax.ratePct || ''}
+									placeholder="15"
+								/>
+							</label>
+							<label class="toggle">
+								<input type="checkbox" name="exemptLongHeld" bind:checked={exemptLongHeld} />
+								<span>Exempt what was held a long time</span>
+							</label>
+							<label class="field">
+								<span>Exempt after (years)</span>
+								<input
+									name="exemptAfterYears"
+									inputmode="numeric"
+									value={data.investTax.exemptAfterYears}
+									disabled={!exemptLongHeld}
+								/>
+							</label>
+							<button type="submit" class="btn btn-primary">Save</button>
+						</div>
+						<!-- Off unless switched on, because a holding-period exemption is a fact
+						     about one country. The Czech time test is three years; somewhere
+						     else it is a different number, or nothing at all. -->
+						<p class="quiet">
+							Both are yours to set. The exemption matches the Czech three-year time test when you
+							turn it on, and is off by default because it applies nowhere else. The Investments
+							screen estimates this year's tax from these.
+						</p>
+					</form>
 				{/if}
 			</section>
 		{/if}
@@ -1531,6 +1585,25 @@
 	.note {
 		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	.tax-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.tax-fields {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-6);
+		flex-wrap: wrap;
+	}
+	.tax-fields .toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding-bottom: var(--space-4);
+		font-size: var(--text-sm);
+		color: var(--fg2);
 	}
 	.currency-form {
 		display: flex;

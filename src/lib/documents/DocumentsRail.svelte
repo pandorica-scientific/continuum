@@ -90,12 +90,12 @@
 	}
 
 	let {
-		data,
-		/** The page's own URL writer: the rail navigates, it does not own the URL. */
-		navigate
+		data
 	}: {
 		data: RailData;
-		navigate: (next: Record<string, string | string[] | null>) => void;
+		/** Kept for the page that passes it; the rows are links now and write
+		 *  the URL themselves, so the rail no longer needs the page's writer. */
+		navigate?: (next: Record<string, string | string[] | null>) => void;
 	} = $props();
 
 	let editingRail = $state(false);
@@ -176,18 +176,21 @@
      places, and the second place had no room to say anything about them. -->
 <nav class="rail" aria-label="Shelves">
 	{#each data.shelves.filter((s) => s.key === 'inbox') as s (s.key)}
-		<button
-			type="button"
+		<!-- A link, not a button: a shelf is a place with an address, so it can
+		     be opened in a new tab, bookmarked, and reached with the back button. -->
+		<a
 			class="rail-item inbox"
 			class:active={data.view !== 'tags' && data.shelf === s.key}
-			onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
+			aria-current={data.view !== 'tags' && data.shelf === s.key ? 'page' : undefined}
+			href="/documents?shelf={s.key}"
+			data-sveltekit-noscroll
 		>
 			<span class="rail-label"
 				>{#if s.emoji}<span class="rail-emoji">{s.emoji}</span>{/if}{s.label}</span
 			>
 			<!-- Amber only when there is something waiting: work, not an error. -->
 			<span class="mono rail-count" class:waiting={s.count > 0}>{s.count}</span>
-		</button>
+		</a>
 	{/each}
 
 	<div class="rail-divider"></div>
@@ -253,15 +256,16 @@
 	{:else}
 		<div class="rail-shelves">
 			{#each railShelves as s (s.key)}
-				<button
-					type="button"
+				<a
 					class="rail-item"
 					class:active={data.view !== 'tags' && data.shelf === s.key}
-					onclick={() => navigate({ shelf: s.key, doc: null, view: null })}
+					aria-current={data.view !== 'tags' && data.shelf === s.key ? 'page' : undefined}
+					href="/documents?shelf={s.key}"
+					data-sveltekit-noscroll
 				>
 					<span class="rail-label"><span class="rail-emoji">{s.emoji}</span>{s.label}</span>
 					<span class="mono rail-count">{s.count}</span>
-				</button>
+				</a>
 			{/each}
 		</div>
 	{/if}
@@ -272,28 +276,30 @@
 	     than the first: a shelf answers a question, and "all of it" is what you
 	     ask for when none of the questions is yours. -->
 	{#each data.shelves.filter((s) => s.key === 'all') as s (s.key)}
-		<button
-			type="button"
+		<a
 			class="rail-item"
 			class:active={data.view !== 'tags' && data.shelf === 'all'}
-			onclick={() => navigate({ shelf: null, doc: null, view: null })}
+			aria-current={data.view !== 'tags' && data.shelf === 'all' ? 'page' : undefined}
+			href="/documents"
+			data-sveltekit-noscroll
 		>
 			<span class="rail-label">{s.label}</span>
 			<span class="mono rail-count">{s.count}</span>
-		</button>
+		</a>
 	{/each}
 
 	<!-- Tags cut across documents and money alike; a household reaches for
 		     them from the paper far more often than from the register. -->
-	<button
-		type="button"
+	<a
 		class="rail-item"
 		class:active={data.view === 'tags'}
-		onclick={() => navigate({ view: 'tags', doc: null })}
+		aria-current={data.view === 'tags' ? 'page' : undefined}
+		href="/documents?view=tags"
+		data-sveltekit-noscroll
 	>
 		<span class="rail-label"><span class="rail-emoji">🏷️</span>Tags</span>
 		<span class="mono rail-count">{data.knownTags.length}</span>
-	</button>
+	</a>
 </nav>
 
 {#if addingShelf}
@@ -505,6 +511,7 @@
 	}
 	.rail-item:hover {
 		background: var(--surface-2);
+		text-decoration: none;
 	}
 	/* A lifted surface and the weight, not a darker card: the rail sits on the
 	   page's own ground, so a darker fill read as a hole rather than a row. */

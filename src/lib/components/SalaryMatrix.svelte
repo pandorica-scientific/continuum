@@ -408,7 +408,7 @@
 		color: var(--yellow);
 	}
 	.c-sub.quiet {
-		opacity: 0.55;
+		opacity: 0.85;
 	}
 	.absent {
 		color: var(--fg3);

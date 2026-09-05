@@ -272,7 +272,7 @@
 		padding: 2px var(--space-4);
 		border-radius: var(--radius-pill);
 		background: color-mix(in srgb, var(--chip-hue) 16%, transparent);
-		color: var(--chip-hue);
+		color: color-mix(in srgb, var(--fg1) var(--series-ink-mix), var(--chip-hue));
 		min-width: 44px;
 		text-align: center;
 	}

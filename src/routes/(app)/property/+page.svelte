@@ -8,9 +8,12 @@
 	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import ImageSlot from '$lib/components/ImageSlot.svelte';
 	import Lightbox from '$lib/components/Lightbox.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import { roomCounts, roomPhotos, unassignedPhotos } from '$lib/property/media';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import FloorPlan from '$lib/components/FloorPlan.svelte';
 	import FloorPlanEditor from '$lib/components/FloorPlanEditor.svelte';
@@ -67,6 +70,28 @@
 		};
 	});
 	let lightbox = $state<string | null>(null);
+
+	// Which gallery is open: a room by its index, the unassigned photos, or
+	// none. The floor plan is the index — press a room, see its pictures.
+	let gallery = $state<number | 'unassigned' | null>(null);
+	const galleryPhotos = $derived(
+		!data.detail
+			? []
+			: gallery === 'unassigned'
+				? unassignedPhotos(data.detail.images)
+				: gallery === null
+					? []
+					: roomPhotos(data.detail.images, gallery)
+	);
+	const galleryTitle = $derived(
+		!data.detail || gallery === null
+			? ''
+			: gallery === 'unassigned'
+				? 'Photos not in a room'
+				: data.detail.images.drawing?.rooms[gallery]?.name || 'Room'
+	);
+	const gallerySlot = (n: number) =>
+		gallery === 'unassigned' ? `photo${n}` : `room${gallery}:photo${n}`;
 </script>
 
 <ScreenHeader title="Property" caption="Each flat with its value, mortgage, bills and tenancy." />
@@ -149,8 +174,13 @@
 {#if data.detail}
 	<section class="section">
 		<div class="eyebrow-row">
-			<Eyebrow hue="--purple" icon="buildings" label="This flat" />
-			<span class="eyebrow-caption">{data.detail.sizeLabel || data.detail.name}</span>
+			<!-- The flat's own name, not a label saying "this flat": the switcher
+			     above has already said which, and the name is what the figures
+			     below are about. -->
+			<span class="flat-head">
+				<span class="flat-name">{data.detail.name}</span>
+				{#if data.detail.sizeLabel}<span class="mono flat-size">{data.detail.sizeLabel}</span>{/if}
+			</span>
 			<span class="p-tags">
 				{#each data.detail.tags as t (t)}
 					<form method="POST" action="?/tags" use:enhance class="tag-chip">
@@ -189,11 +219,8 @@
 			<div class="eyebrow-row">
 				<Eyebrow hue="--purple" icon="buildings" label="Floor plan" />
 				<button type="button" class="btn plan-edit" onclick={() => (editingPlan = !editingPlan)}>
-					{editingPlan
-						? 'Close editor'
-						: data.detail.images.drawing
-							? '✏️ Edit plan'
-							: '✏️ Draw plan'}
+					{#if !editingPlan}<Icon name="pencil" size={13} />{/if}
+					{editingPlan ? 'Close editor' : data.detail.images.drawing ? 'Edit plan' : 'Draw plan'}
 				</button>
 			</div>
 			{#if editingPlan}
@@ -206,7 +233,26 @@
 				{/key}
 			{:else if data.detail.images.drawing}
 				<div class="plan drawn">
-					<FloorPlan drawing={data.detail.images.drawing} />
+					<FloorPlan
+						drawing={data.detail.images.drawing}
+						counts={roomCounts(data.detail.images)}
+						onroom={(i) => (gallery = i)}
+					/>
+				</div>
+				<!-- Photos live in rooms now; the strip under the plan is gone.
+				     What is not in a room yet is one press away, and says how much. -->
+				<div class="plan-foot">
+					<span class="quiet">Press a room to see or add its photos.</span>
+					{#if unassignedPhotos(data.detail.images).length > 0}
+						<button type="button" class="btn small" onclick={() => (gallery = 'unassigned')}>
+							{unassignedPhotos(data.detail.images).length}
+							{unassignedPhotos(data.detail.images).length === 1 ? 'photo' : 'photos'} not in a room
+						</button>
+					{:else}
+						<button type="button" class="btn small" onclick={() => (gallery = 'unassigned')}>
+							Add a photo without a room
+						</button>
+					{/if}
 				</div>
 			{:else}
 				<div class="plan">
@@ -220,27 +266,29 @@
 					/>
 				</div>
 			{/if}
-			<div class="photos">
-				{#each data.detail.images.photos as photo, i (photo)}
+			{#if !data.detail.images.drawing || editingPlan}
+				<div class="photos">
+					{#each data.detail.images.photos as photo, i (photo)}
+						<div class="photo">
+							<ImageSlot
+								propertyId={data.detail.id}
+								slot={`photo${i}`}
+								image={photo}
+								placeholder={`Photo ${i + 1}`}
+								onview={(img) => (lightbox = img)}
+							/>
+						</div>
+					{/each}
 					<div class="photo">
 						<ImageSlot
 							propertyId={data.detail.id}
-							slot={`photo${i}`}
-							image={photo}
-							placeholder={`Photo ${i + 1}`}
-							onview={(img) => (lightbox = img)}
+							slot={`photo${data.detail.images.photos.length}`}
+							image={undefined}
+							placeholder="➕ Add photo"
 						/>
 					</div>
-				{/each}
-				<div class="photo">
-					<ImageSlot
-						propertyId={data.detail.id}
-						slot={`photo${data.detail.images.photos.length}`}
-						image={undefined}
-						placeholder="➕ Add photo"
-					/>
 				</div>
-			</div>
+			{/if}
 		</div>
 
 		<div class="stack" style="gap: 16px;">
@@ -589,6 +637,39 @@
 	</section>
 {/if}
 
+{#if gallery !== null && data.detail}
+	{#key `${data.detail.id}:${gallery}`}
+		<Modal title={galleryTitle} onclose={() => (gallery = null)}>
+			<div class="gallery">
+				{#each galleryPhotos as photo, n (photo)}
+					<div class="photo">
+						<ImageSlot
+							propertyId={data.detail.id}
+							slot={gallerySlot(n)}
+							image={photo}
+							placeholder={`${galleryTitle} · photo ${n + 1}`}
+							onview={(img) => (lightbox = img)}
+						/>
+					</div>
+				{/each}
+				<div class="photo">
+					<ImageSlot
+						propertyId={data.detail.id}
+						slot={gallerySlot(galleryPhotos.length)}
+						image={undefined}
+						placeholder="➕ Add photo"
+					/>
+				</div>
+			</div>
+			<p class="quiet gallery-note">
+				{galleryPhotos.length === 0
+					? 'Nothing here yet. Drop a picture on the empty slot, or click it to browse.'
+					: 'Click a photo to see it full size. ↺ replaces it, ✕ removes it.'}
+			</p>
+		</Modal>
+	{/key}
+{/if}
+
 {#if lightbox}
 	<Lightbox image={lightbox} alt="Property photo" onclose={() => (lightbox = null)} />
 {/if}
@@ -730,6 +811,26 @@
 		gap: var(--space-5);
 		overflow-x: auto;
 		padding-bottom: 4px;
+	}
+	.plan-foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-5);
+		flex-wrap: wrap;
+	}
+	.gallery {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: var(--space-5);
+	}
+	.gallery .photo {
+		flex: none;
+		width: auto;
+		height: 144px;
+	}
+	.gallery-note {
+		margin: var(--space-5) 0 0;
 	}
 	.photo {
 		flex: 0 0 200px;
@@ -908,6 +1009,26 @@
 	.row {
 		display: flex;
 		gap: var(--space-4);
+	}
+	.flat-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-5);
+		min-width: 0;
+	}
+	.flat-name {
+		font-size: var(--text-lg);
+		font-weight: 650;
+		color: var(--fg1);
+	}
+	.flat-size {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.plan-edit {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
 	}
 	.p-tags {
 		display: inline-flex;

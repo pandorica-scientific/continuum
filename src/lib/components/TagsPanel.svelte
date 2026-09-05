@@ -47,7 +47,7 @@
 			<a class="t-link" href="/documents?tag={encodeURIComponent(t.name)}">
 				<span
 					class="t-name"
-					style:color="var({tagHue(t.name)})"
+					style:color="color-mix(in srgb, var(--fg1) var(--series-ink-mix), var({tagHue(t.name)}))"
 					style:border-color="color-mix(in srgb, var({tagHue(t.name)}) 45%, transparent)"
 					>{t.name}</span
 				>

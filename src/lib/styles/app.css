@@ -329,6 +329,13 @@
 	--dur-slow: 260ms;
 
 	/* An icon tile is a hue mixed into the ground behind a stroke icon. */
+	/* How much of --fg1 to mix into a series hue used as INK — a category
+	   chip, a share chip, a tag's name, an initials avatar. The bright series
+	   colours are right for a bar and wrong for eleven-pixel text on their own
+	   tint: on the light theme they sit at 2.2–2.5:1. Zero in the dark theme,
+	   where the same hues clear AA on the dark tints; the light theme darkens
+	   them here rather than re-mixing the tint, which the guidelines forbid. */
+	--series-ink-mix: 0%;
 	--tile-alpha: 16%;
 	--tile-alpha-active: 28%;
 
@@ -565,7 +572,10 @@ html[data-ledger-theme='light'] {
 	--bd: rgb(60 52 40 / 0.11);
 	--bd2: rgb(60 52 40 / 0.22);
 	--fg2: #3d3a34;
-	--fg3: #75705f;
+	/* Darker than the handoff's #75705f, which sat at 4.2–4.4:1 on these
+	   surfaces — every quiet label, count and note on the light theme failed
+	   AA by a hair. This is the v0.7 value, which clears 4.5 on every wash. */
+	--fg3: #6b6559;
 
 	/* Warm-tinted rather than near-black: a neutral shadow over warm paper
 	   reads as grey dirt under the card. */
@@ -573,6 +583,7 @@ html[data-ledger-theme='light'] {
 	--shadow-hero: 0 18px 44px -20px color-mix(in srgb, var(--brand) 55%, transparent);
 	--select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2375705f' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
 	--shadow-float: 0 8px 28px -8px rgb(60 52 40 / 0.35), 0 1px 3px rgb(60 52 40 / 0.12);
+	--series-ink-mix: 42%;
 	--tile-alpha: 17%;
 	--tile-alpha-active: 28%;
 

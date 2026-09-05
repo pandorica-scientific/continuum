@@ -16,6 +16,15 @@
 - 🔎 **Transactions opens on four chips and a search box** — the eleven-field filter grid is one click away instead of the first thing on the screen
 - 📈 **One chart engine behind the salary and tax screens** — bars and lines, its own axis for each, round steps, gaps at null points, a hover readout and a series named at the end of its own line; the two screens each owned a copy of that arrangement and had already drifted on bar width and readout placement
 - 🔥 **Hovering a Sankey block lights its whole route** in both directions and dims the rest, with a slow flame on the lit bands
+- 🧮 **One table** — `DataTable` draws the header strip, the row line, the open group's ground and the summary row for Transactions, Rules, Salary, Tax, Retirement and Holdings, which each used to draw their own
+- 📷 **A room holds its photos** — press a room on the floor plan to see, add or remove its pictures, and the room says how many it has
+- 🌊 **The net-worth tide moves** — the swell under the figure drifts and turns, deeper for a bigger month, and appears from the household's first month rather than its second
+- 🔗 **Documents shelves are links** — a shelf can be opened in a new tab, bookmarked and reached with the back button
+- 🪪 **A wallet card says what it is** — country, kind, the last four of its number, whose it is and when it expires, with the state pill under the face
+- 📊 **Cash flow tells its own story** — six months of in beside out, where the money went by group, and where it came from, in place of a second copy of the Overview's waterfall
+- 🎯 **Retirement's three figures are tiles beside the sentence**, the assumptions are grouped into four questions, the chart is the shared engine with nice ticks and named lines, and the table carries a coverage bar
+- 🧾 **Import lists where each account's statements stop**, beside what still needs a decision
+- ♿ **A skip link** puts the content one Tab away
 
 ### 🔧 Changed
 
@@ -28,6 +37,17 @@
 - 📐 **Two chart geometry modules folded into one engine** — `salary-chart-geometry.ts` and `tax-chart-geometry.ts` keep what a bar means and hand the pixels to `charts/line.ts`, which is tested once instead of twice
 - 🧹 **Nineteen exports narrowed to the file that uses them** and six dead declarations removed; `npm run scan:unused` went from 117 names to 98, and every one still listed is a type naming an exported function's own signature
 - 📸 **The README's screenshots are the new UI**, in both themes
+- 🖼️ **Panel heads carry a stroke icon, never an emoji** — `design/no-emoji-eyebrow` fails a build that passes one
+- 🔽 **Every select wears the app's own chevron and ground**, in both themes, in place of the platform's
+- 📋 **Transactions lands on the newest month, open, at 25 rows** — it used to land on five closed months and no transactions
+- 💱 **Settings › Currencies is Settings › Money**, and holds the approximate-rate note and the gains-tax rule that used to sit on Investments; the rate banner above every screen is a dot on the Money row
+- 🏘️ **Property's flat header is the flat's name and size**, the figures are wash tiles in the display face, the floor plan's rooms are filled in the area's hue
+- 📈 **Holdings take the same colour as their wedge** in the pie beside them, and the "How that is worked out" panel is gone
+- 🏦 **Loans' actions are ghost buttons under the fixation band** — Schedule, Repay early, Re-fix, Edit
+- 📎 **Statements bands take each account's series colour**, and the legend is three keys
+- 🧭 **The Needs-you strip opens in place** — the "+N more" tile takes a card's cell and the board row grows, with no inner scroll
+- 🎨 **The two tide inks are tokens** (`--tide-up`, `--tide-down`) — the sidebar carried the literals
+- ✅ **The screenshot run audits contrast** — `scripts/take-screenshots.mjs` hands every web capture to axe and fails on a `color-contrast` violation
 - 🎚️ **One switch component**, where the same track, knob and thirty lines of CSS were written out three times across Settings and Calendar
 - 🎨 **A register row leads with its category's colour** — an 8×22 bar down the left, so a month of spending is scannable before a word of it is read
 - 🏷️ **A transaction's category is a chip in its own hue**, beside the merchant rather than a grey word three columns to the right
@@ -45,6 +65,7 @@
 
 ### 🐛 Fixed
 
+- 🔎 **The light theme's quiet ink clears AA** — `--fg3` was 4.2–4.4:1 on the light surfaces, which was every note, count and label on the light theme failing by a hair
 - 🗂️ **The Documents header counts the archive** instead of printing `[object Object] documents` — the count was a database row array passed whole
 - 🔧 **A dossier's `once` slot fits its own box** — the ribbon's 28px centred cell was winning over the slot's own layout, so the name sat centred and the date fell out below it
 - 🙈 **A section hidden by an attribute is actually hidden** — `.section` sets `display: flex`, which beat `[hidden]`'s own `display: none`
