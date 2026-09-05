@@ -134,6 +134,7 @@
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
 		padding: 18px 20px;
+		/* Fills its rows and may exceed them: the stored height is a floor. */
 		height: 100%;
 		min-height: 0;
 		overflow: hidden;
@@ -230,16 +231,17 @@
 		color: var(--fg3);
 	}
 	/* Fixed box: content taller than the panel scrolls inside it. */
+	/* The body is not a scroller. It was one, with `overscroll-behavior:
+	   contain` so the wheel stopped at the panel's end — and a panel whose
+	   content FITS is still a scroll container, so the wheel over any panel
+	   went nowhere and the page could not be scrolled from most of the board.
+	   The board's rows grow with their content instead (`minmax(row, auto)`),
+	   so a tall panel makes a tall row and the page is the one thing that
+	   scrolls. */
 	.body {
 		flex: 1;
 		min-height: 0;
-		overflow-x: hidden;
-		overflow-y: auto;
-		/* Scrolling stops at this panel's own end. Without it the wheel is handed
-		   on to whatever scrolls behind, so reaching the bottom here quietly
-		   starts scrolling the page — and scrolling back moves the wrong one
-		   first. See docs/ui-guidelines.md. */
-		overscroll-behavior: contain;
+		overflow: visible;
 	}
 	.body.inert > :global(*) {
 		pointer-events: none;
@@ -257,9 +259,6 @@
 	   to be told. */
 	.panel:has(:global([data-grow])) {
 		height: auto;
-	}
-	.panel:has(:global([data-grow])) .body {
-		overflow: visible;
 	}
 	.handle {
 		position: absolute;

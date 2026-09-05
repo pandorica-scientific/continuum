@@ -237,8 +237,12 @@
 				transform="rotate(-90 62 62)"
 			/>
 		</svg>
-		<span class="gauge-figure display">{coveredPct}<span class="gauge-pct">%</span></span>
-		<span class="gauge-note">covered today</span>
+		<!-- One block, centred as one: two grid items were each centred in a
+		     row of their own, which put the figure high and the note low. -->
+		<span class="gauge-text">
+			<span class="gauge-figure display">{coveredPct}<span class="gauge-pct">%</span></span>
+			<span class="gauge-note">covered today</span>
+		</span>
 	</div>
 	<div class="verdict-text">
 		<p>
@@ -584,6 +588,16 @@
 	/* `tabular-nums` is for a COLUMN of figures that has to align. This is one
 	   number with a unit beside it, and the tabular advance padded a narrow "4"
 	   out to a full digit width — which read as "4    %". */
+	.gauge-text {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-1);
+		padding: 0 var(--space-6);
+		text-align: center;
+	}
 	.gauge-figure {
 		font-size: var(--text-5xl);
 		line-height: 1;

@@ -53,10 +53,27 @@
 	);
 </script>
 
-<ScreenHeader
-	title="Accounts"
-	caption="Balances stay in their own currency. Only totals convert."
-/>
+<ScreenHeader title="Accounts" caption="Balances stay in their own currency. Only totals convert.">
+	{#snippet actions()}
+		{#if !adding}
+			<button type="button" class="btn btn-primary" onclick={() => (adding = true)}>
+				Add account
+			</button>
+		{/if}
+	{/snippet}
+</ScreenHeader>
+
+<!-- The line over both columns, so the first account card and the pie beside
+     it start on the same edge. It sat inside the left column, which pushed the
+     cards a row under the panel they are counted in. -->
+<div class="list-head">
+	<span class="list-title"
+		>Accounts <span class="list-note"
+			>native currency · {data.cashTotalFormatted}
+			{data.baseCurrencyDisplay} in total</span
+		></span
+	>
+</div>
 
 {#if form?.message}
 	<div class="error">{form.message}</div>
@@ -67,18 +84,6 @@
      "where is the money" a scroll away from the money. -->
 <section class="cols">
 	<div class="left">
-		<div class="list-head">
-			<span class="list-title"
-				>Accounts <span class="list-note"
-					>native currency · {data.cashTotalFormatted}
-					{data.baseCurrencyDisplay} in total</span
-				></span
-			>
-			{#if !adding}
-				<button type="button" class="btn" onclick={() => (adding = true)}>＋ Add account</button>
-			{/if}
-		</div>
-
 		{#if data.accounts.length === 0}
 			<p class="empty">
 				No accounts yet. Add them here, or import a statement — accounts are created from statements
@@ -343,9 +348,9 @@
 	.list-head {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		gap: var(--space-5);
 		padding: 0 var(--space-2);
+		margin-bottom: var(--space-6);
 		flex-wrap: wrap;
 	}
 	.list-title {
