@@ -41,7 +41,7 @@
 - 📊 **A chart's keys are ruled off from its plot**, with the footnote at the end of that row where it fits — the design draws the legend as a caption on the picture, not as another row of the panel
 - 🟡 **The effective-rate line is yellow**, the colour a rate wears everywhere else on the Tax screen
 - ➕ **The quick-add button is 36px at rest** and grows to full size under the pointer or while its menu is open — at full size it sat over the last row of a table and the corner of the Documents rail
-- 📶 **The net-worth pill fills with its own month** — green or red across as much of the pill as this month is of the biggest month on record, growing from nothing on arrival, so a good month is visible before the figure is read
+- 🌊 **The net-worth panel carries the month as a tide** — a green swell along its foot for a month that added and a red one for a month that took away, rising and darkening with how big the month is against the biggest on record; two circles turning against each other roll it, and the water fades along its own curve rather than across a flat band
 
 ### 🐛 Fixed
 

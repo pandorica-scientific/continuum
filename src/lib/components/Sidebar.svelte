@@ -119,28 +119,35 @@
 		     made the figure the whole app exists to move look like a statistic;
 		     v0.8.1 gives it the gradient and the only warm shadow, and puts white
 		     type on it in BOTH themes so the number reads the same either way. -->
-		<div class="hero">
+		<div class="hero" class:down={!netWorthDeltaPositive}>
+			{#if netWorthDeltaShare !== null}
+				<!-- The month, as a tide along the foot of the panel. Green when it
+				     added and red when it took away, and it rises and darkens with the
+				     size of the month measured against the biggest on record — a share
+				     of net worth would say nothing, because a good month moves a
+				     fraction of a per cent of a six-figure total.
+
+				     Two near-circles far wider than the panel, turning slowly in
+				     opposite directions: what crosses the top of the band is a long,
+				     lazy arc that never repeats the same way twice. The reduced-motion
+				     block in app.css stops them after one frame, which leaves a still
+				     swell rather than a strobe. -->
+				<span class="tide" style:--share={netWorthDeltaShare} aria-hidden="true">
+					<span class="swell"></span>
+					<span class="swell alt"></span>
+				</span>
+			{/if}
 			<span class="hero-label">Net worth</span>
 			<span class="hero-figure display">{netWorth}<span class="hero-ccy">{baseCurrency}</span></span
 			>
 			{#if netWorthDelta}
-				<!-- The pill carries a fill, and the fill is the month measured against
-				     the biggest month on record. A share of net worth would be useless
-				     here — a good month moves a fraction of a per cent of a six-figure
-				     total — and "is this a big month for us" is the comparison a person
-				     actually makes. It grows from nothing on arrival, which is the one
-				     piece of motion on the panel. -->
 				<span
 					class="hero-delta mono"
-					class:down={!netWorthDeltaPositive}
 					title={netWorthDeltaShare === null
 						? undefined
 						: `${Math.round(netWorthDeltaShare * 100)}% of the biggest month on record`}
 				>
-					{#if netWorthDeltaShare !== null}
-						<span class="delta-fill" style:--share="{netWorthDeltaShare * 100}%"></span>
-					{/if}
-					<span class="delta-value">{netWorthDelta}</span>
+					{netWorthDelta}
 				</span>
 				<span class="hero-note">this month</span>
 			{/if}
@@ -291,6 +298,7 @@
 	}
 
 	.hero {
+		position: relative;
 		display: grid;
 		grid-template-columns: auto 1fr;
 		align-items: center;
@@ -299,11 +307,15 @@
 		border-radius: var(--radius-card);
 		background: var(--hero-bg);
 		box-shadow: var(--shadow-hero);
+		/* The tide is drawn to the panel's own edges and clipped by them. */
+		overflow: hidden;
 		/* Fixed white rather than --fg1: the gradient is dark in both themes, so
 		   a theme-following foreground would put near-black on navy in light. */
 		color: #fff;
 	}
 	.hero-label {
+		position: relative;
+		z-index: 1;
 		grid-column: 1 / -1;
 		font-size: var(--text-xs);
 		text-transform: uppercase;
@@ -311,6 +323,8 @@
 		opacity: 0.75;
 	}
 	.hero-figure {
+		position: relative;
+		z-index: 1;
 		grid-column: 1 / -1;
 		font-size: var(--display-hero);
 		margin: 3px 0 var(--space-3);
@@ -323,44 +337,92 @@
 		margin-left: 5px;
 	}
 	/* Translucent white, not green or red: on this gradient a green pill is
-	   unreadable, and the sign is already in the number. Down gets a tint of
-	   red behind it rather than red text, for the same reason. */
+	   unreadable, and the sign is already in the number — and the colour of the
+	   month is the tide below it. */
 	.hero-delta {
 		position: relative;
+		z-index: 1;
 		justify-self: start;
 		font-size: var(--text-xs);
 		padding: 2px var(--space-4);
 		border-radius: var(--radius-pill);
 		background: rgba(255, 255, 255, 0.16);
-		overflow: hidden;
-		isolation: isolate;
-	}
-	/* Green for a month that added, red for one that took away. Translucent, so
-	   the gradient behind it still reads as the panel's own ground. */
-	.delta-fill {
-		position: absolute;
-		inset: 0;
-		width: var(--share);
-		background: color-mix(in srgb, var(--green) 55%, transparent);
-		border-radius: inherit;
-		z-index: -1;
-		animation: delta-grow var(--dur-slow) var(--ease);
-	}
-	.hero-delta.down .delta-fill {
-		background: color-mix(in srgb, var(--red) 55%, transparent);
-	}
-	.delta-value {
-		position: relative;
-	}
-	@keyframes delta-grow {
-		from {
-			width: 0;
-		}
 	}
 	.hero-note {
+		position: relative;
+		z-index: 1;
 		font-size: var(--text-xs);
 		opacity: 0.7;
 		margin-left: var(--space-2);
+	}
+
+	/* The band the swells turn inside. Fixed height, so a quiet month is a low
+	   wave in the same strip rather than a differently shaped panel. */
+	.tide {
+		position: absolute;
+		inset: auto 0 0;
+		height: 46px;
+		overflow: hidden;
+		pointer-events: none;
+		/* Fixed, for the reason the type above is fixed white: this panel is dark
+		   in both themes, and the light theme's --green is darkened for AA on
+		   white cards — on navy it disappears. Same hues, at dark-theme weight. */
+		--tide-ink: #2ecc71;
+		/* Faint for a month that barely moved, strong for a record one. */
+		opacity: calc(0.45 + 0.5 * var(--share));
+	}
+	.hero.down .tide {
+		--tide-ink: #ef6a5c;
+	}
+	/* Far wider than the panel on purpose: only the top of a very large circle
+	   crosses the band, so the edge reads as a swell and not as a bubble. */
+	.swell {
+		position: absolute;
+		left: 50%;
+		width: 520px;
+		height: 520px;
+		margin-left: -260px;
+		/* Not 50%: a true circle turns without changing shape, and the wave is
+		   the difference between the radii. */
+		border-radius: 44%;
+		/* Radial and centred, so the fade follows the wave's own curve rather
+		   than a flat line across the band — and because a gradient concentric
+		   with the circle it fills is the one kind that does not turn with it.
+		   `closest-side` puts 100% on the rim; without it the stops are measured
+		   to the corner and the edge never reaches transparent. */
+		background: radial-gradient(
+			circle closest-side,
+			color-mix(in srgb, var(--tide-ink) 80%, transparent) 0 94.5%,
+			color-mix(in srgb, var(--tide-ink) 46%, transparent) 97.5%,
+			transparent 100%
+		);
+		/* Sunk so that between 8px and 38px of it shows, by the size of the
+		   month. */
+		bottom: calc(-520px + 8px + 30px * var(--share));
+		animation: tide-roll 11s linear infinite;
+	}
+	.swell.alt {
+		width: 480px;
+		height: 480px;
+		margin-left: -240px;
+		border-radius: 47%;
+		background: radial-gradient(
+			circle closest-side,
+			color-mix(in srgb, var(--tide-ink) 52%, transparent) 0 94%,
+			color-mix(in srgb, var(--tide-ink) 28%, transparent) 97.5%,
+			transparent 100%
+		);
+		bottom: calc(-480px + 4px + 26px * var(--share));
+		animation-duration: 7.5s;
+		animation-direction: reverse;
+	}
+	@keyframes tide-roll {
+		from {
+			transform: rotate(0turn);
+		}
+		to {
+			transform: rotate(1turn);
+		}
 	}
 
 	/* One row per area, no group headings: the areas are the grouping now. */
