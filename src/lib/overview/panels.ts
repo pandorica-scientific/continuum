@@ -13,6 +13,14 @@ import type { OverviewPlacement, PanelBounds } from './layout';
 
 export interface PanelDefinition {
 	key: string;
+	/**
+	 * A control the panel's head row carries, beside "Open →".
+	 *
+	 * Declared here rather than rendered by the panel's content, because the
+	 * head belongs to `Panel` and a snippet cannot travel upward out of the
+	 * content it is rendered in. `period` is the flow panel's window control.
+	 */
+	headControls?: 'period';
 	title: string;
 	icon: IconName;
 	/**
@@ -92,6 +100,7 @@ export const PANELS: PanelDefinition[] = [
 	{
 		key: 'flow',
 		hue: 'teal',
+		headControls: 'period',
 		title: 'Where the money goes',
 		description: "The month's income traced through to what it was actually spent on",
 		icon: 'flow',

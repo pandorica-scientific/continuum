@@ -23,6 +23,8 @@ import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import { createCategory, createCategoryGroup, taxonomyKey } from '$lib/server/categorize/taxonomy';
 import { asEnumValue, ENUMS } from '$lib/enums';
 import { daysBetween } from '$lib/dates';
+import { loadCoverage } from '$lib/server/statements/coverage-load';
+import { cadenceOf } from '$lib/statements/coverage';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -157,15 +159,32 @@ export const load: PageServerLoad = async ({ url }) => {
 	// bank, so a gap past a month and a few days of post is a statement that
 	// has not been imported — the one thing this screen exists to receive.
 	const todayIso = new Date().toISOString().slice(0, 10);
+	// The rhythm each account's statements arrive in, read off the Statements
+	// shelf's own bands for this year: a quarterly account thirty days past
+	// its last statement is not late, and the row should say so.
+	const coverage = await loadCoverage(Number(todayIso.slice(0, 4)), todayIso);
+	const cadence = new Map<string, ReturnType<typeof cadenceOf>>();
+	for (const row of coverage.rows) cadence.set(row.accountId, cadenceOf(row.boxes));
+	for (const row of coverage.yearly?.rows ?? []) {
+		if (!cadence.get(row.accountId)) cadence.set(row.accountId, cadenceOf(row.boxes, 'yearly'));
+	}
+	const OVERDUE_AFTER: Record<string, number> = {
+		monthly: STATEMENT_OVERDUE_DAYS,
+		quarterly: 95,
+		'half-yearly': 185,
+		yearly: 370
+	};
 	const statements = accounts.map((a) => {
 		const days = a.balanceAsOf ? daysBetween(a.balanceAsOf, todayIso) : null;
+		const rhythm = cadence.get(a.id) ?? null;
 		return {
 			id: a.id,
 			name: a.name,
 			emoji: a.emoji || '🏦',
 			to: a.balanceAsOf,
 			days,
-			overdue: days === null || days > STATEMENT_OVERDUE_DAYS
+			cadence: rhythm,
+			overdue: days === null || days > (rhythm ? OVERDUE_AFTER[rhythm] : STATEMENT_OVERDUE_DAYS)
 		};
 	});
 

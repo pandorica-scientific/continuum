@@ -242,3 +242,27 @@ export function coverageDecade(
 export function countGaps(boxes: CoverageBox[]): number {
 	return boxes.filter((box) => box.state === 'gap').length;
 }
+
+/**
+ * The rhythm an account's statements arrive in, read off what has been filed.
+ *
+ * Nothing on the record says "this account sends monthly"; the filed bands
+ * do. The widest band that occurs most often is the cadence — one column is
+ * a month, three a quarter — and the yearly band is its own answer. An
+ * account with nothing filed has no rhythm to name yet.
+ */
+export function cadenceOf(
+	boxes: readonly CoverageBox[],
+	band: 'monthly' | 'yearly' = 'monthly'
+): 'monthly' | 'quarterly' | 'half-yearly' | 'yearly' | null {
+	const filed = boxes.filter((b) => b.state === 'filed');
+	if (filed.length === 0) return null;
+	if (band === 'yearly') return 'yearly';
+	const tally = new Map<number, number>();
+	for (const b of filed) tally.set(b.months, (tally.get(b.months) ?? 0) + 1);
+	const span = [...tally.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+	if (span >= 12) return 'yearly';
+	if (span >= 6) return 'half-yearly';
+	if (span >= 3) return 'quarterly';
+	return 'monthly';
+}

@@ -7,6 +7,7 @@
 	import Panel from './Panel.svelte';
 	import PanelChip from './PanelChip.svelte';
 	import PanelContent from './PanelContent.svelte';
+	import PeriodControls from '$lib/charts/PeriodControls.svelte';
 	import {
 		COLUMNS,
 		compact,
@@ -343,6 +344,20 @@
 					onpointerdown={(event) => begin('move', placement.k, event)}
 					onresizestart={(event) => begin('resize', placement.k, event)}
 				>
+					{#snippet controls()}
+						{#if panel.headControls === 'period' && panels[placement.k]}
+							<!-- The window comes out of the figures rather than off a prop
+							     of its own: the loader clamps the anchor against what the
+							     record holds, so the only period the control can show is
+							     the one the chart beneath it was drawn for. -->
+							<PeriodControls
+								period={panels[placement.k].period}
+								anchor={panels[placement.k].anchor}
+								bounds={panels[placement.k].bounds}
+								caption={panels[placement.k].caption}
+							/>
+						{/if}
+					{/snippet}
 					<PanelContent panelKey={placement.k} data={panels[placement.k]} {currency} />
 				</Panel>
 			{/if}

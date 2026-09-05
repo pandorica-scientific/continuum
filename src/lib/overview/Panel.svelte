@@ -21,6 +21,7 @@
 		onmovedown,
 		onpointerdown,
 		onresizestart,
+		controls,
 		children
 	}: {
 		title: string;
@@ -42,6 +43,8 @@
 		onmovedown?: () => void;
 		onpointerdown?: (event: PointerEvent) => void;
 		onresizestart?: (event: PointerEvent) => void;
+		/** A control on the head row, left of "Open →": the flow panel's period. */
+		controls?: Snippet;
 		children: Snippet;
 	} = $props();
 </script>
@@ -77,7 +80,12 @@
 					>✕</button
 				>
 			</span>
-		{:else if href}
+		{:else}
+			{#if controls}
+				<span class="head-controls">{@render controls()}</span>
+			{/if}
+		{/if}
+		{#if !customising && href}
 			<!--
 				The one way through to the screen behind a panel. Three panels used to
 				put a link of their own at the foot of their body instead, which meant
@@ -180,6 +188,13 @@
 	/* Quiet on purpose: it is on every panel, and ten links competing with the
 	   figures they sit above would be the loudest thing on the board. The hover
 	   is the whole affordance, so the global underline is taken off it. */
+	.head-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		margin-left: auto;
+		min-width: 0;
+	}
 	.open {
 		flex: none;
 		font-size: var(--text-sm);

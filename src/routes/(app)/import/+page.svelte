@@ -550,7 +550,9 @@
 					<IconTile hue="--teal" emoji={a.emoji} size={30} />
 					<span class="stmt-mid">
 						<span class="stmt-name">{a.name}</span>
-						<span class="stmt-sub">{a.to ? `statement to ${a.to}` : 'no statement yet'}</span>
+						<span class="stmt-sub">
+							{a.cadence ?? 'no rhythm yet'} · {a.to ? `statement to ${a.to}` : 'no statement yet'}
+						</span>
 					</span>
 					{#if a.days !== null}
 						<span class="mono stmt-days">{a.days} {a.days === 1 ? 'day' : 'days'}</span>
