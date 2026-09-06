@@ -4,6 +4,7 @@
 // configuring it separately makes the classic mismatch impossible.
 
 import { env } from '$env/dynamic/private';
+import { discoveredOrigin } from '$lib/server/system/tailscale';
 
 function isSecureOrigin(origin: string): boolean {
 	let url: URL;
@@ -23,8 +24,12 @@ export function relyingPartyId(origin: string): string {
 }
 
 /**
- * `env.ORIGIN` normalised into the form a browser reports: lowercase scheme and
- * host, no port when it is the default, no trailing slash, no path.
+ * The instance's one https address, normalised into the form a browser
+ * reports: lowercase scheme and host, no port when it is the default, no
+ * trailing slash, no path.
+ *
+ * `ORIGIN` in the environment wins when set; otherwise it is the name the
+ * Tailscale sidecar reports, once it has one (see `$lib/server/system/tailscale`).
  *
  * WebAuthn verification compares `clientDataJSON.origin` to this by exact
  * string equality. Passing `env.ORIGIN` through verbatim meant that an ORIGIN
@@ -34,12 +39,12 @@ export function relyingPartyId(origin: string): string {
  * relying-party ID is derived from this too, so the same normalisation covers
  * the hostname the credential is bound to.
  *
- * Empty when ORIGIN is unset or unparseable, which `passkeysAvailable()` then
- * reads as "no passkeys here".
+ * Empty when neither is known or the value is unparseable, which
+ * `passkeysAvailable()` then reads as "no passkeys here".
  */
 export function currentOrigin(): string {
 	try {
-		return new URL(env.ORIGIN ?? '').origin;
+		return new URL(env.ORIGIN || discoveredOrigin()).origin;
 	} catch {
 		return '';
 	}

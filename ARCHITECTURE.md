@@ -160,10 +160,10 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   outside this instance, and the screen says so.
 - **No starter rules**: an install begins with the category taxonomy and
   nothing else. Every rule is earned from a correction someone made, which is
-  what the confidence score claims to measure. The 42 curated Czech/Polish
-  merchant patterns that used to ship were wrong in both directions — dead
-  weight for a household that shops elsewhere, and, because seeding ran on
-  every boot, a deleted one came back at the next restart.
+  what the confidence score claims to measure. A curated list of Czech/Polish
+  merchant patterns would be wrong in both directions — dead
+  weight for a household that shops elsewhere, and, because seeding would run on
+  every boot, a deleted one would come back at the next restart.
 - **Money over the wire**: `/api/v1` sends every amount as integer minor units
   plus a currency code, through one `money()` helper that throws on the safe
   integer boundary instead of rounding. Never floats, never formatted strings.
@@ -213,9 +213,9 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
   recomputed each request. The remote id is a deterministic encoding of that
   key, so `calendar_sync_link` is a cache rather than the source of truth —
   losing it triggers a reconcile that re-attaches, instead of a second copy of
-  every event on someone's phone. The published `.ics` feed uses the same keys;
-  it used to number UIDs by array position, so adding a loan renumbered every
-  later event on that day.
+  every event on someone's phone. The published `.ics` feed uses the same
+  keys, which are stable identifiers rather than array positions, so adding a
+  loan does not renumber later events on that day.
 - **Calendar merge**: the three-way merge is a pure function of
   `(base, local, remote)` with no network, database or clock, where `base` is
   the content we last successfully sent. Everything genuinely risky about
@@ -281,9 +281,15 @@ active. Everything downstream — the session cookie, `validateSession`,
 - **Passkeys** are WebAuthn credentials in `credential`, one row per registered
   device. They are registered as discoverable, so the sign-in screen needs no
   person picker — the authenticator returns the person ID in its user handle.
-  The relying-party ID is derived from `ORIGIN` rather than configured, which
-  makes the classic origin/RP-ID mismatch impossible. Where `ORIGIN` is not a
-  secure context the passkey interface is absent, not broken.
+  The relying-party ID is derived from the instance's https address rather
+  than configured, which makes the classic origin/RP-ID mismatch impossible.
+  That address comes from the Tailscale sidecar: `system/tailscale.ts` reads
+  the node's name and certificate domain over the sidecar's local-API socket,
+  which compose shares into the app container, and polls until both exist.
+  `ORIGIN` in the environment overrides it for an instance behind its own
+  proxy. Where no secure address is known the passkey interface is absent, not
+  broken. The same module answers the sidecar's plain-http listener — the bare
+  MagicDNS name typed into a browser — with a redirect to the https address.
 - **Signature counters** are compared only when both the stored and incoming
   value are non-zero. Synced passkeys always report zero, so a naive
   monotonicity check would reject every Apple credential on its second use.

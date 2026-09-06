@@ -655,7 +655,7 @@
 						<div class="status">
 							<span class="s-label">Base URL</span>
 							<span class="mono s-value origin">{data.status.origin}</span>
-							<span class="note">what the server believes it is (ORIGIN)</span>
+							<span class="note">the https address passkeys are bound to</span>
 						</div>
 					</div>
 					<p class="prose">

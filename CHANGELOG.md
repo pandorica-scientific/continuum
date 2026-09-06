@@ -2,6 +2,35 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.2 — 2026-09-06
+
+> One way in: pull the image, start it, open the address it tells you.
+
+### ✨ Added
+
+- 🔗 **The app learns its own https address from the Tailscale sidecar** — it reads the node's name and certificate over the sidecar's shared socket and binds passkeys and secure cookies to it, so `ORIGIN` is no longer something to look up, type and restart for
+- 🚪 **`continuum/` typed on a tailnet device opens the app** — the sidecar answers the bare name on plain http and the app redirects it to the https address
+- 📦 **The Compose file ships inside the image** — `docker run --rm kerth92/continuum compose > compose.yaml` is the whole download, with nothing fetched from GitHub
+- 📣 **The app log says what it is waiting for** — `Tailscale: waiting — …` names the missing key, sign-in or certificate, and `Tailscale: reachable at …` prints the address the moment it exists
+
+### 🔧 Changed
+
+- 🧹 **One install path** — the Caddy `lan-tls` profile, the golink profile, the `docker run` walkthrough and the Postgres 17→18 migration steps are gone from the Compose file and the docs
+- ⬆️ **`docker compose up -d` is also the update** — the app and sidecar images are pulled on every start, and the database follows patch releases within its pinned major
+- 📖 **Every document describes the current version only** — README, install, networking, documents, accounts, backups, API, UI guidelines, security, architecture and contributing were rewritten against the code, with no version history in them
+- 🛠️ **The `build:` block moved to `compose.override.yaml`** — a checkout builds from the working tree, the published file always pulls
+- 🪪 **Settings › Household no longer tells an administrator to edit `.env`** — it says what the address is, or what the sidecar is waiting for
+
+### 🐛 Fixed
+
+- 💥 **An empty `ORIGIN` no longer crashes the app at boot** — Compose passes an unset variable as an empty string, which adapter-node refuses as an invalid URL; the entrypoint drops it before node starts
+- 🧭 **Passkeys work behind the sidecar without `ORIGIN`** — the image now names `X-Forwarded-Host` and `X-Forwarded-Proto` for adapter-node, so the address the browser used is the one the passkey screens compare against
+- 📂 **The backup restore instruction pointed at a `files/` folder that does not exist in the uploads volume** — uploads sit flat at its root, and the document says so
+
+### ⬆️ Upgrading
+
+- 🔁 **Fetch the new Compose file once** — `docker run --rm kerth92/continuum compose > compose.yaml`, then `docker compose up -d`; the volumes are unchanged, and an `ORIGIN` still in `.env` keeps working but is no longer needed behind the sidecar
+
 ## 0.8.1 — 2026-09-03
 
 > The same app, in a warmer skin that says which screen you are on before you read a word.
@@ -407,7 +436,7 @@ create table if not exists document_identity_number (
 
 ### ⬆️ Upgrading
 
-- ⚠️ **A database major version is not something `docker compose pull` can change** — Postgres refuses to start on a data directory written by 17, so an existing instance either keeps `image: postgres:17-alpine` in its own copy of the file or moves its data across deliberately; [docs/install.md](docs/install.md#upgrading) has both routes
+- ⚠️ **A database major version is not something `docker compose pull` can change** — Postgres refuses to start on a data directory written by 17, so an existing instance either keeps `image: postgres:17-alpine` in its own copy of the file or moves its data across deliberately; [docs/install.md](docs/install.md) has the dump/restore steps
 - 📁 **`PGDATA` is now named in the file rather than left to the image** — the official Postgres image moved its own default at 18, from `/var/lib/postgresql/data` to `/var/lib/postgresql/18/docker`, and a volume still mounted at the old path would have held nothing while the database wrote to the container's writable layer, losing everything the next time the container was replaced without failing or logging anything; anyone running the database by hand should add `-e PGDATA=/var/lib/postgresql/data` to match
 - 🔒 **An existing instance should fix its four new system shelves** — a fresh install gets them from the seed, and the statement below is the same change for a database that already has the rows
 
@@ -610,7 +639,7 @@ update shelf set system = true where key in ('finance','property');
 
 ### ⬆️ Upgrading
 
-- 🎥 **The in-app viewfinder needs HTTPS** — browsers refuse camera access on a plain-HTTP address, so the scan button opens your phone's own camera app instead and processes the photo identically; [two routes to a certificate](docs/install.md#https) are in the Compose file and neither needs a domain name
+- 🎥 **The in-app viewfinder needs HTTPS** — browsers refuse camera access on a plain-HTTP address, so the scan button opens your phone's own camera app instead and processes the photo identically; [two routes to a certificate](docs/install.md) are in the Compose file and neither needs a domain name
 
 ## 0.5.7 — 2026-08-25
 

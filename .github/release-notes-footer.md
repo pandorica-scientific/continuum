@@ -15,9 +15,8 @@ Take a backup first. The named volumes carry the data, and migrations run before
 the app accepts requests:
 
 ```sh
-docker compose pull
 docker compose up -d
 ```
 
 Anything this release needs you to do by hand is listed under 🔒 or ⬆️ above.
-Full instructions: [Install, configuration and upgrading](${REPO_URL}/blob/${TAG}/docs/install.md#upgrading).
+Full instructions: [Install and configuration](${REPO_URL}/blob/${TAG}/docs/install.md).

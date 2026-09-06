@@ -64,7 +64,9 @@ npm test           # unit + embedded-PostgreSQL integration tests (vitest)
 
 `npm run format` applies Prettier. CI additionally builds the multi-architecture
 Docker image, so a change that breaks `docker/Dockerfile` fails the pipeline
-even when the tests pass.
+even when the tests pass. In a checkout, `docker compose up -d` builds the image from the working tree —
+the `build:` block lives in `compose.override.yaml`, which Compose loads only
+from a checkout, so the published `compose.yaml` always pulls `latest`.
 
 ### Database changes
 
@@ -136,16 +138,16 @@ merge meant a `docker compose pull` picked up whatever landed an hour ago:
 ```sh
 # 1. bump the version and write the changelog section, then commit
 # 2. tag it and push the tag
-git tag v0.3.5
-git push origin v0.3.5
+git tag v0.8.2
+git push origin v0.8.2
 ```
 
 CI then runs the full suite and, only if it passes, builds `linux/amd64` and
-`linux/arm64` and pushes `0.3.5` alongside `latest` to both registries.
+`linux/arm64` and pushes `0.8.2` alongside `latest` to both registries.
 
 Two things fail the build rather than publishing something wrong:
 
-- **The tag must match `package.json`.** `v0.3.5` against a `0.3.4` package is
+- **The tag must match `package.json`.** `v0.8.2` against a `0.8.1` package is
   one of the two being a mistake, and publishing either would be wrong.
 - **Docker Hub must be configured** for a tagged release — `DOCKERHUB_USERNAME`
   and `DOCKERHUB_TOKEN` (an access token, not the account password). A release
@@ -154,7 +156,7 @@ Two things fail the build rather than publishing something wrong:
 Both live in **secrets** here. The username is half of a credential pair, and
 keeping it out of logs and out of forked pull requests costs nothing worth
 having. One practical effect to expect: GitHub masks it, so the build's
-`Publishing:` line reads `***/continuum:0.3.5` rather than naming the account.
+`Publishing:` line reads `***/continuum:0.8.2` rather than naming the account.
 
 The workflow reads `DOCKERHUB_USERNAME` from a secret or a repository variable,
 whichever it finds, so moving it later does not break anything. The mechanism is
@@ -220,9 +222,9 @@ be sent back.
   Reading a component's own source to match against it is the same test wearing
   a hat. Neither belongs in CI.
 
-  239 such tests were removed in v0.7.2. Not one domain module lost coverage —
-  everything they touched was a `.svelte` file, which is what the rule above
-  already says a person checks by looking.
+  Removing such tests never costs domain coverage: everything they touch is a
+  `.svelte` file, which is what the rule above already says a person checks by
+  looking.
 
   If a screen computes something worth pinning, the computation does not belong
   in the screen. Lift it into a function and test the function, the way
@@ -342,13 +344,6 @@ plainly rather than burying it. Continuum is also the basis of commercial work:
 native applications, and paid licences for organisations that cannot accept
 copyleft terms. Without this permission a single outside patch would make that
 impossible without tracking its author down for consent, possibly years later.
-
-An earlier version of this file said there would never be a CLA. That was
-written before there was a plan for any of the above, and it was wrong to
-promise. It is reversed here rather than quietly dropped, and it is being
-reversed at the only moment when it costs nobody anything: no contribution has
-yet been made under it. If you had read that line and were relying on it, say
-so — that is a fair objection and worth hearing.
 
 A bot asks for your agreement on your first pull request; later ones pass
 without asking. Bug reports, reproductions and design discussion need no

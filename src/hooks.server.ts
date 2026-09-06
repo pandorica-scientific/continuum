@@ -13,6 +13,8 @@ import { runMigrations } from '$lib/server/db/migrate';
 import { runCpuQueue } from '$lib/server/jobs';
 import { refreshRates } from '$lib/server/fx';
 import { isSetUp } from '$lib/server/settings';
+import { currentOrigin } from '$lib/server/auth/webauthn/origin';
+import { shortNameRedirect, watchTailscaleOrigin } from '$lib/server/system/tailscale';
 
 // Requests must not race the boot migrations, so handle() awaits this. A
 // *failed* boot must not be cached: `ready ??= boot()` alone would memoise the
@@ -30,6 +32,10 @@ function ensureReady(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
+	// Independent of the database, and the sidecar may take a while to be
+	// signed in, so it polls on its own rather than holding boot up.
+	watchTailscaleOrigin();
+
 	await runMigrations();
 	// Before anything writes a currency. Fourteen columns now carry a foreign key
 	// into this table, so an empty one refuses every insert — and the migration
@@ -168,6 +174,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// this hook entirely — which is why it could not be improved and had to be
 	// replaced (see vite.config.ts and $lib/server/auth/csrf).
 	if (!sameSiteFormPost(event.request)) return csrfRefusal(event.request);
+
+	// `continuum/` typed on a tailnet device arrives here over plain http via
+	// the sidecar's port-80 listener; send it to the https name where passkeys
+	// and the camera work. Before ensureReady() for the same reason as above.
+	const door = shortNameRedirect(event.request, currentOrigin());
+	if (door) redirect(308, door);
 
 	await ensureReady();
 

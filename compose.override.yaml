@@ -1,0 +1,12 @@
+# Developer overlay. Compose loads this file automatically when it sits next
+# to compose.yaml, which it only does in a checkout of the repository — the
+# published install gets compose.yaml out of the image and always pulls.
+#
+#   docker compose up -d   # builds from this working tree, then runs it
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    # Never replace the local build with the registry's image.
+    pull_policy: build

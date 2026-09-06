@@ -8,29 +8,30 @@ inside it, and visible only to the people who should see it.
 Four independent things describe a document. Keeping them apart is what stops
 the archive turning into a folder tree nobody can navigate.
 
-|           | What it answers                 | Shape                                                                                         |
-| --------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
-| **Shelf** | where in life it belongs        | one per document, a row you own                                                               |
-| **Type**  | what kind of paper it is        | one per document, a fixed list                                                                |
-| **Links** | what it concerns                | many — a person, flat, tenancy, account, loan, contact, subject, transaction or tax statement |
-| **Tags**  | anything else you cut across by | many, free text                                                                               |
+|           | What it answers                 | Shape                                                                                                       |
+| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Shelf** | where in life it belongs        | one per document, a row you own                                                                             |
+| **Type**  | what kind of paper it is        | one per document, from a list you can grow                                                                  |
+| **Links** | what it concerns                | many — a person, flat, tenancy, account, loan, contact, organisation, subject, transaction or tax statement |
+| **Tags**  | anything else you cut across by | many, free text                                                                                             |
 
 A payslip lives on **Income & Tax**, is of type **payslip**, links to
 **Zaměstnavatel s.r.o.**, and might be tagged `2025 return`. Move the shelf and
 nothing breaks: the salary tracker reads the type, never the shelf.
 
-Since v0.8.0 a fifth thing describes a payslip and not a boiler manual: which
-**lane** on its card it sits in. That is not a fifth axis — a lane belongs to
-one card, and a card belongs to one shelf — but it is what lets a shelf say
-_March never arrived_.
+A fifth thing describes a payslip and not a boiler manual: which **lane** on its
+card it sits in. That is not a fifth axis — a lane belongs to one card, and a
+card belongs to one shelf — but it is what lets a shelf say _March never
+arrived_.
 
 ### What a document can be about
 
-A person, a flat, a tenancy, an account, a loan, a contact, a subject — and a
-transaction or a tax statement, which are filed from their own screens rather
-than picked here: a list of every transaction in the household is a list nobody
-can read by eye. The inspector shows all of them under **About**. The first
-seven are chips you tick; the last two are chips with a `✕`, because the only
+A person, a flat, a tenancy, an account, a loan, a contact, an organisation, a
+subject — and a transaction or a tax statement, which are filed from their own
+screens rather than picked here: a list of every transaction in the household is
+a list nobody can read by eye. The inspector shows them under **About**, narrowed
+to what the document's own shelf can point at. The pickable ones are chips you
+tick; a transaction and a tax statement are chips with a `✕`, because the only
 thing to decide about them is whether they stay.
 
 A payslip that was matched to the bank credit it was paid by links to that
@@ -40,10 +41,9 @@ The match runs when the slip arrives after the credit, which is the ordinary
 order; a slip filed before the bank statement that pays it leaves the two rows
 side by side without the link.
 
-**Save keeps every link it was shown.** That matters because it once did not:
-the panel could offer people, flats and subjects, and saving replaced the whole
-set with what it had offered — so opening a receipt and pressing Save threw away
-the payment it evidenced. Removing a link is now something you do to a chip.
+**Save keeps every link it was shown**, so opening a receipt and pressing Save
+does not throw away the payment it evidences. Removing a link is something you
+do to a chip.
 
 ### Shelves are questions
 
@@ -69,8 +69,8 @@ them by name — capture files into **Inbox**, an accepted import into
 **IDs**, **Health** and **Inventory**. **Vehicles** is removable: not every
 household drives.
 
-Every one of them can be renamed, re-ordered and given a different emoji.
-Press the pencil beside **SHELVES** in the rail.
+Every one of them but **Inbox** can be renamed, re-ordered and given a different
+emoji. Press the pencil beside **SHELVES** in the rail.
 
 **Deleting a shelf always moves its paper first.** The dialog asks where the
 documents go and does both in one transaction; the database refuses the delete
@@ -78,10 +78,10 @@ otherwise, so there is no path that leaves a document unfiled.
 
 ### Making a shelf of your own
 
-`+ New shelf` asks for three things, because all three are what a shelf IS: a
-name, a **template**, and what it is **organised by**. A shelf you make is as
-good as one that ships — before v0.8.0 it got a plain list and no question,
-which made it a folder.
+`+ New shelf` asks for a name and an emoji, then for the three things a shelf IS:
+the **question** it answers, a **template**, and what it is **organised by**. A
+shelf you make is as good as one that ships — it opens on the same screen and
+draws the same cards.
 
 Seven templates, four of which are the same engine with a different start:
 
@@ -118,10 +118,12 @@ to one line naming what it is hiding, and the set of collapsed cards is in the
 address, so a bookmark keeps it.
 
 **A card is made where it is used.** `+ New card` at the end of the stack asks
-for a name and an emoji and seeds the shelf's lanes. People, accounts and
-addresses have screens of their own, so those shelves offer no New card: a card
-for each exists the moment the record does. Rename and archive live in the
-card's own `⋯` menu.
+for a name and an emoji — and, on a shelf of organisations, what the
+organisation is to you, since that is what its lanes are seeded from. People,
+accounts and addresses have screens of their own, so those shelves offer no New
+card: a card for each exists the moment the record does. Rename lives in the
+card's own `⋯` menu, with archive beside it for a subject and remove for an
+organisation.
 
 **Paper that names no card sits on "Not assigned yet"**, last, and only when it
 holds something. That is what makes filing to a shelf before its card exists a
@@ -227,25 +229,24 @@ for, and it is why a year's filing can gather papers from four shelves without
 any of them being the wrong place. Shelf is where in life, type is what kind,
 links are what it concerns.
 
-Every shelf, list or not, now knows what it is for: an empty one says what
-belongs on it, its type filter offers those kinds first, and picking a shelf
-during inbox review shortens the type list to that shelf's own and chooses the
-first — marked _suggested_, cleared the moment you touch the field, and never
-overwriting an answer you gave already. `Show all types…` opens the full list
-for the document that does not fit.
+Every shelf, list or not, knows what it is for: an empty one says what belongs on
+it, its type filter offers those kinds first, and picking a shelf during inbox
+review shortens the type list to that shelf's own, with the full list a click
+away for the document that does not fit.
 
-The inspector's own Shelf and Type fields work the same way, so filing a
-document from the Inbox is the same act as filing it from review — and a
-document that already has a type keeps it: a shelf fills the field in only when
-nobody has answered it yet.
+The inspector's Shelf field goes one step further and fills the Type in with the
+shelf's first kind, marked _suggested_ — cleared the moment you touch the field,
+and never overwriting an answer you gave already. A document that already has a
+type keeps it: a shelf fills the field in only when nobody has answered it yet.
+`Show all types…` opens the full list.
 
 **A reminder window belongs to the kind of paper, not to the app.** A document
 turns amber sixty days before it expires, which is right for most things and
 wrong for a passport: replacing one takes half a year, so a warning with sixty
-days left is a warning about a trip that can no longer be made. Identity
-documents ship with six months, every other type uses the sixty-day default, and
-the window is a property of the type — how long a replacement takes is a fact
-about a country and a household, not about this repository.
+days left is a warning about a trip it is already too late to make. Identity
+documents carry six months and every other type the sixty-day default, and the
+window rides on the type rather than on the document, so it answers the same way
+for every passport in the house.
 
 **That list is yours.** Press the pencil beside **SHELVES** in the rail and each
 row gains a tag button: it opens every type with the shelf's own ticked. It
@@ -293,39 +294,31 @@ instead: free, searchable, and nothing in the code depends on them either.
 
 ## Subjects
 
-A subject is a thing in the household that has paperwork but no screen of its
-own: the car, the dog, the household itself. A flat has a Property screen and a
-loan has a Loans screen, so their paper is filed against those records; a car
-has neither, and inventing a screen for it would be building a module to hold
-four documents.
+A subject is a thing in the household that has paperwork but no module of its
+own: the car, the boiler, the dog. A flat has a Property screen and a loan has a
+Loans screen, so their paper is filed against those records; a car has neither,
+and inventing a screen for it would be building a module to hold four documents.
 
-Subjects live in the rail, under **SUBJECTS**, and behave much like the shelves
-above them. A row filters the list to the paper about that subject without
-leaving the shelf you are on, and the pencil turns the section into its own
-settings — click a name to rename it, pick a different emoji, `⋯` to archive one
-or bring it back, `+ New subject` to add one. The one thing you cannot do is
-re-order them: they are sorted by name, so there is no order to drag into. Two
-subjects cannot share a name, and _Car_ and _car_ count as the same name.
+**A subject is a card**, on whichever shelf is organised by subjects —
+**Inventory** and **Vehicles** ship that way, and a shelf you make can be. That
+card is where a subject is made, renamed and archived, so a subject and the
+question its shelf asks are never two places saying different things. Subjects
+sort by name, so there is no order to drag into. Two of them cannot share a
+name, and _Car_ and _car_ count as the same name.
 
 ### Archiving
 
-Archive a subject — a car you have sold — and its paperwork leaves the default
-view without being deleted. Its expiry dates stop being red: they are history,
-not a problem, and a lapsed insurance policy painted red on every visit is how a
-person learns to ignore red. Archiving is the only removal a subject has, and
-the dialog says how many documents move before you agree to it: what once held
-paper is put away rather than deleted.
+Archive a subject — a car you have sold — and its card leaves the shelf and its
+paperwork leaves the default view, without either being deleted. Its expiry
+dates stop being red: they are history, not a problem, and a lapsed insurance
+policy painted red on every visit is how a person learns to ignore red.
+Archiving is the only removal a subject has.
 
-Archived rows are dimmed rather than removed from their own section, and appear
-only while **Include archived subjects** is on. When it is off, the section
-carries a **Show N archived** row saying how many it is holding back, so a
-subject you archived is never behind a door with no handle. The search says the
-same thing in its own words: when every match sits on an archived subject, it
-offers to show them rather than reporting nothing.
-
-The household itself can be renamed and given a different emoji but never
-archived. It is the one subject every document may belong to, so archiving it
-would hide the household's own paper from the household.
+The paper is still reachable. Any shelf's list carries **Include archived
+subjects**, which says how many documents it is holding back, and turns into
+**Hide archived** once they are shown. The search says the same thing in its own
+words: when every match sits on an archived subject, it offers to show them
+rather than reporting nothing.
 
 ## Adding paper
 
@@ -367,17 +360,17 @@ screen of its own shows the same card there — a flat and its tenancy on
 Property, a loan on Loans, an account under **Statements and reports**, a
 contact in its edit panel, a transaction's **Receipts** in its dialog, a tax
 statement's **Attachments** on Tax, and broker reports under **Reports** on
-Investments. It is one card everywhere on purpose: when each screen drew its own
-list, each of them came to know a different amount about expiry dates,
-unlinking, and what a restricted document is.
+Investments. It is one card everywhere on purpose: a screen that drew its own
+list would know its own amount about expiry dates, unlinking, and what a
+restricted document is.
 
 A row is the document itself. Its file opens in the viewer, and under the name
 sits the shelf it lives on and when it falls due — red once the date has passed,
 amber inside the window, quiet otherwise, on the same rule as the Documents
 screen. The blue and purple that say which _kind_ of deadline it is do not come
 with it: one line has no room to explain the difference between two quiet
-states. **Open in Documents →** goes to the full list filtered to that record,
-which is the same filter the rail's subject rows write.
+states. **Open in Documents →** goes to the full list filtered to that record —
+the about filter, not a search for its name.
 
 Below the rows are the two ways paper is added by hand. Either can be absent,
 and the absence is the screen's answer rather than an oversight:
@@ -464,8 +457,8 @@ duplicate.
 
 ## Finding things
 
-The search field reads names, notes, tags, linked entities, shelf and type
-labels — **and the text inside the documents**.
+The search field reads names, notes, tags, linked entities, shelf and type —
+**and the text inside the documents**.
 
 - What a document is about counts for every kind, under the name you were
   shown: a receipt is found by the shop its transaction names, a lease by its
@@ -480,14 +473,14 @@ labels — **and the text inside the documents**.
 Below the search field: filter by **type**, by **what it is about**, and by any
 number of **tags** at once. **What it is about** offers every kind the paper on
 the shelf points at, under the heading it belongs to — a transaction carries its
-amount, because a shop and a date do not tell two payments apart. Each filter
-offers only what is on the shelf in view, with the count it would leave, so no
-filter empties the screen. Everything lives in
-the URL — a bookmark is a saved view.
+amount, because a shop and a date do not tell two payments apart. Type and about
+offer only what is on the shelf in view, each with the count it would leave, so
+neither empties the screen. Everything lives in the URL — a bookmark is a saved
+view.
 
 When the search finds nothing it says which part of the archive could not
 answer: how many documents are still being read, how many have no searchable
-text at all, and how many matches sit on archived subjects.
+text at all, or how many matches sit on archived subjects.
 
 ### How the text gets there
 
@@ -539,8 +532,9 @@ included — and how many rules would stop applying it.
 ## Bulk changes
 
 `Select` puts a checkbox on each row. The bar that appears sets shelf or type
-(each document has one, so these replace), and adds links and tags (these are
-sets, so they add — a bulk edit never silently clears what it did not mention).
+(each document has one, so these replace) and adds tags (a set, so it adds — a
+bulk edit never silently clears what it did not mention). An administrator gets
+the restricted switch there too.
 
 A payslip that carries a salary entry keeps its type: retyping it would leave a
 month's pay counted with nothing on screen to account for it. Everything else in

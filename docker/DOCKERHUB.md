@@ -1,92 +1,70 @@
 # Continuum
 
-Self-hosted household finance for one home server: bank statements in, decisions out.
+Your household's whole financial picture, on hardware you own.
 
-Continuum is a private ledger your household runs at home. It reads the statements your
-banks actually produce, pairs the transfers between your own accounts, categorises
-deterministically (rules you can read, corrections it learns), and turns the result into
-a true net worth statement — each flat side by side with its mortgage, portfolio,
-cash, and loans.
+Continuum reads the statements your banks already give you — CSV, Excel, PDF,
+CAMT, MT940, OFX, a photo of a printout — without being told which bank wrote
+them, checks what it read against the statement's own balances, and connects
+the money to everything around it: the property, the mortgage secured against
+it, the tenants, the portfolio, the payslips, and the taxes. Two people, one
+shared ledger, separate sign-ins and dashboards. Nothing calls home.
 
-![Overview — the cash-flow waterfall](https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docs/screenshots/overview.png)
+![Cash flow](https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docs/screenshots/cashflow-dark-web.png)
 
-## What it does
+## Install
 
-- **An Overview you build yourself** — eighteen panels you drag, resize, add and remove;
-  the arrangement belongs to your profile, so two people sharing an install do not
-  share a dashboard
-- **Statement import** for Fio, Revolut, mBank (cp1250 CSV), Raiffeisenbank and
-  Česká spořitelna (text-layer PDF) — idempotent, safe to re-upload, full history backfill
-- **Cash flow** — a waterfall from income to what you kept, with an explainable rule
-  engine (no ML, every decision has a reason)
-- **Net worth** — assets beside the debts held against them; one mortgage can secure
-  several flats at explicit shares
-- **Loans** — per-fixation rates and payments, day-count conventions per loan
-  (30/360, act/365, act/360; verified to the haléř against real ČS statements),
-  what-if dialogs that preview a repayment or a re-fix offer before saving it
-- **Property** — flats with drawable floor plans (physical dimensions), tenancies,
-  bills with attached documents, photos
-- **Investments** — broker report upload behind an adapter seam (XTB first),
-  reconstructed value curve without any market-data subscription
-- **Retirement & salary** — projection model plus a payslip-fed salary tracker
-  (amounts read themselves from the PDF; corrections teach it)
-- **Documents** — shelves, expiry dates, emergent tags and subjects
-- **Home Assistant** — devices, climate and energy behind a pluggable provider interface
-- **Calendar** — events generated from your data, published as an ics feed
-- **Backups** — one restorable dump plus every uploaded file, written straight into a
-  cloud-synced folder (Google Drive / Dropbox mount) on your schedule
+You need Docker and a free [Tailscale](https://tailscale.com) account — it
+gives the app a trusted `https://` address on your private network, which
+passkeys and the phone camera need.
 
-![Loans — interest vs principal](https://raw.githubusercontent.com/pandorica-scientific/continuum/main/docs/screenshots/loans.png)
+1. In the Tailscale admin console, generate an auth key under Settings → Keys,
+   and enable HTTPS certificates under DNS.
+2. Run:
 
-## Quick start
+   ```sh
+   docker run --rm kerth92/continuum compose > compose.yaml
+   TS_AUTHKEY=tskey-auth-… docker compose up -d
+   ```
 
-```sh
-curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
-POSTGRES_PASSWORD=change-me docker compose up -d
-```
+   The first line writes the Compose file carried inside this image. The
+   second, run again later, is also the update.
 
-Open `http://your-server` and follow the setup wizard. Want to look around
-first? `DEMO=1 docker compose up -d` on a pristine instance seeds a fictional
-household — sign in as _Jana Nováková_ / `demo-demo-demo`.
+3. From a device on your tailnet, open `https://continuum.<your-tailnet>.ts.net`
+   and follow the setup wizard.
 
-## Volumes & environment
+Add `DEMO=1` to look around a fictional household first — sign in as
+_Jana Nováková_ / `demo-demo-demo`.
 
-|                |                                                                                                       |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| `/data`        | uploaded files: documents, photos, original statements                                                |
-| `/backups`     | backup destination — bind-mount a cloud-synced host folder                                            |
-| `DATABASE_URL` | PostgreSQL connection (compose wires this)                                                            |
-| `ORIGIN`       | optional; the one `https://` address passkeys are bound to. Sign-in works at every address without it |
-| `DEMO`         | `1` seeds demo data on a pristine instance                                                            |
-| `TS_AUTHKEY`   | Tailscale auth key, for the optional `tailscale` profile                                              |
+Full instructions, every setting and troubleshooting:
+[docs/install.md](https://github.com/pandorica-scientific/continuum/blob/main/docs/install.md).
 
-Operational overrides are optional:
+## Volumes and environment
 
-|                        |                                                                                                                                                                                  |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONTINUUM_MAX_UPLOAD` | largest accepted upload (default `32M`); phone photos need more than the server's own 512K default                                                                               |
-| `ADDRESS_HEADER`       | read the client address from a forwarded header — set only behind a trusted proxy that always overwrites it, or a caller can forge it and step around authentication rate limits |
-| `XFF_DEPTH`            | trusted `X-Forwarded-For` hop counted from the right (default `1`); change only for a known multi-proxy chain                                                                    |
-| `PASSWORD_MIN_LENGTH`  | minimum password length (default `8`)                                                                                                                                            |
-| `ENROLLMENT_LINK_DAYS` | lifetime of a one-time household enrollment link (default `7`)                                                                                                                   |
+The Compose file wires all of these. For running the image on its own:
 
-Everything else — people, base currency (CZK/EUR/PLN), modules, integrations — is
-configured in the app and stored in your own database. Nothing calls home.
+|                                               |                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `/data`                                       | uploaded files: documents, photos, original statements                                 |
+| `/backups`                                    | backup destination — mount a cloud-synced host folder                                  |
+| `DATABASE_URL`                                | PostgreSQL 18 connection string                                                        |
+| `/var/run/tailscale`                          | the Tailscale sidecar's socket directory, from which the app learns its https address  |
+| `ORIGIN`                                      | the `https://` address passkeys are bound to, when TLS is terminated by your own proxy |
+| `DEMO`                                        | `1` seeds demo data on a pristine instance                                             |
+| `BODY_SIZE_LIMIT`                             | largest accepted upload (default `32M`)                                                |
+| `ADDRESS_HEADER`                              | read the client address from a forwarded header — only behind a trusted proxy          |
+| `PASSWORD_MIN_LENGTH`, `ENROLLMENT_LINK_DAYS` | household security policy (defaults `8`, `7`)                                          |
+
+Everything else — people, base currency, modules, integrations, backup
+cadence — is configured in the app and stored in your own database.
 
 ## Tags
 
-- `latest` — current build from `main` (amd64 + arm64)
-- `0.3.5` — design system V2: an Overview you arrange yourself, areas and sub-tabs in place of a twelve-item sidebar, drawn icons
-- `0.3.4` — first-run pass: no shipped starter rules, a setup wizard that keeps what you typed, themed file fields
-- `0.3.3` — atomic imports and mutations, concurrency-safe authentication and autosave, dated multi-currency totals, and the full-review remediation
-- `0.3.2` — two whole-codebase reviews: a server-side WebAuthn challenge store, currency-correct amounts, and a long list of silently wrong figures put right
-- `0.3.1` — hardening of the accounts work: enrollment, roles and passkey origins
-- `0.3.0` — passkeys, account management and roles; **breaking**, see the changelog
-- `0.2.1` — port 80 by default; reachable as `http://continuum.local` behind a LAN name
-- `0.2.0` — transaction register, splits & tags, self-correcting rules engine, read-only API, tax statements, entity-linked documents
-- `0.1.0` — first published version
+`latest` is the current release and the only tag the Compose file uses. Each
+release is also published under its version number. Both for `linux/amd64` and
+`linux/arm64`, and mirrored at `ghcr.io/pandorica-scientific/continuum`.
 
 ## License
 
 [GNU AGPL v3.0 or later](https://github.com/pandorica-scientific/continuum/blob/main/LICENSE) —
-free to run, modify and share; a modified version other people use must offer them its source.
+free to run, modify and share; a modified version other people use must offer
+them its source.

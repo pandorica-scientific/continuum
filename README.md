@@ -9,7 +9,7 @@
 <p>
   <a href="#screens"><b>Screens</b></a> &nbsp;·&nbsp;
   <a href="#it-reads-any-banks-statement"><b>How import works</b></a> &nbsp;·&nbsp;
-  <a href="#try-it-in-one-command"><b>Quickstart</b></a> &nbsp;·&nbsp;
+  <a href="#install"><b>Install</b></a> &nbsp;·&nbsp;
   <a href="docs/"><b>Docs</b></a> &nbsp;·&nbsp;
   <a href="CHANGELOG.md"><b>Changelog</b></a>
 </p>
@@ -52,7 +52,7 @@ Continuum is for you if you…
 
 - 📊 **are tired of the spreadsheet** — and of losing an evening every month keeping it up to date
 - 🧩 **have too much to keep track of** — accounts, bills, property, loans, investments and tax, all scattered across different places
-- 🚀 **want setup to be painless** — one Compose file, one command, then a guided setup; no configuration files to edit by hand
+- 🚀 **want setup to be painless** — one Compose file, one command, then a guided setup; nothing to edit by hand
 - ⚡ **want it to just work** — give Continuum the file exactly as your bank provided it and let it work out the rest; if something is genuinely ambiguous, it asks
 - 🏠 **want the whole household in one view** — what comes in, where it goes, who it belongs to, and what is left
 - 📅 **need to know what is due and when** — documents stay attached to the property, loan or person they belong to, while every important date comes together in one calendar
@@ -123,8 +123,7 @@ Continuum is for you if you…
 <sub>Accounts, import, rules, tags, salary, retirement, calendar, contacts, documents
 and the phone layouts are in the
 <a href="docs/screenshots.md">full gallery</a>. Every shot is generated from the
-demo household rather than drawn by hand, so what you see is the app — though
-the demo has grown since the last regeneration.</sub>
+demo household rather than drawn by hand, so what you see is the app.</sub>
 
 </div>
 
@@ -172,49 +171,51 @@ each](docs/statement-import.md)
 - **Finds a document by what is printed inside it** — filed paper is read in the background, so a variable symbol on page two of a scan is searchable; shelves are yours to name, and a document can be restricted to administrators, which makes it absent for everyone else rather than locked.
 - **Keeps the paper beside the record it belongs to** — a flat, a tenancy, a loan, an account, a contact, a transaction, a tax statement and the portfolio each show their own documents on their own screen; most of them can also attach paper already filed elsewhere, and a flat, a tenancy, a loan and a contact can add a new document with the record and its shelf already chosen.
 
-## Try it in one command
+## Install
+
+Three steps, about five minutes. You need Docker, and a free
+[Tailscale](https://tailscale.com) account — it is what gives the app a trusted
+`https://` address on a private network, which passkeys and the phone camera
+both require, without a domain name or an open port.
+
+**1. Get a Tailscale key.** In the admin console, open
+[Settings → Keys](https://login.tailscale.com/admin/settings/keys) and generate
+an auth key. Then open [DNS](https://login.tailscale.com/admin/dns) and enable
+**HTTPS certificates**.
+
+**2. Start it.**
 
 ```sh
-curl -O https://raw.githubusercontent.com/pandorica-scientific/continuum/main/compose.yaml
-DEMO=1 docker compose up -d
+docker run --rm kerth92/continuum compose > compose.yaml
+TS_AUTHKEY=tskey-auth-… docker compose up -d
 ```
 
-Open `http://localhost` and sign in as **Jana Nováková** / `demo-demo-demo`. That
-seeds a fictional household — six months of categorised cash flow, two flats on
-one mortgage, payslips, a portfolio — so you can look around before importing
-anything real. An instance that already has people in it is never touched.
+The first line writes the Compose file out of the image; the second starts the
+app, its database and the Tailscale sidecar. The same second line, run again
+later, updates everything to the newest release.
 
-For a real instance, drop `DEMO=1`, set a database password, and follow the setup
-wizard:
+**3. Open it.** Install the [Tailscale app](https://tailscale.com/download) on
+your phone or laptop, then open **`https://continuum.<your-tailnet>.ts.net`** —
+or just type `continuum/` — and follow the setup wizard. People, base currency
+and modules are all set there; nothing is edited in files.
 
-```sh
-POSTGRES_PASSWORD=change-me docker compose up -d
-```
+**Want to look around first?** Add `DEMO=1` and the instance comes up with a
+fictional household — six months of cash flow, two flats on one mortgage,
+payslips, a portfolio. Sign in as **Jana Nováková** / `demo-demo-demo`. An
+instance that already has people is never touched.
 
-**To scan from a phone you need HTTPS** — browsers refuse a camera on a plain
-LAN address. Two routes are in the Compose file, and neither needs a domain
-name: Tailscale, or one local command with `--profile lan-tls`. See
-[Install](docs/install.md#https). Without it the scan button hands over to the
-phone's own camera app and you still get the same cropped PDF — what you lose is
-the outline while aiming and staying in the app between pages.
-
-**What it needs.** About 300 MB of memory at rest — measured at 191 MB for the
-app and 69 MB for Postgres — from a 393 MB image built for both `amd64` and
-`arm64`. A Raspberry Pi 4 or 5 with 2 GB on a 64-bit OS runs it comfortably.
-There is no 32-bit build, so a Pi 3 or older will not.
-
-Docker and Docker Compose are the supported route today. Podman, Proxmox,
-TrueNAS, Umbrel and Unraid packaging are planned.
+**What it needs.** About 300 MB of memory for the app and its database, from a
+393 MB image built for `amd64` and `arm64`. A Raspberry Pi 4 or 5 with 2 GB on
+a 64-bit OS runs it comfortably; there is no 32-bit build.
 
 > [!IMPORTANT]
 > This holds your household's complete financial history in plain text in a
-> database. Run it on a machine you trust, on your own network — never on a
-> public-facing host — and keep backups. Settings → Backups writes a restorable
-> dump plus every uploaded file to a folder you choose, including a cloud-synced
-> one.
+> database. Run it on a machine you trust and keep backups — Settings → Backups
+> writes a restorable dump plus every uploaded file to a folder you choose,
+> including a cloud-synced one.
 
-→ [Install, configuration and upgrading](docs/install.md) · [Backups and
-restore](docs/backups.md)
+→ [Install and configuration](docs/install.md) · [Networking and
+passkeys](docs/networking.md) · [Backups and restore](docs/backups.md)
 
 ## Documentation
 
@@ -222,8 +223,8 @@ restore](docs/backups.md)
 | ---------------------------------------------- | ----------------------------------------------------------------------- |
 | [Statement import](docs/statement-import.md)   | how the reader works, and what it refuses                               |
 | [Documents](docs/documents.md)                 | shelves, subjects, types, expiry, search inside files, restricted paper |
-| [Install and configuration](docs/install.md)   | `.env` reference, ports, upgrading                                      |
-| [Networking and passkeys](docs/networking.md)  | reaching it by name, HTTPS for the camera and passkeys                  |
+| [Install and configuration](docs/install.md)   | quick start, updating, every setting                                    |
+| [Networking and passkeys](docs/networking.md)  | what Tailscale does here, the addresses, your own proxy                 |
 | [Accounts and roles](docs/accounts.md)         | enrollment links, administrators, recovery                              |
 | [Backups and restore](docs/backups.md)         | scheduled dumps, restoring into a fresh instance                        |
 | [API and Home Assistant](docs/api.md)          | read-only tokens, smart-meter billing                                   |

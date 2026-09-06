@@ -1,205 +1,102 @@
 # Networking and passkeys
 
-## Reaching it by name
+## What Tailscale does here
 
-Typing `ip:port` stops working the moment the router hands the server a new
-address. Two steps fix it for every device on the network, no cloud involved:
+Browsers refuse two things outside a secure context: the passkey API and the
+camera. So on a plain-http address there is no Face ID sign-in and no in-app
+viewfinder for scanning paper. A trusted `https://` address fixes both, and
+getting one on a home server normally means a domain name, a certificate and a
+port open to the internet.
 
-1. **Pin the address.** In the router's DHCP settings, give the server a
-   reservation (a fixed lease for its MAC address). This is the actual cure for
-   the rotating IP — do it even if you skip step 2.
-2. **Name it.** Either set the server machine's hostname to `continuum`, and mDNS
-   makes it reachable as **`http://continuum.local`** from macOS, iOS, Windows and
-   recent Android with zero configuration — or, if your router offers local DNS
-   names, give the reservation a name there (`continuum.lan` on most). A Pi-hole
-   or AdGuard Home works too, with a custom DNS record.
+[Tailscale](https://tailscale.com) gives the same thing on a private network.
+The sidecar in `compose.yaml` joins your tailnet as a machine called
+`continuum`, gets a name like `continuum.your-tailnet.ts.net` and a certificate
+for it, and forwards `https://` on that name to the app. Only devices you have
+added to your tailnet can reach it; nothing is opened to the internet. The
+command that would publish a machine to the open internet is `tailscale funnel`,
+which nothing here runs.
 
-The app sits on plain port 80 by default, so the name alone is the whole address —
-just tell it what that address is:
+The app learns its own address from the sidecar. It reads the sidecar's local
+API over a shared socket, waits until the machine has a name and a certificate,
+and from then on binds passkeys and secure cookies to that address. There is
+nothing to configure and nothing to restart; `docker compose logs app` prints
+the address when it is known, and Settings → Server shows it.
 
-Nothing to configure: form submissions are checked against the address your
-browser actually used, so `http://continuum.local`, the LAN IP and
-`http://localhost` all work at once without any of them being named anywhere.
+One thing does become public: the name. Tailscale's certificates come from
+Let's Encrypt, and every Let's Encrypt certificate is listed in public
+Certificate Transparency logs. Nothing is reachable at that name from outside
+your tailnet; only the name is visible.
 
-A bare `continuum` without a suffix is not reliable in browsers (it reads as a
-search), so `.local` or your router's suffix is the practical spelling.
+## The addresses
 
-`ORIGIN` stays optional and governs only passkeys — see below.
+**`https://continuum.<your-tailnet>.ts.net`** is the address. Passkeys, the
+camera, the calendar feed and the API all work here, from any device on the
+tailnet, anywhere in the world.
+
+**`continuum/`** typed into a browser on the tailnet lands in the same place.
+MagicDNS resolves the bare machine name, the sidecar answers plain http on it,
+and the app redirects to the full https name.
+
+**`http://<server-ip>`** works on the local network without Tailscale, for a
+device that cannot run it. Password sign-in works; passkeys and the in-app
+viewfinder do not, and a phone's scan button falls back to the phone's own
+camera app, which produces the same cropped PDF without the outline while
+aiming. If port 80 on the host is taken, `CONTINUUM_PORT` in `.env` moves it.
+
+A phone subscribed to the calendar feed at the https address needs Tailscale
+connected for the feed to refresh.
+
+## Passkeys
+
+Continuum supports passkeys — Face ID, Touch ID, Windows Hello — alongside
+passwords. Passwords never go away, so a device without a passkey still works.
+
+A passkey is bound to one address, so the controls appear only when you are
+browsing the https one. On any other address they are absent rather than
+broken, and Settings → Household names the address that works.
+
+A passkey here always requires user verification — the face, the fingerprint
+or the device PIN. That is what keeps it a second factor rather than a bearer
+token, and it means a roaming security key with no PIN configured cannot be
+registered.
 
 ## One browser cannot reach it and another can
 
-Reported on a Mac where Safari opened `http://continuum.local` and the LAN IP and
-Chrome opened neither. Nothing in Continuum treats one browser differently, and a
-server that answers Safari is answering — so what differs is on the browser side.
-The error Chrome prints is the whole diagnosis; check these in order.
+On a Mac, Safari opens `http://<server-ip>` and Chrome does not. Nothing in
+Continuum treats one browser differently, so what differs is on the browser
+side, and the error Chrome prints is the diagnosis:
 
-- **"Always use secure connections" (HTTPS-First).** Chrome silently rewrites a
-  typed `http://` address to `https://`, and nothing here listens on 443 — so both
-  the name and the raw IP fail while Safari, which does not upgrade, works.
-  `chrome://settings/security` → turn it off, or add an exception for the host.
-  The tell is an address bar that shows `https://` after you typed `http://`, or an
-  error naming SSL — `ERR_SSL_PROTOCOL_ERROR`, `ERR_CONNECTION_REFUSED` on 443.
-- **A pinned HSTS entry**, if that browser once reached the machine over HTTPS —
-  through the Tailscale name, a reverse proxy, or an earlier experiment. It applies
-  per hostname and outlives the certificate. Check and clear it at
-  `chrome://net-internals/#hsts`.
-- **Secure DNS (DNS-over-HTTPS).** A public resolver cannot answer for `.local`,
-  which is mDNS on the local link, so the name fails and the raw IP still works.
-  `chrome://settings/security` → Use secure DNS. This one explains a failing name
-  only; if the IP fails too, it is not this.
+- **"Always use secure connections."** Chrome rewrites a typed `http://`
+  address to `https://`, and the LAN port speaks only http. The tell is an
+  address bar showing `https://` after you typed `http://`, or an error naming
+  SSL. Turn it off under `chrome://settings/security`, or use the tailnet
+  address, which is https anyway.
+- **Secure DNS.** A public resolver cannot answer for `.local` names. The raw
+  IP still works; the tailnet name is unaffected.
 - **An extension, VPN or proxy that blocks private address ranges.** Try an
-  Incognito window with extensions disabled, then the same address in a new
-  profile. A managed work profile can carry a policy the rest of the system does
-  not see — `chrome://policy` lists what is being enforced.
+  Incognito window with extensions disabled.
 
-None of these are things a self-hosted app can fix from the server: an HTTPS
-upgrade never reaches it, and a blocked request never leaves the machine.
+## Your own proxy
 
-## Passkeys and Tailscale
-
-Continuum supports **passkeys** — Face ID, Touch ID, Windows Hello — alongside
-passwords. Passwords never go away, so a device without a passkey still works.
-
-Browsers refuse the passkey API outside a secure context, so the passkey controls
-appear only when `ORIGIN` is `https://` (or `localhost` during development). On a
-plain-HTTP LAN address they are simply absent rather than broken.
-
-## The camera needs HTTPS too
-
-The same rule that governs passkeys governs the scanner. Browsers refuse
-`getUserMedia` outside a secure context, so on a plain-HTTP LAN address the
-in-app viewfinder cannot open, ever — no setting changes that.
-
-Continuum does not simply lose the feature there. The scan button falls back to
-**your phone's own camera app**, which needs no secure context, and the photo it
-returns goes through exactly the same processing: detected, cropped, flattened
-and written as a PDF.
-
-What HTTPS adds is the shooting rather than the scanning: an outline showing what
-has been found while you aim, the torch, and staying inside the app between pages
-instead of leaving for the camera app and coming back for each one.
-
-Set up HTTPS and the viewfinder appears by itself. There are three routes, and
-which one suits you depends on whether you have a domain name.
-
-### The quick one: HTTPS on the LAN, no account, no domain
-
-Bundled as an optional profile. Give it the address you actually type — a name
-or a LAN IP, but it must match, because a certificate issued for the wrong one
-is rejected outright rather than warned about:
+If you already terminate TLS — Caddy, nginx, Traefik, a domain of your own —
+you do not need the sidecar. Run `docker compose up -d app db`, point the proxy
+at the host port, and put two things in `.env`:
 
 ```sh
-# .env
-CONTINUUM_HOST=continuum.local
-
-docker compose --profile lan-tls up -d
+# Exactly the https address you browse to; passkeys are bound to it.
+ORIGIN=https://ledger.example.com
+# Only if the proxy is the only way in and always overwrites the header.
+ADDRESS_HEADER=x-forwarded-for
 ```
 
-Then open **https://continuum.local:8443** on the phone.
+`ORIGIN` replaces the discovery described above. `ADDRESS_HEADER` lets the
+sign-in rate limiter count real callers rather than the proxy; set it only
+when nothing can reach the app directly, because anyone who can will otherwise
+forge the header and step around the limiter. `XFF_DEPTH` (default `1`) is the
+trusted hop counted from the right of `X-Forwarded-For`, for a chain of more
+than one proxy.
 
-The certificate is issued by Caddy's own authority, which no device trusts, so
-every browser warns once. **Accept it and everything works** — the origin is a
-secure context from then on as far as the browser is concerned, which is all
-getUserMedia and passkeys require. Set `ORIGIN=https://continuum.local:8443` to
-turn the passkey controls on as well.
-
-To stop the warning, install Caddy's root certificate on each device and mark it
-trusted:
-
-```sh
-docker compose cp tls:/data/caddy/pki/authorities/local/root.crt ./continuum-root.crt
-```
-
-On iOS, mail or AirDrop it to yourself, open it, install the profile, then turn
-it on under **Settings → General → About → Certificate Trust Settings** — the
-second step is separate and easy to miss. On macOS, open it in Keychain Access
-and set it to _Always Trust_. On Android, **Settings → Security → Encryption &
-credentials → Install a certificate → CA certificate**.
-
-The `caddy-state` volume holds that authority. Delete the volume and a new root
-is issued, and every device warns again.
-
-This route is deliberately the _quick_ one, not the good one. It is right for
-testing the scanner on a phone this evening. For daily use, prefer:
-
-### The good one: a trusted certificate
-
-Tailscale, below, gets you one with no domain name of your own. If you already
-have a domain, any reverse proxy terminating TLS does the job — with
-[Caddy](https://caddyserver.com) it is three lines, and the certificate is
-obtained and renewed for you:
-
-```caddyfile
-ledger.example.com {
-    reverse_proxy localhost:3000
-}
-```
-
-Whatever terminates TLS, set `ORIGIN` to the `https://` address so passkeys work
-at the same time.
-
-A passkey here always requires **user verification** — the face, the fingerprint,
-or the device PIN. That is what keeps it a second factor rather than a bearer
-token, and it means a roaming security key with no PIN configured cannot be
-registered. Platform authenticators (Face ID, Touch ID, Windows Hello) verify by
-nature and need nothing extra.
-
-The simplest way to get HTTPS on a home server is
-[Tailscale](https://tailscale.com), a WireGuard mesh that is **private by
-default**: only devices you have added to your tailnet can reach the machine. That
-is why the sidecar ships **on by default** — passkeys are the point, and they need
-a secure origin. `tailscale serve` publishes to the tailnet; the command that
-would expose the app to the public internet is `tailscale funnel`, which nothing
-here runs. The one thing that does become public is the hostname — Tailscale's
-certificate comes from Let's Encrypt, and every Let's Encrypt certificate is
-listed in public Certificate Transparency logs. Nothing is reachable at that name;
-only the name is visible.
-
-The sidecar needs authenticating once. Either read the login URL out of its logs:
-
-```sh
-docker compose logs tailscale     # visit the https://login.tailscale.com/… URL
-```
-
-or generate an auth key in the Tailscale admin console and let it authenticate
-unattended:
-
-```sh
-# .env
-TS_AUTHKEY=tskey-auth-…
-```
-
-Either way, finish by telling the app the name Tailscale issued — passkeys are
-verified against it exactly:
-
-```sh
-# .env
-ORIGIN=https://continuum.<your-tailnet>.ts.net
-
-docker compose up -d
-```
-
-Until that is done the sidecar sits unauthenticated and nothing else changes: the
-app answers on its LAN address, and the passkey controls stay absent because the
-origin is still plain HTTP.
-
-**Do not remove the LAN port mapping yet.** Sign in over the tailnet address,
-register a passkey in Settings → Household, and confirm it signs you in. Only then
-delete the `ports:` block from the `app` service in `compose.yaml`, which makes
-Tailscale the only way in. Note that this also puts the `/ics` calendar feed and
-the `/api` tokens behind the tailnet, so a phone subscribed to the calendar needs
-Tailscale connected for it to refresh.
-
-**Already running Tailscale on the host?** Skip the sidecar. Set `ORIGIN` to your
-existing `.ts.net` name and run, on the host:
-
-```sh
-# 80 is the host port compose publishes by default; use your CONTINUUM_PORT if
-# you overrode it. 3000 is the port *inside* the container and is not published.
-tailscale serve --bg 80
-```
-
-Any other route to a trusted certificate works equally well — a reverse proxy with
-Let's Encrypt, or your own internal certificate authority via `mkcert` if you would
-rather nothing appear in a public log. Continuum only cares that `ORIGIN` is
-`https://` and matches the address you browse to.
+The proxy must pass `X-Forwarded-Host` and `X-Forwarded-Proto`; every common
+one does by default. Form submissions are checked against the forwarded host,
+so a proxy that drops it gets a "That form was not accepted" page naming both
+addresses.

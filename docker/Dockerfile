@@ -65,6 +65,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/tessdata ./tessdata
+# The install file travels with the image — `docker run --rm <image> compose`
+# prints it — so nothing has to be fetched from anywhere but the registry.
+COPY --from=build /app/compose.yaml ./compose.yaml
+COPY --from=build --chmod=755 /app/docker/entrypoint.sh ./entrypoint.sh
 
 # Uploaded files (property photos, documents, statements) live on this volume
 RUN mkdir -p /data /backups && chown node:node /data /backups
@@ -82,6 +86,13 @@ ENV BACKUP_DIR=/backups
 # enforced by the server the app is served from.
 ENV BODY_SIZE_LIMIT=32M
 
+# Behind the Tailscale sidecar (or any reverse proxy) the address the person
+# typed arrives in these headers, and `Host` is whatever the proxy dialled.
+# adapter-node builds `event.url` from them, which is what the passkey screens
+# compare against the instance's https address.
+ENV HOST_HEADER=x-forwarded-host
+ENV PROTOCOL_HEADER=x-forwarded-proto
+
 USER node
 EXPOSE 3000
-CMD ["node", "build"]
+ENTRYPOINT ["/app/entrypoint.sh"]

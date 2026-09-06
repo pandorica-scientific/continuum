@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
+import { currentOrigin } from '$lib/server/auth/webauthn/origin';
 
 interface StorageFact {
 	label: string;
@@ -100,7 +101,7 @@ export async function serverStatus(): Promise<ServerStatus> {
 		migrations,
 		databaseSize,
 		uptime: formatUptime(process.uptime()),
-		origin: env.ORIGIN || 'not set',
+		origin: currentOrigin() || 'not known yet',
 		node: process.version,
 		storage
 	};
