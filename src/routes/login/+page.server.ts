@@ -3,7 +3,6 @@ import { asRowId } from '$lib/ids';
 import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { currentOrigin, passkeysUsableFrom } from '$lib/server/auth/webauthn/origin';
 import { isOpenMode } from '$lib/server/auth/open-mode';
 import { person } from '$lib/server/db/schema';
 import { createSession, verifyPassword } from '$lib/server/auth';
@@ -16,7 +15,7 @@ import {
 import { personHues } from '$lib/people';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async () => {
 	const openMode = await isOpenMode();
 	const people = await db
 		.select({ id: person.id, name: person.name, initials: person.initials })
@@ -27,7 +26,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		// whose enrollment link has not been opened yet. The second is the worse
 		// of the two: a new person who tries the picker before reading their mail
 		// spends the per-address failure budget that gates everyone's sign-in, and
-		// behind a reverse proxy or Tailscale the whole household shares one
+		// behind a reverse proxy the whole household shares one
 		// address.
 		// In open mode a password is not what makes an account usable, so requiring
 		// one here would hide people who can now perfectly well sign in.
@@ -37,18 +36,12 @@ export const load: PageServerLoad = async ({ url }) => {
 				: and(isNull(person.deactivatedAt), isNotNull(person.passwordHash))
 		)
 		.orderBy(person.createdAt, person.id);
-	// Decided from the address actually being browsed, not from the configured
-	// one. Reading only the configuration put this button on every address the
-	// instance answers at, while exactly one of them can verify.
-	const passkeys = passkeysUsableFrom(url.origin, currentOrigin());
 	// The same colour each person is tagged with everywhere else in the app, so
 	// the picker on the way in matches the sidebar on the other side of it.
 	const hues = personHues(people.map((p) => p.id));
 	return {
 		people: people.map((p) => ({ ...p, hue: hues.get(p.id) ?? '--fg3' })),
-		openMode,
-		passkeys: passkeys.usable,
-		passkeyWorksAt: passkeys.usable ? null : passkeys.worksAt
+		openMode
 	};
 };
 

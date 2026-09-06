@@ -4,7 +4,6 @@
  */
 
 import {
-	bigint,
 	boolean,
 	index,
 	integer,
@@ -31,7 +30,7 @@ export const person = pgTable('person', {
 	// Null between "created by an admin" and "enrolled via the one-time link".
 	// A null hash can never satisfy a sign-in — see verifyPassword.
 	passwordHash: text('password_hash'),
-	// Captured by sessions, passkeys and ceremonies so work begun before a
+	// Captured by sessions so work begun before a
 	// revocation cannot create a new way in after it commits.
 	authGeneration: integer('auth_generation').notNull().default(0),
 	// Set to suspend sign-in without deleting a person other tables reference.
@@ -107,57 +106,6 @@ export const enrollmentToken = pgTable('enrollment_token', {
 	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 	usedAt: timestamp('used_at', { withTimezone: true })
 });
-
-// A WebAuthn challenge this server issued and has not yet spent.
-//
-// The challenge used to live only in an httpOnly cookie the caller hands back,
-// which is not a record of anything: SvelteKit does not sign cookies, so the
-// value was entirely attacker-chosen and "expectedChallenge" was whatever the
-// request said it should be. One captured assertion could then be replayed into
-// a fresh session forever. A row here is what makes a challenge single-use —
-// verification deletes it and refuses if it was not there.
-export const webauthnChallenge = pgTable(
-	'webauthn_challenge',
-	{
-		// sha256 hex of the challenge, the way sessions and tokens are stored
-		id: text('id').primaryKey(),
-		address: text('address').notNull(),
-		personId: uuid('person_id').references(() => person.id, { onDelete: 'cascade' }),
-		authGeneration: integer('auth_generation'),
-		authSnapshot: jsonb('auth_snapshot').$type<Record<string, number>>().notNull().default({}),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
-	},
-	(table) => [
-		index('webauthn_challenge_expires_idx').on(table.expiresAt),
-		index('webauthn_challenge_address_created_idx').on(table.address, table.createdAt),
-		index('webauthn_challenge_person_idx').on(table.personId)
-	]
-);
-
-// A registered passkey. The public key is public by construction — the private
-// half never leaves the authenticator, which is the whole point.
-export const credential = pgTable(
-	'credential',
-	{
-		// base64url credential ID as the authenticator reports it
-		id: text('id').primaryKey(),
-		personId: uuid('person_id')
-			.notNull()
-			.references(() => person.id, { onDelete: 'cascade' }),
-		authGeneration: integer('auth_generation').notNull(),
-		publicKey: text('public_key').notNull(),
-		// See webauthn/counter.ts: 0 means "not reported", not "never used".
-		counter: bigint('counter', { mode: 'number' }).notNull().default(0),
-		transports: jsonb('transports').$type<string[]>().notNull().default([]),
-		label: text('label').notNull(),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		lastUsedAt: timestamp('last_used_at', { withTimezone: true })
-	},
-	// Listing a person's passkeys and revoking them on a password change both
-	// read by person_id.
-	(table) => [index('credential_person_idx').on(table.personId)]
-);
 
 // App-level configuration owned by the Settings screen (module toggles, base
 // currency, household name, …). One row per key, value is JSON.

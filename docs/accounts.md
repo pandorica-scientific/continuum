@@ -4,7 +4,7 @@ The setup wizard makes its first person an **administrator**; anyone added later
 a **member** unless you pick administrator on the form. Only administrators can add
 or deactivate people, change roles, manage API tokens, switch modules on and off,
 set the base currency, or configure and run backups. A member's Settings page holds
-their own password, their own passkeys and the household's list of names — the
+their own password and the household's list of names — the
 administrative sections are not merely hidden from them, they are never sent.
 
 Adding someone in Settings → Household produces a **one-time enrollment link**,
@@ -12,9 +12,8 @@ valid for seven days, which you pass to them however you like. They open it and
 choose their own password — you never see it. Until they do, they show as "not
 enrolled yet" and cannot sign in.
 
-Changing your own password ends your other sessions and clears your passkeys: a
-password somebody else may have learned is a password that could have registered a
-passkey, so the new one starts from nothing and you enroll your passkeys again.
+Changing your own password ends your other sessions: a password somebody else
+may have learned is a password that may have signed in elsewhere.
 
 Two knobs, both optional, in `.env` (see [Install](install.md)):
 `PASSWORD_MIN_LENGTH` (default 8) and `ENROLLMENT_LINK_DAYS` (default 7). The
@@ -22,7 +21,7 @@ password hints in the interface are fed by the same value the server enforces, s
 they cannot disagree.
 
 Deactivating a person blocks sign-in and cuts their live sessions, and voids any
-enrollment link they never opened — but it keeps their password, passkeys and all
+enrollment link they never opened — but it keeps their password and all
 their history, so reactivating is a clean undo. People are never deleted:
 accounts, properties, loans, documents and tax statements reference them.
 
@@ -31,7 +30,7 @@ accounts, properties, loans, documents and tax statements reference them.
 An instance can be run with **no credentials at all**: an administrator drops them
 for the whole install, confirmed with their own password, and the setup wizard can
 start one that way too. Everyone who opens the address is signed in as whoever they
-pick — no password and no passkey is asked for while it is on. This is for a
+pick — no password is asked for while it is on. This is for a
 household that keeps the instance on a network only they can reach and does not want
 a sign-in between them and their own figures. The warning lives on the sign-in page,
 where somebody who did not expect it actually meets it, and on Settings.
@@ -45,9 +44,8 @@ On the plain-HTTP LAN address that is everyone on the network — see
 Only an administrator can turn it on, and only by re-entering their own password —
 the last moment a password can prove intent. Turning it **off** asks for no
 password: anyone already inside could close the door anyway, and asking for a
-credential to close a door that is open would only stop the honest. Passwords and
-passkeys are never deleted, so turning it off restores normal sign-in with every
-credential intact. An instance the wizard started in open mode has no passwords at
+credential to close a door that is open would only stop the honest. Passwords are
+never deleted, so turning it off restores normal sign-in with every one intact. An instance the wizard started in open mode has no passwords at
 all, so closing that one means handing everybody an enrollment link first.
 
 It governs interactive sign-in only. The `/api` boundary, calendar feed tokens and

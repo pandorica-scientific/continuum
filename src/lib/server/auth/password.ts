@@ -12,18 +12,9 @@ import { hashPassword, verifyPassword } from './index';
 import { revokeAuthenticationGeneration } from './generation';
 
 /**
- * Revoke every way into this account except the session doing the revoking.
- *
- * Passkeys go too, and that is the point. Registering one needs only a live
- * session, so somebody holding a stolen cookie could enrol their own
- * authenticator and keep it — a credential is not tied to the password, and
- * passkey sign-in would go on minting fresh thirty-day sessions long after the
- * password had been changed. Deleting other sessions alone left the one door
- * the remedy was supposed to close standing open.
- *
- * The cost is that the account's own passkeys have to be enrolled again, which
- * is the correct trade when the reason for doing this is that someone else may
- * have had the account.
+ * Revoke every way into this account except the session doing the revoking:
+ * every other session is ended, because a password somebody else may have
+ * learned is a password that may have minted sessions they still hold.
  */
 export async function changeOwnPassword(
 	personId: string,

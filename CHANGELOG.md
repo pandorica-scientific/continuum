@@ -2,6 +2,35 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.3 — 2026-09-06
+
+> Two commands, no accounts, and the address is a name.
+
+### ✨ Added
+
+- 📡 **The machine answers to `continuum.local`** — an mDNS announcer runs from the same image as its own service on the host network, so phones, tablets and laptops reach the app by name with nothing installed and nothing typed into a router
+- 📦 **The Compose file ships inside the image** — `docker run --rm kerth92/continuum compose > compose.yaml` is the whole download, with nothing fetched from GitHub
+- 📷 **Multi-page scans on a plain-http address** — "Add a page" on the review screen opens the phone's camera app again, where it used to mount a viewfinder the browser refuses without https, so a stack of pages becomes one PDF on the address everyone actually uses
+
+### 🔧 Changed
+
+- 🔑 **Passkeys are gone** — nobody used them and they need https, which a plain-http install never has; the WebAuthn routes, the `credential` and `webauthn_challenge` tables, the challenge budget in the rate limiter, the two `@simplewebauthn` dependencies and every mention in Settings, sign-in and enrollment are removed, and `ORIGIN` with them
+- 🧹 **One install path, plain http** — the Tailscale sidecar, the Caddy `lan-tls` profile, the golink profile, the `docker run` walkthrough and the Postgres 17→18 migration steps are gone from the Compose file and the docs; `ORIGIN` remains only for a reverse proxy of your own
+- ⬆️ **`docker compose up -d` is also the update** — the images are pulled on every start, and the database follows patch releases within its pinned major
+- 📖 **Every document describes the current version only** — README, install, networking, documents, accounts, backups, API, UI guidelines, security, architecture and contributing were rewritten against the code, with no version history in them
+- 🛠️ **The `build:` block moved to `compose.override.yaml`** — a checkout builds from the working tree, the published file always pulls
+- 🍪 **Auth cookies are marked `Secure` per request** — when the proxy in front says the browser used https, and not otherwise, so a LAN sign-in and an https sign-in through a proxy work on the same instance
+
+### 🐛 Fixed
+
+- 🧭 **The address the browser used is the one the app sees behind a proxy** — the image names `X-Forwarded-Host` and `X-Forwarded-Proto` for adapter-node, so enrollment links and calendar callbacks carry the right address
+- 📂 **The backup restore instruction pointed at a `files/` folder that does not exist in the uploads volume** — uploads sit flat at its root, and the document says so
+
+### ⬆️ Upgrading
+
+- 🔁 **Fetch the new Compose file once** — `docker run --rm kerth92/continuum compose > compose.yaml`, then `docker compose up -d`; the volumes are unchanged, and an `ORIGIN` left in `.env` from an earlier install does nothing and can be deleted
+- 🗄️ **Two tables leave the schema** — `credential` and `webauthn_challenge` are dropped from the baseline; on an existing database run `drop table if exists webauthn_challenge, credential;` after the backup
+
 ## 0.8.2 — 2026-09-06
 
 > One way in: pull the image, start it, open the address it tells you.

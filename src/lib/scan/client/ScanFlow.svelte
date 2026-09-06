@@ -19,6 +19,7 @@
 		type PageSource
 	} from '../core/index.ts';
 	import { loadCv } from './opencv-load.ts';
+	import { isSecureForCamera } from './camera.svelte.ts';
 	import {
 		encodeJpeg,
 		frameFromBitmap,
@@ -76,6 +77,20 @@
 	let source = $state<{ frame: Frame; corners: Corners | null; from: PageSource } | null>(null);
 	/** Remembered past `discard()`, which clears the source it came from. */
 	let fromUpload = $state(false);
+
+	/**
+	 * Where the next page comes from. The in-page viewfinder needs a secure
+	 * context, which a self-hosted Continuum on a plain-http address never
+	 * has; there, every page comes from the phone's own camera app instead,
+	 * through the input below, and lands on the same pipeline. The review
+	 * screen is what you come back to between pages either way.
+	 */
+	const viewfinder = typeof window !== 'undefined' && isSecureForCamera(window.location);
+	let cameraInput = $state<HTMLInputElement | null>(null);
+	function nextPage() {
+		if (viewfinder) screen = 'capture';
+		else cameraInput?.click();
+	}
 	/** The same, scaled down, for everything the preview needs. */
 	let draft = $state<{ frame: Frame; corners: Corners | null } | null>(null);
 	let mode = $state<PageMode>('bw');
@@ -141,9 +156,10 @@
 			session.add(mode, blob);
 			discard();
 			// A dropped photo has no viewfinder to go back to, and a full document
-			// has nowhere further to go: both land on the review screen. Otherwise
-			// return to the camera, which is what someone scanning a stack wants.
-			screen = fromUpload || session.full ? 'review' : 'capture';
+			// has nowhere further to go: both land on the review screen, as does
+			// every page on plain http. Otherwise return to the camera, which is
+			// what someone scanning a stack wants.
+			screen = fromUpload || session.full || !viewfinder ? 'review' : 'capture';
 		} catch (error) {
 			failure = error instanceof Error ? error.message : 'That page could not be kept.';
 		} finally {
@@ -258,7 +274,7 @@
 			await show('bw');
 		} catch (error) {
 			failure = error instanceof Error ? error.message : 'That photo could not be read.';
-			screen = 'capture';
+			screen = viewfinder ? 'capture' : 'review';
 		}
 	}
 
@@ -267,6 +283,24 @@
 		if (file) void readDropped(file);
 	});
 </script>
+
+<!-- The phone's camera app, for a page on plain http. `capture` opens the
+     camera directly rather than the gallery; the photo is read like a dropped
+     one. -->
+<input
+	bind:this={cameraInput}
+	type="file"
+	accept="image/*"
+	capture="environment"
+	tabindex="-1"
+	aria-hidden="true"
+	hidden
+	onchange={() => {
+		const file = cameraInput?.files?.[0];
+		if (cameraInput) cameraInput.value = '';
+		if (file) void readDropped(file);
+	}}
+/>
 
 {#if screen === 'reading'}
 	<div class="reading">
@@ -280,7 +314,7 @@
 		onmove={session.move}
 		onremove={session.remove}
 		onrename={session.rename}
-		onadd={() => (screen = 'capture')}
+		onadd={nextPage}
 		onmake={() => void make()}
 		oncancel={() => {
 			session.dispose();

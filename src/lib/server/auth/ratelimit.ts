@@ -5,13 +5,6 @@
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 8;
-// Issuing a challenge is not a failed credential. An ordinary sign-in issues
-// one per click, every one of them succeeding, and the whole household arrives
-// from one address behind Tailscale or a reverse proxy. This is a flood guard
-// on a cheap public endpoint, so it gets its own far larger allowance than a
-// wrong credential does — counting issues as failures capped the household at
-// eight passkey ceremonies per window with nothing that ever cleared it.
-const MAX_CHALLENGE_ISSUES = 60;
 const DEFAULT_MAX_ENTRIES = 4096;
 const DEFAULT_PRUNE_BATCH_SIZE = 64;
 
@@ -21,7 +14,7 @@ export function loginLimitSubject(personId: string, known: boolean): string {
 	return known ? personId : UNKNOWN_LOGIN_SUBJECT;
 }
 
-type LimitScope = 'login' | 'api' | 'enroll' | 'passkey-challenge';
+type LimitScope = 'login' | 'api' | 'enroll';
 
 interface Entry {
 	count: number;
@@ -37,10 +30,6 @@ interface RateLimiterOptions {
 // NUL cannot appear in any part, so the parts can never collide.
 const keyFor = (scope: LimitScope, address: string, subject: string) =>
 	`${scope}\u0000${address}\u0000${subject}`;
-
-function maximumFor(scope: LimitScope): number {
-	return scope === 'passkey-challenge' ? MAX_CHALLENGE_ISSUES : MAX_FAILURES;
-}
 
 /** A bounded limiter with constant-bounded lifecycle work per operation. */
 export class RateLimiter {
@@ -63,16 +52,16 @@ export class RateLimiter {
 	 * One budget per (scope, address, subject) and no coarser tier above it.
 	 * `subject` narrows the budget to what is actually under attack — the
 	 * account id on the sign-in form. An address-wide tier on top of it looks
-	 * like defence in depth and is not: behind Tailscale or a reverse proxy the
+	 * like defence in depth and is not: behind a reverse proxy the
 	 * whole household is one address, so a handful of failures against any
-	 * account, or a few expired passkey challenges, refused every member's
-	 * sign-in. Doors with no subject (api, enroll, passkey verify) key on the
+	 * account refused every member's sign-in. Doors with no subject (api,
+	 * enroll) key on the
 	 * address alone, because the token in the request is the whole secret.
 	 */
 	blockedForSeconds(scope: LimitScope, address: string, subject = ''): number {
 		const now = this.#now();
 		this.#prune(now);
-		return this.#waitFor(keyFor(scope, address, subject), now, maximumFor(scope));
+		return this.#waitFor(keyFor(scope, address, subject), now, MAX_FAILURES);
 	}
 
 	recordFailure(scope: LimitScope, address: string, subject = ''): void {
@@ -131,16 +120,4 @@ export function recordFailure(scope: LimitScope, address: string, subject = ''):
 
 export function recordSuccess(scope: LimitScope, address: string, subject = ''): void {
 	limiter.recordSuccess(scope, address, subject);
-}
-
-/**
- * Reserve one public challenge issue, returning its retry delay when refused.
- * The count here is issues, not failures: it exists so a script cannot flood
- * webauthn_challenge, and it runs on the MAX_CHALLENGE_ISSUES allowance rather
- * than the credential-guessing one.
- */
-export function reserveChallengeIssuance(address: string): number {
-	const wait = limiter.blockedForSeconds('passkey-challenge', address);
-	if (wait === 0) limiter.recordFailure('passkey-challenge', address);
-	return wait;
 }

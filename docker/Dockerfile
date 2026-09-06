@@ -69,6 +69,8 @@ COPY --from=build /app/tessdata ./tessdata
 # prints it — so nothing has to be fetched from anywhere but the registry.
 COPY --from=build /app/compose.yaml ./compose.yaml
 COPY --from=build --chmod=755 /app/docker/entrypoint.sh ./entrypoint.sh
+# The mDNS announcer, run from this same image as the `mdns` service.
+COPY --from=build /app/docker/mdns.mjs ./mdns.mjs
 
 # Uploaded files (property photos, documents, statements) live on this volume
 RUN mkdir -p /data /backups && chown node:node /data /backups
@@ -86,10 +88,9 @@ ENV BACKUP_DIR=/backups
 # enforced by the server the app is served from.
 ENV BODY_SIZE_LIMIT=32M
 
-# Behind the Tailscale sidecar (or any reverse proxy) the address the person
-# typed arrives in these headers, and `Host` is whatever the proxy dialled.
-# adapter-node builds `event.url` from them, which is what the passkey screens
-# compare against the instance's https address.
+# Behind a reverse proxy the address the person typed arrives in these
+# headers, and `Host` is whatever the proxy dialled; adapter-node builds
+# `event.url` from them, so links the app writes name the right address.
 ENV HOST_HEADER=x-forwarded-host
 ENV PROTOCOL_HEADER=x-forwarded-proto
 

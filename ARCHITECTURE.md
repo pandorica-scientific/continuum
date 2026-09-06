@@ -1,7 +1,8 @@
 # Architecture
 
 Continuum is a single SvelteKit (Svelte 5, TypeScript strict) application over
-PostgreSQL via Drizzle, shipped as a two-container docker-compose stack.
+PostgreSQL via Drizzle, shipped as a docker-compose stack: the app, the
+database, and an mDNS announcer run from the same image.
 Money is integer minor units + a currency code everywhere; stored amounts are
 never re-denominated. Aggregates convert each operand with the newest rate on
 or before its effective date; a missing historical rate is an explicit
@@ -268,53 +269,29 @@ copy is safer than deleting it.
 
 ## Authentication
 
-Two ways in, converging on one generation-conditional session grant. A password
-sign-in and a passkey sign-in both capture `person.authGeneration`; the session
-row is created only if that generation is still current and the person remains
-active. Everything downstream — the session cookie, `validateSession`,
-`locals.person` — is unaware of which credential was used.
+One way in, a password, granting a generation-conditional session. Sign-in
+captures `person.authGeneration`; the session row is created only if that
+generation is still current and the person remains active. Everything
+downstream — the session cookie, `validateSession`, `locals.person` — sees
+only the session.
 
 - **Passwords** are Argon2 hashes on `person`. The column is nullable: a person
   created by an administrator has no password until they open their enrollment
   link and choose one, and `verifyPassword` returns false on a null hash rather
   than throwing.
-- **Passkeys** are WebAuthn credentials in `credential`, one row per registered
-  device. They are registered as discoverable, so the sign-in screen needs no
-  person picker — the authenticator returns the person ID in its user handle.
-  The relying-party ID is derived from the instance's https address rather
-  than configured, which makes the classic origin/RP-ID mismatch impossible.
-  That address comes from the Tailscale sidecar: `system/tailscale.ts` reads
-  the node's name and certificate domain over the sidecar's local-API socket,
-  which compose shares into the app container, and polls until both exist.
-  `ORIGIN` in the environment overrides it for an instance behind its own
-  proxy. Where no secure address is known the passkey interface is absent, not
-  broken. The same module answers the sidecar's plain-http listener — the bare
-  MagicDNS name typed into a browser — with a redirect to the https address.
-- **Signature counters** are compared only when both the stored and incoming
-  value are non-zero. Synced passkeys always report zero, so a naive
-  monotonicity check would reject every Apple credential on its second use.
-  `webauthn/counter.ts` holds the rule and a unit test pins it.
-- **WebAuthn challenges** are recorded in `webauthn_challenge` when issued and
-  deleted when spent, so a verification that spends nothing is refused. Public
-  issuance has its own rate budget, expired rows are indexed for cleanup, and
-  stored challenge counts are bounded. The cookie carries the value back from
-  the browser but is not the record of it: SvelteKit does not sign cookies, so a
-  challenge held only there is whatever the caller says it is.
-- **Authentication generations** invalidate a ceremony that began before a
-  password change or deactivation. Session, credential and positive-counter
-  writes all compare the captured generation and active state in the same SQL
-  statement. Enrollment consumes its token, writes the password and creates
-  the session in one transaction.
-- **Enrollment tokens**, **sessions**, **API tokens** and challenges all store
-  only a sha256 of the value; the raw token is shown once and never persisted.
-- **Changing a password revokes every other way in** — other sessions and every
-  registered passkey. Enrolling a passkey needs only a live session, so one
-  enrolled from a stolen cookie would otherwise outlive the remedy.
+- **Authentication generations** invalidate a sign-in that began before a
+  password change or deactivation. Session writes compare the captured
+  generation and active state in the same SQL statement. Enrollment consumes
+  its token, writes the password and creates the session in one transaction.
+- **Enrollment tokens**, **sessions** and **API tokens** all store only a
+  sha256 of the value; the raw token is shown once and never persisted.
+- **Changing a password ends every other session**, so a password somebody
+  else learned cannot keep a session they already opened.
 - **Rate limiting** is per scope and per subject, not per address alone
   (`auth/ratelimit.ts`). Sign-in attempts combine account and address budgets;
-  unknown identifiers share bounded state. API tokens, enrollment and public
-  passkey challenges keep separate budgets — behind a reverse proxy or
-  Tailscale the whole household may share one address, so an address-only
+  unknown identifiers share bounded state. API tokens and enrollment keep
+  separate budgets — behind a reverse proxy the whole household may share one
+  address, so an address-only
   budget lets any caller shut everyone out. Set `ADDRESS_HEADER`/`XFF_DEPTH`
   only where a trusted proxy chain is the only way in.
 - **API authentication** is applied once by the SvelteKit hook to the complete

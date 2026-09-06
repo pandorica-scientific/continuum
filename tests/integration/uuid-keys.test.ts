@@ -35,8 +35,6 @@ const STAYS_TEXT = new Set([
 	'session',
 	'api_token',
 	'enrollment_token',
-	'webauthn_challenge',
-	'credential',
 	'broker_operation',
 	'broker_position',
 	'broker_import_state',

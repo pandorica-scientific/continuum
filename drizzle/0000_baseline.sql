@@ -30,18 +30,6 @@ CREATE TABLE "api_token" (
 	"last_used_at" timestamp with time zone
 );
 --> statement-breakpoint
-CREATE TABLE "credential" (
-	"id" text PRIMARY KEY NOT NULL,
-	"person_id" uuid NOT NULL,
-	"auth_generation" integer NOT NULL,
-	"public_key" text NOT NULL,
-	"counter" bigint DEFAULT 0 NOT NULL,
-	"transports" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"label" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"last_used_at" timestamp with time zone
-);
---> statement-breakpoint
 CREATE TABLE "enrollment_token" (
 	"id" text PRIMARY KEY NOT NULL,
 	"person_id" uuid NOT NULL,
@@ -80,16 +68,6 @@ CREATE TABLE "settings" (
 CREATE TABLE "setup_claim" (
 	"claimed" boolean PRIMARY KEY NOT NULL,
 	"claimed_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "webauthn_challenge" (
-	"id" text PRIMARY KEY NOT NULL,
-	"address" text NOT NULL,
-	"person_id" uuid,
-	"auth_generation" integer,
-	"auth_snapshot" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "contact" (
@@ -707,10 +685,8 @@ CREATE TABLE "job" (
 );
 --> statement-breakpoint
 ALTER TABLE "currency_rate" ADD CONSTRAINT "currency_rate_code_currency_code_fk" FOREIGN KEY ("code") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "credential" ADD CONSTRAINT "credential_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "enrollment_token" ADD CONSTRAINT "enrollment_token_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "webauthn_challenge" ADD CONSTRAINT "webauthn_challenge_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document" ADD CONSTRAINT "document_shelf_id_shelf_id_fk" FOREIGN KEY ("shelf_id") REFERENCES "public"."shelf"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document" ADD CONSTRAINT "document_type_document_type_key_fk" FOREIGN KEY ("type") REFERENCES "public"."document_type"("key") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_identity" ADD CONSTRAINT "document_identity_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -792,12 +768,8 @@ ALTER TABLE "salary_entry" ADD CONSTRAINT "salary_entry_transaction_id_transacti
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement_line" ADD CONSTRAINT "tax_statement_line_statement_id_tax_statement_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."tax_statement"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "credential_person_idx" ON "credential" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "session_person_idx" ON "session" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "session_expires_idx" ON "session" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "webauthn_challenge_expires_idx" ON "webauthn_challenge" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "webauthn_challenge_address_created_idx" ON "webauthn_challenge" USING btree ("address","created_at");--> statement-breakpoint
-CREATE INDEX "webauthn_challenge_person_idx" ON "webauthn_challenge" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "document_shelf_id_idx" ON "document" USING btree ("shelf_id");--> statement-breakpoint
 CREATE INDEX "document_type_idx" ON "document" USING btree ("type");--> statement-breakpoint
 CREATE INDEX "document_content_hash_idx" ON "document" USING btree ("content_hash");--> statement-breakpoint

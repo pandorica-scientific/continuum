@@ -40,7 +40,7 @@ const FORM_TYPES = new Set([
 
 /** The address the browser put in its URL bar, as this server can see it. */
 function browsedHost(request: Request): string | null {
-	// Behind a proxy — the Tailscale sidecar, or somebody's own — `Host` is
+	// Behind a reverse proxy `Host` is
 	// whatever the proxy dialled, and the address the person actually typed is
 	// in `X-Forwarded-Host`. That is the one to compare against `Origin`.
 	return request.headers.get('x-forwarded-host') ?? request.headers.get('host');

@@ -8,12 +8,11 @@ import { fail, redirect } from '@sveltejs/kit';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
-import { calendarAccount, credential, person, session } from '$lib/server/db/schema';
+import { calendarAccount, person, session } from '$lib/server/db/schema';
 import { currentSessionId } from '$lib/server/auth';
 import { changeOwnPassword } from '$lib/server/auth/password';
 import { canChangeRole, canDeactivate, canSignIn, requireAdmin } from '$lib/server/auth/policy';
 import { createEnrollmentToken, revokeEnrollmentTokens } from '$lib/server/auth/enrollment';
-import { currentOrigin, passkeysUsableFrom } from '$lib/server/auth/webauthn/origin';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { loadCategoryGroups } from '$lib/server/categorize/groups';
 import {
@@ -140,13 +139,9 @@ async function policyTarget(tx: Tx, personId: string) {
 	return { id: row.id, role: row.role, canSignIn: canSignIn(row) };
 }
 
-export const load: PageServerLoad = async ({ locals, url }) => {
-	// Decided from the address actually being browsed, not from the configured
-	// one: reading only the configuration put the passkey controls on every
-	// address the instance answers at, while exactly one of them can verify.
-	const passkeyUse = passkeysUsableFrom(url.origin, currentOrigin());
+export const load: PageServerLoad = async ({ locals }) => {
 	const openMode = await isOpenMode();
-	// Members reach this page for their own password and passkeys. Everything
+	// Members reach this page for their own password. Everything
 	// else on it — backup destinations on the host filesystem, server status,
 	// the API token list — is administrator business and is not fetched at all
 	// for anyone else, so it cannot leak through the payload.
@@ -165,7 +160,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		people,
 		backup,
 		lastBackup,
-		myPasskeys,
 		status,
 		tokens,
 		calendarAccounts,
@@ -197,20 +191,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			.orderBy(person.createdAt, person.id),
 		isAdmin ? getBackupConfig() : null,
 		isAdmin ? getLastBackupRun() : null,
-		// Gated on usability here as well as on being signed in: a plain-HTTP
-		// LAN instance never renders the passkey card, so this was a round trip
-		// per person per visit for the entire life of that deployment.
-		passkeyUse.usable && locals.person
-			? db
-					.select({
-						id: credential.id,
-						label: credential.label,
-						createdAt: credential.createdAt,
-						lastUsedAt: credential.lastUsedAt
-					})
-					.from(credential)
-					.where(eq(credential.personId, locals.person.id))
-			: [],
 		isAdmin ? serverStatus() : null,
 		isAdmin ? listTokens() : [],
 		// Administrator business: a connected calendar is a credential someone
@@ -265,13 +245,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// yours and whether you may administer anyone.
 		me: locals.person,
 		openMode,
-		passkeys: passkeyUse.usable,
-		passkeyWorksAt: passkeyUse.usable ? null : passkeyUse.worksAt,
-		passkeyReason: passkeyUse.usable ? null : passkeyUse.reason,
-		// Named on screen when passkeys are unavailable, so the explanation points
-		// at the value actually in force rather than at a variable name.
-		origin: currentOrigin(),
-		myPasskeys,
 		backup,
 		lastBackup,
 		backupRunning: backupInProgress(),
@@ -290,7 +263,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
  * The two things a member comes to this page for. Everything else on it is
  * household administration.
  */
-const MEMBER_ACTIONS = new Set(['changePassword', 'removePasskey']);
+const MEMBER_ACTIONS = new Set(['changePassword']);
 
 /**
  * Administrator enforcement for the whole page, applied once.
@@ -784,8 +757,6 @@ export const actions = administered({
 		const result = await changeOwnPassword(locals.person.id, current, next, keep);
 		if (!result.ok) return fail(400, { message: result.message });
 
-		// Sessions and passkeys both: a passkey enrolled from a stolen session
-		// would otherwise survive the one remedy the app offers.
 		// Named rather than a bare ok, so the page can confirm the one action here
 		// with a real security consequence instead of appearing to do nothing.
 		return { passwordChanged: true };
@@ -814,17 +785,6 @@ export const actions = administered({
 
 		const { raw } = await createEnrollmentToken(id);
 		return { ok: true, enrollmentLink: `${url.origin}/enroll/${raw}` };
-	},
-
-	removePasskey: async ({ request, locals }) => {
-		if (!locals.person) return fail(401, { message: 'Sign in first.' });
-		const form = await request.formData();
-		const id = String(form.get('credentialId') ?? '');
-		// Scoped to the signed-in person, so one person cannot remove another's.
-		await db
-			.delete(credential)
-			.where(and(eq(credential.id, id), eq(credential.personId, locals.person.id)));
-		return { ok: true };
 	},
 
 	reissueEnrollment: async ({ request, url }) => {

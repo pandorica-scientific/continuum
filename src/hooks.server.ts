@@ -13,8 +13,7 @@ import { runMigrations } from '$lib/server/db/migrate';
 import { runCpuQueue } from '$lib/server/jobs';
 import { refreshRates } from '$lib/server/fx';
 import { isSetUp } from '$lib/server/settings';
-import { currentOrigin } from '$lib/server/auth/webauthn/origin';
-import { shortNameRedirect, watchTailscaleOrigin } from '$lib/server/system/tailscale';
+import { withRequest } from '$lib/server/auth/cookies';
 
 // Requests must not race the boot migrations, so handle() awaits this. A
 // *failed* boot must not be cached: `ready ??= boot()` alone would memoise the
@@ -32,10 +31,6 @@ function ensureReady(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-	// Independent of the database, and the sidecar may take a while to be
-	// signed in, so it polls on its own rather than holding boot up.
-	watchTailscaleOrigin();
-
 	await runMigrations();
 	// Before anything writes a currency. Fourteen columns now carry a foreign key
 	// into this table, so an empty one refuses every insert — and the migration
@@ -151,35 +146,23 @@ export const init: ServerInit = async () => {
 // beside the versioned ones cannot ship unauthenticated. The E2E journey
 // asserts an unauthenticated request gets a 401.
 //
-// /auth/passkey/register is on the list for the same reason, and only that
-// reason: both of its endpoints refuse a request without a session themselves.
-// They are fetched by script, so answering them with a 303 to the login page
-// meant the browser followed it and tried to parse an HTML page as JSON — an
-// expired session surfaced as "Unexpected token <" instead of "sign in again",
-// and the endpoints' own 401 could never fire.
-const PUBLIC_PATHS = [
-	'/login',
-	'/setup',
-	'/ics',
-	'/api',
-	'/enroll',
-	'/auth/passkey/login',
-	'/auth/passkey/register'
-];
+const PUBLIC_PATHS = ['/login', '/setup', '/ics', '/api', '/enroll'];
 
-export const handle: Handle = async ({ event, resolve }) => {
+// Every cookie written while this request is handled needs to know whether
+// the browser used https; see $lib/server/auth/cookies.
+export const handle: Handle = ({ event, resolve }) =>
+	withRequest(event.request, () => handleRequest(event, resolve));
+
+const handleRequest = async (
+	event: Parameters<Handle>[0]['event'],
+	resolve: Parameters<Handle>[0]['resolve']
+) => {
 	// Before ensureReady(): a request that is going to be refused has no business
 	// waiting on the boot migrations, and this decision needs nothing from the
 	// database. SvelteKit's own origin check used to run even earlier, ahead of
 	// this hook entirely — which is why it could not be improved and had to be
 	// replaced (see vite.config.ts and $lib/server/auth/csrf).
 	if (!sameSiteFormPost(event.request)) return csrfRefusal(event.request);
-
-	// `continuum/` typed on a tailnet device arrives here over plain http via
-	// the sidecar's port-80 listener; send it to the https name where passkeys
-	// and the camera work. Before ensureReady() for the same reason as above.
-	const door = shortNameRedirect(event.request, currentOrigin());
-	if (door) redirect(308, door);
 
 	await ensureReady();
 

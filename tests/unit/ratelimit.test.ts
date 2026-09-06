@@ -4,12 +4,10 @@ import {
 	blockedForSeconds,
 	loginLimitSubject,
 	recordFailure,
-	recordSuccess,
-	reserveChallengeIssuance
+	recordSuccess
 } from '$lib/server/auth/ratelimit';
 
 const MAX_FAILURES = 8;
-const MAX_CHALLENGE_ISSUES = 60;
 
 describe('rate limiter scopes', () => {
 	it('a locked-out API caller does not lock the sign-in form', () => {
@@ -51,7 +49,7 @@ describe('rate limiter scopes', () => {
 	});
 
 	it('attempts against one account do not lock the rest of the household', () => {
-		// Behind Tailscale or any reverse proxy the whole household shares one
+		// Behind any reverse proxy the whole household shares one
 		// address, so an address-only budget meant eight bogus attempts against
 		// one person refused everyone's sign-in.
 		const address = '100.64.0.1';
@@ -76,8 +74,8 @@ describe('rate limiter scopes', () => {
 		expect(blockedForSeconds('login', address, loginLimitSubject('person-robert', true))).toBe(0);
 	});
 
-	// One wrong password, or a few expired passkey challenges, must not refuse
-	// every other member: behind Tailscale the household is one address.
+	// One wrong password must not refuse
+	// every other member: behind a reverse proxy the household is one address.
 	it('does not let one account or door lock out the rest of the household', () => {
 		const address = '198.51.100.23';
 		for (let i = 0; i < MAX_FAILURES * 2; i++) {
@@ -118,23 +116,5 @@ describe('rate limiter scopes', () => {
 		expect(blockedForSeconds('login', address)).toBe(0);
 		expect(blockedForSeconds('login', address, 'person-robert')).toBe(0);
 		expect(blockedForSeconds('api', address)).toBe(0);
-	});
-
-	// A flood guard, not a credential budget. Every one of these ceremonies
-	// succeeds; capping them at the failure allowance meant four clicks each
-	// from two members refused the ninth ordinary sign-in of the window.
-	it('lets an ordinary household issue passkey challenges freely', () => {
-		const address = '203.0.113.44';
-		for (let i = 0; i < MAX_FAILURES * 4; i++) {
-			expect(reserveChallengeIssuance(address)).toBe(0);
-		}
-	});
-
-	it('still stops a script flooding challenge issuance', () => {
-		const address = '203.0.113.45';
-		for (let i = 0; i < MAX_CHALLENGE_ISSUES; i++) {
-			expect(reserveChallengeIssuance(address)).toBe(0);
-		}
-		expect(reserveChallengeIssuance(address)).toBeGreaterThan(0);
 	});
 });

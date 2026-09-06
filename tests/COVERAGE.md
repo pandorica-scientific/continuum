@@ -9,8 +9,8 @@ test named for a behaviour often exercises several modules.
 Before adding a test file, run `npm run test:where <module>` and read what is
 already here. Extend an existing file when the behaviour belongs with it.
 
-2880 static tests across 283 files, covering 230 modules.
-161 modules under `src/lib` are imported by no test.
+2856 static tests across 281 files, covering 227 modules.
+157 modules under `src/lib` are imported by no test.
 
 ## Modules
 
@@ -195,10 +195,6 @@ already here. Extend an existing file when the behaviour belongs with it.
 ### `src/lib/errors/states.ts`
 
 - `tests/unit/error-states.test.ts` (unit, 11 tests)
-
-### `src/lib/http.ts`
-
-- `tests/unit/http-problem.test.ts` (unit, 4 tests)
 
 ### `src/lib/icons.ts`
 
@@ -428,7 +424,11 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/api/tokens.ts`
 
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
+- `tests/integration/auth-concurrency.test.ts` (integration, 9 tests)
+
+### `src/lib/server/auth/cookies.ts`
+
+- `tests/unit/cookie-secure.test.ts` (unit, 3 tests)
 
 ### `src/lib/server/auth/csrf.ts`
 
@@ -436,16 +436,16 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/auth/enrollment.ts`
 
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
+- `tests/integration/auth-concurrency.test.ts` (integration, 9 tests)
 - `tests/unit/enrollment.test.ts` (unit, 6 tests)
 
 ### `src/lib/server/auth/generation.ts`
 
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
+- `tests/integration/auth-concurrency.test.ts` (integration, 9 tests)
 
 ### `src/lib/server/auth/index.ts`
 
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
+- `tests/integration/auth-concurrency.test.ts` (integration, 9 tests)
 - `tests/integration/open-mode.test.ts` (integration, 7 tests)
 
 ### `src/lib/server/auth/open-mode.ts`
@@ -458,29 +458,12 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 ### `src/lib/server/auth/ratelimit.ts`
 
-- `tests/unit/ratelimit.test.ts` (unit, 12 tests)
+- `tests/unit/ratelimit.test.ts` (unit, 10 tests)
 
 ### `src/lib/server/auth/token-hash.ts`
 
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
+- `tests/integration/auth-concurrency.test.ts` (integration, 9 tests)
 - `tests/unit/api-tokens.test.ts` (unit, 4 tests)
-
-### `src/lib/server/auth/webauthn/challenge.ts`
-
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
-
-### `src/lib/server/auth/webauthn/counter.ts`
-
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
-- `tests/unit/webauthn-counter.test.ts` (unit, 6 tests)
-
-### `src/lib/server/auth/webauthn/origin.ts`
-
-- `tests/unit/webauthn-origin.test.ts` (unit, 7 tests)
-
-### `src/lib/server/auth/webauthn/payload.ts`
-
-- `tests/unit/webauthn-payload.test.ts` (unit, 10 tests)
 
 ### `src/lib/server/backup/dump.ts`
 
@@ -621,7 +604,7 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `tests/integration/account-documents.test.ts` (integration, 5 tests)
 - `tests/integration/account-edit.test.ts` (integration, 8 tests)
 - `tests/integration/archive-scope.test.ts` (integration, 5 tests)
-- `tests/integration/auth-concurrency.test.ts` (integration, 12 tests)
+- `tests/integration/auth-concurrency.test.ts` (integration, 9 tests)
 - `tests/integration/backlog-import.test.ts` (integration, 6 tests)
 - `tests/integration/backup-round-trip.test.ts` (integration, 4 tests)
 - `tests/integration/briefing-documents.test.ts` (integration, 8 tests)
@@ -1200,11 +1183,14 @@ already here. Extend an existing file when the behaviour belongs with it.
 
 - `tests/integration/one-sided-transfer.test.ts` (integration, 8 tests)
 
+### `src/lib/statements/cadence.ts`
+
+- `tests/unit/statement-cadence.test.ts` (unit, 2 tests)
+
 ### `src/lib/statements/coverage.ts`
 
 - `tests/integration/statement-period.test.ts` (integration, 4 tests)
 - `tests/unit/dossier-cells.test.ts` (unit, 7 tests)
-- `tests/unit/statement-cadence.test.ts` (unit, 3 tests)
 - `tests/unit/statement-coverage.test.ts` (unit, 19 tests)
 
 ### `src/lib/tag-hue.ts`
@@ -1307,7 +1293,6 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/components/Modal.svelte`
 - `src/lib/components/OrganisationRow.svelte`
 - `src/lib/components/PageSize.svelte`
-- `src/lib/components/PasskeyButton.svelte`
 - `src/lib/components/PayslipDialog.svelte`
 - `src/lib/components/PeopleSettings.svelte`
 - `src/lib/components/PersonTag.svelte`
@@ -1381,7 +1366,6 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/scan/core/opencv.ts`
 - `src/lib/scan/core/refine.ts`
 - `src/lib/server/accounts/mutations.ts`
-- `src/lib/server/auth/cookies.ts`
 - `src/lib/server/auth/password.ts`
 - `src/lib/server/backup/destinations.ts`
 - `src/lib/server/calendar/conflicts.ts`
@@ -1417,8 +1401,6 @@ already here. Extend an existing file when the behaviour belongs with it.
 - `src/lib/server/system/policy.ts`
 - `src/lib/statements/CoverageView.svelte`
 - `src/lib/statements/PeriodListing.svelte`
-- `src/lib/statements/cadence.ts`
 - `src/lib/theme.ts`
 - `src/lib/transactions/roles.ts`
 - `src/lib/ui/hue.ts`
-- `src/lib/webauthn.ts`

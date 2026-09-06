@@ -4,7 +4,6 @@ import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { completeEnrollment, lookupEnrollmentToken } from '$lib/server/auth/enrollment';
-import { currentOrigin, passkeysUsableFrom } from '$lib/server/auth/webauthn/origin';
 import { passwordMinLength } from '$lib/server/system/policy';
 import { passwordLengthError, passwordsMatchError } from '$lib/password-policy';
 import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
@@ -14,7 +13,7 @@ import type { Actions, PageServerLoad } from './$types';
 // from "never existed" would confirm whether a guessed token was ever real.
 const UNUSABLE = 'This link is not valid. Ask whoever invited you for a new one.';
 
-const INVALID = { valid: false as const, name: '', passkeys: false, passwordMinLength: 0 };
+const INVALID = { valid: false as const, name: '', passwordMinLength: 0 };
 
 /** The person a live link belongs to, or null when they cannot enrol after all. */
 async function enrollableePerson(token: string): Promise<{ id: string; name: string } | null> {
@@ -46,13 +45,12 @@ async function enrollableePerson(token: string): Promise<{ id: string; name: str
 	return { id: row.id, name: row.name };
 }
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params }) => {
 	const target = await enrollableePerson(params.token);
 	if (!target) return INVALID;
 	return {
 		valid: true as const,
 		name: target.name,
-		passkeys: passkeysUsableFrom(url.origin, currentOrigin()).usable,
 		passwordMinLength: passwordMinLength()
 	};
 };

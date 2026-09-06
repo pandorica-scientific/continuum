@@ -38,6 +38,10 @@ const EXEMPT = new Map([
 	[
 		join('src', 'lib', 'components', 'ImageSlot.svelte'),
 		'a photo tile, not a file input: it renders its image and owns a drag state, a two-tap remove and a lightbox, with the input only as the picker that tile opens'
+	],
+	[
+		join('src', 'lib', 'scan', 'client', 'ScanFlow.svelte'),
+		'the phone camera app as the source of the NEXT page on a plain-http address, where the in-page viewfinder cannot open: it is reached from inside the scanner, which UploadDropzone already opened'
 	]
 ]);
 

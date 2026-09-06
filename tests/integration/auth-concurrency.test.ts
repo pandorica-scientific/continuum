@@ -4,19 +4,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '$lib/server/db/schema';
 import {
 	claimInitialSetup,
-	createCredentialAtGeneration,
 	createSessionAtGeneration,
 	initialSetupPeopleLimitError,
 	runInitialSetup,
 	revokeAuthenticationGeneration
 } from '$lib/server/auth/generation';
 import { completeEnrollment } from '$lib/server/auth/enrollment';
-import { advanceCredentialCounter } from '$lib/server/auth/webauthn/counter';
-import {
-	challengeGenerationMatches,
-	storeChallenge,
-	takeChallenge
-} from '$lib/server/auth/webauthn/challenge';
 import { pruneExpiredSessions, validateSession } from '$lib/server/auth';
 import { verifyToken } from '$lib/server/api/tokens';
 import { hashToken } from '$lib/server/auth/token-hash';
@@ -47,7 +40,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
 	await harness.sql.unsafe(`
-		truncate table webauthn_challenge, credential, session, person, setup_claim, api_token
+		truncate table session, person, setup_claim, api_token
 			restart identity cascade;
 	`);
 });
@@ -90,7 +83,7 @@ describe('authentication concurrency', () => {
 		expect(initialSetupPeopleLimitError(21)).toBe('Setup supports at most 20 people.');
 	});
 
-	it('leaves no session or credential when revocation races their creation', async () => {
+	it('leaves no session when revocation races its creation', async () => {
 		await makePerson(testDb, {
 			id: rowId('person-a'),
 			name: 'Person A',
@@ -105,20 +98,10 @@ describe('authentication concurrency', () => {
 				personId: rowId('person-a'),
 				authGeneration: 0,
 				expiresAt: new Date('2026-09-15T00:00:00Z')
-			}),
-			createCredentialAtGeneration(testDb, {
-				id: 'credential-a',
-				personId: rowId('person-a'),
-				authGeneration: 0,
-				publicKey: 'public-key',
-				counter: 0,
-				transports: [],
-				label: 'Passkey'
 			})
 		]);
 
 		expect(await testDb.select().from(schema.session)).toHaveLength(0);
-		expect(await testDb.select().from(schema.credential)).toHaveLength(0);
 	});
 
 	it('cannot finish in-flight authentication work after deactivation commits', async () => {
@@ -128,19 +111,10 @@ describe('authentication concurrency', () => {
 			initials: 'PA',
 			authGeneration: 0
 		});
-		await testDb.insert(schema.credential).values({
-			id: 'credential-a',
-			personId: rowId('person-a'),
-			authGeneration: 0,
-			publicKey: 'public-key',
-			counter: 5,
-			transports: [],
-			label: 'Passkey'
-		});
 
 		// These values model work captured while the person was active. Once the
-		// deactivation commits, none of that work may create or advance an
-		// authentication artifact that survives until a later reactivation.
+		// deactivation commits, none of that work may create an authentication
+		// artifact that survives until a later reactivation.
 		await testDb
 			.update(schema.person)
 			.set({ deactivatedAt: new Date('2026-08-15T12:00:00Z') })
@@ -152,27 +126,9 @@ describe('authentication concurrency', () => {
 			authGeneration: 0,
 			expiresAt: new Date('2026-09-15T00:00:00Z')
 		});
-		const credentialCreated = await createCredentialAtGeneration(testDb, {
-			id: 'credential-after-deactivation',
-			personId: rowId('person-a'),
-			authGeneration: 0,
-			publicKey: 'new-public-key',
-			counter: 0,
-			transports: [],
-			label: 'Attacker passkey'
-		});
-		const counterAdvanced = await advanceCredentialCounter(testDb, 'credential-a', 5, 6, 0);
 
-		expect({ sessionCreated, credentialCreated, counterAdvanced }).toEqual({
-			sessionCreated: false,
-			credentialCreated: false,
-			counterAdvanced: false
-		});
+		expect(sessionCreated).toBe(false);
 		expect(await testDb.select().from(schema.session)).toHaveLength(0);
-		const credentials = await testDb
-			.select({ id: schema.credential.id, counter: schema.credential.counter })
-			.from(schema.credential);
-		expect(credentials).toEqual([{ id: 'credential-a', counter: 5 }]);
 	});
 
 	it('does not consume enrollment or set a password/session for an inactive person', async () => {
@@ -237,61 +193,6 @@ describe('authentication concurrency', () => {
 		expect(
 			[firstCookies, secondCookies].filter((cookies) => cookies.get('continuum_session')).length
 		).toBe(1);
-	});
-
-	it('allows one positive counter advance from the same stored counter', async () => {
-		await makePerson(testDb, { id: rowId('person-a'), name: 'Person A', initials: 'PA' });
-		await testDb.insert(schema.credential).values({
-			id: 'credential-a',
-			personId: rowId('person-a'),
-			authGeneration: 0,
-			publicKey: 'public-key',
-			counter: 5,
-			transports: [],
-			label: 'Passkey'
-		});
-
-		const winners = await Promise.all([
-			advanceCredentialCounter(testDb, 'credential-a', 5, 6, 0),
-			advanceCredentialCounter(testDb, 'credential-a', 5, 7, 0)
-		]);
-
-		expect(winners.filter(Boolean)).toHaveLength(1);
-		const stored = await testDb
-			.select({ counter: schema.credential.counter })
-			.from(schema.credential);
-		expect([6, 7]).toContain(stored[0].counter);
-	});
-
-	it('caps outstanding challenges for one address', async () => {
-		const cookies = testCookies();
-		for (let i = 0; i < 10; i++) {
-			await storeChallenge(cookies, `challenge-${i}`, {
-				address: '192.0.2.30',
-				handle: testDb
-			});
-		}
-
-		const rows = await testDb.select().from(schema.webauthnChallenge);
-		expect(rows).toHaveLength(4);
-	});
-
-	it('binds a discoverable login challenge to the issued person generations', async () => {
-		await makePerson(testDb, { id: rowId('person-a'), name: 'Person A', initials: 'PA' });
-		const cookies = testCookies();
-		await storeChallenge(cookies, 'login-challenge', {
-			address: '192.0.2.31',
-			authSnapshot: { [rowId('person-a')]: 0 },
-			handle: testDb
-		});
-		await testDb
-			.update(schema.person)
-			.set({ authGeneration: 1 })
-			.where(eq(schema.person.id, rowId('person-a')));
-
-		const stored = await takeChallenge(cookies, testDb);
-		expect(stored).not.toBeNull();
-		expect(challengeGenerationMatches(stored!, rowId('person-a'), 1)).toBe(false);
 	});
 
 	it('clears an invalid session cookie and prunes expired rows in bounded batches', async () => {

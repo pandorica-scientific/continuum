@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { and, eq, ne, sql } from 'drizzle-orm';
 import type { Db, Queryable, Tx } from '$lib/server/db';
-import { credential, person, session, setupClaim } from '$lib/server/db/schema';
+import { person, session, setupClaim } from '$lib/server/db/schema';
 
 const MAX_INITIAL_SETUP_PEOPLE = 20;
 
@@ -16,16 +16,6 @@ interface GenerationSession {
 	personId: string;
 	authGeneration: number;
 	expiresAt: Date;
-}
-
-interface GenerationCredential {
-	id: string;
-	personId: string;
-	authGeneration: number;
-	publicKey: string;
-	counter: number;
-	transports: string[];
-	label: string;
 }
 
 export async function claimInitialSetup(handle: Queryable): Promise<boolean> {
@@ -72,33 +62,6 @@ export async function createSessionAtGeneration(
 	return rows.length === 1;
 }
 
-/** Insert or rename only while the registration ceremony's generation is current. */
-export async function createCredentialAtGeneration(
-	handle: Queryable,
-	values: GenerationCredential
-): Promise<boolean> {
-	const rows = await handle.execute(sql`
-		insert into ${credential}
-			(id, person_id, auth_generation, public_key, counter, transports, label)
-		select ${values.id}, ${values.personId}, ${values.authGeneration}, ${values.publicKey},
-			${values.counter}, ${JSON.stringify(values.transports)}::jsonb, ${values.label}
-		from ${person}
-		where ${person.id} = ${values.personId}
-			and ${person.authGeneration} = ${values.authGeneration}
-			and ${person.deactivatedAt} is null
-		for no key update
-		on conflict (id) do update set
-			public_key = excluded.public_key,
-			counter = excluded.counter,
-			transports = excluded.transports,
-			label = excluded.label
-		where ${credential.personId} = excluded.person_id
-			and ${credential.authGeneration} = excluded.auth_generation
-		returning id
-	`);
-	return rows.length === 1;
-}
-
 /** Advance the generation and remove every artifact carrying the old value. */
 export async function revokeAuthenticationGeneration(
 	handle: Queryable,
@@ -123,6 +86,5 @@ export async function revokeAuthenticationGeneration(
 	} else {
 		await handle.delete(session).where(eq(session.personId, personId));
 	}
-	await handle.delete(credential).where(eq(credential.personId, personId));
 	return advanced[0].auth_generation;
 }

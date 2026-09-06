@@ -1,9 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
-	import { startRegistration } from '@simplewebauthn/browser';
-	import { runCeremony } from '$lib/webauthn';
 	import { DEFAULT_ENROLLMENT_LINK_DAYS, daysPhrase } from '$lib/password-policy';
 
 	// Everything past the name is administrative detail, and the server sends it
@@ -19,67 +16,20 @@
 		pending: boolean;
 	}
 
-	interface PasskeyRow {
-		id: string;
-		label: string;
-		createdAt: Date;
-		lastUsedAt: Date | null;
-	}
-
 	let {
 		people,
 		me,
 		enrollmentLink = null,
-		enrollmentLinkDays = DEFAULT_ENROLLMENT_LINK_DAYS,
-		passkeys = false,
-		origin = '',
-		reason = null,
-		worksAt = null,
-		myPasskeys = []
+		enrollmentLinkDays = DEFAULT_ENROLLMENT_LINK_DAYS
 	}: {
 		people: PersonRow[];
 		me: { id: string; role: 'admin' | 'member' } | null;
 		enrollmentLink?: string | null;
 		enrollmentLinkDays?: number;
-		passkeys?: boolean;
-		/** The configured ORIGIN, named on screen when passkeys are unavailable. */
-		origin?: string;
-		/** Why they are unavailable, so the explanation can be the true one. */
-		reason?: 'unconfigured' | 'insecure' | 'other-address' | null;
-		/** The address they do work at, when there is one. */
-		worksAt?: string | null;
-		myPasskeys?: PasskeyRow[];
 	} = $props();
 
 	let adding = $state(false);
-	let passkeyError = $state('');
-	// Cleared when the next ceremony starts, so a stale success cannot sit above
-	// a fresh failure. Without it nothing on screen distinguished "added, and you
-	// may add another" from "that failed" — the button is deliberately always
-	// present, since passkeys are per-device, so its staying said nothing.
-	let passkeyAdded = $state('');
-	let registering = $state(false);
 	const isAdmin = $derived(me?.role === 'admin');
-
-	async function addPasskey() {
-		passkeyError = '';
-		passkeyAdded = '';
-		registering = true;
-		const result = await runCeremony(
-			'/auth/passkey/register/options',
-			'/auth/passkey/register/verify',
-			startRegistration,
-			// Asked once the authenticator has already agreed, so a cancelled
-			// biometric never puts a naming prompt on screen.
-			() => ({ label: window.prompt('Name this passkey', 'This device') ?? 'Passkey' }),
-			'Could not add that passkey.'
-		);
-		registering = false;
-		if (result.ok) {
-			passkeyAdded = 'Passkey added.';
-			await invalidateAll();
-		} else passkeyError = result.error;
-	}
 
 	function note(p: PersonRow): string {
 		if (!p.role) return '';
@@ -160,84 +110,6 @@
 	{/if}
 </div>
 
-{#if passkeys}
-	<div class="card people">
-		{#each myPasskeys as k (k.id)}
-			<div class="person-row passkey-row">
-				<span class="mod-label">
-					<span>{k.label}</span>
-					<span class="note">
-						{k.lastUsedAt
-							? `last used ${new Date(k.lastUsedAt).toLocaleDateString('en')}`
-							: 'never used'}
-					</span>
-				</span>
-				<form method="POST" action="?/removePasskey" use:enhance class="row-actions">
-					<input type="hidden" name="credentialId" value={k.id} />
-					<button type="submit" class="btn">Remove</button>
-				</form>
-			</div>
-		{/each}
-		<!-- "Add another" once one is registered: the button stays on purpose,
-		     because a passkey belongs to a device and a laptop plus a tablet needs
-		     two. Reading "Add a passkey" after adding one made it look as though
-		     nothing had happened. -->
-		<button type="button" class="btn" onclick={addPasskey} disabled={registering}>
-			{#if registering}
-				Waiting for your device…
-			{:else if myPasskeys.length}
-				➕ Add another passkey
-			{:else}
-				🔑 Add a passkey
-			{/if}
-		</button>
-		{#if passkeyAdded}<p class="note" role="status">{passkeyAdded}</p>{/if}
-		{#if passkeyError}<p class="note">{passkeyError}</p>{/if}
-	</div>
-{:else}
-	<!-- Hiding the passkey card on a plain-HTTP deployment is correct — browsers
-	     refuse WebAuthn outside a secure context — but hiding it silently reads as
-	     "this build has no passkeys". Say why, name the address in force, and give
-	     the administrator the actual steps rather than a variable to look up. -->
-	<div class="card people">
-		<p class="note">
-			{#if reason === 'other-address'}
-				<!-- Not a misconfiguration: a passkey is bound to one address, so this
-				     one is simply the wrong one to add or use it from. Saying "needs
-				     HTTPS" here would be wrong and would send someone to fix a setting
-				     that is already correct. -->
-				Passwords are the only sign-in at this address. A passkey belongs to one address, and this instance's
-				is <code>{worksAt}</code> — open that to add or use one.
-			{:else}
-				Passwords are the only sign-in here: passkeys need a secure address, and browsers refuse
-				them over plain HTTP.
-				{#if origin}
-					This instance's address is <code>{origin}</code>.
-				{:else}
-					This instance does not have an https address yet.
-				{/if}
-			{/if}
-		</p>
-		{#if isAdmin && reason !== 'other-address'}
-			<p class="note">
-				The address arrives on its own once the bundled Tailscale sidecar is on your tailnet with
-				HTTPS certificates enabled — <code>docker compose logs tailscale</code> shows whether it is
-				still waiting to be signed in, and <code>docker compose logs app</code> prints the address the
-				moment it is known. Then reopen this page there.
-			</p>
-			<p class="note">
-				Terminating TLS yourself instead? Set <code>ORIGIN</code> to the <code>https://</code>
-				address you browse to.
-			</p>
-		{:else}
-			<p class="note">
-				An administrator can move the household to an https address; the passkey controls then
-				appear here on their own.
-			</p>
-		{/if}
-	</div>
-{/if}
-
 <style>
 	/* Mirrors the module list on the same screen: a bordered row per entry. */
 	.people {
@@ -255,9 +127,6 @@
 	}
 	.person-row:first-child {
 		border-top: 0;
-	}
-	.passkey-row {
-		grid-template-columns: minmax(0, 1fr) auto;
 	}
 	.person-row.dimmed {
 		opacity: 0.55;
@@ -287,7 +156,7 @@
 		background: var(--card2);
 		border-radius: var(--radius-xs);
 		padding: 1px 5px;
-		/* A tailnet name or a compose command should wrap inside the card rather
+		/* A long address or a compose command should wrap inside the card rather
 		   than push it wider on a phone. */
 		overflow-wrap: anywhere;
 	}

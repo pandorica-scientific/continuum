@@ -10,7 +10,7 @@ units plus a currency code, never a float:
 
 ```sh
 curl -H "Authorization: Bearer <token>" \
-  https://continuum.<your-tailnet>.ts.net/api/v1/networth
+  http://continuum.local/api/v1/networth
 # { "total": { "amountMinor": 646055100, "currency": "CZK" }, … }
 ```
 
@@ -37,10 +37,6 @@ figures `in`, `out`, `saved` and `kept`, and `previous` — the same `caption` a
 far. `kept` is the cash left over **after** saving; what was put aside is `saved`. All
 four are display-grade sums converted into the base currency, not ledger-grade ones:
 the per-transaction endpoints are the exact figures.
-
-If you have removed the LAN port mapping so the tailnet is the only way in, a
-dashboard polling the API has to be on the tailnet too — see
-[Networking](networking.md).
 
 ## Smart-meter billing
 

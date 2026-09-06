@@ -1,11 +1,11 @@
 # Continuum — your household's whole financial picture, on hardware you own.
 #
 #   docker run --rm kerth92/continuum compose > compose.yaml
-#   TS_AUTHKEY=tskey-auth-… docker compose up -d
+#   docker compose up -d
 #
-# Then open https://continuum.<your-tailnet>.ts.net from any device on your
-# tailnet. That is the whole install; everything else is set up in the app.
-# The same `docker compose up -d` later pulls the newest release and updates.
+# Then open http://continuum.local from any device on your network. That is
+# the whole install; everything else is set up in the app. The same
+# `docker compose up -d` later pulls the newest release and updates.
 # Full instructions: https://github.com/pandorica-scientific/continuum/blob/main/docs/install.md
 
 services:
@@ -19,16 +19,11 @@ services:
     pull_policy: always
     restart: unless-stopped
     ports:
-      # Plain http on the local network, as a fallback: http://<server-ip>.
-      # Passkeys and the phone camera need the https address above. If 80 is
-      # taken on the host, set CONTINUUM_PORT in .env.
+      # Plain http on port 80, so the address is just the name. If 80 is taken
+      # on the host, set CONTINUUM_PORT in .env.
       - '${CONTINUUM_PORT:-80}:3000'
     environment:
       DATABASE_URL: postgres://continuum:${POSTGRES_PASSWORD:-continuum}@db:5432/continuum
-      # The https address passkeys are bound to. Discovered from the Tailscale
-      # sidecar over the shared socket below, so leave it unset unless you
-      # terminate TLS yourself — then it is the https:// address you browse to.
-      ORIGIN: ${ORIGIN:-}
       # DEMO=1 seeds a fictional household on a pristine instance
       # (sign in as Jana Nováková / demo-demo-demo).
       DEMO: ${DEMO:-}
@@ -41,41 +36,24 @@ services:
       # CONTINUUM_BACKUPS at a cloud-synced folder on the host to have them
       # carried off-machine.
       - ${CONTINUUM_BACKUPS:-continuum-backups}:/backups
-      # The sidecar's local API, read-only, so the app learns its own https
-      # address instead of being told it.
-      - tailscale-socket:/var/run/tailscale
     depends_on:
       db:
         condition: service_healthy
 
-  # Joins your tailnet as "continuum" and terminates HTTPS for the app with a
-  # trusted certificate — which is what makes passkeys and the phone camera
-  # possible, since browsers refuse both outside a secure context.
-  #
-  # Tailnet-only, never public: the serve config below publishes to devices you
-  # have added to your tailnet. The command that would expose the app to the
-  # open internet is `tailscale funnel`, which nothing here runs.
-  #
-  # No key? It still starts, and `docker compose logs tailscale` prints a login
-  # URL to open once. The app notices the moment the sidecar is signed in.
-  tailscale:
-    image: tailscale/tailscale:latest
+  # Answers `continuum.local` on the local network, so phones, tablets and
+  # laptops reach the app by name with nothing installed and nothing typed
+  # into a router. It has to sit on the host's network to be heard; that is
+  # all it does there. Android browsers do not resolve .local — for them,
+  # name the server in the router (docs/networking.md).
+  mdns:
+    image: kerth92/continuum:latest
     pull_policy: always
-    hostname: continuum
+    command: mdns
+    network_mode: host
     restart: unless-stopped
     environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:-}
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_SERVE_CONFIG: /config/serve.json
-      # Named explicitly so the socket is created inside the shared directory
-      # rather than symlinked from the container's own /tmp.
-      TS_SOCKET: /var/run/tailscale/tailscaled.sock
-    volumes:
-      - tailscale-state:/var/lib/tailscale
-      - tailscale-socket:/var/run/tailscale
-    configs:
-      - source: tailscale-serve
-        target: /config/serve.json
+      # The name before .local. Change it if you run two instances.
+      CONTINUUM_NAME: ${CONTINUUM_NAME:-continuum}
 
   db:
     # The major version is pinned: Postgres will not open a data directory
@@ -98,29 +76,7 @@ services:
       timeout: 3s
       retries: 10
 
-configs:
-  # Inlined so installing is a single download. HTTPS on 443 is the address;
-  # plain http on 80 is what lets `continuum/` — the bare name, typed into a
-  # browser on the tailnet — reach the app, which redirects it to the https
-  # name. The `$$` is deliberate: Compose emits a literal ${TS_CERT_DOMAIN},
-  # which the sidecar fills in with the name Tailscale issued.
-  tailscale-serve:
-    content: |
-      {
-        "TCP": { "80": { "HTTP": true }, "443": { "HTTPS": true } },
-        "Web": {
-          "$${TS_CERT_DOMAIN}:80": {
-            "Handlers": { "/": { "Proxy": "http://app:3000" } }
-          },
-          "$${TS_CERT_DOMAIN}:443": {
-            "Handlers": { "/": { "Proxy": "http://app:3000" } }
-          }
-        }
-      }
-
 volumes:
   continuum-data:
   continuum-db:
   continuum-backups:
-  tailscale-state:
-  tailscale-socket:

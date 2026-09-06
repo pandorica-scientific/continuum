@@ -17,7 +17,6 @@
 <p>
   <a href="https://hub.docker.com/r/kerth92/continuum"><img src="https://img.shields.io/badge/docker-kerth92%2Fcontinuum-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker image"></a>
   <img src="https://img.shields.io/badge/arch-amd64%20%C2%B7%20arm64-555?style=flat-square" alt="amd64 and arm64">
-  <img src="https://img.shields.io/badge/passkeys-supported-5A0FC8?style=flat-square" alt="Passkeys supported">
   <img src="https://img.shields.io/badge/trackers-0-2ea44f?style=flat-square" alt="Zero trackers">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="GNU AGPL v3"></a>
 </p>
@@ -166,43 +165,39 @@ each](docs/statement-import.md)
 - **Never calls home** — no cloud account, no subscription, no telemetry, no trackers. Your statements never leave the machine.
 - **Is safe to re-run** — re-import overlapping exports as often as you like; duplicates are impossible. Backfilling years of history is the intended use.
 - **Is exact about money** — integer minor units end to end, never floats, and multi-currency totals use the rate from the day.
-- **Fits two people** — separate sign-ins, passkeys, dashboards and tax statements over one shared household.
-- **Scans paper with a phone** — photograph a page and get a cropped, flattened, black-and-white PDF; several pages become one document. It runs in the browser, so no page is uploaded until the finished file is.
+- **Fits two people** — separate sign-ins, dashboards and tax statements over one shared household.
+- **Scans paper with a phone** — photograph a page and get a cropped, flattened, black-and-white PDF; several pages become one document. The processing runs in the browser, so no page is uploaded until the finished file is.
 - **Finds a document by what is printed inside it** — filed paper is read in the background, so a variable symbol on page two of a scan is searchable; shelves are yours to name, and a document can be restricted to administrators, which makes it absent for everyone else rather than locked.
 - **Keeps the paper beside the record it belongs to** — a flat, a tenancy, a loan, an account, a contact, a transaction, a tax statement and the portfolio each show their own documents on their own screen; most of them can also attach paper already filed elsewhere, and a flat, a tenancy, a loan and a contact can add a new document with the record and its shelf already chosen.
 
 ## Install
 
-Three steps, about five minutes. You need Docker, and a free
-[Tailscale](https://tailscale.com) account — it is what gives the app a trusted
-`https://` address on a private network, which passkeys and the phone camera
-both require, without a domain name or an open port.
-
-**1. Get a Tailscale key.** In the admin console, open
-[Settings → Keys](https://login.tailscale.com/admin/settings/keys) and generate
-an auth key. Then open [DNS](https://login.tailscale.com/admin/dns) and enable
-**HTTPS certificates**.
-
-**2. Start it.**
+Two commands, and nothing to sign up for. You need Docker on a machine that
+stays on — a Raspberry Pi, a mini PC, a NAS.
 
 ```sh
 docker run --rm kerth92/continuum compose > compose.yaml
-TS_AUTHKEY=tskey-auth-… docker compose up -d
+docker compose up -d
 ```
 
 The first line writes the Compose file out of the image; the second starts the
-app, its database and the Tailscale sidecar. The same second line, run again
-later, updates everything to the newest release.
+app, its database and a small announcer that gives the machine a name on your
+network. Then open **`http://continuum.local`** from any phone, tablet or
+laptop in the house and follow the setup wizard. People, base currency and
+modules are all set there; nothing is edited in files.
 
-**3. Open it.** Install the [Tailscale app](https://tailscale.com/download) on
-your phone or laptop, then open **`https://continuum.<your-tailnet>.ts.net`** —
-or just type `continuum/` — and follow the setup wizard. People, base currency
-and modules are all set there; nothing is edited in files.
+The same second line, run again later, updates everything to the newest
+release.
 
-**Want to look around first?** Add `DEMO=1` and the instance comes up with a
-fictional household — six months of cash flow, two flats on one mortgage,
-payslips, a portfolio. Sign in as **Jana Nováková** / `demo-demo-demo`. An
-instance that already has people is never touched.
+**Want to look around first?** Start with `DEMO=1 docker compose up -d` and
+the instance comes up with a fictional household — six months of cash flow,
+two flats on one mortgage, payslips, a portfolio. Sign in as
+**Jana Nováková** / `demo-demo-demo`. An instance that already has people is
+never touched.
+
+**Scanning paper.** The scan button on a phone opens the camera app; the photo
+comes back cropped, flattened and saved as a PDF, and "Add a page" takes the
+next one. Several pages become one document.
 
 **What it needs.** About 300 MB of memory for the app and its database, from a
 393 MB image built for `amd64` and `arm64`. A Raspberry Pi 4 or 5 with 2 GB on
@@ -210,27 +205,28 @@ a 64-bit OS runs it comfortably; there is no 32-bit build.
 
 > [!IMPORTANT]
 > This holds your household's complete financial history in plain text in a
-> database. Run it on a machine you trust and keep backups — Settings → Backups
-> writes a restorable dump plus every uploaded file to a folder you choose,
-> including a cloud-synced one.
+> database, reachable by anyone on your home network who has a password. Run
+> it on a network you trust, never on a public-facing host, and keep backups —
+> Settings → Backups writes a restorable dump plus every uploaded file to a
+> folder you choose, including a cloud-synced one.
 
-→ [Install and configuration](docs/install.md) · [Networking and
-passkeys](docs/networking.md) · [Backups and restore](docs/backups.md)
+→ [Install and configuration](docs/install.md) · [Reaching it on your
+network](docs/networking.md) · [Backups and restore](docs/backups.md)
 
 ## Documentation
 
-|                                                |                                                                         |
-| ---------------------------------------------- | ----------------------------------------------------------------------- |
-| [Statement import](docs/statement-import.md)   | how the reader works, and what it refuses                               |
-| [Documents](docs/documents.md)                 | shelves, subjects, types, expiry, search inside files, restricted paper |
-| [Install and configuration](docs/install.md)   | quick start, updating, every setting                                    |
-| [Networking and passkeys](docs/networking.md)  | what Tailscale does here, the addresses, your own proxy                 |
-| [Accounts and roles](docs/accounts.md)         | enrollment links, administrators, recovery                              |
-| [Backups and restore](docs/backups.md)         | scheduled dumps, restoring into a fresh instance                        |
-| [API and Home Assistant](docs/api.md)          | read-only tokens, smart-meter billing                                   |
-| [Calendar sync](docs/google-calendar-setup.md) | connecting Google, iCloud or CalDAV                                     |
-| [Screenshot gallery](docs/screenshots.md)      | every screen, both themes, desktop and phone                            |
-| [Architecture](ARCHITECTURE.md)                | how the codebase is laid out                                            |
+|                                                   |                                                                         |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| [Statement import](docs/statement-import.md)      | how the reader works, and what it refuses                               |
+| [Documents](docs/documents.md)                    | shelves, subjects, types, expiry, search inside files, restricted paper |
+| [Install and configuration](docs/install.md)      | quick start, updating, every setting                                    |
+| [Reaching it on your network](docs/networking.md) | the name, the router, Android, your own proxy                           |
+| [Accounts and roles](docs/accounts.md)            | enrollment links, administrators, recovery                              |
+| [Backups and restore](docs/backups.md)            | scheduled dumps, restoring into a fresh instance                        |
+| [API and Home Assistant](docs/api.md)             | read-only tokens, smart-meter billing                                   |
+| [Calendar sync](docs/google-calendar-setup.md)    | connecting Google, iCloud or CalDAV                                     |
+| [Screenshot gallery](docs/screenshots.md)         | every screen, both themes, desktop and phone                            |
+| [Architecture](ARCHITECTURE.md)                   | how the codebase is laid out                                            |
 
 ## Contributing
 

@@ -63,35 +63,21 @@ image — migrations run on start.
 These are design decisions, not vulnerabilities. Knowing them helps you judge
 whether a finding is in scope:
 
-- **A private tunnel, or a trusted local network.** Continuum speaks plain HTTP
-  and terminates no TLS of its own. It is built to sit behind the bundled
-  Tailscale sidecar, reachable only from devices on your tailnet, with plain
-  HTTP on the host port as a fallback for the home LAN behind a router — or
-  behind a reverse proxy of your own. Exposing it directly to the public
-  internet, including via `tailscale funnel`, is a deployment choice the app
-  cannot defend against.
+- **A trusted local network.** Continuum speaks plain HTTP on port 80 and
+  terminates no TLS of its own. It is built to sit on a home LAN behind a
+  router, reachable as `http://continuum.local`, where the people who can
+  reach it are the people who live there. A reverse proxy of your own can put
+  HTTPS in front of it. Exposing it directly to the public internet is a
+  deployment choice the app cannot defend against.
 - **Form submissions are checked against the address the browser used.** The
   `Origin` header must match the `Host` the request was sent to, so a page on
   another site cannot post to your ledger. Scheme is not compared: the app
   speaks HTTP and learns about TLS only from a proxy header, so comparing it
   would mean guessing. The residual gap is somebody who can already forge
   `Host` or terminate TLS inside your network, who is past this fence anyway.
-
-- **The https address is only about passkeys and secure cookies.** It does not
-  decide whether a form submission is accepted. The WebAuthn relying-party ID
-  is derived from it, so it names the single address passkeys are bound to. It
-  is discovered from the Tailscale sidecar's local API over a shared socket —
-  something only tailscaled can write, unlike a forwarded header — or set by
-  hand as `ORIGIN` behind your own proxy, where it must match what you browse
-  to exactly. Without one, password sign-in works everywhere and no passkey
-  controls appear; getting it wrong costs passkeys rather than sign-in.
-- **Passkeys need a secure context.** The passkey controls appear only at the
-  `https://` address (or loopback in development); on a plain-HTTP LAN address
-  they are absent, and passwords remain the only door. That is a browser rule,
-  not a Continuum one.
-- **The plain-http tailnet listener is a doorway only.** The sidecar answers
-  `http://continuum` so the bare name can be typed; the app answers every such
-  request with a redirect to the https address and serves nothing over it.
+- **Cookies follow the request.** An auth cookie is marked `Secure` when the
+  proxy in front says the browser used https, and not otherwise — so a plain
+  LAN sign-in is never handed a cookie the browser will drop.
 - **Everyone with an account can read the whole ledger.** There is no
   multi-tenancy and no per-person data isolation: people are separate sign-ins
   over one shared household, by design. Roles separate administration only —
@@ -107,13 +93,11 @@ whether a finding is in scope:
 Current protections, for reference when assessing a report: passwords hashed
 with Argon2id; session tokens, API tokens and enrollment links stored hashed,
 never in plaintext; enrollment links single-use, expiring and consumed in the
-same transaction that creates the password/session; passkeys requiring user
-verification, with bounded single-use challenges and compare-and-swap signature
-counters; the relying-party ID derived from the https address rather than
-configured separately; authentication generations preventing an in-flight sign-in or
-registration from surviving a password change/deactivation; failed sign-ins
-limited by both account and address, with separate bounded budgets for bearer
-tokens, enrollment and public passkey challenges; `/api/v1` bearer enforcement
+same transaction that creates the password/session; authentication
+generations preventing an in-flight sign-in from surviving a password
+change/deactivation; failed sign-ins limited by both account and address, with
+separate bounded budgets for bearer tokens and enrollment; `/api/v1` bearer
+enforcement
 at the route boundary and a read-only surface with no write endpoints or
 webhooks. Initial setup is one atomic singleton claim and caps the submitted
 household at twenty people before any password hashing begins.
@@ -122,9 +106,6 @@ household at twenty people before any password hashing begins.
 
 - Authentication or session bypass; token forgery, reuse after revocation, or
   privilege escalation from member to administrator.
-- Passkey ceremony flaws: challenge replay or reuse, relying-party or origin
-  confusion, a credential registered to one person authenticating another,
-  user verification not actually enforced.
 - Enrollment-link flaws: a link that works twice, after expiry, after the
   person was deactivated, or that can be guessed from another one.
 - Anything letting an unauthenticated caller read or modify ledger data.

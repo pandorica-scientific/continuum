@@ -2,7 +2,6 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { untrack } from 'svelte';
 	import BrandMark from '$lib/components/BrandMark.svelte';
-	import PasskeyButton from '$lib/components/PasskeyButton.svelte';
 
 	let { data, form } = $props();
 
@@ -41,17 +40,6 @@
 
 			{#if form?.message}
 				<div class="error">{form.message}</div>
-			{/if}
-
-			{#if data.passkeys}
-				<PasskeyButton />
-			{:else if data.passkeyWorksAt}
-				<!-- A passkey is bound to one address. Silence here read as "this build
-				     has no passkeys"; naming the address that works turns a dead end
-				     into a next step. -->
-				<p class="passkey-note">
-					Passkeys work at <code>{data.passkeyWorksAt}</code> — sign in with a password here.
-				</p>
 			{/if}
 
 			<form method="POST" class="card form">
@@ -289,12 +277,6 @@
 		font-size: var(--text-sm);
 		color: var(--yellow);
 		line-height: 1.5;
-	}
-	.passkey-note {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--fg3);
-		text-align: center;
 	}
 
 	/* One column below 900: the panel is decoration, and on a phone the form is

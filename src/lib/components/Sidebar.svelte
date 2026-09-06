@@ -234,9 +234,8 @@
 				<span class="name">{signedIn?.name ?? householdLabel}</span>
 				<span class="household">{householdLabel}</span>
 			</span>
-			<!-- /logout has existed since the first release with nothing linking to
-			     it; without this there is no way to switch accounts or sign in with
-			     a passkey once a session exists. -->
+			<!-- Without this there is no way to switch accounts once a session
+			     exists. -->
 			<form method="POST" action="/logout">
 				<button type="submit" class="sign-out">Sign out</button>
 			</form>

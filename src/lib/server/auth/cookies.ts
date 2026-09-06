@@ -1,19 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// One place decides whether an auth cookie locks itself to HTTPS. Home servers
-// commonly run plain HTTP on the LAN; when the instance is served over HTTPS
-// (the Tailscale sidecar, or somebody's own reverse proxy) every auth cookie
-// follows automatically.
+// One place decides whether an auth cookie locks itself to HTTPS.
 //
-// This exists because the session cookie and the WebAuthn challenge cookie were
-// each parsing ORIGIN by hand. Two copies of a security flag is one copy too
-// many: fixing a trailing slash or an uppercase scheme in one of them would
-// silently leave the other unprotected.
+// The answer belongs to the request, not to the instance. The same server can
+// be reached over https through a proxy and over plain http on the LAN at
+// once, and a `Secure` cookie set on an http response is silently dropped by
+// the browser — so deciding from a configured https address alone would lock
+// every LAN sign-in out the moment one was configured. The app
+// itself only ever speaks http; whether the browser used https is what the
+// proxy in front says in `X-Forwarded-Proto`, and a request without that
+// header came straight to the container's port.
+//
+// One place, so a second cookie can never disagree with the first.
 
-import { currentOrigin } from '$lib/server/auth/webauthn/origin';
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+const current = new AsyncLocalStorage<boolean>();
+
+/** Whether the browser reached this request over https, as the proxy reports it. */
+export function requestIsSecure(request: Request): boolean {
+	return request.headers.get('x-forwarded-proto')?.toLowerCase() === 'https';
+}
+
+/** Run `fn` with `cookieSecure()` answering for this request, awaits included. */
+export function withRequest<T>(request: Request, fn: () => T): T {
+	return current.run(requestIsSecure(request), fn);
+}
 
 export function cookieSecure(): boolean {
-	// No origin known yet — development, a plain-LAN install, or a sidecar
-	// still waiting to be signed in — means plain HTTP, because a `secure`
-	// cookie on an HTTP origin is silently dropped and locks the user out.
-	return currentOrigin().startsWith('https://');
+	// Outside a request — a test, a script — there is no browser to protect a
+	// cookie from, and `false` is the value that cannot lock anyone out.
+	return current.getStore() ?? false;
 }

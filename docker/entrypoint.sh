@@ -11,9 +11,10 @@ if [ "$1" = "compose" ]; then
 	exec cat /app/compose.yaml
 fi
 
-# Compose hands optional variables over as empty strings, and adapter-node
-# refuses an empty ORIGIN outright rather than treating it as unset. Unset means
-# "discover it from the sidecar", so an empty one is dropped before node starts.
-[ -n "$ORIGIN" ] || unset ORIGIN
+# The mDNS announcer — the `mdns` service in compose.yaml, on the host network,
+# answering continuum.local for the machine.
+if [ "$1" = "mdns" ]; then
+	exec node /app/mdns.mjs
+fi
 
 exec node build

@@ -504,11 +504,6 @@
 				me={data.me}
 				enrollmentLink={form?.enrollmentLink ?? null}
 				enrollmentLinkDays={data.enrollmentLinkDays}
-				passkeys={data.passkeys}
-				origin={data.origin}
-				reason={data.passkeyReason}
-				worksAt={data.passkeyWorksAt}
-				myPasskeys={data.myPasskeys}
 			/>
 
 			<form
@@ -533,10 +528,7 @@
 				<button type="submit" class="btn">Change password</button>
 			</form>
 			{#if form?.passwordChanged}
-				<p class="ok-note">
-					Password changed. Every other signed-in device has been signed out, and any registered
-					passkeys have been removed — add them again from this device.
-				</p>
+				<p class="ok-note">Password changed. Every other signed-in device has been signed out.</p>
 			{/if}
 		</section>
 
@@ -651,11 +643,6 @@
 							<span class="s-label">Uptime</span>
 							<span class="mono s-value">{data.status.uptime}</span>
 							<span class="note">node {data.status.node}</span>
-						</div>
-						<div class="status">
-							<span class="s-label">Base URL</span>
-							<span class="mono s-value origin">{data.status.origin}</span>
-							<span class="note">the https address passkeys are bound to</span>
 						</div>
 					</div>
 					<p class="prose">
@@ -1069,7 +1056,7 @@
 					hue="--brand"
 					icon="lock"
 					label="Open this instance"
-					caption="Sign in with no password and no passkey — for everyone, on every address."
+					caption="Sign in with no password — for everyone, on every address."
 				/>
 				<div class="card open-mode" class:on={data.openMode}>
 					{#if data.openMode}
@@ -1086,9 +1073,9 @@
 						</form>
 					{:else}
 						<p class="note">
-							Everyone signs in with a password or a passkey. Turning this off means anyone who can
-							reach the address is anyone on this instance. Existing passwords are kept, so turning
-							it back on restores normal sign-in.
+							Everyone signs in with a password. Turning this off means anyone who can reach the
+							address is anyone on this instance. Existing passwords are kept, so turning it back on
+							restores normal sign-in.
 						</p>
 						<form method="POST" action="?/enableOpenMode" use:enhance class="open-form">
 							<Field label="Your password, to confirm you mean it">
@@ -1671,12 +1658,6 @@
 	.s-value {
 		font-size: var(--text-xl);
 		font-weight: 600;
-	}
-	.s-value.origin {
-		font-size: var(--text-md);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 	.config-row {
 		display: flex;
