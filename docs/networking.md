@@ -14,6 +14,16 @@ on both Ethernet and Wi-Fi is found either way.
 Type it with the `http://`, or with a trailing slash as `continuum.local/`, so
 the browser treats it as an address rather than a search.
 
+**The machine's own name is usually shorter.** A Pi is called `raspberrypi`,
+a NAS is called whatever you named it, and the router learned that name the
+day the machine asked for its address. Most home routers — Fritz!Box, UniFi,
+OpenWrt, Pi-hole, AdGuard Home, many ISP boxes — then resolve it for every
+device in the house, so `raspberrypi/` typed with the slash opens the app on
+Android too. Continuum reads the machine's name and lists that address first
+on the setup wizard and under Settings → Self-hosting → Reachable at, with the
+`.local` names and the IP beneath it. Eero and Apple routers do not register
+names; there, the `.local` names and the IP are what work.
+
 To run two instances on one network, set `CONTINUUM_NAME` in `.env` on one of
 them.
 

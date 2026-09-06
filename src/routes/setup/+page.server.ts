@@ -8,6 +8,7 @@ import { initialSetupPeopleLimitError, runInitialSetup } from '$lib/server/auth/
 import { setSetting } from '$lib/server/settings';
 import { MODULE_KEYS, type ModuleToggles } from '$lib/modules/registry';
 import { passwordMinLength } from '$lib/server/system/policy';
+import { currentAddresses } from '$lib/server/system/addresses';
 import { passwordLengthError, passwordsMatchError } from '$lib/password-policy';
 import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
@@ -15,7 +16,8 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => ({
 	currencies: await availableCurrencies(),
-	passwordMinLength: passwordMinLength()
+	passwordMinLength: passwordMinLength(),
+	addresses: await currentAddresses()
 });
 
 export const actions: Actions = {

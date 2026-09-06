@@ -44,6 +44,17 @@
 		hard-coded.
 	</p>
 
+	<!-- The one thing a household needs to know before anything else: what to
+	     type on the phone. Worked out from the machine, not configured. -->
+	<div class="card addresses">
+		<p class="addresses-title">Reach it from any device in the house at</p>
+		<ul>
+			{#each data.addresses as a (a.url)}
+				<li><code>{a.url}</code><span class="note">{a.note}</span></li>
+			{/each}
+		</ul>
+	</div>
+
 	{#if form?.message}
 		<div class="error">{form.message}</div>
 	{/if}
@@ -160,6 +171,37 @@
 		font-size: var(--text-4xl);
 		font-weight: 600;
 		letter-spacing: -0.02em;
+	}
+	.addresses {
+		margin-bottom: var(--space-4);
+	}
+	.addresses-title {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--fg2);
+	}
+	.addresses ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.addresses li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
+	}
+	.addresses code {
+		font-family: var(--font-mono);
+		font-size: var(--text-md);
+		color: var(--fg1);
+	}
+	.addresses .note {
+		font-size: var(--text-xs);
+		color: var(--fg3);
 	}
 	.lead {
 		margin: 0;

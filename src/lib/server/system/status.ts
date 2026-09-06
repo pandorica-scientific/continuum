@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
+import { currentAddresses, type Reachable } from '$lib/server/system/addresses';
 
 interface StorageFact {
 	label: string;
@@ -25,6 +26,8 @@ interface ServerStatus {
 	uptime: string;
 	node: string;
 	storage: StorageFact[];
+	/** Where the household can reach this instance, best first. */
+	addresses: Reachable[];
 }
 
 export function formatBytes(bytes: number): string {
@@ -100,7 +103,8 @@ export async function serverStatus(): Promise<ServerStatus> {
 		databaseSize,
 		uptime: formatUptime(process.uptime()),
 		node: process.version,
-		storage
+		storage,
+		addresses: await currentAddresses()
 	};
 }
 

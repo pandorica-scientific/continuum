@@ -30,30 +30,40 @@ services:
       # Largest upload the server accepts; a phone photo needs more than the
       # server's own 512K default.
       BODY_SIZE_LIMIT: ${CONTINUUM_MAX_UPLOAD:-32M}
+      # So the addresses it shows carry the port when it is not 80.
+      CONTINUUM_PORT: ${CONTINUUM_PORT:-80}
+      CONTINUUM_NAME: ${CONTINUUM_NAME:-continuum}
     volumes:
       - continuum-data:/data
       # Backups land here (cadence in Settings → Backups). Point
       # CONTINUUM_BACKUPS at a cloud-synced folder on the host to have them
       # carried off-machine.
       - ${CONTINUUM_BACKUPS:-continuum-backups}:/backups
+      # The machine's name and addresses, as the announcer sees them, so the
+      # setup wizard can say what to type on a phone.
+      - continuum-net:/run/continuum:ro
     depends_on:
       db:
         condition: service_healthy
 
   # Answers `continuum.local` on the local network, so phones, tablets and
   # laptops reach the app by name with nothing installed and nothing typed
-  # into a router. It has to sit on the host's network to be heard; that is
-  # all it does there. Android browsers do not resolve .local — for them,
-  # name the server in the router (docs/networking.md).
+  # into a router. It has to sit on the host's network to be heard, and it
+  # shares the host's name so the app can show the machine's own address too
+  # — `http://raspberrypi/` on a Pi — which most routers already resolve.
+  # Android browsers do not resolve .local; docs/networking.md has the rest.
   mdns:
     image: kerth92/continuum:latest
     pull_policy: always
     command: mdns
     network_mode: host
+    uts: host
     restart: unless-stopped
     environment:
       # The name before .local. Change it if you run two instances.
       CONTINUUM_NAME: ${CONTINUUM_NAME:-continuum}
+    volumes:
+      - continuum-net:/run/continuum
 
   db:
     # The major version is pinned: Postgres will not open a data directory
@@ -80,3 +90,4 @@ volumes:
   continuum-data:
   continuum-db:
   continuum-backups:
+  continuum-net:

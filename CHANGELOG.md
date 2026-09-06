@@ -2,6 +2,23 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.4 — 2026-09-06
+
+> The setup screen tells you what to type on the phone.
+
+### ✨ Added
+
+- 🧭 **The app says where it is** — the announcer shares the machine's name and addresses with the app, and the setup wizard and Settings › Self-hosting list every address that works, shortest first: `http://raspberrypi/` on a Pi where the router names devices, then the `.local` names, then the IP, each with a word on when it works
+- 🏷️ **The machine's own name is a go link** — most home routers already resolve the hostname a device asked for its lease with, so the app shows it rather than asking anyone to rename or configure anything
+
+### 🔧 Changed
+
+- 📡 **The announcer shares the host's name** — `uts: host` on the `mdns` service, and a small `continuum-net` volume carries the machine's name and addresses to the app; Docker Desktop's VM is recognised and its name and addresses are left out
+
+### ⬆️ Upgrading
+
+- 🔁 **Fetch the new Compose file once** — `docker run --rm kerth92/continuum compose > compose.yaml`, then `docker compose up -d`; the new volume is created on the way and the data volumes are unchanged
+
 ## 0.8.3 — 2026-09-06
 
 > Two commands, no accounts, and the address is a name.

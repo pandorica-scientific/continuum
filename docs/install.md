@@ -23,9 +23,12 @@ Then open **`http://continuum.local`** from any phone, tablet or laptop on the
 same network and follow the setup wizard: the first person (an
 administrator), the base currency, and which modules are on.
 
-That is the install. If the name does not resolve on a device — Android
-browsers do not do `.local` — use the server's IP address, or name it in your
-router once; [Networking](networking.md) has both.
+That is the install. The wizard's first card lists every address the machine
+answers to, shortest first — on a Pi that is usually `http://raspberrypi/`,
+the machine's own name, which most routers already resolve — so you can pick
+the one to bookmark. If none of the names resolve on a device — Android
+browsers do not do `.local` — the IP address in the same list works anywhere;
+[Networking](networking.md) has the router step that fixes the names.
 
 ## What it needs
 
@@ -88,7 +91,8 @@ password is acceptable: only the app container can reach it.
 ## Troubleshooting
 
 **`http://continuum.local` does not open.** First try the server's IP address,
-`http://192.168.x.x`. If that works, the name is the problem: on Android, it
+`http://192.168.x.x` (Settings → Self-hosting lists it under "Reachable at").
+If that works, the name is the problem: on Android, it
 always is — see [Networking](networking.md). On anything else, check that
 `docker compose logs mdns` says `answering continuum.local with …` and names an
 address on your network; a machine with Docker Desktop rather than Docker on

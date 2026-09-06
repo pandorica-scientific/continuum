@@ -645,6 +645,14 @@
 							<span class="note">node {data.status.node}</span>
 						</div>
 					</div>
+					<div class="addresses">
+						<span class="s-label">Reachable at</span>
+						<ul>
+							{#each data.status.addresses as a (a.url)}
+								<li><code class="mono">{a.url}</code><span class="note">{a.note}</span></li>
+							{/each}
+						</ul>
+					</div>
 					<p class="prose">
 						Everything on this server — people, currencies, modules, integrations — is configuration
 						in your own database. Restoring elsewhere is booting a fresh instance and feeding it the
@@ -1639,6 +1647,26 @@
 		align-items: center;
 		gap: var(--space-6);
 		flex-wrap: wrap;
+	}
+	.addresses {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-top: var(--space-4);
+	}
+	.addresses ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	.addresses li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
 	}
 	.status-grid {
 		display: grid;

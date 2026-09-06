@@ -15,7 +15,9 @@
 // JSDoc so the checker still reads it. Its pure parts are covered by
 // tests/unit/mdns.test.ts.
 
-import { networkInterfaces } from 'node:os';
+import { hostname, networkInterfaces } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import mdns from 'multicast-dns';
 
@@ -115,8 +117,35 @@ export function answersFor(query, name, interfaces, from) {
 	}));
 }
 
+/**
+ * What the app cannot see from inside its own container: the machine's name
+ * and LAN addresses. Written to a file on a volume the app also mounts, so
+ * the setup wizard can say which addresses work. Rewritten on a timer
+ * because a Wi-Fi address can change.
+ * @param {string} file
+ */
+function writeFacts(file) {
+	const facts = {
+		hostname: hostname(),
+		addresses: chooseAddresses(networkInterfaces(), null),
+		writtenAt: new Date().toISOString()
+	};
+	try {
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(file, JSON.stringify(facts));
+	} catch (error) {
+		console.warn(
+			'mDNS: could not write network facts:',
+			error instanceof Error ? error.message : error
+		);
+	}
+}
+
 export function main() {
 	const name = localName();
+	const factsFile = process.env.CONTINUUM_NETWORK_FILE || '/run/continuum/network.json';
+	writeFacts(factsFile);
+	setInterval(() => writeFacts(factsFile), 60_000);
 	const responder = mdns({ reuseAddr: true });
 	responder.on('query', (query, rinfo) => {
 		const answers = answersFor(

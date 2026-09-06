@@ -72,8 +72,10 @@ COPY --from=build --chmod=755 /app/docker/entrypoint.sh ./entrypoint.sh
 # The mDNS announcer, run from this same image as the `mdns` service.
 COPY --from=build /app/docker/mdns.mjs ./mdns.mjs
 
-# Uploaded files (property photos, documents, statements) live on this volume
-RUN mkdir -p /data /backups && chown node:node /data /backups
+# Uploaded files (property photos, documents, statements) live on this volume.
+# /run/continuum is where the announcer leaves the machine's name and
+# addresses for the app; owned by node here so a fresh volume inherits it.
+RUN mkdir -p /data /backups /run/continuum && chown node:node /data /backups /run/continuum
 VOLUME /data
 ENV UPLOAD_DIR=/data
 # Default backup destination; mount a host (cloud-synced) folder here to have
