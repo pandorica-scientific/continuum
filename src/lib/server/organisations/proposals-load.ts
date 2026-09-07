@@ -25,7 +25,6 @@ import {
 	tag,
 	tagLink
 } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { attachDocument } from '$lib/server/documents/targets';
 import { proposeFor, type ProposingLane } from '$lib/organisations/proposals';
 import type { LaneCandidate } from '$lib/organisations/lane-match';
@@ -51,7 +50,6 @@ export interface ProposalRow {
  * has an answer, and proposing a second would be arguing with it.
  */
 async function unclaimedDocuments(
-	actor: Actor | null,
 	handle: Queryable
 ): Promise<(LaneCandidate & { name: string; typeLabel: string; addedOn: string })[]> {
 	const rows = await handle
@@ -68,7 +66,6 @@ async function unclaimedDocuments(
 		.where(
 			and(
 				eq(shelf.key, SYSTEM_SHELF_KEYS.incomeTax),
-				visibleDocumentPredicate(actor),
 				notExists(
 					handle
 						.select({ one: sql`1` })
@@ -98,11 +95,8 @@ async function unclaimedDocuments(
 }
 
 /** Every proposal the lanes would make, named the way a person reads them. */
-export async function loadProposals(
-	handle: Queryable = db,
-	actor: Actor | null = null
-): Promise<ProposalRow[]> {
-	const documents = await unclaimedDocuments(actor, handle);
+export async function loadProposals(handle: Queryable = db): Promise<ProposalRow[]> {
+	const documents = await unclaimedDocuments(handle);
 	if (documents.length === 0) return [];
 
 	const lanes = await handle
@@ -154,10 +148,9 @@ export async function acceptProposal(
 	documentId: string,
 	laneId: string,
 	organisationId: string,
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<{ ok: boolean; message?: string }> {
-	const result = await attachDocument(organisationId, documentId, actor, handle);
+	const result = await attachDocument(organisationId, documentId, handle);
 	if (!result.ok) return { ok: false, message: result.message };
 	// The link AND the lane. Accepting a proposal that only linked the card left
 	// the document in the card's history rather than in the lane that claimed

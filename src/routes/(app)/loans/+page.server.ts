@@ -59,8 +59,7 @@ const EVENT_LABELS: Record<string, string> = {
 	balance: 'balance statement'
 };
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const actor = locals.person ?? null;
+export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
 	// The rate table is loaded once for the whole screen rather than per loan.
 	// Converting inside the loop below meant three awaited round trips for every
@@ -101,10 +100,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// for each loan's picker.
 	const loanIds = loans.map((l) => l.id);
 	const [documentsByLoan, candidatesByLoan] = await Promise.all([
-		Promise.all(loanIds.map(async (id) => [id, await documentsAbout(id, actor)] as const)).then(
+		Promise.all(loanIds.map(async (id) => [id, await documentsAbout(id)] as const)).then(
 			(pairs) => new Map(pairs)
 		),
-		candidateDocumentsFor(loanIds, actor)
+		candidateDocumentsFor(loanIds)
 	]);
 
 	const cards = [];
@@ -301,7 +300,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const unit = displayCurrency(baseCurrency);
 	return {
-		isAdmin: locals.person?.role === 'admin',
 		unit,
 		count: loans.length,
 		metrics: {
@@ -440,12 +438,12 @@ export const actions: Actions = {
 	 * `DocumentsCard`. Every loan's card posts here with its own `targetId`, so
 	 * one action serves all of them; the registry resolves which loan it was.
 	 */
-	attachDocument: async ({ request, locals }) => {
+	attachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
-		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		const result = await attachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
@@ -454,12 +452,12 @@ export const actions: Actions = {
 	 * Unfile a document — the link only. The document stays on its shelf, so a
 	 * mis-click costs a re-attach rather than evidence.
 	 */
-	detachDocument: async ({ request, locals }) => {
+	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Which document?' });
-		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		const result = await detachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	}

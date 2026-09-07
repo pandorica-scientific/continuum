@@ -152,7 +152,7 @@ describe('the briefing applies the same scope', () => {
 	it('drops a document whose only subject link is archived, and keeps one with an active link', async () => {
 		await seedExpiringDocumentLinkedTo('Car insurance · sold Skoda', ['archived']);
 		await seedExpiringDocumentLinkedTo('Car insurance · household Volvo', ['active']);
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const titles = items.map((i) => i.title).join(' | ');
 		expect(titles).not.toMatch(/sold Skoda/);
 		expect(titles).toMatch(/household Volvo/);

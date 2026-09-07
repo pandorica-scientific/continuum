@@ -23,6 +23,20 @@ import type { Corners, DetectState, Frame, Point } from './types.ts';
  */
 export const DETECT_WIDTH = 640;
 
+/**
+ * The width a STILL is measured at, once there is time to do it properly.
+ *
+ * Twice the live width, because a corner found here is the one that gets
+ * warped. It is a cap, not a target: the point is that detection runs at a
+ * known width whatever the camera produced, because every kernel below is an
+ * absolute number of pixels. `SEGMENT_CLOSE` is 9 px — 1.4% of a 640-wide
+ * frame, and 0.37% of a 2400-wide one, which is far too small to seal the
+ * holes text punches in the page mask. The contour then breaks up, solidity
+ * falls under the floor, and nothing is found: a full-resolution frame handed
+ * straight to `detectBest` does not come back slowly, it comes back UNCROPPED.
+ */
+export const REFINE_WIDTH = 1280;
+
 /** Below this share of the frame the page is too far away to be worth capturing. */
 const MIN_AREA_FRACTION = 0.25;
 /** Mean luminance below this is a room too dark to read the page in. */
@@ -194,9 +208,17 @@ function flattenLighting(cv: CV, frame: Frame): Frame {
 export function detectOnce(
 	cv: CV,
 	frame: Frame,
-	options?: { gates?: boolean; refine?: RefineMode }
+	options?: { gates?: boolean; refine?: RefineMode; invert?: boolean }
 ): DetectState {
 	const gates = options?.gates ?? true;
+	/**
+	 * Which side of Otsu's split is the thing being photographed.
+	 *
+	 * Otsu chooses WHERE to cut the histogram; it says nothing about which side
+	 * is the object. Defaulting to the bright side is right for paper on a desk
+	 * and wrong for everything darker than what it lies on.
+	 */
+	const invert = options?.invert ?? false;
 	// Off while tracking, by default. The mask's boundary is smooth and
 	// approximate — good enough to aim by — and the caller turns this on at the
 	// moment the page stops moving, when there is time to do better.
@@ -223,7 +245,13 @@ export function detectOnce(
 		const work = keep(new cv.Mat());
 		cv.GaussianBlur(gray, work, new cv.Size(SEGMENT_BLUR, SEGMENT_BLUR), 0);
 		const mask = keep(new cv.Mat());
-		cv.threshold(work, mask, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+		cv.threshold(
+			work,
+			mask,
+			0,
+			255,
+			(invert ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY) + cv.THRESH_OTSU
+		);
 		// Open first, to shed the specks and bridges a patterned desk leaves
 		// stuck to the page; then close, to seal the holes text punches in it.
 		// Both matter, and the order does: closing first would weld the bridges
@@ -383,8 +411,16 @@ export function detectBest(cv: CV, frame: Frame): DetectState {
 		gates: false,
 		refine: 'thorough'
 	});
+	// The same photograph read as a DARK thing on a light ground. Otsu's split
+	// is the same; only which side of it counts as the object changes. Without
+	// this the mask for a black wallet on a white floor is the floor, and the
+	// object is a hole in it — a passport, an ID card on a pale counter and a
+	// dark-bound booklet were all undetectable rather than badly detected.
+	// It is a candidate, not an override: judgeQuad below scores it against the
+	// others on contrast, squareness and area, and it wins only if it is better.
+	const darker = detectOnce(cv, frame, { gates: false, refine: 'thorough', invert: true });
 
-	const candidates = [plain, evened]
+	const candidates = [plain, evened, darker]
 		.map((state) => ('corners' in state ? state.corners : null))
 		.filter((corners): corners is Corners => corners !== null);
 	if (candidates.length === 0) return { kind: 'searching' };

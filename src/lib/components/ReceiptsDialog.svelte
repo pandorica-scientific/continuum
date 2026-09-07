@@ -21,7 +21,6 @@
 		candidatesError,
 		loadingCandidates,
 		formMessage,
-		isAdmin = false,
 		onclose
 	}: {
 		transaction: { id: string; merchant: string; amount: string; documents: AboutDocument[] };
@@ -36,7 +35,6 @@
 		loadingCandidates: boolean;
 		/** A failure from `attachDocument`/`detachDocument` that named this row. */
 		formMessage: string | null;
-		isAdmin?: boolean;
 		onclose: () => void;
 	} = $props();
 </script>
@@ -59,7 +57,6 @@
 		attach={{ action: 'attachDocument', candidates }}
 		detachAction="detachDocument"
 		confirmDetach
-		{isAdmin}
 	/>
 
 	{#if candidatesError}

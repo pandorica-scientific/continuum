@@ -21,8 +21,7 @@ import { displayCurrency, formatMinor } from '$lib/money';
 import { positiveDonutSlices } from '$lib/charts/donut';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const actor = locals.person ?? null;
+export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
 	const [holdings, operations, snapshots, positions, rates, taxPolicy, brokerageAccounts] =
 		await Promise.all([
@@ -51,8 +50,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		? { id: soleBrokerageAccount.id, kind: 'account' as const, label: soleBrokerageAccount.name }
 		: { id: '', kind: 'account' as const, label: 'Broker reports' };
 	const reports = soleBrokerageAccount
-		? await documentsAbout(soleBrokerageAccount.id, actor)
-		: await brokerReports(actor);
+		? await documentsAbout(soleBrokerageAccount.id)
+		: await brokerReports();
 
 	const latestSnapshot = snapshots[snapshots.length - 1] ?? null;
 
@@ -231,8 +230,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		donut,
 		holdings: rows,
 		reportsTarget,
-		reports,
-		isAdmin: locals.person?.role === 'admin'
+		reports
 	};
 };
 

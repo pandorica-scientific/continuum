@@ -45,9 +45,6 @@ let other: string;
 const asAdmin = {
 	person: { id: 'a', name: 'A', initials: 'A', role: 'admin' as const, theme: null }
 };
-const asMember = {
-	person: { id: 'm', name: 'M', initials: 'M', role: 'member' as const, theme: null }
-};
 
 beforeAll(async () => {
 	previousUrl = process.env.DATABASE_URL;
@@ -70,18 +67,13 @@ beforeEach(async () => {
 });
 
 /** One document, filed under whichever subjects it belongs to. */
-async function fileUnder(
-	name: string,
-	subjectIds: string[],
-	sensitivity: 'normal' | 'restricted' = 'normal'
-): Promise<string> {
+async function fileUnder(name: string, subjectIds: string[]): Promise<string> {
 	const id = uuidv7();
 	await makeDocument(testDb, {
 		id,
 		name,
 		shelfKey: 'inventory',
 		type: 'other',
-		sensitivity,
 		addedOn: '2026-01-01'
 	});
 	for (const targetId of subjectIds) {
@@ -137,18 +129,14 @@ describe('the subjects list', () => {
 		expect(before.filter((s) => s.name === 'Household')).toHaveLength(0);
 	});
 
-	it('counts the paper filed under each subject behind the read rule', async () => {
-		// The same invariant the shelf counts carry: a member seeing a count that
-		// includes a restricted document has been told it exists.
+	it('counts the paper filed under each subject', async () => {
 		const car = await addSubject('Car', '🚗', await shelfIdByKey('inventory', testDb), testDb);
 		await fileUnder('Insurance', [car]);
 		await fileUnder('Service book', [car]);
-		await fileUnder('Private valuation', [car], 'restricted');
+		await fileUnder('Private valuation', [car]);
 
-		const forAdmin = await listSubjects(testDb, asAdmin.person);
-		const forMember = await listSubjects(testDb, asMember.person);
-		expect(forAdmin.find((s) => s.id === car)!.documentCount).toBe(3);
-		expect(forMember.find((s) => s.id === car)!.documentCount).toBe(2);
+		const listed = await listSubjects(testDb);
+		expect(listed.find((s) => s.id === car)!.documentCount).toBe(3);
 	});
 });
 
@@ -178,12 +166,10 @@ describe('archiving a subject', () => {
 		await archiveSubject(car, '2026-08-29', testDb);
 
 		// `documentsAbout` — every record screen's card reads through this.
-		expect(await documentsAbout(car, asAdmin.person, testDb)).toEqual([]);
-		expect(
-			(await documentsAbout(car, asAdmin.person, testDb, { includeArchived: true })).map(
-				(d) => d.id
-			)
-		).toEqual([insurance]);
+		expect(await documentsAbout(car, testDb)).toEqual([]);
+		expect((await documentsAbout(car, testDb, { includeArchived: true })).map((d) => d.id)).toEqual(
+			[insurance]
+		);
 
 		// The Documents screen itself.
 		const listed = await loadDocuments(asAdmin);
@@ -215,9 +201,7 @@ describe('unarchiving a subject', () => {
 		// the paper is current again, not that the period never ended.
 		expect(found.activeTo).toBe('2026-08-29');
 
-		expect((await documentsAbout(car, asAdmin.person, testDb)).map((d) => d.id)).toEqual([
-			insurance
-		]);
+		expect((await documentsAbout(car, testDb)).map((d) => d.id)).toEqual([insurance]);
 	});
 });
 

@@ -91,7 +91,6 @@ async function seedRestrictedSlip(): Promise<void> {
 		ext: 'PDF',
 		addedOn: '2026-07-31',
 		periodOn: '2026-07-01',
-		sensitivity: 'restricted',
 		contentHash: hashBytes(JULY)
 	});
 	await testDb.insert(documentLink).values({ documentId: SLIP, targetId: PETRA });

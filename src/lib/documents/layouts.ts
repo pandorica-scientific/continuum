@@ -24,7 +24,6 @@ export interface AboutLink {
 /** A row as a layout needs it: the list's row, plus what a card face draws. */
 export interface LayoutRow extends DocRow {
 	ext: string;
-	restricted: boolean;
 	tags: string[];
 	about: AboutLink[];
 	identity: {

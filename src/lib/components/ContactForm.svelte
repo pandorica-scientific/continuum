@@ -36,7 +36,6 @@
 		documents = [],
 		documentCandidates = [],
 		addDocumentHref = undefined,
-		isAdmin = false,
 		onclose
 	}: {
 		options: {
@@ -50,12 +49,11 @@
 		 *  save does not throw away what was typed. Takes precedence over the
 		 *  stored row for exactly that reason. */
 		values?: Partial<ContactValues>;
-		/** From `documentsAbout(contact.id, actor)`. Empty for a contact that does
+		/** From `documentsAbout(contact.id)`. Empty for a contact that does
 		 *  not exist yet — there is nowhere to file paper against it. */
 		documents?: AboutDocument[];
 		documentCandidates?: CandidateDocument[];
 		addDocumentHref?: string;
-		isAdmin?: boolean;
 		onclose: () => void;
 	} = $props();
 
@@ -190,7 +188,6 @@
 			addHref={addDocumentHref}
 			attach={{ action: 'attachDocument', candidates: documentCandidates }}
 			detachAction="detachDocument"
-			{isAdmin}
 		/>
 	{/if}
 </div>

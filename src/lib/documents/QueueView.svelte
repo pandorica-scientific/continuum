@@ -23,13 +23,11 @@
 		queue,
 		documentTypes,
 		knownTags,
-		isAdmin,
 		onopen
 	}: {
 		queue: QueuePayload;
 		documentTypes: { key: string; label: string; builtin: boolean }[];
 		knownTags: string[];
-		isAdmin: boolean;
 		onopen: (documentId: string) => void;
 	} = $props();
 
@@ -261,13 +259,6 @@
 			<label class="field"><span class="eyebrow">Note</span><textarea name="note"></textarea></label
 			>
 
-			{#if isAdmin}
-				<label class="restricted">
-					<input type="checkbox" name="sensitivity" value="restricted" />
-					<span>Restricted — only admins can see it exists</span>
-				</label>
-			{/if}
-
 			<div class="foot">
 				<button type="submit" class="btn btn-primary">File it</button>
 				{#if queue.waiting.length > 1}
@@ -433,13 +424,6 @@
 	}
 	.widen:hover {
 		color: var(--fg1);
-	}
-	.restricted {
-		display: flex;
-		align-items: center;
-		gap: var(--space-4);
-		font-size: var(--text-sm);
-		color: var(--fg2);
 	}
 	.foot {
 		display: flex;

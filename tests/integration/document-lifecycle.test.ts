@@ -155,10 +155,6 @@ const ACCOUNT = rowId('dl-account');
 const CREDIT = rowId('dl-credit');
 const SLIP = rowId('dl-slip');
 
-/** Who is asking. Restricted paper is absent to the second of these. */
-const ADMIN = { id: ROBERT, role: 'admin' } as const;
-const MEMBER = { id: KSENIYA, role: 'member' } as const;
-
 /** Four bytes that are a real file on the volume, which is all these need. */
 const PAYSLIP_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
 
@@ -262,7 +258,7 @@ describe('removing a payslip', () => {
 		expect(merged[0].documentId).toBe(slip.id);
 		expect(merged[0].transactionId).toBe(CREDIT);
 
-		expect(await removeDocument(slip.id, ADMIN, testDb)).toEqual({ ok: true });
+		expect(await removeDocument(slip.id, testDb)).toEqual({ ok: true });
 
 		// The payslip's half is gone; what the bank proved is still there, as the
 		// credit-only row it was before a slip ever claimed it.
@@ -287,7 +283,7 @@ describe('removing a payslip', () => {
 		await seedHousehold();
 		const slip = await payslip('2026-06', 6_840_000n);
 
-		expect(await removeDocument(slip.id, ADMIN, testDb)).toEqual({ ok: true });
+		expect(await removeDocument(slip.id, testDb)).toEqual({ ok: true });
 
 		expect(await rowsFor('2026-06')).toHaveLength(0);
 		expect(await testDb.select().from(document).where(eq(document.id, slip.id))).toHaveLength(0);
@@ -315,7 +311,7 @@ describe('removing a payslip', () => {
 		).toEqual({ ok: true });
 		expect(await rowsFor('2026-05')).toHaveLength(2);
 
-		expect(await removeDocument(slip.id, ADMIN, testDb)).toEqual({ ok: true });
+		expect(await removeDocument(slip.id, testDb)).toEqual({ ok: true });
 
 		const after = await rowsFor('2026-05');
 		expect(after).toHaveLength(1);
@@ -323,28 +319,8 @@ describe('removing a payslip', () => {
 		expect(after[0].netMinor).toBe(5_000_000n);
 	});
 
-	it('is absent, not forbidden, to a member who may not see it', async () => {
-		await seedHousehold();
-		const slip = await payslip('2026-04', 6_840_000n);
-		await testDb
-			.update(document)
-			.set({ sensitivity: 'restricted' })
-			.where(eq(document.id, slip.id));
-
-		expect(await removeDocument(slip.id, MEMBER, testDb)).toEqual({
-			ok: false,
-			status: 404,
-			message: NOT_THERE
-		});
-
-		// Nothing moved: not the entry, not the row, not the file.
-		expect(await rowsFor('2026-04')).toHaveLength(1);
-		expect(await testDb.select().from(document).where(eq(document.id, slip.id))).toHaveLength(1);
-		expect(await uploadSize(slip.storedName)).not.toBeNull();
-	});
-
 	it('says exactly the same thing about a document that was never there', async () => {
-		expect(await removeDocument(rowId('dl-nothing'), ADMIN, testDb)).toEqual({
+		expect(await removeDocument(rowId('dl-nothing'), testDb)).toEqual({
 			ok: false,
 			status: 404,
 			message: NOT_THERE
@@ -354,7 +330,7 @@ describe('removing a payslip', () => {
 	it("still refuses the statement behind an import, in Task 8's words", async () => {
 		const { documentId, storedName } = await ingestOneStatement(rowId('dl-import'), 'fio-remove');
 
-		expect(await removeDocument(documentId, ADMIN, testDb)).toEqual({
+		expect(await removeDocument(documentId, testDb)).toEqual({
 			ok: false,
 			status: 409,
 			message: 'This is the statement behind an import; it stays with the import.'

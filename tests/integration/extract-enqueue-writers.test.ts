@@ -120,8 +120,7 @@ describe('every writer hashes and enqueues', () => {
 						contentHash: hashBytes(PDF_BYTES)
 					}
 				],
-				linkDocumentIds: [],
-				actor: null
+				linkDocumentIds: []
 			},
 			testDb
 		);

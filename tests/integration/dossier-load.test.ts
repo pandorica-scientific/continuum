@@ -28,8 +28,6 @@ let harness: Harness;
 let testDb: TestDb;
 let previousUrl: string | undefined;
 
-const asAdmin = { id: 'a', role: 'admin' as const };
-const asMember = { id: 'm', role: 'member' as const };
 const TODAY = '2026-09-02';
 
 /** The shelf row by key — `loadDossier` takes the row, not the key. */
@@ -78,7 +76,7 @@ describe('the dossier loader', () => {
 			await assignLane(doc.id, insurance.id, testDb);
 		}
 
-		const payload = await loadDossier(vehicles, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(vehicles, 2026, testDb, TODAY);
 		expect(payload.unit).toBe('subject');
 		expect(payload.canCreate).toBe(true);
 		// The card with a hole leads. That is what the shelf is for.
@@ -104,7 +102,7 @@ describe('the dossier loader', () => {
 			(l) => l.label === 'Technical inspection'
 		)!;
 		expect(inspection.every).toBe(2);
-		const payload = await loadDossier(vehicles, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(vehicles, 2026, testDb, TODAY);
 		const drawn = payload.cards[0].lanes.find((l) => l.id === inspection.id)!;
 		expect(drawn.cells.every((c) => c.span === 2)).toBe(true);
 	});
@@ -114,7 +112,7 @@ describe('the dossier loader', () => {
 		await createCard({ shelfId: inventory.id, name: 'Boiler' }, testDb);
 		await makeDocument(testDb, { shelfKey: 'inventory', name: 'Loose receipt' });
 
-		const payload = await loadDossier(inventory, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(inventory, 2026, testDb, TODAY);
 		const last = payload.cards.at(-1)!;
 		expect(last.id).toBeNull();
 		expect(last.name).toBe('Not assigned yet');
@@ -127,7 +125,7 @@ describe('the dossier loader', () => {
 	it('draws no "Not assigned yet" card when there is nothing loose', async () => {
 		const inventory = await shelfBy('inventory');
 		await createCard({ shelfId: inventory.id, name: 'Boiler' }, testDb);
-		const payload = await loadDossier(inventory, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(inventory, 2026, testDb, TODAY);
 		expect(payload.cards.every((c) => c.id !== null)).toBe(true);
 	});
 
@@ -139,7 +137,7 @@ describe('the dossier loader', () => {
 		await makeDocumentLink(testDb, { documentId: receipt.id, targetId: boiler.id });
 		await assignLane(receipt.id, lanes.find((l) => l.label === 'Receipt')!.id, testDb);
 
-		const payload = await loadDossier(inventory, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(inventory, 2026, testDb, TODAY);
 		const card = payload.cards.find((c) => c.name === 'Boiler')!;
 		expect(card.lanes.map((l) => [l.label, l.cells[0].state])).toEqual([
 			['Receipt', 'filed'],
@@ -168,7 +166,7 @@ describe('the dossier loader', () => {
 		for (const doc of [older, newer])
 			await makeDocumentLink(testDb, { documentId: doc.id, targetId: jana.id });
 
-		const payload = await loadDossier(health, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(health, 2026, testDb, TODAY);
 		// A person has a screen of its own; a card for one exists the moment the
 		// person does.
 		expect(payload.canCreate).toBe(false);
@@ -192,24 +190,19 @@ describe('the dossier loader', () => {
 			const doc = await makeDocument(testDb, { shelfKey: 'vehicles', name, periodOn: on });
 			await makeDocumentLink(testDb, { documentId: doc.id, targetId: car.id });
 		}
-		const payload = await loadDossier(vehicles, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(vehicles, 2026, testDb, TODAY);
 		expect(payload.historyOrder).toBe('newest');
 		expect(payload.cards[0].history.map((d) => d.name)).toEqual(['New claim', 'Old claim']);
 	});
 
-	it('hides a restricted document from a member, exactly as the list does', async () => {
+	it('counts the paper filed against a card', async () => {
 		const health = await shelfBy('health');
 		const jana = await makePerson(testDb, { name: 'Jana' });
-		const secret = await makeDocument(testDb, {
-			shelfKey: 'health',
-			sensitivity: 'restricted'
-		});
-		await makeDocumentLink(testDb, { documentId: secret.id, targetId: jana.id });
+		const filed = await makeDocument(testDb, { shelfKey: 'health' });
+		await makeDocumentLink(testDb, { documentId: filed.id, targetId: jana.id });
 
-		const forMember = await loadDossier(health, asMember, 2026, testDb, TODAY);
-		expect(forMember.cards.find((c) => c.name === 'Jana')!.documentCount).toBe(0);
-		const forAdmin = await loadDossier(health, asAdmin, 2026, testDb, TODAY);
-		expect(forAdmin.cards.find((c) => c.name === 'Jana')!.documentCount).toBe(1);
+		const payload = await loadDossier(health, 2026, testDb, TODAY);
+		expect(payload.cards.find((c) => c.name === 'Jana')!.documentCount).toBe(1);
 	});
 
 	it('pins the oldest contract on the card', async () => {
@@ -227,7 +220,7 @@ describe('the dossier loader', () => {
 			});
 			await makeDocumentLink(testDb, { documentId: doc.id, targetId: car.id });
 		}
-		const payload = await loadDossier(vehicles, asAdmin, 2026, testDb, TODAY);
+		const payload = await loadDossier(vehicles, 2026, testDb, TODAY);
 		expect(payload.cards[0].pinned?.name).toBe('Purchase contract');
 		// The pinned document is drawn once, at the top — not again in history.
 		expect(payload.cards[0].history.map((d) => d.name)).toEqual(['Later amendment']);

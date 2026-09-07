@@ -3,6 +3,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import {
 		DETECT_WIDTH,
+		REFINE_WIDTH,
 		detectBest,
 		detectOnce,
 		hairline,
@@ -39,10 +40,6 @@
 		/** The last page kept, shown in the deck's left slot. */
 		thumbnail?: string | null;
 	} = $props();
-
-	/** Where the capture-time detection pass runs: twice the live width, so a
-	 *  refined corner is worth having. */
-	const REFINE_WIDTH = 1280;
 
 	const camera = createCamera();
 	const stability = createStability(DETECT_WIDTH);

@@ -20,7 +20,7 @@ vi.mock('$env/dynamic/private', () => ({
  * Task 16: receipts through the same `DocumentsCard` every other screen uses.
  *
  * `attachDocumentToTransaction`/`detachDocumentFromTransaction` are gone —
- * `targets.ts`'s `attachDocument`/`detachDocument` replace them, visibility
+ * `targets.ts`'s `attachDocument`/`detachDocument` replace them, existence
  * checked in a way the transaction-only versions were not. What is left here
  * to unit-test directly is `loadTransactionDocuments`, the one batched read
  * the register still owns; attach and detach are exercised the way every
@@ -41,9 +41,6 @@ interface Locals {
 }
 const asAdmin: Locals = {
 	person: { id: rowId('td-admin'), name: 'Admin', initials: 'A', role: 'admin', theme: null }
-};
-const asMember: Locals = {
-	person: { id: rowId('td-member'), name: 'Member', initials: 'M', role: 'member', theme: null }
 };
 
 async function addDocument(id: string, name: string) {
@@ -134,28 +131,21 @@ describe('reading receipts filed against a transaction', () => {
 			{ documentId: DOC, targetId: TXN },
 			{ documentId: DOC, targetId: OTHER_TXN }
 		]);
-		const found = await loadTransactionDocuments([TXN, OTHER_TXN], null, testDb);
+		const found = await loadTransactionDocuments([TXN, OTHER_TXN], testDb);
 		expect(found.get(TXN)?.map((d) => d.name)).toEqual(['Vet receipt']);
 		expect(found.get(OTHER_TXN)?.map((d) => d.name)).toEqual(['Vet receipt']);
 	});
 
 	it('returns nothing for transactions with no documents', async () => {
-		expect((await loadTransactionDocuments([TXN], null, testDb)).size).toBe(0);
-		expect((await loadTransactionDocuments([], null, testDb)).size).toBe(0);
+		expect((await loadTransactionDocuments([TXN], testDb)).size).toBe(0);
+		expect((await loadTransactionDocuments([], testDb)).size).toBe(0);
 	});
 
-	it('hides a restricted receipt from a member but not an admin', async () => {
-		await testDb
-			.update(schema.document)
-			.set({ sensitivity: 'restricted' })
-			.where(eq(schema.document.id, DOC));
+	it('returns the receipt filed against a transaction', async () => {
 		await testDb.insert(schema.documentLink).values({ documentId: DOC, targetId: TXN });
-		expect(
-			(await loadTransactionDocuments([TXN], asMember.person, testDb)).get(TXN)
-		).toBeUndefined();
-		expect(
-			(await loadTransactionDocuments([TXN], asAdmin.person, testDb)).get(TXN)?.map((d) => d.name)
-		).toEqual(['Vet receipt']);
+		expect((await loadTransactionDocuments([TXN], testDb)).get(TXN)?.map((d) => d.name)).toEqual([
+			'Vet receipt'
+		]);
 	});
 });
 
@@ -166,25 +156,21 @@ describe('attaching and detaching a receipt through the actions', () => {
 		const result = await postAction('attachDocument', { targetId: TXN, documentId: DOC }, asAdmin);
 		expect(result).toEqual({ ok: true });
 
-		const found = await loadTransactionDocuments([TXN], null, testDb);
+		const found = await loadTransactionDocuments([TXN], testDb);
 		expect(found.get(TXN)?.map((d) => d.name)).toEqual(['Vet receipt']);
 	});
 
 	it('is idempotent — attaching twice does not duplicate the link', async () => {
 		await postAction('attachDocument', { targetId: TXN, documentId: DOC }, asAdmin);
 		await postAction('attachDocument', { targetId: TXN, documentId: DOC }, asAdmin);
-		expect((await loadTransactionDocuments([TXN], null, testDb)).get(TXN)).toHaveLength(1);
+		expect((await loadTransactionDocuments([TXN], testDb)).get(TXN)).toHaveLength(1);
 	});
 
-	it('refuses a restricted document for a member, and does not link it', async () => {
-		await testDb
-			.update(schema.document)
-			.set({ sensitivity: 'restricted' })
-			.where(eq(schema.document.id, DOC));
+	it('refuses a document that is not there, and does not link it', async () => {
 		const result: unknown = await postAction(
 			'attachDocument',
-			{ targetId: TXN, documentId: DOC },
-			asMember
+			{ targetId: TXN, documentId: rowId('td-no-such-document') },
+			asAdmin
 		);
 		expect(result).toMatchObject({ status: 404 });
 		const links = await testDb
@@ -230,7 +216,7 @@ describe('attaching and detaching a receipt through the actions', () => {
 		const result = await (actions.attachDocument as any)({ request, locals: asAdmin });
 		expect(result).toEqual({ ok: true });
 
-		const found = await loadTransactionDocuments([TXN], null, testDb);
+		const found = await loadTransactionDocuments([TXN], testDb);
 		expect(found.get(TXN)?.map((d) => d.name)).toEqual(['invoice.pdf']);
 		expect(found.get(TXN)?.[0].tags).toEqual(['receipt']);
 		expect(found.get(TXN)?.[0].shelfKey).toBe('inbox');
@@ -269,14 +255,5 @@ describe('the attach-existing picker, fetched only for the transaction it is ope
 
 		const after = await postAction('candidates', { targetId: TXN }, asAdmin);
 		expect(after.candidates).toEqual([]);
-	});
-
-	it('does not offer a member a document they cannot see', async () => {
-		await testDb
-			.update(schema.document)
-			.set({ sensitivity: 'restricted' })
-			.where(eq(schema.document.id, DOC));
-		const result = await postAction('candidates', { targetId: TXN }, asMember);
-		expect(result.candidates).toEqual([]);
 	});
 });

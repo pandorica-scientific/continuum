@@ -217,7 +217,6 @@
 						addHref={l.addDocumentHref}
 						attach={{ action: 'attachDocument', candidates: l.documentCandidates }}
 						detachAction="detachDocument"
-						isAdmin={data.isAdmin}
 					/>
 
 					{#if l.chart.length}

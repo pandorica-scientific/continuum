@@ -79,10 +79,25 @@ function isDockerInternal(address: string): boolean {
  */
 export function reachableAddresses(
 	facts: NetworkFacts | null,
-	options: { name: string; port: number }
+	options: { name: string; port: number; browsing?: string }
 ): Reachable[] {
 	const suffix = options.port === 80 ? '' : `:${options.port}`;
 	const out: Reachable[] = [];
+	// Docker Desktop: the announcer is inside a VM, so nothing it answers
+	// reaches the network and `continuum.local` cannot work here. The Mac or
+	// PC still publishes the port under its own name — which the browser used
+	// to get here, so that is the address to show.
+	if (isVirtualHost(facts?.hostname)) {
+		const here = (options.browsing ?? '').toLowerCase().replace(/:\d+$/, '');
+		if (here && here !== 'localhost' && here !== '127.0.0.1') {
+			out.push({
+				url: `http://${here}${suffix}`,
+				note: 'this computer’s own name; every device except Android'
+			});
+		}
+		out.push({ url: `http://localhost${suffix}`, note: 'on this computer' });
+		return out;
+	}
 	const host = machineName(facts?.hostname);
 	if (host && host !== options.name) {
 		out.push({
@@ -98,7 +113,7 @@ export function reachableAddresses(
 		url: `http://${options.name}.local${suffix}`,
 		note: 'announced by Continuum itself; every device except Android'
 	});
-	for (const address of isVirtualHost(facts?.hostname) ? [] : (facts?.addresses ?? [])) {
+	for (const address of facts?.addresses ?? []) {
 		if (isDockerInternal(address)) continue;
 		out.push({
 			url: `http://${address}${suffix}`,
@@ -125,12 +140,17 @@ export async function readNetworkFacts(
 	}
 }
 
-/** The addresses as the screens show them, from the environment and the announcer. */
-export async function currentAddresses(): Promise<Reachable[]> {
+/**
+ * The addresses as the screens show them, from the environment and the
+ * announcer. `browsing` is the host the current request came in on — what
+ * somebody actually typed — which is the one true address on a machine the
+ * announcer cannot describe.
+ */
+export async function currentAddresses(browsing?: string): Promise<Reachable[]> {
 	const port = Number(env.CONTINUUM_PORT) || 80;
 	const name = (env.CONTINUUM_NAME || 'continuum')
 		.trim()
 		.toLowerCase()
 		.replace(/\.local$/, '');
-	return reachableAddresses(await readNetworkFacts(), { name, port });
+	return reachableAddresses(await readNetworkFacts(), { name, port, browsing });
 }

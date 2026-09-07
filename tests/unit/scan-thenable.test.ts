@@ -37,6 +37,44 @@ describe('the OpenCV loader', () => {
 	});
 });
 
+/**
+ * The loader must always settle.
+ *
+ * Emscripten does not reject anything when it cannot get a heap: it aborts by
+ * throwing inside its own callback, so `onRuntimeInitialized` never fires. With
+ * nothing else watching, every `await loadCv()` waits for the life of the tab —
+ * which is how a scan on a phone came to sit on "Reading photo…" with no error
+ * and no way out.
+ */
+describe('a runtime that never starts', () => {
+	it('is given a deadline rather than waited on forever', () => {
+		expect(loader).toMatch(/const READY_TIMEOUT_MS = [\d_]+;/);
+		expect(loader).toMatch(/setTimeout\(/);
+	});
+
+	it('says what actually went wrong, so the message names memory', () => {
+		expect(loader).toMatch(/short of memory/i);
+	});
+
+	it('clears the deadline on every settled path, success included', () => {
+		// A timer left running would reject a promise that already resolved and
+		// keep the page awake for half a minute after a perfectly good scan.
+		expect(loader).toContain('clearTimeout(timer)');
+		const settles = loader.match(/(?<!const )\b(resolve|reject)\(/g) ?? [];
+		const wrapped = loader.match(/settle\(\(\) =>/g) ?? [];
+		expect(wrapped.length).toBeGreaterThanOrEqual(4);
+		expect(settles.length).toBeGreaterThan(0);
+	});
+
+	it('never memoises a failure, so a retry is really a retry', () => {
+		// `ready` lives for the life of the page. Holding a rejected promise
+		// there answers every later scan with the same stale error, including
+		// the retry the error message just asked for.
+		expect(loader).toMatch(/\.catch\(/);
+		expect(loader).toMatch(/ready = null;/);
+	});
+});
+
 describe('the split OpenCV build', () => {
 	const script = readFileSync('scripts/prepare-opencv.mjs', 'utf8');
 

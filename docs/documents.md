@@ -339,6 +339,55 @@ instead, since there is nothing to tick it out of.
 Filing is still a separate pass, so dropping twenty scans never turns into twenty
 forms.
 
+### Photographing a page
+
+Two buttons sit in the drop zone, and they do different jobs.
+
+The **camera** keeps the photograph as it is — a meter reading, a receipt you
+want to look at later. Nothing is cropped or cleaned up.
+
+The **scanner** treats what you photograph as a document. It finds the page,
+straightens it out of perspective, cleans it up and writes it as a PDF. A
+laptop with a camera opens a viewfinder; on a plain-http address — which is
+every ordinary install — the browser refuses camera access, so the phone's own
+camera app opens instead and the photograph comes back into the same pipeline.
+Nothing about the page ever leaves the device: the finding, the straightening
+and the PDF all happen in the browser, and only the finished document is
+uploaded.
+
+Each page is then shown as it will be saved, in four treatments:
+
+- **B&W** is the default and right for almost all household paper — text on
+  white, most legible, smallest file.
+- **Grayscale** keeps the shading, for a photograph printed on a page.
+- **Colour** keeps the colours, evening out a desk lamp's gradient without
+  altering them.
+- **Original** is the photograph untouched: no crop, no clean-up. It is the
+  recovery when everything else looks wrong.
+
+**Add a page** photographs the next one and they become a single PDF, in the
+order shown. **Choose another file** retakes the page in front of you and leaves
+the pages behind it alone.
+
+### When the edges are wrong
+
+Under the preview, **Adjust the corners** opens the photograph with a handle on
+each corner of the page. Drag them onto the real edges and choose `Use these
+edges`; the page is re-cut from where you put them, in whichever treatment you
+were looking at.
+
+Two things make it worth reaching for rather than retaking:
+
+- Some pages cannot be found automatically however well you photograph them — a
+  card that fills little of the frame, an object with a strong dark band across
+  it, a page the same brightness as the table it lies on. These are not bad
+  photographs, and a second one comes out the same.
+- `Whole photo` sets the corners to the full frame in one tap, for when the
+  right answer is no crop at all.
+
+Arrow keys nudge whichever corner has focus, with Shift for larger steps, so
+the screen works without a touchscreen.
+
 ### Filing from the queue
 
 The Inbox draws the queue itself — see _The Inbox is a queue_ above. Shelf,
@@ -361,8 +410,7 @@ Property, a loan on Loans, an account under **Statements and reports**, a
 contact in its edit panel, a transaction's **Receipts** in its dialog, a tax
 statement's **Attachments** on Tax, and broker reports under **Reports** on
 Investments. It is one card everywhere on purpose: a screen that drew its own
-list would know its own amount about expiry dates, unlinking, and what a
-restricted document is.
+list would know its own amount about expiry dates and unlinking.
 
 A row is the document itself. Its file opens in the viewer, and under the name
 sits the shelf it lives on and when it falls due — red once the date has passed,
@@ -422,10 +470,6 @@ cannot be unticked. Both leave the figure counted and unaccounted for, so both
 are refused with _This payslip carries a salary entry; delete it from the Salary
 screen to unhook it._ — the screen where the figure is visible is the screen
 that should decide.
-
-A member who cannot see a restricted document is told it is not there rather
-than that they may not have it, for the same reason the rest of the rule works
-that way.
 
 ## Expiry dates
 
@@ -496,27 +540,6 @@ slices — the inspector says which pages are searchable and offers to continue.
 Extraction never edits a document. It writes text and nothing else: no names,
 no dates, no amounts.
 
-## Restricted documents
-
-An administrator can mark a document **restricted**. It is then _absent_ for
-household members rather than locked: no row, no search hit, no count, no
-briefing item, no calendar event, no file — a member cannot infer it exists from
-a number that is one too high. Administrators see a quiet lock beside the name.
-
-The rule follows the paper onto every other screen, and stops there. What a
-member loses is the row, the name, the paperclip and the file — wherever they
-would have appeared. A salary month still shows its gross and net and only loses
-the paperclip; a tax statement still shows what it declared and what was paid,
-without the attachment; the document is off the flat's card, off the loan's, off
-a transaction's receipts, off the Investments reports, and out of the Tags view
-— the tag's count included. Only the paper is hidden, because a module's own
-figures were never the document's, and hiding a salary because its slip is
-private would be answering a different question from the one that was asked.
-
-Restricted documents generate no calendar events for **anyone**, including
-administrators, because a synced event lands on a device outside the app's
-session entirely.
-
 ## Tags
 
 **Tags** in the rail lists every tag with what it is on and what it has cost,
@@ -533,8 +556,7 @@ included — and how many rules would stop applying it.
 
 `Select` puts a checkbox on each row. The bar that appears sets shelf or type
 (each document has one, so these replace) and adds tags (a set, so it adds — a
-bulk edit never silently clears what it did not mention). An administrator gets
-the restricted switch there too.
+bulk edit never silently clears what it did not mention).
 
 A payslip that carries a salary entry keeps its type: retyping it would leave a
 month's pay counted with nothing on screen to account for it. Everything else in

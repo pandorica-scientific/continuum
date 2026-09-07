@@ -10,16 +10,10 @@
  * fact about periods and answering it a second time from document rows would be
  * a second answer to one question.
  *
- * Every count goes through `visibleDocumentPredicate`, the same rule the list
- * and the search use. A band counting a document a member cannot see would be
- * telling them it exists, which is the one fact the restriction protects — and
- * a second reading of that rule here would be a second place for the first one
- * to drift.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { document, documentLink, documentType, entity, shelf } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from './visibility';
 import { SOON_DAYS } from '$lib/documents/view';
 import { daysBetween } from '$lib/dates';
 import { EMPTY_FACTS, type ShelfFacts } from '$lib/documents/shelf-tiles';
@@ -39,11 +33,10 @@ const DUE_SOON_DAYS = 30;
  */
 export async function shelfFacts(
 	shelfRow: ShelfRow,
-	viewer: Actor | null,
 	handle: Queryable = db,
 	today: string = new Date().toISOString().slice(0, 10)
 ): Promise<ShelfFacts> {
-	const onShelf = and(eq(shelf.key, shelfRow.key), visibleDocumentPredicate(viewer));
+	const onShelf = eq(shelf.key, shelfRow.key);
 	const engine = templateEngine(shelfRow.template);
 
 	// One pass over the shelf for everything a document row can answer. The
@@ -82,7 +75,7 @@ export async function shelfFacts(
 	// member whether or not anything is filed against them, so those two are
 	// counted from their own tables; the rest are counted from what is linked,
 	// and the loader corrects the figure when it knows better.
-	const cards = await countCards(shelfRow, viewer, handle);
+	const cards = await countCards(shelfRow, handle);
 
 	const documents = totals?.documents ?? 0;
 	return {
@@ -101,11 +94,7 @@ export async function shelfFacts(
 }
 
 /** Cards drawn on a shelf, by what its unit is. */
-async function countCards(
-	shelfRow: ShelfRow,
-	viewer: Actor | null,
-	handle: Queryable
-): Promise<number> {
+async function countCards(shelfRow: ShelfRow, handle: Queryable): Promise<number> {
 	if (shelfRow.unit === 'document') return 0;
 	const [row] = await handle
 		.select({
@@ -115,13 +104,12 @@ async function countCards(
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		.innerJoin(documentLink, eq(documentLink.documentId, document.id))
 		.innerJoin(entity, eq(entity.id, documentLink.targetId))
-		.where(and(eq(shelf.key, shelfRow.key), visibleDocumentPredicate(viewer)));
+		.where(eq(shelf.key, shelfRow.key));
 	return row?.n ?? 0;
 }
 
 /** Everything: the archive's own three figures, across every shelf. */
 export async function archiveFacts(
-	viewer: Actor | null,
 	handle: Queryable = db,
 	today: string = new Date().toISOString().slice(0, 10)
 ): Promise<{ documents: number; shelves: number; nextDate: string | null }> {
@@ -132,8 +120,7 @@ export async function archiveFacts(
 				where ${document.expiresOn} >= ${today}::date
 			)`
 		})
-		.from(document)
-		.where(visibleDocumentPredicate(viewer));
+		.from(document);
 	const [shelves] = await handle.select({ n: sql<number>`count(*)::int` }).from(shelf);
 	return {
 		documents: totals?.documents ?? 0,

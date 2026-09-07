@@ -3,8 +3,9 @@
  * Everything the Documents screen reads, in one place and one round of queries.
  *
  * It lives here rather than in `+page.server.ts` because it is a domain read,
- * not a route concern: the read rule is the archive's invariant, and a route
- * that builds its own selects is free to forget it. Eleven hand-written queries
+ * not a route concern: the archive scope is the archive's invariant, and a
+ * route that builds its own selects is free to forget it. Eleven hand-written
+ * queries
  * sat in the route beside a fully-formed domain package — which is how a screen
  * ends up being the second place that knows how a document is stored.
  *
@@ -26,13 +27,8 @@ import {
 } from '$lib/server/db/schema';
 
 export interface DocumentsScreenRead {
+	/** The archive scope, which is what decides the list and the rail counts. */
 	readable: SQL | undefined;
-	/**
-	 * The read rule WITHOUT the archive half, which is how many are being
-	 * hidden. Separate on purpose: the two answer different questions and a
-	 * single predicate cannot give both.
-	 */
-	readableEverywhere: SQL | undefined;
 }
 
 /**
@@ -43,7 +39,7 @@ export interface DocumentsScreenRead {
  * documents screen that feels slow on the one machine it runs on.
  */
 export async function readDocumentsScreen(
-	{ readable, readableEverywhere }: DocumentsScreenRead,
+	{ readable }: DocumentsScreenRead,
 	handle: Queryable = db
 ) {
 	const [docs, railCounts, everywhereCount, docLinks, docTags, tags, texts, pending, identities] =
@@ -60,7 +56,7 @@ export async function readDocumentsScreen(
 				.innerJoin(shelfTable, eq(shelfTable.id, document.shelfId))
 				.where(readable)
 				.orderBy(document.addedOn),
-			// Rail counts are computed in SQL, after the read rule and nothing else.
+			// Rail counts are computed in SQL, after the archive scope and nothing else.
 			// They deliberately ignore the search term and the active tag: a rail
 			// whose numbers move as you type cannot be used to navigate.
 			handle
@@ -69,7 +65,8 @@ export async function readDocumentsScreen(
 				.innerJoin(shelfTable, eq(shelfTable.id, document.shelfId))
 				.where(readable)
 				.groupBy(shelfTable.key),
-			handle.select({ n: count() }).from(document).where(readableEverywhere),
+			// Without the archive scope, which is how many are being hidden.
+			handle.select({ n: count() }).from(document),
 			// One select for every kind of target; the kind comes from `entity`.
 			handle
 				.select({

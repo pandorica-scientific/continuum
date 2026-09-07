@@ -29,7 +29,7 @@
 		taxPaid: string;
 		ratePct: string | null;
 		lines: { label: string; amount: string }[];
-		/** From `documentsAbout`, already filtered by the read rule. */
+		/** From `documentsAbout`. */
 		attachments: AboutDocument[];
 		note: string | null;
 		diverges: string | null;
@@ -39,8 +39,7 @@
 		statements,
 		countries,
 		personHue,
-		onedit,
-		isAdmin = false
+		onedit
 	}: {
 		statements: Statement[];
 		countries: { code: string; name: string; token: string }[];
@@ -52,8 +51,6 @@
 		 */
 		personHue: (personId: string) => string;
 		onedit: (statement: Statement) => void;
-		/** Draws the lock on a restricted attachment. Never what hides one. */
-		isAdmin?: boolean;
 	} = $props();
 
 	const tokenOf = $derived(new Map(countries.map((c) => [c.code, c.token])));
@@ -102,7 +99,6 @@
 						target={{ id: s.id, kind: 'tax_statement', label: `${s.year} ${s.country}` }}
 						emptyText="Nothing filed against this statement yet."
 						detachAction="detach"
-						{isAdmin}
 					/>
 
 					<form

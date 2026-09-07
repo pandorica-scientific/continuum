@@ -178,7 +178,6 @@ async function fileDemoPdf(input: {
 	targetIds?: string[];
 	tagNames?: string[];
 	note?: string;
-	sensitivity?: EnumValue<'document.sensitivity'>;
 	expiresOn?: string;
 	expiryVerb?: EnumValue<'document.expiry_verb'>;
 	periodOn?: string;
@@ -198,7 +197,6 @@ async function fileDemoPdf(input: {
 		shelfId: await shelfIdByKey(input.shelfKey),
 		type: input.type,
 		note: input.note ?? null,
-		sensitivity: input.sensitivity ?? 'normal',
 		storedName,
 		ext: 'PDF',
 		addedOn: new Date().toISOString().slice(0, 10),
@@ -783,8 +781,7 @@ export async function seedDemo(): Promise<void> {
 	// constants at the top of this module, saved to the data volume, hashed, and
 	// queued for extraction like any upload. Until v0.7.1 all of this was
 	// metadata only, so the one instance built to show the viewer, search by
-	// contents, receipts, restricted paper and archived subjects showed none of
-	// them.
+	// contents, receipts and archived subjects showed none of them.
 	const thisYear = Number(thisMonth.slice(0, 4));
 
 	// Twelve payslips, through the salary tracker's own writer rather than a
@@ -901,7 +898,7 @@ export async function seedDemo(): Promise<void> {
 	const employerLanes = await lanesFor(employer.id, db);
 	const laneNamed = (label: string) => employerLanes.find((l) => l.label === label)?.id ?? null;
 	for (const documentId of payslipIds) {
-		await attachDocument(employer.id, documentId, null, db);
+		await attachDocument(employer.id, documentId, db);
 		// Into the lane, not merely onto the card. A payslip in the card's history
 		// leaves the month it covers reading as a hole, which is the one thing
 		// this shelf exists to be right about.
@@ -1198,14 +1195,11 @@ export async function seedDemo(): Promise<void> {
 		]
 	});
 
-	// The one restricted document, so demo mode can show what "restricted" means:
-	// an admin sees it, a member does not see it AT ALL — no row, no count, no
-	// search hint, no calendar entry, no file.
+	// A second identity card, so the wallet holds more than one.
 	await fileDemoPdf({
 		name: `Identity card · ${JANA}`,
 		shelfKey: 'identity',
 		type: 'id_document',
-		sensitivity: 'restricted',
 		targetIds: [jana],
 		identity: {
 			kind: 'id_card',
@@ -1215,7 +1209,7 @@ export async function seedDemo(): Promise<void> {
 			issuer: 'Magistrát hlavního města Prahy'
 		},
 		// Far outside every window the briefing and calendar watch: this document
-		// exists to demonstrate the read rule, not to add a reminder.
+		// adds a card, not a reminder.
 		expiresOn: `${thisYear + 4}-03-14`,
 		lines: [
 			`Holder: ${JANA}`,
@@ -1227,10 +1221,9 @@ export async function seedDemo(): Promise<void> {
 		]
 	});
 
-	// An ordinary passport beside the restricted card: the wallet is worth
-	// looking at only when it holds more than one card, and this is the one that
-	// a member sees too. Its expiry is far outside every window the briefing
-	// watches, so it adds a card and not a reminder.
+	// A passport beside the identity card: the wallet is worth looking at only
+	// when it holds more than one card. Its expiry is far outside every window
+	// the briefing watches, so it adds a card and not a reminder.
 	await fileDemoPdf({
 		name: `Passport · ${PETR}`,
 		shelfKey: 'identity',

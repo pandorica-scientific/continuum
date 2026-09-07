@@ -634,13 +634,6 @@
 						{/each}
 					</select>
 					<TagField known={data.knownTags} placeholder="Add tags…" />
-					{#if data.isAdmin}
-						<select name="sensitivity" aria-label="Set visibility">
-							<option value="">Visibility…</option>
-							<option value="normal">Everyone in the household</option>
-							<option value="restricted">Admins only</option>
-						</select>
-					{/if}
 					<button type="submit" class="btn btn-primary">Apply</button>
 					<button
 						type="button"
@@ -751,7 +744,6 @@
 					queue={data.queue}
 					documentTypes={data.documentTypes}
 					knownTags={data.knownTags}
-					isAdmin={data.isAdmin}
 					onopen={(id) => navigate({ doc: id })}
 				/>
 			{:else if data.view === 'shelf' && data.layout === 'wallet'}
@@ -874,14 +866,6 @@
 												{:else}
 													{d.name}
 												{/if}
-												{#if d.restricted}
-													<!-- Inline in the title flow, not a flex sibling: on a
-											     two-line name a sibling centres against the block and
-											     reads as a second button. Quiet, and admins only —
-											     restricted is an access state, not a warning. -->
-													<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span
-													>
-												{/if}
 												{#if d.subjectArchived}
 													<span class="chip">Archived subject</span>
 												{/if}
@@ -949,18 +933,10 @@
 	{#if data.selected}
 		{@const d = data.selected}
 		<aside class="inspector" aria-label="Document details">
-			<!-- 1. Header. The lock is INLINE in the title text flow, wrapped with a
-			     zero-width space so it trails the last word and wraps with it. As a
-			     flex sibling it centres against a two-line name and reads as a
-			     second toolbar button. -->
+			<!-- 1. Header. -->
 			<header class="ins-head">
 				<div class="ins-title">
-					<h2 class="ins-name">
-						{d.name}{#if d.restricted}<span class="lock-wrap"
-								>&#8203;<span class="lock"><Icon name="lock" size={15} label="Restricted" /></span
-								></span
-							>{/if}
-					</h2>
+					<h2 class="ins-name">{d.name}</h2>
 					<p class="mono ins-meta">
 						{d.ext}{#if readableSize(d.fileSize)}
 							· {readableSize(d.fileSize)}{/if} · added
@@ -1413,25 +1389,6 @@
 						<span class="eyebrow">Note</span>
 						<textarea name="note">{d.note ?? ''}</textarea>
 					</div>
-					{#if data.isAdmin}
-						<div class="sec last">
-							<!-- Its own bordered row: the one decision on the form that
-							     changes who can see the document. -->
-							<label class="restricted">
-								<input
-									type="checkbox"
-									name="sensitivity"
-									value="restricted"
-									checked={d.sensitivity === 'restricted'}
-								/>
-								<span class="lock"><Icon name="lock" size={15} /></span>
-								<span class="restricted-text">
-									<span class="restricted-title">Restricted — admins only</span>
-									<span class="quiet">Absent for household members, not locked.</span>
-								</span>
-							</label>
-						</div>
-					{/if}
 				</form>
 			{:else}
 				<div class="ins-sections">
@@ -1853,11 +1810,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.lock {
-		flex: none;
-		color: var(--fg3);
-		display: inline-flex;
-	}
 	.chip {
 		flex: none;
 		font-size: var(--text-2xs);
@@ -2043,16 +1995,6 @@
 		color: var(--fg1);
 		text-wrap: pretty;
 	}
-	/* The lock trails the last word and wraps with it, rather than centring
-	   against a two-line block as a flex sibling would. */
-	.lock-wrap {
-		white-space: nowrap;
-	}
-	.lock-wrap .lock {
-		display: inline-flex;
-		vertical-align: -1px;
-		margin-left: 7px;
-	}
 	.ins-meta {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-sm);
@@ -2198,38 +2140,6 @@
 		align-items: center;
 		padding: 0 10px;
 		font-size: var(--text-md);
-		color: var(--fg1);
-	}
-	.sec label.restricted {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: var(--space-5);
-		padding: var(--space-5) var(--space-6);
-		border: 1px solid var(--bd2);
-		border-radius: var(--radius-md);
-		background: var(--card2);
-		cursor: pointer;
-	}
-	.sec .restricted input {
-		height: auto;
-		width: 16px;
-		padding: 0;
-		flex: none;
-	}
-	.restricted .lock {
-		color: var(--fg3);
-		display: inline-flex;
-		flex: none;
-	}
-	.restricted-text {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-	.restricted-title {
-		font-size: var(--text-md);
-		font-weight: 500;
 		color: var(--fg1);
 	}
 	.expiry-grid {

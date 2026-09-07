@@ -123,15 +123,13 @@ describe('the documents-v2 registry', () => {
 		expect(ENUM_COLUMNS.some((c) => c.table === 'document' && c.column === 'shelf')).toBe(false);
 	});
 
-	it('constrains sensitivity and chunk source', () => {
-		expect(ENUMS['document.sensitivity']).toEqual(['normal', 'restricted']);
+	it('constrains the chunk source', () => {
 		expect(ENUMS['document_text_chunk.source']).toEqual(['text_layer', 'ocr', 'plain']);
-		for (const [table, column, key] of [
-			['document', 'sensitivity', 'document.sensitivity'],
-			['document_text_chunk', 'source', 'document_text_chunk.source']
-		] as const) {
-			expect(ENUM_COLUMNS).toContainEqual({ table, column, enum: key });
-		}
+		expect(ENUM_COLUMNS).toContainEqual({
+			table: 'document_text_chunk',
+			column: 'source',
+			enum: 'document_text_chunk.source'
+		});
 	});
 
 	it('lets the queue carry an extraction', () => {

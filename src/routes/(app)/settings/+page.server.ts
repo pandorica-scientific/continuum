@@ -139,7 +139,7 @@ async function policyTarget(tx: Tx, personId: string) {
 	return { id: row.id, role: row.role, canSignIn: canSignIn(row) };
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const openMode = await isOpenMode();
 	// Members reach this page for their own password. Everything
 	// else on it — backup destinations on the host filesystem, server status,
@@ -191,7 +191,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.orderBy(person.createdAt, person.id),
 		isAdmin ? getBackupConfig() : null,
 		isAdmin ? getLastBackupRun() : null,
-		isAdmin ? serverStatus() : null,
+		isAdmin ? serverStatus(url.hostname) : null,
 		isAdmin ? listTokens() : [],
 		// Administrator business: a connected calendar is a credential someone
 		// entered, and the account list names where the household's diary goes.

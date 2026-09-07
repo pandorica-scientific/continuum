@@ -253,21 +253,14 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 		expect(docsAfter[0].storedName).toBe(docsBefore[0].storedName);
 	});
 
-	it('does not let a member see a restricted report', async () => {
+	it('lists the filed report', async () => {
 		const bytes = makeXtbWorkbook('2026-07-10 10:00:00');
 		await uploadBrokerReport('account_statement.xlsx', bytes, testDb);
 		const [doc] = await testDb.select().from(schema.document);
-		await testDb
-			.update(schema.document)
-			.set({ sensitivity: 'restricted' })
-			.where(eq(schema.document.id, doc.id));
 
-		const memberDocs = await brokerReports({ id: rowId('member'), role: 'member' }, testDb);
-		expect(memberDocs).toHaveLength(0);
-
-		const adminDocs = await brokerReports({ id: rowId('admin'), role: 'admin' }, testDb);
-		expect(adminDocs).toHaveLength(1);
-		expect(adminDocs[0].id).toBe(doc.id);
+		const docs = await brokerReports(testDb);
+		expect(docs).toHaveLength(1);
+		expect(docs[0].id).toBe(doc.id);
 	});
 	it('leaves the account link empty when there is more than one brokerage account', async () => {
 		await makeAccount(testDb, {

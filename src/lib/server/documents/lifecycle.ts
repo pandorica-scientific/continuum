@@ -17,18 +17,15 @@
  * may reach into `salary`, and `salary` must never reach back here, or "what a
  * month is worth" would depend on how paper is filed.
  *
- * A restricted document is ABSENT to a member, so a member's removal of one is
- * answered the way a removal of something already deleted is answered: 404,
- * same sentence. A 403 would confirm it exists.
+ * A removal that names no document is answered the way a removal of something
+ * already deleted is answered: 404, one sentence, from `assertDocumentExists`.
  */
 
-import { and, eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
-import { document } from '$lib/server/db/schema';
 import { forgetPayslip, salaryEntryPeople } from '$lib/server/salary';
 import { deleteDocumentRow, IMPORT_STATEMENT_REFUSAL } from './mutations';
 import { removeUpload } from '$lib/server/system/files';
-import { NO_SUCH_DOCUMENT, visibleDocumentPredicate, type Actor } from './visibility';
+import { assertDocumentExists, NO_SUCH_DOCUMENT } from './visibility';
 
 type RemoveDocumentResult = { ok: true } | { ok: false; status: 404 | 409; message: string };
 
@@ -50,27 +47,22 @@ class RemovalRefused extends Error {
  * Remove one document from the household, salary and file included.
  *
  * Everything that touches the database happens in one transaction, so a
- * refusal — a member who may not see it, or the statement an accepted import
+ * refusal — an id that names nothing, or the statement an accepted import
  * filed for itself — leaves the household exactly as it was. The file is
  * unlinked only after that transaction has committed: a delete that rolls back
  * must not leave a record pointing at bytes that are gone.
  */
 export async function removeDocument(
 	documentId: string,
-	actor: Actor | null,
 	handle: Db = db
 ): Promise<RemoveDocumentResult> {
 	let storedName: string | null = null;
 	try {
 		await handle.transaction(async (tx) => {
-			// The read rule, in SQL and inside the transaction: a member must not
-			// be able to remove — or learn the existence of — restricted paper.
-			const [visible] = await tx
-				.select({ id: document.id })
-				.from(document)
-				.where(and(eq(document.id, documentId), visibleDocumentPredicate(actor)))
-				.limit(1);
-			if (!visible) {
+			// The existence check, inside the transaction: a removal may not name
+			// a row that is not there.
+			const present = await assertDocumentExists(documentId, tx);
+			if (!present.ok) {
 				throw new RemovalRefused({ ok: false, status: 404, message: NO_SUCH_DOCUMENT });
 			}
 
@@ -87,7 +79,7 @@ export async function removeDocument(
 			if (removed.refused) {
 				throw new RemovalRefused({ ok: false, status: 409, message: IMPORT_STATEMENT_REFUSAL });
 			}
-			// Deleted between the visibility read and here. Nothing to undo, and
+			// Deleted between the existence read and here. Nothing to undo, and
 			// the answer is the one the household would expect.
 			if (!removed.ok) {
 				throw new RemovalRefused({ ok: false, status: 404, message: NO_SUCH_DOCUMENT });

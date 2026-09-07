@@ -6,7 +6,7 @@ import { rowId } from '../row-id';
 import { document, documentLink } from '$lib/server/db/schema';
 
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { asAdmin, asMember, makeContact, makeDocument, type SessionLocals } from './fixtures';
+import { asAdmin, makeContact, makeDocument, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -51,7 +51,6 @@ beforeEach(async () => {
 
 async function seedDocument(options: {
 	name: string;
-	sensitivity?: 'normal' | 'restricted';
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
@@ -60,7 +59,6 @@ async function seedDocument(options: {
 		name: options.name,
 		shelfKey: 'inbox',
 		type: 'other',
-		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
 		ext: 'PDF',
 		addedOn: '2026-01-01'
@@ -75,7 +73,6 @@ async function loadContacts(locals: SessionLocals) {
 		url: new URL('http://localhost/contacts'),
 		locals
 	})) as {
-		isAdmin: boolean;
 		contacts: {
 			id: string;
 			documents: { id: string; name: string }[];
@@ -166,12 +163,11 @@ describe('attach and detach through the actions', () => {
 		expect(row).toBeDefined();
 	});
 
-	it('refuses to attach a restricted document for a member, and does not link it', async () => {
-		const doc = await seedDocument({ name: 'Divorce papers', sensitivity: 'restricted' });
+	it('refuses to attach a document that is not there, and links nothing', async () => {
 		const result: unknown = await postAction(
 			'attachDocument',
-			{ targetId: CONTACT, documentId: doc },
-			asMember
+			{ targetId: CONTACT, documentId: uuidv7() },
+			asAdmin
 		);
 		expect(result).toMatchObject({ status: 404 });
 		const links = await testDb
@@ -181,14 +177,11 @@ describe('attach and detach through the actions', () => {
 		expect(links).toEqual([]);
 	});
 
-	it('shows a restricted document on an admin’s card but hides it from a member', async () => {
-		const doc = await seedDocument({ name: 'Sensitive letter', sensitivity: 'restricted' });
+	it('shows the paper filed against the contact on its card', async () => {
+		const doc = await seedDocument({ name: 'Letter' });
 		await testDb.insert(documentLink).values({ documentId: doc, targetId: CONTACT });
 
-		const { contacts: adminContacts } = await loadContacts(asAdmin);
-		expect(adminContacts.find((c) => c.id === CONTACT)?.documents.map((d) => d.id)).toEqual([doc]);
-
-		const { contacts: memberContacts } = await loadContacts(asMember);
-		expect(memberContacts.find((c) => c.id === CONTACT)?.documents).toEqual([]);
+		const { contacts } = await loadContacts(asAdmin);
+		expect(contacts.find((c) => c.id === CONTACT)?.documents.map((d) => d.id)).toEqual([doc]);
 	});
 });

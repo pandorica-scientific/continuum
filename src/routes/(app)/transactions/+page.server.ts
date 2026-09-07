@@ -47,7 +47,7 @@ function monthLabel(month: string): string {
 	return `${new Date(Date.UTC(2000, index - 1, 1)).toLocaleString('en', { month: 'long' })} ${year}`;
 }
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ url }) => {
 	// The filter needs the base currency before anything else can run; the module
 	// toggles need nothing, so they come along rather than costing a second wait.
 	const [baseCurrency, modules] = await Promise.all([getBaseCurrency(), getModules()]);
@@ -103,7 +103,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			loadTagsFor(rowIds),
 			loadSplitTagsFor(rowIds),
 			db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
-			loadTransactionDocuments(rowIds, locals.person ?? null),
+			loadTransactionDocuments(rowIds),
 			// Not gated on the module: what a row already IS stays true when the
 			// loans screens are hidden, and a chip that disappeared would read as
 			// the record having lost the link rather than as a setting.
@@ -165,7 +165,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 
 	return {
-		isAdmin: locals.person?.role === 'admin',
 		baseCurrency: displayCurrency(baseCurrency),
 		prevHref: pageHref(Math.max(1, filter.page - 1)),
 		nextHref: pageHref(Math.min(page?.pageCount ?? 1, filter.page + 1)),
@@ -351,13 +350,13 @@ export const actions: Actions = {
 	 * query would never have offered them. No schema work behind either path:
 	 * `document_link` targets any entity and a transaction is one.
 	 */
-	attachDocument: async ({ request, locals }) => {
+	attachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('targetId'));
 		const existingId = String(form.get('documentId') ?? '').trim();
 
 		if (existingId) {
-			const linked = await attachDocument(id, existingId, locals.person ?? null);
+			const linked = await attachDocument(id, existingId);
 			if (!linked.ok) return fail(linked.status, { id, message: linked.message });
 			return { ok: true };
 		}
@@ -416,7 +415,7 @@ export const actions: Actions = {
 	 * the transaction: a receipt filed against something else as well goes
 	 * from there too.
 	 */
-	detachDocument: async ({ request, locals }) => {
+	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
@@ -424,11 +423,11 @@ export const actions: Actions = {
 
 		// Unlink first: if the document is already gone, the row must still end up
 		// without a dangling reference to it.
-		await detachDocument(id, documentId, locals.person ?? null);
+		await detachDocument(id, documentId);
 		// The whole removal, not just the row: a receipt is rarely a payslip, but
 		// nothing stops one being filed against a transaction, and the salary
 		// month behind it must not be orphaned from here either.
-		const outcome = await removeDocument(documentId, locals.person);
+		const outcome = await removeDocument(documentId);
 		// A 404 usually is "it was already gone", the state the unlink above was
 		// asking for anyway — but it is also what a member gets back from BOTH
 		// calls for a restricted receipt they cannot see: neither the unlink nor
@@ -452,10 +451,10 @@ export const actions: Actions = {
 	 * demand instead, the same way the categories screen checks what a leaf
 	 * holds before it lets you delete it.
 	 */
-	candidates: async ({ request, locals }) => {
+	candidates: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('targetId'));
-		return { candidates: await candidateDocuments(id, locals.person ?? null) };
+		return { candidates: await candidateDocuments(id) };
 	},
 
 	split: async ({ request }) => {

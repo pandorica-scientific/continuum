@@ -24,7 +24,11 @@ describe('the flow around it', () => {
 		// a phone capture, which is why the same switch felt quick on a phone and
 		// slow on a Mac.
 		expect(flow).toMatch(/const PREVIEW_WIDTH = \d+;/);
-		expect(flow).toMatch(/renderPage\(cv, draft\.frame, draft\.corners, next\)/);
+		// `held` is the draft, narrowed to non-null by ensureDraft() so the corner
+		// editor can share it. What matters is that the preview renders from the
+		// DRAFT and never from source.frame.
+		expect(flow).toMatch(/renderPage\(cv, held\.frame, held\.corners, next\)/);
+		expect(flow).not.toMatch(/renderPage\(cv, source\.frame, source\.corners, next\)/);
 	});
 
 	it('renders the kept page once, at full resolution', () => {

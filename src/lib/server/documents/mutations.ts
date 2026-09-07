@@ -52,7 +52,6 @@ interface CreateDocumentInput {
 	/** What kind of paper this is. Behaviour hangs off this, never off shelf. */
 	type: DocumentTypeKey;
 	note?: string | null;
-	sensitivity?: EnumValue<'document.sensitivity'>;
 	storedName: string | null;
 	ext: string;
 	addedOn: string;
@@ -117,7 +116,6 @@ export async function insertDocumentAggregate(
 		shelfId: input.shelfId,
 		type: input.type,
 		note: input.note ?? null,
-		sensitivity: input.sensitivity ?? 'normal',
 		storedName: input.storedName,
 		ext: input.ext,
 		addedOn: input.addedOn,

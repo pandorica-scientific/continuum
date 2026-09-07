@@ -22,7 +22,6 @@ import postgres from 'postgres';
 import { uuidv7 } from 'uuidv7';
 import { db, type Queryable } from '$lib/server/db';
 import { document, documentLink, subject } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from './visibility';
 
 /**
  * What a new subject gets when nobody picked an emoji.
@@ -83,19 +82,11 @@ async function refusingDuplicates<T>(write: () => Promise<T>): Promise<T> {
 /**
  * Every subject, with how much paper is filed under it.
  *
- * The count carries `visibleDocumentPredicate`, exactly as the shelf counts do:
- * a member seeing "3" beside a subject holding the two documents they can open
- * has been told a third exists, which is the one fact the read rule protects. A
- * null actor is a member, deliberately — the safe reading is the default.
- *
  * The ARCHIVE scope is deliberately NOT applied. This count is how much paper
  * the subject holds, and an archived subject reporting zero because its own
  * archiving hid its own documents would be a number that means nothing.
  */
-export async function listSubjects(
-	handle: Queryable = db,
-	actor: Actor | null = null
-): Promise<SubjectRow[]> {
+export async function listSubjects(handle: Queryable = db): Promise<SubjectRow[]> {
 	const [rows, counted] = await Promise.all([
 		handle
 			.select({
@@ -108,15 +99,13 @@ export async function listSubjects(
 			})
 			.from(subject)
 			.orderBy(subject.name),
-		// The read rule as a fragment inside the query, never a filter applied to
-		// the rows afterwards. Grouped over every target rather than narrowed to
-		// subjects: `document_link` points at `entity`, so a narrowing would mean
-		// this module deciding which kinds exist, which is the registry's job.
+		// Grouped over every target rather than narrowed to subjects:
+		// `document_link` points at `entity`, so a narrowing would mean this
+		// module deciding which kinds exist, which is the registry's job.
 		handle
 			.select({ targetId: documentLink.targetId, n: count() })
 			.from(documentLink)
 			.innerJoin(document, eq(document.id, documentLink.documentId))
-			.where(visibleDocumentPredicate(actor))
 			.groupBy(documentLink.targetId)
 	]);
 	const countByTarget = new Map(counted.map((row) => [row.targetId, row.n]));

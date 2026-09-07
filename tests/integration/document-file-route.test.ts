@@ -18,13 +18,12 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * A file is served through the document, not through its filename.
+ * A document's file is served through the DOCUMENT, not through its filename.
  *
- * The hole this closes: `/files/[name]` guarded the session and then opened
- * whatever name it was handed, so a member holding a stored name could fetch a
- * restricted document. Both routes now resolve the document row first, and both
- * answer 404 rather than 403 — a 403 confirms the document exists, which is the
- * fact being protected.
+ * `/documents/[id]/file` resolves the row before it opens anything, so an id
+ * that names nothing gets a 404 rather than a stream. `/files/[name]` stays
+ * what it always was — avatars and property media, which have no document row
+ * at all — and must keep serving them.
  */
 let harness: Harness;
 let testDb: TestDb;
@@ -32,10 +31,7 @@ const DIRECTORY = resolve('scratch-workspace/document-file-route-uploads');
 let previousDirectory: string | undefined;
 let previousUrl: string | undefined;
 
-const asAdmin = { person: { id: 'a', name: 'Admin', initials: 'A', role: 'admin', theme: null } };
-const asMember = {
-	person: { id: 'm', name: 'Member', initials: 'M', role: 'member', theme: null }
-};
+const locals = { person: { id: 'a', name: 'Robert', initials: 'R', role: 'admin', theme: null } };
 
 beforeAll(async () => {
 	previousDirectory = process.env.UPLOAD_DIR;
@@ -63,7 +59,7 @@ beforeEach(async () => {
 	await harness.sql`delete from document`;
 });
 
-async function seedDocumentWithFile(options: { sensitivity: 'normal' | 'restricted' }) {
+async function seedDocumentWithFile() {
 	const storedName = await saveUploadBytes(
 		new TextEncoder().encode('%PDF-1.4 a document'),
 		'paper.pdf'
@@ -74,7 +70,6 @@ async function seedDocumentWithFile(options: { sensitivity: 'normal' | 'restrict
 		name: 'Paper',
 		shelfKey: 'inventory',
 		type: 'other',
-		sensitivity: options.sensitivity,
 		storedName,
 		addedOn: '2026-01-01'
 	});
@@ -105,34 +100,19 @@ async function getNamedFile(name: string, locals: unknown): Promise<number> {
 }
 
 describe('GET /documents/[id]/file', () => {
-	it('streams the file to an admin', async () => {
-		const { id } = await seedDocumentWithFile({ sensitivity: 'restricted' });
-		expect(await getDocumentFile(id, asAdmin)).toBe(200);
+	it('streams the file behind a document', async () => {
+		const { id } = await seedDocumentWithFile();
+		expect(await getDocumentFile(id, locals)).toBe(200);
 	});
 
-	it('streams a normal document to a member', async () => {
-		const { id } = await seedDocumentWithFile({ sensitivity: 'normal' });
-		expect(await getDocumentFile(id, asMember)).toBe(200);
-	});
-
-	it('answers 404 to a member for a restricted document', async () => {
-		// 404 rather than 403: a 403 confirms the document exists, which is
-		// exactly the fact being protected.
-		const { id } = await seedDocumentWithFile({ sensitivity: 'restricted' });
-		expect(await getDocumentFile(id, asMember)).toBe(404);
-	});
-
-	it('answers 404 to a member holding the stored name directly', async () => {
-		// The old hole: /files/[name] auth-guarded the session and then opened the
-		// file, without ever asking which document it belonged to.
-		const { id, storedName } = await seedDocumentWithFile({ sensitivity: 'restricted' });
-		expect(await getNamedFile(storedName, asMember)).toBe(404);
-		expect(await getDocumentFile(id, asMember)).toBe(404);
+	it('answers 404 for an id that names no document', async () => {
+		await seedDocumentWithFile();
+		expect(await getDocumentFile(uuidv7(), locals)).toBe(404);
 	});
 
 	it('still serves a file that belongs to no document', async () => {
 		// Avatars and property media have no document row and must keep working.
 		const storedName = await saveUploadBytes(new TextEncoder().encode('avatar'), 'face.png');
-		expect(await getNamedFile(storedName, asMember)).toBe(200);
+		expect(await getNamedFile(storedName, locals)).toBe(200);
 	});
 });

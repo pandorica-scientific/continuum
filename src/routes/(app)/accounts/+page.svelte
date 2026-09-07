@@ -201,7 +201,6 @@
 						emptyText="Nothing filed for this account yet — statements arrive by importing them, and a brokerage report is added from Investments."
 						attach={{ action: 'attachDocument', candidates: a.documentCandidates }}
 						detachAction="detachDocument"
-						isAdmin={data.isAdmin}
 					/>
 				</div>
 			{/if}

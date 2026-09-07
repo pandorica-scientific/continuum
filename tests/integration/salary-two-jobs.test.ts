@@ -153,7 +153,7 @@ describe('what a month with two jobs reports', () => {
 		await file(JOB_A, 10000000n, 7500000n);
 		await file(JOB_B, 4000000n, 3100000n);
 
-		const [robert] = await loadSalaryHistory('CZK', convert, null, testDb);
+		const [robert] = await loadSalaryHistory('CZK', convert, testDb);
 		// Taking either row alone would report one employer and drop the other.
 		expect(robert.years[0].grossTotalMinor).toBe(14000000n);
 		expect(robert.years[0].netTotalMinor).toBe(10600000n);
@@ -167,7 +167,7 @@ describe('what a month with two jobs reports', () => {
 		await file(JOB_A, 10000000n, 7500000n);
 		await file(JOB_B, 4000000n, 3100000n);
 
-		const [robert] = await loadSalaryHistory('CZK', convert, null, testDb);
+		const [robert] = await loadSalaryHistory('CZK', convert, testDb);
 		expect(robert.payslips).toHaveLength(2);
 		expect(new Set(robert.payslips.map((p) => p.documentId))).toEqual(new Set([JOB_A, JOB_B]));
 		// Each row is addressed by its ENTRY, which is what a correction names.
@@ -188,7 +188,7 @@ describe('what a month with two jobs reports', () => {
 			},
 			testDb
 		);
-		const [robert] = await loadSalaryHistory('CZK', convert, null, testDb);
+		const [robert] = await loadSalaryHistory('CZK', convert, testDb);
 		expect(robert.years[0].netMonths).toBe(0);
 	});
 });

@@ -48,9 +48,9 @@ function daysUntil(date: string): number {
 	return Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
 }
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ url }) => {
 	const [{ properties, tenancies, bills, loans, periods, links, docs, allTags }, rates] =
-		await Promise.all([readPropertyScreen(locals.person ?? null), loadRateTable()]);
+		await Promise.all([readPropertyScreen(), loadRateTable()]);
 	const today = new Date().toISOString().slice(0, 10);
 	const month = today.slice(0, 7);
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
@@ -297,8 +297,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				// The lease contract is paper about the TENANCY, not the flat: a flat
 				// let out twice over the years should not show the first tenant's
 				// signed lease once the second one has moved in.
-				documents: await documentsAbout(currentTenancy.id, locals.person ?? null),
-				documentCandidates: await candidateDocuments(currentTenancy.id, locals.person ?? null),
+				documents: await documentsAbout(currentTenancy.id),
+				documentCandidates: await candidateDocuments(currentTenancy.id),
 				addDocumentHref: `/documents?add=1&addShelfKey=tenancy&targetKind=tenancy&targetId=${currentTenancy.id}`
 			};
 		}
@@ -338,8 +338,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// what the Documents screen hides. Handed to `DocumentsCard` unchanged —
 		// the card computes its own expiry tone, so no `{file, meta, expired,
 		// amber}` reshaping happens here any more.
-		const propertyDocs = await documentsAbout(current.id, locals.person ?? null);
-		const propertyDocCandidates = await candidateDocuments(current.id, locals.person ?? null);
+		const propertyDocs = await documentsAbout(current.id);
+		const propertyDocCandidates = await candidateDocuments(current.id);
 
 		const flatTagRows = await db
 			.select({ name: tag.name })
@@ -391,7 +391,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	return {
-		isAdmin: locals.person?.role === 'admin',
 		currencies: await availableCurrencies(),
 		// Names only, for the tenant field's suggestion list. Adding a tenant now
 		// files them in the address book, and seeing who is already there is what
@@ -686,12 +685,12 @@ export const actions: Actions = {
 	 * own `targetId`, so one action serves both without knowing which kind it
 	 * was handed; the registry is what resolves that.
 	 */
-	attachDocument: async ({ request, locals }) => {
+	attachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
-		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		const result = await attachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
@@ -700,12 +699,12 @@ export const actions: Actions = {
 	 * Unfile a document — the link only. The document stays on its shelf, so a
 	 * mis-click costs a re-attach rather than evidence.
 	 */
-	detachDocument: async ({ request, locals }) => {
+	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Which document?' });
-		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		const result = await detachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	}

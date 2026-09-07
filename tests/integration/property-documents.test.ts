@@ -6,7 +6,7 @@ import { rowId } from '../row-id';
 import { document, documentLink, propertyBill, tenancy } from '$lib/server/db/schema';
 
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { asAdmin, asMember, makeDocument, makeProperty, type SessionLocals } from './fixtures';
+import { asAdmin, makeDocument, makeProperty, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -60,7 +60,6 @@ beforeEach(async () => {
 
 async function seedDocument(options: {
 	name: string;
-	sensitivity?: 'normal' | 'restricted';
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
@@ -69,7 +68,6 @@ async function seedDocument(options: {
 		name: options.name,
 		shelfKey: 'inventory',
 		type: 'other',
-		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
 		ext: 'PDF',
 		addedOn: '2026-01-01'
@@ -201,12 +199,11 @@ describe('attach and detach through the actions', () => {
 		expect(row).toBeDefined();
 	});
 
-	it('refuses to attach a restricted document for a member, and does not link it', async () => {
-		const doc = await seedDocument({ name: 'Divorce papers', sensitivity: 'restricted' });
+	it('refuses to attach a document that is not there, and links nothing', async () => {
 		const result: unknown = await postAction(
 			'attachDocument',
-			{ targetId: PROPERTY, documentId: doc },
-			asMember
+			{ targetId: PROPERTY, documentId: rowId('pd-no-such-document') },
+			asAdmin
 		);
 		expect(result).toMatchObject({ status: 404 });
 		const links = await testDb
@@ -218,10 +215,9 @@ describe('attach and detach through the actions', () => {
 });
 
 describe('a bill’s paperclip', () => {
-	async function seedBill(sensitivity: 'normal' | 'restricted') {
+	async function seedBill() {
 		const doc = await seedDocument({
 			name: 'Electricity bill',
-			sensitivity,
 			storedName: 'bill.pdf'
 		});
 		await testDb.insert(documentLink).values({ documentId: doc, targetId: PROPERTY });
@@ -235,21 +231,16 @@ describe('a bill’s paperclip', () => {
 		return doc;
 	}
 
-	it('gives an admin the documentId behind a normal bill', async () => {
-		const doc = await seedBill('normal');
+	it('carries the documentId behind a bill', async () => {
+		const doc = await seedBill();
 		const { detail } = await loadProperty(asAdmin);
 		expect(detail?.bills[0].documentId).toBe(doc);
 	});
 
-	it('gives a member null for a restricted bill, never the raw column', async () => {
-		await seedBill('restricted');
-		const { detail } = await loadProperty(asMember);
+	it('is null for a bill whose document was deleted', async () => {
+		await seedBill();
+		await testDb.delete(document);
+		const { detail } = await loadProperty(asAdmin);
 		expect(detail?.bills[0].documentId).toBeNull();
-	});
-
-	it('gives an admin the documentId behind a restricted bill', async () => {
-		const doc = await seedBill('restricted');
-		const { detail } = await loadProperty(asAdmin);
-		expect(detail?.bills[0].documentId).toBe(doc);
 	});
 });

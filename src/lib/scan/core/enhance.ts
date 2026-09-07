@@ -60,7 +60,7 @@ export function renderPage(cv: CV, source: Frame, corners: Corners | null, mode:
 
 		const out = keep(new cv.Mat());
 		if (mode === 'color') {
-			balanceColour(cv, keep, warped, out);
+			balanceColour(cv, keep, warped, out, width);
 		} else {
 			const flat = keep(flatten(cv, keep, warped, width));
 			if (mode === 'grayscale') {
@@ -91,14 +91,35 @@ export function renderPage(cv: CV, source: Frame, corners: Corners | null, mode:
 }
 
 /**
- * CLAHE on the L channel of LAB: fixes uneven room lighting without the plastic
- * look global normalisation gives.
+ * Flat-field the lightness: take the room's lighting out of the picture and
+ * leave the colours where they were.
+ *
+ * This used to be CLAHE on the same channel, and CLAHE is the wrong instrument
+ * here. It equalises LOCAL contrast, so it does not merely remove a lamp's
+ * gradient — it rewrites the relationship between light and dark everywhere,
+ * pulls flat regions apart, and amplifies sensor noise in exactly the smooth
+ * areas a photograph has most of. Hue survived it, because `a` and `b` were
+ * never touched, but a duty-free bag and a laminated licence came back looking
+ * washed out and grainy against the original, which is not what "Colour" should
+ * mean when "Original" sits next to it.
+ *
+ * Dividing by the illumination field is the older and duller correction, and
+ * it is the right one: a desk lamp's gradient and a hand's shadow are a slowly
+ * varying multiplier over the picture, so dividing them out removes them and
+ * leaves local contrast exactly as the sensor recorded it.
+ *
+ * Scaled by the field's own MEAN rather than by 255. The grey modes below scale
+ * by 255 deliberately — that is what drives paper to white — but doing it here
+ * would drive every photograph to white, which is only ever right for a page.
+ * The mean preserves the picture's overall lightness and takes away nothing but
+ * the gradient.
  */
 function balanceColour(
 	cv: CV,
 	keep: Arena,
 	warped: InstanceType<CV['Mat']>,
-	out: InstanceType<CV['Mat']>
+	out: InstanceType<CV['Mat']>,
+	width: number
 ) {
 	const lab = keep(new cv.Mat());
 	cv.cvtColor(warped, lab, cv.COLOR_RGBA2RGB);
@@ -110,14 +131,17 @@ function balanceColour(
 	const a = keep(planes.get(1));
 	const b = keep(planes.get(2));
 
-	// `new cv.CLAHE(...)`, not `createCLAHE` — the factory does not exist in the
-	// opencv.js build, though it does in the C++ API and in most tutorials.
-	const clahe = keep(new cv.CLAHE(2.0, new cv.Size(8, 8)));
-	clahe.apply(l, l);
+	const field = keep(illuminationField(cv, keep, l, width));
+	// Guard the divide: a black region gives a field near zero, and 0/0 is
+	// where a correction turns into a blown-out square of noise.
+	const floor = keep(new cv.Mat(field.rows, field.cols, field.type(), new cv.Scalar(1)));
+	cv.max(field, floor, field);
+	const evened = keep(new cv.Mat());
+	cv.divide(l, field, evened, cv.mean(field)[0], cv.CV_8U);
 
 	// split() copies the planes out, so the adjusted L has to be put back.
 	const merged = keep(new cv.MatVector());
-	merged.push_back(l);
+	merged.push_back(evened);
 	merged.push_back(a);
 	merged.push_back(b);
 	const balanced = keep(new cv.Mat());
@@ -127,21 +151,21 @@ function balanceColour(
 }
 
 /**
- * Divide out the illumination field. Kills a desk lamp's gradient or a hand
- * shadow in one pass, with no model. Returns a single-channel Mat whose
- * ownership passes to the caller.
+ * The lighting across a frame: the picture with everything but the illumination
+ * blurred out of it.
+ *
+ * Measured at a quarter scale, because a blur wide enough to erase the content
+ * is enormous at full size and the field it produces is smooth enough that the
+ * detail thrown away by the resize cannot be seen in it.
  */
-function flatten(cv: CV, keep: Arena, warped: InstanceType<CV['Mat']>, width: number) {
-	const gray = keep(new cv.Mat());
-	cv.cvtColor(warped, gray, cv.COLOR_RGBA2GRAY);
-
+function illuminationField(cv: CV, keep: Arena, single: InstanceType<CV['Mat']>, width: number) {
 	const small = keep(new cv.Mat());
 	cv.resize(
-		gray,
+		single,
 		small,
 		new cv.Size(
-			Math.max(1, Math.round(gray.cols * BACKGROUND_SCALE)),
-			Math.max(1, Math.round(gray.rows * BACKGROUND_SCALE))
+			Math.max(1, Math.round(single.cols * BACKGROUND_SCALE)),
+			Math.max(1, Math.round(single.rows * BACKGROUND_SCALE))
 		),
 		0,
 		0,
@@ -153,9 +177,21 @@ function flatten(cv: CV, keep: Arena, warped: InstanceType<CV['Mat']>, width: nu
 		new cv.Size(0, 0),
 		(width / BACKGROUND_SIGMA_DIVISOR) * BACKGROUND_SCALE
 	);
+	const field = keep(new cv.Mat());
+	cv.resize(small, field, new cv.Size(single.cols, single.rows), 0, 0, cv.INTER_LINEAR);
+	return keep.release(field);
+}
 
-	const background = keep(new cv.Mat());
-	cv.resize(small, background, new cv.Size(gray.cols, gray.rows), 0, 0, cv.INTER_LINEAR);
+/**
+ * Divide out the illumination field. Kills a desk lamp's gradient or a hand
+ * shadow in one pass, with no model. Returns a single-channel Mat whose
+ * ownership passes to the caller.
+ */
+function flatten(cv: CV, keep: Arena, warped: InstanceType<CV['Mat']>, width: number) {
+	const gray = keep(new cv.Mat());
+	cv.cvtColor(warped, gray, cv.COLOR_RGBA2GRAY);
+
+	const background = keep(illuminationField(cv, keep, gray, width));
 
 	const divided = keep(new cv.Mat());
 	// Scaled by 255 so the quotient lands back in 0–255 rather than around 1.

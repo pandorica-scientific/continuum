@@ -25,9 +25,9 @@ let db: TestDb;
 let previousUrl: string | undefined;
 
 /** The facts for a shelf named by key — the row is what `shelfFacts` takes. */
-async function factsFor(key: string, viewer: Parameters<typeof shelfFacts>[1] = null) {
+async function factsFor(key: string) {
 	const row = (await listShelves(db)).find((s) => s.key === key)!;
-	return shelfFacts(row, viewer, db);
+	return shelfFacts(row, db);
 }
 
 /** An ISO day relative to today, so no fixture sits on an expiry boundary by accident. */
@@ -117,14 +117,11 @@ describe('shelfFacts', () => {
 		expect(facts.oldestDays).toBe(6);
 	});
 
-	it('hides a restricted document from a member, exactly as the list does', async () => {
-		// A band counting a document a member cannot see would tell them it
-		// exists, which is the one fact the restriction protects.
+	it('counts every document on the shelf', async () => {
 		const shelfId = await shelfIdByKey('identity', db);
-		await makeDocument(db, { shelfId, type: 'certificate', sensitivity: 'restricted' });
+		await makeDocument(db, { shelfId, type: 'certificate' });
 		await makeDocument(db, { shelfId, type: 'certificate' });
 
-		expect((await factsFor('identity', { id: 'x', role: 'member' })).documents).toBe(1);
-		expect((await factsFor('identity', { id: 'x', role: 'admin' })).documents).toBe(2);
+		expect((await factsFor('identity')).documents).toBe(2);
 	});
 });

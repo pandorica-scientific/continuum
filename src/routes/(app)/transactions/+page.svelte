@@ -631,7 +631,6 @@
 			{candidatesError}
 			{loadingCandidates}
 			formMessage={form?.message && form?.id === attaching.id ? form.message : null}
-			isAdmin={data.isAdmin}
 			onclose={() => (attachingId = null)}
 		/>
 	{/if}

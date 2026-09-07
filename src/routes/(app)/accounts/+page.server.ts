@@ -22,8 +22,7 @@ import {
 } from '$lib/server/documents/targets';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const actor = locals.person ?? null;
+export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
 	const [accounts, rates, banks, people] = await Promise.all([
 		db
@@ -78,10 +77,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// the whole library fetched again for each account's picker.
 	const accountIds = accounts.map((a) => a.id);
 	const [documentsByAccountId, candidatesByAccountId] = await Promise.all([
-		Promise.all(accountIds.map(async (id) => [id, await documentsAbout(id, actor)] as const)).then(
+		Promise.all(accountIds.map(async (id) => [id, await documentsAbout(id)] as const)).then(
 			(pairs) => new Map(pairs)
 		),
-		candidateDocumentsFor(accountIds, actor)
+		candidateDocumentsFor(accountIds)
 	]);
 
 	const rows = [];
@@ -193,7 +192,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const shareById = new Map(donut.map((d) => [d.id, { pct: d.pct, color: d.color }]));
 
 	return {
-		isAdmin: locals.person?.role === 'admin',
 		currencies: await availableCurrencies(),
 		// "Other" is a fallback rather than an institution, so it goes last —
 		// just above the "add a bank" control the markup renders after this list.
@@ -296,12 +294,12 @@ export const actions: Actions = {
 	 * itself, and a brokerage report is added from Investments, so this card
 	 * only ever attaches paper that already exists.
 	 */
-	attachDocument: async ({ request, locals }) => {
+	attachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
-		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		const result = await attachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
@@ -310,12 +308,12 @@ export const actions: Actions = {
 	 * Unfile a document — the link only. The document stays on its shelf, so a
 	 * mis-click costs a re-attach rather than evidence.
 	 */
-	detachDocument: async ({ request, locals }) => {
+	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Which document?' });
-		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		const result = await detachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	}

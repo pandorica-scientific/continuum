@@ -25,9 +25,8 @@ import {
 } from '$lib/server/documents/targets';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url, locals }) => {
+export const load: PageServerLoad = async ({ url }) => {
 	const query = url.searchParams.get('q') ?? '';
-	const actor = locals.person ?? null;
 
 	const [contacts, links, tenancies, properties, loans, accounts] = await Promise.all([
 		listContacts(query),
@@ -52,15 +51,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// contact at a time.
 	const contactIds = contacts.map((c) => c.id);
 	const [documentsByContactId, candidatesByContactId] = await Promise.all([
-		Promise.all(contactIds.map(async (id) => [id, await documentsAbout(id, actor)] as const)).then(
+		Promise.all(contactIds.map(async (id) => [id, await documentsAbout(id)] as const)).then(
 			(pairs) => new Map(pairs)
 		),
-		candidateDocumentsFor(contactIds, actor)
+		candidateDocumentsFor(contactIds)
 	]);
 
 	return {
 		query,
-		isAdmin: locals.person?.role === 'admin',
 		contacts: contacts.map((row) => ({
 			...row,
 			links: links.get(row.id) ?? emptyLinks(),
@@ -175,12 +173,12 @@ export const actions: Actions = {
 	 * `DocumentsCard` inside its edit panel. Every contact's panel posts here
 	 * with its own `targetId`, so one action serves all of them.
 	 */
-	attachDocument: async ({ request, locals }) => {
+	attachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Choose a document to attach.' });
-		const result = await attachDocument(targetId, documentId, locals.person ?? null);
+		const result = await attachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
@@ -189,12 +187,12 @@ export const actions: Actions = {
 	 * Unfile a document — the link only. The document stays on its shelf, so a
 	 * mis-click costs a re-attach rather than evidence.
 	 */
-	detachDocument: async ({ request, locals }) => {
+	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { message: 'Which document?' });
-		const result = await detachDocument(targetId, documentId, locals.person ?? null);
+		const result = await detachDocument(targetId, documentId);
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	}

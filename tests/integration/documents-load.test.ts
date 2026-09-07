@@ -29,7 +29,6 @@ let testDb: TestDb;
 let previousUrl: string | undefined;
 
 const asAdmin = { person: { id: 'a', name: 'A', initials: 'A', role: 'admin', theme: null } };
-const asMember = { person: { id: 'm', name: 'M', initials: 'M', role: 'member', theme: null } };
 
 /**
  * One record of every kind the screen has to be able to offer or name.
@@ -88,22 +87,16 @@ beforeEach(async () => {
 	await harness.sql`delete from document`;
 });
 
-async function seedShelf(key: string, counts: { normal: number; restricted: number }) {
+async function seedShelf(key: string, n: number) {
 	const shelfId = await shelfIdByKey(key, testDb);
-	for (const [sensitivity, n] of [
-		['normal', counts.normal],
-		['restricted', counts.restricted]
-	] as const) {
-		for (let i = 0; i < n; i++) {
-			await makeDocument(testDb, {
-				id: uuidv7(),
-				name: `${sensitivity} ${i}`,
-				shelfId,
-				type: 'other',
-				sensitivity,
-				addedOn: '2026-01-01'
-			});
-		}
+	for (let i = 0; i < n; i++) {
+		await makeDocument(testDb, {
+			id: uuidv7(),
+			name: `filed ${i}`,
+			shelfId,
+			type: 'other',
+			addedOn: '2026-01-01'
+		});
 	}
 }
 
@@ -177,32 +170,12 @@ async function loadDocuments(
 }
 
 describe('the documents load', () => {
-	it('gives a member a rail count that has already forgotten the restricted one', async () => {
-		await seedShelf('inventory', { normal: 26, restricted: 1 });
-		const data = await loadDocuments(asMember);
-		expect(data.shelves.find((s) => s.key === 'inventory')!.count).toBe(26);
-		expect(data.shelves.find((s) => s.key === 'all')!.count).toBe(26);
-		expect(data.total).toBe(26);
-	});
-
-	it('gives the admin 27', async () => {
-		await seedShelf('inventory', { normal: 26, restricted: 1 });
+	it('counts every document on the shelf, in the rail and in the total', async () => {
+		await seedShelf('inventory', 27);
 		const data = await loadDocuments(asAdmin);
 		expect(data.shelves.find((s) => s.key === 'inventory')!.count).toBe(27);
+		expect(data.shelves.find((s) => s.key === 'all')!.count).toBe(27);
 		expect(data.total).toBe(27);
-	});
-
-	it('never shows a teaser row', async () => {
-		// Not a row, not a name, not a flag set on anything the member can see.
-		// The document does not reach the screen at all — there is nothing to
-		// dim, grey out or mark as withheld, because a placeholder IS the leak.
-		await seedShelf('inventory', { normal: 1, restricted: 1 });
-		const data = (await loadDocuments(asMember)) as LoadedDocuments & {
-			rows: { name: string; restricted: boolean }[];
-		};
-		expect(data.rows).toHaveLength(1);
-		expect(data.rows.every((r) => r.restricted === false)).toBe(true);
-		expect(JSON.stringify(data.rows)).not.toMatch(/restricted 0/);
 	});
 });
 
@@ -580,13 +553,7 @@ describe('the Inbox queue', () => {
 		expect(row.laneId).toBe(insurance.id);
 		// The cell it was filed for is no longer a hole. That is the whole point
 		// of the third step.
-		const payload = await loadDossier(
-			vehicles,
-			{ id: 'a', role: 'admin' },
-			2026,
-			testDb,
-			'2026-09-02'
-		);
+		const payload = await loadDossier(vehicles, 2026, testDb, '2026-09-02');
 		const drawn = payload.cards[0].lanes.find((l) => l.id === insurance.id)!;
 		expect(drawn.cells.find((c) => c.key === '2025')?.state).toBe('filed');
 	});

@@ -68,7 +68,7 @@ describe('loadSalaryHistory', () => {
 			documentId: DOC
 		});
 
-		const [robert] = await loadSalaryHistory('CZK', same, null, testDb);
+		const [robert] = await loadSalaryHistory('CZK', same, testDb);
 		const [year] = robert.years;
 		expect(year.grossTotalMinor).toBe(10000000n);
 		expect(year.netTotalMinor).toBe(7140000n);
@@ -93,7 +93,7 @@ describe('loadSalaryHistory', () => {
 			currency: 'CZK',
 			source: 'statement'
 		});
-		const [robert] = await loadSalaryHistory('CZK', same, null, testDb);
+		const [robert] = await loadSalaryHistory('CZK', same, testDb);
 		expect(robert.years[0].grossMonths).toBe(0);
 		expect(robert.years[0].netMonths).toBe(1);
 		expect(robert.payslips).toHaveLength(0);
@@ -123,7 +123,7 @@ describe('loadSalaryHistory', () => {
 			}))
 		);
 
-		const [robert] = await loadSalaryHistory('CZK', same, null, testDb);
+		const [robert] = await loadSalaryHistory('CZK', same, testDb);
 		const [year] = robert.years;
 		expect(year.grossTotalMinor).toBe(gross * 2n + bonus);
 		expect(year.bonusTotalMinor).toBe(bonus);

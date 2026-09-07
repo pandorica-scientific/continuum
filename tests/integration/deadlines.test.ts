@@ -165,7 +165,7 @@ describe('a lease document dated the same as its tenancy', () => {
 		const { tenancyId } = await seedTenancy(soon);
 		await seedLeaseDocument(soon, tenancyId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const leaseItems = items.filter((i) => i.kind === 'Tenancy' || i.kind === 'Document');
 		expect(leaseItems).toHaveLength(1);
 		expect(leaseItems[0].kind).toBe('Tenancy');
@@ -187,7 +187,7 @@ describe('a lease document dated differently from its tenancy', () => {
 		const { tenancyId } = await seedTenancy(soon);
 		await seedLeaseDocument(different, tenancyId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const leaseItems = items.filter((i) => i.kind === 'Tenancy' || i.kind === 'Document');
 		expect(leaseItems).toHaveLength(2);
 	});
@@ -207,7 +207,7 @@ describe('a re-fixation letter dated the same as the loan’s current fixation e
 		const { loanId } = await seedLoanWithCurrentFixation(soon);
 		await seedRefixLetter(soon, loanId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const mortgageItems = items.filter((i) => i.kind === 'Mortgage' || i.kind === 'Document');
 		expect(mortgageItems).toHaveLength(1);
 		expect(mortgageItems[0].kind).toBe('Mortgage');
@@ -229,7 +229,7 @@ describe('a re-fixation letter dated differently from the loan’s current fixat
 		const { loanId } = await seedLoanWithCurrentFixation(soon);
 		await seedRefixLetter(different, loanId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const mortgageItems = items.filter((i) => i.kind === 'Mortgage' || i.kind === 'Document');
 		expect(mortgageItems).toHaveLength(2);
 	});
@@ -256,7 +256,7 @@ describe('a document whose owning record reminds about nothing', () => {
 		const { tenancyId } = await seedTenancy(beyondTheLeaseWindow);
 		await seedLeaseDocument(beyondTheLeaseWindow, tenancyId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const leaseItems = items.filter((i) => i.kind === 'Tenancy' || i.kind === 'Document');
 		// `leaseExpiry` stops at 120 days, so there is no Tenancy item to be a
 		// duplicate of — the document is the reminder.
@@ -268,7 +268,7 @@ describe('a document whose owning record reminds about nothing', () => {
 		const { loanId } = await seedLoanWithCurrentFixation(soon, { owedMinor: 0n });
 		await seedRefixLetter(soon, loanId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const mortgageItems = items.filter((i) => i.kind === 'Mortgage' || i.kind === 'Document');
 		expect(mortgageItems).toHaveLength(1);
 		expect(mortgageItems[0].kind).toBe('Document');
@@ -278,7 +278,7 @@ describe('a document whose owning record reminds about nothing', () => {
 		const { loanId } = await seedLoanWithCurrentFixation(soon, { regime: 'floating' });
 		await seedRefixLetter(soon, loanId);
 
-		const { items } = await buildBriefing(null);
+		const { items } = await buildBriefing();
 		const mortgageItems = items.filter((i) => i.kind === 'Mortgage' || i.kind === 'Document');
 		expect(mortgageItems).toHaveLength(1);
 		expect(mortgageItems[0].kind).toBe('Document');

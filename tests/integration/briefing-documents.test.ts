@@ -4,7 +4,6 @@ import { uuidv7 } from 'uuidv7';
 import { documentLink, job, tenancy } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { buildBriefing, type BriefingItem } from '$lib/server/briefing';
-import type { Actor } from '$lib/server/documents/visibility';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeDocument, makeLoan, makeProperty } from './fixtures';
 
@@ -46,16 +45,12 @@ beforeEach(async () => {
 	await harness.sql`truncate document, job, person, property, loan cascade`;
 });
 
-const asAdmin: Actor = { id: uuidv7(), role: 'admin' };
-const asMember: Actor = { id: uuidv7(), role: 'member' };
-
 /** Far enough out to sit inside the document horizon, near enough to be on the strip. */
 const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
 async function seedDocument(options: {
 	name: string;
 	shelfKey: string;
-	sensitivity?: 'normal' | 'restricted';
 	expiresOn?: string;
 }): Promise<string> {
 	const id = uuidv7();
@@ -64,7 +59,6 @@ async function seedDocument(options: {
 		name: options.name,
 		shelfId: await shelfIdByKey(options.shelfKey, testDb),
 		type: 'other',
-		sensitivity: options.sensitivity ?? 'normal',
 		storedName: `${id}.pdf`,
 		ext: 'PDF',
 		addedOn: '2026-01-01',
@@ -96,15 +90,12 @@ const unreadableItem = (items: BriefingItem[]) =>
 	items.find((item) => item.title.includes('could not be read'));
 
 describe('the inbox backlog', () => {
-	it('counts a restricted document for an admin and not for a member', async () => {
+	it('counts every document waiting on the inbox shelf', async () => {
 		await seedDocument({ name: 'Passport scan', shelfKey: 'inbox' });
-		await seedDocument({ name: 'Divorce papers', shelfKey: 'inbox', sensitivity: 'restricted' });
+		await seedDocument({ name: 'Divorce papers', shelfKey: 'inbox' });
 
-		const member = await buildBriefing(asMember);
-		expect(backlogItem(member.items)?.title).toBe('1 document waiting to be filed');
-
-		const admin = await buildBriefing(asAdmin);
-		expect(backlogItem(admin.items)?.title).toBe('2 documents waiting to be filed');
+		const { items } = await buildBriefing();
+		expect(backlogItem(items)?.title).toBe('2 documents waiting to be filed');
 	});
 
 	// The backlog is a shelf, not a state: a document filed on finance has been
@@ -112,14 +103,14 @@ describe('the inbox backlog', () => {
 	it('does not count a document that has already been filed', async () => {
 		await seedDocument({ name: 'Payslip · March', shelfKey: 'income_tax' });
 
-		const { items } = await buildBriefing(asAdmin);
+		const { items } = await buildBriefing();
 		expect(backlogItem(items)).toBeUndefined();
 	});
 
 	it('sends the reader to the review flow', async () => {
 		await seedDocument({ name: 'Passport scan', shelfKey: 'inbox' });
 
-		const { items } = await buildBriefing(asAdmin);
+		const { items } = await buildBriefing();
 		expect(backlogItem(items)?.href).toBe('/documents?shelf=inbox');
 	});
 });
@@ -129,7 +120,7 @@ describe('extraction failures', () => {
 		const id = await seedDocument({ name: 'Mortgage agreement', shelfKey: 'income_tax' });
 		await seedExtraction(id, 'failed', new Date('2026-02-01T00:00:00Z'), 'mupdf: cannot open file');
 
-		const { items } = await buildBriefing(asAdmin);
+		const { items } = await buildBriefing();
 		const item = unreadableItem(items);
 		expect(item?.title).toBe('1 document could not be read');
 		expect(item?.href).toBe(`/documents?doc=${id}`);
@@ -143,7 +134,7 @@ describe('extraction failures', () => {
 		await seedExtraction(id, 'failed', new Date('2026-01-01T00:00:00Z'), 'mupdf: cannot open file');
 		await seedExtraction(id, 'done', new Date('2026-03-01T00:00:00Z'));
 
-		const { items } = await buildBriefing(asAdmin);
+		const { items } = await buildBriefing();
 		expect(unreadableItem(items)).toBeUndefined();
 	});
 
@@ -153,22 +144,10 @@ describe('extraction failures', () => {
 		await seedExtraction(first, 'failed', new Date('2026-02-01T00:00:00Z'), 'mupdf: cannot open');
 		await seedExtraction(second, 'failed', new Date('2026-02-02T00:00:00Z'));
 
-		const { items } = await buildBriefing(asAdmin);
+		const { items } = await buildBriefing();
 		const item = unreadableItem(items);
 		expect(item?.title).toBe('2 documents could not be read');
 		expect(item?.href).toBe('/documents');
-	});
-
-	it('keeps a restricted document out of a member’s strip', async () => {
-		const id = await seedDocument({
-			name: 'Divorce papers',
-			shelfKey: 'inventory',
-			sensitivity: 'restricted'
-		});
-		await seedExtraction(id, 'failed', new Date('2026-02-01T00:00:00Z'));
-
-		const { items } = await buildBriefing(asMember);
-		expect(unreadableItem(items)).toBeUndefined();
 	});
 });
 
@@ -207,7 +186,7 @@ describe('a document’s about line', () => {
 			{ documentId, targetId: loanId }
 		]);
 
-		const { items } = await buildBriefing(asAdmin);
+		const { items } = await buildBriefing();
 		const item = items.find((i) => i.kind === 'Document');
 		expect(item?.detail).toContain('Filed under Property, about ');
 		expect(item?.detail).toContain('Flat Karlín · Martin Dvořák');

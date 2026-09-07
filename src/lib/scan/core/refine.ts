@@ -361,5 +361,23 @@ export function edgeContrast(
 	}
 	if (differences.length === 0) return 0;
 	differences.sort((a, b) => a - b);
-	return differences[differences.length >> 1] / 255;
+	/**
+	 * The SIZE of the step across the boundary, not its direction.
+	 *
+	 * This used to return the signed median of `inside - outside`, which says
+	 * "a page is brighter than what it lies on". For a dark passport, a black
+	 * wallet or an ID card on a white counter every sample is negative, so the
+	 * caller in detect.ts scored the correct quad below zero on 45% of its
+	 * marks, and the gate in searchQuad below — `< CONTRAST_FLOOR` — threw
+	 * every candidate away before it could be scored at all. Neither was a
+	 * near miss: a dark object could not be detected by any path.
+	 *
+	 * `abs` of the MEDIAN, deliberately, not the median of the absolutes. A
+	 * real boundary steps the same way the whole length of the edge, so the two
+	 * agree; where they differ is a boundary whose samples disagree in sign,
+	 * which is not an edge but noise, and the signed median collapses to zero
+	 * and scores it as the nothing it is. Taking the absolutes first would
+	 * dress that noise up as strong contrast.
+	 */
+	return Math.abs(differences[differences.length >> 1]) / 255;
 }

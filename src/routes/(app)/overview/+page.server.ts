@@ -72,8 +72,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			anchorMonth: anchor ?? dataMonth,
 			netWorth: () => (netWorthPromise ??= computeNetWorth()),
 			rates,
-			spending,
-			actor: locals.person
+			spending
 		}
 	);
 

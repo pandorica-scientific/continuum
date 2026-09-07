@@ -59,15 +59,39 @@ function draw(source: CanvasImageSource, width: number, height: number): Frame {
 }
 
 /**
- * The widest source the pipeline will work from.
+ * The longest side the pipeline will work from.
  *
  * Output is clamped to 2480 px (A4 at 300 DPI), so anything past this is thrown
  * away by the warp anyway — but it is not free on the way there. Recent phones
  * shoot 48 MP: 8064 x 6048 is 195 MB as RGBA, four times what the design
  * assumed, and `renderPage` holds several Mats derived from it at once. Capping
  * here costs nothing visible and takes the peak from ~195 MB to ~30 MB.
+ *
+ * The LONGEST side, not the width, and that difference is the whole bug: a page
+ * is photographed in PORTRAIT, so its long side is the height and a cap on
+ * width never fires. An iPhone's ordinary 12 MP frame is 3024x4032 — inside a
+ * 3200 width cap, so it passed through untouched at 48.8 MB — and a 48 MP
+ * portrait capped on width alone still lands at 3200x4267, 54.6 MB, worse than
+ * the landscape case the number was chosen for. Held while OpenCV asks iOS for
+ * a heap of its own, that is the allocation the tab cannot make: the runtime
+ * never starts, `onRuntimeInitialized` never fires, and the scan sits on
+ * "Reading photo…" for good. Capped on the long side, every orientation lands
+ * on the same ~7.7 MP and ~30 MB the design assumed.
  */
-const MAX_CAPTURE_WIDTH = 3200;
+const MAX_CAPTURE_LONG = 3200;
+
+/**
+ * The width that puts the LONGEST side on `MAX_CAPTURE_LONG`, for the callers
+ * below that think in target widths. Never scales up.
+ *
+ * Exported for its arithmetic: the width cap it replaces looked right and was
+ * wrong for every portrait photograph, which is most of them.
+ */
+export function captureWidth(width: number, height: number): number {
+	const longest = Math.max(width, height);
+	if (longest <= MAX_CAPTURE_LONG) return width;
+	return Math.max(1, Math.round((width * MAX_CAPTURE_LONG) / longest));
+}
 
 /**
  * How far a still's aspect ratio may differ from the preview's before it is
@@ -138,7 +162,7 @@ export async function stillFromTrack(
 			// phone writes a DIFFERENT rotation depending on how it was held. That
 			// is why this failed in landscape and not in portrait.
 			const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
-			const still = frameFromBitmap(bitmap, MAX_CAPTURE_WIDTH);
+			const still = frameFromBitmap(bitmap, captureWidth(bitmap.width, bitmap.height));
 			bitmap.close();
 
 			// Whatever the still says, it has to agree with the picture the user
@@ -158,7 +182,7 @@ export async function stillFromTrack(
 	}
 	// The video element is what the user was actually looking at, so it can
 	// never disagree with what they framed. Lower resolution, always right.
-	return frameFromVideo(video, Math.min(video.videoWidth, MAX_CAPTURE_WIDTH));
+	return frameFromVideo(video, captureWidth(video.videoWidth, video.videoHeight));
 }
 
 /**
@@ -185,10 +209,16 @@ export async function frameFromFile(file: File): Promise<Frame> {
 	if (!bitmap) {
 		if (!looksLikeHeic(bytes, file.name)) throw new Error('That image could not be read.');
 		const { decodeHeic } = await import('./heic-decode.ts');
-		return applyOrientation(await decodeHeic(bytes), readOrientation(bytes));
+		const decoded = await decodeHeic(bytes);
+		// Capped like the bitmap path below. Nothing downstream can tell which
+		// decoder a frame came from, so neither may leave 12 MP in memory.
+		return applyOrientation(
+			frameFromBitmapSource(decoded, captureWidth(decoded.width, decoded.height)),
+			readOrientation(bytes)
+		);
 	}
 
-	const frame = frameFromBitmap(bitmap, MAX_CAPTURE_WIDTH);
+	const frame = frameFromBitmap(bitmap, captureWidth(bitmap.width, bitmap.height));
 	// Freed immediately: a 12 MP bitmap is ~48 MB, and holding one per dropped
 	// file is how a ten-image drop kills the tab.
 	bitmap.close();

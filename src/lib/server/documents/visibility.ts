@@ -2,23 +2,23 @@
 /**
  * Which documents a read path is allowed to return, as SQL fragments.
  *
- * Two independent questions live here — may this actor know the document exists,
- * and is its subject still current — and both are applied by every read path
- * rather than by the screen that happens to need them.
+ * One question lives here now: is this document's subject still current. There
+ * used to be a second — may this actor know the document exists — carried by a
+ * `sensitivity` column that a member's reads filtered out. It is gone. On an
+ * instance where anyone who can reach the address signs in as anyone, hiding a
+ * document from a member while the admin they could sign in as reads it was a
+ * lock on a door with no wall, and it cost an `actor` argument threaded through
+ * two dozen read paths to enforce. Everyone in a household sees everything.
+ *
+ * What survives is EXISTENCE. A write action still may not name a document that
+ * is not there, and that check was tangled up with the permission one — so it
+ * is kept here, deliberately, rather than deleted alongside it.
  */
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { document, documentLink, subject } from '$lib/server/db/schema';
 
-/**
- * Absent, not forbidden — the sentence every refusal of an unreadable document
- * uses, here rather than typed out per caller.
- *
- * A member who names a restricted document is told what someone naming a
- * deleted one is told. "You may not" would confirm it exists, which is the one
- * fact the read rule protects, so the two answers have to be the same string
- * and not merely two strings that currently agree.
- */
+/** The sentence a document that is not there gets, here rather than per caller. */
 export const NO_SUCH_DOCUMENT = 'That document is not there.';
 
 /**
@@ -49,88 +49,50 @@ export function archiveScopePredicate(includeArchived: boolean): SQL | undefined
 	)`;
 }
 
-/**
- * Who is asking. Structural on purpose: `SessionPerson` satisfies it, and so
- * does the little the ICS route knows, which is not a session at all.
- */
-export interface Actor {
-	id: string;
-	role: 'admin' | 'member';
-}
-
-/**
- * Whether this actor may know a document exists — at all, anywhere.
- *
- * ONE fragment, used by the Documents load, search, every count, the briefing,
- * calendar generation, the ICS feed and file serving. It is an invariant rather
- * than a filter: a member must not be able to infer a restricted document from
- * a count that is one too high, a search hint that mentions matches they cannot
- * see, or a calendar event with no document behind it.
- *
- * A NULL actor is a member, deliberately. The ICS feed carries a token, not a
- * session, and reading "no person" as "no restriction" would make the feed the
- * one door left open.
- */
-export function visibleDocumentPredicate(actor: Actor | null): SQL | undefined {
-	if (actor?.role === 'admin') return undefined;
-	return eq(document.sensitivity, 'normal');
-}
-
-/** A read the rule refused, in the shape an action hands to `fail`. */
+/** A read that found nothing, in the shape an action hands to `fail`. */
 export type NoSuchDocument = { ok: false; status: 404; message: typeof NO_SUCH_DOCUMENT };
 
-/** Either the id, or the same answer a document that does not exist gets. */
+/** Either the id, or the answer a document that does not exist gets. */
 export type VisibleDocument = { ok: true; id: string } | NoSuchDocument;
 
 /**
- * May this actor act on this document at all?
+ * Is there such a document at all?
  *
- * The predicate above says what a LIST may return; this says what a WRITE may
- * name. Both questions have to be asked or the rule is only half a rule: a
- * member who never saw a restricted document in any list could still rename it,
- * retype it or put different bytes behind it by posting its id, and none of
- * those needs the row to have been listed anywhere.
- *
- * One helper rather than the check written out per action, because five
- * actions each spelling it themselves is five places for one of them to be
- * forgotten — which is exactly how the Documents screen's write actions ended
- * up unguarded while its reads were not.
- *
- * The refusal carries `NO_SUCH_DOCUMENT`, so an action that has no such
- * document and an action that has one it may not touch answer identically.
+ * A write may not name a row that is not there, and this is the one place that
+ * is asked. It used to answer a second question as well — may this actor touch
+ * it — and losing that must not lose this: five actions each spelling out their
+ * own existence check is five places for one of them to be forgotten, which is
+ * exactly how the Documents screen's write actions once ended up unguarded.
  */
-export async function assertVisibleDocument(
+export async function assertDocumentExists(
 	id: string,
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<VisibleDocument> {
 	const [row] = await handle
 		.select({ id: document.id })
 		.from(document)
-		.where(and(eq(document.id, id), visibleDocumentPredicate(actor)))
+		.where(eq(document.id, id))
 		.limit(1);
 	return row ? { ok: true, id: row.id } : { ok: false, status: 404, message: NO_SUCH_DOCUMENT };
 }
 
 /**
- * The same question for a selection: which of these may this actor act on.
+ * The same question for a selection: which of these are really there.
  *
- * A bulk edit is refused per document rather than as a whole. Failing the
- * entire bar because one id in forty is not the caller's to touch would be a
- * louder answer than the question, and — worse — would tell them the id they
- * cannot see is special. What they can act on happens; the rest is not there.
+ * A bulk edit drops the ids that are not rather than failing the whole bar,
+ * because refusing forty documents over one stale id is a louder answer than
+ * the question.
  */
-export async function visibleDocumentIds(
+export async function existingDocumentIds(
 	ids: readonly string[],
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<string[]> {
 	if (ids.length === 0) return [];
 	const rows = await handle
 		.select({ id: document.id })
 		.from(document)
-		.where(and(inArray(document.id, [...ids]), visibleDocumentPredicate(actor)));
-	const allowed = new Set(rows.map((row) => row.id));
+		.where(inArray(document.id, [...ids]));
+	const found = new Set(rows.map((row) => row.id));
 	// In the order they were given, so a caller's own ordering survives.
-	return ids.filter((id) => allowed.has(id));
+	return ids.filter((id) => found.has(id));
 }

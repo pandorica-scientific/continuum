@@ -44,6 +44,15 @@ function detach(cv: CV): CV {
 	return cv;
 }
 
+/**
+ * How long the runtime gets to start before the wait is called off.
+ *
+ * Generous: 8 MB of WebAssembly over a slow phone connection, then compiled on
+ * a phone. This is not a performance budget, it is the difference between an
+ * error and a screen that waits for the life of the tab.
+ */
+const READY_TIMEOUT_MS = 30_000;
+
 export function loadCv(): Promise<CV> {
 	// Memoised: the detection loop calls this every frame rather than holding a
 	// reference, so a caller can never reach `cv` before the runtime is up.
@@ -52,24 +61,55 @@ export function loadCv(): Promise<CV> {
 		const already = (globalThis as { cv?: CV }).cv;
 		if (already?.Mat) return resolve(detach(already));
 
+		/**
+		 * A runtime that never starts must not leave this promise pending.
+		 *
+		 * Emscripten does not report a heap it could not get by rejecting
+		 * anything: it aborts by throwing inside its own callback, so
+		 * `onRuntimeInitialized` simply never fires and every `await loadCv()`
+		 * waits for the life of the tab. That is what an iOS tab already
+		 * holding a full-resolution photograph looks like from here, and it is
+		 * what put the scanner on "Reading photo…" with nothing else to say.
+		 */
+		const timer = setTimeout(
+			() =>
+				reject(
+					new Error(
+						'The scanner could not start — the browser may be short of memory. Close other tabs and try again.'
+					)
+				),
+			READY_TIMEOUT_MS
+		);
+		const settle = (outcome: () => void) => {
+			clearTimeout(timer);
+			outcome();
+		};
+
 		const script = document.createElement('script');
 		script.src = LOADER;
 		script.async = true;
 		script.onerror = () =>
-			reject(new Error('The scanner could not load. Reload the page and try again.'));
+			settle(() => reject(new Error('The scanner could not load. Reload the page and try again.')));
 		script.onload = () => {
 			const cv = (globalThis as { cv?: CV }).cv;
-			if (!cv) return reject(new Error('The scanner loaded but did not start.'));
+			if (!cv) return settle(() => reject(new Error('The scanner loaded but did not start.')));
 			// The script defines `cv` at once; the WebAssembly behind it lands a
 			// moment later, and only then is `Mat` a constructor.
-			if (cv.Mat) return resolve(detach(cv));
+			if (cv.Mat) return settle(() => resolve(detach(cv)));
 			const previous = cv.onRuntimeInitialized;
 			cv.onRuntimeInitialized = () => {
 				previous?.();
-				resolve(detach(cv));
+				settle(() => resolve(detach(cv)));
 			};
 		};
 		document.head.appendChild(script);
+	}).catch((error: unknown) => {
+		// A FAILURE is never memoised. `ready` is held for the life of the page,
+		// so keeping a rejected promise here would answer every later scan with
+		// the same stale error — including the retry the message just asked for,
+		// which by then has a freed heap and every chance of working.
+		ready = null;
+		throw error;
 	});
 	return ready;
 }

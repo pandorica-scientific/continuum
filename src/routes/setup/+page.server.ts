@@ -14,10 +14,10 @@ import { BIRTH_YEAR_ERROR, initialsFor, parseBirthYear } from '$lib/people';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => ({
+export const load: PageServerLoad = async ({ url }) => ({
 	currencies: await availableCurrencies(),
 	passwordMinLength: passwordMinLength(),
-	addresses: await currentAddresses()
+	addresses: await currentAddresses(url.hostname)
 });
 
 export const actions: Actions = {

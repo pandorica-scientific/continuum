@@ -7,22 +7,19 @@
  * `detachDocumentFromTransaction` here until Task 16, which is when the
  * transactions screen moved onto the same `DocumentsCard` every other record
  * screen uses. Those two are gone: `targets.ts`'s `attachDocument` and
- * `detachDocument` replace them, visibility-checked in a way the
- * transaction-only versions were not — a member holding a restricted
- * document's id could otherwise attach it to a transaction they can see and
- * read it off the card from there.
+ * `detachDocument` replace them, existence-checked in a way the
+ * transaction-only versions were not.
  *
  * What stays is this one function. The register pages up to fifty rows and
  * needs a receipt count and its filed papers for every one of them at once;
- * `documentsAbout` answers for a single record, so this is that same read
- * rule in one query keyed by transaction rather than fifty round trips to ask
- * it fifty times.
+ * `documentsAbout` answers for a single record, so this is that same read in
+ * one query keyed by transaction rather than fifty round trips to ask it fifty
+ * times.
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { document, documentLink, documentType, shelf, tag, tagLink } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import type { AboutDocument } from '$lib/server/documents/targets';
 
 /**
@@ -30,13 +27,10 @@ import type { AboutDocument } from '$lib/server/documents/targets';
  *
  * Still one query, deliberately: a register page shows fifty rows, and asking
  * per row for the sake of reusing `documentsAbout` would be fifty round trips
- * to answer one screen. What is shared is the RULE, not the query — the same
- * `visibleDocumentPredicate` goes into this `where`, so a receipt a member may
- * not see is not in the result rather than filtered out of it afterwards.
+ * to answer one screen.
  */
 export async function loadTransactionDocuments(
 	transactionIds: string[],
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<Map<string, AboutDocument[]>> {
 	const byTransaction = new Map<string, AboutDocument[]>();
@@ -55,14 +49,13 @@ export async function loadTransactionDocuments(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity,
 			reminderDays: documentType.reminderDays
 		})
 		.from(documentLink)
 		.innerJoin(document, eq(documentLink.documentId, document.id))
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		.innerJoin(documentType, eq(documentType.key, document.type))
-		.where(and(inArray(documentLink.targetId, transactionIds), visibleDocumentPredicate(actor)))
+		.where(inArray(documentLink.targetId, transactionIds))
 		.orderBy(document.name);
 
 	if (rows.length === 0) return byTransaction;

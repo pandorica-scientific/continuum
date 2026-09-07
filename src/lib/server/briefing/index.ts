@@ -20,11 +20,7 @@ import {
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
-import {
-	archiveScopePredicate,
-	visibleDocumentPredicate,
-	type Actor
-} from '$lib/server/documents/visibility';
+import { archiveScopePredicate } from '$lib/server/documents/visibility';
 import { loadRecordDates, ownedByLinkedRecord } from '$lib/server/documents/deadlines';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
@@ -58,20 +54,8 @@ export interface BriefingItem {
 // database. Sources that do not take one still satisfy this — a function of
 // fewer parameters is assignable — so the ones that read the singleton are
 // untouched.
-/**
- * A briefing source, optionally told who is reading.
- *
- * The actor arrives second so the handle stays the first argument every source
- * already took. Every source that reads `document` uses it, and must: a member
- * cannot be shown a restricted document's renewal date on the Overview, nor
- * infer one from a backlog count that is one too high. "No actor" is read as a
- * member rather than as an admin.
- */
-type Source = (
-	handle?: Queryable,
-	actor?: Actor | null,
-	shared?: BriefingShared
-) => Promise<BriefingItem[]>;
+/** A briefing source. */
+type Source = (handle?: Queryable, shared?: BriefingShared) => Promise<BriefingItem[]>;
 
 /**
  * Work the caller has already done, or is about to do for something else.
@@ -118,7 +102,7 @@ const unreviewedImports: Source = async () => {
  * unfiled document has no expiry date to remind about and no record to appear
  * beside, which is exactly why the backlog grows unnoticed.
  */
-const inboxBacklog: Source = async (handle: Queryable = db, actor = null) => {
+const inboxBacklog: Source = async (handle: Queryable = db) => {
 	let inboxId: string;
 	try {
 		inboxId = await systemShelfId(SYSTEM_SHELF_KEYS.inbox, handle);
@@ -133,7 +117,7 @@ const inboxBacklog: Source = async (handle: Queryable = db, actor = null) => {
 	const [row] = await handle
 		.select({ count: sql<number>`count(*)::int` })
 		.from(document)
-		.where(and(eq(document.shelfId, inboxId), visibleDocumentPredicate(actor)));
+		.where(eq(document.shelfId, inboxId));
 	const waiting = row.count;
 	if (waiting === 0) return [];
 	return [
@@ -236,18 +220,16 @@ const fixationHorizon: Source = async () => {
 	return items;
 };
 
-const documentExpiry: Source = async (_handle, actor = null) => {
+const documentExpiry: Source = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 	const docs = await db
 		.select({ ...getTableColumns(document), shelfLabel: shelf.label })
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
-		// The invariant, not a screen filter: a member must not learn a restricted
-		// document exists from a renewal date on the Overview. Archive scope is the
-		// second, independent question — a document whose only subject is archived
-		// (a sold car's insurance) is stale rather than secret, and drops out of the
-		// default view the same way it does everywhere else.
-		.where(and(visibleDocumentPredicate(actor), archiveScopePredicate(false)));
+		// A document whose only subject is archived (a sold car's insurance) is
+		// stale, and drops out of the default view the same way it does
+		// everywhere else.
+		.where(archiveScopePredicate(false));
 	// What each document belongs to, by current name, for the detail line. The
 	// same `links` rows also answer D7 below — a second query over
 	// `document_link` per source would be the "extend the load, don't add a
@@ -344,7 +326,7 @@ const MAX_ERROR_CHARS = 90;
  * an answer rather than a gap. Nobody goes looking for a document they have
  * already been told is not there, which is why it has to be said here.
  */
-const extractionFailures: Source = async (handle: Queryable = db, actor = null) => {
+const extractionFailures: Source = async (handle: Queryable = db) => {
 	const rows = await handle
 		.select({
 			documentId: document.id,
@@ -354,17 +336,9 @@ const extractionFailures: Source = async (handle: Queryable = db, actor = null) 
 		})
 		.from(job)
 		.innerJoin(document, eq(document.id, job.subjectId))
-		.where(
-			and(
-				eq(job.kind, 'extract_text'),
-				// The same two questions every other read of `document` asks. A
-				// member must not learn a restricted document exists from a count of
-				// what could not be read, and a sold car's paperwork failing to
-				// extract is not work anybody is going to do.
-				visibleDocumentPredicate(actor),
-				archiveScopePredicate(false)
-			)
-		)
+		// The same question every other read of `document` asks: a sold car's
+		// paperwork failing to extract is not work anybody is going to do.
+		.where(and(eq(job.kind, 'extract_text'), archiveScopePredicate(false)))
 		.orderBy(desc(job.queuedAt));
 
 	// Attempts accumulate: a document read successfully on the second try still
@@ -404,7 +378,7 @@ const extractionFailures: Source = async (handle: Queryable = db, actor = null) 
 	];
 };
 
-const overspend: Source = async (_handle, _actor, shared) => {
+const overspend: Source = async (_handle, shared) => {
 	// A category group running well past its twelve-month average this month.
 	// The tally itself lives in `$lib/server/cashflow/spending`, shared with the
 	// Overview panel that draws the same comparison as bars — two spellings of
@@ -562,10 +536,7 @@ export interface Briefing {
 	caption: string;
 }
 
-export async function buildBriefing(
-	actor: Actor | null = null,
-	shared: BriefingShared = {}
-): Promise<Briefing> {
+export async function buildBriefing(shared: BriefingShared = {}): Promise<Briefing> {
 	// Settled, not all. Nine domains are queried here and any one of them can
 	// fail on its own — a table a migration has not reached, a shelf that is not
 	// there, a rate table that would not load — and under `Promise.all` the
@@ -573,9 +544,7 @@ export async function buildBriefing(
 	// "nothing needs you today" because one query threw is worse than one that
 	// is short a card: it is the same screen a household with nothing to do
 	// sees, so nothing about it looks wrong.
-	const settled = await Promise.allSettled(
-		SOURCES.map((source) => source(undefined, actor, shared))
-	);
+	const settled = await Promise.allSettled(SOURCES.map((source) => source(undefined, shared)));
 	const items: BriefingItem[] = [];
 	settled.forEach((result, index) => {
 		if (result.status === 'fulfilled') {

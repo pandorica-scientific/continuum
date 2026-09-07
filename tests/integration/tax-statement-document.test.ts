@@ -47,10 +47,7 @@ const base = {
 	note: null,
 	lines: [],
 	attachments: [],
-	linkDocumentIds: [],
-	// An admin saves these fixtures: linking now goes through the registry,
-	// which applies the read rule to the document being named.
-	actor: { id: rowId('person-a'), role: 'admin' as const }
+	linkDocumentIds: []
 };
 
 const upload = {
@@ -277,7 +274,7 @@ describe('detaching', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 		const [doc] = await testDb.select().from(schema.document);
 
-		expect(await detachDocument(statement.id, doc.id, base.actor, testDb)).toEqual({ ok: true });
+		expect(await detachDocument(statement.id, doc.id, testDb)).toEqual({ ok: true });
 
 		expect(await testDb.select().from(schema.document)).toHaveLength(1);
 		expect(await attachedTo(statement.id)).toEqual([]);
@@ -288,7 +285,7 @@ describe('detaching', () => {
 		const [statement] = await testDb.select().from(schema.taxStatement);
 		const [doc] = await testDb.select().from(schema.document);
 
-		await detachDocument(statement.id, doc.id, base.actor, testDb);
+		await detachDocument(statement.id, doc.id, testDb);
 
 		expect(
 			await testDb
@@ -304,7 +301,7 @@ describe('detaching', () => {
 
 		// A person id is not a document, so the registry answers the way it
 		// answers any document that is not there.
-		const outcome = await detachDocument(statement.id, PERSON, base.actor, testDb);
+		const outcome = await detachDocument(statement.id, PERSON, testDb);
 		expect(outcome.ok).toBe(false);
 	});
 });
@@ -346,7 +343,7 @@ describe('loadStatements', () => {
 			testDb
 		);
 
-		const rows = await loadStatements(null, testDb);
+		const rows = await loadStatements(testDb);
 		const y2025 = rows.find((r) => r.year === 2025)!;
 		const y2024 = rows.find((r) => r.year === 2024)!;
 
@@ -373,7 +370,7 @@ describe('loadStatements', () => {
 			.values({ documentId: rowId('loose-doc'), targetId: PERSON });
 		await saveStatement({ ...base, attachments: [upload] }, testDb);
 
-		const rows = await loadStatements(null, testDb);
+		const rows = await loadStatements(testDb);
 		expect(rows[0].attachments.map((a) => a.name)).toEqual([statementDocumentName(2025, 'CZ')]);
 	});
 });

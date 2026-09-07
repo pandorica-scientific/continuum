@@ -2,7 +2,7 @@
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { document, person, salaryEntry, taxStatement } from '$lib/server/db/schema';
 import {
@@ -14,7 +14,6 @@ import {
 } from '$lib/server/tax';
 import { detachDocument } from '$lib/server/documents/targets';
 import { removeDocument } from '$lib/server/documents/lifecycle';
-import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import {
 	attachmentKind,
@@ -36,7 +35,7 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const [statements, people, salaryRows, taxDocs, base, rates, currencies, prefRows] =
 		await Promise.all([
-			loadStatements(locals.person ?? null),
+			loadStatements(),
 			db
 				.select({ id: person.id, name: person.name })
 				.from(person)
@@ -51,15 +50,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					currency: salaryEntry.currency
 				})
 				.from(salaryEntry),
-			// What "link an existing document" may offer. The read rule is in the
-			// where: a member offered a restricted document would have been told it
-			// exists by the list alone, before ever picking it.
+			// What "link an existing document" may offer.
 			db
 				.select({ id: document.id, name: document.name })
 				.from(document)
-				.where(
-					and(eq(document.type, 'tax_document'), visibleDocumentPredicate(locals.person ?? null))
-				)
+				.where(eq(document.type, 'tax_document'))
 				.orderBy(document.addedOn),
 			getBaseCurrency(),
 			loadRateTable(),
@@ -136,7 +131,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		prefillTotals,
 		// Draws the lock on a restricted attachment, on the card each statement's
 		// paperwork renders through. Never what decides which rows it is handed.
-		isAdmin: locals.person?.role === 'admin',
 		statements: statements
 			.sort((a, b) => b.year - a.year)
 			.map((s) => {
@@ -246,7 +240,7 @@ async function discardUploads(attachments: StatementAttachment[]): Promise<void>
 }
 
 export const actions: Actions = {
-	save: async ({ request, locals }) => {
+	save: async ({ request }) => {
 		const form = await request.formData();
 		// No fixed fallback: an empty field means "the household's own currency",
 		// which is configured, not a constant this file gets to decide.
@@ -304,9 +298,7 @@ export const actions: Actions = {
 				// Optional: a document already on the shelf is linked, not re-filed.
 				linkDocumentIds: [asOptionalRowId(form.get('documentId'))].filter((id): id is string =>
 					Boolean(id)
-				),
-				// Who is linking, for the read rule the registry applies to it.
-				actor: locals.person ?? null
+				)
 			});
 		} catch (err) {
 			await discardUploads(attachments);
@@ -373,17 +365,14 @@ export const actions: Actions = {
 	 * `DocumentsCard`'s own detach form posts `targetId`, not `id` — the field
 	 * name every other screen's card already uses.
 	 */
-	detach: async ({ request, locals }) => {
+	detach: async ({ request }) => {
 		const form = await request.formData();
 		// The registry's own detach, the one every other card uses. Tax kept a
-		// local copy that checked neither who was asking nor what the target
-		// was, so a member holding a restricted document's id could unfile paper
-		// they are not allowed to know exists — and two functions of one name
-		// enforced two different things.
+		// local copy that checked neither the document nor the target, so two
+		// functions of one name enforced two different things.
 		const outcome = await detachDocument(
 			asRowId(form.get('targetId')),
-			asRowId(form.get('documentId')),
-			locals.person ?? null
+			asRowId(form.get('documentId'))
 		);
 		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
@@ -399,9 +388,9 @@ export const actions: Actions = {
 	 * an orphaned row still counted in a year's total. `removeDocument` forgets
 	 * the payslip's contribution first, keeping only what the bank proved.
 	 */
-	deleteAttachment: async ({ request, locals }) => {
+	deleteAttachment: async ({ request }) => {
 		const form = await request.formData();
-		const outcome = await removeDocument(asRowId(form.get('documentId')), locals.person ?? null);
+		const outcome = await removeDocument(asRowId(form.get('documentId')));
 		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},

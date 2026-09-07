@@ -31,11 +31,7 @@ import {
 } from '$lib/server/db/schema';
 import { buildBriefing } from '$lib/server/briefing';
 import { effectiveDate } from '$lib/server/transactions';
-import {
-	archiveScopePredicate,
-	visibleDocumentPredicate,
-	type Actor
-} from '$lib/server/documents/visibility';
+import { archiveScopePredicate } from '$lib/server/documents/visibility';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { groupSummary } from '$lib/documents/view';
@@ -104,12 +100,6 @@ interface PanelContext {
 	 * it was the most expensive thing on the Overview, done identically.
 	 */
 	spending: () => Promise<GroupMonthSpend[]>;
-	/**
-	 * Who is looking at the board. Only the briefing and Paper panels need it,
-	 * and they need it absolutely: a restricted document's renewal date must not
-	 * reach a member's Overview, and neither must a count that includes it.
-	 */
-	actor: Actor | null;
 }
 
 type Builder = (ctx: PanelContext) => Promise<unknown>;
@@ -127,7 +117,7 @@ function share(value: number, largest: number): number {
 }
 
 const builders: Record<string, Builder> = {
-	briefing: (ctx) => buildBriefing(ctx.actor, { spending: ctx.spending }),
+	briefing: (ctx) => buildBriefing({ spending: ctx.spending }),
 
 	flow: (ctx) => flowData(ctx.period, { anchor: ctx.anchorMonth }),
 
@@ -482,13 +472,10 @@ const builders: Record<string, Builder> = {
 		};
 	},
 
-	paper: async (ctx) => {
-		// The archive as this reader may see it, on every count below. A member
-		// told "10 on Identity" where an admin is told "11" has been told a
-		// restricted document exists, which is the one fact the read rule
-		// protects — so the predicate goes in the query rather than on the rows
-		// that come back.
-		const readable = and(visibleDocumentPredicate(ctx.actor), archiveScopePredicate(false));
+	paper: async () => {
+		// Archive scope on every count below, in the query rather than on the
+		// rows that come back.
+		const readable = archiveScopePredicate(false);
 
 		// `systemShelfId` throws where the shelf is not there, and it is right to
 		// for anything that FILES into it. A panel that only counts has no such
@@ -500,10 +487,7 @@ const builders: Record<string, Builder> = {
 			// the review screen counts. This figure carries a link to that screen,
 			// so a household told "3 waiting" has to find three there.
 			inboxId
-				? db
-						.select({ n: count() })
-						.from(document)
-						.where(and(eq(document.shelfId, inboxId), visibleDocumentPredicate(ctx.actor)))
+				? db.select({ n: count() }).from(document).where(eq(document.shelfId, inboxId))
 				: Promise.resolve([]),
 			db
 				.select({

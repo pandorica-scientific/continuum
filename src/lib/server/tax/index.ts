@@ -14,7 +14,6 @@ import {
 } from '$lib/server/db/schema';
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { attachDocument, documentsAbout } from '$lib/server/documents/targets';
-import type { Actor } from '$lib/server/documents/visibility';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
@@ -64,16 +63,6 @@ interface StatementInput {
 	attachments: StatementAttachment[];
 	/** Documents already on the shelf, to link without filing anything new. */
 	linkDocumentIds: string[];
-	/**
-	 * Who is saving, for `linkDocumentIds`.
-	 *
-	 * Required rather than optional: a link is a write against a document, the
-	 * registry checks whether this person may know that document exists, and a
-	 * caller that forgot to say who is asking should not silently be given the
-	 * admin's answer. `null` is a member, the same reading every other read path
-	 * gives it.
-	 */
-	actor: Actor | null;
 }
 
 type TaxResult = { ok: true } | { ok: false; status: number; message: string };
@@ -87,14 +76,8 @@ type TaxResult = { ok: true } | { ok: false; status: number; message: string };
  */
 class StatementRefused extends Error {}
 
-/**
- * Every statement, with the paper this reader is allowed to know about.
- *
- * The statement itself is never hidden: what was declared and what was paid are
- * the tax module's own figures, and D2 hides the document, not the record. Only
- * the attachments list shortens.
- */
-export async function loadStatements(actor: Actor | null, handle: Db = db) {
+/** Every statement, with the paper filed against it. */
+export async function loadStatements(handle: Db = db) {
 	const [rows, lines, people] = await Promise.all([
 		handle.select().from(taxStatement),
 		handle.select().from(taxStatementLine),
@@ -102,12 +85,12 @@ export async function loadStatements(actor: Actor | null, handle: Db = db) {
 	]);
 
 	// One `documentsAbout` call per statement, which is THE query behind every
-	// documents card — read-rule and shelf label included, rather than a
+	// documents card — archive scope and shelf label included, rather than a
 	// bespoke join this module kept its own copy of. A household files a
 	// handful of statements a year, never hundreds, so a call per row stays a
 	// few round trips rather than the one-query-per-record cost a hot loop
 	// would be.
-	const attachments = await Promise.all(rows.map((r) => documentsAbout(r.id, actor, handle)));
+	const attachments = await Promise.all(rows.map((r) => documentsAbout(r.id, handle)));
 
 	const personName = new Map(people.map((p) => [p.id, p.name]));
 	return rows.map((r, i) => ({
@@ -255,11 +238,11 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 			//
 			// Through the registry's `attachDocument` rather than an insert of its
 			// own: that is where "is this a record paper can be filed against" and
-			// "may this person know this document exists" are answered, and a second
-			// path into `document_link` is a second set of rules to keep in step.
+			// "is there such a document" are answered, and a second path into
+			// `document_link` is a second set of rules to keep in step.
 			// It is idempotent, so linking the same document twice is the same state.
 			for (const documentId of input.linkDocumentIds) {
-				const linked = await attachDocument(id, documentId, input.actor, tx);
+				const linked = await attachDocument(id, documentId, tx);
 				if (!linked.ok) {
 					// Rolled back rather than saved without the paper that was asked
 					// for: the statement and its attachment are one act, the same way

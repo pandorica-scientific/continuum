@@ -2,12 +2,9 @@
 /**
  * One archive, read through one rule.
  *
- * Every query below carries `visibleDocumentPredicate` and
- * `archiveScopePredicate`, including the counts — a member seeing "27" beside a
- * shelf holding the 26 documents they can open has been told something exists,
- * which is the fact the invariant protects. Searching happens in SQL rather
- * than over the loaded array, because contents live in chunks nobody would ship
- * to a screen.
+ * Every query below carries `archiveScopePredicate`, including the counts.
+ * Searching happens in SQL rather than over the loaded array, because contents
+ * live in chunks nobody would ship to a screen.
  */
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue, type DocumentTypeKey } from '$lib/enums';
@@ -106,11 +103,9 @@ import { deleteTag, upsertTag } from '$lib/server/tags';
 import { loadTagsScreen } from '$lib/server/tags/screen';
 import {
 	archiveScopePredicate,
-	assertVisibleDocument,
-	visibleDocumentIds,
-	visibleDocumentPredicate,
-	NO_SUCH_DOCUMENT,
-	type Actor
+	assertDocumentExists,
+	existingDocumentIds,
+	NO_SUCH_DOCUMENT
 } from '$lib/server/documents/visibility';
 import { searchDocuments } from '$lib/server/documents/search';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
@@ -208,12 +203,8 @@ const bannerToday = (): string => new Date().toISOString().slice(0, 10);
  * meant a second reading of what a gap is, so they are filled from the coverage
  * loader that already knows.
  */
-async function tileFactsFor(
-	shelfRow: ShelfRow,
-	viewer: Actor | null,
-	dossier: DossierPayload | null
-) {
-	const facts = await shelfFacts(shelfRow, viewer);
+async function tileFactsFor(shelfRow: ShelfRow, dossier: DossierPayload | null) {
+	const facts = await shelfFacts(shelfRow);
 	// A dossier's cards and holes are what its own loader drew; the row count
 	// cannot see a lane.
 	if (dossier)
@@ -251,12 +242,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// kept because links to them are already out in the app.
 	const addShelfKey = url.searchParams.get('addShelfKey') ?? '';
 
-	const readable = and(
-		visibleDocumentPredicate(locals.person),
-		archiveScopePredicate(includeArchived)
-	);
-	// Deliberately without the archive half: this is how many are being hidden.
-	const readableEverywhere = visibleDocumentPredicate(locals.person);
+	const readable = archiveScopePredicate(includeArchived);
 
 	const [
 		{ docs, railCounts, everywhereCount, docLinks, docTags, tags, texts, pending, identities },
@@ -265,13 +251,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		shelfTypes,
 		documentTypes
 	] = await Promise.all([
-		readDocumentsScreen({ readable, readableEverywhere }),
+		readDocumentsScreen({ readable }),
 		listShelves(),
 		// Behind the same read rule as everything else on this screen: a member
 		// seeing "3" beside the car has been told about a document they cannot
 		// open. The archive scope is deliberately NOT applied to these counts —
 		// see `listSubjects`.
-		listSubjects(db, locals.person),
+		listSubjects(db),
 		// The kinds the document side may pick, from the registry — which is the
 		// one list. Whole, because a picker is a list of what could be chosen.
 		// The four hand-written selects this replaces were the reason a receipt's
@@ -301,7 +287,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// decision rather than a link to a page that carries it.
 	const queue =
 		view === 'shelf' && engine === 'queue'
-			? await loadQueue(locals.person ?? null, db, bannerToday(), openDocumentId)
+			? await loadQueue(db, bannerToday(), openDocumentId)
 			: null;
 
 	// Drawn whatever the view: the band answers the SHELF's question, and the
@@ -311,7 +297,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		engine === 'dossier' && shelfRow
 			? await loadDossier(
 					shelfRow,
-					locals.person ?? null,
 					Number(url.searchParams.get('year')) || Number(bannerToday().slice(0, 4)),
 					db,
 					bannerToday()
@@ -427,7 +412,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// Searching happens in SQL, not over the loaded array: the tiers are what
 	// make a name match outrank a mention on page forty.
 	const search = query
-		? await searchDocuments(query, locals.person, {
+		? await searchDocuments(query, {
 				includeArchived,
 				shelfKey: shelf === 'all' ? undefined : shelf
 			})
@@ -547,9 +532,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			ext: d.ext,
 			hasFile: d.storedName !== null,
 			note: d.note,
-			// Members never see this field carry `restricted`; the row they cannot
-			// see is not in `docs` at all.
-			restricted: d.sensitivity === 'restricted',
 			extraction: text
 				? {
 						complete: text.complete,
@@ -581,7 +563,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	return {
 		view,
-		tagsScreen: view === 'tags' ? await loadTagsScreen(locals.person ?? null) : null,
+		tagsScreen: view === 'tags' ? await loadTagsScreen() : null,
 		shelf,
 		query,
 		filters: { tags: tagFilters, type: typeFilter, entity: entityFilter },
@@ -633,13 +615,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				},
 		/** The three figures, chosen by the shelf's engine. */
 		tiles: shelfRow
-			? shelfTiles(engine!, await tileFactsFor(shelfRow, locals.person ?? null, dossier))
-			: archiveTiles(await archiveFacts(locals.person ?? null)),
+			? shelfTiles(engine!, await tileFactsFor(shelfRow, dossier))
+			: archiveTiles(await archiveFacts()),
 		/**
 		 * The organisations the household deals with, for the rail's third
 		 * section. Counted behind the same read rule as everything else here.
 		 */
-		organisations: await listOrganisations(db, locals.person ?? null),
+		organisations: await listOrganisations(db),
 		/**
 		 * What the lanes think should be filed, and where.
 		 *
@@ -647,10 +629,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		 * is edited or the document is filed by hand, and then the screen argues
 		 * with the archive.
 		 */
-		proposals:
-			view === 'shelf' && engine === 'dossier'
-				? await loadProposals(db, locals.person ?? null)
-				: [],
+		proposals: view === 'shelf' && engine === 'dossier' ? await loadProposals(db) : [],
 		/** The cards, or null when the centre column draws the list. */
 		dossier: view === 'shelf' ? dossier : null,
 		/** The Inbox's own queue, or null. */
@@ -738,8 +717,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					identityNumbers: await identityNumbersFor(selected.id),
 					links: targetsByDoc.get(selected.id) ?? [],
 					// Which lane on its card holds it, or null for history.
-					laneId: selected.laneId,
-					sensitivity: selected.sensitivity
+					laneId: selected.laneId
 				}
 			: null,
 		// Every tag the household has, so the tag field offers them rather than
@@ -802,11 +780,6 @@ export const actions: Actions = {
 			shelfId,
 			type: asDocumentType(form.get('type'), await documentTypeKeys()),
 			note: String(form.get('note') ?? '').trim() || null,
-			sensitivity: asEnumValue(
-				'document.sensitivity',
-				String(form.get('sensitivity') ?? 'normal'),
-				'normal'
-			),
 			addedOn: new Date().toISOString().slice(0, 10),
 			expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
 			expiryVerb: asEnumValue(
@@ -862,15 +835,15 @@ export const actions: Actions = {
 	},
 
 	/** The inspector's Save: metadata only, never the file. */
-	updateDocument: async ({ request, locals }) => {
+	updateDocument: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		// The read rule is a rule about the document, not about the list it was
-		// read from. An id posted straight at this action has been through no
-		// list at all, so the question is asked here before anything is written.
-		const readable = await assertVisibleDocument(id, locals.person ?? null);
-		if (!readable.ok) return fail(readable.status, { message: readable.message });
+		// Existence is a fact about the document, not about the list it was read
+		// from. An id posted straight at this action has been through no list at
+		// all, so the question is asked here before anything is written.
+		const present = await assertDocumentExists(id);
+		if (!present.ok) return fail(present.status, { message: present.message });
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		let shelfId: string | undefined;
@@ -917,18 +890,7 @@ export const actions: Actions = {
 						String(form.get('expiryVerb') ?? 'expires'),
 						'expires'
 					),
-					...period,
-					// Only an admin can restrict, and only an admin can unrestrict:
-					// a member's form has no such field and must not be able to send one.
-					...(locals.person?.role === 'admin'
-						? {
-								sensitivity: asEnumValue(
-									'document.sensitivity',
-									String(form.get('sensitivity') ?? 'normal'),
-									'normal'
-								)
-							}
-						: {})
+					...period
 				})
 				.where(eq(document.id, id));
 
@@ -999,7 +961,7 @@ export const actions: Actions = {
 	},
 
 	/** Put different bytes behind the same record. */
-	replaceFile: async ({ request, locals }) => {
+	replaceFile: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		const file = form.get('file');
@@ -1007,11 +969,10 @@ export const actions: Actions = {
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { message: 'Choose a file to put in its place.' });
 		}
-		// Before the upload is saved, not after: this is the sharpest of the
-		// actions — different bytes behind a record somebody cannot see — and a
-		// refusal that had already written a file would leave litter behind it.
-		const readable = await assertVisibleDocument(id, locals.person ?? null);
-		if (!readable.ok) return fail(readable.status, { message: readable.message });
+		// Before the upload is saved, not after: a refusal that had already
+		// written a file would leave litter behind it.
+		const present = await assertDocumentExists(id);
+		if (!present.ok) return fail(present.status, { message: present.message });
 		// `replaceDocumentFile` hashes the bytes itself (it needs them for the
 		// document's contentHash), so this can't hand off to `saveUploadAndHash`
 		// the way the other actions do — but the read still belongs inside the
@@ -1044,14 +1005,13 @@ export const actions: Actions = {
 	},
 
 	/** The next slice of a file that stopped at the automatic limit. */
-	continueExtraction: async ({ request, locals }) => {
+	continueExtraction: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		// Reading more of a document is a read, and the queue would put its text
-		// where search can find it.
-		const readable = await assertVisibleDocument(id, locals.person ?? null);
-		if (!readable.ok) return fail(readable.status, { message: readable.message });
+		// A document that is not there has no more of itself to read.
+		const present = await assertDocumentExists(id);
+		if (!present.ok) return fail(present.status, { message: present.message });
 		await enqueueExtraction(id);
 		void runCpuQueue().catch(() => undefined);
 		return { ok: true };
@@ -1061,27 +1021,26 @@ export const actions: Actions = {
 	 * Remove a document from the household: the record, its links, the salary
 	 * month a payslip evidenced, and the file.
 	 */
-	deleteDocument: async ({ request, locals }) => {
+	deleteDocument: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
 		// Not `deleteDocument`: a payslip's salary entry has to be dealt with
-		// before the row goes, and the answer to a member naming restricted
-		// paper has to be the same as the answer to naming nothing at all.
-		const outcome = await removeDocument(id, locals.person);
+		// before the row goes.
+		const outcome = await removeDocument(id);
 		if (!outcome.ok) return fail(outcome.status, { id, message: outcome.message });
 		return { ok: true };
 	},
 
 	/** Bulk edits from the selection bar: additive for links and tags. */
-	bulkUpdate: async ({ request, locals }) => {
+	bulkUpdate: async ({ request }) => {
 		const form = await request.formData();
 		const selected = form.getAll('ids').map(String).filter(Boolean);
 		if (selected.length === 0) return fail(400, { message: 'Nothing was selected.' });
-		// Narrowed to what this person may act on, and the rest is simply not
-		// there. Refusing the whole bar over one id would say that id is special,
-		// which is the fact the read rule exists to keep quiet.
-		const ids = await visibleDocumentIds(selected, locals.person ?? null);
+		// Narrowed to the ids that are really there, and the rest is dropped.
+		// Refusing forty documents over one stale id is a louder answer than the
+		// question.
+		const ids = await existingDocumentIds(selected);
 		if (ids.length === 0) return fail(404, { message: NO_SUCH_DOCUMENT });
 
 		const shelfKey = String(form.get('shelf') ?? '');
@@ -1095,7 +1054,6 @@ export const actions: Actions = {
 		// would otherwise fall back to the truthy 'other' and turn "no type was
 		// selected" into "retype everything to Other".
 		const normalisedType = type ? asDocumentType(type, await documentTypeKeys()) : '';
-		const sensitivity = String(form.get('sensitivity') ?? '');
 		const addTags = await readTags(form);
 		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
 
@@ -1126,14 +1084,6 @@ export const actions: Actions = {
 			}
 			if (normalisedType && retype.length > 0) {
 				await tx.update(document).set({ type: normalisedType }).where(inArray(document.id, retype));
-			}
-			if (sensitivity && locals.person?.role === 'admin') {
-				await tx
-					.update(document)
-					.set({
-						sensitivity: asEnumValue('document.sensitivity', sensitivity, 'normal')
-					})
-					.where(inArray(document.id, ids));
 			}
 			if (linkIds.length > 0) {
 				await tx
@@ -1338,7 +1288,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	acceptProposal: async ({ request, locals }) => {
+	acceptProposal: async ({ request }) => {
 		const form = await request.formData();
 		const documentId = String(form.get('documentId') ?? '').trim();
 		const laneId = String(form.get('laneId') ?? '').trim();
@@ -1346,13 +1296,7 @@ export const actions: Actions = {
 		if (!documentId || !laneId || !organisationId) {
 			return fail(400, { message: 'Nothing to file.' });
 		}
-		const result = await acceptProposal(
-			documentId,
-			laneId,
-			organisationId,
-			locals.person ?? null,
-			db
-		);
+		const result = await acceptProposal(documentId, laneId, organisationId, db);
 		if (!result.ok) return fail(404, { message: result.message ?? NO_SUCH_DOCUMENT });
 		return { ok: true };
 	},
@@ -1433,8 +1377,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		const readable = await assertVisibleDocument(id, locals.person ?? null);
-		if (!readable.ok) return fail(readable.status, { message: readable.message });
+		const present = await assertDocumentExists(id);
+		if (!present.ok) return fail(present.status, { message: present.message });
 
 		let shelfId: string;
 		try {
@@ -1467,16 +1411,7 @@ export const actions: Actions = {
 							'document.expiry_verb',
 							String(form.get('expiryVerb') ?? 'expires'),
 							'expires'
-						),
-						...(locals.person?.role === 'admin'
-							? {
-									sensitivity: asEnumValue(
-										'document.sensitivity',
-										String(form.get('sensitivity') ?? 'normal'),
-										'normal'
-									)
-								}
-							: {})
+						)
 					})
 					.where(eq(document.id, id));
 

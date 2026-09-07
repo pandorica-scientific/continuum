@@ -17,7 +17,6 @@
 	// because artwork is picked by a fallback chain and would otherwise state
 	// its own key rather than the document's.
 	import EuMark from '$lib/components/EuMark.svelte';
-	import Icon from '$lib/components/Icon.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import Pill from '$lib/components/Pill.svelte';
 	import type { Hue } from '$lib/ui/hue';
@@ -27,11 +26,6 @@
 	import { expiryTreatment, readableDate, typeLabel } from '$lib/documents/view';
 	import { sectionsByPerson, type LayoutRow } from '$lib/documents/layouts';
 
-	// No `isAdmin`. The lock is drawn on `restricted` alone, exactly as the list
-	// row and the inspector draw it, because a member never receives a
-	// restricted row to begin with: `visibleDocumentPredicate` removes it in
-	// SQL, so `row.restricted` is only ever true for somebody allowed to know.
-	// A second rule here would be a second place for the first one to drift.
 	let {
 		rows,
 		people,
@@ -205,11 +199,6 @@
 								{/if}
 								<span class="kind" style:background={SUPPORT}>
 									<span class="name" style:color={INK}>{cardTitle(row)}</span>
-									{#if row.restricted}
-										<span class="lock" style:color={INK_QUIET}>
-											<Icon name="lock" size={11} label="Restricted — admins only" />
-										</span>
-									{/if}
 								</span>
 							</span>
 
@@ -418,9 +407,5 @@
 		line-height: 1.25;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-	}
-	.lock {
-		display: inline-flex;
-		flex: none;
 	}
 </style>

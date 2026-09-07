@@ -15,10 +15,10 @@
  * into something a person recognises — and every screen reads the description
  * rather than repeating it.
  *
- * The read rule is NOT restated here. `visibleDocumentPredicate` and
- * `archiveScopePredicate` are applied as SQL fragments in the one query that
- * answers "what is filed against this record", because a rule that is
- * re-implemented per screen is a rule that will differ per screen.
+ * The archive rule is NOT restated here. `archiveScopePredicate` is applied as
+ * an SQL fragment in the one query that answers "what is filed against this
+ * record", because a rule that is re-implemented per screen is a rule that
+ * will differ per screen.
  */
 
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
@@ -44,13 +44,7 @@ import {
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
-import {
-	archiveScopePredicate,
-	assertVisibleDocument,
-	visibleDocumentPredicate,
-	NO_SUCH_DOCUMENT,
-	type Actor
-} from './visibility';
+import { archiveScopePredicate, assertDocumentExists, NO_SUCH_DOCUMENT } from './visibility';
 
 /**
  * Every kind of record a document can be filed against.
@@ -119,13 +113,7 @@ interface TargetKindSpec {
 	load(handle?: Queryable, ids?: readonly string[]): Promise<TargetRow[]>;
 }
 
-/**
- * What a card shows for one piece of filed paper.
- *
- * `sensitivity` rides along so an admin's card can draw the lock. It is never
- * what hides a row: a member's query returns restricted paper not at all,
- * because the predicate runs in SQL.
- */
+/** What a card shows for one piece of filed paper. */
 export interface AboutDocument {
 	id: string;
 	name: string;
@@ -137,7 +125,6 @@ export interface AboutDocument {
 	expiresOn: string | null;
 	expiryVerb: EnumValue<'document.expiry_verb'>;
 	addedOn: string;
-	sensitivity: EnumValue<'document.sensitivity'>;
 	/**
 	 * The amber window this KIND of paper earns, or null for the default.
 	 *
@@ -422,8 +409,8 @@ async function homedOn(
 /**
  * The paper filed against one record — THE query behind every documents card.
  *
- * Both halves of the read rule are in the `where`, so a card on the loans
- * screen hides exactly what the Documents screen hides. Tags come back in a
+ * The archive rule is in the `where`, so a card on the loans screen demotes
+ * exactly what the Documents screen demotes. Tags come back in a
  * second query keyed by document rather than one query per row: a card with
  * eight documents on it should cost two round trips, not nine.
  *
@@ -434,7 +421,6 @@ async function homedOn(
  */
 export async function documentsAbout(
 	targetId: string,
-	actor: Actor | null,
 	handle: Queryable = db,
 	{ includeArchived = false }: { includeArchived?: boolean } = {}
 ): Promise<AboutDocument[]> {
@@ -452,20 +438,13 @@ export async function documentsAbout(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity,
 			reminderDays: documentType.reminderDays
 		})
 		.from(documentLink)
 		.innerJoin(document, eq(document.id, documentLink.documentId))
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		.innerJoin(documentType, eq(documentType.key, document.type))
-		.where(
-			and(
-				eq(documentLink.targetId, targetId),
-				visibleDocumentPredicate(actor),
-				archiveScopePredicate(includeArchived)
-			)
-		)
+		.where(and(eq(documentLink.targetId, targetId), archiveScopePredicate(includeArchived)))
 		.orderBy(document.name, document.id);
 
 	if (rows.length === 0) return [];
@@ -493,18 +472,14 @@ export async function documentsAbout(
 }
 
 /**
- * Whether this actor may know this document exists at all.
+ * Whether there is such a document at all.
  *
- * Through `assertVisibleDocument` rather than its own query: the same question
+ * Through `assertDocumentExists` rather than its own query: the same question
  * is asked by the Documents screen's write actions and by the inbox review,
  * and one answer means one place to change it.
  */
-async function isVisible(
-	documentId: string,
-	actor: Actor | null,
-	handle: Queryable
-): Promise<boolean> {
-	return (await assertVisibleDocument(documentId, actor, handle)).ok;
+async function documentExists(documentId: string, handle: Queryable): Promise<boolean> {
+	return (await assertDocumentExists(documentId, handle)).ok;
 }
 
 /**
@@ -527,9 +502,8 @@ async function isFileableTarget(targetId: string, handle: Queryable): Promise<bo
 /**
  * File an existing document against a record.
  *
- * Visibility-checked, which the transactions-only version it replaces was not:
- * a member holding a restricted document's id could otherwise attach it to a
- * record they can see and read it off the card afterwards.
+ * Existence-checked on both sides, which the transactions-only version it
+ * replaces was not: a link may not be written from an id that names nothing.
  *
  * Idempotent, because the link's primary key is the pair — attaching twice is
  * the same state rather than an error someone has to think about.
@@ -537,13 +511,12 @@ async function isFileableTarget(targetId: string, handle: Queryable): Promise<bo
 export async function attachDocument(
 	targetId: string,
 	documentId: string,
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<AttachmentResult> {
 	if (!(await isFileableTarget(targetId, handle))) {
 		return { ok: false, status: 404, message: NO_SUCH_RECORD };
 	}
-	if (!(await isVisible(documentId, actor, handle))) {
+	if (!(await documentExists(documentId, handle))) {
 		return { ok: false, status: 404, message: NO_SUCH_DOCUMENT };
 	}
 
@@ -556,8 +529,8 @@ export async function attachDocument(
  *
  * The document stays: it belongs to the household and is filed on its own
  * shelf, not to the row it happened to hang on. Deleting it here would destroy
- * evidence to undo a mis-click. Visibility-checked for the same reason as
- * attaching — a member must not be able to unfile paper they cannot see.
+ * evidence to undo a mis-click. Existence-checked for the same reason as
+ * attaching — an id that names nothing must not answer as though it worked.
  *
  * Same target-kind check as `attachDocument`, for the same reason: a missing
  * or unfileable target is a 404 here too, not silently a no-op delete.
@@ -565,13 +538,12 @@ export async function attachDocument(
 export async function detachDocument(
 	targetId: string,
 	documentId: string,
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<AttachmentResult> {
 	if (!(await isFileableTarget(targetId, handle))) {
 		return { ok: false, status: 404, message: NO_SUCH_RECORD };
 	}
-	if (!(await isVisible(documentId, actor, handle))) {
+	if (!(await documentExists(documentId, handle))) {
 		return { ok: false, status: 404, message: NO_SUCH_DOCUMENT };
 	}
 	await handle
@@ -582,15 +554,15 @@ export async function detachDocument(
 
 /**
  * What "Attach existing" may offer, for every one of several records at once:
- * visible, current, and not already linked to THAT record.
+ * current, and not already linked to THAT record.
  *
- * One query for the visible library and one for `document_link` restricted to
- * the given targets, with the not-yet-linked subtraction done in JS per
- * target — not a NOT EXISTS run once per record. A screen with N records
- * calling the single-record shape once each fetches the whole visible
- * library N times over; this fetches it once and reuses it, which is the
- * difference between a picker that renders for one record and a query that
- * scales with the size of the household's whole archive.
+ * One query for the library and one for `document_link` restricted to the
+ * given targets, with the not-yet-linked subtraction done in JS per target —
+ * not a NOT EXISTS run once per record. A screen with N records calling the
+ * single-record shape once each fetches the whole library N times over; this
+ * fetches it once and reuses it, which is the difference between a picker that
+ * renders for one record and a query that scales with the size of the
+ * household's whole archive.
  *
  * `targetIds` with nothing in it is nothing to ask: no query at all, the same
  * rule `loadTargetNames` follows for an empty id list.
@@ -598,16 +570,15 @@ export async function detachDocument(
  * Each target's kind is checked against the registry too — the same check
  * `attachDocument` has — in one batched query rather than one per target, so
  * a document offered by mistake as a target of itself gets an empty list
- * instead of the whole visible library.
+ * instead of the whole library.
  */
 export async function candidateDocumentsFor(
 	targetIds: readonly string[],
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<Map<string, CandidateDocument[]>> {
 	if (targetIds.length === 0) return new Map();
 
-	const [visible, links, kinds] = await Promise.all([
+	const [current, links, kinds] = await Promise.all([
 		handle
 			.select({
 				id: document.id,
@@ -617,7 +588,7 @@ export async function candidateDocumentsFor(
 			})
 			.from(document)
 			.innerJoin(shelf, eq(shelf.id, document.shelfId))
-			.where(and(visibleDocumentPredicate(actor), archiveScopePredicate(false)))
+			.where(archiveScopePredicate(false))
 			.orderBy(document.name, document.id),
 		handle
 			.select({ targetId: documentLink.targetId, documentId: documentLink.documentId })
@@ -640,13 +611,13 @@ export async function candidateDocumentsFor(
 		else linkedByTarget.set(link.targetId, new Set([link.documentId]));
 	}
 
-	// `visible` is already sorted by name; filtering it preserves that order
+	// `current` is already sorted by name; filtering it preserves that order
 	// rather than re-sorting per target.
 	return new Map(
 		targetIds.map((targetId) => {
 			if (!fileableTargetIds.has(targetId)) return [targetId, []] as const;
 			const linked = linkedByTarget.get(targetId);
-			const candidates = linked ? visible.filter((doc) => !linked.has(doc.id)) : visible;
+			const candidates = linked ? current.filter((doc) => !linked.has(doc.id)) : current;
 			return [targetId, candidates] as const;
 		})
 	);
@@ -660,9 +631,8 @@ export async function candidateDocumentsFor(
  */
 export async function candidateDocuments(
 	targetId: string,
-	actor: Actor | null,
 	handle: Queryable = db
 ): Promise<CandidateDocument[]> {
-	const byTarget = await candidateDocumentsFor([targetId], actor, handle);
+	const byTarget = await candidateDocumentsFor([targetId], handle);
 	return byTarget.get(targetId) ?? [];
 }

@@ -2,6 +2,40 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.5 — 2026-09-07
+
+> The scanner finds the page, keeps its colours, and hands you the corners when it is wrong.
+
+### ✨ Added
+
+- ✏️ **The edges can be corrected by hand** — "Edges wrong?" on the preview now leads to the photograph with four handles on it, so a crop the detector got wrong is dragged into place rather than abandoned; the grab targets are far larger than the dots they place, arrow keys nudge the selected corner, and "Whole photo" is one tap for when the answer is no crop at all
+
+### 🔧 Changed
+
+- ⚡ **The scanner downloads while you are taking the photograph** — OpenCV is 7.6 MB of WebAssembly and was fetched only once the photograph came back, so the whole download was a wait someone watched; it now starts the moment the camera app is opened and is usually ready before the photograph is
+- 📷 **The reading screen names its step** — "Reading photo…" now says what it is doing underneath, so the pause after a capture is accounted for rather than silent
+- 🖥️ **Docker Desktop shows the address you came in on** — on a Mac or Windows PC the announcer sits inside Docker Desktop's VM and cannot be heard, so the wizard and Settings › Self-hosting now list the name the browser actually used, then `localhost`, and leave out `continuum.local` and the VM's own addresses that never work there
+
+### 🔒 Security
+
+- 🔓 **Per-document visibility is gone, and everyone in a household sees everything** — a document could be marked restricted and was then absent for members: no row, no search hit, no count, no calendar event, no file; it is removed, along with the `sensitivity` column, the checkbox, the padlocks and the `actor` argument threaded through two dozen read paths to enforce it — on an instance where anyone who can reach the address signs in as anyone, hiding paper from a member while the administrator they could sign in as reads it was a lock on a door with no wall; the existence check those same paths performed is kept, so a write still cannot name a document that is not there
+
+### 🐛 Fixed
+
+- 📷 **Photographing a page on a phone no longer hangs on "Reading photo…"** — the capture cap limited a photo's WIDTH, so a portrait photograph never met it and an iPhone's ordinary 12 MP frame reached the pipeline whole at 48.8 MB, leaving too little memory for OpenCV to start; the cap is now on the longest side, which puts every orientation on the ~30 MB the pipeline was designed for
+- ✂️ **A photographed page is cropped again** — a photograph from the camera app went to the detector at its own full resolution, but every kernel in the detector is an absolute number of pixels sized for a frame about 640 across, so at 2400 the 9-pixel close could not seal the holes text punches in the page mask and no quad was found; the upload path now measures at the same known width the viewfinder's shutter uses and scales the corners back, which is both the crop and roughly six times less work
+- 🔦 **A dark document is found at all** — the detector split the picture on brightness and then assumed the object was the BRIGHT side, while its contrast measure scored an edge by how much lighter the inside was, so a black wallet, a dark passport cover or an ID card on a pale counter was not cropped badly, it was invisible: the mask came back as the floor with the object as a hole in it; every photograph is now read both ways round and the existing scorer picks the better, and contrast counts the size of the step across an edge rather than its direction
+- 🎨 **Colour mode keeps the colours it was given** — evening out the room's lighting was done with CLAHE, which equalises LOCAL contrast and so rewrote the relationship between light and dark everywhere and amplified sensor noise in the smooth areas a photograph is mostly made of; the lightness is now flat-fielded instead — the lamp's gradient divided out and nothing else touched — which on a colourful test frame corrects the lighting slightly better while keeping saturation intact and cutting noise by about two thirds
+- 💾 **Retaking one page no longer discards the whole document** — "Choose another file" on the preview handed control back to the screen that opened the scanner, which unmounted it and took every page scanned so far with it; a photograph you are not happy with is now retaken in place, and the pages behind it stay where they are
+- 🖼️ **The page you keep is not compressed twice at draft quality** — the kept frame is encoded once when you keep it and again when the PDF is written, and at the encoder's default both times the losses compounded into visible blocking on a laminated card; both passes now use a higher quality, while the throwaway preview keeps the fast default
+- ⏱️ **The scanner reports a runtime that will not start instead of waiting for it** — OpenCV aborts a heap it cannot get without ever calling back, so the wait had no end; it is now given thirty seconds and then says so, and the failure is no longer remembered against later attempts
+- 📷 **A scan that failed to render no longer sits on "Reading photo…" for good** — a failure in the render step used to leave the reading screen up with the error hidden beneath it; it now returns to the review screen and shows the message
+- ⚡ **Turning a photograph the right way up stopped branching per pixel** — the EXIF rotation ran an eight-way `switch` inside its inner loop and copied one colour channel at a time, 7.7 million times for a capped frame; the turn is worked out once as six coefficients and each pixel moves as a single 32-bit word
+
+### ⬆️ Upgrading
+
+- 🗑️ **An unused column may be dropped when convenient** — the server no longer reads `document.sensitivity` and an existing database is served correctly with it still present, so nothing has to be done; to be rid of it, run `alter table document drop column sensitivity;` against a backed-up copy
+
 ## 0.8.4 — 2026-09-06
 
 > The setup screen tells you what to type on the phone.

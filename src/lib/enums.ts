@@ -198,7 +198,6 @@ export const ENUMS = {
 	// v1 is two values and one rule: an admin sees both, a member sees `normal`
 	// and cannot infer the other from a count, a search hint or a calendar feed.
 	// Per-person ACLs are deferred; this column does not change if they arrive.
-	'document.sensitivity': ['normal', 'restricted'],
 
 	// How a chunk's text was obtained. Shown only under an admin disclosure —
 	// a person filing paper does not care that page 3 was recognised.
@@ -274,7 +273,6 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'import_profile', column: 'origin', enum: 'import_profile.origin' },
 	{ table: 'import_file', column: 'proof_class', enum: 'proof_class' },
 	{ table: 'rule', column: 'provenance', enum: 'rule.provenance' },
-	{ table: 'document', column: 'sensitivity', enum: 'document.sensitivity' },
 	{ table: 'document_text_chunk', column: 'source', enum: 'document_text_chunk.source' },
 	{ table: 'document', column: 'expiry_verb', enum: 'document.expiry_verb' },
 	{ table: 'document_identity', column: 'kind', enum: 'document_identity.kind' },

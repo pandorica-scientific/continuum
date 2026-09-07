@@ -74,7 +74,7 @@ async function dirFact(label: string, path: string): Promise<StorageFact> {
 	return { label, path, writable, size };
 }
 
-export async function serverStatus(): Promise<ServerStatus> {
+export async function serverStatus(browsing?: string): Promise<ServerStatus> {
 	let version = 'dev';
 	try {
 		const pkg = JSON.parse(await readFile('package.json', 'utf8')) as { version?: string };
@@ -104,7 +104,7 @@ export async function serverStatus(): Promise<ServerStatus> {
 		uptime: formatUptime(process.uptime()),
 		node: process.version,
 		storage,
-		addresses: await currentAddresses()
+		addresses: await currentAddresses(browsing)
 	};
 }
 

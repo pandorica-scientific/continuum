@@ -46,15 +46,12 @@ import {
  * that every kind in it can actually name a row, because a registry entry whose
  * name expression does not run is the same outage as a missing entry.
  *
- * The read rule is not re-tested from first principles (`archive-scope` and
- * `document-visibility` hold the truth tables); what is tested here is that
- * `documentsAbout` carries BOTH predicates rather than either.
+ * The archive rule is not re-tested from first principles (`archive-scope`
+ * holds the truth table); what is tested here is that `documentsAbout` carries
+ * it at all.
  */
 let harness: Harness;
 let testDb: TestDb;
-
-const asAdmin = { id: rowId('dt-admin'), role: 'admin' } as const;
-const asMember = { id: rowId('dt-member'), role: 'member' } as const;
 
 /** One row of every kind, so a name expression is exercised against real data. */
 const target = {
@@ -147,7 +144,6 @@ beforeEach(async () => {
 
 interface SeedOptions {
 	name: string;
-	sensitivity?: 'normal' | 'restricted';
 	links?: string[];
 	tags?: string[];
 }
@@ -159,7 +155,6 @@ async function seedDocument(options: SeedOptions): Promise<string> {
 		name: options.name,
 		shelfKey: 'inventory',
 		type: 'other',
-		sensitivity: options.sensitivity ?? 'normal',
 		storedName: `${id}.pdf`,
 		ext: 'PDF',
 		addedOn: '2026-01-01'
@@ -347,7 +342,7 @@ describe('the documents about a record', () => {
 		await seedDocument({ name: 'Passport', links: [target.person], tags: ['identity'] });
 		await seedDocument({ name: 'Birth certificate', links: [target.person] });
 
-		const docs = await documentsAbout(target.person, asAdmin, testDb);
+		const docs = await documentsAbout(target.person, testDb);
 		expect(docs.map((d) => d.name)).toEqual(['Birth certificate', 'Passport']);
 
 		const passport = docs.find((d) => d.name === 'Passport');
@@ -359,46 +354,18 @@ describe('the documents about a record', () => {
 		expect(passport?.addedOn).toBe('2026-01-01');
 		expect(passport?.expiresOn).toBeNull();
 		expect(passport?.expiryVerb).toBe('expires');
-		expect(passport?.sensitivity).toBe('normal');
 		expect(passport?.tags).toEqual(['identity']);
 		expect(docs.find((d) => d.name === 'Birth certificate')?.tags).toEqual([]);
-	});
-
-	it('hides a restricted document from a member and shows it to an admin', async () => {
-		await seedDocument({ name: 'Passport', links: [target.person] });
-		await seedDocument({
-			name: 'Divorce papers',
-			sensitivity: 'restricted',
-			links: [target.person]
-		});
-
-		const asSeenByMember = await documentsAbout(target.person, asMember, testDb);
-		expect(asSeenByMember.map((d) => d.name)).toEqual(['Passport']);
-
-		const asSeenByAdmin = await documentsAbout(target.person, asAdmin, testDb);
-		expect(asSeenByAdmin.map((d) => d.name)).toEqual(['Divorce papers', 'Passport']);
-		// The admin's card needs this to draw the lock; a member never receives
-		// the row at all, so the flag can never be the thing that hides it.
-		expect(asSeenByAdmin.find((d) => d.name === 'Divorce papers')?.sensitivity).toBe('restricted');
-	});
-
-	it('treats a null actor as a member', async () => {
-		await seedDocument({
-			name: 'Divorce papers',
-			sensitivity: 'restricted',
-			links: [target.person]
-		});
-		expect(await documentsAbout(target.person, null, testDb)).toEqual([]);
 	});
 
 	it('leaves out paper whose only subject is archived, unless asked for it', async () => {
 		await seedDocument({ name: 'Service book', links: [target.loan, archivedSubject] });
 		await seedDocument({ name: 'Loan agreement', links: [target.loan] });
 
-		const current = await documentsAbout(target.loan, asAdmin, testDb);
+		const current = await documentsAbout(target.loan, testDb);
 		expect(current.map((d) => d.name)).toEqual(['Loan agreement']);
 
-		const everything = await documentsAbout(target.loan, asAdmin, testDb, {
+		const everything = await documentsAbout(target.loan, testDb, {
 			includeArchived: true
 		});
 		expect(everything.map((d) => d.name)).toEqual(['Loan agreement', 'Service book']);
@@ -411,12 +378,12 @@ describe('the documents about a record', () => {
 			name: 'Insurance policy',
 			links: [target.loan, archivedSubject, target.subject]
 		});
-		const docs = await documentsAbout(target.loan, asAdmin, testDb);
+		const docs = await documentsAbout(target.loan, testDb);
 		expect(docs.map((d) => d.name)).toEqual(['Insurance policy']);
 	});
 
 	it('returns nothing for a record nothing is filed against', async () => {
-		expect(await documentsAbout(target.contact, asAdmin, testDb)).toEqual([]);
+		expect(await documentsAbout(target.contact, testDb)).toEqual([]);
 	});
 
 	it('breaks a name tie with the id, so the order does not depend on insertion order', async () => {
@@ -433,7 +400,6 @@ describe('the documents about a record', () => {
 				name: 'Same name',
 				shelfId,
 				type: 'other',
-				sensitivity: 'normal',
 				storedName: `${id}.pdf`,
 				ext: 'PDF',
 				addedOn: '2026-01-01'
@@ -441,7 +407,7 @@ describe('the documents about a record', () => {
 			await testDb.insert(documentLink).values({ documentId: id, targetId: target.person });
 		}
 
-		const docs = await documentsAbout(target.person, asAdmin, testDb);
+		const docs = await documentsAbout(target.person, testDb);
 		expect(docs.map((d) => d.id)).toEqual([idLow, idHigh]);
 	});
 
@@ -453,37 +419,28 @@ describe('the documents about a record', () => {
 		// `attachDocument`'s own check.
 		const other = await seedDocument({ name: 'Passport' });
 		await seedDocument({ name: 'Stray receipt', links: [other] });
-		expect(await documentsAbout(other, asAdmin, testDb)).toEqual([]);
+		expect(await documentsAbout(other, testDb)).toEqual([]);
 	});
 });
 
 describe('attaching a document to a record', () => {
-	it('attaches a visible document, and says so once whatever the repetition', async () => {
+	it('attaches a document, and says so once whatever the repetition', async () => {
 		const id = await seedDocument({ name: 'Loan agreement' });
-		expect(await attachDocument(target.loan, id, asMember, testDb)).toEqual({ ok: true });
-		expect(await attachDocument(target.loan, id, asMember, testDb)).toEqual({ ok: true });
+		expect(await attachDocument(target.loan, id, testDb)).toEqual({ ok: true });
+		expect(await attachDocument(target.loan, id, testDb)).toEqual({ ok: true });
 		expect(await linkedDocumentIds(target.loan)).toEqual([id]);
 	});
 
-	it('refuses a document the actor may not see, and does not say it exists', async () => {
-		const id = await seedDocument({ name: 'Divorce papers', sensitivity: 'restricted' });
-		const refused = await attachDocument(target.person, id, asMember, testDb);
-		expect(refused).toEqual({ ok: false, status: 404, message: 'That document is not there.' });
-		// The same answer a missing document gets, and no link written.
-		expect(await linkedDocumentIds(target.person)).toEqual([]);
-
-		expect(await attachDocument(target.person, id, asAdmin, testDb)).toEqual({ ok: true });
-	});
-
-	it('refuses a document that is not there at all, in the same words', async () => {
+	it('refuses a document that is not there at all, and writes no link', async () => {
 		const missing = rowId('dt-no-such-document');
-		const refused = await attachDocument(target.person, missing, asAdmin, testDb);
+		const refused = await attachDocument(target.person, missing, testDb);
 		expect(refused).toEqual({ ok: false, status: 404, message: 'That document is not there.' });
+		expect(await linkedDocumentIds(target.person)).toEqual([]);
 	});
 
 	it('refuses a record that is not there', async () => {
 		const id = await seedDocument({ name: 'Loan agreement' });
-		const refused = await attachDocument(rowId('dt-no-such-record'), id, asAdmin, testDb);
+		const refused = await attachDocument(rowId('dt-no-such-record'), id, testDb);
 		expect(refused.ok).toBe(false);
 		expect(refused).toMatchObject({ status: 404 });
 	});
@@ -493,14 +450,14 @@ describe('attaching a document to a record', () => {
 		// is what says a document is not a place to file paper.
 		const id = await seedDocument({ name: 'Loan agreement' });
 		const other = await seedDocument({ name: 'Passport' });
-		const refused = await attachDocument(other, id, asAdmin, testDb);
+		const refused = await attachDocument(other, id, testDb);
 		expect(refused.ok).toBe(false);
 		expect(await linkedDocumentIds(other)).toEqual([]);
 	});
 
 	it('detaches the link and keeps the document', async () => {
 		const id = await seedDocument({ name: 'Loan agreement', links: [target.loan, target.person] });
-		expect(await detachDocument(target.loan, id, asAdmin, testDb)).toEqual({ ok: true });
+		expect(await detachDocument(target.loan, id, testDb)).toEqual({ ok: true });
 		expect(await linkedDocumentIds(target.loan)).toEqual([]);
 		// The paper belongs to the household, not to the row it hung on.
 		expect(await linkedDocumentIds(target.person)).toEqual([id]);
@@ -508,20 +465,17 @@ describe('attaching a document to a record', () => {
 		expect(row).toBeDefined();
 	});
 
-	it('refuses to detach a document the actor may not see', async () => {
-		const id = await seedDocument({
-			name: 'Divorce papers',
-			sensitivity: 'restricted',
-			links: [target.person]
-		});
-		const refused = await detachDocument(target.person, id, asMember, testDb);
+	it('refuses to detach a document that is not there, and leaves the links alone', async () => {
+		const id = await seedDocument({ name: 'Loan agreement', links: [target.person] });
+		const missing = rowId('dt-no-such-document-detach');
+		const refused = await detachDocument(target.person, missing, testDb);
 		expect(refused).toEqual({ ok: false, status: 404, message: 'That document is not there.' });
 		expect(await linkedDocumentIds(target.person)).toEqual([id]);
 	});
 
 	it('refuses to detach from a record that is not there, like attaching does', async () => {
 		const id = await seedDocument({ name: 'Loan agreement' });
-		const refused = await detachDocument(rowId('dt-no-such-record'), id, asAdmin, testDb);
+		const refused = await detachDocument(rowId('dt-no-such-record'), id, testDb);
 		expect(refused).toEqual({ ok: false, status: 404, message: 'That record is not there.' });
 	});
 
@@ -530,7 +484,7 @@ describe('attaching a document to a record', () => {
 		// `links: [target]` inserts the row directly, the way a stray
 		// `document_link` could exist without ever going through `attachDocument`.
 		const other = await seedDocument({ name: 'Passport', links: [target] });
-		const refused = await detachDocument(other, target, asAdmin, testDb);
+		const refused = await detachDocument(other, target, testDb);
 		expect(refused).toEqual({ ok: false, status: 404, message: 'That record is not there.' });
 		// The stray link is left alone — this refuses the call, it does not clean
 		// up data on its way past.
@@ -539,42 +493,29 @@ describe('attaching a document to a record', () => {
 });
 
 describe('what is left to attach', () => {
-	it('offers visible documents that are not linked yet', async () => {
+	it('offers documents that are not linked yet', async () => {
 		const linked = await seedDocument({ name: 'Loan agreement', links: [target.loan] });
 		await seedDocument({ name: 'Amortisation letter' });
 		await seedDocument({ name: 'Passport' });
 
-		const candidates = await candidateDocuments(target.loan, asAdmin, testDb);
+		const candidates = await candidateDocuments(target.loan, testDb);
 		expect(candidates.map((c) => c.name)).toEqual(['Amortisation letter', 'Passport']);
 		expect(candidates.some((c) => c.id === linked)).toBe(false);
 		expect(candidates[0]).toMatchObject({ ext: 'PDF' });
 		expect(candidates[0].shelfLabel).toBeTruthy();
 	});
 
-	it('never offers a member a document they may not see', async () => {
-		await seedDocument({ name: 'Divorce papers', sensitivity: 'restricted' });
-		await seedDocument({ name: 'Loan agreement' });
-
-		expect((await candidateDocuments(target.loan, asMember, testDb)).map((c) => c.name)).toEqual([
-			'Loan agreement'
-		]);
-		expect((await candidateDocuments(target.loan, asAdmin, testDb)).map((c) => c.name)).toEqual([
-			'Divorce papers',
-			'Loan agreement'
-		]);
-	});
-
 	it('leaves archived paper out of the offer', async () => {
 		await seedDocument({ name: 'Service book', links: [archivedSubject] });
 		await seedDocument({ name: 'Loan agreement' });
-		expect((await candidateDocuments(target.loan, asAdmin, testDb)).map((c) => c.name)).toEqual([
+		expect((await candidateDocuments(target.loan, testDb)).map((c) => c.name)).toEqual([
 			'Loan agreement'
 		]);
 	});
 
-	it('offers nothing when everything visible is already attached', async () => {
+	it('offers nothing when everything is already attached', async () => {
 		await seedDocument({ name: 'Loan agreement', links: [target.loan] });
-		expect(await candidateDocuments(target.loan, asAdmin, testDb)).toEqual([]);
+		expect(await candidateDocuments(target.loan, testDb)).toEqual([]);
 	});
 
 	it('breaks a name tie with the id in the candidate list too', async () => {
@@ -587,29 +528,28 @@ describe('what is left to attach', () => {
 				name: 'Same name',
 				shelfId,
 				type: 'other',
-				sensitivity: 'normal',
 				storedName: `${id}.pdf`,
 				ext: 'PDF',
 				addedOn: '2026-01-01'
 			});
 		}
 
-		const candidates = await candidateDocuments(target.loan, asAdmin, testDb);
+		const candidates = await candidateDocuments(target.loan, testDb);
 		expect(candidates.map((c) => c.id)).toEqual([idLow, idHigh]);
 	});
 
 	it('never offers a document as a place to file another document against', async () => {
 		// Without the registry check, a document's own id passes every other test
 		// this function runs (no links target it, so nothing looks "attached")
-		// and the whole visible library comes back as though it were a real record.
+		// and the whole library comes back as though it were a real record.
 		const other = await seedDocument({ name: 'Passport' });
 		await seedDocument({ name: 'Loan agreement' });
-		expect(await candidateDocuments(other, asAdmin, testDb)).toEqual([]);
+		expect(await candidateDocuments(other, testDb)).toEqual([]);
 	});
 });
 
 /**
- * The fix for a picker that fetched the whole visible library once PER RECORD:
+ * The fix for a picker that fetched the whole library once PER RECORD:
  * a screen with N records now runs one document query and one `document_link`
  * query for however many targets it asks about, and does the per-target
  * subtraction in JS. `candidateDocuments(targetId, …)` is a thin wrapper over
@@ -621,7 +561,7 @@ describe('candidateDocumentsFor, batched across several records', () => {
 		const forContact = await seedDocument({ name: 'Business card', links: [target.contact] });
 		const forNeither = await seedDocument({ name: 'Passport' });
 
-		const byTarget = await candidateDocumentsFor([target.loan, target.contact], asAdmin, testDb);
+		const byTarget = await candidateDocumentsFor([target.loan, target.contact], testDb);
 
 		const loanCandidates = byTarget.get(target.loan)?.map((c) => c.id) ?? [];
 		expect(loanCandidates).toContain(forContact);
@@ -639,39 +579,30 @@ describe('candidateDocumentsFor, batched across several records', () => {
 		await seedDocument({ name: 'Loan agreement', links: [target.loan] });
 
 		const [single, batched] = await Promise.all([
-			candidateDocuments(target.loan, asAdmin, testDb),
-			candidateDocumentsFor([target.loan], asAdmin, testDb)
+			candidateDocuments(target.loan, testDb),
+			candidateDocumentsFor([target.loan], testDb)
 		]);
 		expect(batched.get(target.loan)?.map((c) => c.id)).toEqual(single.map((c) => c.id));
-	});
-
-	it('never offers a member a restricted document through the batched path either', async () => {
-		await seedDocument({ name: 'Divorce papers', sensitivity: 'restricted' });
-		await seedDocument({ name: 'Loan agreement' });
-
-		const byTarget = await candidateDocumentsFor([target.loan, target.contact], asMember, testDb);
-		expect(byTarget.get(target.loan)?.map((c) => c.name)).toEqual(['Loan agreement']);
-		expect(byTarget.get(target.contact)?.map((c) => c.name)).toEqual(['Loan agreement']);
 	});
 
 	it('leaves archived paper out of every target it batches for', async () => {
 		await seedDocument({ name: 'Service book', links: [archivedSubject] });
 		await seedDocument({ name: 'Loan agreement' });
 
-		const byTarget = await candidateDocumentsFor([target.loan, target.contact], asAdmin, testDb);
+		const byTarget = await candidateDocumentsFor([target.loan, target.contact], testDb);
 		expect(byTarget.get(target.loan)?.map((c) => c.name)).toEqual(['Loan agreement']);
 		expect(byTarget.get(target.contact)?.map((c) => c.name)).toEqual(['Loan agreement']);
 	});
 
 	it('returns an empty map for an empty list of targets, with no query at all', async () => {
-		expect(await candidateDocumentsFor([], asAdmin, testDb)).toEqual(new Map());
+		expect(await candidateDocumentsFor([], testDb)).toEqual(new Map());
 	});
 
 	it('excludes a batched target that is not a fileable kind, without affecting the others', async () => {
 		const other = await seedDocument({ name: 'Passport' });
 		const forLoan = await seedDocument({ name: 'Loan agreement' });
 
-		const byTarget = await candidateDocumentsFor([target.loan, other], asAdmin, testDb);
+		const byTarget = await candidateDocumentsFor([target.loan, other], testDb);
 		// `other` (the Passport document) is a perfectly normal candidate to
 		// attach to the loan; what is rejected is offering candidates AS IF
 		// `other` were itself a valid place to file paper.

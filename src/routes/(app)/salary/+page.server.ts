@@ -53,7 +53,7 @@ function serialiseYear(y: SalaryYear) {
 	};
 }
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ url }) => {
 	const [baseCurrency, rates, currencies] = await Promise.all([
 		getBaseCurrency(),
 		loadRateTable(),
@@ -64,7 +64,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	// Who is asking travels into the query. A member gets every month and every
 	// figure; the slips they may not see arrive with no file behind them.
-	const history = await loadSalaryHistory(baseCurrency, convert, locals.person ?? null);
+	const history = await loadSalaryHistory(baseCurrency, convert);
 
 	// The household series, computed here rather than in the screen: merging
 	// TOTALS is the only honest way to it, and doing that in markup invites the
@@ -515,7 +515,7 @@ export const actions: Actions = {
 				// against it, so this is a rollback rather than a deletion — but it
 				// goes through the same removal as any other, because a
 				// half-successful re-upload could have left a row behind.
-				await removeDocument(documentId, locals.person);
+				await removeDocument(documentId);
 				skipped.push({ name: file.name, reason: recorded.message.toLowerCase() });
 				continue;
 			}
@@ -685,7 +685,7 @@ export const actions: Actions = {
 	 * A statement with no document is a bank credit or a hand-typed figure and
 	 * has no paper to remove, so that one is deleted here.
 	 */
-	deletePayslip: async ({ request, locals }) => {
+	deletePayslip: async ({ request }) => {
 		const form = await request.formData();
 		const found = await entryWithOwner(asRowId(form.get('entryId')));
 		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
@@ -695,7 +695,7 @@ export const actions: Actions = {
 			// This ONE statement of the month, and the file it was read from. A
 			// month worked twice keeps its other job: the removal is keyed to the
 			// document, and deleting by month took both.
-			const outcome = await removeDocument(entry.documentId, locals.person);
+			const outcome = await removeDocument(entry.documentId);
 			if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 			return { ok: true };
 		}

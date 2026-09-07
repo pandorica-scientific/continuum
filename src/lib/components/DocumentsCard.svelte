@@ -10,13 +10,10 @@
 	// this is the only one — the property card's markup, which was the best of
 	// them, with the rules it was missing.
 	//
-	// It renders what it is handed and posts what it is asked to. The read rule
-	// is not here and must not be: `documentsAbout` applies it in SQL, so a row
-	// this card never receives is a row no member can learn exists. `isAdmin`
-	// only draws the lock; it hides nothing.
+	// It renders what it is handed and posts what it is asked to. The archive
+	// scope is not here and must not be: `documentsAbout` applies it in SQL.
 	import { enhance } from '$app/forms';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
-	import Icon from '$lib/components/Icon.svelte';
 	import {
 		documentExpiryTone,
 		expiryTreatment,
@@ -42,11 +39,10 @@
 		attach,
 		detachAction,
 		confirmDetach = false,
-		isAdmin = false,
 		heading = 'Documents',
 		bare = false
 	}: {
-		/** From `documentsAbout(target.id, actor)` — already filtered by the read rule. */
+		/** From `documentsAbout(target.id)` — already filtered by the read rule. */
 		documents: AboutDocument[];
 		/** The record this card belongs to. `label` is what the person calls it. */
 		target: { id: string; kind: DocumentTargetKind; label: string };
@@ -55,7 +51,7 @@
 		/** Capture prefill: `/documents?add=1&addShelfKey=…&targetKind=…&targetId=…`. */
 		addHref?: string;
 		addLabel?: string;
-		/** From `candidateDocuments(target.id, actor)`; the picker hides when empty. */
+		/** From `candidateDocuments(target.id)`; the picker hides when empty. */
 		attach?: { action: string; candidates: CandidateDocument[] };
 		detachAction?: string;
 		/**
@@ -69,8 +65,6 @@
 		 * card asks for a second tap first.
 		 */
 		confirmDetach?: boolean;
-		/** Draws the lock on restricted rows. Never what decides which rows exist. */
-		isAdmin?: boolean;
 		heading?: string;
 		/**
 		 * Drop the `.card` wrapper and its padding, for a screen where this card
@@ -145,11 +139,6 @@
 						>
 					{:else}
 						<span class="name-text">{d.name}</span>
-					{/if}
-					{#if isAdmin && d.sensitivity === 'restricted'}
-						<!-- Quiet, and admins only: restricted is an access state, not a
-						     warning. A member never sees the row to begin with. -->
-						<span class="lock"><Icon name="lock" size={13} label="Restricted" /></span>
 					{/if}
 				</span>
 				<span
@@ -263,11 +252,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.lock {
-		flex: none;
-		color: var(--fg3);
-		display: inline-flex;
 	}
 	.doc-meta {
 		font-size: var(--text-xs);

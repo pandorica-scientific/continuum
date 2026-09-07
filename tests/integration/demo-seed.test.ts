@@ -23,7 +23,7 @@ import { loadQueue } from '$lib/server/documents/queue-load';
 import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import {
 	account,
 	document,
@@ -48,7 +48,6 @@ import { listSubjects } from '$lib/server/documents/subjects';
 import { documentsAbout } from '$lib/server/documents/targets';
 import { listOrganisations } from '$lib/server/organisations/mutations';
 import { engagementSpan, engagementsFor } from '$lib/server/organisations/engagements';
-import { visibleDocumentPredicate } from '$lib/server/documents/visibility';
 import { hashBytes, readUpload } from '$lib/server/system/files';
 import { seedDemo } from '$lib/server/system/demo';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
@@ -78,9 +77,6 @@ let previousUploadDir: string | undefined;
 let uploadDir: string;
 /** The environment the SEED read, snapshotted before the assertions read more. */
 let seedEnvReads: Set<string>;
-
-const asAdmin = { id: 'a', role: 'admin' as const };
-const asMember = { id: 'm', role: 'member' as const };
 
 const today = new Date().toISOString().slice(0, 10);
 const thisYear = Number(today.slice(0, 4));
@@ -301,7 +297,7 @@ describe('the demo seed', () => {
 	it('files every payslip against that employer', async () => {
 		const orgs = await listOrganisations(testDb);
 		const employer = orgs.find((o) => o.kind === 'employer')!;
-		const filed = await documentsAbout(employer.id, null, testDb);
+		const filed = await documentsAbout(employer.id, testDb);
 		expect(filed.filter((d) => d.type === 'payslip')).toHaveLength(12);
 	});
 
@@ -370,35 +366,16 @@ describe('the demo seed', () => {
 		}
 	});
 
-	it('leaves one of the two identity documents visible to everyone', async () => {
-		// A wallet worth looking at holds more than one card, and a member who
-		// sees an empty Identity shelf learns nothing about what it is for.
+	it('files two identity documents, so the wallet holds more than one card', async () => {
+		// A wallet worth looking at holds more than one card, and an empty
+		// Identity shelf says nothing about what it is for.
 		const docs = await seededDocuments();
 		const identity = docs.filter((d) => d.type === 'id_document');
 		expect(identity).toHaveLength(2);
-		expect(identity.filter((d) => d.sensitivity === 'normal')).toHaveLength(1);
-	});
-
-	it('files exactly one restricted document, which a member cannot see', async () => {
-		const docs = await seededDocuments();
-		const restricted = docs.filter((d) => d.sensitivity === 'restricted');
-		expect(restricted).toHaveLength(1);
-		expect(restricted[0].type).toBe('id_document');
-
-		const forMember = await testDb
-			.select({ id: document.id })
-			.from(document)
-			.where(and(eq(document.id, restricted[0].id), visibleDocumentPredicate(asMember)));
-		expect(forMember).toHaveLength(0);
-		const forAdmin = await testDb
-			.select({ id: document.id })
-			.from(document)
-			.where(and(eq(document.id, restricted[0].id), visibleDocumentPredicate(asAdmin)));
-		expect(forAdmin).toHaveLength(1);
 	});
 
 	it('seeds an archived Car holding past-dated paper, and a Dog holding current paper', async () => {
-		const subjects = await listSubjects(testDb, asAdmin);
+		const subjects = await listSubjects(testDb);
 		const car = subjects.find((s) => s.name === 'Car');
 		const dog = subjects.find((s) => s.name === 'Dog');
 		expect(car).toBeDefined();
@@ -504,7 +481,7 @@ describe('the demo seed', () => {
 		const shelves = await listShelves(testDb);
 		const shelfBy = (key: string) => shelves.find((s) => s.key === key)!;
 
-		const vehicles = await loadDossier(shelfBy('vehicles'), asAdmin, thisYear, testDb, today);
+		const vehicles = await loadDossier(shelfBy('vehicles'), thisYear, testDb, today);
 		const octavia = vehicles.cards.find((c) => c.name.includes('Octavia'))!;
 		expect(octavia).toBeDefined();
 		expect(octavia.lanes.find((l) => l.label === 'Road tax')!.gaps).toBeGreaterThan(0);
@@ -514,19 +491,19 @@ describe('the demo seed', () => {
 		// A card with nothing on it is a finding too, and the stack has to show one.
 		expect(vehicles.cards.some((c) => c.name.includes('PCX'))).toBe(true);
 
-		const inventory = await loadDossier(shelfBy('inventory'), asAdmin, thisYear, testDb, today);
+		const inventory = await loadDossier(shelfBy('inventory'), thisYear, testDb, today);
 		const boiler = inventory.cards.find((c) => c.name.startsWith('Boiler'))!;
 		expect(boiler.lanes.find((l) => l.label === 'Manual')!.cells[0].state).toBe('gap');
 		expect(boiler.lanes.find((l) => l.label === 'Receipt')!.cells[0].state).toBe('filed');
 
-		const property = await loadDossier(shelfBy('property'), asAdmin, thisYear, testDb, today);
+		const property = await loadDossier(shelfBy('property'), thisYear, testDb, today);
 		expect(
 			property.cards.some((c) => c.lanes.some((l) => l.label === 'Boiler inspection' && l.gaps > 0))
 		).toBe(true);
 
 		// Every person has a card on a person shelf, whether or not anything is
 		// filed against them: the member with no record is the finding.
-		const health = await loadDossier(shelfBy('health'), asAdmin, thisYear, testDb, today);
+		const health = await loadDossier(shelfBy('health'), thisYear, testDb, today);
 		expect(health.cards.filter((c) => c.id !== null).length).toBeGreaterThanOrEqual(2);
 	});
 
@@ -536,7 +513,6 @@ describe('the demo seed', () => {
 		const shelves = await listShelves(testDb);
 		const incomeTax = await loadDossier(
 			shelves.find((s) => s.key === 'income_tax')!,
-			asAdmin,
 			thisYear,
 			testDb,
 			today
@@ -548,7 +524,7 @@ describe('the demo seed', () => {
 	});
 
 	it('leaves paper in the Inbox for the queue to have something to do', async () => {
-		const queue = await loadQueue(asAdmin, testDb, today);
+		const queue = await loadQueue(testDb, today);
 		expect(queue.waiting.length).toBeGreaterThan(0);
 		expect(queue.current).toBe(queue.waiting[0].id);
 		// Every shelf but the Inbox is offered to file onto.
@@ -582,7 +558,7 @@ describe('the demo seed', () => {
 		expect(pets!.unit).toBe('subject');
 		expect(pets!.system).toBe(false);
 
-		const drawn = await loadDossier(pets!, asAdmin, thisYear, testDb, today);
+		const drawn = await loadDossier(pets!, thisYear, testDb, today);
 		const dog = drawn.cards.find((c) => c.name === 'Dog')!;
 		expect(dog).toBeDefined();
 		expect(dog.history.length).toBeGreaterThan(0);

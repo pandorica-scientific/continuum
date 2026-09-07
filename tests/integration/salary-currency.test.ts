@@ -163,7 +163,7 @@ describe('which currency a slip row is read in', () => {
 	 */
 	it('reports a slip as it was recorded, not converted to the base', async () => {
 		await czechSlip('2026-01', rowId('doc-jan'));
-		const [robert] = await loadSalaryHistory('EUR', convert, null, testDb);
+		const [robert] = await loadSalaryHistory('EUR', convert, testDb);
 		expect(robert.payslips).toHaveLength(1);
 		expect(robert.payslips[0].currency).toBe('CZK');
 		expect(robert.payslips[0].grossMinor).toBe(13588700n);
@@ -174,7 +174,7 @@ describe('which currency a slip row is read in', () => {
 	// across currencies, so those stay converted.
 	it('still converts the year rows to the base currency', async () => {
 		await czechSlip('2026-02', rowId('doc-feb'));
-		const [robert] = await loadSalaryHistory('EUR', convert, null, testDb);
+		const [robert] = await loadSalaryHistory('EUR', convert, testDb);
 		expect(robert.years[0].grossTotalMinor).toBe(13588700n / 25n);
 	});
 });

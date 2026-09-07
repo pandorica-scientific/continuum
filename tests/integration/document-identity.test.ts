@@ -33,13 +33,11 @@ const DIRECTORY = resolve('scratch-workspace/document-identity-uploads');
 
 const ROBERT = rowId('person-robert');
 const PASSPORT = rowId('doc-passport');
-const RESTRICTED = rowId('doc-restricted-id');
+/** An id of the right shape that names nothing at all. */
+const MISSING = rowId('doc-missing');
 
 const asAdmin = {
 	person: { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' as const, theme: null }
-};
-const asMember = {
-	person: { id: ROBERT, name: 'Robert', initials: 'R', role: 'member' as const, theme: null }
 };
 
 beforeAll(async () => {
@@ -65,28 +63,22 @@ afterAll(async () => {
 beforeEach(async () => {
 	await harness.sql`truncate document, person cascade`;
 	await makePerson(testDb, { id: ROBERT, name: 'Robert', initials: 'R', role: 'admin' });
-	for (const [id, sensitivity] of [
-		[PASSPORT, 'normal'],
-		[RESTRICTED, 'restricted']
-	] as const) {
-		await makeDocument(testDb, {
-			id,
-			name: 'Passport',
-			shelfId: await shelfIdByKey('identity', testDb),
-			type: 'id_document',
-			storedName: `${id}.pdf`,
-			ext: 'PDF',
-			addedOn: '2026-08-01',
-			sensitivity
-		});
-	}
+	await makeDocument(testDb, {
+		id: PASSPORT,
+		name: 'Passport',
+		shelfId: await shelfIdByKey('identity', testDb),
+		type: 'id_document',
+		storedName: `${PASSPORT}.pdf`,
+		ext: 'PDF',
+		addedOn: '2026-08-01'
+	});
 });
 
 type ActionResult = { status?: number; data?: { message?: string }; ok?: boolean };
 
 async function save(
 	fields: Record<string, string | string[]>,
-	locals: typeof asAdmin | typeof asMember = asAdmin
+	locals: typeof asAdmin = asAdmin
 ): Promise<ActionResult> {
 	const { actions } = await import('../../src/routes/(app)/documents/+page.server');
 	const form = new FormData();
@@ -191,13 +183,13 @@ describe('a document that stops being an identity document', () => {
 	});
 });
 
-describe('the read rule', () => {
-	it('refuses a member the document it cannot see, and writes nothing', async () => {
-		const result = await save({ ...PASSPORT_FIELDS, id: RESTRICTED }, asMember);
+describe('the existence guard', () => {
+	it('refuses an id that names no document, and writes nothing', async () => {
+		const result = await save({ ...PASSPORT_FIELDS, id: MISSING });
 
 		expect(result.status).toBe(404);
 		expect(result.data?.message).toBe(NO_SUCH_DOCUMENT);
-		expect(await identityOf(RESTRICTED)).toBeUndefined();
+		expect(await identityOf(MISSING)).toBeUndefined();
 	});
 });
 

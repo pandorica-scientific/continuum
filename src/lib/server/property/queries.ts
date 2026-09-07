@@ -11,7 +11,6 @@ import {
 	tag,
 	tenancy
 } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 
 /**
  * Every property, in a stable order.
@@ -36,13 +35,12 @@ export function listProperties(handle: Db = db) {
  *
  * Here rather than in `+page.server.ts` because it is a domain read. The route
  * built eleven selects of its own beside this module, which is how a screen
- * becomes the second place that knows how a property is stored — and how the
- * read rule on the document half comes to be applied by whoever remembers.
+ * becomes the second place that knows how a property is stored.
  *
  * What it returns is rows. Turning them into cards, allocations and pills is
  * presentation and stays with the markup.
  */
-export async function readPropertyScreen(actor: Actor | null, handle: Db = db) {
+export async function readPropertyScreen(handle: Db = db) {
 	const [properties, tenancies, bills, loans, periods, links, docs, allTags] = await Promise.all([
 		listProperties(handle),
 		handle.select().from(tenancy),
@@ -50,12 +48,10 @@ export async function readPropertyScreen(actor: Actor | null, handle: Db = db) {
 		handle.select().from(loan),
 		handle.select().from(loanFixationPeriod),
 		handle.select().from(loanProperty),
-		// Only what a BILL's row needs — whether the file behind it is one this
-		// actor may open at all. The documents card is loaded by `documentsAbout`,
-		// which is where the shelf label and the read rule both come from.
-		// Restricted here too: a bill's scan is paper like any other, so a member
-		// sees the amount with no paperclip behind it.
-		handle.select({ id: document.id }).from(document).where(visibleDocumentPredicate(actor)),
+		// Only what a BILL's row needs — whether there is a file behind it at
+		// all. The documents card is loaded by `documentsAbout`, which is where
+		// the shelf label comes from.
+		handle.select({ id: document.id }).from(document),
 		// For the tag field's suggestion list, the same way the Loans screen offers
 		// its own known tags: typing "Renovation" here and "renovation" there
 		// should land on the one tag, not two differently-cased ones.

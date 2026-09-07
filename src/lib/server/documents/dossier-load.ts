@@ -32,7 +32,6 @@ import {
 	shelf,
 	subject
 } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from './visibility';
 import {
 	monthlyCells,
 	onceCell,
@@ -183,11 +182,10 @@ async function cardsFor(shelfRow: ShelfRow, handle: Queryable): Promise<CardReco
 	}
 }
 
-/** Every document on the shelf the viewer may see, with the card it names. */
+/** Every document on the shelf, with the card it names. */
 async function shelfDocuments(
 	shelfRow: ShelfRow,
 	cardIds: string[],
-	actor: Actor | null,
 	handle: Queryable
 ): Promise<{ byCard: Map<string, CardDocument[]>; loose: CardDocument[] }> {
 	const rows = await handle
@@ -206,7 +204,7 @@ async function shelfDocuments(
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		.innerJoin(documentType, eq(documentType.key, document.type))
-		.where(and(eq(shelf.id, shelfRow.id), visibleDocumentPredicate(actor)));
+		.where(eq(shelf.id, shelfRow.id));
 
 	// Which card each document names. One pass rather than a query per card: a
 	// shelf with forty cards must not cost forty round trips to draw.
@@ -351,7 +349,6 @@ function buildLane(
  */
 export async function loadDossier(
 	shelfRow: ShelfRow,
-	actor: Actor | null,
 	year: number,
 	handle: Queryable = db,
 	today: string = new Date().toISOString().slice(0, 10)
@@ -360,7 +357,6 @@ export async function loadDossier(
 	const { byCard, loose } = await shelfDocuments(
 		shelfRow,
 		records.map((r) => r.id),
-		actor,
 		handle
 	);
 	const { historyOrder } = templateDefaults(shelfRow.template);

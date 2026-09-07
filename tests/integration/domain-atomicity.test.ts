@@ -874,8 +874,7 @@ describe('domain replacement writes', () => {
 			taxPaidMinor: 2000n,
 			note: null,
 			attachments: [],
-			linkDocumentIds: [],
-			actor: null
+			linkDocumentIds: []
 		};
 		await saveStatement(
 			{ ...base, grossIncomeMinor: 10000n, lines: [{ label: 'Original', amountMinor: 500n }] },
@@ -930,8 +929,7 @@ describe('domain replacement writes', () => {
 					{ storedName: 'aaaa.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'statement' },
 					{ storedName: 'bbbb.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'broker' }
 				],
-				linkDocumentIds: [],
-				actor: null
+				linkDocumentIds: []
 			},
 			testDb
 		);
@@ -976,8 +974,7 @@ describe('domain replacement writes', () => {
 						{ storedName: 'cccc.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'statement' },
 						{ storedName: 'dddd.pdf', ext: 'PDF', addedOn: '2026-08-23', kind: 'broker' }
 					],
-					linkDocumentIds: [],
-					actor: null
+					linkDocumentIds: []
 				},
 				testDb
 			)

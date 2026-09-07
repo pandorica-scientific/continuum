@@ -95,9 +95,12 @@ password is acceptable: only the app container can reach it.
 If that works, the name is the problem: on Android, it
 always is — see [Networking](networking.md). On anything else, check that
 `docker compose logs mdns` says `answering continuum.local with …` and names an
-address on your network; a machine with Docker Desktop rather than Docker on
-Linux cannot put the announcer on the network, and answers to its own hostname
-instead.
+address on your network. On a Mac or Windows PC running Docker Desktop it
+never will: the announcer sits inside Docker Desktop's VM and cannot be heard
+on your network, so `continuum.local` does not exist there and the computer's
+own name — `http://<computer name>.local`, the name under Sharing in System
+Settings — is the address. The wizard says so on such a machine. A Pi, a NAS
+or any Linux box with Docker has no such limit.
 
 **Every page is a 500, and the app log says `password authentication failed
 for user "continuum"`.** The password the app sends is not the one the database

@@ -52,12 +52,19 @@ describe('reachableAddresses', () => {
 		expect(urls).toEqual(['http://continuum.local']);
 	});
 
-	it('shows nothing of Docker Desktop, whose name and addresses are a VM’s', () => {
-		const urls = reachableAddresses(
-			{ hostname: 'docker-desktop', addresses: ['192.168.65.3'] },
-			OPTS
-		).map((r) => r.url);
-		expect(urls).toEqual(['http://continuum.local']);
+	it('on Docker Desktop names localhost and the computer, never the VM or continuum.local', () => {
+		// The announcer sits inside Docker Desktop's VM: its multicast never
+		// reaches the network and its addresses are the VM's, so the one
+		// address that cannot work there is the announced name.
+		const facts = { hostname: 'docker-desktop', addresses: ['192.168.65.3'] };
+		expect(reachableAddresses(facts, OPTS).map((r) => r.url)).toEqual(['http://localhost']);
+		// The browser got here somehow; that address is real and is shown first.
+		expect(
+			reachableAddresses(facts, { ...OPTS, browsing: 'Roberts-MacBook.local' }).map((r) => r.url)
+		).toEqual(['http://roberts-macbook.local', 'http://localhost']);
+		expect(
+			reachableAddresses(facts, { ...OPTS, browsing: 'localhost:8080' }).map((r) => r.url)
+		).toEqual(['http://localhost']);
 	});
 
 	it('always has the announced name, even with no facts at all', () => {

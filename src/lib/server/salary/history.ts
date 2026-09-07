@@ -5,10 +5,9 @@
 // that never read it. It is a Money question — what was earned — so it moved to
 // its own screen, and the assembly came here rather than being copied.
 
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { salaryStats, type SalaryYear } from '$lib/salary';
 
 /**
@@ -141,7 +140,6 @@ export interface SalaryPersonHistory {
 export async function loadSalaryHistory(
 	baseCurrency: string,
 	convert: ConvertMinor,
-	actor: Actor | null,
 	handle: Db = db
 ): Promise<SalaryPersonHistory[]> {
 	const [people, slipDocs, slipOwners, entries] = await Promise.all([
@@ -149,13 +147,7 @@ export async function loadSalaryHistory(
 			.select({ id: person.id, name: person.name, birthYear: person.birthYear })
 			.from(person)
 			.orderBy(person.createdAt, person.id),
-		// The read rule in the query, not a filter afterwards. A member asking for
-		// this screen gets the months and their figures; the restricted slips
-		// behind some of them are simply not in this result.
-		handle
-			.select()
-			.from(document)
-			.where(and(eq(document.type, 'payslip'), visibleDocumentPredicate(actor))),
+		handle.select().from(document).where(eq(document.type, 'payslip')),
 		// Filtered to people: document_link also holds a document's properties,
 		// accounts and subjects, and a payslip filed against a flat is not a
 		// payslip belonging to a flat.

@@ -91,7 +91,6 @@ CREATE TABLE "document" (
 	"shelf_id" uuid NOT NULL,
 	"type" text DEFAULT 'other' NOT NULL,
 	"note" text,
-	"sensitivity" text DEFAULT 'normal' NOT NULL,
 	"stored_name" text,
 	"ext" text DEFAULT 'PDF' NOT NULL,
 	"added_on" date NOT NULL,
@@ -1009,9 +1008,6 @@ ALTER TABLE import_file ADD CONSTRAINT import_file_proof_class_check
 --> statement-breakpoint
 ALTER TABLE rule ADD CONSTRAINT rule_provenance_check
 	CHECK (provenance in ('learned', 'manual'));
---> statement-breakpoint
-ALTER TABLE document ADD CONSTRAINT document_sensitivity_check
-	CHECK (sensitivity in ('normal', 'restricted'));
 --> statement-breakpoint
 ALTER TABLE document_text_chunk ADD CONSTRAINT document_text_chunk_source_check
 	CHECK (source in ('text_layer', 'ocr', 'plain'));

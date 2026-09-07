@@ -110,7 +110,6 @@
 				documents={contact.documents}
 				documentCandidates={contact.documentCandidates}
 				addDocumentHref={contact.addDocumentHref}
-				isAdmin={data.isAdmin}
 				onclose={() => (opened = null)}
 			/>
 		{:else}

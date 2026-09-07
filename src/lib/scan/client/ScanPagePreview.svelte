@@ -1,12 +1,15 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Two answers, not an editor.
+	// Three answers and a way to the editor.
 	//
-	// There are no corner handles, by decision: dragging four handles on a phone
-	// is worse than taking the photo again. What makes that safe is this screen —
-	// the crop is visible before it is kept, Replace costs one tap, and `original`
-	// hands back the photograph uncropped when the detector got the edges wrong.
-	// Without it a bad crop is silently filed.
+	// This screen used to argue that corner handles should not exist — dragging
+	// four of them on a phone being worse than taking the photo again, with
+	// `original` as the recovery. That held until the detector met a card too
+	// small in frame, an object with a dark band across it, and a page the same
+	// brightness as the table: failures no retake fixes, where `original` hands
+	// back the desk along with the page. So the crop is still visible before it
+	// is kept, Replace still costs one tap, and the edges are now correctable
+	// rather than merely refusable.
 
 	import Icon from '$lib/components/Icon.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
@@ -20,7 +23,8 @@
 		onkeep,
 		onreplace,
 		onmode,
-		onrotate
+		onrotate,
+		onedges
 	}: {
 		previewUrl: string;
 		mode: PageMode;
@@ -30,6 +34,8 @@
 		onreplace: () => void;
 		onmode: (mode: PageMode) => void;
 		onrotate: () => void;
+		/** Open the corner editor: the floor under a detector that got it wrong. */
+		onedges: () => void;
 	} = $props();
 
 	/**
@@ -67,10 +73,13 @@
 			<Segmented options={MODES} value={mode} onchange={(value) => onmode(value as PageMode)} />
 		</div>
 		<!-- Fixed height, so the deck does not jump as the wording changes. -->
+		<!-- The line someone reads at exactly the moment the crop is wrong, so the
+		     way to fix it belongs here rather than behind an icon in the deck. -->
 		<p class="note">
 			{mode === 'original'
 				? 'Straight from the camera — no cropping, no clean-up.'
-				: 'Edges wrong? Try Original.'}
+				: 'Edges wrong?'}
+			<button type="button" class="edges" onclick={onedges}>Adjust the corners</button>
 		</p>
 
 		<div class="actions">
@@ -86,6 +95,22 @@
 </div>
 
 <style>
+	.edges {
+		padding: 0;
+		border: 0;
+		background: none;
+		font: inherit;
+		color: var(--blue);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+	.edges:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 3px;
+		border-radius: var(--radius-xs);
+	}
+
 	.preview {
 		position: fixed;
 		inset: 0;

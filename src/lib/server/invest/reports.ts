@@ -20,11 +20,7 @@ import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
-import {
-	archiveScopePredicate,
-	visibleDocumentPredicate,
-	type Actor
-} from '$lib/server/documents/visibility';
+import { archiveScopePredicate } from '$lib/server/documents/visibility';
 import type { AboutDocument } from '$lib/server/documents/targets';
 import { ingestReport, parseBrokerReport, type BrokerIngestResult } from './ingest';
 
@@ -171,16 +167,12 @@ export async function uploadBrokerReport(
 }
 
 /**
- * Every `broker_report` document, visibility-checked — for when there is no
- * single brokerage account to key a `documentsAbout` lookup off (none filed
- * yet, or more than one account). Applies the same predicates
- * `documentsAbout` does, so a restricted report is exactly as invisible here
- * as it is everywhere else.
+ * Every `broker_report` document — for when there is no single brokerage
+ * account to key a `documentsAbout` lookup off (none filed yet, or more than
+ * one account). Applies the same archive scope `documentsAbout` does, so a
+ * sold account's report drops out here exactly as it does everywhere else.
  */
-export async function brokerReports(
-	actor: Actor | null,
-	handle: Queryable = db
-): Promise<AboutDocument[]> {
+export async function brokerReports(handle: Queryable = db): Promise<AboutDocument[]> {
 	const rows = await handle
 		.select({
 			id: document.id,
@@ -193,19 +185,12 @@ export async function brokerReports(
 			expiresOn: document.expiresOn,
 			expiryVerb: document.expiryVerb,
 			addedOn: document.addedOn,
-			sensitivity: document.sensitivity,
 			reminderDays: documentType.reminderDays
 		})
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		.innerJoin(documentType, eq(documentType.key, document.type))
-		.where(
-			and(
-				eq(document.type, 'broker_report'),
-				visibleDocumentPredicate(actor),
-				archiveScopePredicate(false)
-			)
-		)
+		.where(and(eq(document.type, 'broker_report'), archiveScopePredicate(false)))
 		.orderBy(document.name);
 
 	if (rows.length === 0) return [];

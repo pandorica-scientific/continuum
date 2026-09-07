@@ -106,13 +106,6 @@ export const document = pgTable(
 			.references(() => documentType.key, { onDelete: 'restrict' }),
 		// The one user-authored phrase field, ranked above contents in search.
 		note: text('note'),
-		// Absent for members everywhere — list, search, counts, briefing,
-		// calendar, ICS and the file itself. Enforced by
-		// `visibleDocumentPredicate`, never by a screen.
-		sensitivity: text('sensitivity')
-			.$type<EnumValue<'document.sensitivity'>>()
-			.notNull()
-			.default('normal'),
 		// uploaded file on the data volume; a document may be metadata-only
 		storedName: text('stored_name'),
 		ext: text('ext').notNull().default('PDF'),

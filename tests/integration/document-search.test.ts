@@ -37,9 +37,6 @@ import {
 let harness: Harness;
 let testDb: TestDb;
 
-const asAdmin = { id: 'a', role: 'admin' } as const;
-const asMember = { id: 'm', role: 'member' } as const;
-
 /**
  * One record of every kind Tier B has to be able to name.
  *
@@ -122,7 +119,6 @@ beforeEach(async () => {
 async function seedDocument(options: {
 	name?: string;
 	note?: string;
-	sensitivity?: 'normal' | 'restricted';
 	shelf?: string;
 	type?: 'other' | 'invoice' | 'contract';
 	tag?: string;
@@ -139,7 +135,6 @@ async function seedDocument(options: {
 		shelfId: await shelfIdByKey(options.shelf ?? 'inventory', testDb),
 		type: options.type ?? 'other',
 		note: options.note ?? null,
-		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName === undefined ? `${id}.pdf` : options.storedName,
 		addedOn: options.addedOn ?? '2026-01-01'
 	});
@@ -197,7 +192,7 @@ describe('the candidate union', () => {
 		const inside = await seedDocument({ name: 'Manual' });
 		await seedText(inside, 'ochrana údajů na straně 4');
 
-		const { hits } = await searchDocuments('ochrana', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('ochrana', {}, testDb);
 		expect(hits.map((h) => h.documentId)).toEqual([named, inside]);
 		expect(hits[0].tier).toBe('A');
 		expect(hits[1].tier).toBe('D');
@@ -208,7 +203,7 @@ describe('the candidate union', () => {
 		// matching on name AND contents is still one document.
 		const id = await seedDocument({ name: 'Smlouva', note: 'smlouva o dílo' });
 		await seedText(id, 'smlouva o dílo, strana 1');
-		const { hits } = await searchDocuments('smlouva', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('smlouva', {}, testDb);
 		expect(hits.filter((h) => h.documentId === id)).toHaveLength(1);
 		expect(hits[0].tier).toBe('A');
 	});
@@ -219,26 +214,19 @@ describe('the candidate union', () => {
 		const car = await seedSubject('Renovation van', false);
 		const linked = await seedDocument({ name: 'C', subjectId: car });
 
-		expect(
-			(await searchDocuments('renovation', asAdmin, {}, testDb)).hits.map((h) => h.tier)
-		).toEqual(['A', 'B', 'C']);
-		const ids = (await searchDocuments('renovation', asAdmin, {}, testDb)).hits.map(
-			(h) => h.documentId
-		);
+		expect((await searchDocuments('renovation', {}, testDb)).hits.map((h) => h.tier)).toEqual([
+			'A',
+			'B',
+			'C'
+		]);
+		const ids = (await searchDocuments('renovation', {}, testDb)).hits.map((h) => h.documentId);
 		expect(new Set(ids)).toEqual(new Set([tagged, noted, linked]));
-	});
-
-	it('excludes restricted documents in SQL, not afterwards', async () => {
-		const id = await seedDocument({ name: 'Sealed', sensitivity: 'restricted' });
-		await seedText(id, 'confidential');
-		expect((await searchDocuments('confidential', asMember, {}, testDb)).hits).toHaveLength(0);
-		expect((await searchDocuments('confidential', asAdmin, {}, testDb)).hits).toHaveLength(1);
 	});
 
 	it('scopes to one shelf when the rail is on one', async () => {
 		await seedDocument({ name: 'Insurance', shelf: 'income_tax' });
 		await seedDocument({ name: 'Insurance', shelf: 'property' });
-		const { hits } = await searchDocuments('insurance', asAdmin, { shelfKey: 'property' }, testDb);
+		const { hits } = await searchDocuments('insurance', { shelfKey: 'property' }, testDb);
 		expect(hits).toHaveLength(1);
 	});
 });
@@ -258,7 +246,7 @@ describe('the entity tier, over every registry kind', () => {
 			name: 'Receipt 4187',
 			about: [HOUSEHOLD.transaction]
 		});
-		const { hits } = await searchDocuments('alza', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('alza', {}, testDb);
 		expect(hits.map((h) => h.documentId)).toEqual([receipt]);
 		expect(hits[0].tier).toBe('B');
 		expect(hits[0].matchedIn).toBe('entity');
@@ -266,19 +254,19 @@ describe('the entity tier, over every registry kind', () => {
 
 	it('finds a lease by the tenant it names', async () => {
 		const lease = await seedDocument({ name: 'Lease', about: [HOUSEHOLD.tenancy] });
-		const { hits } = await searchDocuments('kučera', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('kučera', {}, testDb);
 		expect(hits.map((h) => h.documentId)).toEqual([lease]);
 		expect(hits[0].tier).toBe('B');
 	});
 
 	it('finds a mortgage statement by the name of the loan, diacritics or not', async () => {
 		const statement = await seedDocument({ name: 'Yearly statement', about: [HOUSEHOLD.loan] });
-		expect(
-			(await searchDocuments('hypoteka', asAdmin, {}, testDb)).hits.map((h) => h.documentId)
-		).toEqual([statement]);
-		expect(
-			(await searchDocuments('Hypotéka', asAdmin, {}, testDb)).hits.map((h) => h.documentId)
-		).toEqual([statement]);
+		expect((await searchDocuments('hypoteka', {}, testDb)).hits.map((h) => h.documentId)).toEqual([
+			statement
+		]);
+		expect((await searchDocuments('Hypotéka', {}, testDb)).hits.map((h) => h.documentId)).toEqual([
+			statement
+		]);
 	});
 
 	it('finds a tax attachment by the year of the statement it belongs to', async () => {
@@ -286,7 +274,7 @@ describe('the entity tier, over every registry kind', () => {
 			name: 'Interest certificate',
 			about: [HOUSEHOLD.taxStatement]
 		});
-		const { hits } = await searchDocuments('2019', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('2019', {}, testDb);
 		expect(hits.map((h) => h.documentId)).toEqual([attachment]);
 		expect(hits[0].tier).toBe('B');
 	});
@@ -298,7 +286,7 @@ describe('substrings and snippets', () => {
 		// any text-search configuration, so FTS alone never finds it.
 		const id = await seedDocument({ name: 'Claim' });
 		await seedText(id, 'Platba VS 10078410 částka 4 200 Kč za opravu', 2);
-		const { hits } = await searchDocuments('10078410', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('10078410', {}, testDb);
 		expect(hits[0].documentId).toBe(id);
 		expect(hits[0].pageNo).toBe(2);
 		expect(hits[0].snippet).toMatch(/10078410/);
@@ -308,15 +296,15 @@ describe('substrings and snippets', () => {
 	it('folds diacritics in both directions', async () => {
 		const id = await seedDocument({ name: 'Manual' });
 		await seedText(id, 'provozní režim zařízení');
-		expect((await searchDocuments('rezim', asAdmin, {}, testDb)).hits[0]?.documentId).toBe(id);
-		expect((await searchDocuments('režim', asAdmin, {}, testDb)).hits[0]?.documentId).toBe(id);
+		expect((await searchDocuments('rezim', {}, testDb)).hits[0]?.documentId).toBe(id);
+		expect((await searchDocuments('režim', {}, testDb)).hits[0]?.documentId).toBe(id);
 	});
 
 	it('labels where the match was found', async () => {
 		const noted = await seedDocument({ name: 'A', note: 'boiler serviced in March' });
 		const inside = await seedDocument({ name: 'B' });
 		await seedText(inside, 'boiler service report');
-		const { hits } = await searchDocuments('boiler', asAdmin, {}, testDb);
+		const { hits } = await searchDocuments('boiler', {}, testDb);
 		expect(hits.find((h) => h.documentId === noted)!.matchedIn).toBe('note');
 		expect(hits.find((h) => h.documentId === inside)!.matchedIn).toBe('contents');
 	});
@@ -342,7 +330,7 @@ describe('the honesty counts', () => {
 		await seedText(read, 'contract text');
 		await seedDocument({ name: 'Metadata only', storedName: null });
 
-		const { honesty } = await searchDocuments('nothing at all', asAdmin, {}, testDb);
+		const { honesty } = await searchDocuments('nothing at all', {}, testDb);
 		expect(honesty.notSearchable).toBe(1);
 	});
 
@@ -351,33 +339,28 @@ describe('the honesty counts', () => {
 		await testDb
 			.insert(job)
 			.values({ id: uuidv7(), kind: 'extract_text', subjectId: waiting, state: 'queued' });
-		const { honesty } = await searchDocuments('nothing at all', asAdmin, {}, testDb);
+		const { honesty } = await searchDocuments('nothing at all', {}, testDb);
 		expect(honesty.pending).toBe(1);
 		expect(honesty.notSearchable).toBe(0);
 	});
 
-	it("does not count restricted documents in a member's honesty hint", async () => {
-		// The hint is a count, and a count is the leak this whole invariant
-		// exists to close.
+	it('counts every archived-only match in the honesty hint', async () => {
 		const archived = await seedSubject('The old car', true);
-		const hidden = await seedDocument({ sensitivity: 'restricted', subjectId: archived });
-		await seedText(hidden, 'polička');
-		const shown = await seedDocument({ sensitivity: 'normal', subjectId: archived });
-		await seedText(shown, 'polička');
+		const first = await seedDocument({ subjectId: archived });
+		await seedText(first, 'polička');
+		const second = await seedDocument({ subjectId: archived });
+		await seedText(second, 'polička');
 
-		const member = await searchDocuments('polička', asMember, { includeArchived: false }, testDb);
-		expect(member.hits).toHaveLength(0);
-		expect(member.honesty.archivedOnly).toBe(1);
-
-		const admin = await searchDocuments('polička', asAdmin, { includeArchived: false }, testDb);
-		expect(admin.honesty.archivedOnly).toBe(2);
+		const found = await searchDocuments('polička', { includeArchived: false }, testDb);
+		expect(found.hits).toHaveLength(0);
+		expect(found.honesty.archivedOnly).toBe(2);
 	});
 
 	it('finds the archived matches once the scope is opened', async () => {
 		const archived = await seedSubject('The old car', true);
 		const id = await seedDocument({ name: 'Servisní kniha', subjectId: archived });
-		expect((await searchDocuments('servisni', asAdmin, {}, testDb)).hits).toHaveLength(0);
-		const open = await searchDocuments('servisni', asAdmin, { includeArchived: true }, testDb);
+		expect((await searchDocuments('servisni', {}, testDb)).hits).toHaveLength(0);
+		const open = await searchDocuments('servisni', { includeArchived: true }, testDb);
 		expect(open.hits.map((h) => h.documentId)).toEqual([id]);
 		expect(open.honesty.archivedOnly).toBe(0);
 	});

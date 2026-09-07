@@ -41,8 +41,6 @@ const SLIP = rowId('stl-slip');
 const SLIP_B = rowId('stl-slip-b');
 const CREDIT_B = rowId('stl-credit-b');
 
-const ADMIN = { id: ROBERT, role: 'admin' } as const;
-
 beforeAll(async () => {
 	harness = await startPostgres('salary-transaction-link');
 	testDb = harness.db;
@@ -325,7 +323,7 @@ describe('D6: payslip <-> bank credit cross-link', () => {
 		);
 		expect(await linkedToCredit()).toHaveLength(1);
 
-		expect(await removeDocument(SLIP, ADMIN, testDb)).toEqual({ ok: true });
+		expect(await removeDocument(SLIP, testDb)).toEqual({ ok: true });
 
 		expect(await linkedToCredit()).toHaveLength(0);
 		const [row] = await testDb.select().from(transaction).where(eq(transaction.id, CREDIT));
@@ -394,7 +392,7 @@ describe('D6: payslip <-> bank credit cross-link', () => {
 		expect(rowBBefore?.transactionId).toBeNull();
 		expect(rowBBefore?.grossMinor).toBe(40_000_00n);
 
-		expect(await removeDocument(SLIP, ADMIN, testDb)).toEqual({ ok: true });
+		expect(await removeDocument(SLIP, testDb)).toEqual({ ok: true });
 
 		const after = await rowsFor('2026-07');
 		expect(after).toHaveLength(2);

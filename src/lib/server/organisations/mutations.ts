@@ -26,7 +26,6 @@ import {
 	organisation,
 	person
 } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import type { EnumValue } from '$lib/enums';
 
 export const ORGANISATION_NAME_TAKEN = 'An organisation with that name already exists.';
@@ -91,11 +90,8 @@ export interface OrganisationRow {
 	people: OrganisationPerson[];
 }
 
-/** Every organisation, with how much paper the viewer may see filed against it. */
-export async function listOrganisations(
-	handle: Queryable = db,
-	actor: Actor | null = null
-): Promise<OrganisationRow[]> {
+/** Every organisation, with how much paper is filed against it. */
+export async function listOrganisations(handle: Queryable = db): Promise<OrganisationRow[]> {
 	const [rows, counted, people] = await Promise.all([
 		handle
 			.select({
@@ -106,15 +102,13 @@ export async function listOrganisations(
 			})
 			.from(organisation)
 			.orderBy(organisation.name),
-		// The read rule as a fragment inside the query, never a filter applied
-		// afterwards — and grouped over every target rather than narrowed to
-		// organisations, because `document_link` points at `entity` and deciding
-		// which kinds exist is the registry's job, not this module's.
+		// Grouped over every target rather than narrowed to organisations,
+		// because `document_link` points at `entity` and deciding which kinds
+		// exist is the registry's job, not this module's.
 		handle
 			.select({ targetId: documentLink.targetId, n: count() })
 			.from(documentLink)
 			.innerJoin(document, eq(document.id, documentLink.documentId))
-			.where(visibleDocumentPredicate(actor))
 			.groupBy(documentLink.targetId),
 		handle
 			.select({

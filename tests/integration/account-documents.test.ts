@@ -7,7 +7,7 @@ import { rowId } from '../row-id';
 import { document, documentLink } from '$lib/server/db/schema';
 
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { asAdmin, asMember, makeAccount, makeDocument, type SessionLocals } from './fixtures';
+import { asAdmin, makeAccount, makeDocument, type SessionLocals } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -70,7 +70,6 @@ beforeEach(async () => {
 
 async function seedDocument(options: {
 	name: string;
-	sensitivity?: 'normal' | 'restricted';
 	storedName?: string | null;
 }): Promise<string> {
 	const id = uuidv7();
@@ -79,7 +78,6 @@ async function seedDocument(options: {
 		name: options.name,
 		shelfKey: 'statements',
 		type: 'bank_statement',
-		sensitivity: options.sensitivity ?? 'normal',
 		storedName: options.storedName ?? null,
 		ext: 'PDF',
 		addedOn: '2026-01-01'
@@ -91,7 +89,6 @@ async function loadAccounts(locals: SessionLocals) {
 	const { load } = await import('../../src/routes/(app)/accounts/+page.server');
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return (await (load as any)({ locals })) as {
-		isAdmin: boolean;
 		accounts: {
 			id: string;
 			documents: { id: string; name: string }[];
@@ -213,15 +210,11 @@ describe('attach and detach through the actions', () => {
 		expect(row).toBeDefined();
 	});
 
-	it('refuses to attach a restricted document for a member, and does not link it', async () => {
-		const doc = await seedDocument({
-			name: 'Private brokerage statement',
-			sensitivity: 'restricted'
-		});
+	it('refuses to attach a document that is not there, and links nothing', async () => {
 		const result: unknown = await postAction(
 			'attachDocument',
-			{ targetId: ACCOUNT, documentId: doc },
-			asMember
+			{ targetId: ACCOUNT, documentId: uuidv7() },
+			asAdmin
 		);
 		expect(result).toMatchObject({ status: 404 });
 		const links = await testDb
@@ -231,14 +224,11 @@ describe('attach and detach through the actions', () => {
 		expect(links).toEqual([]);
 	});
 
-	it('shows a restricted document on an admin’s card but hides it from a member', async () => {
-		const doc = await seedDocument({ name: 'Sensitive statement', sensitivity: 'restricted' });
+	it('shows the paper filed against the account on its card', async () => {
+		const doc = await seedDocument({ name: 'Statement' });
 		await testDb.insert(documentLink).values({ documentId: doc, targetId: ACCOUNT });
 
-		const { accounts: adminAccounts } = await loadAccounts(asAdmin);
-		expect(adminAccounts.find((a) => a.id === ACCOUNT)?.documents.map((d) => d.id)).toEqual([doc]);
-
-		const { accounts: memberAccounts } = await loadAccounts(asMember);
-		expect(memberAccounts.find((a) => a.id === ACCOUNT)?.documents).toEqual([]);
+		const { accounts } = await loadAccounts(asAdmin);
+		expect(accounts.find((a) => a.id === ACCOUNT)?.documents.map((d) => d.id)).toEqual([doc]);
 	});
 });

@@ -1,5 +1,5 @@
 {
-  "id": "0ced10d3-e240-452a-bbc9-f3e16f8421a2",
+  "id": "99e7a06b-6d43-4163-abda-fe36257390d6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -527,13 +527,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "sensitivity": {
-          "name": "sensitivity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'normal'"
         },
         "stored_name": {
           "name": "stored_name",

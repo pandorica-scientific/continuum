@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import {
 	document,
@@ -144,18 +144,12 @@ export async function generateEvents(
 		handle.select().from(loanFixationPeriod),
 		handle.select().from(tenancy),
 		handle.select().from(property),
-		// Restricted documents generate no event AT ALL — not for a member, not
-		// for an admin. This is deliberately not `visibleDocumentPredicate`: a
-		// generated event syncs to iCloud and to a published feed, where there is
-		// no session and no role to filter by, so filtering by who happened to
-		// trigger generation would be false safety. Archive scope applies on top:
-		// a document whose only subject is archived (a sold car's insurance) is
-		// stale rather than secret, but the same reasoning holds — nobody's
-		// calendar should carry a renewal for something that is no longer theirs.
-		handle
-			.select()
-			.from(document)
-			.where(and(eq(document.sensitivity, 'normal'), archiveScopePredicate(false))),
+		// Archive scope applies here and nothing else does: a generated event
+		// syncs to iCloud and to a published feed, where there is no session to
+		// filter by anyway. A document whose only subject is archived (a sold
+		// car's insurance) is stale, and nobody's calendar should carry a
+		// renewal for something that is no longer theirs.
+		handle.select().from(document).where(archiveScopePredicate(false)),
 		// D7: which record, if any, a document is filed against — so a lease's
 		// contract or a re-fix letter dated the same as its tenancy or loan's own
 		// deadline (below) can be told apart from one that is not.

@@ -22,7 +22,6 @@
 import { sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { documentTargetSpec, DOCUMENT_TARGET_KINDS } from './targets';
-import type { Actor } from './visibility';
 
 /**
  * Tier B's "what is this about" side, built from the registry rather than typed
@@ -79,16 +78,14 @@ const SNIPPET_BEFORE = 60;
 const SNIPPET_LENGTH = 180;
 
 /**
- * The two halves of the read rule, as SQL fragments over an aliased `document`.
+ * The archive scope, as an SQL fragment over an aliased `document`.
  *
  * Written against an alias rather than reusing `visibility.ts` directly because
  * this query mentions `document` several times over; the RULE is the same one,
- * and the truth table that proves the archive half lives in
- * `tests/integration/archive-scope`.
+ * and the truth table that proves it lives in `tests/integration/archive-scope`.
  */
-function readableSql(actor: Actor | null, includeArchived: boolean) {
-	const sensitivity = actor?.role === 'admin' ? sql`true` : sql`d.sensitivity = ${'normal'}`;
-	const archive = includeArchived
+function readableSql(includeArchived: boolean) {
+	return includeArchived
 		? sql`true`
 		: sql`not (
 				exists (
@@ -100,7 +97,6 @@ function readableSql(actor: Actor | null, includeArchived: boolean) {
 					where dl.document_id = d.id and s.archived_at is null
 				)
 			)`;
-	return sql`${sensitivity} and ${archive}`;
 }
 
 /**
@@ -112,8 +108,8 @@ function readableSql(actor: Actor | null, includeArchived: boolean) {
  * from the ordering: an identifier like a variable symbol is not a fuzzy match,
  * and sorting by similarity buries the exact hit under near misses.
  */
-function candidateSql(q: string, actor: Actor | null, options: SearchOptions) {
-	const readable = readableSql(actor, options.includeArchived ?? false);
+function candidateSql(q: string, options: SearchOptions) {
+	const readable = readableSql(options.includeArchived ?? false);
 	const shelfFilter = options.shelfKey ? sql`and sh.key = ${options.shelfKey}` : sql``;
 	const like = sql`'%' || public.contact_fold(${q}) || '%'`;
 
@@ -185,16 +181,15 @@ function candidateSql(q: string, actor: Actor | null, options: SearchOptions) {
 
 export async function searchDocuments(
 	q: string,
-	actor: Actor | null,
 	options: SearchOptions = {},
 	handle: Queryable = db
 ): Promise<{ hits: SearchHit[]; honesty: SearchHonesty }> {
 	const query = q.trim();
 	if (!query) {
-		return { hits: [], honesty: await honestyCounts(actor, [], options, handle) };
+		return { hits: [], honesty: await honestyCounts([], options, handle) };
 	}
 
-	const rows = (await handle.execute(candidateSql(query, actor, options))) as unknown as {
+	const rows = (await handle.execute(candidateSql(query, options))) as unknown as {
 		document_id: string;
 		tier: Tier;
 		matched_in: MatchedIn;
@@ -210,24 +205,21 @@ export async function searchDocuments(
 		snippet: row.snippet ? row.snippet.replace(/\s+/g, ' ').trim() : null
 	}));
 
-	return { hits, honesty: await honestyCounts(actor, hits, { ...options, query }, handle) };
+	return { hits, honesty: await honestyCounts(hits, { ...options, query }, handle) };
 }
 
 /**
  * What the screen is allowed to say about what it could NOT find.
  *
  * Every count is derived rather than stored, and every count passes through the
- * same read rule as the rows: telling a member "3 matches belong only to
- * archived subjects" when two of them are restricted would leak exactly what
- * the invariant exists to hide — a hint is a count, and a count is the leak.
+ * same archive scope as the rows.
  */
 async function honestyCounts(
-	actor: Actor | null,
 	hits: SearchHit[],
 	options: SearchOptions & { query?: string },
 	handle: Queryable
 ): Promise<SearchHonesty> {
-	const readable = readableSql(actor, options.includeArchived ?? false);
+	const readable = readableSql(options.includeArchived ?? false);
 
 	const [counts] = (await handle.execute(sql`
 		select
@@ -251,7 +243,7 @@ async function honestyCounts(
 		// that the closed scope did not is a match hiding in the archive — which
 		// is a thing the screen must offer to show rather than pretend is absent.
 		const open = (await handle.execute(
-			candidateSql(options.query, actor, { ...options, includeArchived: true })
+			candidateSql(options.query, { ...options, includeArchived: true })
 		)) as unknown as { document_id: string }[];
 		const shown = new Set(hits.map((h) => h.documentId));
 		archivedOnly = [...open].filter((row) => !shown.has(row.document_id)).length;

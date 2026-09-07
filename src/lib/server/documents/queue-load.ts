@@ -13,10 +13,9 @@
  * the shelf decides which cards exist, the card decides which lanes exist, and
  * the lane decides what type the paper probably is.
  */
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { document, shelf } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from './visibility';
 import { daysBetween } from '$lib/dates';
 import { templateEngine, unitMakesCards, type ShelfEngine } from '$lib/documents/templates';
 import { listShelves, shelfTypesByKey, type ShelfRow } from './shelves';
@@ -101,7 +100,6 @@ function impliedType(conditions: unknown): string | null {
 }
 
 export async function loadQueue(
-	actor: Actor | null,
 	handle: Queryable = db,
 	today: string = new Date().toISOString().slice(0, 10),
 	openId = ''
@@ -129,7 +127,7 @@ export async function loadQueue(
 		})
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
-		.where(and(eq(shelf.id, inbox.id), visibleDocumentPredicate(actor)))
+		.where(eq(shelf.id, inbox.id))
 		// Oldest first. A queue that offered the newest would leave the one that
 		// has waited longest waiting longer.
 		.orderBy(asc(document.addedOn), asc(document.id));
@@ -184,7 +182,7 @@ export async function loadQueue(
 	// What a lane rule thinks, for the document in front of you only. Proposed
 	// and never applied: a wrong guess looks exactly like a right one once it is
 	// filed, so it stays a suggestion until somebody agrees with it.
-	const proposals = current ? await loadProposals(handle, actor) : [];
+	const proposals = current ? await loadProposals(handle) : [];
 	const match = proposals.find((p) => p.documentId === current) ?? null;
 	const proposalShelf = match
 		? filing.find((s) => (cards[s.key] ?? []).some((c) => c.id === match.organisationId))

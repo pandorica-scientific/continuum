@@ -79,7 +79,27 @@
 	let incoming = $state<File[]>([]);
 	let scanFailed = $state(false);
 
+	/**
+	 * Start fetching the scanner while the camera app is open.
+	 *
+	 * On a plain-http address the Scan button hands straight over to the phone's
+	 * own camera app, and the seconds someone spends framing and shooting are
+	 * seconds this tab spends doing nothing. OpenCV is 7.6 MB of WebAssembly —
+	 * 1.8 MB over the wire — and it was fetched only once the photograph came
+	 * BACK, so the whole of that download was a wait the user sat and watched on
+	 * a screen reading "Reading photo…". Started here it is usually ready before
+	 * the photograph is.
+	 *
+	 * Fire and forget, deliberately: nothing here may delay opening the camera,
+	 * and a failure belongs to the real `loadCv()` later — it does not memoise
+	 * one, so the attempt that matters starts afresh.
+	 */
+	function warmScanner() {
+		void import('$lib/scan/client/opencv-load').then((module) => module.loadCv()).catch(() => {});
+	}
+
 	async function openScanner() {
+		warmScanner();
 		// Once the chunk has failed, stop trying: a second stall helps nobody
 		// when the camera app is right there.
 		if (scanFailed) return void cameraInput?.click();
@@ -267,7 +287,12 @@
 					// self-hosted instance on a plain-http address — the phone's
 					// own camera app still works and needs no such thing.
 					if (isSecureForCamera(window.location)) void openScanner();
-					else cameraInput?.click();
+					else {
+						// The camera app is about to take the screen for as long as
+						// it takes to photograph a page. Spend it on the download.
+						warmScanner();
+						cameraInput?.click();
+					}
 				}}
 			>
 				<Icon name="scan" size={18} />

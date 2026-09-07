@@ -112,11 +112,10 @@ describe('proposals', () => {
 			proposal.documentId,
 			proposal.laneId,
 			proposal.organisationId,
-			{ id: 'a', role: 'admin' },
 			db
 		);
 		expect(result.ok).toBe(true);
-		expect((await documentsAbout(org.id, null, db)).map((d) => d.id)).toEqual([doc.id]);
+		expect((await documentsAbout(org.id, db)).map((d) => d.id)).toEqual([doc.id]);
 
 		const [row] = await db.select().from(lane).where(eq(lane.id, proposal.laneId));
 		expect(row.acceptedCount).toBe(1);
@@ -135,7 +134,7 @@ describe('proposals', () => {
 		const [proposal] = await loadProposals(db);
 		await dismissProposal(proposal.laneId, db);
 
-		expect(await documentsAbout(org.id, null, db)).toEqual([]);
+		expect(await documentsAbout(org.id, db)).toEqual([]);
 		const [row] = await db.select().from(lane).where(eq(lane.id, proposal.laneId));
 		expect(row.correctedCount).toBe(1);
 	});

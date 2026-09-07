@@ -138,16 +138,16 @@ merge meant a `docker compose pull` picked up whatever landed an hour ago:
 ```sh
 # 1. bump the version and write the changelog section, then commit
 # 2. tag it and push the tag
-git tag v0.8.4
-git push origin v0.8.4
+git tag v0.8.5
+git push origin v0.8.5
 ```
 
 CI then runs the full suite and, only if it passes, builds `linux/amd64` and
-`linux/arm64` and pushes `0.8.4` alongside `latest` to both registries.
+`linux/arm64` and pushes `0.8.5` alongside `latest` to both registries.
 
 Two things fail the build rather than publishing something wrong:
 
-- **The tag must match `package.json`.** `v0.8.4` against a `0.8.3` package is
+- **The tag must match `package.json`.** `v0.8.5` against a `0.8.4` package is
   one of the two being a mistake, and publishing either would be wrong.
 - **Docker Hub must be configured** for a tagged release — `DOCKERHUB_USERNAME`
   and `DOCKERHUB_TOKEN` (an access token, not the account password). A release
@@ -156,7 +156,7 @@ Two things fail the build rather than publishing something wrong:
 Both live in **secrets** here. The username is half of a credential pair, and
 keeping it out of logs and out of forked pull requests costs nothing worth
 having. One practical effect to expect: GitHub masks it, so the build's
-`Publishing:` line reads `***/continuum:0.8.4` rather than naming the account.
+`Publishing:` line reads `***/continuum:0.8.5` rather than naming the account.
 
 The workflow reads `DOCKERHUB_USERNAME` from a secret or a repository variable,
 whichever it finds, so moving it later does not break anything. The mechanism is

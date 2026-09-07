@@ -341,7 +341,6 @@
 						addHref={data.detail.lease.addDocumentHref}
 						attach={{ action: 'attachDocument', candidates: data.detail.lease.documentCandidates }}
 						detachAction="detachDocument"
-						isAdmin={data.isAdmin}
 					/>
 				{:else if addingTenancy}
 					<form method="POST" action="?/addTenancy" use:enhance class="card add-form">
@@ -526,7 +525,6 @@
 				addLabel="Add a document about this flat"
 				attach={{ action: 'attachDocument', candidates: data.detail.documentCandidates }}
 				detachAction="detachDocument"
-				isAdmin={data.isAdmin}
 			/>
 		</div>
 	</section>

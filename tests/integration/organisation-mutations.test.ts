@@ -160,16 +160,4 @@ describe('listing organisations', () => {
 		// One nothing is filed against is a zero, not an absence.
 		expect(rows.find((r) => r.id === empty.id)!.documentCount).toBe(0);
 	});
-
-	it('hides a restricted document from a member, exactly as every other count does', async () => {
-		const org = await makeOrganisation(db, { name: 'Institute' });
-		for (const sensitivity of ['normal', 'restricted'] as const) {
-			const doc = await makeDocument(db, { type: 'payslip', sensitivity });
-			await makeDocumentLink(db, { documentId: doc.id, targetId: org.id });
-		}
-		const asMember = await listOrganisations(db, { id: 'm', role: 'member' });
-		const asAdmin = await listOrganisations(db, { id: 'a', role: 'admin' });
-		expect(asMember[0].documentCount).toBe(1);
-		expect(asAdmin[0].documentCount).toBe(2);
-	});
 });

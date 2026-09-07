@@ -389,7 +389,6 @@
 	documents={data.reports}
 	target={data.reportsTarget}
 	emptyText="No broker reports filed yet — upload one above and it appears here."
-	isAdmin={data.isAdmin}
 />
 
 <style>

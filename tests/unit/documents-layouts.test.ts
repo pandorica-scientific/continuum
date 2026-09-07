@@ -20,7 +20,6 @@ const row = (id: string, about: AboutLink[], over: Partial<LayoutRow> = {}): Lay
 	expiryVerb: over.expiryVerb ?? 'expires',
 	subjectArchived: over.subjectArchived ?? false,
 	ext: 'PDF',
-	restricted: over.restricted ?? false,
 	tags: [],
 	about,
 	identity: over.identity ?? null

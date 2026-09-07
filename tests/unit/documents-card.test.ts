@@ -27,7 +27,6 @@ const doc = (over: Partial<AboutDocument> = {}): AboutDocument => ({
 	expiresOn: null,
 	expiryVerb: 'expires',
 	addedOn: '2026-01-02',
-	sensitivity: 'normal',
 	tags: [],
 	...over
 });

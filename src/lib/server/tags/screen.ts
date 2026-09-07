@@ -17,7 +17,6 @@ import {
 	transaction,
 	transactionSplit
 } from '$lib/server/db/schema';
-import { visibleDocumentPredicate, type Actor } from '$lib/server/documents/visibility';
 import { convertedTagTotal, tagTotals, tagUsage } from '$lib/server/tags';
 import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
@@ -26,14 +25,8 @@ import { displayCurrency, formatMinor } from '$lib/money';
 /** Inline list cap: the items themselves, "+N more" only past this. */
 const INLINE = 5;
 
-/**
- * The view, as one reader may see it.
- *
- * Every document select below carries the read rule, and so does the usage
- * count: a tag showing five documents but saying "6 tagged" would have told a
- * member the sixth exists, which is the fact the rule protects.
- */
-export async function loadTagsScreen(actor: Actor | null) {
+/** The view, in one round of queries. */
+export async function loadTagsScreen() {
 	const [
 		totals,
 		usage,
@@ -49,20 +42,17 @@ export async function loadTagsScreen(actor: Actor | null) {
 		loans
 	] = await Promise.all([
 		tagTotals(),
-		tagUsage(actor),
+		tagUsage(),
 		getBaseCurrency(),
 		loadRateTable(),
 		db
 			.select({ documentId: tagLink.targetId, tagId: tagLink.tagId })
 			.from(tagLink)
-			.innerJoin(document, eq(document.id, tagLink.targetId))
-			.where(visibleDocumentPredicate(actor)),
+			.innerJoin(document, eq(document.id, tagLink.targetId)),
 		db
 			.select({ propertyId: tagLink.targetId, tagId: tagLink.tagId })
 			.from(tagLink)
 			.innerJoin(property, eq(property.id, tagLink.targetId)),
-		// A loan is not a document — nothing D2 covers hides one — so, unlike the
-		// two selects above, this carries no visibility predicate.
 		db
 			.select({ loanId: tagLink.targetId, tagId: tagLink.tagId })
 			.from(tagLink)
@@ -84,10 +74,7 @@ export async function loadTagsScreen(actor: Actor | null) {
 			.select({ splitId: tagLink.targetId, tagId: tagLink.tagId })
 			.from(tagLink)
 			.innerJoin(transactionSplit, eq(transactionSplit.id, tagLink.targetId)),
-		db
-			.select({ id: document.id, name: document.name, file: document.storedName })
-			.from(document)
-			.where(visibleDocumentPredicate(actor)),
+		db.select({ id: document.id, name: document.name, file: document.storedName }).from(document),
 		db.select({ id: property.id, name: property.name }).from(property),
 		db.select({ id: loan.id, name: loan.name }).from(loan)
 	]);

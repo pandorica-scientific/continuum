@@ -35,7 +35,7 @@ describe('the captured still', () => {
 		// The video element is what the user was looking at, so it cannot
 		// disagree with what they framed. Lower resolution, always right.
 		const tail = source.slice(source.indexOf('export async function stillFromTrack'));
-		expect(tail).toMatch(/return frameFromVideo\(video, Math\.min\(video\.videoWidth/);
+		expect(tail).toMatch(/return frameFromVideo\(video, captureWidth\(video\.videoWidth/);
 	});
 
 	it('tolerates a sensor cropping its still slightly differently', () => {

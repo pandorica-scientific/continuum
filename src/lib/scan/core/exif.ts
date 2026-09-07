@@ -90,45 +90,43 @@ export function applyOrientation(frame: Frame, orientation: number): Frame {
 	const height = quarter ? frame.width : frame.height;
 	const out = new Uint8ClampedArray(width * height * 4);
 
+	/**
+	 * The turn as six coefficients, worked out ONCE.
+	 *
+	 * Every one of these transforms is affine on the pixel grid —
+	 * `nx = ax·x + bx·y + cx`, `ny = ay·x + by·y + cy` — so the `switch` that
+	 * used to sit in the inner loop was re-deciding the same eight-way branch
+	 * for every pixel. On a capped 2400x3200 frame that is 7.7 million
+	 * branches, and it ran on the main thread while the reading screen was up.
+	 */
+	const w1 = frame.width - 1;
+	const h1 = frame.height - 1;
+	// prettier-ignore
+	const [ax, bx, cx, ay, by, cy] =
+		orientation === 2 ? [-1, 0, w1, 0, 1, 0] :        // mirrored
+		orientation === 3 ? [-1, 0, w1, 0, -1, h1] :      // 180°
+		orientation === 4 ? [1, 0, 0, 0, -1, h1] :        // flipped
+		orientation === 5 ? [0, 1, 0, 1, 0, 0] :          // transposed
+		orientation === 6 ? [0, -1, h1, 1, 0, 0] :        // 90° clockwise
+		orientation === 7 ? [0, -1, h1, -1, 0, w1] :      // transverse
+		/* 8 */             [0, 1, 0, -1, 0, w1]; // 90° anticlockwise
+
+	// A pixel at a time rather than a channel at a time. RGBA is exactly one
+	// 32-bit word, and copying it whole is four times fewer bounds-checked
+	// accesses; byte order does not matter because it is never inspected.
+	const src = new Uint32Array(frame.data.buffer, frame.data.byteOffset, frame.width * frame.height);
+	const dst = new Uint32Array(out.buffer);
+
 	for (let y = 0; y < frame.height; y++) {
+		// Walk the destination incrementally: within a row only x advances, so
+		// each step is one add rather than a fresh multiply.
+		let nx = bx * y + cx;
+		let ny = by * y + cy;
+		let from = y * frame.width;
 		for (let x = 0; x < frame.width; x++) {
-			let nx: number;
-			let ny: number;
-			switch (orientation) {
-				case 2:
-					nx = frame.width - 1 - x;
-					ny = y;
-					break; // mirrored
-				case 3:
-					nx = frame.width - 1 - x;
-					ny = frame.height - 1 - y;
-					break; // 180°
-				case 4:
-					nx = x;
-					ny = frame.height - 1 - y;
-					break; // flipped
-				case 5:
-					nx = y;
-					ny = x;
-					break; // transposed
-				case 6:
-					nx = frame.height - 1 - y;
-					ny = x;
-					break; // 90° clockwise
-				case 7:
-					nx = frame.height - 1 - y;
-					ny = frame.width - 1 - x;
-					break; // transverse
-				default:
-					nx = y;
-					ny = frame.width - 1 - x; // 8: 90° anticlockwise
-			}
-			const from = (y * frame.width + x) * 4;
-			const to = (ny * width + nx) * 4;
-			out[to] = frame.data[from];
-			out[to + 1] = frame.data[from + 1];
-			out[to + 2] = frame.data[from + 2];
-			out[to + 3] = frame.data[from + 3];
+			dst[ny * width + nx] = src[from++];
+			nx += ax;
+			ny += ay;
 		}
 	}
 
