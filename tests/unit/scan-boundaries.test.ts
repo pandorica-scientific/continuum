@@ -63,13 +63,25 @@ describe('the scan engine', () => {
 		// It must be imported for TYPES only. A value import drags 10 MB of
 		// JavaScript, with 7.6 MB of base64 WebAssembly inside it, into whichever
 		// chunk touches it — which does not merely load slowly: it hangs the tab
-		// with no error at all. The runtime copy is loaded as a script from
-		// static/opencv/, split out of node_modules at build time.
+		// with no error at all. Since v0.8.6 the real thing is loaded by the scan
+		// child, in a server process, and the rule below keeps `client` away from
+		// it entirely.
 		const offenders = files(ROOT).filter((path) => {
 			const source = code(path);
 			if (!source.includes('@techstark/opencv-js')) return false;
 			return !/import type .*from '@techstark\/opencv-js'/.test(source);
 		});
+		expect(offenders).toEqual([]);
+	});
+
+	it('keeps OpenCV and libheif out of the browser half entirely', () => {
+		// The point of v0.8.6. `client` may no longer reach either package by ANY
+		// import form — not a type import, not a dynamic one. Both now live in the
+		// scan child, a forked process whose heap can be reclaimed by exiting;
+		// Emscripten memory grows and never shrinks, so in a tab it could not be.
+		const offenders = files(join(ROOT, 'client')).filter((path) =>
+			/@techstark\/opencv-js|libheif-js/.test(code(path))
+		);
 		expect(offenders).toEqual([]);
 	});
 

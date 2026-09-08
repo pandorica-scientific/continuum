@@ -1,26 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import Icon from '$lib/components/Icon.svelte';
-	import {
-		DETECT_WIDTH,
-		REFINE_WIDTH,
-		detectBest,
-		detectOnce,
-		hairline,
-		scaleCorners,
-		type Corners,
-		type DetectState,
-		type Frame
-	} from '../core/index.ts';
-	import { loadCv } from './opencv-load.ts';
 	import { createCamera } from './camera.svelte.ts';
-	import { frameFromBitmapSource, frameFromVideo, stillFromTrack } from './frame.ts';
-	import {
-		DETECT_INTERVAL_MS,
-		GUIDANCE_DEBOUNCE_MS,
-		createStability,
-		guidanceFor
-	} from './loop.svelte.ts';
+	import { stillFileFromTrack } from './frame.ts';
 	import ScanPermission from './ScanPermission.svelte';
 
 	let {
@@ -31,7 +13,8 @@
 		pageCount = 0,
 		thumbnail = null
 	}: {
-		oncapture: (frame: Frame, corners: Corners | null) => void;
+		/** The photograph itself. Nothing in the browser opens it. */
+		oncapture: (file: File) => void;
 		oncancel: () => void;
 		onchoosefile: () => void;
 		/** Through to the document so far. */
@@ -42,18 +25,10 @@
 	} = $props();
 
 	const camera = createCamera();
-	const stability = createStability(DETECT_WIDTH);
 
 	let video: HTMLVideoElement | undefined = $state();
-	let detect = $state<DetectState>({ kind: 'searching' });
-	let guidance = $state('Point at the page');
 	let torchOn = $state(false);
 	let shooting = $state(false);
-	// The detection frame's own dimensions. The overlay's viewBox is exactly
-	// this, so a corner found at (x, y) in the frame is drawn at (x, y) — no
-	// scaling factor to get wrong.
-	let frameWidth = $state(DETECT_WIDTH);
-	let frameHeight = $state(Math.round(DETECT_WIDTH * 0.75));
 
 	/**
 	 * Where the video's picture actually lands inside its element.
@@ -91,81 +66,19 @@
 		picture = next;
 	}
 
-	let guidanceTimer: ReturnType<typeof setTimeout> | undefined;
-
-	/**
-	 * No entry for `searching`, deliberately: no page found means no outline,
-	 * because a speculative box is a claim the detector has not made. Every read
-	 * below tolerates the absence — assuming an entry exists is what took the
-	 * prototype's permission screens down.
-	 */
-	const OUTLINE = {
-		detected: {
-			width: 'var(--detect-w-found)',
-			colour: 'var(--detect-found)',
-			dash: 'none',
-			brackets: true
-		},
-		stable: {
-			width: 'var(--detect-w-stable)',
-			colour: 'var(--detect-stable)',
-			dash: 'none',
-			brackets: true
-		},
-		rejected: {
-			width: 'var(--detect-w-found)',
-			colour: 'var(--detect-rejected)',
-			dash: 'var(--detect-dash-rejected)',
-			brackets: false
-		}
-	} as const;
-
-	const outline = $derived(OUTLINE[detect.kind as keyof typeof OUTLINE]);
-	const corners = $derived('corners' in detect ? detect.corners : null);
-	// Brackets are drawn from the segment they sit on, so anything computed goes
-	// through `hairline` rather than straight into a stroke.
-	const bracket = $derived(hairline(detect.kind === 'stable' ? 3 : 2));
-
-	const points = (c: Corners) => [c.tl, c.tr, c.br, c.bl].map((p) => `${p.x},${p.y}`).join(' ');
-
-	/** Debounced, or the user gets a strobing instruction they cannot read. */
-	function say(line: string) {
-		if (line === guidance) return;
-		clearTimeout(guidanceTimer);
-		guidanceTimer = setTimeout(() => (guidance = line), GUIDANCE_DEBOUNCE_MS);
-	}
-
 	async function shoot() {
 		if (!video || !camera.track || shooting) return;
 		shooting = true;
 		try {
-			// Sensor resolution for the page itself — not the 640px detection
-			// frame, and not the video track's 1080p either.
-			const full = await stillFromTrack(camera.track, video);
-
-			// The real detection, on the STILL, at twice the live resolution and
-			// reading the picture two different ways.
-			//
-			// The live corners are no use here: they describe a frame captured a
-			// moment earlier, so any movement between the last tick and the
-			// shutter is baked into the crop, and they come from a 640px pass
-			// whose corners approximate the boundary of a blurred mask. Nothing
-			// is waiting on this — the preview is being prepared anyway — so it
-			// gets a second or two rather than a tenth of one.
-			const cv = await loadCv();
-			const measured = frameFromBitmapSource(full, REFINE_WIDTH);
-			const settled = detectBest(cv, measured);
-			const found = 'corners' in settled ? settled.corners : null;
-
-			const scaled = found
-				? scaleCorners(found, full.width / measured.width)
-				: // Fall back to the live corners rather than to nothing: a slightly
-					// stale crop beats no crop, and `renderPage` treats null as the
-					// full frame.
-					corners
-					? scaleCorners(corners, full.width / DETECT_WIDTH)
-					: null;
-			oncapture(full, scaled);
+			// The photograph, as bytes, straight to the server. Nothing here
+			// decodes it, measures it or looks for a page in it — which also
+			// retires a whole class of bug: the crop used to be found on a frame
+			// the browser had decoded and possibly re-oriented, so a still whose
+			// aspect ratio disagreed with the viewfinder produced corners
+			// describing a region of some other picture. Detection now runs on the
+			// exact bytes that were uploaded, and there is nothing left to
+			// disagree.
+			oncapture(await stillFileFromTrack(camera.track, video));
 		} finally {
 			shooting = false;
 		}
@@ -216,44 +129,7 @@
 
 	$effect(() => {
 		void camera.start();
-		let running = true;
-		let last = 0;
-
-		void (async () => {
-			const cv = await loadCv();
-			const tick = (now: number) => {
-				if (!running) return;
-				requestAnimationFrame(tick);
-				// A timestamp gate rather than setInterval: setInterval queues work
-				// the main thread cannot drain, and that queue never recovers.
-				if (now - last < DETECT_INTERVAL_MS) return;
-				last = now;
-				if (camera.state.kind !== 'live' || !video?.videoWidth || shooting) return;
-
-				const frame = frameFromVideo(video);
-				frameWidth = frame.width;
-				frameHeight = frame.height;
-				measurePicture();
-				// A FRAMING AID, nothing more. It never fires the shutter, so it
-				// can afford to be the cheap reading: the outline is here to show
-				// roughly what has been found while someone aims, and the real
-				// work happens once, after they press the button, with seconds to
-				// spend rather than a tenth of one.
-				const next = detectOnce(cv, frame);
-				detect =
-					stability.settled(next) && next.kind === 'detected'
-						? { kind: 'stable', corners: next.corners }
-						: next;
-				say(guidanceFor(detect));
-			};
-			requestAnimationFrame(tick);
-		})();
-
-		return () => {
-			running = false;
-			clearTimeout(guidanceTimer);
-			camera.stop();
-		};
+		return () => camera.stop();
 	});
 </script>
 
@@ -279,54 +155,33 @@
 		></video>
 
 		<!--
-			Sized and placed from the measurement above, so its coordinate space
-			is exactly the picture the user can see. Because the box already
-			matches, `none` is correct here — there is no remaining aspect
-			difference for the SVG to reconcile.
+			A STATIC FRAME GUIDE, where the tracked outline used to be.
+
+			The outline was OpenCV running nine times a second in the browser, and
+			taking it out is what lets the WebAssembly heap — the one an iPhone
+			could not always allocate — leave the browser altogether. Auto-capture
+			had already gone, so what is lost is an aiming aid rather than a
+			trigger: everything the detector has to say now arrives after the
+			shutter, from the server, where a crop that came out wrong is dragged
+			into place with the corner handles rather than retaken.
+
+			Still placed from the measurement above, so it sits on the PICTURE
+			rather than on the element — `object-fit: cover` means those are not
+			the same rectangle on a portrait phone holding a 4:3 stream.
 		-->
-		<svg
-			class="overlay"
+		<div
+			class="guide"
+			aria-hidden="true"
 			style="left: {picture.left}px; top: {picture.top}px; width: {picture.width}px; height: {picture.height}px"
-			viewBox="0 0 {frameWidth} {frameHeight}"
-			preserveAspectRatio="none"
 		>
-			{#if corners && outline}
-				<polygon
-					points={points(corners)}
-					fill="none"
-					stroke={outline.colour}
-					stroke-width={outline.width}
-					stroke-dasharray={outline.dash}
-					vector-effect="non-scaling-stroke"
-				/>
-				{#if outline.brackets && bracket.stroked}
-					<!-- Brackets only when four corners are actually found, which
-					     makes searching → detected two shape changes rather than
-					     one, and keeps the states separable without colour. -->
-					{#each [corners.tl, corners.tr, corners.br, corners.bl] as corner, i (i)}
-						<circle
-							cx={corner.x}
-							cy={corner.y}
-							r="6"
-							fill="none"
-							stroke={outline.colour}
-							stroke-width={bracket.width}
-							vector-effect="non-scaling-stroke"
-						/>
-					{/each}
-				{/if}
-			{:else}
-				<!-- A slow sweep says the camera is working without asserting a
-				     result. A @keyframes animation, so reduced motion stops it. -->
-				<rect class="sweep" x="0" y="0" width={DETECT_WIDTH} height="2.5" />
-			{/if}
-		</svg>
+			<span class="frame"></span>
+		</div>
 
 		<div class="top">
 			<button type="button" class="chip" onclick={oncancel}>Cancel</button>
 		</div>
 
-		<p class="guidance"><span class="chip">{guidance}</span></p>
+		<p class="guidance"><span class="chip">Fit the page inside the frame</span></p>
 
 		<div class="deck">
 			<span class="slot">
@@ -409,21 +264,19 @@
 		   measured against the result rather than assuming it. */
 		object-fit: cover;
 	}
-	.overlay {
+	.guide {
 		position: absolute;
-		/* left/top/width/height come from measurePicture(). */
+		pointer-events: none;
+		display: grid;
+		place-items: center;
 	}
-	.sweep {
-		fill: var(--detect-searching);
-		animation: sweep 2.6s var(--ease-out) infinite;
-	}
-	@keyframes sweep {
-		from {
-			transform: translateY(0);
-		}
-		to {
-			transform: translateY(360px);
-		}
+	/* Inset from the picture rather than filling it: a page held right to the
+	   edges is a page whose edges the detector cannot see. */
+	.frame {
+		width: 82%;
+		height: 78%;
+		border: var(--detect-w-found) dashed var(--detect-searching);
+		border-radius: var(--radius-md);
 	}
 	.top {
 		position: absolute;

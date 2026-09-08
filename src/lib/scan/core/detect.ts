@@ -15,7 +15,8 @@ import { MAX_ASPECT, MAX_CORNER_SKEW, orderCorners, quadAspect } from './geometr
 import { EDGES, quadArea, worstCornerSkew } from './lines.ts';
 import { CONTRAST_FULL, CONTRAST_REACH, edgeContrast, searchQuad } from './refine.ts';
 import type { CV } from './opencv.ts';
-import type { Corners, DetectState, Frame, Point } from './types.ts';
+import { measureBow } from './curve.ts';
+import type { Corners, DetectState, Edges, Frame, Point } from './types.ts';
 
 /**
  * Detection runs here and nowhere else. Detecting on a 4K canvas at 10 fps is a
@@ -36,6 +37,14 @@ export const DETECT_WIDTH = 640;
  * straight to `detectBest` does not come back slowly, it comes back UNCROPPED.
  */
 export const REFINE_WIDTH = 1280;
+
+/**
+ * The lowest score a quad may have and still be called a page.
+ *
+ * Deliberately far below every genuine page measured (0.795 at worst) rather
+ * than tuned close to them: this exists to reject nonsense, not to grade.
+ */
+const MIN_JUDGED_SCORE = 0.6;
 
 /** Below this share of the frame the page is too far away to be worth capturing. */
 const MIN_AREA_FRACTION = 0.25;
@@ -205,10 +214,21 @@ function flattenLighting(cv: CV, frame: Frame): Frame {
  * `gates: false` on the upload path. The photo is whatever it is, and rejecting
  * it helps nobody when there is no viewfinder to retake with.
  */
+/**
+ * What the segmentation splits on.
+ *
+ * `brightness` is the original and the right default: paper is usually lighter
+ * than what it lies on. `saturation` exists for when it is not — a white page
+ * on a brown carpet or a beige table separates barely at all by brightness and
+ * cleanly by colourfulness, because paper is nearly grey and furnishings are
+ * not. It is a CANDIDATE, never an override; `judgeQuad` still decides.
+ */
+export type SegmentOn = 'brightness' | 'saturation';
+
 export function detectOnce(
 	cv: CV,
 	frame: Frame,
-	options?: { gates?: boolean; refine?: RefineMode; invert?: boolean }
+	options?: { gates?: boolean; refine?: RefineMode; invert?: boolean; segment?: SegmentOn }
 ): DetectState {
 	const gates = options?.gates ?? true;
 	/**
@@ -227,6 +247,7 @@ export function detectOnce(
 	// hull out of shape, while a line fitted along the edge either side of the
 	// fold does not care about it at all.
 	const refining = options?.refine ?? 'none';
+	const segment = options?.segment ?? 'brightness';
 
 	return withMats((keep): DetectState => {
 		const src = keep(cv.matFromImageData(frame as ImageData));
@@ -243,14 +264,33 @@ export function detectOnce(
 		// in none of them. Otsu splits the histogram between paper and
 		// everything else, which is a property text does not disturb.
 		const work = keep(new cv.Mat());
-		cv.GaussianBlur(gray, work, new cv.Size(SEGMENT_BLUR, SEGMENT_BLUR), 0);
+		if (segment === 'saturation') {
+			// Saturation, not brightness. Everything downstream — the morphology,
+			// the contours, the refinement — is unchanged; only the channel the
+			// histogram is split on differs.
+			const rgb = keep(new cv.Mat());
+			cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+			const hsv = keep(new cv.Mat());
+			cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+			const channels = keep(new cv.MatVector());
+			cv.split(hsv, channels);
+			// Rule 2 of the arena contract: this is a NEW Mat, and deleting the
+			// MatVector does not free it.
+			const saturation = keep(channels.get(1));
+			cv.GaussianBlur(saturation, work, new cv.Size(SEGMENT_BLUR, SEGMENT_BLUR), 0);
+		} else {
+			cv.GaussianBlur(gray, work, new cv.Size(SEGMENT_BLUR, SEGMENT_BLUR), 0);
+		}
 		const mask = keep(new cv.Mat());
+		// On saturation the OBJECT is the dull side, so the sense of the split is
+		// reversed before `invert` is applied to it.
+		const wantsInverse = segment === 'saturation' ? !invert : invert;
 		cv.threshold(
 			work,
 			mask,
 			0,
 			255,
-			(invert ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY) + cv.THRESH_OTSU
+			(wantsInverse ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY) + cv.THRESH_OTSU
 		);
 		// Open first, to shed the specks and bridges a patterned desk leaves
 		// stuck to the page; then close, to seal the holes text punches in it.
@@ -353,9 +393,22 @@ export function detectOnce(
 			// region admitted only by the looser floor has nothing to fall back
 			// on, and a dented blob's convex hull is precisely the sheared,
 			// unreadable crop the search exists to prevent.
+			//
+			// This rule was MEASURED against the tuning corpus and kept. It is the
+			// largest single cause of the detector giving up — every photograph it
+			// refuses scores between 0.81 and 0.90 solidity — and lifting it was
+			// tried twice: once alone, which produced four visibly sheared crops,
+			// and once with `judgeQuad`'s floor and `measureBow` behind it, which
+			// still produced one. A crop that flares off the page is worse than no
+			// crop, because no crop renders the whole photograph and says so.
 			if (found) best = found;
 			else if (!bestIsClean) best = null;
 		}
+
+		// The bow of the quad that won, measured against the same mask it was
+		// found in. Only worth doing once a quad exists, and only on a thorough
+		// pass: the live loop had no time for it and no use for it either.
+		const bend = best && refining !== 'none' ? measureBow(cv, mask, best, frame) : undefined;
 
 		if (!best) {
 			// Nothing found. If the whole frame is dark that is worth saying,
@@ -367,7 +420,7 @@ export function detectOnce(
 			}
 			return { kind: 'searching' };
 		}
-		if (!gates) return { kind: 'detected', corners: best };
+		if (!gates) return { kind: 'detected', corners: best, edges: bend };
 
 		if (bestArea < frameArea * MIN_AREA_FRACTION) {
 			return { kind: 'rejected', corners: best, reason: 'small' };
@@ -387,7 +440,7 @@ export function detectOnce(
 		if (sharpness(cv, keep, gray) < MIN_SHARPNESS) {
 			return { kind: 'rejected', corners: best, reason: 'blurry' };
 		}
-		return { kind: 'detected', corners: best };
+		return { kind: 'detected', corners: best, edges: bend };
 	});
 }
 
@@ -419,10 +472,23 @@ export function detectBest(cv: CV, frame: Frame): DetectState {
 	// It is a candidate, not an override: judgeQuad below scores it against the
 	// others on contrast, squareness and area, and it wins only if it is better.
 	const darker = detectOnce(cv, frame, { gates: false, refine: 'thorough', invert: true });
+	// Paper is nearly grey and a carpet, a wooden desk or a beige table is not.
+	// Measured over the tuning corpus, a white page on brown carpet and one on a
+	// pale table were both invisible to every brightness reading and obvious to
+	// this one.
+	const dull = detectOnce(cv, frame, { gates: false, refine: 'thorough', segment: 'saturation' });
 
-	const candidates = [plain, evened, darker]
-		.map((state) => ('corners' in state ? state.corners : null))
-		.filter((corners): corners is Corners => corners !== null);
+	// Each candidate keeps the bow measured in ITS OWN mask. The judge compares
+	// them on their corners, but the curve that comes back has to be the one
+	// belonging to the reading that won — pairing them here is what stops a
+	// crop being bent by a boundary some other segmentation found.
+	const candidates = [plain, evened, darker, dull]
+		.map((state) =>
+			'corners' in state && state.corners
+				? { corners: state.corners, edges: 'edges' in state ? state.edges : undefined }
+				: null
+		)
+		.filter((candidate) => candidate !== null);
 	if (candidates.length === 0) return { kind: 'searching' };
 
 	return withMats((keep): DetectState => {
@@ -430,17 +496,31 @@ export function detectBest(cv: CV, frame: Frame): DetectState {
 		const gray = keep(new cv.Mat());
 		cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-		let best: Corners | null = null;
+		let best: { corners: Corners; edges?: Edges } | null = null;
 		let bestScore = -1;
-		for (const corners of candidates) {
-			const score = judgeQuad(gray, corners, frame);
+		for (const candidate of candidates) {
+			const score = judgeQuad(gray, candidate.corners, frame);
 			if (score > bestScore) {
 				bestScore = score;
-				best = corners;
+				best = candidate;
 			}
 		}
-		if (!best) return { kind: 'searching' };
-		return { kind: 'detected', corners: best };
+		// The one thing the judge is allowed to REFUSE.
+		//
+		// It chooses between candidates and does not second-guess the gates each
+		// reading already applied — that distinction is deliberate and is
+		// explained on `judgeQuad`. But a reading can produce a quad that is not
+		// a page at all, and with several readings now offering candidates the
+		// chance of one of them doing so has gone up rather than down.
+		//
+		// Measured over the tuning corpus, every genuine page scored between
+		// 0.795 and 0.900, while a wild quad — a shadow across a beige table read
+		// as an object — scored 0.388. The floor sits in that gap with room on
+		// both sides, so it costs nothing real and stops the scanner asserting a
+		// crop it has no basis for. Nothing found is not a failure: it renders
+		// the whole photograph, which is honest, and the corner handles are there.
+		if (!best || bestScore < MIN_JUDGED_SCORE) return { kind: 'searching' };
+		return { kind: 'detected', corners: best.corners, edges: best.edges };
 	});
 }
 

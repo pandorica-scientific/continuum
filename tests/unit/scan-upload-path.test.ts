@@ -58,15 +58,22 @@ describe('the flow', () => {
 		expect(flow).toMatch(/incoming\.length \? 'reading' : 'capture'/);
 	});
 
-	it('names the wait, because decoding a 48 MP HEIC took 3.6 seconds', () => {
+	it('names the wait, which is now the upload rather than a decode', () => {
+		// It used to be 3.6 seconds of decoding a 48 MP HEIC in the tab. It is now
+		// the photograph going up and the crop coming back, which is shorter on a
+		// LAN and honest either way.
 		expect(flow).toContain('Reading photo…');
+		expect(flow).toContain('Sending the photo…');
 	});
 
 	it('reads a dropped file the thorough way, with the gates off', () => {
 		// There is no retake: the file is whatever the gallery held, so refusing
-		// it for being blurry tells the user no and offers nothing. detectBest
-		// runs gateless by construction and reads the picture twice.
-		expect(flow).toMatch(/detectBest\(cv, measured\)/);
+		// it for being blurry tells the user no and offers nothing. `detectBest`
+		// runs gateless by construction and reads the picture both ways round.
+		// It runs on the server now, so this reads the pipeline rather than the
+		// flow — the decision is unchanged, only its address is.
+		const pipeline = readFileSync('src/lib/server/scan/worker/pipeline.ts', 'utf8');
+		expect(pipeline).toMatch(/detectBest\(cv, measured\)/);
 	});
 
 	it('measures the page at a known width, never at the photograph’s own', () => {
@@ -75,10 +82,15 @@ describe('the flow', () => {
 		// so. Handed a full 2400-wide capture, the 9 px close cannot seal the
 		// holes text punches in the page mask, the contour breaks up, and
 		// nothing is found: the photograph came back slowly AND uncropped.
-		expect(flow).toMatch(/frameFromBitmapSource\(frame, REFINE_WIDTH\)/);
+		const pipeline = readFileSync('src/lib/server/scan/worker/pipeline.ts', 'utf8');
+		expect(pipeline).toMatch(/downscaleFrame\(source, REFINE_WIDTH\)/);
 		// And the corners found on the measured frame must be carried back onto
 		// the frame that actually gets warped.
-		expect(flow).toMatch(/scaleCorners\(found, frame\.width \/ measured\.width\)/);
+		expect(pipeline).toMatch(/scaleOutline\(found, source\.width \/ measured\.width\)/);
+		// Corners AND curve scale together. Both were measured in the same
+		// downscaled frame, so scaling one alone would leave a bow describing an
+		// edge 1280 px wide on a page four thousand across.
+		expect(pipeline).toMatch(/corners: state\.corners, edges: state\.edges/);
 		// The full frame must not reach the detector.
 		expect(flow).not.toMatch(/detectBest\(cv, frame\)/);
 	});
@@ -94,10 +106,17 @@ describe('the flow', () => {
 	});
 
 	it('does not compound JPEG loss on the page it keeps', () => {
-		// The kept frame is encoded here and again inside the PDF. At the 0.85
-		// default twice over, a photograph of a laminated card came back blocked.
-		expect(flow).toMatch(/const KEEP_QUALITY = 0\.9[5-9];/);
-		expect(flow).toMatch(/encodeJpeg: \(frame\) => encodeJpeg\(frame, KEEP_QUALITY\)/);
+		// v0.8.5 had to RAISE both qualities because the kept page was encoded
+		// twice — once when kept and again inside the PDF — and at the 0.85
+		// default twice over, a photograph of a laminated card came back visibly
+		// blocked. v0.8.6 removes the second pass instead: the artefact written
+		// when the page is kept is the artefact the document embeds, so there is
+		// one encode for the whole journey.
+		const pipeline = readFileSync('src/lib/server/scan/worker/pipeline.ts', 'utf8');
+		expect(pipeline).toMatch(/await write\(request\.outPath, page, request\.mode, 95\)/);
+
+		const document = readFileSync('src/routes/scan/document/+server.ts', 'utf8');
+		expect(document).toMatch(/jpeg: new Uint8Array\(await readFile\(colour\)\)/);
 	});
 
 	it('survives a photo it cannot read', () => {

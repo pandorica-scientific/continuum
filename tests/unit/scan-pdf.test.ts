@@ -38,6 +38,29 @@ function bilevelPage(width: number, height: number): Frame {
 // The real one needs a canvas, which core may not touch.
 const encodeJpeg = async () => new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 
+/**
+ * Real JPEG bytes, 20x30 and 30x20.
+ *
+ * Inlined rather than kept as fixture files, and generated rather than drawn:
+ * `pdf-lib` PARSES what it embeds, so the four-byte stand-in above is enough
+ * for a callback that is never meant to run and not enough for a page that is
+ * actually embedded. Small enough to read past, real enough to survive
+ * `embedJpg` — including its dimensions, which is what the landscape case
+ * turns on.
+ */
+const REAL_JPEG = Uint8Array.from(
+	Buffer.from(
+		'/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wgARCAAeABQDAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAVAQEBAAAAAAAAAAAAAAAAAAAAA//aAAwDAQACEAMQAAABrSqAAAAAP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCT//EABQRAQAAAAAAAAAAAAAAAAAAADD/2gAIAQMBAT8BT//EABQRAQAAAAAAAAAAAAAAAAAAADD/2gAIAQIBAT8BT//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CT//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAT8hT//aAAwDAQACAAMAAAAQkkkkkk//xAAUEQEAAAAAAAAAAAAAAAAAAAAw/9oACAEDAQE/EE//xAAUEQEAAAAAAAAAAAAAAAAAAAAw/9oACAECAQE/EE//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAE/EE//2Q==',
+		'base64'
+	)
+);
+const REAL_JPEG_LANDSCAPE = Uint8Array.from(
+	Buffer.from(
+		'/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wgARCAAUAB4DAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAVAQEBAAAAAAAAAAAAAAAAAAAAA//aAAwDAQACEAMQAAABrSqAAAAAP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCT//EABQRAQAAAAAAAAAAAAAAAAAAADD/2gAIAQMBAT8BT//EABQRAQAAAAAAAAAAAAAAAAAAADD/2gAIAQIBAT8BT//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CT//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAT8hT//aAAwDAQACAAMAAAAQkkkkkk//xAAUEQEAAAAAAAAAAAAAAAAAAAAw/9oACAEDAQE/EE//xAAUEQEAAAAAAAAAAAAAAAAAAAAw/9oACAECAQE/EE//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAE/EE//2Q==',
+		'base64'
+	)
+);
+
 describe('isBilevel', () => {
 	it('is true when every pixel is pure black or pure white', () => {
 		expect(
@@ -97,6 +120,35 @@ describe('deflate', () => {
 });
 
 describe('assemblePdf', () => {
+	it('embeds an already-encoded page without encoding it again', async () => {
+		// The server renders and encodes ONCE, then stores the artefact. If
+		// assembly encodes a second time, the page is compressed twice at high
+		// quality — the exact compounding v0.8.5 had to raise both qualities to
+		// survive, and the reason `RenderedPage` grew this second shape.
+		let encodes = 0;
+		const counting = async () => {
+			encodes++;
+			return new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+		};
+		const bytes = await assemblePdf([async () => ({ jpeg: REAL_JPEG, mode: 'color' as const })], {
+			title: 'Already encoded',
+			encodeJpeg: counting
+		});
+		expect(encodes).toBe(0);
+		expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+	});
+
+	it('still turns the sheet to match an already-encoded landscape page', async () => {
+		// The orientation decision moves with the new shape: there is no `frame`
+		// to measure, so it has to come off the embedded image instead.
+		const bytes = await assemblePdf(
+			[async () => ({ jpeg: REAL_JPEG_LANDSCAPE, mode: 'color' as const })],
+			{ title: 'Wide', encodeJpeg }
+		);
+		const [page] = (await PDFDocument.load(bytes)).getPages();
+		expect(page.getWidth()).toBeGreaterThan(page.getHeight());
+	});
+
 	it('makes one page per scan page, in the order given', async () => {
 		const pages: PageProvider[] = [
 			async () => ({ frame: bilevelPage(200, 283), mode: 'bw' as const }),

@@ -14,6 +14,8 @@ export { withMats, type Arena, type Disposable } from './arena.ts';
 export {
 	A4_RATIO,
 	MAX_OUTPUT_WIDTH,
+	MAX_SOURCE_LONG,
+	clampOutput,
 	fullFrameCorners,
 	orderCorners,
 	turnCorners,
@@ -35,6 +37,7 @@ export { deflate, isBilevel, packBilevel } from './bilevel.ts';
 export { assemblePdf, type RenderedPage } from './pdf.ts';
 export { DETECT_WIDTH, REFINE_WIDTH, detectBest, detectOnce, type RefineMode } from './detect.ts';
 export { renderPage } from './enhance.ts';
+export { isStraight, meshMaps, outlineSpan, scaleOutline, turnEdges } from './mesh.ts';
 export {
 	angleBetween,
 	distanceToLine,

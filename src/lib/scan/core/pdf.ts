@@ -19,7 +19,19 @@ import {
 import { deflate, isBilevel, packBilevel } from './bilevel.ts';
 import type { Frame, PageMode } from './types.ts';
 
-export type RenderedPage = { frame: Frame; mode: PageMode };
+/**
+ * A page ready to be written, either as pixels or as bytes already encoded.
+ *
+ * The `jpeg` shape exists because the server renders and encodes ONCE, before
+ * assembly ever runs. Handing pdf-lib a `Frame` there would decode the stored
+ * artefact and re-encode it — two lossy passes over the same page, which is
+ * precisely the compounding v0.8.5 had to raise both qualities to survive.
+ *
+ * Black-and-white keeps the `frame` shape and must: it is not a JPEG at all by
+ * the time it reaches the document, it is a 1-bit DeviceGray stream, and
+ * `packBilevel` needs the pixels to build one.
+ */
+export type RenderedPage = { frame: Frame; mode: PageMode } | { jpeg: Uint8Array; mode: PageMode };
 
 /**
  * A page fetched only when it is about to be written.
@@ -57,7 +69,30 @@ export async function assemblePdf(
 	doc.setProducer('Continuum scan engine');
 
 	for (const load of pages) {
-		const { frame, mode } = await load();
+		const loaded = await load();
+
+		if ('jpeg' in loaded) {
+			// Embedded as it arrived. The orientation decision has to come off the
+			// EMBEDDED image rather than a frame, because there is no frame here —
+			// that is the whole point of this shape.
+			const image = await doc.embedJpg(loaded.jpeg);
+			const upright = image.height >= image.width;
+			const sheetWidth = upright ? A4_WIDTH : A4_HEIGHT;
+			const sheetHeight = upright ? A4_HEIGHT : A4_WIDTH;
+			const sheet = doc.addPage([sheetWidth, sheetHeight]);
+			const fit = Math.min(sheetWidth / image.width, sheetHeight / image.height);
+			const drawnWidth = image.width * fit;
+			const drawnHeight = image.height * fit;
+			sheet.drawImage(image, {
+				x: (sheetWidth - drawnWidth) / 2,
+				y: (sheetHeight - drawnHeight) / 2,
+				width: drawnWidth,
+				height: drawnHeight
+			});
+			continue;
+		}
+
+		const { frame, mode } = loaded;
 		// A4, turned to match the image so a landscape page gets a landscape
 		// sheet rather than being rotated into a portrait one.
 		const portrait = frame.height >= frame.width;

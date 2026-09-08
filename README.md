@@ -166,7 +166,7 @@ each](docs/statement-import.md)
 - **Is safe to re-run** — re-import overlapping exports as often as you like; duplicates are impossible. Backfilling years of history is the intended use.
 - **Is exact about money** — integer minor units end to end, never floats, and multi-currency totals use the rate from the day.
 - **Fits two people** — separate sign-ins, dashboards and tax statements over one shared household.
-- **Scans paper with a phone** — photograph a page and get a cropped, flattened, black-and-white PDF; several pages become one document. The processing runs in the browser, so no page is uploaded until the finished file is.
+- **Scans paper with a phone** — photograph a page and get a cropped, flattened, black-and-white PDF; several pages become one document. The processing runs on your own server rather than on the phone, so an old handset scans as well as a new one, and the photographs are deleted as soon as the document is saved.
 - **Finds a document by what is printed inside it** — filed paper is read in the background, so a variable symbol on page two of a scan is searchable, and the shelves it is filed on are yours to name.
 - **Keeps the paper beside the record it belongs to** — a flat, a tenancy, a loan, an account, a contact, a transaction, a tax statement and the portfolio each show their own documents on their own screen; most of them can also attach paper already filed elsewhere, and a flat, a tenancy, a loan and a contact can add a new document with the record and its shelf already chosen.
 

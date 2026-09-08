@@ -2,6 +2,36 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.6 — 2026-09-08
+
+> The phone takes the photograph and your server does the rest.
+
+### ✨ Added
+
+- 📄 **A page that is not flat is flattened rather than stretched** — A4 lifted off a table bows, and a perspective transform maps a quadrilateral exactly and a curve not at all, so a bowed sheet came out with its edges bent inward and the desk showing at the corners; the boundary now carries the curve of each edge and the page is sampled through it, which straightens the paper instead of the box around it
+- ✏️ **Each edge of the page can be pulled into a curve** — "Adjust the edges" now offers a handle in the middle of every edge as well as one at each corner, so a page that bows is traced rather than approximated; the edge handles sit quietly until they are used, dragging one back onto its straight line puts it back, and arrow keys move them like the corners
+- 🔍 **The page is looked for by colourfulness as well as by brightness** — paper is nearly grey and a carpet, a wooden desk or a beige table is not, so a white page that barely separates from what it lies on by lightness separates cleanly by how colourful it is; it is one more reading offered to the same scorer, which still picks whichever crop is actually best
+
+### 🔧 Changed
+
+- 🖥️ **The scanner runs on your server, not on the phone** — every bug in the v0.8.5 cycle came from a phone browser's memory ceiling, and the fix each time was to ask less of it: the photograph is now sent up as it comes off the camera, your server finds the page, straightens it, renders it and writes the PDF, and the phone only shows what comes back — so an old or busy phone scans exactly as well as a new one
+- 🖼️ **Original now crops the page and leaves everything else alone** — it used to hand back the whole photograph, which served the recovery case and not the ordinary one: anyone scanning something whose appearance IS the document, a passport cover or a bank card, had to choose between having it cropped and having its colours untouched, and can now have both; the uncropped photograph is still one tap away under "Adjust the edges" as `Whole photo`, and when no page was found at all Original hands back the picture whole exactly as before
+- 📷 **The viewfinder no longer draws the page outline or coaches the framing** — tracing the page nine times a second WAS the WebAssembly an iPhone could not always allocate, and it had stopped being a trigger when the shutter became the only way to take a page, so the viewfinder is now a plain camera with a frame guide and everything the detector has to say arrives after the shutter, where a crop that came out wrong is dragged into place rather than aimed at again
+- 📡 **A scan needs the server for each page rather than once at the end** — the honest cost of the move: on a home network it is not noticeable, but over a weak link or a tunnel a page takes a moment to come back, where previously ten pages could be scanned offline and the network was needed once
+- 🍎 **A HEIC from an iPhone is read on the server** — the 1.5 MB decoder that used to load in the browser for it now sits beside everything else, so the format an iPhone shoots by default costs the phone nothing at all
+- 📦 **7.6 MB of WebAssembly no longer ships to the browser** — nothing in the page loads OpenCV any more, so it is gone from the download, from the bundle and from the image's static files
+- 🚫 **A crop that scores like nothing at all is no longer asserted** — with more readings offering candidates, the chance of one of them proposing a shadow rather than a page went up, so a winning candidate now has to clear a floor measured far below every genuine page; failing it shows the whole photograph, which is honest, and the corner handles are one tap away
+
+### 🐛 Fixed
+
+- 🎨 **Colour mode no longer drains the colour out of a passport or an ID card** — evening out the lighting adjusted only the lightness channel and left the two colour channels where they were, which is not conservative but destructive: in that colour space lifting the lightness alone makes a colour PALER, so a burgundy passport cover came back pale mauve and a teal identity card came back grey-green; the correction now scales all three channels by the same amount, which changes the brightness and cannot touch the hue or the saturation at all
+- 🖼️ **The page you keep is encoded once rather than twice** — v0.8.5 raised the quality of both passes because their losses compounded into visible blocking on a laminated card; the second pass is now gone entirely, because the page written when you keep it is the page the PDF embeds
+- 📐 **A still that disagreed with the viewfinder can no longer crop somewhere else** — a phone writes a different EXIF rotation depending on how it was held and browsers disagree about applying it, so a photograph could be measured in one shape and cropped in another; the page is now found on exactly the bytes that were uploaded, and there is no second version of the picture left to disagree
+
+### ⬆️ Upgrading
+
+- 🔁 **Nothing to do** — `docker compose up -d` as usual; no data changes, no new settings, and the image is smaller than it was
+
 ## 0.8.5 — 2026-09-07
 
 > The scanner finds the page, keeps its colours, and hands you the corners when it is wrong.

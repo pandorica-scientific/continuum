@@ -19,9 +19,15 @@ COPY . .
 # OCR language data, fetched ONCE here so the running product never reaches the
 # network. ~7.4 MB for English, Czech, Polish, German and Spanish.
 RUN node scripts/fetch-tessdata.mjs
-# `npm run build` also splits OpenCV out of node_modules into static/opencv/ —
-# a small loader plus a separate .wasm. Bundling the package's single 10 MB file
-# hangs the browser outright; see scripts/prepare-opencv.mjs.
+# `npm run build` also bundles the scan child into build/scan-worker.cjs. That
+# child is a separate node process — nothing SvelteKit does for the server
+# bundle reaches it — and `src/` is not copied into the runtime stage, so it has
+# to arrive as one self-contained file in build/. See
+# scripts/build-scan-worker.mjs.
+#
+# It replaces the step that used to split OpenCV out for the BROWSER to load.
+# Since v0.8.6 nothing in the browser loads it: the 7.6 MB of WebAssembly runs
+# in that child instead, where its heap can be reclaimed by the process exiting.
 RUN npm run build
 
 # Production dependencies — this one DOES run as the target architecture,

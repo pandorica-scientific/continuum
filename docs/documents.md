@@ -347,13 +347,24 @@ The **camera** keeps the photograph as it is — a meter reading, a receipt you
 want to look at later. Nothing is cropped or cleaned up.
 
 The **scanner** treats what you photograph as a document. It finds the page,
-straightens it out of perspective, cleans it up and writes it as a PDF. A
+straightens it — out of perspective, and out of the bow a sheet takes when it is
+not lying flat — cleans it up and writes it as a PDF. A
 laptop with a camera opens a viewfinder; on a plain-http address — which is
 every ordinary install — the browser refuses camera access, so the phone's own
 camera app opens instead and the photograph comes back into the same pipeline.
-Nothing about the page ever leaves the device: the finding, the straightening
-and the PDF all happen in the browser, and only the finished document is
-uploaded.
+
+The work happens **on your server**, not on the phone. The photograph is sent up
+and the cropped page comes back, which is why an old or busy phone scans exactly
+as well as a new one — the device only has to take the picture and show what
+returns. The photograph does not leave your machine any more than the finished
+document does; it goes from your phone to your own server on your own network,
+and the originals are deleted as soon as the document is saved.
+
+The trade is that scanning now needs the server reachable for **each page**
+rather than only at the end. On a home network that is not noticeable. Over a
+weak connection, or on a link you are tunnelling in through, a page can take a
+moment to come back — where previously the photographs were processed on the
+phone and the network was needed once.
 
 Each page is then shown as it will be saved, in four treatments:
 
@@ -362,8 +373,14 @@ Each page is then shown as it will be saved, in four treatments:
 - **Grayscale** keeps the shading, for a photograph printed on a page.
 - **Colour** keeps the colours, evening out a desk lamp's gradient without
   altering them.
-- **Original** is the photograph untouched: no crop, no clean-up. It is the
-  recovery when everything else looks wrong.
+- **Original** crops the page but changes nothing else — no lighting
+  correction, no clean-up, the colours exactly as the camera recorded them. It
+  is the one to reach for when the document's appearance is part of the
+  document: a passport cover, a bank card, a photograph on a page.
+
+To keep the whole photograph uncropped, choose **Adjust the edges** and then
+`Whole photo`. When the page could not be found at all there is nothing to crop
+to, and Original hands back the picture untouched.
 
 **Add a page** photographs the next one and they become a single PDF, in the
 order shown. **Choose another file** retakes the page in front of you and leaves
@@ -371,10 +388,18 @@ the pages behind it alone.
 
 ### When the edges are wrong
 
-Under the preview, **Adjust the corners** opens the photograph with a handle on
+Under the preview, **Adjust the edges** opens the photograph with a handle on
 each corner of the page. Drag them onto the real edges and choose `Use these
 edges`; the page is re-cut from where you put them, in whichever treatment you
 were looking at.
+
+There is also a handle in the middle of each edge. Paper photographed off a
+table is rarely flat — A4 lifted at one corner bows along its length — and four
+straight lines cannot follow that, so the crop cuts into the page at the middle
+of an edge and takes in the desk at the corners. Pull the edge handle onto the
+real edge and the page is flattened along that curve rather than stretched to
+fit a box. Dragging it back onto the straight line between the corners makes the
+edge straight again.
 
 Two things make it worth reaching for rather than retaking:
 
@@ -385,8 +410,8 @@ Two things make it worth reaching for rather than retaking:
 - `Whole photo` sets the corners to the full frame in one tap, for when the
   right answer is no crop at all.
 
-Arrow keys nudge whichever corner has focus, with Shift for larger steps, so
-the screen works without a touchscreen.
+Arrow keys nudge whichever handle has focus — corner or edge — with Shift for
+larger steps, so the screen works without a touchscreen.
 
 ### Filing from the queue
 
