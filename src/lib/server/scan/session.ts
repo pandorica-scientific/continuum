@@ -174,12 +174,49 @@ export async function addScanPage(
 export async function countScanPages(sessionId: string): Promise<number> {
 	const dir = sessionDir(sessionId);
 	if (!existsSync(dir)) return 0;
+	return keptIn(await readdir(dir)).size;
+}
+
+/** The page ids with an artefact among these filenames. */
+function keptIn(names: string[]): Set<string> {
 	const kept = new Set<string>();
-	for (const name of await readdir(dir)) {
+	for (const name of names) {
 		const at = name.indexOf('-page.');
 		if (at > 0) kept.add(name.slice(0, at));
 	}
-	return kept.size;
+	return kept;
+}
+
+/**
+ * Sources nobody kept and nobody is looking at, gone.
+ *
+ * ONE PAGE IS IN FLIGHT AT A TIME. The screen photographs a page, inspects it,
+ * and either keeps it or retakes it before the next photograph — there is no
+ * path through it that has two unkept pages at once, and a retake says so with
+ * a `DELETE`. So a source with no artefact beside it, at the moment a NEW
+ * photograph arrives, is one whose `DELETE` never landed: a tab closed on the
+ * corner screen, a phone that lost the network on the way out.
+ *
+ * Without this the count of them was unbounded. The page cap counts kept pages
+ * — correctly, since it is a statement about the document — so a client that
+ * never said goodbye could add originals to a session all afternoon while its
+ * page count stayed at zero. Now a session holds what it kept, plus the one
+ * being looked at.
+ */
+export async function dropUnkeptScanPages(sessionId: string): Promise<number> {
+	const dir = sessionDir(sessionId);
+	if (!existsSync(dir)) return 0;
+
+	const names = await readdir(dir);
+	const kept = keptIn(names);
+	const stale = new Set<string>();
+	for (const name of names) {
+		const at = name.indexOf('-source.');
+		if (at > 0 && !kept.has(name.slice(0, at))) stale.add(name.slice(0, at));
+	}
+
+	for (const pageId of stale) await dropScanPage(sessionId, pageId);
+	return stale.size;
 }
 
 /** Everything this session wrote, gone. */
@@ -224,6 +261,28 @@ export async function dropOtherArtefact(
 }
 
 /**
+ * When this session was last worked on.
+ *
+ * The DIRECTORY's own mtime is not that, and reading it as though it were is
+ * how a scan gets swept out from under the person taking it. A directory's
+ * mtime moves when an entry is added, removed or renamed — so keeping a page
+ * moves it, and re-rendering one does NOT: a mode tap and a corner drag both
+ * overwrite files that already exist. Someone who spends two hours on a single
+ * difficult page, changing modes and dragging corners the whole time, touches
+ * the directory once at the start and never again.
+ *
+ * So the newest mtime of anything inside it, which every render moves.
+ */
+async function lastWorkedOn(path: string, own: number): Promise<number> {
+	let newest = own;
+	for (const name of await readdir(path).catch(() => [])) {
+		const info = await stat(join(path, name)).catch(() => null);
+		if (info) newest = Math.max(newest, info.mtimeMs);
+	}
+	return newest;
+}
+
+/**
  * Delete the sessions nobody came back to.
  *
  * Hung off the same five-minute tick that drains the CPU queue. Required, not
@@ -240,10 +299,8 @@ export async function sweepScanSessions(olderThanMs = SESSION_TTL_MS): Promise<n
 		if (!ID.test(name)) continue;
 		const path = join(root, name);
 		const info = await stat(path).catch(() => null);
-		// The directory's own mtime moves whenever a page is added to it, so a
-		// scan still being taken is never swept out from under the person taking
-		// it, however long they spend on it.
-		if (!info?.isDirectory() || info.mtimeMs > cutoff) continue;
+		if (!info?.isDirectory()) continue;
+		if ((await lastWorkedOn(path, info.mtimeMs)) > cutoff) continue;
 		await rm(path, { recursive: true, force: true });
 		removed++;
 	}

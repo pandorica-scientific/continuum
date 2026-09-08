@@ -126,6 +126,25 @@ describe('a scan session', () => {
 		expect(existsSync(second.sourcePath)).toBe(true);
 	});
 
+	it('reclaims a source nobody kept when the next photograph arrives', async () => {
+		// One page is in flight at a time, so a source with no artefact beside it
+		// at the moment a new photograph lands is one whose `DELETE` never
+		// arrived — a closed tab, a phone off the network. The page cap counts
+		// KEPT pages, so without this a client that never says goodbye could add
+		// originals all afternoon with its page count stuck at zero.
+		const { createScanSession, addScanPage, dropUnkeptScanPages, scanPagePaths } = await load();
+		const session = await createScanSession();
+		const abandoned = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		const finished = await addScanPage(session.id, new Uint8Array([2]), 'b.jpg');
+		await writeFile(scanPagePaths(session.id, finished.pageId).artefactPath('color'), 'kept');
+
+		expect(await dropUnkeptScanPages(session.id)).toBe(1);
+		expect(existsSync(abandoned.sourcePath)).toBe(false);
+		// A page that WAS kept keeps its source: re-editing its edges renders from
+		// the original again.
+		expect(existsSync(finished.sourcePath)).toBe(true);
+	});
+
 	it('leaves exactly one artefact behind when a page is kept twice', async () => {
 		// `document/+server.ts` reads whichever artefact exists and tests the PNG
 		// first, so a page kept as colour after black-and-white would go into the
@@ -150,8 +169,11 @@ describe('a scan session', () => {
 
 		// Aged through the module's OWN idea of where the session lives rather
 		// than a path rebuilt here, so this keeps testing the right directory
-		// even if where sessions live ever changes.
+		// even if where sessions live ever changes. The files age with it: the
+		// sweep reads the newest mtime INSIDE the session, because that is the
+		// only one a re-render moves.
 		const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
+		await utimes(page.sourcePath, old, old);
 		await utimes(sessionDir(session.id), old, old);
 
 		expect(await sweepScanSessions()).toBe(1);
@@ -159,11 +181,34 @@ describe('a scan session', () => {
 	});
 
 	it('leaves a scan that is still being taken', async () => {
-		// The directory's mtime moves whenever a page is added, so a long session
-		// is never swept out from under the person taking it.
 		const { createScanSession, sweepScanSessions } = await load();
 		await createScanSession();
 		expect(await sweepScanSessions()).toBe(0);
+	});
+
+	it('leaves a scan whose only recent work was re-rendering one page', async () => {
+		// The directory's mtime moves when an entry is ADDED, removed or renamed —
+		// not when a file inside it is written over. A mode tap and a corner drag
+		// both overwrite a preview that already exists, so someone spending two
+		// hours on a single difficult page touched the directory once, at the
+		// start, and was then swept out from under.
+		const { createScanSession, addScanPage, sessionDir, scanPagePaths, sweepScanSessions } =
+			await load();
+		const session = await createScanSession();
+		const page = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		const { previewPath } = scanPagePaths(session.id, page.pageId);
+		await writeFile(previewPath, 'first render');
+
+		// Two hours pass with the page on screen, and the directory ages with it.
+		const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
+		await utimes(sessionDir(session.id), old, old);
+		await utimes(page.sourcePath, old, old);
+
+		// Then another mode is tapped, which rewrites the preview and nothing else.
+		await writeFile(previewPath, 'second render');
+
+		expect(await sweepScanSessions()).toBe(0);
+		expect(existsSync(page.sourcePath)).toBe(true);
 	});
 
 	it('sweeps nothing at all when no scanning has ever happened', async () => {

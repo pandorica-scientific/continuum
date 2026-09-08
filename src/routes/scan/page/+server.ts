@@ -14,6 +14,7 @@ import {
 	addScanPage,
 	countScanPages,
 	createScanSession,
+	dropUnkeptScanPages,
 	scanPagePaths
 } from '$lib/server/scan/session';
 import { extname } from 'node:path';
@@ -26,10 +27,17 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// A session carries across pages; the first page of a scan makes one.
 	const existing = form.get('sessionId');
-	const sessionId =
-		typeof existing === 'string' && existing
-			? scanId(existing, 'scan session')
-			: (await createScanSession()).id;
+	const carried = typeof existing === 'string' && existing ? existing : null;
+	const sessionId = carried ? scanId(carried, 'scan session') : (await createScanSession()).id;
+
+	// A new photograph means the last one is finished with. One page is in flight
+	// at a time, so any source still sitting here without an artefact beside it
+	// was abandoned by a client that never got its `DELETE` out — a closed tab, a
+	// phone off the network. Reclaimed HERE rather than left to the sweep,
+	// because the page cap counts kept pages and these are not kept: without
+	// this, a session could grow all afternoon while its page count stayed at
+	// zero.
+	if (carried) await dropUnkeptScanPages(sessionId);
 
 	// Enforced here as well as in the browser. The browser's cap is now advice —
 	// this endpoint is reachable without it. Counted on the pages already KEPT,
