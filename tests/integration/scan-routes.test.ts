@@ -7,7 +7,7 @@
 // the property that lets an abandoned one be swept.
 import { readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +26,7 @@ import { GET as getPreview } from '../../src/routes/scan/page/[id]/preview/+serv
 import { GET as getOriginal } from '../../src/routes/scan/page/[id]/original/+server';
 import { POST as makeDocument } from '../../src/routes/scan/document/+server';
 import { DELETE as dropSession } from '../../src/routes/scan/session/[id]/+server';
+import { DELETE as dropPage } from '../../src/routes/scan/page/[id]/+server';
 import { shutdownScanChild } from '$lib/server/scan/child';
 
 const DIRECTORY = resolve('scratch-workspace/scan-route-uploads');
@@ -86,16 +87,61 @@ describe('the scan endpoints', () => {
 
 	it('serves the uncropped original for the corner screen', async () => {
 		// The fallback for a page whose blob the phone has released, and for a
-		// HEIC the browser will not decode.
+		// HEIC the browser will not decode. The decode happens in the child: doing
+		// it here would put libheif's never-shrinking heap in the web server, in
+		// the process the child exists to keep clean.
 		const { sessionId, pageId } = await upload();
-		const original = await getOriginal(
-			event({
-				params: { id: pageId },
-				url: new URL(`http://localhost/scan/page/${pageId}/original?session=${sessionId}&w=800`)
-			})
-		);
+		const ask = () =>
+			getOriginal(
+				event({
+					params: { id: pageId },
+					url: new URL(`http://localhost/scan/page/${pageId}/original?session=${sessionId}`)
+				})
+			);
+		const original = await ask();
 		expect(original.status).toBe(200);
 		expect(original.headers.get('content-type')).toBe('image/jpeg');
+
+		// Asked for twice — cancelling out of the corner screen and going back in
+		// is one tap — and the second time it is a file, not another decode.
+		const again = await ask();
+		expect((await again.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+	}, 60_000);
+
+	it('answers a malformed id with a 400 rather than a 500', async () => {
+		// Traversal is refused deeper down and always was, but by throwing a plain
+		// Error — which SvelteKit reports as a server fault, with a stack trace in
+		// the log, for someone following a stale link.
+		await expect(
+			getPreview(
+				event({
+					params: { id: 'not-an-id' },
+					url: new URL('http://localhost/scan/page/not-an-id/preview?session=nor-is-this')
+				})
+			)
+		).rejects.toMatchObject({ status: 400 });
+	});
+
+	it('gives back a retaken page rather than keeping it to the end of the scan', async () => {
+		// The replacement goes into the SAME session, so without this the rejected
+		// original — the 2–4 MB one — sits there until the document is made.
+		const { sessionId, pageId } = await upload();
+		await dropPage(
+			event({
+				params: { id: pageId },
+				url: new URL(`http://localhost/scan/page/${pageId}?session=${sessionId}`)
+			})
+		);
+		await expect(
+			getPreview(
+				event({
+					params: { id: pageId },
+					url: new URL(`http://localhost/scan/page/${pageId}/preview?session=${sessionId}`)
+				})
+			)
+		).rejects.toMatchObject({ status: 404 });
+		// And the session it belonged to is still open.
+		expect(existsSync(resolve(DIRECTORY, 'scan', sessionId))).toBe(true);
 	}, 60_000);
 
 	it('re-renders at a new mode', async () => {
@@ -188,6 +234,30 @@ describe('the scan endpoints', () => {
 			})
 		);
 		expect((await PDFDocument.load(await pdf.arrayBuffer())).getPageCount()).toBe(1);
+	}, 90_000);
+
+	it('keeps a page at the mode chosen LAST when it is kept twice', async () => {
+		// Black-and-white writes a PNG and every other mode a JPEG, so a page kept
+		// twice leaves two artefacts — and the document reads whichever exists,
+		// testing the PNG first. The second choice was the one being ignored.
+		const { sessionId, pageId, outline } = await upload();
+		const keep = (mode: string) =>
+			keepPage(
+				event({
+					params: { id: pageId },
+					request: new Request('http://localhost/x', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ sessionId, mode, outline, rotation: 0 })
+					})
+				})
+			);
+		await keep('bw');
+		await keep('color');
+
+		const dir = resolve(DIRECTORY, 'scan', sessionId);
+		expect(existsSync(join(dir, `${pageId}-page.png`))).toBe(false);
+		expect(existsSync(join(dir, `${pageId}-page.jpg`))).toBe(true);
 	}, 90_000);
 
 	it('abandons a scan on request rather than waiting for the sweep', async () => {

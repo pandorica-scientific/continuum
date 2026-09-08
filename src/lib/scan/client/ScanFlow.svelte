@@ -20,6 +20,7 @@
 	import { isSecureForCamera } from './camera.svelte.ts';
 	import {
 		assembleScanDocument,
+		dropScanPage,
 		dropScanSession,
 		keepScanPage,
 		originalUrl,
@@ -256,7 +257,7 @@
 
 	/** Back to the viewfinder. Nothing is lost by trying again. */
 	function replace() {
-		discard();
+		retake();
 		screen = 'capture';
 	}
 
@@ -265,6 +266,20 @@
 		held = null;
 		cornersUrl = '';
 		mode = 'bw';
+	}
+
+	/**
+	 * Discard the page being inspected, on the server as well as here.
+	 *
+	 * The replacement is uploaded into the SAME session, so a page dropped
+	 * without saying so stays on disk as its full-size original until the
+	 * document is made — twice the scratch for a page photographed twice, and
+	 * more for a difficult one. `discard()` on its own is for a page that is
+	 * staying, which is the one the keep path has just committed.
+	 */
+	function retake() {
+		if (held && session.id) dropScanPage(session.id, held.pageId);
+		discard();
 	}
 
 	/** Give the server back its scratch, whenever this screen is left for good. */
@@ -309,6 +324,29 @@
 			// Pinning the body scrolled it to the top; put the reader back where
 			// they were rather than at the top of the documents list.
 			window.scrollTo(0, offset);
+		};
+	});
+
+	/**
+	 * The scratch goes back however the screen ends, not only when Cancel is
+	 * pressed.
+	 *
+	 * Closing the tab, a phone that goes flat, a call site that unmounts this
+	 * component — all of them are the end of the scan as far as the server is
+	 * concerned, and none of them reach `abandon()`. The sweep is the backstop
+	 * and runs two hours later; this is the same request at the moment the screen
+	 * goes away, which is what `keepalive` on that fetch is for. It is a no-op
+	 * once a document has been made: `make()` disposes the session first, so
+	 * there is no id left to drop.
+	 */
+	$effect(() => {
+		const leave = () => {
+			if (session.id) dropScanSession(session.id);
+		};
+		window.addEventListener('pagehide', leave);
+		return () => {
+			window.removeEventListener('pagehide', leave);
+			leave();
 		};
 	});
 
@@ -369,7 +407,7 @@
 			// Pages already kept are not thrown away silently: if there are any,
 			// Cancel goes to the review screen where discarding is a deliberate act.
 			if (session.pages.length > 0) {
-				discard();
+				retake();
 				screen = 'review';
 				return;
 			}
@@ -411,7 +449,7 @@
 				// silently cost you every page behind it. Retake in place instead
 				// and leave the document alone.
 				if (session.pages.length > 0) {
-					discard();
+					retake();
 					// Somewhere to land if the camera is dismissed: the review
 					// screen, still holding the pages that never went anywhere.
 					screen = 'review';

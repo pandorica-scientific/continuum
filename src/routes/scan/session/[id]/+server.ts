@@ -7,10 +7,11 @@
  * hours after they closed the screen.
  */
 import { json } from '@sveltejs/kit';
+import { scanId } from '$lib/server/scan/http';
 import { dropScanSession } from '$lib/server/scan/session';
 import type { RequestHandler } from './$types';
 
 export const DELETE: RequestHandler = async ({ params }) => {
-	await dropScanSession(params.id);
+	await dropScanSession(scanId(params.id, 'scan session'));
 	return json({ dropped: true });
 };

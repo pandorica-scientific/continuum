@@ -10,12 +10,13 @@
 import { error } from '@sveltejs/kit';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { scanId } from '$lib/server/scan/http';
 import { scanPagePaths } from '$lib/server/scan/session';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params, url }) => {
-	const sessionId = url.searchParams.get('session') ?? '';
-	const { previewPath } = scanPagePaths(sessionId, params.id);
+	const sessionId = scanId(url.searchParams.get('session'), 'scan session');
+	const { previewPath } = scanPagePaths(sessionId, scanId(params.id, 'scan page'));
 	if (!existsSync(previewPath)) error(404, 'There is no preview for that page.');
 
 	return new Response(new Uint8Array(await readFile(previewPath)), {

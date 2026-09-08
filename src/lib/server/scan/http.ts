@@ -14,7 +14,23 @@
 import { error } from '@sveltejs/kit';
 import { holdCpuQueueForScan } from '$lib/server/jobs';
 import { ask } from './child';
+import { isScanId } from './session';
 import type { PendingScanRequest, ScanReply } from './protocol';
+
+/**
+ * An id off the wire, answered for rather than thrown over.
+ *
+ * `session.ts` checks these as well and must — it is the guard between a URL
+ * parameter and the filesystem, and a `..` that gets through it is a read or a
+ * delete anywhere the server can reach. But it throws a plain `Error`, which
+ * SvelteKit reports as a 500 and `handleError` logs with a stack trace and an
+ * error reference. A stale link or a mistyped id is not a server fault; it is a
+ * 400, and saying so keeps the log for things that are.
+ */
+export function scanId(value: string | null | undefined, what: string): string {
+	if (!value || !isScanId(value)) error(400, `That is not a ${what}.`);
+	return value;
+}
 
 /**
  * Run one piece of scan work, with the CPU queue standing back around it.

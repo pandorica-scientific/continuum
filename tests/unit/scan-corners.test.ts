@@ -98,6 +98,16 @@ describe('the corner editor', () => {
 		// The other half of a failed detection: sometimes the answer is "no crop".
 		expect(corners).toMatch(/quad = fullFrameCorners\(width, height\)/);
 	});
+
+	it('takes the bends away with it when the whole photo is asked for', () => {
+		// Pull an edge, change your mind, press Whole photo: with the bends left
+		// behind, the boundary handed over is the full frame with CURVED edges,
+		// `isStraight` is false, and the renderer mesh-warps the photograph the
+		// button exists to return whole.
+		expect(corners).toMatch(/function wholePhoto\(\)/);
+		expect(corners).toMatch(/bends = \{ top: null, right: null, bottom: null, left: null \}/);
+		expect(corners).toMatch(/onclick=\{wholePhoto\}/);
+	});
 });
 
 describe('the corners it hands back', () => {
@@ -124,5 +134,19 @@ describe('the corners it hands back', () => {
 
 	it('cannot be dragged outside the photograph', () => {
 		expect(corners).toMatch(/const clamp = \(value: number, high: number\) =>/);
+	});
+
+	it('carries each curve to the edge it was actually pulled on', () => {
+		// The ordering above can move a point from one role to another, and a bend
+		// belongs to the PAIR OF POINTS it was pulled between rather than to the
+		// name that pair had at the time. Read back by name after a reorder, the
+		// curve arrives on an edge nobody touched — and pointing the wrong way, so
+		// the dewarp bows the page outward where the person pulled it in.
+		expect(corners).toMatch(/const edges = edgesFor\(ordered\)/);
+		expect(corners).toMatch(/function edgesFor\(ordered: Corners\)/);
+		// Matched by position, and reversed when the ordered edge runs the other
+		// way round: ENDS is also the direction the mesh reads each edge in.
+		expect(corners).toMatch(/curveOf\(was\)\.reverse\(\)/);
+		expect(corners).not.toMatch(/top: curveOf\('top'\)/);
 	});
 });

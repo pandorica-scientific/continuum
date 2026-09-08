@@ -8,8 +8,8 @@
  */
 import { error, json } from '@sveltejs/kit';
 import { DRAFT_WIDTH } from '$lib/server/scan/protocol';
-import { readJson, scanWork } from '$lib/server/scan/http';
-import { scanPagePaths, scanSourceExt } from '$lib/server/scan/session';
+import { readJson, scanId, scanWork } from '$lib/server/scan/http';
+import { dropOtherArtefact, scanPagePaths, scanSourceExt } from '$lib/server/scan/session';
 import type { Outline, PageMode, Rotation } from '$lib/scan/core/types';
 import type { RequestHandler } from './$types';
 
@@ -28,10 +28,12 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	if (!MODES.includes(body.mode)) error(400, 'That is not a page mode.');
 	if (!ROTATIONS.includes(body.rotation)) error(400, 'That is not a rotation.');
 
-	const ext = await scanSourceExt(body.sessionId, params.id);
+	const sessionId = scanId(body.sessionId, 'scan session');
+	const pageId = scanId(params.id, 'scan page');
+	const ext = await scanSourceExt(sessionId, pageId);
 	if (!ext) error(404, 'That page is no longer being scanned.');
 
-	const { sourcePath, artefactPath } = scanPagePaths(body.sessionId, params.id, ext);
+	const { sourcePath, artefactPath } = scanPagePaths(sessionId, pageId, ext);
 
 	const result = await scanWork({
 		op: 'render',
@@ -44,6 +46,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		full: true,
 		previewWidth: DRAFT_WIDTH
 	});
+
+	// Keeping the same page a second time at a different mode leaves the first
+	// artefact behind — black-and-white is a PNG and everything else a JPEG — and
+	// the document reads whichever it finds. Only the mode just chosen survives.
+	await dropOtherArtefact(sessionId, pageId, body.mode);
 
 	return json({ kept: true, width: result.width, height: result.height });
 };

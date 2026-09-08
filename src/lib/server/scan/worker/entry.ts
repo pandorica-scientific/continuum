@@ -20,7 +20,7 @@
 import { createRequire } from 'node:module';
 import type { CV } from '$lib/scan/core/index';
 import type { ScanRequest } from '../protocol';
-import { runDetect, runRender } from './pipeline';
+import { runDetect, runOriginal, runRender } from './pipeline';
 
 /**
  * The listener is registered before anything else in this file.
@@ -141,9 +141,21 @@ ready.catch(() => {});
 async function serve(request: ScanRequest): Promise<void> {
 	lastSeen = Date.now();
 	try {
-		const cv = await ready;
-		const result =
-			request.op === 'detect' ? await runDetect(cv, request) : await runRender(cv, request);
+		// `original` neither needs OpenCV nor waits for it. It is the corner
+		// screen's fallback, and a box too short of memory to give Emscripten a
+		// heap can still hand back a photograph to place handles on — which is
+		// exactly the box where that fallback matters most.
+		let result;
+		switch (request.op) {
+			case 'original':
+				result = await runOriginal(request);
+				break;
+			case 'detect':
+				result = await runDetect(await ready, request);
+				break;
+			default:
+				result = await runRender(await ready, request);
+		}
 		process.send?.({ id: request.id, ok: true, ...result });
 	} catch (error) {
 		// A failure is REPORTED, never thrown away. The parent is waiting on a

@@ -20,8 +20,8 @@ vi.mock('$env/dynamic/private', () => ({
 		get: (_target, key: string) => process.env[key]
 	})
 }));
-import { existsSync } from 'node:fs';
-import { mkdtemp, rm, utimes } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -90,12 +90,57 @@ describe('a scan session', () => {
 		expect(existsSync(page.sourcePath)).toBe(false);
 	});
 
-	it('counts the pages it holds', async () => {
-		const { createScanSession, addScanPage, countScanPages } = await load();
+	it('counts the pages a document would hold rather than the photographs taken', async () => {
+		// Every upload writes a source whether its page survives or not, so
+		// counting THOSE counted retakes: someone who photographed six pages twice
+		// was refused at twenty shutter presses while the review screen in front
+		// of them showed fourteen. The cap is a statement about the document.
+		const { createScanSession, addScanPage, countScanPages, scanPagePaths } = await load();
 		const session = await createScanSession();
-		await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		const first = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
 		await addScanPage(session.id, new Uint8Array([2]), 'b.jpg');
-		expect(await countScanPages(session.id)).toBe(2);
+		expect(await countScanPages(session.id)).toBe(0);
+
+		const { artefactPath } = scanPagePaths(session.id, first.pageId);
+		await writeFile(artefactPath('color'), 'kept');
+		expect(await countScanPages(session.id)).toBe(1);
+
+		// The two modes write different extensions, so a page kept twice leaves
+		// two files. It is still one page.
+		await writeFile(artefactPath('bw'), 'kept');
+		expect(await countScanPages(session.id)).toBe(1);
+	});
+
+	it('drops one page without ending the scan', async () => {
+		// A retake uploads its replacement into the same session, and the rejected
+		// original is the 2–4 MB one.
+		const { createScanSession, addScanPage, dropScanPage, scanPagePaths } = await load();
+		const session = await createScanSession();
+		const first = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		const second = await addScanPage(session.id, new Uint8Array([2]), 'b.jpg');
+		await writeFile(scanPagePaths(session.id, first.pageId).previewPath, 'preview');
+
+		await dropScanPage(session.id, first.pageId);
+		expect(existsSync(first.sourcePath)).toBe(false);
+		expect(existsSync(scanPagePaths(session.id, first.pageId).previewPath)).toBe(false);
+		expect(existsSync(second.sourcePath)).toBe(true);
+	});
+
+	it('leaves exactly one artefact behind when a page is kept twice', async () => {
+		// `document/+server.ts` reads whichever artefact exists and tests the PNG
+		// first, so a page kept as colour after black-and-white would go into the
+		// document as the mode the person changed their mind about.
+		const { createScanSession, addScanPage, dropOtherArtefact, scanPagePaths } = await load();
+		const session = await createScanSession();
+		const page = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		const { artefactPath } = scanPagePaths(session.id, page.pageId);
+
+		await writeFile(artefactPath('bw'), 'first');
+		await writeFile(artefactPath('color'), 'second');
+		await dropOtherArtefact(session.id, page.pageId, 'color');
+
+		expect(existsSync(artefactPath('bw'))).toBe(false);
+		expect(existsSync(artefactPath('color'))).toBe(true);
 	});
 
 	it('sweeps a session whose phone never came back', async () => {
@@ -124,5 +169,23 @@ describe('a scan session', () => {
 	it('sweeps nothing at all when no scanning has ever happened', async () => {
 		const { sweepScanSessions } = await load();
 		expect(await sweepScanSessions()).toBe(0);
+	});
+});
+
+describe('the reclaim of a scan nobody finished', () => {
+	it('runs on the server"s own tick and not only in this file', () => {
+		// The failure this exists for. The sweep was written, documented as
+		// "Required, not housekeeping", and called from nowhere but the test above
+		// — so every abandoned scan kept its 2–4 MB a page for ever, on the
+		// smallest disk the product runs on.
+		expect(readFileSync('src/hooks.server.ts', 'utf8')).toContain('sweepScanSessions');
+	});
+
+	it('is not the only thing that reclaims one, because two hours is a long time', () => {
+		// Closing the tab is how a scan usually ends, and it reaches none of the
+		// buttons that say so. `keepalive` is what lets the request leave anyway.
+		const flow = readFileSync('src/lib/scan/client/ScanFlow.svelte', 'utf8');
+		expect(flow).toMatch(/addEventListener\('pagehide', leave\)/);
+		expect(readFileSync('src/lib/scan/client/api.ts', 'utf8')).toMatch(/keepalive: true/);
 	});
 });

@@ -14,6 +14,8 @@ export { withMats, type Arena, type Disposable } from './arena.ts';
 export {
 	A4_RATIO,
 	MAX_OUTPUT_WIDTH,
+	MAX_SOURCE_LONG,
+	clampOutput,
 	fullFrameCorners,
 	orderCorners,
 	turnCorners,

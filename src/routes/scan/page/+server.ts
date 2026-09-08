@@ -8,7 +8,7 @@
  */
 import { error, json } from '@sveltejs/kit';
 import { DRAFT_WIDTH } from '$lib/server/scan/protocol';
-import { scanWork } from '$lib/server/scan/http';
+import { scanId, scanWork } from '$lib/server/scan/http';
 import {
 	MAX_PAGES,
 	addScanPage,
@@ -27,10 +27,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	// A session carries across pages; the first page of a scan makes one.
 	const existing = form.get('sessionId');
 	const sessionId =
-		typeof existing === 'string' && existing ? existing : (await createScanSession()).id;
+		typeof existing === 'string' && existing
+			? scanId(existing, 'scan session')
+			: (await createScanSession()).id;
 
 	// Enforced here as well as in the browser. The browser's cap is now advice —
-	// this endpoint is reachable without it.
+	// this endpoint is reachable without it. Counted on the pages already KEPT,
+	// so a retake does not spend one of the twenty.
 	if ((await countScanPages(sessionId)) >= MAX_PAGES) {
 		error(409, `A document holds at most ${MAX_PAGES} pages.`);
 	}

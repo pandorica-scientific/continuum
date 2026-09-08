@@ -11,6 +11,18 @@ export const MAX_OUTPUT_WIDTH = 2480;
 /** Long edge over short edge for A4. */
 export const A4_RATIO = Math.SQRT2;
 
+/**
+ * The longest edge a SOURCE photograph is read at.
+ *
+ * Derived, not chosen: the largest page this pipeline can ever produce is A4 at
+ * 300 dpi, whose long edge is `MAX_OUTPUT_WIDTH * A4_RATIO`. A photograph with
+ * more pixels than that along its own long edge cannot put them anywhere — the
+ * warp discards them on the way out — so reading it whole buys nothing and
+ * costs everything. A 108 MP phone photograph is 432 MB as RGBA, and the same
+ * frame again once OpenCV has copied it into the WASM heap.
+ */
+export const MAX_SOURCE_LONG = Math.round(MAX_OUTPUT_WIDTH * A4_RATIO);
+
 /** Within this of A4, snap to it. Any wider and a receipt gets stretched into a page. */
 const SNAP_TOLERANCE = 0.04;
 
@@ -36,6 +48,20 @@ export function outputSize(corners: Corners): { width: number; height: number } 
 		width = height * A4_RATIO;
 	}
 
+	return clampOutput(width, height);
+}
+
+/**
+ * An output size, held to what a page is worth storing and to whole pixels.
+ *
+ * Split out of `outputSize` because it is NOT only `outputSize`'s business: the
+ * bowed path measures its own span from the boundary curves and skipped this
+ * entirely. The arc length of a page photographed at 48 MP asks for something
+ * around 7000×9800 — a 274 MB Mat, plus the remap maps beside it, on the box
+ * whose 2 GB is the reason `meshMaps` stripes at all. It also meant a flat page
+ * and a bowed one landed in the same PDF at different resolutions.
+ */
+export function clampOutput(width: number, height: number): { width: number; height: number } {
 	if (width > MAX_OUTPUT_WIDTH) {
 		height = (height * MAX_OUTPUT_WIDTH) / width;
 		width = MAX_OUTPUT_WIDTH;

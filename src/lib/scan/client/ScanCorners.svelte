@@ -296,17 +296,57 @@
 		return points;
 	}
 
+	/** Two points at the same place. Exact, because these are copies, not measurements. */
+	const same = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+
+	/**
+	 * The curves, re-labelled onto the corners as `orderCorners` left them.
+	 *
+	 * Ordering can move a point from one role to another — dragging the top-left
+	 * past the top-right is the case it exists for — and a bend belongs to the
+	 * PAIR OF POINTS it was pulled between, not to the name that pair happened to
+	 * have at the time. Reading `bends.top` for the ordered top edge after a
+	 * reorder hands the model a curve for an edge nobody touched, and hands it in
+	 * the wrong direction as well, so the dewarp bows the page somewhere the
+	 * person never pulled.
+	 *
+	 * Matched by position and REVERSED when the ordered edge runs the other way
+	 * round, because `ENDS` is also the direction the mesh reads each edge in.
+	 */
+	function edgesFor(ordered: Corners): Record<Edge, Point[]> {
+		const out: Record<Edge, Point[]> = { top: [], right: [], bottom: [], left: [] };
+		for (const edge of EDGES) {
+			const [from, to] = ENDS[edge];
+			for (const was of EDGES) {
+				const [a, b] = ENDS[was];
+				if (same(quad[a], ordered[from]) && same(quad[b], ordered[to])) out[edge] = curveOf(was);
+				else if (same(quad[b], ordered[from]) && same(quad[a], ordered[to]))
+					out[edge] = curveOf(was).reverse();
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * No crop at all: the boundary is the frame.
+	 *
+	 * The BENDS go with it. Left in place they would send the full frame out with
+	 * curved edges — `isStraight` false, so the renderer mesh-warps the
+	 * photograph — which is the opposite of what this button is for. It is the
+	 * escape hatch for a detection that went wrong, and an escape hatch that
+	 * quietly warps the picture is not one.
+	 */
+	function wholePhoto() {
+		quad = fullFrameCorners(width, height);
+		bends = { top: null, right: null, bottom: null, left: null };
+	}
+
 	function apply() {
 		// Ordered on the way out: dragging the top-left past the top-right is a
 		// perfectly reasonable thing to do with a rotated photograph, and the warp
 		// downstream requires tl/tr/br/bl to mean what they say.
 		const ordered = orderCorners([quad.tl, quad.tr, quad.br, quad.bl]);
-		const edges = {
-			top: curveOf('top'),
-			right: curveOf('right'),
-			bottom: curveOf('bottom'),
-			left: curveOf('left')
-		};
+		const edges = edgesFor(ordered);
 		const bent = EDGES.some((edge) => edges[edge].length > 0);
 		// A flat page hands back no edges at all, so nothing downstream has to
 		// decide whether four empty arrays mean "straight" or "not measured".
@@ -417,9 +457,7 @@
 		<div class="actions">
 			<button type="button" class="btn btn-primary" onclick={apply}>Use these edges</button>
 			<button type="button" class="btn" onclick={oncancel}>Cancel</button>
-			<button type="button" class="btn" onclick={() => (quad = fullFrameCorners(width, height))}
-				>Whole photo</button
-			>
+			<button type="button" class="btn" onclick={wholePhoto}>Whole photo</button>
 		</div>
 	</div>
 </div>

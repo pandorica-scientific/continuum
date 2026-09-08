@@ -57,8 +57,22 @@ function scanRoot(): string {
  */
 const ID = /^[0-9a-f-]{36}$/;
 
+/**
+ * Whether an id is one of ours, for a caller that wants to ANSWER rather than
+ * throw.
+ *
+ * `checked` below is the guard and stays one: it throws, unconditionally, at
+ * the moment an id meets a path. But a thrown `Error` reaches SvelteKit as a
+ * 500 with a stack trace in the log, which is the wrong answer for someone
+ * following a stale link — that is a 400. The routes ask this first and reply
+ * properly; the guard is still there behind them.
+ */
+export function isScanId(id: string): boolean {
+	return ID.test(id);
+}
+
 function checked(id: string, what: string): string {
-	if (!ID.test(id)) throw new Error(`That is not a ${what}.`);
+	if (!isScanId(id)) throw new Error(`That is not a ${what}.`);
 	return id;
 }
 
@@ -72,16 +86,25 @@ export async function createScanSession(): Promise<{ id: string }> {
 	return { id };
 }
 
-/** Where a page's three files live. The original keeps the extension it arrived with. */
+/** Where a page's files live. The original keeps the extension it arrived with. */
 export function scanPagePaths(
 	sessionId: string,
 	pageId: string,
 	ext = '.jpg'
-): { sourcePath: string; previewPath: string; artefactPath: (mode: PageMode) => string } {
+): {
+	sourcePath: string;
+	previewPath: string;
+	originalPath: string;
+	artefactPath: (mode: PageMode) => string;
+} {
 	const dir = join(sessionDir(sessionId), checked(pageId, 'scan page'));
 	return {
 		sourcePath: `${dir}-source${ext}`,
 		previewPath: `${dir}-preview.png`,
+		// The uncropped photograph at screen size, for the corner editor. Written
+		// once and reused: it is a downscale of a file that never changes, so the
+		// second visit to that screen costs a read rather than a decode.
+		originalPath: `${dir}-original.jpg`,
 		// Colour and grayscale are JPEG; black-and-white is a PNG, because it is
 		// a 1-bit stream by the time it reaches the PDF and JPEG ringing around
 		// black text on white is the one artefact that costs legibility.
@@ -134,17 +157,70 @@ export async function addScanPage(
 	return { pageId, sourcePath };
 }
 
-/** How many pages this session already holds. */
+/**
+ * How many pages this session would put in a document.
+ *
+ * KEPT pages, counted by their artefacts, and deliberately not uploads. Every
+ * upload writes a source whether or not the page survives it, so counting those
+ * counted retakes: someone who photographed six pages twice hit "a document
+ * holds at most 20 pages" at twenty shutter presses, while the review screen in
+ * front of them showed fourteen and the browser's own cap still said there was
+ * room. The cap is a statement about the document, so it is measured on what
+ * the document will contain.
+ *
+ * By page id rather than by file, because the two modes write different
+ * extensions and a page kept twice would otherwise count twice.
+ */
 export async function countScanPages(sessionId: string): Promise<number> {
 	const dir = sessionDir(sessionId);
 	if (!existsSync(dir)) return 0;
-	const entries = await readdir(dir);
-	return entries.filter((name) => name.includes('-source.')).length;
+	const kept = new Set<string>();
+	for (const name of await readdir(dir)) {
+		const at = name.indexOf('-page.');
+		if (at > 0) kept.add(name.slice(0, at));
+	}
+	return kept.size;
 }
 
 /** Everything this session wrote, gone. */
 export async function dropScanSession(sessionId: string): Promise<void> {
 	await rm(sessionDir(sessionId), { recursive: true, force: true });
+}
+
+/**
+ * One page's files, gone, while the session carries on.
+ *
+ * A retake uploads a NEW page into the same session and leaves the old one
+ * behind — and the old one is the 2–4 MB original, not the preview. Nothing
+ * asked for it again, so it sat there until the document was made. The client
+ * says so at the moment it discards the page.
+ */
+export async function dropScanPage(sessionId: string, pageId: string): Promise<void> {
+	const dir = sessionDir(sessionId);
+	if (!existsSync(dir)) return;
+	const prefix = `${checked(pageId, 'scan page')}-`;
+	for (const name of await readdir(dir)) {
+		if (name.startsWith(prefix)) await rm(join(dir, name), { force: true });
+	}
+}
+
+/**
+ * Leave exactly one artefact behind for a page.
+ *
+ * Black-and-white writes a PNG and every other mode a JPEG, so keeping a page
+ * twice at two different modes leaves TWO files. `document/+server.ts` reads
+ * whichever exists and tests the PNG first, so the second keep would be the one
+ * ignored — the document would carry the mode the person changed their mind
+ * about. Deleting the other one makes "whichever exists" a statement about one
+ * file.
+ */
+export async function dropOtherArtefact(
+	sessionId: string,
+	pageId: string,
+	mode: PageMode
+): Promise<void> {
+	const { artefactPath } = scanPagePaths(sessionId, pageId);
+	await rm(artefactPath(mode === 'bw' ? 'color' : 'bw'), { force: true });
 }
 
 /**

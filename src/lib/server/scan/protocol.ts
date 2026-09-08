@@ -45,17 +45,37 @@ export interface RenderRequest {
 	previewWidth: number;
 }
 
-export type ScanRequest = DetectRequest | RenderRequest;
+/**
+ * The uncropped photograph, for the corner screen's fallback.
+ *
+ * A third op rather than a decode in the route, because the decode is the
+ * expensive and memory-permanent part: HEIC goes through libheif, whose heap
+ * never shrinks, and the child exists so that heap can be thrown away. It also
+ * puts this behind the same one-at-a-time queue as everything else, so two
+ * people opening the corner screen no longer decode two photographs at once.
+ */
+export interface OriginalRequest {
+	id: string;
+	op: 'original';
+	sourcePath: string;
+	/** Where to write the downscaled JPEG. */
+	outPath: string;
+	/** The widest it may come back. */
+	width: number;
+}
+
+export type ScanRequest = DetectRequest | RenderRequest | OriginalRequest;
 
 /**
  * A request before the supervisor stamps an id on it.
  *
- * Written as a union of two omits rather than `Omit<ScanRequest, 'id'>`, which
- * does NOT distribute: applied to a union it keeps only the keys both members
- * share, so `outPath`, `corners` and `mode` all quietly vanish and a render
+ * Written as a union of omits rather than `Omit<ScanRequest, 'id'>`, which does
+ * NOT distribute: applied to a union it keeps only the keys every member
+ * shares, so `outPath`, `outline` and `mode` all quietly vanish and a render
  * request stops type-checking against the very type that describes it.
  */
-export type PendingScanRequest = Omit<DetectRequest, 'id'> | Omit<RenderRequest, 'id'>;
+export type PendingScanRequest =
+	Omit<DetectRequest, 'id'> | Omit<RenderRequest, 'id'> | Omit<OriginalRequest, 'id'>;
 
 export type ScanReply =
 	| { id: string; ok: true; outline: Outline | null; width: number; height: number }

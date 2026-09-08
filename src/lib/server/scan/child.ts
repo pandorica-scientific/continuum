@@ -105,10 +105,26 @@ function start(): ChildProcess {
 }
 
 function touchIdle(): void {
-	if (idleTimer) clearTimeout(idleTimer);
+	holdIdle();
 	idleTimer = setTimeout(() => void shutdownScanChild(), IDLE_EXIT_MS);
 	// A pending exit must never be the thing keeping the server alive.
 	idleTimer.unref?.();
+}
+
+/**
+ * Take the idle clock away for the duration of a request.
+ *
+ * The timer used to be touched only on the way OUT of a request, which left the
+ * window open on the way in: a request arriving at 119 seconds of a 120-second
+ * idle window is still running when the timer fires, and `shutdownScanChild`
+ * SIGKILLs the child underneath it. The caller then gets "the scanner stopped
+ * unexpectedly" for a perfectly good photograph, at a rate of about one scan in
+ * however many happen to land in that last second. Idle means nothing is
+ * running, so nothing running means no idle clock.
+ */
+function holdIdle(): void {
+	if (idleTimer) clearTimeout(idleTimer);
+	idleTimer = null;
 }
 
 /**
@@ -128,6 +144,9 @@ export function ask(request: PendingScanRequest): Promise<Extract<ScanReply, { o
 }
 
 function once(request: PendingScanRequest): Promise<Extract<ScanReply, { ok: true }>> {
+	// Before the child is even looked at: the timer this cancels would otherwise
+	// be free to fire while the request below is in flight.
+	holdIdle();
 	if (!scanChildAlive()) child = start();
 	const active = child!;
 	const id = uuidv7();

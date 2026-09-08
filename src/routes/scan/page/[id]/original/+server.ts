@@ -10,33 +10,40 @@
  *      small preview, and the user has come back to re-edit its edges;
  *   2. the local copy is a HEIC the browser will not decode, which is an
  *      iPhone photographing anything at default settings.
+ *
+ * The decode happens IN THE CHILD, like every other decode. It used to happen
+ * here, and that was the one path undoing the architecture: libheif's heap
+ * grows and never shrinks, the child makes that floor temporary by exiting, and
+ * a web server that never exits made it permanent again. Going through
+ * `scanWork` also puts it behind the same one-at-a-time queue, so two people on
+ * the corner screen no longer decode two photographs at once.
  */
 import { error } from '@sveltejs/kit';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { decodeToFrame, downscaleFrame, encodeFrame } from '$lib/server/scan/worker/codec';
+import { scanId, scanWork } from '$lib/server/scan/http';
 import { scanPagePaths, scanSourceExt } from '$lib/server/scan/session';
-import { applyOrientation, readOrientation } from '$lib/scan/core/index';
 import type { RequestHandler } from './$types';
 
 /** Enough to place a corner accurately on any phone screen, and no more. */
 const MAX_WIDTH = 1600;
 
 export const GET: RequestHandler = async ({ params, url }) => {
-	const sessionId = url.searchParams.get('session') ?? '';
-	const ext = await scanSourceExt(sessionId, params.id);
+	const sessionId = scanId(url.searchParams.get('session'), 'scan session');
+	const pageId = scanId(params.id, 'scan page');
+	const ext = await scanSourceExt(sessionId, pageId);
 	if (!ext) error(404, 'That page is no longer being scanned.');
 
-	const { sourcePath } = scanPagePaths(sessionId, params.id, ext);
-	const bytes = new Uint8Array(await readFile(sourcePath));
+	const { sourcePath, originalPath } = scanPagePaths(sessionId, pageId, ext);
 
-	// Turned the right way up here as well: the handles are placed against what
-	// the person sees, and the corners they produce are in the same space the
-	// renderer works in only if both have applied the same rotation.
-	const frame = applyOrientation(await decodeToFrame(bytes), readOrientation(bytes));
-	const asked = Number(url.searchParams.get('w')) || MAX_WIDTH;
-	const wanted = Math.min(MAX_WIDTH, Math.max(320, asked));
+	// Written once per page. The photograph does not change, so a second visit
+	// to the corner screen — cancelling out of it and going back in is one tap —
+	// is a file read rather than another decode of a 12 MP HEIC.
+	if (!existsSync(originalPath)) {
+		await scanWork({ op: 'original', sourcePath, outPath: originalPath, width: MAX_WIDTH });
+	}
 
-	return new Response(await encodeFrame(downscaleFrame(frame, wanted), 'jpeg', 80), {
+	return new Response(new Uint8Array(await readFile(originalPath)), {
 		headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }
 	});
 };

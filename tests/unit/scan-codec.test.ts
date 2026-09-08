@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Pixels in and out of the scan child, through mupdf.
 //
-// The two translations under test here are both SILENT when wrong: mupdf hands
-// back 3-component RGB with its own stride where a Frame is packed RGBA, and
-// its warp reads a quad in an order that is not the order Corners reads in.
-// Neither mistake throws; each produces a picture that is merely wrong.
+// The translations under test here are SILENT when wrong: mupdf hands back
+// 3-component RGB with its own stride where a Frame is packed RGBA, and the
+// size cap measures the long edge where the downscale measures the width.
+// Neither mistake throws; each produces a picture, or a heap, that is merely
+// wrong.
 import { describe, expect, it } from 'vitest';
 import {
 	decodeToFrame,
 	downscaleFrame,
 	encodeFrame,
-	quadFromCorners
+	limitFrame
 } from '$lib/server/scan/worker/codec';
-import type { Corners, Frame } from '$lib/scan/core/types';
+import type { Frame } from '$lib/scan/core/types';
 
 /** A frame with a known, asymmetric pattern, so an orientation error is visible. */
 function swatch(width: number, height: number): Frame {
@@ -94,16 +95,25 @@ describe('the scan codec', () => {
 		expect(small.data[(small.width - 1) * 4]).toBeGreaterThan(240);
 	});
 
-	it('orders a quad the way mupdf wants it, not the way Corners reads', () => {
-		const corners: Corners = {
-			tl: { x: 1, y: 2 },
-			tr: { x: 3, y: 4 },
-			br: { x: 5, y: 6 },
-			bl: { x: 7, y: 8 }
-		};
-		// mupdf reads a quad as upper-left, upper-right, LOWER-LEFT, lower-right.
-		// Corners reads clockwise. Handing one to the other swaps the bottom two
-		// points and folds the page into a bow tie — which does not throw.
-		expect(quadFromCorners(corners)).toEqual([1, 2, 3, 4, 7, 8, 5, 6]);
+	it('caps a PORTRAIT photograph, which is how a document is photographed', () => {
+		// The mistake the browser's old capture cap made: it measured width, so a
+		// tall frame was never over the limit and never came down. A phone shoots
+		// portrait, so that cap fired on almost nothing.
+		const tall = limitFrame(swatch(3000, 4000), 2000);
+		expect(Math.max(tall.width, tall.height)).toBe(2000);
+		expect(tall.width).toBe(1500);
+	});
+
+	it('caps a landscape one on the same edge', () => {
+		const wide = limitFrame(swatch(4000, 3000), 2000);
+		expect(wide.width).toBe(2000);
+		expect(wide.height).toBe(1500);
+	});
+
+	it('leaves a frame already within the cap exactly as it is', () => {
+		// Not merely equal in size — the SAME frame, because copying a 12 MP
+		// photograph to change nothing is 48 MB for nothing.
+		const small = swatch(800, 600);
+		expect(limitFrame(small, 2000)).toBe(small);
 	});
 });

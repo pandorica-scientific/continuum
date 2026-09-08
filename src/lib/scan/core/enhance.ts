@@ -9,22 +9,23 @@
 // imports the WASM bundle.
 
 import { withMats, type Arena } from './arena.ts';
-import { fullFrameCorners, outputSize } from './geometry.ts';
+import { clampOutput, fullFrameCorners, outputSize } from './geometry.ts';
 import { isStraight, meshMaps, outlineSpan } from './mesh.ts';
 import type { CV } from './opencv.ts';
 import type { Frame, Outline, PageMode } from './types.ts';
 
 /**
- * Round a measured span to whole pixels, never to zero.
+ * Round a measured span to whole pixels, and hold it to the same ceiling a flat
+ * page is held to.
  *
  * `outlineSpan` measures along curves and comes back fractional; a Mat needs
- * integers, and a degenerate outline must not ask for a zero-sized one.
+ * integers, and a degenerate outline must not ask for a zero-sized one. The
+ * CEILING is the part that is easy to leave out: `outputSize` clamps and this
+ * path does not go through it, so without `clampOutput` a bowed page in a large
+ * frame asks for an output the size of its own arc length in source pixels.
  */
 function sized(span: { width: number; height: number }): { width: number; height: number } {
-	return {
-		width: Math.max(1, Math.round(span.width)),
-		height: Math.max(1, Math.round(span.height))
-	};
+	return clampOutput(span.width, span.height);
 }
 
 /**

@@ -61,6 +61,16 @@ describe('the scan worker bundle', () => {
 		expect(source).toMatch(/resolve\(detach\(cv\)\)/);
 	});
 
+	it('stops the idle clock on the way INTO a request, not only on the way out', () => {
+		// The clock used to be touched in `cleanup` alone, which left the window
+		// open at the front: a request arriving at 119 seconds of the 120-second
+		// idle window was still running when the timer fired, and the supervisor
+		// SIGKILLed the child underneath it. The caller then heard "the scanner
+		// stopped unexpectedly" about a photograph that was perfectly good.
+		const source = code('src/lib/server/scan/child.ts');
+		expect(source).toMatch(/function once\([\s\S]{0,200}holdIdle\(\);/);
+	});
+
 	it('is built before it is forked', () => {
 		// `npm run predev` and the build script both produce it. A missing bundle
 		// is a wiring mistake, and it should say so here rather than as an ENOENT

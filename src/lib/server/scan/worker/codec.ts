@@ -9,13 +9,13 @@
  * and no native build — which is the whole reason the scanner can move to the
  * server without an arch-specific image.
  *
- * Two translations live here and nowhere else, because both are silent when
- * they are wrong: mupdf returns 3-component RGB with its own stride where a
- * `Frame` is packed RGBA, and `Pixmap.warp` wants a flat eight-number quad in
- * an order that is NOT the order `Corners` reads in.
+ * The translation that lives here and nowhere else is the one that is silent
+ * when it is wrong: mupdf returns 3-component RGB with its own stride where a
+ * `Frame` is packed RGBA, so walking the buffer linearly shears the picture on
+ * any width mupdf pads.
  */
 import { looksLikeHeic } from '$lib/scan/core/heic';
-import type { Corners, Frame } from '$lib/scan/core/types';
+import type { Frame } from '$lib/scan/core/types';
 
 type Mupdf = typeof import('mupdf');
 type MupdfPixmap = import('mupdf').Pixmap;
@@ -219,22 +219,20 @@ export function downscaleFrame(frame: Frame, targetWidth: number): Frame {
 }
 
 /**
- * `Corners` in mupdf's quad order.
+ * A frame no larger than `maxLong` along its LONG edge.
  *
- * mupdf reads a quad as upper-left, upper-right, LOWER-LEFT, lower-right.
- * `Corners` reads clockwise: tl, tr, br, bl. Handing one straight to the other
- * swaps the bottom two points and folds the page into a bow tie — which does
- * not throw, it just produces a wrong picture.
+ * `downscaleFrame` measures width, which is the wrong axis half the time: a
+ * portrait photograph is over the limit on its height and comes back untouched,
+ * and a document is photographed portrait. That is the same mistake the
+ * browser's old capture cap made before it was deleted, so it is not made again
+ * here.
+ *
+ * This does not remove the decode's own peak — the decoder produces whatever
+ * the file holds — but it is everything after it: the copy into the WASM heap,
+ * the warp, the flat-field blur and the maps are all sized from this frame.
  */
-export function quadFromCorners(corners: Corners): number[] {
-	return [
-		corners.tl.x,
-		corners.tl.y,
-		corners.tr.x,
-		corners.tr.y,
-		corners.bl.x,
-		corners.bl.y,
-		corners.br.x,
-		corners.br.y
-	];
+export function limitFrame(frame: Frame, maxLong: number): Frame {
+	const long = Math.max(frame.width, frame.height);
+	if (long <= maxLong) return frame;
+	return downscaleFrame(frame, Math.max(1, Math.round((frame.width * maxLong) / long)));
 }

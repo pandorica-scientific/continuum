@@ -62,6 +62,23 @@ async function boot(): Promise<void> {
 	void readQueued();
 	setInterval(readQueued, 5 * 60 * 1000);
 
+	// Abandoned scans, on the same five-minute tick.
+	//
+	// Required, not housekeeping, and the module says so: a scan in progress is
+	// files and nothing else, so a phone that goes flat halfway through a stack —
+	// or a tab closed on a train — leaves 2–4 MB a page behind with nothing in
+	// the product that would ever remove it. The screen asks the server to drop
+	// its own session when it is closed properly; this is for every other way a
+	// scan ends.
+	const scans = async () => {
+		const { sweepScanSessions } = await import('$lib/server/scan/session');
+		return sweepScanSessions();
+	};
+	const scanTick = () =>
+		scans().catch((err) => console.warn('Scan sweep failed:', err.message ?? err));
+	void scanTick();
+	setInterval(scanTick, 5 * 60 * 1000);
+
 	// Daily FX fixing; failures are logged, never fatal — a home server may be
 	// offline and the app keeps working with the last known rates.
 	const refresh = () =>

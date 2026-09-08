@@ -102,9 +102,14 @@ export function previewUrl(sessionId: string, pageId: string, token: number): st
  * of the photograph, which costs no network at all. This is for the page that
  * was already kept — whose copy the phone released — and for a HEIC the browser
  * will not decode.
+ *
+ * The size is the server's to choose. It renders one downscale per page and
+ * reuses it, and the handles are placed in the frame's own coordinates through
+ * an SVG viewBox, so how many pixels arrive is a question of sharpness rather
+ * than of correctness.
  */
-export function originalUrl(sessionId: string, pageId: string, width = 1600): string {
-	return `/scan/page/${pageId}/original?session=${sessionId}&w=${width}`;
+export function originalUrl(sessionId: string, pageId: string): string {
+	return `/scan/page/${pageId}/original?session=${sessionId}`;
 }
 
 /** The kept pages, in the order shown, as one PDF. */
@@ -130,4 +135,19 @@ export async function assembleScanDocument(
  */
 export function dropScanSession(sessionId: string): void {
 	void fetch(`/scan/session/${sessionId}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+}
+
+/**
+ * Give up on one page, with the scan carrying on.
+ *
+ * Sent when a photograph is retaken. The new one goes into the SAME session, so
+ * without this the rejected original stays there — 2–4 MB of it, times however
+ * many attempts a difficult page took. Fire-and-forget for the same reason as
+ * above: the session's own end sweeps up whatever this missed.
+ */
+export function dropScanPage(sessionId: string, pageId: string): void {
+	void fetch(`/scan/page/${pageId}?session=${sessionId}`, {
+		method: 'DELETE',
+		keepalive: true
+	}).catch(() => {});
 }

@@ -6,6 +6,7 @@
 // is not quietly changed by a feature it does not use — and the hard case at
 // all.
 import { describe, expect, it } from 'vitest';
+import { MAX_OUTPUT_WIDTH, clampOutput } from '$lib/scan/core/geometry';
 import { isStraight, meshMaps, outlineSpan } from '$lib/scan/core/mesh';
 import type { Outline, Point } from '$lib/scan/core/types';
 
@@ -115,6 +116,29 @@ describe('the size a bowed page is rendered at', () => {
 		expect(outlineSpan(bowed).width).toBeGreaterThan(105);
 		// The other axis is untouched by a bend in this one.
 		expect(outlineSpan(bowed).height).toBeCloseTo(200, 1);
+	});
+
+	it('is still held to the ceiling a flat page is held to', () => {
+		// `outputSize` clamps and the bowed path does not go through it, so the
+		// span measured here has to be clamped by whoever uses it — otherwise a
+		// bowed page in a large frame asks for an output the size of its own arc
+		// length in source pixels: about 7000×9800 from a 48 MP photograph, which
+		// is a 274 MB Mat and the remap maps beside it.
+		const huge: Outline = {
+			corners: {
+				tl: { x: 0, y: 0 },
+				tr: { x: 6000, y: 0 },
+				br: { x: 6000, y: 8000 },
+				bl: { x: 0, y: 8000 }
+			}
+		};
+		const span = outlineSpan(huge);
+		expect(span.width).toBeGreaterThan(MAX_OUTPUT_WIDTH);
+
+		const held = clampOutput(span.width, span.height);
+		expect(held.width).toBe(MAX_OUTPUT_WIDTH);
+		// Clamped by scaling, not by cropping: the page keeps its proportions.
+		expect(held.height / held.width).toBeCloseTo(span.height / span.width, 2);
 	});
 });
 
