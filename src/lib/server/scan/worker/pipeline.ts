@@ -17,12 +17,13 @@ import {
 	detectBest,
 	readOrientation,
 	renderPage,
+	scaleLine,
 	scaleOutline,
 	turnCorners,
 	turnEdges,
 	type CV
 } from '$lib/scan/core/index';
-import type { Frame, Outline, PageMode, Rotation } from '$lib/scan/core/types';
+import type { Frame, Line, Outline, PageMode, Rotation } from '$lib/scan/core/types';
 import type { DetectRequest, OriginalRequest, RenderRequest } from '../protocol';
 import { decodeToFrame, downscaleFrame, encodeFrame } from './codec';
 
@@ -113,7 +114,7 @@ function turn(
 export async function runDetect(
 	cv: CV,
 	request: DetectRequest
-): Promise<{ outline: Outline | null; width: number; height: number }> {
+): Promise<{ outline: Outline | null; lines: Line[]; width: number; height: number }> {
 	const source = await openSource(request.sourcePath);
 	const measured = downscaleFrame(source, REFINE_WIDTH);
 	const state = detectBest(cv, measured);
@@ -126,13 +127,22 @@ export async function runDetect(
 			: null;
 	// Back into the ORIGINAL's pixels, which is the only space an outline is
 	// ever allowed to be in.
-	const outline = found ? scaleOutline(found, source.width / measured.width) : null;
+	const factor = source.width / measured.width;
+	const outline = found ? scaleOutline(found, factor) : null;
+	// The lines scale with everything else, and for the same reason: they were
+	// fitted in the downscaled frame and the corner screen measures in the
+	// source's pixels. Kept even when nothing was cropped — a photograph whose
+	// page the detector could not confirm is exactly the one somebody is about
+	// to place four corners on by hand.
+	const lines = ('lines' in state ? (state.lines ?? []) : []).map((line) =>
+		scaleLine(line, factor)
+	);
 
 	// Black-and-white is the mode the preview opens on, matching `ScanFlow`.
 	const page = renderPage(cv, source, outline, 'bw');
 	await write(request.previewPath, downscaleFrame(page, request.previewWidth), 'bw', 90);
 
-	return { outline, width: source.width, height: source.height };
+	return { outline, lines, width: source.width, height: source.height };
 }
 
 /**
@@ -153,7 +163,7 @@ export async function runDetect(
  */
 export async function runOriginal(
 	request: OriginalRequest
-): Promise<{ outline: null; width: number; height: number }> {
+): Promise<{ outline: null; lines: Line[]; width: number; height: number }> {
 	// Decoded at the size the corner screen asks for, not at the pipeline's cap:
 	// this picture is looked at and never rendered from, so there is nothing
 	// downstream that wants the other 90% of the pixels.
@@ -162,7 +172,7 @@ export async function runOriginal(
 	const part = `${request.outPath}.part`;
 	await writeFile(part, await encodeFrame(shown, 'jpeg', 80));
 	await rename(part, request.outPath);
-	return { outline: null, width: shown.width, height: shown.height };
+	return { outline: null, lines: [], width: shown.width, height: shown.height };
 }
 
 /**
@@ -176,7 +186,7 @@ export async function runOriginal(
 export async function runRender(
 	cv: CV,
 	request: RenderRequest
-): Promise<{ outline: Outline | null; width: number; height: number }> {
+): Promise<{ outline: Outline | null; lines: Line[]; width: number; height: number }> {
 	const source = await openSource(request.sourcePath);
 	const turned = turn(source, request.outline, request.rotation);
 
@@ -202,5 +212,5 @@ export async function runRender(
 	// the client stores it and sends it again on the next mode switch, and a
 	// draft-space boundary round-tripping through that would shrink the crop a
 	// little more on every tap.
-	return { outline: request.outline, width: page.width, height: page.height };
+	return { outline: request.outline, lines: [], width: page.width, height: page.height };
 }

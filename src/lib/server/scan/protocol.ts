@@ -7,7 +7,7 @@
  * all. So the child reads its input from disk and writes its output there, and
  * the message carries names.
  */
-import type { Outline, PageMode, Rotation } from '$lib/scan/core/types';
+import type { Line, Outline, PageMode, Rotation } from '$lib/scan/core/types';
 
 export interface DetectRequest {
 	id: string;
@@ -78,7 +78,21 @@ export type PendingScanRequest =
 	Omit<DetectRequest, 'id'> | Omit<RenderRequest, 'id'> | Omit<OriginalRequest, 'id'>;
 
 export type ScanReply =
-	| { id: string; ok: true; outline: Outline | null; width: number; height: number }
+	| {
+			id: string;
+			ok: true;
+			outline: Outline | null;
+			/**
+			 * The straight edges the detector fitted in this photograph.
+			 *
+			 * For the corner screen, which snaps a dragged handle onto them. In the
+			 * SOURCE's pixels like the outline, and empty on anything but a detect:
+			 * a render is told where the page is, it does not go looking.
+			 */
+			lines: Line[];
+			width: number;
+			height: number;
+	  }
 	| { id: string; ok: false; error: string };
 
 /**

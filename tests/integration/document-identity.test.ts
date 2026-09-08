@@ -14,6 +14,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { documentIdentity, documentIdentityNumber } from '$lib/server/db/schema';
+import { loadQueue } from '$lib/server/documents/queue-load';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { NO_SUCH_DOCUMENT } from '$lib/server/documents/visibility';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
@@ -281,5 +282,124 @@ describe('the other numbers a document carries', () => {
 		await harness.sql`delete from document where id = ${PASSPORT}`;
 
 		expect(await numbersOf(PASSPORT)).toEqual([]);
+	});
+});
+
+/**
+ * Filing from the Inbox writes the same fields the inspector does.
+ *
+ * It did not, and the failure was quiet: a passport filed from the Inbox
+ * reached the wallet with no kind and no country, which is generic artwork, no
+ * flag and a card titled "Identity document" — a styling bug to look at, and a
+ * missing write in fact. Both screens now post the same inputs and this action
+ * reads them the same way.
+ */
+async function file(fields: Record<string, string | string[]>): Promise<ActionResult> {
+	const { actions } = await import('../../src/routes/(app)/documents/+page.server');
+	const form = new FormData();
+	for (const [key, value] of Object.entries(fields)) {
+		if (Array.isArray(value)) for (const one of value) form.append(key, one);
+		else form.set(key, value);
+	}
+	const request = new Request('http://localhost/documents?/fileFromQueue', {
+		method: 'POST',
+		body: form
+	});
+	return (await (actions.fileFromQueue as (event: unknown) => Promise<unknown>)({
+		request,
+		locals: asAdmin
+	})) as ActionResult;
+}
+
+describe('filing an identity document from the Inbox', () => {
+	it('writes the five fields', async () => {
+		await file({
+			id: PASSPORT,
+			name: 'Passport',
+			shelf: 'identity',
+			type: 'id_document',
+			identityKind: 'passport',
+			identityCountry: 'PL',
+			identityNumber: 'ZS3609',
+			identityIssuedOn: '2020-09-01',
+			identityIssuer: 'Wojewoda Mazowiecki'
+		});
+
+		expect(await identityOf(PASSPORT)).toMatchObject({
+			kind: 'passport',
+			country: 'PL',
+			number: 'ZS3609',
+			issuedOn: '2020-09-01',
+			issuer: 'Wojewoda Mazowiecki'
+		});
+	});
+
+	it('writes the other numbers too', async () => {
+		await file({
+			id: PASSPORT,
+			name: 'Residence permit',
+			shelf: 'identity',
+			type: 'id_document',
+			identityKind: 'residence_permit',
+			identityCountry: 'CZ',
+			identityExtraLabel: ['Card number'],
+			identityExtraValue: ['CZ-8891']
+		});
+
+		expect(await numbersOf(PASSPORT)).toEqual([
+			{ ordinal: 0, label: 'Card number', value: 'CZ-8891' }
+		]);
+	});
+
+	it('does not give identity fields to paper that is not an identity document', async () => {
+		await file({
+			id: PASSPORT,
+			name: 'Some contract',
+			shelf: 'identity',
+			type: 'contract',
+			identityKind: 'passport',
+			identityCountry: 'CZ'
+		});
+
+		expect(await identityOf(PASSPORT)).toBeUndefined();
+	});
+});
+
+/**
+ * The filing form is seeded, because filing WRITES these fields.
+ *
+ * Both screens treat the whole form as the intended state — a blank box means
+ * cleared, which is how a field is emptied — so a filing form that always
+ * started blank would post over a document somebody had already filled in and
+ * delete its extra numbers on the way past. Nothing on screen would say so.
+ */
+describe('what the Inbox is handed about the current document', () => {
+	it('carries what the document already says, so the form can show it', async () => {
+		await save({
+			...PASSPORT_FIELDS,
+			identityExtraLabel: ['Card number'],
+			identityExtraValue: ['CZ-8891']
+		});
+		// Back to the Inbox after the save, which files it onto Identity.
+		await harness.sql`update document set shelf_id = ${await shelfIdByKey('inbox', testDb)} where id = ${PASSPORT}`;
+
+		const queue = await loadQueue(testDb, '2026-09-08', PASSPORT);
+
+		expect(queue.current).toBe(PASSPORT);
+		expect(queue.currentIdentity?.fields).toMatchObject({
+			kind: 'passport',
+			country: 'CZ',
+			number: '12345678'
+		});
+		expect(queue.currentIdentity?.numbers).toEqual([{ label: 'Card number', value: 'CZ-8891' }]);
+	});
+
+	it('says nothing about a document that has typed nothing', async () => {
+		await harness.sql`update document set shelf_id = ${await shelfIdByKey('inbox', testDb)} where id = ${PASSPORT}`;
+
+		const queue = await loadQueue(testDb, '2026-09-08', PASSPORT);
+
+		expect(queue.current).toBe(PASSPORT);
+		expect(queue.currentIdentity).toBeNull();
 	});
 });

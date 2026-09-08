@@ -85,8 +85,12 @@ describe('the flow', () => {
 		const pipeline = readFileSync('src/lib/server/scan/worker/pipeline.ts', 'utf8');
 		expect(pipeline).toMatch(/downscaleFrame\(source, REFINE_WIDTH\)/);
 		// And the corners found on the measured frame must be carried back onto
-		// the frame that actually gets warped.
-		expect(pipeline).toMatch(/scaleOutline\(found, source\.width \/ measured\.width\)/);
+		// the frame that actually gets warped — by the ratio between the two, and
+		// by nothing else. The detected LINES scale by the same factor, which is
+		// why it is named rather than written out twice.
+		expect(pipeline).toMatch(/const factor = source\.width \/ measured\.width;/);
+		expect(pipeline).toMatch(/scaleOutline\(found, factor\)/);
+		expect(pipeline).toMatch(/scaleLine\(line, factor\)/);
 		// Corners AND curve scale together. Both were measured in the same
 		// downscaled frame, so scaling one alone would leave a bow describing an
 		// edge 1280 px wide on a page four thousand across.

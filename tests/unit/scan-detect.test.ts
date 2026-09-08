@@ -134,13 +134,32 @@ describe('the two readings of a still', () => {
 		// to do. Measured over real captures, every good outcome improves that a
 		// lot — 0.12 to 0.87, 0.16 to 0.70 — while the capture that produced a
 		// visibly loose crop was the only one to go backwards, 0.27 to 0.24.
-		expect(refine).toMatch(/return bestSupport > roughSupport \? best : null;/);
+		expect(refine).toMatch(/corners: bestSupport > roughSupport \? best : null/);
 	});
 
 	it('drops a loose candidate the search cannot confirm', () => {
 		// Otherwise loosening the floor just trades a missed page for the sheared
 		// crop across two objects that the search exists to prevent.
-		expect(source).toMatch(/if \(found\) best = found;\s*else if \(!bestIsClean\) best = null;/);
+		expect(source).toMatch(
+			/if \(found\.corners\) best = found\.corners;\s*else if \(!bestIsClean\) best = null;/
+		);
+	});
+
+	it('hands back the lines it fitted even when it found no page', () => {
+		// The case snapping exists for. A photograph the detector cannot confirm
+		// is exactly the one somebody is about to place four corners on by hand,
+		// and the straight edges it DID fit are the only help a thumb can get —
+		// so they ride out on `searching` as well as on a found page.
+		expect(source).toMatch(/return \{ kind: 'searching', lines \};/);
+		expect(source).toMatch(
+			/if \(candidates\.length === 0\)\s*return \{ kind: 'searching', lines: anyLines \};/
+		);
+		expect(source).toMatch(
+			/return \{ kind: 'searching', lines: best\?\.lines\?\.length \? best\.lines : anyLines \};/
+		);
+		// And the worker must not filter them back out by kind on the way through.
+		const pipeline = readFileSync('src/lib/server/scan/worker/pipeline.ts', 'utf8');
+		expect(pipeline).toMatch(/'lines' in state \? \(state\.lines \?\? \[\]\) : \[\]/);
 	});
 
 	it('still trusts a clean region when the search finds nothing', () => {

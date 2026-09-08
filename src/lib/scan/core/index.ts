@@ -45,7 +45,11 @@ export {
 	intersect,
 	lineAngle,
 	lineThrough,
+	projectOnto,
 	quadAngles,
+	scaleLine,
+	SNAP_REACH,
+	snapToLines,
 	worstCornerSkew,
 	type Line,
 	type Segment

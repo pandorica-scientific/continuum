@@ -1391,6 +1391,8 @@ export const actions: Actions = {
 		const newCardName = String(form.get('newCardName') ?? '').trim();
 		let cardId = String(form.get('cardId') ?? '').trim();
 
+		const type = asDocumentType(form.get('type'), await documentTypeKeys());
+
 		try {
 			await db.transaction(async (tx) => {
 				// A card made on the way past, before anything is linked to it.
@@ -1404,7 +1406,7 @@ export const actions: Actions = {
 					.set({
 						name: String(form.get('name') ?? '').trim() || 'Document',
 						shelfId,
-						type: asDocumentType(form.get('type'), await documentTypeKeys()),
+						type,
 						note: String(form.get('note') ?? '').trim() || null,
 						expiresOn: String(form.get('expiresOn') ?? '').trim() || null,
 						expiryVerb: asEnumValue(
@@ -1414,6 +1416,16 @@ export const actions: Actions = {
 						)
 					})
 					.where(eq(document.id, id));
+
+				// The identity fields, on the same terms the inspector writes them:
+				// only for `id_document`, and the extra numbers only after the
+				// record they hang off exists. Filing was the one route into the
+				// wallet that skipped this, which is why cards arrived with generic
+				// artwork and no flag.
+				if (type === 'id_document') {
+					await upsertIdentity(id, readIdentityFields(form), tx);
+					await replaceIdentityNumbers(id, readIdentityNumbers(form), tx);
+				}
 
 				if (cardId)
 					await tx

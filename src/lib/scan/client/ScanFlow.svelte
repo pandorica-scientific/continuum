@@ -16,7 +16,7 @@
 	// twenty photographs to make it free would cost 60 MB on the device least
 	// able to spare it.
 
-	import { type Outline, type PageMode, type Rotation } from '../core/index.ts';
+	import { type Line, type Outline, type PageMode, type Rotation } from '../core/index.ts';
 	import { isSecureForCamera } from './camera.svelte.ts';
 	import {
 		assembleScanDocument,
@@ -74,6 +74,8 @@
 	interface Held {
 		pageId: string;
 		outline: Outline | null;
+		/** The straight edges the detector fitted, for the corner screen to snap to. */
+		lines: Line[];
 		rotation: Rotation;
 		width: number;
 		height: number;
@@ -133,6 +135,7 @@
 			held = {
 				pageId: page.pageId,
 				outline: page.outline,
+				lines: page.lines,
 				rotation: 0,
 				width: page.width,
 				height: page.height,
@@ -425,6 +428,7 @@
 		width={held.width}
 		height={held.height}
 		outline={held.outline}
+		lines={held.lines}
 		onunavailable={cornersFallback}
 		onapply={(next) => void show(mode, next)}
 		oncancel={() => {

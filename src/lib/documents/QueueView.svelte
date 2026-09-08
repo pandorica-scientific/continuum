@@ -16,6 +16,7 @@
 	import TagField from '$lib/components/TagField.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	import { ALL_TYPES, EXPIRY_VERBS, EXPIRY_VERB_MEANINGS, typeOptionsFor } from '$lib/documents';
+	import IdentityFields from '$lib/documents/IdentityFields.svelte';
 	import { typeLabels } from '$lib/documents/view';
 	import type { QueuePayload } from '$lib/server/documents/queue-load';
 
@@ -238,6 +239,30 @@
 					</button>
 				{/if}
 			</label>
+
+			<!-- The same fields the inspector's edit form offers, and the reason
+			     they are here: a passport filed without them reaches the wallet
+			     with generic artwork, no flag and "Identity document" for a
+			     title, and the only way to fix it was to reopen the document and
+			     answer the same questions again.
+
+			     Seeded from what the document already holds, because filing
+			     WRITES these — the form is the intended state, so a blank one
+			     would empty the fields of a document somebody had already filled
+			     in and delete its extra numbers with them. -->
+			{#if type === 'id_document'}
+				<div class="field">
+					<span class="eyebrow">Identity</span>
+					<!-- Keyed on the document so the extra-number rows belong to the
+					     one being filed, not to whichever was reviewed before it. -->
+					{#key current.id}
+						<IdentityFields
+							identity={queue.currentIdentity?.fields ?? null}
+							numbers={queue.currentIdentity?.numbers ?? []}
+						/>
+					{/key}
+				</div>
+			{/if}
 
 			<div class="field expiry">
 				<span class="eyebrow">Expiry</span>

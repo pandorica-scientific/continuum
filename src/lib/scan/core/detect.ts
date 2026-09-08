@@ -16,7 +16,7 @@ import { EDGES, quadArea, worstCornerSkew } from './lines.ts';
 import { CONTRAST_FULL, CONTRAST_REACH, edgeContrast, searchQuad } from './refine.ts';
 import type { CV } from './opencv.ts';
 import { measureBow } from './curve.ts';
-import type { Corners, DetectState, Edges, Frame, Point } from './types.ts';
+import type { Corners, DetectState, Edges, Frame, Line, Point } from './types.ts';
 
 /**
  * Detection runs here and nowhere else. Detecting on a 4K canvas at 10 fps is a
@@ -327,6 +327,9 @@ export function detectOnce(
 		// Whether the winning region was clean enough to stand on its own, which
 		// decides what happens if refinement finds nothing.
 		let bestIsClean = false;
+		// The straight edges the refinement pass fitted, kept for the corner
+		// screen. Empty on a live pass, which does no refinement.
+		let lines: Line[] = [];
 		const solidityFloor = refining === 'none' ? MIN_SOLIDITY : SEARCH_MIN_SOLIDITY;
 
 		for (let i = 0; i < contours.size(); i++) {
@@ -387,6 +390,10 @@ export function detectOnce(
 			// So look again, at the mask's OUTLINE rather than its filled shape,
 			// and ask which four straight lines actually bound a page.
 			const found = searchQuad(cv, keep, gray, mask, best, frame);
+			// Kept whatever the search concluded about the corners: these are the
+			// straight edges present in this photograph, and the corner screen
+			// snaps to them even on a page the search could not improve.
+			lines = found.lines;
 			// Nothing confirmed. A region clean enough for the strict floor keeps
 			// the corners it already had — that is exactly the answer this
 			// detector gave before there was a search, and it is a good one. A
@@ -401,7 +408,7 @@ export function detectOnce(
 			// and once with `judgeQuad`'s floor and `measureBow` behind it, which
 			// still produced one. A crop that flares off the page is worse than no
 			// crop, because no crop renders the whole photograph and says so.
-			if (found) best = found;
+			if (found.corners) best = found.corners;
 			else if (!bestIsClean) best = null;
 		}
 
@@ -418,9 +425,12 @@ export function detectOnce(
 			if (gates && cv.mean(gray)[0] < MIN_MEAN_LUMA) {
 				return { kind: 'rejected', corners: null, reason: 'dark' };
 			}
-			return { kind: 'searching' };
+			// The LINES go out even though the page did not. Nothing found is the
+			// case the corner screen exists for, and the straight edges fitted here
+			// are the only help it can offer a thumb.
+			return { kind: 'searching', lines };
 		}
-		if (!gates) return { kind: 'detected', corners: best, edges: bend };
+		if (!gates) return { kind: 'detected', corners: best, edges: bend, lines };
 
 		if (bestArea < frameArea * MIN_AREA_FRACTION) {
 			return { kind: 'rejected', corners: best, reason: 'small' };
@@ -440,7 +450,7 @@ export function detectOnce(
 		if (sharpness(cv, keep, gray) < MIN_SHARPNESS) {
 			return { kind: 'rejected', corners: best, reason: 'blurry' };
 		}
-		return { kind: 'detected', corners: best, edges: bend };
+		return { kind: 'detected', corners: best, edges: bend, lines };
 	});
 }
 
@@ -482,21 +492,38 @@ export function detectBest(cv: CV, frame: Frame): DetectState {
 	// them on their corners, but the curve that comes back has to be the one
 	// belonging to the reading that won — pairing them here is what stops a
 	// crop being bent by a boundary some other segmentation found.
-	const candidates = [plain, evened, darker, dull]
+	const readings = [plain, evened, darker, dull];
+	// The best pool of lines any reading produced, for the returns below that
+	// have no winning candidate to take them from. Longest wins: a reading that
+	// fitted more straight edges saw more of the page's boundary, and the pools
+	// are the same handful of candidates per edge either way.
+	const anyLines = readings
+		.map((state) => ('lines' in state && state.lines ? state.lines : []))
+		.reduce((most, some) => (some.length > most.length ? some : most), [] as Line[]);
+
+	const candidates = readings
 		.map((state) =>
 			'corners' in state && state.corners
-				? { corners: state.corners, edges: 'edges' in state ? state.edges : undefined }
+				? {
+						corners: state.corners,
+						edges: 'edges' in state ? state.edges : undefined,
+						// The lines belong to the reading that found them, for the same
+						// reason the bow does: they were fitted in that segmentation's
+						// own mask, and snapping to another reading's edges would pull a
+						// corner onto a boundary this crop was never built from.
+						lines: 'lines' in state ? state.lines : undefined
+					}
 				: null
 		)
 		.filter((candidate) => candidate !== null);
-	if (candidates.length === 0) return { kind: 'searching' };
+	if (candidates.length === 0) return { kind: 'searching', lines: anyLines };
 
 	return withMats((keep): DetectState => {
 		const src = keep(cv.matFromImageData(frame as ImageData));
 		const gray = keep(new cv.Mat());
 		cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-		let best: { corners: Corners; edges?: Edges } | null = null;
+		let best: { corners: Corners; edges?: Edges; lines?: Line[] } | null = null;
 		let bestScore = -1;
 		for (const candidate of candidates) {
 			const score = judgeQuad(gray, candidate.corners, frame);
@@ -519,8 +546,11 @@ export function detectBest(cv: CV, frame: Frame): DetectState {
 		// both sides, so it costs nothing real and stops the scanner asserting a
 		// crop it has no basis for. Nothing found is not a failure: it renders
 		// the whole photograph, which is honest, and the corner handles are there.
-		if (!best || bestScore < MIN_JUDGED_SCORE) return { kind: 'searching' };
-		return { kind: 'detected', corners: best.corners, edges: best.edges };
+		// The refused candidate's own lines where there was one, because those are
+		// the edges of whatever the losing reading actually looked at.
+		if (!best || bestScore < MIN_JUDGED_SCORE)
+			return { kind: 'searching', lines: best?.lines?.length ? best.lines : anyLines };
+		return { kind: 'detected', corners: best.corners, edges: best.edges, lines: best.lines };
 	});
 }
 

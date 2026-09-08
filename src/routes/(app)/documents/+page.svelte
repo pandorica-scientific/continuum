@@ -33,13 +33,12 @@
 		ALL_TYPES,
 		EXPIRY_VERBS,
 		EXPIRY_VERB_MEANINGS,
-		IDENTITY_KINDS,
-		IDENTITY_KIND_LABELS,
 		identityKindLabel,
 		mayProposeType,
 		typeOptionsFor
 	} from '$lib/documents';
-	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
+	import { countryName, flagEmoji } from '$lib/countries';
+	import IdentityFields from '$lib/documents/IdentityFields.svelte';
 	import { ENGINE_LABELS } from '$lib/documents/templates';
 	import {
 		aboutOptionLabel,
@@ -149,15 +148,6 @@
 		)
 	);
 	let numberShown = $state(false);
-	/**
-	 * The extra-number rows the form is currently showing.
-	 *
-	 * Local state rather than `$derived`, because the form is being edited: rows
-	 * are added and removed before anything is saved, and a derived list would
-	 * discard them on the next load. Seeded from the record whenever the
-	 * inspector opens on a different document.
-	 */
-	let extraNumbers = $state<{ label: string; value: string }[]>([]);
 	/** The identity fields of the open document, whatever its type says now. */
 	const identity = $derived(data.selected?.identityDetail ?? null);
 	/**
@@ -188,7 +178,6 @@
 		editShelf = selected?.shelfKey ?? '';
 		typeProposed = false;
 		allTypes = false;
-		extraNumbers = (selected?.identityNumbers ?? []).map((n) => ({ ...n }));
 	});
 
 	const today = new Date().toISOString().slice(0, 10);
@@ -1203,78 +1192,11 @@
 					{#if editType === 'id_document'}
 						<div class="sec">
 							<span class="eyebrow">Identity</span>
-							<!-- Typed by hand, every field optional. Nothing reads the
-							     document to fill these in: a number a recogniser guessed
-							     wrong is worse than an empty box, because it is believed. -->
-							<div class="id-grid">
-								<label class="id-field">
-									<span class="quiet">Kind</span>
-									<select name="identityKind" value={identity?.kind ?? 'other'}>
-										{#each IDENTITY_KINDS as kind (kind)}
-											<option value={kind}>{IDENTITY_KIND_LABELS[kind]}</option>
-										{/each}
-									</select>
-								</label>
-								<label class="id-field">
-									<span class="quiet">Country</span>
-									<select name="identityCountry" value={identity?.country ?? ''}>
-										<option value="">—</option>
-										{#each countryOptions() as c (c.code)}
-											<option value={c.code}>{c.name}</option>
-										{/each}
-									</select>
-								</label>
-								<label class="id-field">
-									<span class="quiet">Number</span>
-									<input class="mono" name="identityNumber" value={identity?.number ?? ''} />
-								</label>
-								<label class="id-field">
-									<span class="quiet">Issued on</span>
-									<input type="date" name="identityIssuedOn" value={identity?.issuedOn ?? ''} />
-								</label>
-								<label class="id-field wide">
-									<span class="quiet">Issuer</span>
-									<input name="identityIssuer" value={identity?.issuer ?? ''} />
-								</label>
-							</div>
-
-							<!-- One document really can carry several numbers — a residence
-							     permit with a card number and a personal number, a licence
-							     with a national identifier beside it — and there is no
-							     sensible ceiling to guess at, so the household adds as many
-							     as it has. Clearing both halves of a row is how one goes:
-							     Save writes exactly what the form holds. -->
-							<div class="id-extra">
-								{#each extraNumbers as extra, i (i)}
-									<div class="id-extra-row">
-										<input
-											name="identityExtraLabel"
-											placeholder="What it is called"
-											value={extra.label}
-										/>
-										<input
-											class="mono"
-											name="identityExtraValue"
-											placeholder="Number"
-											value={extra.value}
-										/>
-										<button
-											type="button"
-											class="chip-x"
-											aria-label="Remove {extra.label || 'this number'}"
-											onclick={() => (extraNumbers = extraNumbers.filter((_, at) => at !== i))}
-											>✕</button
-										>
-									</div>
-								{/each}
-								<button
-									type="button"
-									class="link id-add"
-									onclick={() => (extraNumbers = [...extraNumbers, { label: '', value: '' }])}
-								>
-									+ Add another number
-								</button>
-							</div>
+							<!-- Keyed on the document so the extra-number rows belong to the one
+							     on screen, not to whichever was open before. -->
+							{#key d.id}
+								<IdentityFields {identity} numbers={data.selected?.identityNumbers ?? []} />
+							{/key}
 						</div>
 					{/if}
 					<div class="sec">
@@ -2149,38 +2071,6 @@
 	}
 	/* Five fields in two columns, the issuer across both: a kind, a country and
 	   a date are all short, and an issuing authority is a sentence. */
-	.id-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--space-4);
-	}
-	.id-field {
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		font-size: var(--text-xs);
-	}
-	.id-field.wide {
-		grid-column: 1 / -1;
-	}
-	.id-extra {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-		margin-top: var(--space-4);
-	}
-	/* Name and number on one line, with the way to remove it at the end: the
-	   pair is one fact, and stacking them would read as two. */
-	.id-extra-row {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-		align-items: center;
-		gap: var(--space-4);
-	}
-	.id-add {
-		align-self: flex-start;
-		font-size: var(--text-xs);
-	}
 	.id-read {
 		flex-direction: column;
 		align-items: flex-start;

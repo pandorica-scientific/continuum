@@ -2,6 +2,28 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.8.7 — 2026-09-08
+
+> Corners that snap to the page, and a wallet that knows what it is holding.
+
+### ✨ Added
+
+- 🧲 **A dragged corner snaps to the edges the detector found** — the detector already fits straight lines to the page's boundary and then threw them away, so placing a corner by thumb threw that precision away with them; a dragged corner now lands on the crossing of the two lines nearest it, or straightens onto the one line it is near, while a corner placed away from every edge stays exactly where it was put — which is what makes it safe to leave on, and the square button in the top corner turns it off for a crop taken deliberately inside the paper
+- 🪪 **The Inbox asks what an identity document actually is** — filing a passport from the Inbox recorded neither its kind nor its issuing country, so it reached the wallet with generic artwork, no flag and "Identity document" for a title, and the only way to fix it was to reopen the document and answer the same questions again; the filing form now offers the same fields the inspector does — kind, country, number, issue date, issuer, and as many other numbers as the document carries
+- 🌍 **The wallet is divided by country as well as by person** — somebody holding paper from two states holds two sets of it, a Polish licence renewed in Poland and a Czech one in the Czech Republic, and one run of cards left that to be worked out from the flags; the heading appears only where there is more than one country to tell apart
+
+### 🔧 Changed
+
+- 📅 **A wallet card states its expiry once, on its face** — the date sat both on the artwork and on a pill under the card, which reads as two dates until you notice they are the same one; the pill is now on the face itself, over a dark plate so that an expiring document still says so in amber or red whatever the artwork behind it is doing
+
+### 🐛 Fixed
+
+- ✋ **Adjusting the crop no longer selects text or offers to save the photograph** — pressing a corner and dragging it is the same gesture as pressing and holding an image, so iOS raised Save image · Copy image · Open image over the whole screen and selected the hint above on the way past; the photograph is now inert to the pointer and nothing on the screen is selectable, while the handles over it are untouched
+
+### ⬆️ Upgrading
+
+- 🔁 **Nothing to do** — `docker compose up -d` as usual; no data changes and no new settings
+
 ## 0.8.6 — 2026-09-08
 
 > The phone takes the photograph and your server does the rest.

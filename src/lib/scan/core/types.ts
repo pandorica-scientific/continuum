@@ -6,6 +6,9 @@ export type Point = { x: number; y: number };
 /** Always in ORIGINAL image pixels, never in the downscaled detection frame's. */
 export type Corners = { tl: Point; tr: Point; br: Point; bl: Point };
 
+/** A line as `a·x + b·y + c = 0`, with (a, b) a unit normal. */
+export type Line = { a: number; b: number; c: number };
+
 /**
  * The four edges of a page, each as the points BETWEEN its two corners.
  *
@@ -66,9 +69,18 @@ export type Rotation = 0 | 90 | 180 | 270;
  */
 export type Frame = { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number };
 
-/** What the detection loop returns for each frame. */
+/**
+ * What the detection loop returns for each frame.
+ *
+ * `lines` are the straight edges the refinement pass fitted in this frame, kept
+ * so the corner screen can snap a dragged handle onto them. They ride on
+ * `searching` as well as on a found page, and deliberately: a photograph whose
+ * page the detector could NOT confirm is exactly the one somebody is about to
+ * place four corners on by hand, and the edges it did find are still there.
+ * Absent from a live pass, which does no refinement.
+ */
 export type DetectState =
-	| { kind: 'searching' }
-	| { kind: 'detected'; corners: Corners; edges?: Edges }
-	| { kind: 'stable'; corners: Corners; edges?: Edges }
+	| { kind: 'searching'; lines?: Line[] }
+	| { kind: 'detected'; corners: Corners; edges?: Edges; lines?: Line[] }
+	| { kind: 'stable'; corners: Corners; edges?: Edges; lines?: Line[] }
 	| { kind: 'rejected'; corners: Corners | null; reason: 'blurry' | 'dark' | 'small' | 'angle' };

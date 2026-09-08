@@ -15,10 +15,9 @@
 // Everything here is pure arithmetic on plain numbers, which is the point: the
 // part of detection that can be tested without a WebAssembly runtime should be.
 
-import type { Corners, Point } from './types.ts';
+import type { Corners, Line, Point } from './types.ts';
 
-/** A line as `a·x + b·y + c = 0`, with (a, b) a unit normal. */
-export type Line = { a: number; b: number; c: number };
+export type { Line };
 
 /** A detected edge fragment, as Hough returns it. */
 export type Segment = { x1: number; y1: number; x2: number; y2: number };
@@ -272,4 +271,78 @@ export function quadArea(corners: Corners): number {
 	return (
 		triangle(corners.tl, corners.tr, corners.bl) + triangle(corners.tr, corners.br, corners.bl)
 	);
+}
+
+/**
+ * The same line, measured in a frame scaled by `factor`.
+ *
+ * Substituting x → x/f into a·x + b·y + c = 0 gives a·x + b·y + c·f = 0, so
+ * only the offset moves and (a, b) stays a unit normal. Lines are found in the
+ * downscaled frame the detector works in and have to arrive in the source's
+ * own pixels, for the same reason `scaleOutline` exists.
+ */
+export function scaleLine(line: Line, factor: number): Line {
+	return { a: line.a, b: line.b, c: line.c * factor };
+}
+
+/**
+ * How far from a line a dragged corner may be and still be pulled onto it.
+ *
+ * A share of the frame's longer side, so it is the same distance on the screen
+ * whatever the photograph's resolution. Roughly a finger's width of slack: wide
+ * enough that a corner placed by eye lands on the edge, narrow enough that a
+ * corner deliberately placed off the page stays where it was put.
+ */
+export const SNAP_REACH = 0.022;
+
+/**
+ * Two lines this close to parallel are the same edge seen twice.
+ *
+ * Intersecting them would put the corner somewhere far off the screen — the
+ * meeting point of two nearly-parallel lines is enormously sensitive to the
+ * angle between them — so a pair inside this is treated as one line and the
+ * point is projected instead.
+ */
+const SNAP_MIN_ANGLE = (25 * Math.PI) / 180;
+
+/** The point on `line` closest to `p`. */
+export function projectOnto(line: Line, p: Point): Point {
+	const away = signedDistanceToLine(line, p);
+	return { x: p.x - line.a * away, y: p.y - line.b * away };
+}
+
+/**
+ * A dragged point, pulled onto the edges the detector actually found.
+ *
+ * The detector already fits straight lines to the page's boundary — that is how
+ * it turns a blurred mask into corners — and then throws them away. Placing a
+ * corner by hand on a phone is the least precise thing this whole feature asks
+ * anyone to do, and the answer is usually within a few pixels of a line that
+ * was measured properly, so the lines are kept and the finger is snapped to
+ * them.
+ *
+ * Two lines that cross near the point give a CORNER, which is the case worth
+ * having: the tap lands on the exact intersection the detector would have
+ * computed. One line alone projects the point onto it, which straightens an
+ * edge without claiming to know where along it the corner sits. Nothing near
+ * enough returns the point untouched — snapping never moves a point that was
+ * placed away from every edge, which is what makes it safe to leave on.
+ */
+export function snapToLines(p: Point, lines: readonly Line[], reach: number): Point {
+	const near = lines
+		.map((line) => ({ line, away: distanceToLine(line, p) }))
+		.filter((c) => c.away <= reach)
+		.sort((one, two) => one.away - two.away);
+	if (near.length === 0) return p;
+
+	const first = near[0].line;
+	const wanted = lineAngle(first);
+	for (const { line } of near.slice(1)) {
+		if (angleBetween(lineAngle(line), wanted) < SNAP_MIN_ANGLE) continue;
+		const corner = intersect(first, line);
+		// A crossing further away than either line is a pair that meets outside
+		// the reach they were chosen for; projecting is the honest answer there.
+		if (corner && Math.hypot(corner.x - p.x, corner.y - p.y) <= reach) return corner;
+	}
+	return projectOnto(first, p);
 }

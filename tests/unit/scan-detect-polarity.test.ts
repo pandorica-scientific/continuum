@@ -48,7 +48,8 @@ describe('which side of the split is the object', () => {
 		// Candidates, not overrides: judgeQuad scores them against each other.
 		expect(detect).toMatch(/detectOnce\(cv, frame, \{[^}]*invert: true[^}]*\}\)/s);
 		expect(detect).toMatch(/segment: 'saturation'/);
-		expect(detect).toMatch(/const candidates = \[plain, evened, darker, dull\]/);
+		expect(detect).toMatch(/const readings = \[plain, evened, darker, dull\];/);
+		expect(detect).toMatch(/const candidates = readings/);
 	});
 
 	it('refuses a quad that scores like nothing at all', () => {

@@ -17,7 +17,10 @@
 	import {
 		fullFrameCorners,
 		orderCorners,
+		SNAP_REACH,
+		snapToLines,
 		type Corners,
+		type Line,
 		type Outline,
 		type Point
 	} from '../core/index.ts';
@@ -27,6 +30,7 @@
 		width,
 		height,
 		outline = null,
+		lines = [],
 		onapply,
 		oncancel,
 		onunavailable
@@ -38,6 +42,18 @@
 		height: number;
 		/** Where the detector put the boundary, or null when it found nothing. */
 		outline?: Outline | null;
+		/**
+		 * The straight edges the detector fitted in this photograph.
+		 *
+		 * Not a boundary — a pool of lines, most of which the detector rejected.
+		 * They are here because they are far more precise than a thumb: the
+		 * detector measures an edge from its gradient across hundreds of pixels,
+		 * and a person placing a corner on a phone is working to about a finger's
+		 * width. Snapping hands the precision back. Empty is ordinary — a
+		 * photograph with no page in it produces none — and means the handles
+		 * behave exactly as they always did.
+		 */
+		lines?: Line[];
 		onapply: (outline: Outline) => void;
 		oncancel: () => void;
 		/**
@@ -147,6 +163,44 @@
 	let overlay: SVGSVGElement | undefined = $state();
 
 	/**
+	 * Where the preference lives.
+	 *
+	 * The browser rather than the person: it is about this hand on this screen,
+	 * not about the household, and somebody who turns snapping off on their
+	 * phone has said nothing about the laptop.
+	 */
+	const SNAP_KEY = 'continuum.scan.snap';
+
+	/**
+	 * Pull a dragged corner onto the detected edges. On unless told otherwise.
+	 *
+	 * On by default because it is right far more often than not — the lines were
+	 * measured from the photograph, the finger was not — and off is one press
+	 * away for the case it is wrong: a page whose real corner is hidden under a
+	 * thumb, or a crop deliberately taken inside the paper.
+	 */
+	let snapping = $state(storedSnapping());
+
+	function storedSnapping(): boolean {
+		try {
+			return localStorage.getItem(SNAP_KEY) !== 'off';
+		} catch {
+			// Private browsing, or storage the browser refuses. The default is the
+			// answer; it is not worth a screen that will not open.
+			return true;
+		}
+	}
+
+	function toggleSnap() {
+		snapping = !snapping;
+		try {
+			localStorage.setItem(SNAP_KEY, snapping ? 'on' : 'off');
+		} catch {
+			// Nothing to do: the setting still holds for this page.
+		}
+	}
+
+	/**
 	 * Hit target and drawn dot are different sizes on purpose. A 44px target is
 	 * the smallest a thumb reliably lands on; a 44px DOT would cover the corner
 	 * it is meant to be placing. Both are in frame units, so they stay the same
@@ -156,6 +210,10 @@
 	const dotRadius = $derived(unit * 1.5);
 	const grabRadius = $derived(unit * 5);
 	const stroke = $derived(unit * 0.42);
+	/** How far a corner may be from a line and still be pulled onto it. */
+	const reach = $derived(Math.max(width, height) * SNAP_REACH);
+	/** Nothing to snap to is not a setting anyone should have to think about. */
+	const snappable = $derived(lines.length > 0);
 
 	const clamp = (value: number, high: number) => Math.min(high, Math.max(0, value));
 
@@ -203,7 +261,9 @@
 		const at = toFrame(event);
 		if (!at) return;
 		if (dragging in quad) {
-			quad = { ...quad, [dragging]: at };
+			// Corners only. An edge handle places a CURVE, and pulling it onto a
+			// straight line would undo the one thing it exists to do.
+			quad = { ...quad, [dragging]: snapPoint(at) };
 			return;
 		}
 		const edge = dragging as Edge;
@@ -214,6 +274,15 @@
 		// than keeping a bend too small to see but large enough to warp with.
 		const straight = Math.hypot(at.x - mid.x, at.y - mid.y) < span * STRAIGHT_ENOUGH;
 		bends = { ...bends, [edge]: straight ? null : at };
+	}
+
+	/** The dragged point, on the detector's edges where it is near one. */
+	function snapPoint(at: Point): Point {
+		if (!snapping || !snappable) return at;
+		const to = snapToLines(at, lines, reach);
+		// Snapping may not push a corner off the picture: a line running past the
+		// frame's edge would otherwise take the handle with it, out of reach.
+		return { x: clamp(to.x, width), y: clamp(to.y, height) };
 	}
 
 	function release(event: PointerEvent) {
@@ -237,6 +306,9 @@
 		event.preventDefault();
 		selected = handle;
 		const from = handleAt(handle);
+		// Deliberately NOT snapped. Arrow keys are the fine adjustment — the tool
+		// somebody reaches for when a corner is nearly right — and a pull onto a
+		// nearby line would take back the very pixel they pressed a key to move.
 		const to = { x: clamp(from.x + delta.x, width), y: clamp(from.y + delta.y, height) };
 		if (handle in quad) {
 			quad = { ...quad, [handle]: to };
@@ -357,6 +429,29 @@
 <div class="corners">
 	<p class="hint">Drag the corners onto the page &middot; pull an edge to follow a curve</p>
 
+	{#if snappable}
+		<!-- Square, and in the corner, because it is a mode rather than an action:
+		     it changes what the next drag does and then stays changed. Only shown
+		     when the detector found edges — a switch over an empty pool would be a
+		     control that does nothing whichever way it is set. -->
+		<button
+			type="button"
+			class="snap"
+			class:on={snapping}
+			aria-pressed={snapping}
+			aria-label="Snap corners to the detected edges"
+			title={snapping ? 'Snapping to detected edges' : 'Snapping off'}
+			onclick={toggleSnap}
+		>
+			<!-- A corner meeting, with the point that lands on it. The glyph is the
+			     behaviour: two lines crossing, and a dot on the crossing. -->
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M4 9 H20 M9 4 V20" />
+				<circle cx="9" cy="9" r="2.6" />
+			</svg>
+		</button>
+	{/if}
+
 	<div class="stage">
 		<!-- A direct-manipulation surface, like the viewfinder: the pointer
 		     handlers live here rather than on each handle so a drag that runs off
@@ -369,9 +464,15 @@
 			onpointerup={release}
 			onpointercancel={release}
 		>
+			<!-- `draggable` off and pointer events through it: on a desktop the
+			     browser's own image drag starts the moment a press moves, and on
+			     iOS a press-and-hold over an <img> raises Save image / Copy image
+			     / Open image over the whole screen. Both fire on exactly the
+			     gesture this screen is for — press a corner, move it. -->
 			<img
 				src={imageUrl}
 				alt="The photograph, with the page corners marked"
+				draggable="false"
 				onerror={() => onunavailable?.()}
 			/>
 			<svg viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -453,7 +554,10 @@
 	</div>
 
 	<div class="deck">
-		<p class="note">Arrow keys nudge the selected corner · Shift for bigger steps</p>
+		<p class="note">
+			Arrow keys nudge the selected corner · Shift for bigger steps{#if snappable && snapping}
+				· corners snap to the detected edges{/if}
+		</p>
 		<div class="actions">
 			<button type="button" class="btn btn-primary" onclick={apply}>Use these edges</button>
 			<button type="button" class="btn" onclick={oncancel}>Cancel</button>
@@ -466,6 +570,11 @@
 	.corners {
 		position: fixed;
 		inset: 0;
+		/* Nothing on this screen is text to be copied, and a drag that begins on
+		   a corner and crosses the hint above it selected that sentence — on iOS
+		   with the grab handles and the Copy bubble over the photograph. */
+		user-select: none;
+		-webkit-user-select: none;
 		/* iOS Safari resolves `inset: 0` against the LARGE viewport, so the panel
 		   ends up taller than the visible area and the page scrolls to make up the
 		   difference. See ScanCapture for the same fix. */
@@ -479,9 +588,46 @@
 		touch-action: none;
 		overscroll-behavior: none;
 	}
+	/* Over the hint rather than in the row with it: the hint is a sentence that
+	   wraps to two lines on a narrow phone, and a button in that flow moved with
+	   it. Pinned to the corner it stays where it was found. */
+	.snap {
+		position: absolute;
+		top: calc(var(--safe-top) + var(--space-4));
+		right: var(--space-5);
+		z-index: 1;
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		padding: 0;
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		/* Opaque, not a tinted card: it floats over the photograph, and a
+		   translucent ground would let the picture through the glyph. */
+		background: var(--bg2);
+		color: var(--fg3);
+		cursor: pointer;
+	}
+	.snap.on {
+		border-color: var(--detect-stable);
+		color: var(--detect-stable);
+	}
+	.snap svg {
+		width: 22px;
+		height: 22px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.7;
+		stroke-linecap: round;
+	}
+	.snap svg circle {
+		fill: currentColor;
+		stroke: none;
+	}
 	.hint {
 		margin: 0;
-		padding: calc(var(--safe-top) + var(--space-5)) var(--space-6) var(--space-4);
+		padding: calc(var(--safe-top) + var(--space-5)) calc(var(--space-6) + 44px) var(--space-4);
 		text-align: center;
 		color: var(--fg2);
 	}
@@ -503,6 +649,11 @@
 	}
 	.surface img {
 		display: block;
+		/* See the element: the callout menu and the image drag both belong to the
+		   <img>, and neither is reachable if the pointer never lands on it. The
+		   handles are in the SVG above, so nothing is lost. */
+		pointer-events: none;
+		-webkit-touch-callout: none;
 		width: 100%;
 		height: 100%;
 		/* `contain` and the overlay's `xMidYMid meet` are defined to produce the

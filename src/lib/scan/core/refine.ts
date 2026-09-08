@@ -25,6 +25,7 @@ import {
 	quadFromLines,
 	quadWinding,
 	worstCornerSkew,
+	type Line,
 	type Segment
 } from './lines.ts';
 import type { CV } from './opencv.ts';
@@ -105,6 +106,24 @@ const HOUGH = {
 } as const;
 
 /**
+ * What the search found: the better quad, and the lines it was chosen from.
+ *
+ * The lines are handed back rather than discarded because the corner screen
+ * wants them. They are the straight edges the detector measured in this
+ * photograph, and a finger placing a corner by hand is far less precise than
+ * they are — see `snapToLines`. Costing a few dozen triples of numbers, they
+ * are the cheapest thing this function produces.
+ *
+ * `corners` is null when nothing beat the quad that came in, which says nothing
+ * about the lines: a search that found the page's edges and could not improve
+ * on the mask still found the page's edges.
+ */
+export interface QuadSearch {
+	corners: Corners | null;
+	lines: Line[];
+}
+
+/**
  * Find the four lines that really bound the page.
  *
  * Reads the MASK's outline, not the photograph. Canny over the photograph is
@@ -119,7 +138,8 @@ const HOUGH = {
  *
  * Each edge of the rough quad proposes a few lines; every combination is
  * scored; the rough edges are among the candidates, so a quad that was already
- * right stays right. Returns null when nothing beats what came in.
+ * right stays right. `corners` comes back null when nothing beats what came
+ * in; the lines come back either way.
  */
 export function searchQuad(
 	cv: CV,
@@ -128,7 +148,7 @@ export function searchQuad(
 	mask: InstanceType<CV['Mat']>,
 	rough: Corners,
 	frame: Frame
-): Corners | null {
+): QuadSearch {
 	const width = frame.width;
 
 	// Pad before taking the gradient. A page held close runs off the edge of the
@@ -169,7 +189,7 @@ export function searchQuad(
 	for (let i = 0; i + 3 < data.length; i += 4) {
 		segments.push({ x1: data[i], y1: data[i + 1], x2: data[i + 2], y2: data[i + 3] });
 	}
-	if (segments.length === 0) return null;
+	if (segments.length === 0) return { corners: null, lines: [] };
 
 	// Distance to the nearest outline pixel, computed once. Testing whether a
 	// point sits on the page's boundary is then a single lookup instead of a
@@ -269,7 +289,12 @@ export function searchQuad(
 		}
 	}
 
-	return bestSupport > roughSupport ? best : null;
+	// Every candidate from every edge, flattened. The four groups are what the
+	// combinatorial search needs; a screen snapping a dragged corner does not
+	// know which edge that corner is on — dragging the top-left past the
+	// top-right is the case the ordering exists for — so it gets the pool.
+	const edgeLines = perEdge.flat();
+	return { corners: bestSupport > roughSupport ? best : null, lines: edgeLines };
 }
 
 /** A corner a little outside the picture is a page running off the edge; one

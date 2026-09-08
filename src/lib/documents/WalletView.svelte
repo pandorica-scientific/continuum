@@ -21,10 +21,15 @@
 	import Pill from '$lib/components/Pill.svelte';
 	import type { Hue } from '$lib/ui/hue';
 	import { documentArtUrl } from '$lib/documents/art';
-	import { flagEmoji, isEuCountry } from '$lib/countries';
+	import { countryName, flagEmoji, isEuCountry } from '$lib/countries';
 	import { identityKindLabel } from '$lib/documents';
 	import { expiryTreatment, readableDate, typeLabel } from '$lib/documents/view';
-	import { sectionsByPerson, type LayoutRow } from '$lib/documents/layouts';
+	import {
+		countryGroups,
+		NO_COUNTRY,
+		sectionsByPerson,
+		type LayoutRow
+	} from '$lib/documents/layouts';
 
 	let {
 		rows,
@@ -104,15 +109,6 @@
 	}
 
 	/**
-	 * What the date pill says, and in what tone.
-	 *
-	 * Never empty. A document with date logic says what it does and when
-	 * (`expires 4 Aug 2032`); one without — a birth certificate — falls back to
-	 * the bare period date with no verb, because there is no behaviour to name.
-	 * A slot that looks missing on most cards trains a reader to stop looking at
-	 * it, which costs the one card where it was red.
-	 */
-	/**
 	 * The number as a card prints it: the last four digits, the rest masked.
 	 *
 	 * A face is looked at over a shoulder; the whole number is in the inspector.
@@ -125,6 +121,15 @@
 		return `•••• •••• ${clean.slice(-4)}`;
 	}
 
+	/**
+	 * What the date pill on the card face says, and in what tone.
+	 *
+	 * Never empty. A document with date logic says what it does and when
+	 * (`expires 4 Aug 2032`); one without — a birth certificate — falls back to
+	 * the bare period date with no verb, because there is no behaviour to name.
+	 * A slot that looks missing on most cards trains a reader to stop looking at
+	 * it, which costs the one card where it was red.
+	 */
 	function dateChip(row: LayoutRow): { text: string; hue: string | null } | null {
 		// `wide`, so the pill says what the date DOES as well as when: a card has
 		// room for `expires 4 Aug 2033`, and a bare date leaves a reader to guess
@@ -146,6 +151,11 @@
 </script>
 
 {#each sections as section (section.link?.id ?? 'nobody')}
+	{@const groups = countryGroups(section.items)}
+	<!-- A heading per country only where there is more than one to tell apart. A
+	     single heading over a single run of cards divides nothing, and the flag is
+	     already on every face. -->
+	{@const divided = groups.length > 1}
 	<section class="wallet-section">
 		<h2 class="section-head">
 			{#if section.link}
@@ -158,86 +168,100 @@
 			<span class="mono section-count">{section.items.length}</span>
 			<span class="section-rule"></span>
 		</h2>
-		<div class="cards">
-			{#each section.items as row (row.id)}
-				{@const chip = dateChip(row)}
-				{@const number = maskedNumber(row.identity?.number ?? null)}
-				<!-- The card and its caption: the face is what is recognised, the
-				     line under it is what is read. The state pill sits under the
-				     face rather than on it, where a traffic-light hue is legible
-				     against the app's own ground rather than a photograph. -->
-				<article class="wallet-card">
-					<button
-						type="button"
-						class="card-face"
-						class:selected={row.id === selectedId}
-						style:background-image="url({documentArtUrl(
-							row.identity?.country ?? null,
-							row.identity?.kind ?? null
-						)})"
-						onclick={() => onopen(row.id)}
-						aria-label="Open {row.name}"
-					>
-						<span class="overlay">
-							<span class="top">
-								{#if row.identity?.country}
-									<span class="country" style:background={SUPPORT}>
-										<span class="flag">{flagEmoji(row.identity.country)}</span>
-										{#if isEuCountry(row.identity.country)}
-											<!-- The code goes inside the Union's ring, as it does on the
+		{#each groups as group (group.code ?? '')}
+			{#if divided}
+				<h3 class="country-head">
+					<span class="country-flag">{flagEmoji(group.code)}</span>
+					<span class="country-label">
+						{group.code ? countryName(group.code) : NO_COUNTRY}
+					</span>
+					<span class="mono country-count">{group.items.length}</span>
+				</h3>
+			{/if}
+			<div class="cards">
+				{#each group.items as row (row.id)}
+					{@const chip = dateChip(row)}
+					{@const number = maskedNumber(row.identity?.number ?? null)}
+					<!-- The card and its caption: the face is what is recognised, the
+					     line under it is what is read. The date sits ON the face, once —
+					     it used to appear in both places, which read as two dates until
+					     you noticed they were the same one. -->
+					<article class="wallet-card">
+						<button
+							type="button"
+							class="card-face"
+							class:selected={row.id === selectedId}
+							style:background-image="url({documentArtUrl(
+								row.identity?.country ?? null,
+								row.identity?.kind ?? null
+							)})"
+							onclick={() => onopen(row.id)}
+							aria-label="Open {row.name}"
+						>
+							<span class="overlay">
+								<span class="top">
+									{#if row.identity?.country}
+										<span class="country" style:background={SUPPORT}>
+											<span class="flag">{flagEmoji(row.identity.country)}</span>
+											{#if isEuCountry(row.identity.country)}
+												<!-- The code goes inside the Union's ring, as it does on the
 											     document itself: an EU passport, licence or plate puts the
 											     member state's letters in the middle of the twelve stars,
 											     and a card that spelled them beside it instead would be
 											     the only one in the wallet that did. -->
-											<EuMark code={row.identity.country} size={24} />
-										{:else}
-											<span class="mono code" style:color={INK_STRONG}>{row.identity.country}</span>
-										{/if}
+												<EuMark code={row.identity.country} size={24} />
+											{:else}
+												<span class="mono code" style:color={INK_STRONG}
+													>{row.identity.country}</span
+												>
+											{/if}
+										</span>
+									{:else}
+										<span class="country-gap"></span>
+									{/if}
+									<span class="kind" style:background={SUPPORT}>
+										<span class="name" style:color={INK}>{cardTitle(row)}</span>
 									</span>
-								{:else}
-									<span class="country-gap"></span>
-								{/if}
-								<span class="kind" style:background={SUPPORT}>
-									<span class="name" style:color={INK}>{cardTitle(row)}</span>
 								</span>
-							</span>
 
-							{#if number}
-								<span class="number mono" style:background={SUPPORT} style:color={INK}
-									>{number}</span
-								>
-							{/if}
-
-							<span class="foot">
-								{#if section.link}
-									<span class="holder" style:background={SUPPORT} style:color={INK_STRONG}
-										>{section.label.toUpperCase()}</span
+								{#if number}
+									<span class="number mono" style:background={SUPPORT} style:color={INK}
+										>{number}</span
 									>
 								{/if}
-								{#if row.expiresOn}
-									<span class="expires mono" style:background={SUPPORT} style:color={INK_QUIET}>
-										expires · {readableDate(row.expiresOn)}
-									</span>
-								{/if}
+
+								<span class="foot">
+									{#if section.link}
+										<span class="holder" style:background={SUPPORT} style:color={INK_STRONG}
+											>{section.label.toUpperCase()}</span
+										>
+									{/if}
+									{#if chip}
+										<!-- On a dark plate of its own, not on the artwork. The pill's
+										     own tint is translucent and would take its lightness from
+										     whatever passage of the picture it landed on; over a plate
+										     the amber and the red read the same on every card. -->
+										<span class="date-plate" style:background={SUPPORT}>
+											{#if chip.hue}
+												<Pill hue={chip.hue as Hue}>{chip.text}</Pill>
+											{:else}
+												<span class="expires mono" style:color={INK_QUIET}>{chip.text}</span>
+											{/if}
+										</span>
+									{/if}
+								</span>
+							</span>
+						</button>
+						<span class="under">
+							<span class="title">
+								{cardTitle(row)}{#if row.identity?.country}
+									· {row.identity.country}{/if}
 							</span>
 						</span>
-					</button>
-					<span class="under">
-						<span class="title">
-							{cardTitle(row)}{#if row.identity?.country}
-								· {row.identity.country}{/if}
-						</span>
-						{#if chip}
-							{#if chip.hue}
-								<Pill hue={chip.hue as Hue}>{chip.text}</Pill>
-							{:else}
-								<span class="mono quiet-date">{chip.text}</span>
-							{/if}
-						{/if}
-					</span>
-				</article>
-			{/each}
-		</div>
+					</article>
+				{/each}
+			</div>
+		{/each}
 	</section>
 {/each}
 
@@ -265,6 +289,32 @@
 		flex: 1;
 		height: 1px;
 		background: var(--bd);
+	}
+	/* Quieter than the person above it: this is a division WITHIN a section, and
+	   a second heading at the same weight would read as a second section. */
+	.country-head {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-3);
+		margin: 0 0 var(--space-5);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		color: var(--fg2);
+	}
+	.country-head:not(:first-of-type) {
+		margin-top: var(--space-7);
+	}
+	.country-flag {
+		font-size: var(--text-lg);
+		line-height: 1;
+	}
+	.country-label {
+		letter-spacing: 0.01em;
+	}
+	.country-count {
+		font-size: var(--text-2xs);
+		color: var(--fg3);
 	}
 	/* auto-fill rather than auto-fit: a wallet holding two cards keeps them
 	   card-sized instead of stretching them across the column. */
@@ -304,11 +354,12 @@
 		gap: var(--space-4);
 		min-width: 0;
 	}
+	/* The caption is the title alone now that the date is on the face. Kept as a
+	   flex row rather than collapsed into `.title`, because it is the row the
+	   caption grows in and the ellipsis needs something to be narrower than. */
 	.under {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-4);
 		min-width: 0;
 	}
 	.title {
@@ -318,10 +369,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.quiet-date {
-		font-size: var(--text-xs);
-		color: var(--fg3);
 	}
 	.top {
 		display: flex;
@@ -352,6 +399,18 @@
 		font-size: var(--text-2xs);
 		letter-spacing: 0.06em;
 		white-space: nowrap;
+	}
+	/* The plate is the ground the pill needs; the pill keeps its own border and
+	   hue, so an expiring card says so in colour on the face itself. Padding is
+	   tight because the pill already carries its own. */
+	.date-plate {
+		display: inline-flex;
+		align-items: center;
+		padding: 2px;
+		border-radius: var(--radius-pill);
+	}
+	.date-plate .expires {
+		padding: 1px 7px;
 	}
 	.card-face.selected {
 		border-color: var(--brand);

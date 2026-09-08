@@ -65,6 +65,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		sessionId,
 		pageId,
 		outline: result.outline,
+		// A handful of triples of numbers: the straight edges found in this
+		// photograph, so the corner screen can pull a dragged handle onto one
+		// rather than leaving it where a thumb happened to land.
+		lines: result.lines,
 		width: result.width,
 		height: result.height
 	});

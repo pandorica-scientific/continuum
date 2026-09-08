@@ -9,11 +9,14 @@ import {
 	isConvexQuad,
 	lineAngle,
 	lineThrough,
+	projectOnto,
 	quadAngles,
 	quadArea,
 	quadFromLines,
 	quadWinding,
+	scaleLine,
 	signedDistanceToLine,
+	snapToLines,
 	worstCornerSkew,
 	type Segment
 } from '$lib/scan/core/lines';
@@ -274,5 +277,78 @@ describe('quad angles', () => {
 		// comparison meant to reject it.
 		const collapsed: Corners = { tl: P(5, 5), tr: P(5, 5), br: P(5, 5), bl: P(5, 5) };
 		for (const angle of quadAngles(collapsed)) expect(Number.isFinite(angle)).toBe(true);
+	});
+});
+
+describe('scaleLine', () => {
+	it('keeps the same points on the line when the frame is scaled', () => {
+		// A line through (10, 20) and (90, 60) in a small frame; the same two
+		// points at twice the size must lie on the scaled line.
+		const small = lineThrough(P(10, 20), P(90, 60));
+		const big = scaleLine(small, 2);
+		expect(distanceToLine(big, P(20, 40))).toBeCloseTo(0, 6);
+		expect(distanceToLine(big, P(180, 120))).toBeCloseTo(0, 6);
+	});
+
+	it('leaves the normal a unit vector', () => {
+		const line = scaleLine(lineThrough(P(3, 7), P(41, 19)), 3.5);
+		expect(Math.hypot(line.a, line.b)).toBeCloseTo(1, 9);
+	});
+});
+
+describe('projectOnto', () => {
+	it('drops a point onto the nearest place on the line', () => {
+		const line = lineThrough(P(0, 50), P(100, 50));
+		expect(projectOnto(line, P(30, 62))).toEqual({ x: 30, y: 50 });
+	});
+
+	it('leaves a point already on the line where it is', () => {
+		const line = lineThrough(P(0, 0), P(60, 60));
+		const at = projectOnto(line, P(25, 25));
+		expect(at.x).toBeCloseTo(25, 6);
+		expect(at.y).toBeCloseTo(25, 6);
+	});
+});
+
+describe('snapToLines', () => {
+	const top = lineThrough(P(0, 100), P(500, 100));
+	const left = lineThrough(P(80, 0), P(80, 500));
+
+	it('lands a near-miss on the corner where two edges cross', () => {
+		// The kind of miss a thumb makes: a few pixels off both edges at once.
+		expect(snapToLines(P(86, 94), [top, left], 20)).toEqual({ x: 80, y: 100 });
+	});
+
+	it('projects onto the one edge it is near', () => {
+		// Well along the top edge, nowhere near the left one: the corner should
+		// straighten onto the top and keep the x it was dragged to.
+		const at = snapToLines(P(300, 108), [top, left], 20);
+		expect(at.x).toBeCloseTo(300, 6);
+		expect(at.y).toBeCloseTo(100, 6);
+	});
+
+	it('leaves a point that is near nothing alone', () => {
+		// A crop taken deliberately inside the paper. Snapping must not drag it
+		// back out, which is what makes the setting safe to leave on.
+		expect(snapToLines(P(300, 300), [top, left], 20)).toEqual({ x: 300, y: 300 });
+	});
+
+	it('does not intersect two lines that are nearly parallel', () => {
+		// Two readings of the same edge. Their crossing is hundreds of pixels away
+		// and enormously sensitive to the angle; projecting is the honest answer.
+		const nearlyTop = lineThrough(P(0, 104), P(500, 110));
+		const at = snapToLines(P(250, 103), [top, nearlyTop], 20);
+		expect(at.y).toBeCloseTo(100, 4);
+		expect(at.x).toBeCloseTo(250, 4);
+	});
+
+	it('snaps to nothing when the detector found nothing', () => {
+		expect(snapToLines(P(12, 34), [], 20)).toEqual({ x: 12, y: 34 });
+	});
+
+	it('prefers the closest line when several are in reach', () => {
+		const far = lineThrough(P(0, 118), P(500, 118));
+		const at = snapToLines(P(300, 106), [far, top], 20);
+		expect(at.y).toBeCloseTo(100, 6);
 	});
 });

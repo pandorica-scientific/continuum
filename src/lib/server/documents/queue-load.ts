@@ -15,13 +15,14 @@
  */
 import { asc, eq } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
-import { document, shelf } from '$lib/server/db/schema';
+import { document, documentIdentity, shelf } from '$lib/server/db/schema';
 import { daysBetween } from '$lib/dates';
 import { templateEngine, unitMakesCards, type ShelfEngine } from '$lib/documents/templates';
 import { listShelves, shelfTypesByKey, type ShelfRow } from './shelves';
 import { lanesFor } from '$lib/server/organisations/mutations';
 import { cardsFor } from './dossier-load';
 import { loadProposals } from '$lib/server/organisations/proposals-load';
+import { identityNumbersFor, type IdentityFields, type IdentityNumber } from './identity';
 
 export interface QueueDocument {
 	id: string;
@@ -66,10 +67,29 @@ export interface QueueShelf {
 	types: string[];
 }
 
+/**
+ * What the current document already says about itself as an identity document.
+ *
+ * Sent so the filing form can SHOW those answers rather than posting over them.
+ * Filing writes the identity fields the same way the inspector does — the whole
+ * form is the intended state, and a blank box means "cleared" — so a form that
+ * started blank on a document somebody had already filled in would silently
+ * empty every field and delete every extra number on the way past.
+ *
+ * Only for the document being decided. The queue can hold a folder's worth of
+ * scans, and the other twenty are not being edited.
+ */
+export interface QueueIdentity {
+	fields: IdentityFields;
+	numbers: IdentityNumber[];
+}
+
 export interface QueuePayload {
 	waiting: QueueDocument[];
 	/** The document being decided, or null when the queue is empty. */
 	current: string | null;
+	/** What `current` already holds, or null when it holds nothing. */
+	currentIdentity: QueueIdentity | null;
 	/** Its place in the queue, for "3 of 7". */
 	index: number;
 	shelves: QueueShelf[];
@@ -110,6 +130,7 @@ export async function loadQueue(
 		return {
 			waiting: [],
 			current: null,
+			currentIdentity: null,
 			index: 0,
 			shelves: [],
 			cards: {},
@@ -182,6 +203,29 @@ export async function loadQueue(
 	// What a lane rule thinks, for the document in front of you only. Proposed
 	// and never applied: a wrong guess looks exactly like a right one once it is
 	// filed, so it stays a suggestion until somebody agrees with it.
+	// What the document already says about itself, when it says anything. A row
+	// exists only for paper somebody has typed identity fields into — most of
+	// the queue has none, and asking costs one indexed lookup for the one
+	// document on screen.
+	const identityRow = current
+		? (
+				await handle
+					.select({
+						kind: documentIdentity.kind,
+						country: documentIdentity.country,
+						number: documentIdentity.number,
+						issuedOn: documentIdentity.issuedOn,
+						issuer: documentIdentity.issuer
+					})
+					.from(documentIdentity)
+					.where(eq(documentIdentity.documentId, current))
+			)[0]
+		: undefined;
+	const currentIdentity: QueueIdentity | null =
+		current && identityRow
+			? { fields: identityRow, numbers: await identityNumbersFor(current, handle) }
+			: null;
+
 	const proposals = current ? await loadProposals(handle) : [];
 	const match = proposals.find((p) => p.documentId === current) ?? null;
 	const proposalShelf = match
@@ -191,6 +235,7 @@ export async function loadQueue(
 	return {
 		waiting,
 		current,
+		currentIdentity,
 		index,
 		shelves: queueShelves,
 		cards,

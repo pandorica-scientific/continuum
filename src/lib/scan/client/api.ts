@@ -9,13 +9,15 @@
 // decode, detection, warp and encode happens in a process with no memory
 // ceiling to hit.
 
-import type { Outline, PageMode, Rotation } from '../core/types.ts';
+import type { Line, Outline, PageMode, Rotation } from '../core/types.ts';
 
 export interface UploadedPage {
 	sessionId: string;
 	pageId: string;
 	/** The page boundary, which may carry curved edges. Null when none was found. */
 	outline: Outline | null;
+	/** The straight edges the detector fitted, for the corner screen to snap to. */
+	lines: Line[];
 	width: number;
 	height: number;
 }
@@ -52,7 +54,12 @@ export async function uploadScanPage(file: File, sessionId: string | null): Prom
 		await fetch('/scan/page', { method: 'POST', body: form }),
 		'That photo could not be read.'
 	);
-	return (await response.json()) as UploadedPage;
+	// `lines` is filled in rather than required of the wire: a photograph the
+	// detector found nothing in has none, and a page that arrives without the
+	// field should open a corner screen that snaps to nothing rather than one
+	// that cannot read its own props.
+	const page = (await response.json()) as Omit<UploadedPage, 'lines'> & { lines?: Line[] };
+	return { ...page, lines: page.lines ?? [] };
 }
 
 export interface PageState {

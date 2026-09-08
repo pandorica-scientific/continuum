@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { NOBODY, sectionsByPerson, type AboutLink, type LayoutRow } from '$lib/documents/layouts';
+import {
+	countryGroups,
+	NOBODY,
+	sectionsByPerson,
+	type AboutLink,
+	type LayoutRow
+} from '$lib/documents/layouts';
 
 const ROBERT: AboutLink = { id: 'p1', kind: 'person', name: 'Robert' };
 const JANA: AboutLink = { id: 'p2', kind: 'person', name: 'Jana' };
@@ -62,5 +68,37 @@ describe('sectionsByPerson', () => {
 
 	it('has nothing to show for nothing', () => {
 		expect(sectionsByPerson([])).toEqual([]);
+	});
+});
+
+describe('countryGroups', () => {
+	const issued = (id: string, country: string | null): LayoutRow =>
+		row(id, [ROBERT], { identity: { kind: 'passport', country, number: null } });
+
+	it('puts one country together, in code order', () => {
+		const groups = countryGroups([issued('a', 'PL'), issued('b', 'CZ'), issued('c', 'PL')]);
+
+		expect(groups.map((g) => g.code)).toEqual(['CZ', 'PL']);
+		expect(groups.map((g) => g.items.length)).toEqual([1, 2]);
+	});
+
+	it('puts the documents naming no country last', () => {
+		// The unfinished filing, after the finished ones — the same rule NOBODY
+		// follows, and for the same reason: worth showing, not worth showing first.
+		const groups = countryGroups([issued('a', null), issued('b', 'PL')]);
+
+		expect(groups.map((g) => g.code)).toEqual(['PL', null]);
+	});
+
+	it('treats a document with no identity record as naming no country', () => {
+		const groups = countryGroups([row('plain', [ROBERT])]);
+
+		expect(groups).toHaveLength(1);
+		expect(groups[0].code).toBeNull();
+	});
+
+	it('makes one group when the whole wallet is from one country', () => {
+		// What the wallet checks to decide whether to draw country headings at all.
+		expect(countryGroups([issued('a', 'CZ'), issued('b', 'CZ')])).toHaveLength(1);
 	});
 });
