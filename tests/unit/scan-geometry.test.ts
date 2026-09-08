@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	A4_RATIO,
 	MAX_OUTPUT_WIDTH,
+	MAX_SOURCE_LONG,
 	fullFrameCorners,
 	hairline,
 	outputSize,
@@ -74,6 +75,31 @@ describe('outputSize', () => {
 		const collapsed = outputSize(rect(0, 0));
 		expect(Number.isFinite(collapsed.width)).toBe(true);
 		expect(Number.isFinite(collapsed.height)).toBe(true);
+	});
+});
+
+describe('the source cap against the output ceiling', () => {
+	it('lets a page that fills the frame reach the ceiling exactly, and no further', () => {
+		// This is the whole reason MAX_SOURCE_LONG is `MAX_OUTPUT_WIDTH * A4_RATIO`
+		// rather than a number somebody liked. A page photographed to fill the
+		// frame gives a source of exactly that long edge, and the page rendered
+		// out of it is A4 at 300 dpi — the largest this pipeline ever writes. So
+		// the cap costs a well-framed photograph NOTHING: there is no resolution
+		// on the far side of it that the PDF could have carried.
+		const short = Math.round(MAX_SOURCE_LONG / A4_RATIO);
+		const page = outputSize(fullFrameCorners(short, MAX_SOURCE_LONG));
+		expect(page.width).toBe(MAX_OUTPUT_WIDTH);
+		expect(page.height).toBe(Math.round(MAX_OUTPUT_WIDTH * A4_RATIO));
+	});
+
+	it('is what a photograph twice as large would have come out at anyway', () => {
+		// The clamp in `outputSize` is the ceiling; the cap on the source only
+		// decides how much work is done to reach it. A 4× larger frame produces
+		// the same page.
+		const short = Math.round(MAX_SOURCE_LONG / A4_RATIO);
+		expect(outputSize(fullFrameCorners(short * 2, MAX_SOURCE_LONG * 2))).toEqual(
+			outputSize(fullFrameCorners(short, MAX_SOURCE_LONG))
+		);
 	});
 });
 

@@ -32,24 +32,93 @@ async function load(): Promise<Mupdf> {
 }
 
 /**
- * Decode a photograph into a packed RGBA frame.
+ * Decode a photograph into a packed RGBA frame, no larger than `maxLong` on its
+ * long edge.
  *
  * mupdf does not read HEIC — it answers "unknown image file format" — and an
  * iPhone shoots HEIC by DEFAULT, so this is not an edge case, it is the most
  * common single input the scanner receives. libheif handles those and mupdf
  * handles everything else.
+ *
+ * THE SIZE IS ASKED FOR BEFORE THE DECODE, NOT AFTER IT. A photograph's file
+ * size says nothing about its decoded size — the 48 MP frame this was measured
+ * on is a 0.8 MB JPEG — and decoding one whole and shrinking it afterwards paid
+ * for every pixel twice: once in mupdf's pixmap and again in the packed copy
+ * taken out of it. Handing mupdf a destination of the size actually wanted lets
+ * it choose its own decode resolution, which for a JPEG means libjpeg
+ * subsampling as it goes. Measured on that 48 MP frame: 784 MB peak whole,
+ * 411 MB asked for at the cap, 284 MB asked for at a thumbnail.
+ *
+ * `maxLong` defaults to no limit, for the caller that is reading back a page
+ * this pipeline WROTE and wants it exactly.
  */
-export async function decodeToFrame(bytes: Uint8Array): Promise<Frame> {
-	if (looksLikeHeic(bytes)) return decodeHeic(bytes);
+export async function decodeToFrame(bytes: Uint8Array, maxLong = Infinity): Promise<Frame> {
+	// libheif has no scaled decode to ask for: it writes into a buffer of the
+	// image's own size, so the cap can only be applied afterwards. An iPhone's
+	// 12 MP is 48 MB, which is why this is tolerable and the JPEG path was not.
+	if (looksLikeHeic(bytes)) return limitFrame(await decodeHeic(bytes), maxLong);
+
 	const mupdf = await load();
-	const pixmap = new mupdf.Image(bytes).toPixmap();
+	const image = new mupdf.Image(bytes);
 	try {
-		return pixmapToFrame(pixmap);
+		const width = image.getWidth();
+		const height = image.getHeight();
+		const scale = Math.min(1, maxLong / Math.max(width, height));
+		// EXACTLY as stored when it already fits. mupdf's resampling filter is
+		// not the identity, so drawing a 1:1 copy through it would put grey
+		// pixels along the strokes of the black-and-white artefact that gets read
+		// back on the way into the PDF — and `assemblePdf` checks for bilevel
+		// before packing one, so the page would quietly become a JPEG.
+		const pixmap = scale === 1 ? image.toPixmap() : drawn(mupdf, image, width, height, scale);
+		try {
+			return pixmapToFrame(pixmap);
+		} finally {
+			// A pixmap holds bytes outside the JS heap until this is called. The
+			// extraction path learned the same lesson; see `ocr/index.ts`.
+			pixmap.destroy();
+		}
 	} finally {
-		// A pixmap holds bytes outside the JS heap until this is called. The
-		// extraction path learned the same lesson; see `ocr/index.ts`.
-		pixmap.destroy();
+		image.destroy();
 	}
+}
+
+/**
+ * The image drawn into a pixmap of the size wanted, rather than its own.
+ *
+ * An image occupies the UNIT SQUARE, so the transform that lands it on this
+ * pixmap is simply the pixmap's size.
+ *
+ * NO Y-FLIP, however much the examples suggest one. `scale(w, -h)` then
+ * `translate(0, h)` is the idiom throughout mupdf's own sample code, and it is
+ * correct THERE because those callers work in PDF user space, where y increases
+ * upward and the image's first row therefore has to be sent to the top of the
+ * square. A `DrawDevice` over a bare pixmap is not in that space: it is raster
+ * device space, y downward, which is already the order the rows are stored in.
+ * The flip is a second inversion, and the photograph comes back upside down —
+ * measured both ways, not reasoned about.
+ */
+function drawn(
+	mupdf: Mupdf,
+	image: import('mupdf').Image,
+	width: number,
+	height: number,
+	scale: number
+): MupdfPixmap {
+	const target = Math.max(1, Math.round(width * scale));
+	const rows = Math.max(1, Math.round(height * scale));
+	const pixmap = new mupdf.Pixmap(mupdf.ColorSpace.DeviceRGB, [0, 0, target, rows], false);
+	// A photograph is opaque, but the pixmap arrives uninitialised: anything the
+	// draw does not cover would otherwise be whatever the heap last held.
+	pixmap.clear(255);
+
+	const device = new mupdf.DrawDevice(mupdf.Matrix.identity, pixmap);
+	try {
+		device.fillImage(image, mupdf.Matrix.scale(target, rows), 1);
+		device.close();
+	} finally {
+		device.destroy();
+	}
+	return pixmap;
 }
 
 /**

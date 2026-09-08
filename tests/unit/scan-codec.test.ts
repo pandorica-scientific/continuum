@@ -95,6 +95,54 @@ describe('the scan codec', () => {
 		expect(small.data[(small.width - 1) * 4]).toBeGreaterThan(240);
 	});
 
+	it('decodes at the size asked for rather than the size stored', async () => {
+		// The whole point: a photograph's file size says nothing about its decoded
+		// size, so the cap is handed to the decoder instead of applied afterwards.
+		// Measured on a 48 MP frame — a 0.8 MB JPEG — asking for the cap rather
+		// than the whole thing took the peak from 784 MB to 411 MB.
+		const jpeg = await encodeFrame(swatch(1200, 900), 'jpeg', 90);
+		const small = await decodeToFrame(jpeg, 400);
+		expect(Math.max(small.width, small.height)).toBe(400);
+		expect(small.height).toBe(300);
+	});
+
+	it('does not turn the photograph upside down on the way', async () => {
+		// The trap this guards. mupdf's sample code draws images with a y-flip,
+		// which is right in PDF user space — y upward, so the first row has to be
+		// sent to the TOP of the unit square — and wrong over a bare pixmap, whose
+		// device space already runs downward like the rows do. Someone will
+		// eventually add the idiomatic flip; this is what tells them.
+		//
+		// Red rises left to right and green top to bottom, so the top-left corner
+		// is dark in both and the bottom-left is green.
+		const jpeg = await encodeFrame(swatch(1200, 900), 'jpeg', 95);
+		const small = await decodeToFrame(jpeg, 300);
+		const at = (x: number, y: number) => {
+			const i = (y * small.width + x) * 4;
+			return { red: small.data[i], green: small.data[i + 1] };
+		};
+		expect(at(0, 0).green).toBeLessThan(40);
+		expect(at(0, small.height - 1).green).toBeGreaterThan(215);
+		expect(at(small.width - 1, 0).red).toBeGreaterThan(215);
+	});
+
+	it('reads a page back EXACTLY when no size is asked for', async () => {
+		// The artefact re-read on the way into the PDF goes down this path, and
+		// `assemblePdf` checks it is bilevel before packing a 1-bit stream. mupdf's
+		// resampling filter is not the identity, so drawing even a 1:1 copy through
+		// it would put grey along every stroke and the page would silently become
+		// a JPEG instead.
+		const page: Frame = { data: new Uint8ClampedArray(64 * 64 * 4), width: 64, height: 64 };
+		for (let i = 0; i < 64 * 64; i++) {
+			const black = (i / 64) % 2 < 1;
+			page.data.set(black ? [0, 0, 0, 255] : [255, 255, 255, 255], i * 4);
+		}
+		const back = await decodeToFrame(await encodeFrame(page, 'png'));
+		expect(back.width).toBe(64);
+		const greys = [...back.data].filter((_, i) => i % 4 === 0 && ![0, 255].includes(back.data[i]));
+		expect(greys).toEqual([]);
+	});
+
 	it('caps a PORTRAIT photograph, which is how a document is photographed', () => {
 		// The mistake the browser's old capture cap made: it measured width, so a
 		// tall frame was never over the limit and never came down. A phone shoots

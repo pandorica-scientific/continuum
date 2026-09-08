@@ -24,7 +24,7 @@ import {
 } from '$lib/scan/core/index';
 import type { Frame, Outline, PageMode, Rotation } from '$lib/scan/core/types';
 import type { DetectRequest, OriginalRequest, RenderRequest } from '../protocol';
-import { decodeToFrame, downscaleFrame, encodeFrame, limitFrame } from './codec';
+import { decodeToFrame, downscaleFrame, encodeFrame } from './codec';
 
 /**
  * The photograph, turned the right way up and held to a workable size.
@@ -44,11 +44,15 @@ import { decodeToFrame, downscaleFrame, encodeFrame, limitFrame } from './codec'
  * this function, so "the source's pixels" means the capped frame's pixels
  * everywhere: the outline the client stores, the corners it sends back and the
  * width and height it lays its handles out in are all in the same space.
+ *
+ * The cap is handed to the DECODER rather than applied after it, so a large
+ * photograph is never materialised whole; see `codec.ts`. Rotation does not
+ * change which edge is the long one, so capping before `applyOrientation` and
+ * capping after it are the same thing.
  */
-async function openSource(path: string): Promise<Frame> {
+async function openSource(path: string, maxLong = MAX_SOURCE_LONG): Promise<Frame> {
 	const bytes = new Uint8Array(await readFile(path));
-	const upright = applyOrientation(await decodeToFrame(bytes), readOrientation(bytes));
-	return limitFrame(upright, MAX_SOURCE_LONG);
+	return applyOrientation(await decodeToFrame(bytes, maxLong), readOrientation(bytes));
 }
 
 /**
@@ -150,7 +154,10 @@ export async function runDetect(
 export async function runOriginal(
 	request: OriginalRequest
 ): Promise<{ outline: null; width: number; height: number }> {
-	const source = await openSource(request.sourcePath);
+	// Decoded at the size the corner screen asks for, not at the pipeline's cap:
+	// this picture is looked at and never rendered from, so there is nothing
+	// downstream that wants the other 90% of the pixels.
+	const source = await openSource(request.sourcePath, request.width);
 	const shown = downscaleFrame(source, request.width);
 	const part = `${request.outPath}.part`;
 	await writeFile(part, await encodeFrame(shown, 'jpeg', 80));
