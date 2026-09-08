@@ -7,9 +7,45 @@ export type Point = { x: number; y: number };
 export type Corners = { tl: Point; tr: Point; br: Point; bl: Point };
 
 /**
- * `original` is the escape hatch: no warp, no enhancement, EXIF rotation only.
- * It exists because the upload path has no viewfinder to retake from, so a
- * failed detection would otherwise leave the user with nothing (§3.1).
+ * The four edges of a page, each as the points BETWEEN its two corners.
+ *
+ * An edge runs from the first named corner to the second — `top` is tl→tr,
+ * `right` tr→br, `bottom` br→bl, `left` bl→tl — and holds only the interior
+ * points, because the endpoints are already in `Corners` and storing them twice
+ * is two things that can disagree.
+ *
+ * An empty array means that edge is straight, which is the ordinary case: most
+ * paper photographed flat needs none of this.
+ */
+export interface Edges {
+	top: Point[];
+	right: Point[];
+	bottom: Point[];
+	left: Point[];
+}
+
+/**
+ * A page boundary, which is not always a quadrilateral.
+ *
+ * A4 lifted off a table bows: the edge between two corners is a curve, and four
+ * straight lines cannot describe it. Measured over real photographs, that is
+ * not a rare case — a bowed page is exactly what produces a mask whose boundary
+ * is dented, which is why the detector returned nothing for several of them.
+ *
+ * `corners` is always present and is the whole answer for a flat page, so
+ * everything that only wants a quad keeps working unchanged. `edges` bends it.
+ */
+export interface Outline {
+	corners: Corners;
+	edges?: Edges;
+}
+
+/**
+ * `original` is CROPPED but not enhanced: the page is straightened out of
+ * perspective and nothing else is touched, so the colours are the ones the
+ * camera recorded. It is also still the escape hatch — with no boundary to
+ * apply it returns the photograph whole, which is what the upload path needs
+ * when detection has failed and there is no viewfinder to retake from.
  */
 export type PageMode = 'bw' | 'grayscale' | 'color' | 'original';
 
@@ -33,26 +69,6 @@ export type Frame = { data: Uint8ClampedArray<ArrayBuffer>; width: number; heigh
 /** What the detection loop returns for each frame. */
 export type DetectState =
 	| { kind: 'searching' }
-	| { kind: 'detected'; corners: Corners }
-	| { kind: 'stable'; corners: Corners }
+	| { kind: 'detected'; corners: Corners; edges?: Edges }
+	| { kind: 'stable'; corners: Corners; edges?: Edges }
 	| { kind: 'rejected'; corners: Corners | null; reason: 'blurry' | 'dark' | 'small' | 'angle' };
-
-export interface ScanPage {
-	id: string;
-	source: PageSource;
-	/** null means detection failed; the full frame is used instead, never an error. */
-	corners: Corners | null;
-	rotation: Rotation;
-	mode: PageMode;
-	/** The encoded page. The full-resolution source is freed as soon as this exists. */
-	rendered: Blob | null;
-	previewUrl: string;
-}
-
-export interface ScanSession {
-	id: string;
-	pages: ScanPage[];
-	/** From the review screen's "Save as". */
-	filename: string;
-	createdAt: string;
-}

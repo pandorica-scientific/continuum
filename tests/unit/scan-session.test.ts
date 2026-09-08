@@ -1,88 +1,128 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it, vi } from 'vitest';
-import { MAX_PAGES, createSession } from '$lib/scan/client/session.svelte';
+// A scan in progress, on disk.
+//
+// The originals are scratch and the sweep is what makes that true rather than
+// aspirational — a phone that goes flat mid-stack leaves 60 MB behind, and
+// nothing else in the product will ever remove it.
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The session hands out object URLs for its tiles; node has neither.
-vi.stubGlobal('URL', {
-	createObjectURL: (blob: Blob) => `blob:${blob.size}-${Math.random()}`,
-	revokeObjectURL: vi.fn()
+/**
+ * `$env/dynamic/private` snapshots process.env when Vite builds the virtual
+ * module, which is BEFORE this suite picks its directory — so without this the
+ * module under test reads the default `data`, and a test that thinks it is
+ * writing to a temporary directory quietly drops files into the developer's
+ * own uploads. It did exactly that before this mock was added.
+ *
+ * `document-file-route.test.ts` mocks it the same way, for the same reason.
+ */
+vi.mock('$env/dynamic/private', () => ({
+	env: new Proxy({} as Record<string, string | undefined>, {
+		get: (_target, key: string) => process.env[key]
+	})
+}));
+import { existsSync } from 'node:fs';
+import { mkdtemp, rm, utimes } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/** One directory for the whole file, emptied between tests. */
+let root: string;
+
+beforeAll(async () => {
+	root = await mkdtemp(join(tmpdir(), 'scan-session-'));
+	process.env.UPLOAD_DIR = root;
 });
 
-const blob = () => new Blob(['x']);
+beforeEach(async () => {
+	await rm(join(root, 'scan'), { recursive: true, force: true });
+});
 
-describe('the scan session', () => {
-	it('keeps pages in the order they arrived, because that order IS the document', () => {
-		const session = createSession();
-		session.add('bw', blob());
-		session.add('bw', blob());
-		session.add('bw', blob());
-		const [a, b, c] = session.pages.map((p) => p.id);
-		session.move(c, -1);
-		expect(session.pages.map((p) => p.id)).toEqual([a, c, b]);
+afterAll(async () => {
+	await rm(root, { recursive: true, force: true });
+	delete process.env.UPLOAD_DIR;
+});
+
+const load = () => import('$lib/server/scan/session');
+
+describe('a scan session', () => {
+	it('keeps its originals under scan/, away from filed documents', async () => {
+		const { createScanSession, addScanPage } = await load();
+		const session = await createScanSession();
+		const page = await addScanPage(session.id, new Uint8Array([1, 2, 3]), 'photo.jpg');
+
+		// Never beside filed documents: these are scratch, and a stray original in
+		// the uploads directory would look exactly like a document with no row.
+		expect(page.sourcePath).toContain(join('scan', session.id));
+		expect(existsSync(page.sourcePath)).toBe(true);
 	});
 
-	it('moves the first page to the end in one action', () => {
-		// Up-only takes four taps on OTHER tiles to do this.
-		const session = createSession();
-		session.add('bw', blob());
-		session.add('bw', blob());
-		const [first] = session.pages.map((p) => p.id);
-		session.move(first, 1);
-		expect(session.pages[1].id).toBe(first);
+	it('keeps the extension the photograph arrived with', async () => {
+		const { createScanSession, addScanPage, scanSourceExt } = await load();
+		const session = await createScanSession();
+		const page = await addScanPage(session.id, new Uint8Array([1]), 'IMG_0042.HEIC');
+		// An iPhone hands over a HEIC and the decoder needs to know that before it
+		// opens the file, so the extension is carried rather than normalised away.
+		expect(await scanSourceExt(session.id, page.pageId)).toBe('.heic');
 	});
 
-	it('leaves an edge move alone rather than wrapping', () => {
-		const session = createSession();
-		session.add('bw', blob());
-		const [only] = session.pages.map((p) => p.id);
-		session.move(only, -1);
-		session.move(only, 1);
-		expect(session.pages.map((p) => p.id)).toEqual([only]);
+	it('refuses a file that is not a photograph', async () => {
+		const { createScanSession, addScanPage } = await load();
+		const session = await createScanSession();
+		await expect(addScanPage(session.id, new Uint8Array([1]), 'statement.pdf')).rejects.toThrow();
 	});
 
-	it('removes a page and frees its preview', () => {
-		const session = createSession();
-		session.add('bw', blob());
-		session.add('color', blob());
-		const [first] = session.pages.map((p) => p.id);
-		session.remove(first);
-		expect(session.pages.length).toBe(1);
-		expect(URL.revokeObjectURL).toHaveBeenCalled();
+	it('refuses an id that tries to leave its directory', async () => {
+		// These arrive from a URL parameter. A `..` that gets through is a read or
+		// a delete anywhere the server can reach; `system/files.ts` checks names
+		// for the same reason.
+		const { scanPagePaths, sessionDir } = await load();
+		expect(() =>
+			scanPagePaths('7f3d5a9c-1111-4222-8333-444455556666', '../../etc/passwd')
+		).toThrow();
+		expect(() => sessionDir('../..')).toThrow();
 	});
 
-	it('remembers the mode each page was rendered in', () => {
-		// The PDF embeds a bilevel page at one bit per pixel and everything else
-		// as JPEG, so the mode has to survive to assembly.
-		const session = createSession();
-		session.add('bw', blob());
-		session.add('original', blob());
-		expect(session.pages.map((p) => p.mode)).toEqual(['bw', 'original']);
+	it('deletes everything when the session is dropped', async () => {
+		const { createScanSession, addScanPage, dropScanSession } = await load();
+		const session = await createScanSession();
+		const page = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		await dropScanSession(session.id);
+		expect(existsSync(page.sourcePath)).toBe(false);
 	});
 
-	it('caps at twenty pages', () => {
-		const session = createSession();
-		for (let i = 0; i < MAX_PAGES + 5; i++) session.add('bw', blob());
-		expect(session.pages.length).toBe(MAX_PAGES);
-		expect(session.full).toBe(true);
+	it('counts the pages it holds', async () => {
+		const { createScanSession, addScanPage, countScanPages } = await load();
+		const session = await createScanSession();
+		await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+		await addScanPage(session.id, new Uint8Array([2]), 'b.jpg');
+		expect(await countScanPages(session.id)).toBe(2);
 	});
 
-	it('falls back to the dated name when the user clears the field', () => {
-		const session = createSession();
-		session.rename('   ');
-		expect(session.filename).toMatch(/^Scan \d{4}-\d{2}-\d{2}$/);
+	it('sweeps a session whose phone never came back', async () => {
+		const { createScanSession, addScanPage, sessionDir, sweepScanSessions } = await load();
+		const session = await createScanSession();
+		const page = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
+
+		// Aged through the module's OWN idea of where the session lives rather
+		// than a path rebuilt here, so this keeps testing the right directory
+		// even if where sessions live ever changes.
+		const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
+		await utimes(sessionDir(session.id), old, old);
+
+		expect(await sweepScanSessions()).toBe(1);
+		expect(existsSync(page.sourcePath)).toBe(false);
 	});
 
-	it('keeps a name the user actually typed', () => {
-		const session = createSession();
-		session.rename('  Nájemní smlouva  ');
-		expect(session.filename).toBe('Nájemní smlouva');
+	it('leaves a scan that is still being taken', async () => {
+		// The directory's mtime moves whenever a page is added, so a long session
+		// is never swept out from under the person taking it.
+		const { createScanSession, sweepScanSessions } = await load();
+		await createScanSession();
+		expect(await sweepScanSessions()).toBe(0);
 	});
 
-	it('frees every preview on dispose', () => {
-		const session = createSession();
-		session.add('bw', blob());
-		session.add('bw', blob());
-		session.dispose();
-		expect(session.pages).toEqual([]);
+	it('sweeps nothing at all when no scanning has ever happened', async () => {
+		const { sweepScanSessions } = await load();
+		expect(await sweepScanSessions()).toBe(0);
 	});
 });

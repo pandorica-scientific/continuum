@@ -4,39 +4,35 @@
 // One PDF means the order of the tiles IS the order of the pages — getting it
 // wrong is not a display preference, it is a wrong document.
 //
-// Only the ENCODED page is kept, never the frame it came from. A rendered A4
-// page is about 35 MB as pixels, so twenty of them is more memory than a phone
-// has; encoded they are a few hundred kilobytes each. The frame is decoded back
-// one at a time when the PDF is written, which is also the retention guarantee:
-// nothing full-resolution outlives the preview that produced it.
+// The phone now holds NO PAGE AT ALL. It used to keep each rendered page
+// encoded, because a rendered A4 page is about 35 MB as pixels and twenty of
+// them is more memory than a phone has; now the rendered page lives on the
+// server and what is kept here is its id and a URL to a small preview. The old
+// retention guarantee — that nothing full-resolution outlives the preview that
+// produced it — has become something stronger: nothing full-resolution is ever
+// in the browser.
 
 import { defaultFilename, type PageMode } from '../core/index.ts';
 
 export interface ScanPage {
+	/** The server's id for this page, within the scan session. */
 	id: string;
 	mode: PageMode;
-	/** The rendered page, encoded. */
-	blob: Blob;
-	/** An object URL onto `blob`, for the tile. Revoked when the page goes. */
+	/** Where the tile's picture comes from. Served, not held. */
 	previewUrl: string;
 }
 
 /**
  * A very old phone struggles on a long session. Capping and SAYING SO beats an
- * out-of-memory crash, and the recovery costs nothing because nothing is on a
- * server to reconcile.
+ * out-of-memory crash — and the cap is now enforced by the server as well,
+ * because this one has become advice that the endpoint does not depend on.
  */
 export const MAX_PAGES = 20;
-
-let counter = 0;
 
 export function createSession() {
 	let pages = $state<ScanPage[]>([]);
 	let filename = $state(defaultFilename(Date.now()));
-
-	function free(page: ScanPage) {
-		if (page.previewUrl) URL.revokeObjectURL(page.previewUrl);
-	}
+	let scanId = $state<string | null>(null);
 
 	return {
 		get pages() {
@@ -48,13 +44,17 @@ export function createSession() {
 		get full() {
 			return pages.length >= MAX_PAGES;
 		},
+		/** The server's session, once the first photograph has made one. */
+		get id() {
+			return scanId;
+		},
+		set id(next: string | null) {
+			scanId = next;
+		},
 
-		add(mode: PageMode, blob: Blob) {
+		add(id: string, mode: PageMode, previewUrl: string) {
 			if (pages.length >= MAX_PAGES) return;
-			pages = [
-				...pages,
-				{ id: `page-${++counter}`, mode, blob, previewUrl: URL.createObjectURL(blob) }
-			];
+			pages = [...pages, { id, mode, previewUrl }];
 		},
 
 		move(id: string, direction: -1 | 1) {
@@ -69,8 +69,9 @@ export function createSession() {
 		},
 
 		remove(id: string) {
-			const page = pages.find((p) => p.id === id);
-			if (page) free(page);
+			// The server keeps the page's artefact until the session ends. Nothing
+			// is revoked here any more because nothing was ever allocated: a
+			// removed page simply stops being asked for.
 			pages = pages.filter((p) => p.id !== id);
 		},
 
@@ -79,8 +80,8 @@ export function createSession() {
 		},
 
 		dispose() {
-			for (const page of pages) free(page);
 			pages = [];
+			scanId = null;
 		}
 	};
 }

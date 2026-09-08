@@ -10,8 +10,54 @@
 
 import { withMats, type Arena } from './arena.ts';
 import { fullFrameCorners, outputSize } from './geometry.ts';
+import { isStraight, meshMaps, outlineSpan } from './mesh.ts';
 import type { CV } from './opencv.ts';
-import type { Corners, Frame, PageMode } from './types.ts';
+import type { Frame, Outline, PageMode } from './types.ts';
+
+/**
+ * Round a measured span to whole pixels, never to zero.
+ *
+ * `outlineSpan` measures along curves and comes back fractional; a Mat needs
+ * integers, and a degenerate outline must not ask for a zero-sized one.
+ */
+function sized(span: { width: number; height: number }): { width: number; height: number } {
+	return {
+		width: Math.max(1, Math.round(span.width)),
+		height: Math.max(1, Math.round(span.height))
+	};
+}
+
+/**
+ * Sample the page through its boundary curves, a band of rows at a time.
+ *
+ * `remap` reads a per-pixel source coordinate, which is what lets a curved
+ * boundary be followed at all — a matrix cannot express one. The cost is the
+ * maps themselves, hence the striping.
+ */
+function dewarp(
+	cv: CV,
+	keep: Arena,
+	src: InstanceType<CV['Mat']>,
+	out: InstanceType<CV['Mat']>,
+	page: Outline,
+	width: number,
+	height: number
+): void {
+	out.create(height, width, src.type());
+	for (let row = 0; row < height; row += REMAP_STRIP_ROWS) {
+		const rows = Math.min(REMAP_STRIP_ROWS, height - row);
+		const maps = meshMaps(page, width, height, row, rows);
+		const mapX = keep(cv.matFromArray(rows, width, cv.CV_32FC1, Array.from(maps.x)));
+		const mapY = keep(cv.matFromArray(rows, width, cv.CV_32FC1, Array.from(maps.y)));
+		const band = keep(out.roi(new cv.Rect(0, row, width, rows)));
+		cv.remap(src, band, mapX, mapY, cv.INTER_CUBIC, cv.BORDER_REPLICATE, new cv.Scalar());
+		// `roi` is a VIEW, so what remap wrote is already in `out`; copying it
+		// back would be a second full-size write for nothing.
+		mapX.delete();
+		mapY.delete();
+		band.delete();
+	}
+}
 
 /**
  * The illumination field is low-frequency, so computing it at quarter scale and
@@ -29,37 +75,77 @@ const BACKGROUND_SIGMA_DIVISOR = 60;
 const BLOCK_DIVISOR = 100;
 const THRESHOLD_C = 10;
 
-export function renderPage(cv: CV, source: Frame, corners: Corners | null, mode: PageMode): Frame {
-	// `original` is the upload path's escape hatch: EXIF rotation only, applied
-	// by the caller before this. Deliberately does nothing here, because it has
-	// to work when detection has failed completely.
-	if (mode === 'original') return { ...source, data: new Uint8ClampedArray(source.data) };
+/**
+ * How many output rows are remapped at a time on a bowed page.
+ *
+ * The sampling maps are two floats per output pixel, so a full A4 page at 300
+ * dpi would be about 140 MB of them at once — more than a 2 GB box can spare
+ * beside the source frame and the warp it is already holding. A band is a
+ * window onto the same surface, so striping costs nothing but a loop.
+ */
+const REMAP_STRIP_ROWS = 512;
+
+export function renderPage(cv: CV, source: Frame, outline: Outline | null, mode: PageMode): Frame {
+	// `original` is CROPPED but not cleaned up.
+	//
+	// It used to return the photograph whole, on the grounds that it was the
+	// recovery for a detection that had gone wrong. But those are two different
+	// wishes and it only served one: someone who wants the page cropped and the
+	// colours left exactly as photographed — a passport, a card, anything whose
+	// appearance IS the document — had to choose between the crop and the
+	// colours. Cropping here gives them both.
+	//
+	// Nothing is lost. The uncropped photograph is still one tap away, in the
+	// edge editor, where "Whole photo" sets the boundary to the full frame — and
+	// when detection has failed there is no boundary to apply, so the escape
+	// hatch below returns the picture untouched exactly as it always did.
+	if (mode === 'original' && !outline) {
+		return { ...source, data: new Uint8ClampedArray(source.data) };
+	}
 
 	// A failed detection degrades to the full frame, never to an error.
-	const quad = corners ?? fullFrameCorners(source.width, source.height);
-	const { width, height } = outputSize(quad);
+	const page: Outline = outline ?? { corners: fullFrameCorners(source.width, source.height) };
+	const quad = page.corners;
+	const flat = isStraight(page);
+	// A bowed page is LONGER along its curve than across the chord between its
+	// corners, so measuring corner-to-corner renders it squashed.
+	const { width, height } = flat ? outputSize(quad) : sized(outlineSpan(page));
 
 	return withMats((keep): Frame => {
 		const src = keep(cv.matFromImageData(source as ImageData));
-		const from = keep(
-			cv.matFromArray(4, 1, cv.CV_32FC2, [
-				quad.tl.x,
-				quad.tl.y,
-				quad.tr.x,
-				quad.tr.y,
-				quad.br.x,
-				quad.br.y,
-				quad.bl.x,
-				quad.bl.y
-			])
-		);
-		const to = keep(cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, width, 0, width, height, 0, height]));
-		const transform = keep(cv.getPerspectiveTransform(from, to));
 		const warped = keep(new cv.Mat());
-		cv.warpPerspective(src, warped, transform, new cv.Size(width, height), cv.INTER_CUBIC);
+
+		if (flat) {
+			// Four points onto four points, exactly, in one matrix. Nothing about
+			// the ordinary case changed when curves became possible.
+			const from = keep(
+				cv.matFromArray(4, 1, cv.CV_32FC2, [
+					quad.tl.x,
+					quad.tl.y,
+					quad.tr.x,
+					quad.tr.y,
+					quad.br.x,
+					quad.br.y,
+					quad.bl.x,
+					quad.bl.y
+				])
+			);
+			const to = keep(
+				cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, width, 0, width, height, 0, height])
+			);
+			const transform = keep(cv.getPerspectiveTransform(from, to));
+			cv.warpPerspective(src, warped, transform, new cv.Size(width, height), cv.INTER_CUBIC);
+		} else {
+			dewarp(cv, keep, src, warped, page, width, height);
+		}
 
 		const out = keep(new cv.Mat());
-		if (mode === 'color') {
+		if (mode === 'original') {
+			// Geometry only. Every other mode goes on to even out the lighting or
+			// binarize, and this one deliberately does neither: the pixels are the
+			// ones the camera recorded, moved but not judged.
+			warped.copyTo(out);
+		} else if (mode === 'color') {
 			balanceColour(cv, keep, warped, out, width);
 		} else {
 			const flat = keep(flatten(cv, keep, warped, width));
@@ -114,6 +200,32 @@ export function renderPage(cv: CV, source: Frame, corners: Corners | null, mode:
  * The mean preserves the picture's overall lightness and takes away nothing but
  * the gradient.
  */
+/**
+ * How far the illumination correction may push a single pixel.
+ *
+ * A desk lamp across a page is a gradient of maybe ±40%; anything beyond that
+ * is not lighting, it is the document. Clamping is what stops a large evenly
+ * coloured object — a passport cover, an ID card — being read as a shadow and
+ * "corrected" into pale grey.
+ */
+const MIN_GAIN = 0.7;
+const MAX_GAIN = 1.6;
+
+/**
+ * Even out the lighting WITHOUT touching the colour.
+ *
+ * The previous version divided only the L channel in Lab and left a and b
+ * alone, which sounds conservative and is not: Lab's chroma is not perceptual
+ * saturation, so lifting L while holding a and b fixed makes a colour PALER.
+ * On white paper that is invisible, which is why it survived — every test
+ * document was a white page. On a burgundy passport or a teal identity card it
+ * is the whole appearance of the thing, and both came back washed out.
+ *
+ * Dividing all three channels by the SAME field cannot do that. It scales R, G
+ * and B together, so their ratios — and with them the hue and the saturation —
+ * come through untouched, and only the brightness changes. Which is all
+ * "evening out the lighting" ever meant.
+ */
 function balanceColour(
 	cv: CV,
 	keep: Arena,
@@ -121,32 +233,50 @@ function balanceColour(
 	out: InstanceType<CV['Mat']>,
 	width: number
 ) {
-	const lab = keep(new cv.Mat());
-	cv.cvtColor(warped, lab, cv.COLOR_RGBA2RGB);
-	cv.cvtColor(lab, lab, cv.COLOR_RGB2Lab);
+	const rgb = keep(new cv.Mat());
+	cv.cvtColor(warped, rgb, cv.COLOR_RGBA2RGB);
 
-	const planes = keep(new cv.MatVector());
-	cv.split(lab, planes);
-	const l = keep(planes.get(0));
-	const a = keep(planes.get(1));
-	const b = keep(planes.get(2));
+	// The field is measured on brightness, because that is what a lamp changes.
+	const gray = keep(new cv.Mat());
+	cv.cvtColor(rgb, gray, cv.COLOR_RGB2GRAY);
+	const field = keep(illuminationField(cv, keep, gray, width));
 
-	const field = keep(illuminationField(cv, keep, l, width));
 	// Guard the divide: a black region gives a field near zero, and 0/0 is
 	// where a correction turns into a blown-out square of noise.
 	const floor = keep(new cv.Mat(field.rows, field.cols, field.type(), new cv.Scalar(1)));
 	cv.max(field, floor, field);
-	const evened = keep(new cv.Mat());
-	cv.divide(l, field, evened, cv.mean(field)[0], cv.CV_8U);
 
-	// split() copies the planes out, so the adjusted L has to be put back.
-	const merged = keep(new cv.MatVector());
-	merged.push_back(evened);
-	merged.push_back(a);
-	merged.push_back(b);
+	const field32 = keep(new cv.Mat());
+	field.convertTo(field32, cv.CV_32F);
+	const gain = keep(new cv.Mat());
+	// gain = mean(field) / field — greater than one where the page was in
+	// shadow, less where the lamp fell on it, one on average.
+	const level = keep(
+		new cv.Mat(field.rows, field.cols, cv.CV_32F, new cv.Scalar(cv.mean(field)[0]))
+	);
+	cv.divide(level, field32, gain);
+
+	const low = keep(new cv.Mat(gain.rows, gain.cols, cv.CV_32F, new cv.Scalar(MIN_GAIN)));
+	const high = keep(new cv.Mat(gain.rows, gain.cols, cv.CV_32F, new cv.Scalar(MAX_GAIN)));
+	cv.max(gain, low, gain);
+	cv.min(gain, high, gain);
+
+	// The same gain on every channel. This is the line that keeps the colour.
+	const gains = keep(new cv.MatVector());
+	gains.push_back(gain);
+	gains.push_back(gain);
+	gains.push_back(gain);
+	const gain3 = keep(new cv.Mat());
+	cv.merge(gains, gain3);
+
+	const rgb32 = keep(new cv.Mat());
+	rgb.convertTo(rgb32, cv.CV_32F);
+	cv.multiply(rgb32, gain3, rgb32);
 	const balanced = keep(new cv.Mat());
-	cv.merge(merged, balanced);
-	cv.cvtColor(balanced, balanced, cv.COLOR_Lab2RGB);
+	// convertTo saturates rather than wrapping, so a highlight pushed past 255
+	// clips to white instead of turning black.
+	rgb32.convertTo(balanced, cv.CV_8U);
+
 	cv.cvtColor(balanced, out, cv.COLOR_RGB2RGBA);
 }
 

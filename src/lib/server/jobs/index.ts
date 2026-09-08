@@ -25,6 +25,8 @@ registerHandler('extract_text', async (claimed, handle) => {
 export {
 	runCpuQueue,
 	clearFinished,
+	holdCpuQueueForScan,
+	cpuQueueHeldForScan,
 	registerHandler,
 	LEASE_MS,
 	KEEP_FINISHED_MS,

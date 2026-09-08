@@ -1,12 +1,12 @@
 {
 	"name": "continuum",
 	"private": true,
-	"version": "0.8.5",
+	"version": "0.8.6",
 	"license": "AGPL-3.0-or-later",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "node scripts/prepare-opencv.mjs && vite build",
+		"build": "vite build && node scripts/build-scan-worker.mjs",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''; git config core.hooksPath .githooks || true",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -28,7 +28,8 @@
 		"version:sync": "node scripts/sync-version.mjs",
 		"version:check": "node scripts/sync-version.mjs --check",
 		"changelog:section": "node scripts/changelog-section.mjs",
-		"prepare:opencv": "node scripts/prepare-opencv.mjs"
+		"prepare:scan-worker": "node scripts/build-scan-worker.mjs",
+		"predev": "node scripts/build-scan-worker.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -36,7 +37,6 @@
 		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
-		"@techstark/opencv-js": "^4.12.0-release.1",
 		"@types/node": "^26.2.0",
 		"drizzle-kit": "^0.31.10",
 		"embedded-postgres": "^18.4.0-beta.17",
@@ -56,6 +56,7 @@
 		"@fontsource-variable/inter": "^5.3.0",
 		"@fontsource/source-code-pro": "^5.3.0",
 		"@node-rs/argon2": "^2.0.2",
+		"@techstark/opencv-js": "^4.12.0-release.1",
 		"drizzle-orm": "^0.45.2",
 		"iconv-lite": "^0.7.3",
 		"libheif-js": "^1.19.8",

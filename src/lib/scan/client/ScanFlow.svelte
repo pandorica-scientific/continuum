@@ -2,32 +2,31 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The one component a call site mounts. It owns which screen is showing.
 	//
-	// The render happens immediately after capture, while the user is looking at
-	// the preview — not batched at the end. It costs about a second a page, and
-	// paid there it is invisible.
+	// Every pixel operation now happens on the server. What is left here is the
+	// journey — camera, inspect, corners, keep, add or retake, done — which is
+	// deliberately unchanged: the same screens in the same order, doing the same
+	// things. Only where the work happens moved.
+	//
+	// THE PHOTOGRAPH IS A CACHE, NOT STORAGE. The file the camera produced is
+	// held only while its page is on the inspection or corner screen, so the
+	// corner handles can be drawn over the phone's own copy without fetching
+	// anything. The moment the page is kept it is released, and what remains is
+	// a preview URL of a couple of hundred kilobytes. Coming back to re-edge a
+	// kept page fetches the original again, which is rare and cheap; holding
+	// twenty photographs to make it free would cost 60 MB on the device least
+	// able to spare it.
 
-	import {
-		applyOrientation,
-		assemblePdf,
-		detectBest,
-		REFINE_WIDTH,
-		renderPage,
-		scaleCorners,
-		turnCorners,
-		type Corners,
-		type Frame,
-		type PageMode,
-		type PageSource
-	} from '../core/index.ts';
-	import { loadCv } from './opencv-load.ts';
+	import { type Outline, type PageMode, type Rotation } from '../core/index.ts';
 	import { isSecureForCamera } from './camera.svelte.ts';
 	import {
-		encodeJpeg,
-		frameFromBitmap,
-		frameFromBitmapSource,
-		frameFromFile,
-		frameToBlob
-	} from './frame.ts';
+		assembleScanDocument,
+		dropScanSession,
+		keepScanPage,
+		originalUrl,
+		previewUrl,
+		renderScanPage,
+		uploadScanPage
+	} from './api.ts';
 	import ScanCapture from './ScanCapture.svelte';
 	import ScanCorners from './ScanCorners.svelte';
 	import ScanPagePreview from './ScanPagePreview.svelte';
@@ -66,50 +65,44 @@
 	 * It began as a diagnostic — a phone on plain http has no console anyone can
 	 * reach, and naming the step is what located a hang that had no error to
 	 * report. It stays because the honest answer to "why is this taking a
-	 * moment" is worth showing; the sizes and timings it also printed have gone,
-	 * having been for whoever was debugging it rather than for whoever is
-	 * scanning.
+	 * moment" is worth showing.
 	 */
 	let stage = $state('');
 
-	/**
-	 * Preview at a fraction of the resolution.
-	 *
-	 * Switching mode re-runs the whole pipeline, and doing that at capture
-	 * resolution means warping and filtering 13 megapixels to fill a box about
-	 * 800px wide. It is wasted work and it is felt: a dropped 48MP photograph
-	 * caps at 3200px and takes roughly five times as long as a phone capture,
-	 * which is why the same switch felt quick on a phone and slow on a Mac.
-	 *
-	 * The full-resolution frame is kept and rendered ONCE, when the page is
-	 * actually kept, so nothing is lost from the output.
-	 */
-	const PREVIEW_WIDTH = 1400;
+	/** The page currently being inspected, as the server and the phone each see it. */
+	interface Held {
+		pageId: string;
+		outline: Outline | null;
+		rotation: Rotation;
+		width: number;
+		height: number;
+		from: 'camera' | 'upload';
+		/** The phone's own copy of the photograph. Released the moment it is kept. */
+		file: File | null;
+		/** An object URL onto `file`, for the corner screen. */
+		localUrl: string;
+	}
 
-	/**
-	 * Quality for the page that is KEPT, and for that same page again inside
-	 * the PDF.
-	 *
-	 * Higher than the encoder's 0.85 default because this frame is encoded
-	 * TWICE — once here, and again when `assemblePdf` decodes it and writes it
-	 * into the document — and the losses compound. At 0.85 twice over a phone
-	 * photograph of a laminated card came back visibly blocked. The preview is
-	 * left at the default: it is looked at once and thrown away, and encoding
-	 * is the slowest step on a phone.
-	 */
-	const KEEP_QUALITY = 0.95;
-
-	/** The full-resolution capture, kept only while the preview is open. */
-	let source = $state<{ frame: Frame; corners: Corners | null; from: PageSource } | null>(null);
-	/** Remembered past `discard()`, which clears the source it came from. */
+	let held = $state<Held | null>(null);
+	let mode = $state<PageMode>('bw');
+	/** Bumped on every render so the preview URL is a new one to the browser. */
+	let token = $state(0);
 	let fromUpload = $state(false);
+
+	const preview = $derived(held && session.id ? previewUrl(session.id, held.pageId, token) : '');
+
+	/** What the corner screen draws on: the phone's copy, or the server's if it has none. */
+	let cornersUrl = $state('');
+
+	function releaseLocal() {
+		if (held?.localUrl) URL.revokeObjectURL(held.localUrl);
+	}
 
 	/**
 	 * Where the next page comes from. The in-page viewfinder needs a secure
 	 * context, which a self-hosted Continuum on a plain-http address never
 	 * has; there, every page comes from the phone's own camera app instead,
-	 * through the input below, and lands on the same pipeline. The review
-	 * screen is what you come back to between pages either way.
+	 * through the input below, and lands on the same pipeline.
 	 */
 	const viewfinder = typeof window !== 'undefined' && isSecureForCamera(window.location);
 	let cameraInput = $state<HTMLInputElement | null>(null);
@@ -117,104 +110,67 @@
 		if (viewfinder) screen = 'capture';
 		else cameraInput?.click();
 	}
-	/** The same, scaled down, for everything the preview needs. */
-	let draft = $state<{ frame: Frame; corners: Corners | null } | null>(null);
-	let mode = $state<PageMode>('bw');
-	let previewUrl = $state('');
-
-	function releasePreview() {
-		if (previewUrl) URL.revokeObjectURL(previewUrl);
-		previewUrl = '';
-	}
 
 	/**
-	 * The capture at preview resolution, with its corners carried across. Built
-	 * once per capture and reused: the corner editor and every mode switch work
-	 * from the same frame, so none of them pays for the downscale again.
-	 */
-	function ensureDraft(): { frame: Frame; corners: Corners | null } | null {
-		if (draft) return draft;
-		if (!source) return null;
-		const small = frameFromBitmapSource(source.frame, PREVIEW_WIDTH);
-		draft = {
-			frame: small,
-			corners: source.corners
-				? scaleCorners(source.corners, small.width / source.frame.width)
-				: null
-		};
-		return draft;
-	}
-
-	/** The uncropped photograph, held only while the corner editor is open. */
-	let cornersUrl = $state('');
-
-	function releaseCorners() {
-		if (cornersUrl) URL.revokeObjectURL(cornersUrl);
-		cornersUrl = '';
-	}
-
-	/**
-	 * Show the photograph with handles on it.
+	 * Send a photograph up and show what comes back.
 	 *
-	 * The draft frame, not the full capture: the editor only has to be accurate
-	 * to the pixel the user can see, and encoding a 12 MP frame to look at on a
-	 * phone screen is the slowest thing this component could do.
+	 * The upload is the only thing the phone does with the file besides display
+	 * it. A 12 MP HEIC that used to be decoded here — 3.6 seconds, and the
+	 * allocation that failed on iOS — is now bytes on a socket.
 	 */
-	async function openCorners() {
-		if (!source) return;
-		busy = true;
+	async function read(file: File) {
+		screen = 'reading';
 		failure = null;
+		busy = true;
 		try {
-			const held = ensureDraft();
-			if (!held) return;
-			releaseCorners();
-			cornersUrl = URL.createObjectURL(await frameToBlob(held.frame, 'image/jpeg'));
-			screen = 'corners';
+			stage = 'Sending the photo…';
+			const page = await uploadScanPage(file, session.id);
+			session.id = page.sessionId;
+			stage = 'Finding the page…';
+
+			releaseLocal();
+			held = {
+				pageId: page.pageId,
+				outline: page.outline,
+				rotation: 0,
+				width: page.width,
+				height: page.height,
+				from: fromUpload ? 'upload' : 'camera',
+				file,
+				localUrl: URL.createObjectURL(file)
+			};
+			mode = 'bw';
+			token++;
+			screen = 'preview';
 		} catch (error) {
-			failure = error instanceof Error ? error.message : 'That photo could not be opened.';
+			failure = error instanceof Error ? error.message : 'That photo could not be read.';
+			screen = viewfinder ? 'capture' : 'review';
 		} finally {
 			busy = false;
+			stage = '';
 		}
 	}
 
-	/**
-	 * Take the edges the user drew and re-render from them.
-	 *
-	 * They arrive in the DRAFT's coordinates and the warp reads the full capture,
-	 * so they are scaled back on the way in — the same carry the detector's own
-	 * corners make, in the opposite direction. `draft` is dropped because the one
-	 * it holds describes the old crop.
-	 */
-	function applyCorners(next: Corners) {
-		if (!source || !draft) return;
-		source = { ...source, corners: scaleCorners(next, source.frame.width / draft.frame.width) };
-		draft = null;
-		releaseCorners();
-		void show(mode);
-	}
-
-	/** Render the held capture in the chosen mode and show it. */
-	async function show(next: PageMode) {
-		if (!source) return;
+	/** Ask the server for this page in another mode, or at new corners. */
+	async function show(
+		next: PageMode,
+		outline = held?.outline ?? null,
+		rotation = held?.rotation ?? 0
+	) {
+		if (!held || !session.id) return;
 		busy = true;
 		failure = null;
 		try {
-			const cv = await loadCv();
-			// Built once per capture, then reused for every mode switch.
-			const held = ensureDraft();
-			if (!held) return;
-			// A failed detection degrades to the full frame inside renderPage —
-			// never to an error, because there is nothing else the user could do
-			// about it. `original` skips the warp entirely, which is what makes it
-			// the recovery when the edges came out wrong.
-			const page = renderPage(cv, held.frame, held.corners, next);
-			releasePreview();
-			// PNG for a binarized page: lossless, and JPEG ringing around black
-			// text on white is the one artefact that costs legibility.
-			previewUrl = URL.createObjectURL(
-				await frameToBlob(page, next === 'bw' ? 'image/png' : 'image/jpeg')
-			);
+			await renderScanPage({
+				sessionId: session.id,
+				pageId: held.pageId,
+				mode: next,
+				outline,
+				rotation
+			});
+			held = { ...held, outline, rotation };
 			mode = next;
+			token++;
 			screen = 'preview';
 		} catch (error) {
 			failure = error instanceof Error ? error.message : 'That page could not be processed.';
@@ -224,25 +180,46 @@
 	}
 
 	/**
-	 * Render the chosen mode at full resolution, encode it, and add it to the
-	 * document. Only the encoded page is kept — see session.svelte.ts.
+	 * Show the photograph with handles on it.
+	 *
+	 * The phone's own copy is used when it still has one, which is the common
+	 * case and costs nothing. A page that was already kept has released its
+	 * file, and a HEIC that this browser will not decode never displayed in the
+	 * first place — both fall through to the server's downscaled original, which
+	 * is what that endpoint exists for.
+	 */
+	function openCorners() {
+		if (!held || !session.id) return;
+		cornersUrl = held.localUrl || originalUrl(session.id, held.pageId);
+		screen = 'corners';
+	}
+
+	/** The local copy would not display. Ask the server for one that will. */
+	function cornersFallback() {
+		if (!held || !session.id) return;
+		cornersUrl = originalUrl(session.id, held.pageId);
+	}
+
+	/**
+	 * Render at full resolution, store the artefact, and add the page.
+	 *
+	 * This is where the phone lets go of the photograph: the document has it
+	 * now, and holding twenty of them is the memory problem this release exists
+	 * to remove.
 	 */
 	async function keep() {
-		if (!source) return;
+		if (!held || !session.id) return;
 		busy = true;
+		failure = null;
 		try {
-			// The one full-resolution render, of the mode actually chosen. Every
-			// other pass has been on the draft.
-			const cv = await loadCv();
-			const page = renderPage(cv, source.frame, source.corners, mode);
-			// PNG for a binarized page: lossless, and JPEG ringing around black
-			// text on white is the one artefact that costs legibility.
-			const blob = await frameToBlob(
-				page,
-				mode === 'bw' ? 'image/png' : 'image/jpeg',
-				KEEP_QUALITY
-			);
-			session.add(mode, blob);
+			await keepScanPage({
+				sessionId: session.id,
+				pageId: held.pageId,
+				mode,
+				outline: held.outline,
+				rotation: held.rotation
+			});
+			session.add(held.pageId, mode, previewUrl(session.id, held.pageId, token));
 			discard();
 			// A dropped photo has no viewfinder to go back to, and a full document
 			// has nowhere further to go: both land on the review screen, as does
@@ -258,25 +235,16 @@
 
 	/** Write every kept page into one PDF, in the order shown. */
 	async function make() {
-		if (session.pages.length === 0) return;
+		if (session.pages.length === 0 || !session.id) return;
 		busy = true;
 		failure = null;
 		try {
-			const name = session.filename;
-			const bytes = await assemblePdf(
-				// Providers, not pages: each is decoded, written and dropped before
-				// the next is touched, so twenty pages cost one page of memory.
-				session.pages.map((page) => async () => {
-					const bitmap = await createImageBitmap(page.blob);
-					try {
-						return { frame: frameFromBitmap(bitmap), mode: page.mode };
-					} finally {
-						bitmap.close();
-					}
-				}),
-				{ title: name, encodeJpeg: (frame) => encodeJpeg(frame, KEEP_QUALITY) }
+			const file = await assembleScanDocument(
+				session.id,
+				session.pages.map((page) => page.id),
+				session.filename
 			);
-			await ondone(new File([bytes], `${name}.pdf`, { type: 'application/pdf' }));
+			await ondone(file);
 			session.dispose();
 			onclose();
 		} catch (error) {
@@ -286,19 +254,24 @@
 		}
 	}
 
-	/** Back to the viewfinder. Nothing is lost by trying again — that is what
-	 *  makes shipping without corner handles defensible. */
+	/** Back to the viewfinder. Nothing is lost by trying again. */
 	function replace() {
 		discard();
 		screen = 'capture';
 	}
 
 	function discard() {
-		releasePreview();
-		releaseCorners();
-		source = null;
-		draft = null;
+		releaseLocal();
+		held = null;
+		cornersUrl = '';
 		mode = 'bw';
+	}
+
+	/** Give the server back its scratch, whenever this screen is left for good. */
+	function abandon() {
+		if (session.id) dropScanSession(session.id);
+		session.dispose();
+		discard();
 	}
 
 	/**
@@ -308,9 +281,7 @@
 	 * iOS Safari — touch scrolling ignores it. The technique that does work is to
 	 * pin the body with `position: fixed` at its current offset, which takes it
 	 * out of flow entirely so there is nothing left to scroll, then put the
-	 * offset back on the way out. Without it a drag beginning on the viewfinder
-	 * scrolls the document behind, and the camera appears to slide under your
-	 * thumb.
+	 * offset back on the way out.
 	 */
 	$effect(() => {
 		const body = document.body;
@@ -341,61 +312,12 @@
 		};
 	});
 
-	/**
-	 * Take a dropped photograph through the pipeline.
-	 *
-	 * Detection runs with the quality gates OFF. There is no retake here — the
-	 * file is whatever the gallery held — so rejecting it for being blurry or
-	 * dimly lit helps nobody; the user would simply be told no. Whatever can be
-	 * found is found, and if nothing is, `renderPage` falls back to the full
-	 * frame and `original` is one tap away.
-	 */
-	async function readDropped(file: File) {
-		screen = 'reading';
-		failure = null;
-		try {
-			// Decoding a 48 MP HEIC took 3.6 seconds when measured, which is why
-			// this screen exists at all rather than a silent pause.
-			stage = 'Decoding the photograph…';
-			const frame = await frameFromFile(file);
-			stage = 'Starting the scanner…';
-			const cv = await loadCv();
-			stage = 'Finding the page…';
-			// Measured at a KNOWN width, then the corners scaled back onto the
-			// frame that actually gets warped — the same two steps the
-			// viewfinder's shutter takes. Handing `detectBest` the full frame
-			// instead runs every absolute-pixel kernel inside it against three
-			// times the width they are sized for: six times the work, and a
-			// page mask too broken to yield a quad, so the photograph came back
-			// slowly AND uncropped.
-			const measured = frameFromBitmapSource(frame, REFINE_WIDTH);
-			const settled = detectBest(cv, measured);
-			const found = 'corners' in settled ? settled.corners : null;
-			source = {
-				frame,
-				corners: found ? scaleCorners(found, frame.width / measured.width) : null,
-				from: 'upload'
-			};
-			fromUpload = true;
-			stage = 'Preparing the page…';
-			await show('bw');
-			// `show()` reports its own failures through `failure` and leaves the
-			// screen where it was — which here is this one. Without this line a
-			// render that fails (OpenCV out of memory, `toBlob` handing back
-			// nothing under iOS memory pressure) leaves "Reading photo…" up for
-			// good, with the error pill underneath as the only sign anything ended.
-			if (screen === 'reading') screen = viewfinder ? 'capture' : 'review';
-		} catch (error) {
-			failure = error instanceof Error ? error.message : 'That photo could not be read.';
-			screen = viewfinder ? 'capture' : 'review';
-		} finally {
-			stage = '';
-		}
-	}
-
 	$effect(() => {
 		const [file] = incoming;
-		if (file) void readDropped(file);
+		if (file) {
+			fromUpload = true;
+			void read(file);
+		}
 	});
 </script>
 
@@ -413,7 +335,7 @@
 	onchange={() => {
 		const file = cameraInput?.files?.[0];
 		if (cameraInput) cameraInput.value = '';
-		if (file) void readDropped(file);
+		if (file) void read(file);
 	}}
 />
 
@@ -433,8 +355,7 @@
 		onadd={nextPage}
 		onmake={() => void make()}
 		oncancel={() => {
-			session.dispose();
-			discard();
+			abandon();
 			onclose();
 		}}
 	/>
@@ -442,10 +363,7 @@
 	<ScanCapture
 		pageCount={session.pages.length}
 		thumbnail={session.pages.at(-1)?.previewUrl ?? null}
-		oncapture={(frame, corners) => {
-			source = { frame, corners, from: 'camera' };
-			void show('bw');
-		}}
+		oncapture={(file) => void read(file)}
 		onreview={() => (screen = 'review')}
 		oncancel={() => {
 			// Pages already kept are not thrown away silently: if there are any,
@@ -455,38 +373,38 @@
 				screen = 'review';
 				return;
 			}
-			discard();
+			abandon();
 			onclose();
 		}}
 		onchoosefile={() => {
-			session.dispose();
-			discard();
+			abandon();
 			onclose();
 		}}
 	/>
-{:else if screen === 'corners' && source && draft}
+{:else if screen === 'corners' && held}
 	<ScanCorners
 		imageUrl={cornersUrl}
-		width={draft.frame.width}
-		height={draft.frame.height}
-		corners={draft.corners}
-		onapply={applyCorners}
+		width={held.width}
+		height={held.height}
+		outline={held.outline}
+		onunavailable={cornersFallback}
+		onapply={(next) => void show(mode, next)}
 		oncancel={() => {
-			releaseCorners();
+			cornersUrl = '';
 			screen = 'preview';
 		}}
 	/>
-{:else if source}
+{:else if held}
 	<ScanPagePreview
-		{previewUrl}
+		previewUrl={preview}
 		{mode}
 		{busy}
-		source={source.from}
+		source={held.from}
 		onkeep={() => void keep()}
 		onreplace={() => {
 			// On the upload path there is no viewfinder to return to, so Replace
 			// means "pick a different file" and the button says so.
-			if (source?.from === 'upload') {
+			if (held?.from === 'upload') {
 				// But the pages already kept are not this photograph's to throw
 				// away. Handing back to the call site UNMOUNTS this component and
 				// the session goes with it, so retaking a page you did not like
@@ -500,32 +418,22 @@
 					nextPage();
 					return;
 				}
-				discard();
+				abandon();
 				(onchoosefile ?? onclose)();
 				return;
 			}
 			replace();
 		}}
 		onmode={(next) => void show(next)}
-		onedges={() => void openCorners()}
+		onedges={openCorners}
 		onrotate={() => {
-			if (!source) return;
+			if (!held) return;
 			// Rotate the SOURCE and re-render, rather than rotating the result:
 			// resampling a binarized page softens every edge the threshold just
-			// sharpened.
-			//
-			// The corners turn WITH it. They used to be discarded here, which
-			// meant straightening a page also threw its crop away and handed back
-			// the whole photograph, desk and all.
-			const was = source.frame.height;
-			source = {
-				...source,
-				frame: applyOrientation(source.frame, 6),
-				corners: source.corners ? turnCorners(source.corners, was) : null
-			};
-			// The draft describes the frame as it was; rebuild it from the turned one.
-			draft = null;
-			void show(mode);
+			// sharpened. The server turns the corners with it, so straightening a
+			// page no longer throws its crop away.
+			const turned = ((held.rotation + 90) % 360) as Rotation;
+			void show(mode, held.outline, turned);
 		}}
 	/>
 {/if}

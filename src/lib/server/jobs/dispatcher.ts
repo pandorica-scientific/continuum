@@ -126,6 +126,45 @@ export async function clearFinished(
 	return removed.length;
 }
 
+/**
+ * How many scan requests are in flight.
+ *
+ * A COUNT rather than a flag: two routes can be inside a scan at once — a mode
+ * switch and a keep, or two people — and a boolean would have whichever
+ * finished first declare that nobody was scanning, which is the moment an OCR
+ * run would start underneath the other.
+ */
+let scanning = 0;
+
+/**
+ * Hold the CPU queue back while a scan is running.
+ *
+ * A scan is a button press someone is watching; an extraction is batch work
+ * nobody is. This does NOT preempt a job already running — there is no way to,
+ * and claiming otherwise in a comment would be worse than not having it. What
+ * it prevents is a fresh one STARTING while someone is scanning, which is the
+ * difference between a slow render and a render that waits ten minutes for a
+ * hundred-page OCR to finish.
+ *
+ * Returns the release, so a caller cannot forget which way round it goes.
+ */
+export function holdCpuQueueForScan(): () => void {
+	scanning++;
+	let released = false;
+	return () => {
+		// Idempotent: a route that releases in a `finally` and again on an error
+		// path must not take the count below zero and let a scan run unprotected.
+		if (released) return;
+		released = true;
+		scanning--;
+	};
+}
+
+/** Whether the queue is currently standing back for a scan. Test seam. */
+export function cpuQueueHeldForScan(): boolean {
+	return scanning > 0;
+}
+
 let sweep: Promise<number> | null = null;
 
 /**
@@ -154,6 +193,11 @@ async function drain(handle: Queryable = db): Promise<number> {
 	await clearFinished(KEEP_FINISHED_MS, handle);
 	let done = 0;
 	for (;;) {
+		// Someone is scanning. Stop claiming rather than start a fresh hundred-page
+		// OCR underneath a person photographing a stack of paper — see
+		// `holdCpuQueueForScan`.
+		if (scanning > 0) return done;
+
 		const claimed = await claimNext(handle);
 		if (!claimed) return done;
 

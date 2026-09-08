@@ -34,13 +34,30 @@ const refine = readFileSync('src/lib/scan/core/refine.ts', 'utf8');
 
 describe('which side of the split is the object', () => {
 	it('does not hard-code the bright side as the foreground', () => {
-		expect(detect).toMatch(/invert \? cv\.THRESH_BINARY_INV : cv\.THRESH_BINARY/);
+		expect(detect).toMatch(/wantsInverse \? cv\.THRESH_BINARY_INV : cv\.THRESH_BINARY/);
 	});
 
-	it('reads every photograph both ways round', () => {
-		// A candidate, not an override: judgeQuad scores it against the others.
+	it('reverses the sense of the split when segmenting on saturation', () => {
+		// On brightness the object is usually the LIGHT side; on saturation it is
+		// the DULL one, because paper is nearly grey and a carpet is not. Getting
+		// this backwards masks the furniture and calls it the page.
+		expect(detect).toMatch(/const wantsInverse = segment === 'saturation' \? !invert : invert;/);
+	});
+
+	it('reads every photograph both ways round, and by colourfulness too', () => {
+		// Candidates, not overrides: judgeQuad scores them against each other.
 		expect(detect).toMatch(/detectOnce\(cv, frame, \{[^}]*invert: true[^}]*\}\)/s);
-		expect(detect).toMatch(/const candidates = \[plain, evened, darker\]/);
+		expect(detect).toMatch(/segment: 'saturation'/);
+		expect(detect).toMatch(/const candidates = \[plain, evened, darker, dull\]/);
+	});
+
+	it('refuses a quad that scores like nothing at all', () => {
+		// The judge chooses rather than vetoes, with one exception: a reading can
+		// produce a quad that is not a page, and offering more readings makes that
+		// more likely rather than less. Measured, genuine pages scored 0.795 and
+		// up while a shadow read as an object scored 0.388.
+		expect(detect).toMatch(/const MIN_JUDGED_SCORE = 0\.6;/);
+		expect(detect).toMatch(/bestScore < MIN_JUDGED_SCORE/);
 	});
 });
 

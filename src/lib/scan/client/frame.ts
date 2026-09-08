@@ -1,139 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Every canvas call in the engine, in one file.
+// The one thing the browser still does with pixels: get the photograph OUT of
+// the camera.
 //
-// `core` is canvas-free so that its arithmetic can be tested without a DOM;
-// this is where that boundary gets paid for. A plain <canvas> rather than an
-// OffscreenCanvas: 2D OffscreenCanvas only reached Safari in 16.4, and nothing
-// here runs off the main thread, so the newer API buys a version cliff and no
-// capability.
-
-import {
-	DETECT_WIDTH,
-	applyOrientation,
-	looksLikeHeic,
-	needsRotation,
-	readOrientation,
-	readStoredSize,
-	type Frame
-} from '../core/index.ts';
-
-function scratch(width: number, height: number) {
-	const canvas = document.createElement('canvas');
-	canvas.width = width;
-	canvas.height = height;
-	const context = canvas.getContext('2d', { willReadFrequently: true });
-	if (!context) throw new Error('This browser gave no 2D drawing context.');
-	return { canvas, context };
-}
-
-/**
- * Free a scratch canvas's pixels NOW, rather than whenever the collector gets
- * to it.
- *
- * A canvas's backing store lives outside the JavaScript heap and is not counted
- * against it, so dropping the last reference is a promise to free it eventually
- * and nothing more. Every page here allocates several at full capture size — a
- * 3200x4267 frame is 54 MB apiece — and a rotation allocates a fresh set for
- * the turned frame on top of whatever the last render left behind.
- *
- * When a browser will not give out another backing store it does not throw:
- * `putImageData` writes into nothing, `toBlob` hands back a fully TRANSPARENT
- * image, and a transparent PNG over the preview's dark card reads as a solid
- * black page. Zeroing the dimensions releases the memory at once and is the
- * documented way to do it.
- */
-function release(canvas: HTMLCanvasElement) {
-	canvas.width = 0;
-	canvas.height = 0;
-}
-
-function draw(source: CanvasImageSource, width: number, height: number): Frame {
-	const { canvas, context } = scratch(width, height);
-	try {
-		context.drawImage(source, 0, 0, width, height);
-		const { data } = context.getImageData(0, 0, width, height);
-		return { data, width, height };
-	} finally {
-		release(canvas);
-	}
-}
-
-/**
- * The longest side the pipeline will work from.
- *
- * Output is clamped to 2480 px (A4 at 300 DPI), so anything past this is thrown
- * away by the warp anyway — but it is not free on the way there. Recent phones
- * shoot 48 MP: 8064 x 6048 is 195 MB as RGBA, four times what the design
- * assumed, and `renderPage` holds several Mats derived from it at once. Capping
- * here costs nothing visible and takes the peak from ~195 MB to ~30 MB.
- *
- * The LONGEST side, not the width, and that difference is the whole bug: a page
- * is photographed in PORTRAIT, so its long side is the height and a cap on
- * width never fires. An iPhone's ordinary 12 MP frame is 3024x4032 — inside a
- * 3200 width cap, so it passed through untouched at 48.8 MB — and a 48 MP
- * portrait capped on width alone still lands at 3200x4267, 54.6 MB, worse than
- * the landscape case the number was chosen for. Held while OpenCV asks iOS for
- * a heap of its own, that is the allocation the tab cannot make: the runtime
- * never starts, `onRuntimeInitialized` never fires, and the scan sits on
- * "Reading photo…" for good. Capped on the long side, every orientation lands
- * on the same ~7.7 MP and ~30 MB the design assumed.
- */
-const MAX_CAPTURE_LONG = 3200;
-
-/**
- * The width that puts the LONGEST side on `MAX_CAPTURE_LONG`, for the callers
- * below that think in target widths. Never scales up.
- *
- * Exported for its arithmetic: the width cap it replaces looked right and was
- * wrong for every portrait photograph, which is most of them.
- */
-export function captureWidth(width: number, height: number): number {
-	const longest = Math.max(width, height);
-	if (longest <= MAX_CAPTURE_LONG) return width;
-	return Math.max(1, Math.round((width * MAX_CAPTURE_LONG) / longest));
-}
-
-/**
- * How far a still's aspect ratio may differ from the preview's before it is
- * treated as a different picture rather than the same one.
- *
- * Generous, because a sensor's still is often cropped slightly differently from
- * its video track; far tighter than the 33% gap between 4:3 and 3:4, which is
- * the failure this catches.
- */
-const ASPECT_AGREEMENT = 0.15;
-
-/** Fit to a target width, never scaling UP — enlarging invents detail. */
-function fit(width: number, height: number, target?: number) {
-	if (!target || width <= target) return { width, height };
-	return { width: target, height: Math.max(1, Math.round((height * target) / width)) };
-}
-
-export function frameFromVideo(video: HTMLVideoElement, targetWidth = DETECT_WIDTH): Frame {
-	const { width, height } = fit(video.videoWidth, video.videoHeight, targetWidth);
-	return draw(video, width, height);
-}
-
-/**
- * Rescale a frame we already hold. Used to measure a full-resolution still at a
- * detection-friendly width without decoding anything twice.
- */
-export function frameFromBitmapSource(frame: Frame, targetWidth: number): Frame {
-	const { width, height } = fit(frame.width, frame.height, targetWidth);
-	if (width === frame.width && height === frame.height) return frame;
-	const { canvas, context } = scratch(frame.width, frame.height);
-	try {
-		context.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
-		return draw(canvas, width, height);
-	} finally {
-		release(canvas);
-	}
-}
-
-export function frameFromBitmap(bitmap: ImageBitmap, targetWidth?: number): Frame {
-	const { width, height } = fit(bitmap.width, bitmap.height, targetWidth);
-	return draw(bitmap, width, height);
-}
+// This file used to hold every canvas call in the engine — decoding a dropped
+// file, applying EXIF, downscaling for detection, encoding a page. All of it
+// has gone to the server, along with the memory ceilings that made it fragile
+// on a phone. What is left is the viewfinder's shutter, which has to turn a
+// live track into bytes because there is no other way to reach the sensor.
+//
+// The phone's own camera app — the path a self-hosted Continuum on plain http
+// always takes — needs none of this: it hands over a File already.
 
 /**
  * The still, at SENSOR resolution rather than the video track's.
@@ -142,11 +18,22 @@ export function frameFromBitmap(bitmap: ImageBitmap, targetWidth?: number): Fram
  * that gap is the whole margin between a legible scan of small print and a
  * blurry one. `ImageCapture` is the only way to reach it, and Safari still
  * lacks it entirely — so the video frame is the fallback, not the plan.
+ *
+ * Returned as a FILE, unopened. The blob `takePhoto` produces is already an
+ * encoded JPEG with its EXIF intact, so handing it straight to the server means
+ * the browser never decodes a 12 MP frame at all — which is the allocation that
+ * failed on iOS, and it is now simply absent rather than made more careful.
+ *
+ * It also retires the aspect-ratio check this function used to carry. That
+ * existed because corners were found on a frame the browser had decoded and
+ * possibly re-oriented, so a still shaped differently from the viewfinder gave
+ * a crop of somewhere else. Detection now runs server-side on these exact
+ * bytes; there is nothing left to disagree.
  */
-export async function stillFromTrack(
+export async function stillFileFromTrack(
 	track: MediaStreamTrack,
 	video: HTMLVideoElement
-): Promise<Frame> {
+): Promise<File> {
 	const Capture = (
 		globalThis as {
 			ImageCapture?: new (track: MediaStreamTrack) => { takePhoto(): Promise<Blob> };
@@ -156,108 +43,56 @@ export async function stillFromTrack(
 	if (Capture) {
 		try {
 			const blob = await new Capture(track).takePhoto();
-			// `from-image` explicitly. The default has changed across versions of
-			// the specification and browsers disagree, so leaving it unsaid means
-			// a photo carrying an EXIF rotation may or may not be turned — and a
-			// phone writes a DIFFERENT rotation depending on how it was held. That
-			// is why this failed in landscape and not in portrait.
-			const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
-			const still = frameFromBitmap(bitmap, captureWidth(bitmap.width, bitmap.height));
-			bitmap.close();
-
-			// Whatever the still says, it has to agree with the picture the user
-			// was framing. If ImageCapture hands back the sensor's own orientation
-			// the aspect ratio comes out inverted, and every corner found on it
-			// describes a region of a differently-shaped image — a crop of
-			// somewhere else entirely.
-			const framed = video.videoWidth / video.videoHeight;
-			const captured = still.width / still.height;
-			if (framed > 0 && Math.abs(captured - framed) / framed <= ASPECT_AGREEMENT) {
-				return still;
-			}
+			if (blob.size > 0) return asFile(blob);
 		} catch {
 			// Some Android cameras advertise ImageCapture and then refuse
 			// takePhoto while the track is live. The video frame is always there.
 		}
 	}
-	// The video element is what the user was actually looking at, so it can
-	// never disagree with what they framed. Lower resolution, always right.
-	return frameFromVideo(video, captureWidth(video.videoWidth, video.videoHeight));
+	return asFile(await frameFromVideo(video));
+}
+
+function asFile(blob: Blob): File {
+	// The name carries the extension the server reads to decide how to decode,
+	// and `isImageFile` is what admits it. A photograph from `takePhoto` is a
+	// JPEG on every browser that implements it.
+	const type = blob.type || 'image/jpeg';
+	const ext = type === 'image/png' ? 'png' : 'jpg';
+	return new File([blob], `scan.${ext}`, { type });
 }
 
 /**
- * A dropped or photographed file, decoded and turned the right way up.
+ * The video element's current frame, encoded.
  *
- * EXIF is applied here rather than left to the caller because canvas
- * `drawImage` ignores it, so every portrait photo from certain Androids would
- * otherwise land sideways — including in `original` mode, where rotation is the
- * only processing there is.
+ * Lower resolution than the sensor, always right: it is literally what the
+ * person was looking at, so it can never disagree with what they framed.
+ *
+ * The canvas is released explicitly. Its backing store lives outside the
+ * JavaScript heap, so dropping the reference is a promise to free it eventually
+ * and nothing more — and when a browser will not give out another one it does
+ * not throw, it hands back a fully TRANSPARENT image, which over the preview's
+ * dark card reads as a solid black page.
  */
-export async function frameFromFile(file: File): Promise<Frame> {
-	const bytes = new Uint8Array(await file.arrayBuffer());
+function frameFromVideo(video: HTMLVideoElement): Promise<Blob> {
+	const canvas = document.createElement('canvas');
+	canvas.width = video.videoWidth;
+	canvas.height = video.videoHeight;
+	const context = canvas.getContext('2d');
+	if (!context) throw new Error('This browser gave no 2D drawing context.');
+	context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-	// Try the browser first: Safari decodes HEIC natively, and avoiding 1.5 MB
-	// of WASM when it is not needed is most of the win here.
-	//
-	// `none` explicitly, because the rotation is applied below and doing it
-	// twice is worse than not doing it at all. Chrome now defaults to
-	// `from-image`, so leaving this unsaid meant a portrait photo was turned by
-	// the browser and then turned again here — arriving in landscape, which is
-	// precisely what a double rotation looks like.
-	const bitmap = await createImageBitmap(file, { imageOrientation: 'none' }).catch(() => null);
-
-	if (!bitmap) {
-		if (!looksLikeHeic(bytes, file.name)) throw new Error('That image could not be read.');
-		const { decodeHeic } = await import('./heic-decode.ts');
-		const decoded = await decodeHeic(bytes);
-		// Capped like the bitmap path below. Nothing downstream can tell which
-		// decoder a frame came from, so neither may leave 12 MP in memory.
-		return applyOrientation(
-			frameFromBitmapSource(decoded, captureWidth(decoded.width, decoded.height)),
-			readOrientation(bytes)
-		);
-	}
-
-	const frame = frameFromBitmap(bitmap, captureWidth(bitmap.width, bitmap.height));
-	// Freed immediately: a 12 MP bitmap is ~48 MB, and holding one per dropped
-	// file is how a ten-image drop kills the tab.
-	bitmap.close();
-	return orientUpright(frame, bytes);
-}
-
-/**
- * Apply the EXIF rotation, but only if the decoder has not already done it.
- *
- * Chrome applies it to `createImageBitmap` whatever `imageOrientation` asks —
- * measured against a real iPhone JPEG, `'none'`, `'from-image'` and the default
- * all return the same rotated bitmap — while other decoders may not. Rotating a
- * second time lays an upright page on its side, and that looks so much like
- * "the rotation was not applied" that it invites the same wrong fix twice.
- *
- * So this does not guess. It compares what came out of the decoder against the
- * dimensions stored in the file: if they are transposed, the turn has happened
- * already.
- */
-function orientUpright(frame: Frame, bytes: Uint8Array): Frame {
-	const orientation = readOrientation(bytes);
-	if (!needsRotation(orientation, frame, readStoredSize(bytes))) return frame;
-	return applyOrientation(frame, orientation);
-}
-
-export function frameToBlob(frame: Frame, type = 'image/jpeg', quality = 0.85): Promise<Blob> {
-	const { canvas, context } = scratch(frame.width, frame.height);
-	context.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
 	return new Promise<Blob>((resolve, reject) => {
 		canvas.toBlob(
-			(blob) => (blob ? resolve(blob) : reject(new Error('The page could not be encoded.'))),
-			type,
-			quality
+			(blob) => {
+				canvas.width = 0;
+				canvas.height = 0;
+				if (blob) resolve(blob);
+				else reject(new Error('That photo could not be taken.'));
+			},
+			'image/jpeg',
+			// High, because this is the ONLY encode the photograph receives before
+			// the server sees it — everything downstream works from what arrives.
+			0.95
 		);
-		// NOT in a `finally` on the promise: the callback is asynchronous and the
-		// pixels have to still be there when it runs.
-	}).finally(() => release(canvas));
-}
-
-export async function encodeJpeg(frame: Frame, quality = 0.85): Promise<Uint8Array> {
-	return new Uint8Array(await (await frameToBlob(frame, 'image/jpeg', quality)).arrayBuffer());
+	});
 }

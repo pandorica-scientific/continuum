@@ -22,23 +22,41 @@ describe('the corner editor', () => {
 	it('is reachable from the line that says the edges are wrong', () => {
 		// The moment someone reads "Edges wrong?" is the moment they want this,
 		// so the way in belongs on that line rather than behind an icon.
-		expect(preview).toContain('Adjust the corners');
+		expect(preview).toContain('Adjust the edges');
+		// The wording covers what the screen actually does. It offered only corner
+		// handles when it was called "Adjust the corners"; it now bends edges too,
+		// and a name that undersells a control is a control people do not find.
+		expect(preview).toContain('Crop wrong?');
 		expect(preview).toMatch(/onclick=\{onedges\}/);
-		expect(flow).toMatch(/onedges=\{\(\) => void openCorners\(\)\}/);
+		expect(flow).toMatch(/onedges=\{openCorners\}/);
 	});
 
-	it('shows the photograph uncropped, at draft resolution', () => {
-		// Accurate to the pixel someone can see is enough; encoding a 12 MP frame
-		// to look at on a phone would be the slowest thing this component does.
-		expect(flow).toMatch(/frameToBlob\(held\.frame, 'image\/jpeg'\)/);
+	it("draws on the phone's own copy of the photograph, costing no network", () => {
+		// The browser still holds the file it just took, so the handles go over
+		// that rather than over anything fetched back. It used to encode a draft
+		// of a decoded frame for this, which was the slowest thing the component
+		// did; now there is no decoded frame to draft.
+		expect(flow).toMatch(/cornersUrl = held\.localUrl \|\| originalUrl\(/);
 	});
 
-	it('carries the corners back to the frame that actually gets warped', () => {
-		// They are drawn in the draft's coordinates; the warp reads the full
-		// capture. Skipping the scale would crop a fraction of the right region.
-		expect(flow).toMatch(/scaleCorners\(next, source\.frame\.width \/ draft\.frame\.width\)/);
-		// And the cached draft describes the OLD crop, so it must be dropped.
-		expect(flow).toMatch(/draft = null;/);
+	it('falls back to the server when the phone has no usable copy', () => {
+		// Two cases, and both are ordinary rather than exotic: a page already
+		// KEPT has released its blob, and a HEIC is a picture most browsers will
+		// not display at all — which is an iPhone photographing anything at
+		// default settings.
+		expect(flow).toMatch(/function cornersFallback\(\)/);
+		expect(flow).toMatch(/onunavailable=\{cornersFallback\}/);
+		expect(corners).toMatch(/onerror=\{\(\) => onunavailable\?\.\(\)\}/);
+	});
+
+	it("hands its corners back in the photograph's own pixels", () => {
+		// `Corners` is only ever allowed to be in the SOURCE's coordinate space.
+		// The editor is given the true width and height and reports in them, so
+		// nothing has to be scaled on the way out and nothing can be scaled
+		// twice — which is what shrank a crop a little on every pass.
+		expect(flow).toMatch(/width=\{held\.width\}/);
+		expect(flow).toMatch(/height=\{held\.height\}/);
+		expect(flow).toMatch(/onapply=\{\(next\) => void show\(mode, next\)\}/);
 	});
 
 	it('gives a thumb more room than the dot it is placing', () => {
@@ -86,7 +104,10 @@ describe('the corners it hands back', () => {
 	it('are ordered, however they were dragged', () => {
 		// Dragging the top-left past the top-right is reasonable on a rotated
 		// photograph; the warp downstream needs tl/tr/br/bl to mean what they say.
-		expect(corners).toMatch(/onapply\(orderCorners\(/);
+		expect(corners).toMatch(/const ordered = orderCorners\(/);
+		expect(corners).toMatch(
+			/onapply\(bent \? \{ corners: ordered, edges \} : \{ corners: ordered \}\)/
+		);
 
 		// And orderCorners really does sort a quad given in a scrambled order.
 		const scrambled = orderCorners([

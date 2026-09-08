@@ -7,9 +7,9 @@ import { readFileSync } from 'node:fs';
  * documentation. Three of four assumptions held; the fourth did not, and it
  * would have thrown on every file a user ever dropped.
  */
-const source = readFileSync('src/lib/scan/client/heic-decode.ts', 'utf8');
+const source = readFileSync('src/lib/server/scan/worker/codec.ts', 'utf8');
 
-describe('heic-decode', () => {
+describe('the HEIC path in the scan codec', () => {
 	it('imports libheif lazily, so 1.5 MB of WASM never loads for a JPEG', () => {
 		// A static import pulls the decoder into the main chunk and every visitor
 		// pays for it whether or not an iPhone photo ever arrives.

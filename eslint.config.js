@@ -122,8 +122,6 @@ export default ts.config(
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
 			// Generated at build time out of node_modules by
-			// scripts/prepare-opencv.mjs — vendor output, not source.
-			'static/opencv/',
 			'.remember/'
 		]
 	}

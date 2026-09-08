@@ -76,10 +76,8 @@
 		<!-- The line someone reads at exactly the moment the crop is wrong, so the
 		     way to fix it belongs here rather than behind an icon in the deck. -->
 		<p class="note">
-			{mode === 'original'
-				? 'Straight from the camera — no cropping, no clean-up.'
-				: 'Edges wrong?'}
-			<button type="button" class="edges" onclick={onedges}>Adjust the corners</button>
+			{mode === 'original' ? 'Cropped, with the colours exactly as photographed.' : 'Crop wrong?'}
+			<button type="button" class="edges" onclick={onedges}>Adjust the edges</button>
 		</p>
 
 		<div class="actions">

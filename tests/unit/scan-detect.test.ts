@@ -66,7 +66,9 @@ describe('the two readings of a still', () => {
 	// The search that pulls a rough quad onto the page's real edges lives beside
 	// it rather than inside it: one file, one job.
 	const refine = readFileSync('src/lib/scan/core/refine.ts', 'utf8');
-	const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
+	// Detection moved to the server in v0.8.6, so the file that shows HOW it is
+	// called is the pipeline rather than the viewfinder component.
+	const pipeline = readFileSync('src/lib/server/scan/worker/pipeline.ts', 'utf8');
 
 	it('is off while the phone is moving', () => {
 		// The loop has about 110 ms a frame and the outline only has to help
@@ -147,17 +149,21 @@ describe('the two readings of a still', () => {
 		expect(source).toMatch(/bestIsClean = solidity >= MIN_SOLIDITY;/);
 	});
 
-	it('never runs on a live frame', () => {
-		// The viewfinder outline is a framing aid and nothing else — it does not
-		// fire the shutter, so it has no reason to be more than the cheap
-		// reading, and the loop keeps its tenth of a second.
-		expect(capture).toMatch(/const next = detectOnce\(cv, frame\);/);
-		expect(capture).not.toMatch(/detectOnce\(cv, frame, \{ refine/);
+	it('never runs on a live frame, because there is no longer a live frame to run on', () => {
+		// This used to assert that the viewfinder's loop took the CHEAP reading:
+		// an outline is a framing aid, it does not fire the shutter, and the loop
+		// had about 110 ms a frame. v0.8.6 removed the loop altogether — detection
+		// was OpenCV running nine times a second in the browser, and that heap is
+		// exactly what an iPhone could not always allocate. So the guarantee is
+		// now absolute rather than a budget: nothing detects until the shutter.
+		const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
+		expect(capture).not.toContain('detectOnce');
+		expect(capture).not.toContain('detectBest');
 	});
 
 	it('runs once on the still, both ways', () => {
 		// Where there is a second or two to spend rather than a tenth of one.
-		expect(capture).toMatch(/const settled = detectBest\(cv, measured\);/);
+		expect(pipeline).toMatch(/const state = detectBest\(cv, measured\);/);
 		expect(source).toMatch(
 			/const plain = detectOnce\(cv, frame, \{ gates: false, refine: 'thorough' \}\)/
 		);
