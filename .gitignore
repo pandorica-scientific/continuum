@@ -4,6 +4,9 @@ bank_data_examples_do_not_share/
 # Local scratch work
 scratch-workspace/
 
+# Design working files — local reference only, never committed
+design_system/
+
 # Local agent settings and working artefacts. Plans and specs are how a change
 # was arrived at, not what it produced — the code, the tests and the reference
 # docs are that. They stay on disk and out of the repository.
