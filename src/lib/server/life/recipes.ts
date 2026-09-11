@@ -328,6 +328,67 @@ export async function addCategory(name: string, emoji: string, handle: Db = db):
 	return id;
 }
 
+export async function updateCategory(
+	id: string,
+	name: string,
+	emoji: string,
+	handle: Db = db
+): Promise<void> {
+	await handle.update(recipeCategory).set({ name, emoji }).where(eq(recipeCategory.id, id));
+}
+
+/** How many recipes stand on a shelf. Asked before it is taken away. */
+export async function countOnCategory(id: string, handle: Db = db): Promise<number> {
+	const [{ count }] = await handle
+		.select({ count: sql<number>`count(*)::int` })
+		.from(recipe)
+		.where(eq(recipe.categoryId, id));
+	return count;
+}
+
+export async function deleteCategory(id: string, handle: Db = db): Promise<void> {
+	await handle.delete(recipeCategory).where(eq(recipeCategory.id, id));
+}
+
+/**
+ * Move a shelf one place up or down the rail.
+ *
+ * A swap with the neighbour rather than a renumber of the whole list: only two
+ * rows change, and a rail ordered by `sortOrder` then name stays stable even if
+ * two shelves somehow share a number.
+ */
+export async function moveCategory(
+	id: string,
+	direction: 'up' | 'down',
+	handle: Db = db
+): Promise<void> {
+	await handle.transaction(async (tx) => {
+		const ordered = await tx
+			.select({ id: recipeCategory.id, sortOrder: recipeCategory.sortOrder })
+			.from(recipeCategory)
+			.orderBy(asc(recipeCategory.sortOrder), asc(recipeCategory.name));
+
+		const at = ordered.findIndex((row) => row.id === id);
+		const swapWith = direction === 'up' ? at - 1 : at + 1;
+		// Already at the end it is being asked to move towards. Nothing to do,
+		// rather than an error somebody has to read.
+		if (at === -1 || swapWith < 0 || swapWith >= ordered.length) return;
+
+		const here = ordered[at];
+		const there = ordered[swapWith];
+		// Their stored numbers may be equal — the rail's second sort key was doing
+		// the ordering — in which case a swap would change nothing. Use positions.
+		const mine = here.sortOrder === there.sortOrder ? swapWith : there.sortOrder;
+		const theirs = here.sortOrder === there.sortOrder ? at : here.sortOrder;
+
+		await tx.update(recipeCategory).set({ sortOrder: mine }).where(eq(recipeCategory.id, here.id));
+		await tx
+			.update(recipeCategory)
+			.set({ sortOrder: theirs })
+			.where(eq(recipeCategory.id, there.id));
+	});
+}
+
 /**
  * A tag, made on the way in if it is new.
  *

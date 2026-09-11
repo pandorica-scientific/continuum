@@ -30,7 +30,7 @@ import { documentsCheckSql, documentsIndexSql, documentsSeedSql } from './docume
 import { entitySql } from './entity';
 import { organisationsCheckSql } from './organisations';
 import { investmentsSql } from './investments';
-import { lifeCheckSql, lifeIndexSql } from './life';
+import { lifeCheckSql, lifeIndexSql, lifeSeedSql } from './life';
 import { moneySeedSql } from './money';
 
 /**
@@ -163,5 +163,8 @@ export const BASELINE_SECTIONS: BaselineSection[] = [
 	{ title: 'One visit per trip destination', sql: lifeIndexSql },
 	{ title: 'The entity supertype', sql: entitySql },
 	{ title: 'The net-worth contract', sql: netWorthSql },
-	{ title: 'Seed rows', sql: join([moneySeedSql, accountsSeedSql, documentsSeedSql]) }
+	{
+		title: 'Seed rows',
+		sql: join([moneySeedSql, accountsSeedSql, documentsSeedSql, lifeSeedSql])
+	}
 ];

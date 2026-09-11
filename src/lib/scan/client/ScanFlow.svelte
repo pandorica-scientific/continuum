@@ -26,6 +26,7 @@
 		originalUrl,
 		previewUrl,
 		renderScanPage,
+		scanPageImage,
 		uploadScanPage
 	} from './api.ts';
 	import ScanCapture from './ScanCapture.svelte';
@@ -36,6 +37,7 @@
 
 	let {
 		incoming = [],
+		finish = 'document',
 		onclose,
 		onchoosefile,
 		ondone
@@ -43,12 +45,37 @@
 		/** Photographs dropped on the call site, to run through the pipeline
 		 *  instead of opening the viewfinder. */
 		incoming?: File[];
+		/**
+		 * What comes out at the end.
+		 *
+		 * `document` is the journey this engine was built for: many pages,
+		 * thresholded, assembled into one PDF. `picture` is the same camera and
+		 * the same corner editor stopping halfway — one page, in colour, handed
+		 * back as an image. A wine label, a meter dial, the back of a card: things
+		 * that want the de-skew and would be ruined by the rest of it.
+		 */
+		finish?: 'document' | 'picture';
 		onclose: () => void;
 		/** The upload path's Replace: there is no viewfinder to go back to. */
 		onchoosefile?: () => void;
-		/** The finished page, handed to whatever the call site already does with a file. */
-		ondone: (file: File) => void | Promise<void>;
+		/**
+		 * The finished page, handed to whatever the call site already does with
+		 * a file.
+		 *
+		 * `original` is the photograph it was cropped FROM, whole and untouched —
+		 * the file the camera or the drop produced. A picture site can keep both:
+		 * the crop for where a crop belongs, the whole frame for where it does
+		 * not. Absent for a document, which has no use for it.
+		 */
+		ondone: (file: File, original?: File) => void | Promise<void>;
 	} = $props();
+
+	/**
+	 * Derived, not read once: `finish` is a prop, and a plain read would capture
+	 * whatever it was the first time this mounted. It never changes at any call
+	 * site today, which is exactly why a silent capture would go unnoticed.
+	 */
+	const picture = $derived(finish === 'picture');
 
 	// The INITIAL value is exactly what is wanted here, and reading it once is
 	// deliberate: were this to start on 'capture', the viewfinder would mount for
@@ -87,7 +114,17 @@
 	}
 
 	let held = $state<Held | null>(null);
-	let mode = $state<PageMode>('bw');
+	/**
+	 * A picture starts in colour and a document starts thresholded.
+	 *
+	 * Only the default differs — all four modes are offered either way. Nobody
+	 * photographs a wine label wanting 1-bit black and white first, and nobody
+	 * scans a contract wanting a three-megabyte colour JPEG; but a receipt
+	 * photographed as a picture may well want thresholding, and that is the
+	 * household's call rather than this component's.
+	 */
+	// svelte-ignore state_referenced_locally
+	let mode = $state<PageMode>(picture ? 'color' : 'bw');
 	/** Bumped on every render so the preview URL is a new one to the browser. */
 	let token = $state(0);
 	let fromUpload = $state(false);
@@ -143,7 +180,7 @@
 				file,
 				localUrl: URL.createObjectURL(file)
 			};
-			mode = 'bw';
+			mode = picture ? 'color' : 'bw';
 			token++;
 			screen = 'preview';
 		} catch (error) {
@@ -224,7 +261,21 @@
 				rotation: held.rotation
 			});
 			session.add(held.pageId, mode, previewUrl(session.id, held.pageId, token));
+			const kept = held.pageId;
+			// Taken before `discard()` releases it: this is the photograph as it
+			// arrived, which is the one thing the server never keeps.
+			const original = held.file;
 			discard();
+
+			// A picture is one page and there is nothing to assemble, order or
+			// name — so keeping it IS finishing it, and a review screen holding a
+			// single thumbnail and a filename field would be a step that asks a
+			// question nobody has.
+			if (picture) {
+				await handOver(kept, original);
+				return;
+			}
+
 			// A dropped photo has no viewfinder to go back to, and a full document
 			// has nowhere further to go: both land on the review screen, as does
 			// every page on plain http. Otherwise return to the camera, which is
@@ -234,6 +285,20 @@
 			failure = error instanceof Error ? error.message : 'That page could not be kept.';
 		} finally {
 			busy = false;
+		}
+	}
+
+	/** Fetch the kept page back as a picture and hand it to the call site. */
+	async function handOver(pageId: string, original: File | null) {
+		if (!session.id) return;
+		try {
+			const file = await scanPageImage(session.id, pageId, session.filename);
+			await ondone(file, original ?? undefined);
+			session.dispose();
+			onclose();
+		} catch (error) {
+			failure = error instanceof Error ? error.message : 'That picture could not be read back.';
+			screen = 'preview';
 		}
 	}
 
@@ -268,7 +333,7 @@
 		releaseLocal();
 		held = null;
 		cornersUrl = '';
-		mode = 'bw';
+		mode = picture ? 'color' : 'bw';
 	}
 
 	/**
@@ -441,6 +506,7 @@
 		previewUrl={preview}
 		{mode}
 		{busy}
+		{picture}
 		source={held.from}
 		onkeep={() => void keep()}
 		onreplace={() => {

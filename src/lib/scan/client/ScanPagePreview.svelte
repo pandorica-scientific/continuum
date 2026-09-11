@@ -20,6 +20,13 @@
 		mode,
 		source,
 		busy = false,
+		/**
+		 * A picture rather than a document: one page, and nothing after this
+		 * screen. It changes two words. Everything else — the four modes, the
+		 * rotate, the corner editor and its Whole photo — is the same screen doing
+		 * the same job, which is the point of reusing it.
+		 */
+		picture = false,
 		onkeep,
 		onreplace,
 		onmode,
@@ -30,6 +37,7 @@
 		mode: PageMode;
 		source: PageSource;
 		busy?: boolean;
+		picture?: boolean;
 		onkeep: () => void;
 		onreplace: () => void;
 		onmode: (mode: PageMode) => void;
@@ -60,7 +68,10 @@
 
 <div class="preview">
 	<div class="paper">
-		<img src={previewUrl} alt="The page as it will be saved" />
+		<img
+			src={previewUrl}
+			alt={picture ? 'The picture as it will be saved' : 'The page as it will be saved'}
+		/>
 		{#if busy}
 			<!-- Tapping a mode re-processes, so the tap lands at once and the PAGE
 			     catches up under a scrim naming what it is doing. -->
@@ -82,7 +93,7 @@
 
 		<div class="actions">
 			<button type="button" class="btn btn-primary" onclick={onkeep} disabled={busy}
-				>Keep page</button
+				>{picture ? 'Use this' : 'Keep page'}</button
 			>
 			<button type="button" class="btn" onclick={onreplace}>{replaceLabel}</button>
 			<button type="button" class="btn rotate" aria-label="Rotate this page" onclick={onrotate}>

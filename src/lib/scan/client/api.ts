@@ -119,6 +119,28 @@ export function originalUrl(sessionId: string, pageId: string): string {
 	return `/scan/page/${pageId}/original?session=${sessionId}`;
 }
 
+/**
+ * One kept page, as a picture.
+ *
+ * The other ending to the same journey: a label, a meter dial, the back of a
+ * card — things that want the corner editor and the de-skew but are pictures
+ * rather than documents, and would be ruined by being thresholded into a PDF.
+ */
+export async function scanPageImage(
+	sessionId: string,
+	pageId: string,
+	filename: string
+): Promise<File> {
+	const response = await orThrow(
+		await fetch(`/scan/page/${pageId}/image?session=${sessionId}`),
+		'That picture could not be read back.'
+	);
+	const type = response.headers.get('content-type') ?? 'image/jpeg';
+	const bytes = await response.arrayBuffer();
+	const ext = type === 'image/png' ? 'png' : 'jpg';
+	return new File([bytes], `${filename}.${ext}`, { type });
+}
+
 /** The kept pages, in the order shown, as one PDF. */
 export async function assembleScanDocument(
 	sessionId: string,

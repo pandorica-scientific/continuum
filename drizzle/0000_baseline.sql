@@ -1550,3 +1550,7 @@ INSERT INTO shelf_type (shelf_id, type, ordinal) VALUES
 	((SELECT id FROM shelf WHERE key = 'vehicles'), 'warranty', 4),
 	((SELECT id FROM shelf WHERE key = 'vehicles'), 'manual', 5)
 ON CONFLICT (shelf_id, type) DO NOTHING;
+--> statement-breakpoint
+INSERT INTO collection (id, key, name, emoji, question, sort_order) VALUES
+	(gen_random_uuid(), 'cellar', 'Cellar', '🍷', 'What is worth opening, and when?', 0)
+ON CONFLICT (key) DO NOTHING;

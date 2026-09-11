@@ -13,6 +13,7 @@
  * Dates are relative to today, so the demo never drifts into a state where
  * every trip is in the past and the map has nothing left to reveal.
  */
+import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db } from '$lib/server/db';
 import {
@@ -814,15 +815,14 @@ export async function seedDemoLife(
 	}
 
 	// ---- The cellar ----
-	const cellarId = uuidv7();
-	await handle.insert(collection).values({
-		id: cellarId,
-		key: 'cellar',
-		name: 'Cellar',
-		emoji: '🍷',
-		question: 'What is in the house, and what is ready to drink?',
-		sortOrder: 0
-	});
+	// The shelf itself is a seeded row every install has — see `lifeSeedSql`.
+	// The demo fills it rather than making a second one.
+	const [cellar] = await handle
+		.select({ id: collection.id })
+		.from(collection)
+		.where(eq(collection.key, 'cellar'))
+		.limit(1);
+	const cellarId = cellar.id;
 	for (const seed of BOTTLES) {
 		const bottleId = uuidv7();
 		await handle.insert(bottle).values({

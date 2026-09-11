@@ -16,13 +16,16 @@
 	let tagFilter = $state<string | null>(null);
 	let addingRecipe = $state(false);
 	let addingCategory = $state(false);
+	/** The shelf being changed, if one is. Never open at the same time as the above. */
+	let editingCategory = $state<string | null>(null);
 	/** Set when the recipe dialog sent somebody off to make the first shelf. */
 	let thenWriteRecipe = $state(false);
 
-	// A rejected submission has to land back in the dialog it came from.
+	// A rejected submission has to land back in the dialog it came from — and a
+	// refused edit is already in one, so only the new-shelf dialog is reopened.
 	$effect(() => {
 		if (form?.on === 'recipe') addingRecipe = true;
-		if (form?.on === 'category') addingCategory = true;
+		if (form?.on === 'category' && editingCategory === null) addingCategory = true;
 	});
 
 	// The shelf they were sent to make now exists, so put them back where they
@@ -33,6 +36,23 @@
 			addingCategory = false;
 			addingRecipe = true;
 		}
+	});
+
+	/**
+	 * The shelf under the pencil, with where it stands in the rail.
+	 *
+	 * Derived rather than copied, so a rename or a move lands in the dialog that
+	 * asked for it instead of leaving it showing what was true when it opened.
+	 */
+	const editing = $derived.by(() => {
+		if (editingCategory === null) return null;
+		const at = data.categories.findIndex((shelf) => shelf.id === editingCategory);
+		if (at === -1) return null;
+		return {
+			...data.categories[at],
+			first: at === 0,
+			last: at === data.categories.length - 1
+		};
 	});
 
 	const matches = (haystack: string): boolean =>
@@ -113,6 +133,7 @@
 			if (tagFilter && !tagsHere.some((tag) => tag.id === tagFilter)) tagFilter = null;
 		}}
 		onadd={() => (addingCategory = true)}
+		onedit={(id) => (editingCategory = id)}
 	/>
 
 	<div class="grid">
@@ -161,6 +182,18 @@
 			addingCategory = false;
 			// Backing out of the shelf means backing out of the recipe too.
 			thenWriteRecipe = false;
+		}}
+	/>
+{/if}
+
+{#if editing}
+	<CategoryDialog
+		category={editing}
+		message={form?.on === 'category' ? form.message : null}
+		onclose={() => {
+			editingCategory = null;
+			// The shelf being filtered on may have just gone.
+			if (!data.categories.some((shelf) => shelf.id === category)) category = null;
 		}}
 	/>
 {/if}

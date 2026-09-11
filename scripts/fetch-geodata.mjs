@@ -35,7 +35,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
-import { geoMercator, geoPath } from 'd3-geo';
+import { geoCentroid, geoMercator, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import {
 	COUNTRY_CODE_OVERRIDES,
@@ -50,6 +50,107 @@ const ADMIN1_DIRECTORY = join(DIRECTORY, 'admin1');
 const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json';
 const ADMIN1_URL =
 	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_1_states_provinces.geojson';
+
+/**
+ * The two the progress cards need, both small.
+ *
+ * Time zones are the REAL IANA bands, which follow borders and are nothing like
+ * vertical stripes — the whole point of showing them. Continents come from the
+ * 110m country file because that is where Natural Earth puts the `CONTINENT`
+ * property, and 110m is plenty for a coin an inch across.
+ */
+const ZONES_URL =
+	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_time_zones.geojson';
+const CONTINENTS_URL =
+	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_110m_admin_0_countries.geojson';
+
+/** Write a document beside the province outlines, gzipped as they are. */
+async function writePacked(name, value) {
+	const packed = gzipSync(Buffer.from(JSON.stringify(value)), { level: 9 });
+	await writeFile(join(DIRECTORY, name), packed);
+	console.log(`  ${name}: ${(packed.length / 1e3).toFixed(0)} kB gzipped`);
+}
+
+/**
+ * The time-zone bands, trimmed to what a small map needs.
+ *
+ * One entry per zone offset, its polygons merged, because the card lights a
+ * ZONE rather than one of the 120-odd pieces Natural Earth splits them into.
+ */
+async function fetchZones() {
+	const text = await download(ZONES_URL, 'natural-earth time zones');
+	const source = JSON.parse(text);
+	const byZone = new Map();
+
+	for (const feature of source.features) {
+		const zone = feature.properties?.zone;
+		if (zone === null || zone === undefined) continue;
+		const key = String(zone);
+		if (!byZone.has(key)) {
+			byZone.set(key, {
+				zone: Number(zone),
+				utc: feature.properties.utc_format ?? '',
+				geometry: []
+			});
+		}
+		const trimmed = trimGeometry(feature.geometry);
+		if (trimmed) byZone.get(key).geometry.push(trimmed);
+	}
+
+	return [...byZone.values()].filter((one) => one.geometry.length).sort((a, b) => a.zone - b.zone);
+}
+
+/**
+ * Which continent each country is on, and how many countries each has.
+ *
+ * Antarctica is dropped throughout: nobody scratches it off, and a coin that
+ * can never be opened is a permanent reproach rather than progress.
+ */
+async function fetchContinents() {
+	const text = await download(CONTINENTS_URL, 'natural-earth continents');
+	const source = JSON.parse(text);
+
+	const of = {};
+	const totals = {};
+	const shapes = {};
+
+	for (const feature of source.features) {
+		const properties = feature.properties ?? {};
+		const continent = properties.CONTINENT;
+		const name = properties.NAME || properties.ADMIN;
+		// "Seven seas (open ocean)" is not a continent; Antarctica is one nobody
+		// scratches off, and a coin that can never be opened is a reproach rather
+		// than progress.
+		if (!continent || continent === 'Antarctica' || continent.startsWith('Seven seas')) continue;
+		if (!name) continue;
+
+		const code = properties.ISO_A2 && properties.ISO_A2 !== '-99' ? properties.ISO_A2 : null;
+		if (code) of[code] = continent;
+		totals[continent] = (totals[continent] ?? 0) + 1;
+
+		const trimmed = trimGeometry(feature.geometry);
+		if (trimmed) (shapes[continent] = shapes[continent] ?? []).push(trimmed);
+	}
+
+	return { of, totals, shapes };
+}
+
+/** Round a geometry's coordinates and keep nothing else. */
+function trimGeometry(geometry) {
+	if (!geometry) return null;
+	if (geometry.type === 'Polygon') {
+		return { type: 'Polygon', coordinates: geometry.coordinates.map(roundRing) };
+	}
+	if (geometry.type === 'MultiPolygon') {
+		return {
+			type: 'MultiPolygon',
+			coordinates: geometry.coordinates.map((polygon) => polygon.map(roundRing))
+		};
+	}
+	return null;
+}
+
+const roundRing = (ring) => ring.map(([x, y]) => [round(x), round(y)]);
 
 /**
  * Three decimals, about 110 m.
@@ -204,7 +305,16 @@ async function main() {
 			unresolved.push(name);
 			continue;
 		}
-		codes[name] = { code, admin, slug: countrySlug(admin) };
+		// The centre on the GLOBE, not on a projection: it is the only position a
+		// visit can carry — a visit records a country's name, never a coordinate —
+		// and the time-zone card asks which band that point falls in.
+		const centre = geoCentroid(country);
+		codes[name] = {
+			code,
+			admin,
+			slug: countrySlug(admin),
+			centre: Number.isFinite(centre[0]) ? [round(centre[0]), round(centre[1])] : null
+		};
 	}
 
 	// A country whose name resolves to nothing scratches as one piece, which does
@@ -248,15 +358,26 @@ async function main() {
 	}
 	const colours = Object.fromEntries(assignColours(centroids));
 
+	// Written as their own gzipped files rather than into the manifest: the two
+	// together are megabytes, and the manifest is read on every map load.
+	const zones = await fetchZones();
+	const continents = await fetchContinents();
+	await writePacked('zones.json.gz', zones);
+	await writePacked('continents.json.gz', continents);
+
 	const manifest = {
 		version: 1,
 		generated: new Date().toISOString().slice(0, 10),
-		sources: { world: WORLD_URL, admin1: ADMIN1_URL },
+		sources: { world: WORLD_URL, admin1: ADMIN1_URL, zones: ZONES_URL, continents: CONTINENTS_URL },
 		precision: COORDINATE_PRECISION,
 		view: VIEW,
 		countries: codes,
 		colours,
-		files
+		files,
+		// Just the counts: the geometry lives in its own file beside the
+		// provinces, and the screen asks for it when it needs it.
+		zones: zones.length,
+		continents: continents.totals
 	};
 	await writeFile(manifestPath, JSON.stringify(manifest));
 

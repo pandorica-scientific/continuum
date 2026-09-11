@@ -321,13 +321,23 @@ export interface BottleSubject {
 	producer: string;
 	name: string;
 	vintage?: number | null;
-	/** A cropped label photograph on the data volume, as `/files/[name]`. */
-	labelPhoto?: string | null;
 }
 
 /**
  * Draw a bottle. There is no definition to store: the silhouette follows the
  * type, so the drawing is a function of the row rather than a decision about it.
+ *
+ * DELIBERATELY WITHOUT THE LABEL PHOTOGRAPH. The library will happily put one
+ * in, as an `<image href="/files/…">` inside the SVG — and `assertInertSvg`
+ * refuses exactly that, because `<image>` and a non-fragment `href` are two of
+ * the things it exists to keep out of `{@html}`. Passing the photograph here
+ * therefore threw on every bottle that had one, `artOf` caught it, and the card
+ * drew nothing at all.
+ *
+ * The photograph goes over the top instead, as an ordinary `<img>` positioned
+ * by `bottleLabelBox` — see `BottleArt.svelte`. That keeps the inert rule intact
+ * rather than punching a hole in it for one feature, and an `<img>` outside the
+ * SVG is a plain element the browser already knows how to size and cache.
  *
  * `idPrefix` is the row's own id, because the SVG defines gradients and clip
  * paths by id and a grid of twenty bottles on one page would otherwise have
@@ -336,13 +346,42 @@ export interface BottleSubject {
 export function bottleSvg(subject: BottleSubject, width = 400): string {
 	return renderBottle({
 		type: SILHOUETTE[subject.type] ?? 'bordeaux',
-		labelImage: subject.labelPhoto ?? undefined,
-		labelFit: 'contain',
 		title: [subject.producer, subject.name].filter(Boolean).join(' '),
 		width,
 		idPrefix: `bottle-${subject.id.replaceAll(/[^a-zA-Z0-9-]/g, '')}`
 	});
 }
+
+/**
+ * Where the label plate sits on a silhouette, as percentages of the drawing.
+ *
+ * The library gives the box in its own 400 × 160 viewBox; percentages are what
+ * an overlay needs, because the SVG is drawn at whatever width the card is and
+ * nothing else knows how many pixels that turned out to be.
+ */
+export function bottleLabelBox(type: EnumValue<'bottle.type'>): {
+	left: string;
+	top: string;
+	width: string;
+	height: string;
+} {
+	const shape = bottles[SILHOUETTE[type] ?? 'bordeaux'];
+	const box = shape.labelBox;
+	const pct = (value: number, of: number) => `${(value / of) * 100}%`;
+	return {
+		left: pct(box.x, VIEWBOX_WIDTH),
+		top: pct(box.y, VIEWBOX_HEIGHT),
+		width: pct(box.width, VIEWBOX_WIDTH),
+		height: pct(box.height, VIEWBOX_HEIGHT)
+	};
+}
+
+/** The viewBox every silhouette is drawn in. The library's own contract. */
+const VIEWBOX_WIDTH = 400;
+const VIEWBOX_HEIGHT = 160;
+
+/** The aspect the drawing holds, for a box an overlay can be measured against. */
+export const BOTTLE_ASPECT = `${VIEWBOX_WIDTH} / ${VIEWBOX_HEIGHT}`;
 
 /** The initials shown on the label plate until a photograph replaces it. */
 export function labelInitials(producer: string, name: string): string {

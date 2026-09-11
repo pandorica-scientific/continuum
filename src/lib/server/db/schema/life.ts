@@ -589,3 +589,21 @@ CREATE UNIQUE INDEX visit_from_trip_unique
 	ON visit (trip_id, country, COALESCE(region, ''), COALESCE(city, ''))
 	WHERE source = 'trip';
 `;
+
+/**
+ * The Cellar, which every install has from the first minute.
+ *
+ * Seeded here rather than in the demo, because Collections cannot make its own
+ * shelf: v0.9.0 ships one shelf type and the rail's "New shelf" is deliberately
+ * disabled until books and records arrive. A household without this row gets a
+ * screen with an empty rail and an Add bottle button that does nothing, which is
+ * exactly what happened on the first real install.
+ *
+ * `ON CONFLICT (key) DO NOTHING`, like the document shelves: the row is keyed by
+ * `cellar` and the household is free to rename it afterwards.
+ */
+export const lifeSeedSql = `
+INSERT INTO collection (id, key, name, emoji, question, sort_order) VALUES
+	(gen_random_uuid(), 'cellar', 'Cellar', '🍷', 'What is worth opening, and when?', 0)
+ON CONFLICT (key) DO NOTHING;
+`;

@@ -43,6 +43,14 @@
 	--rose: #e3819e;
 	--plate: rgba(14, 17, 23, 0.86);
 
+	/* Label stock, and the only pair here that does NOT change with the theme.
+	   The plate on a bottle silhouette is standing in for a photograph of a
+	   paper label, and a label is the same colour in a dark cellar as in a lit
+	   one. Defined once on :root and deliberately not redefined below: a dark
+	   theme is about the screen, not about the bottle. */
+	--label-paper: #f2ece0;
+	--label-ink: #4a4036;
+
 	/* Pill fills: the hue itself at 0.18 over the card. Grey is the one
 	   exception at 0.16 — a neutral at the same alpha as a hue reads heavier,
 	   because nothing about it is carried by chroma.

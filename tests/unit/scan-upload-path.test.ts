@@ -40,7 +40,16 @@ describe('isImageFile', () => {
 
 describe('the dropzone', () => {
 	it('sends a dropped photograph into the pipeline', () => {
-		expect(dropzone).toMatch(/offersScan && picked\.length === 1 && isImageFile\(picked\[0\]\)/);
+		expect(dropzone).toMatch(/offersCrop && picked\.length === 1 && isImageFile\(picked\[0\]\)/);
+	});
+
+	// The corner editor is wanted by two different jobs: a document, which ends
+	// as a PDF, and a picture — a wine label — which must not be thresholded and
+	// comes back as an image. A dropzone that admits only images has no PDF in
+	// its `accept` and would otherwise be offered no crop at all.
+	it('offers the crop for a picture as well as for a document', () => {
+		expect(dropzone).toMatch(/offersScan \|\| \(crop && admitsImages\(accept\)\)/);
+		expect(dropzone).toMatch(/finish=\{crop \? 'picture' : 'document'\}/);
 	});
 
 	it('leaves a multiple drop alone until the review screen exists', () => {

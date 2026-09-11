@@ -3,10 +3,14 @@ import { fail, redirect } from '@sveltejs/kit';
 import { asRowId } from '$lib/ids';
 import {
 	addCategory,
+	countOnCategory,
 	createRecipe,
+	deleteCategory,
 	listCategories,
 	listRecipes,
 	listTags,
+	moveCategory,
+	updateCategory,
 	upsertTag
 } from '$lib/server/life/recipes';
 import { clampServings } from '$lib/life/cookbook/scale';
@@ -63,5 +67,53 @@ export const actions: Actions = {
 		if (!name) return fail(400, { on: 'category', message: 'A shelf needs a name.' });
 		await addCategory(name, String(form.get('emoji') ?? '🍽️'));
 		return { added: true };
+	},
+
+	editCategory: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('categoryId'));
+		const name = String(form.get('name') ?? '').trim();
+		if (!id) return fail(400, { on: 'category', message: 'No such shelf.' });
+		if (!name) return fail(400, { on: 'category', message: 'A shelf needs a name.' });
+		await updateCategory(id, name, String(form.get('emoji') ?? '🍽️'));
+		return { edited: true };
+	},
+
+	/**
+	 * Taking a shelf away.
+	 *
+	 * Refused while anything stands on it. The foreign key would refuse too, but
+	 * as a database error nobody can act on — this says which shelf and how many
+	 * recipes, so the next move is obvious.
+	 */
+	deleteCategory: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('categoryId'));
+		if (!id) return fail(400, { on: 'category', message: 'No such shelf.' });
+
+		const standing = await countOnCategory(id);
+		if (standing > 0) {
+			return fail(400, {
+				on: 'category',
+				message:
+					standing === 1
+						? 'One recipe is still on this shelf. Move it to another shelf first.'
+						: `${standing} recipes are still on this shelf. Move them to another shelf first.`
+			});
+		}
+
+		await deleteCategory(id);
+		return { removed: true };
+	},
+
+	moveCategory: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('categoryId'));
+		const direction = String(form.get('direction') ?? '');
+		if (!id || (direction !== 'up' && direction !== 'down')) {
+			return fail(400, { on: 'category', message: 'Nowhere to move it.' });
+		}
+		await moveCategory(id, direction);
+		return { moved: true };
 	}
 };

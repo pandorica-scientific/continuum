@@ -147,7 +147,8 @@ beforeAll(async () => {
 	await testDb
 		.insert(trip)
 		.values({ id: target.trip, name: 'Porto', startsOn: '2026-06-01', endsOn: '2026-06-08' });
-	await testDb.insert(collection).values({ id: cellar, key: 'cellar', name: 'Cellar' });
+	// A second shelf beside the seeded Cellar, so the key does not collide.
+	await testDb.insert(collection).values({ id: cellar, key: 'dt-cellar', name: 'Cellar' });
 	await testDb.insert(bottle).values({
 		id: target.bottle,
 		collectionId: cellar,

@@ -25,9 +25,10 @@ beforeAll(async () => {
 	harness = await startPostgres('life-schema', { max: 1 });
 	await harness.applyMigrations(ALL_MIGRATIONS);
 
-	cellarId = uuidv7();
-	await harness.sql`insert into collection (id, key, name)
-		values (${cellarId}, 'cellar', 'Cellar')`;
+	// The Cellar is a seeded row every install has — see `lifeSeedSql`. Inserting
+	// a second one here would collide on the key rather than test anything.
+	const [cellar] = await harness.sql`select id from collection where key = 'cellar'`;
+	cellarId = cellar.id;
 
 	categoryId = uuidv7();
 	await harness.sql`insert into recipe_category (id, name) values (${categoryId}, 'Weeknight')`;
