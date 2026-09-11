@@ -5,13 +5,18 @@ import { rowId } from '../row-id';
 import { ENTITY_KINDS } from '$lib/enums';
 import { displayCurrency } from '$lib/money';
 import {
+	bottle,
+	collection,
 	document,
 	documentLink,
 	organisation,
+	recipe,
+	recipeCategory,
 	subject,
 	tagLink,
 	taxStatement,
-	tenancy
+	tenancy,
+	trip
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { upsertTag } from '$lib/server/tags';
@@ -64,8 +69,15 @@ const target = {
 	subject: rowId('dt-subject'),
 	transaction: rowId('dt-transaction'),
 	tax_statement: rowId('dt-tax-statement'),
-	organisation: rowId('dt-organisation')
+	organisation: rowId('dt-organisation'),
+	trip: rowId('dt-trip'),
+	bottle: rowId('dt-bottle'),
+	recipe: rowId('dt-recipe')
 } as const;
+
+/** The shelf and the category the two Life rows above have to hang from. */
+const cellar = rowId('dt-collection');
+const recipeCategoryId = rowId('dt-recipe-category');
 
 const archivedSubject = rowId('dt-subject-archived');
 
@@ -130,6 +142,25 @@ beforeAll(async () => {
 		grossIncomeMinor: 0n,
 		taxPaidMinor: 0n
 	});
+	// The Life records paper is filed against: a trip's confirmations, a
+	// bottle's receipt, the page a recipe came from.
+	await testDb
+		.insert(trip)
+		.values({ id: target.trip, name: 'Porto', startsOn: '2026-06-01', endsOn: '2026-06-08' });
+	await testDb.insert(collection).values({ id: cellar, key: 'cellar', name: 'Cellar' });
+	await testDb.insert(bottle).values({
+		id: target.bottle,
+		collectionId: cellar,
+		type: 'whisky',
+		producer: 'Lagavulin',
+		name: '16 Year Old',
+		vintage: null,
+		owned: 1
+	});
+	await testDb.insert(recipeCategory).values({ id: recipeCategoryId, name: 'Weeknight' });
+	await testDb
+		.insert(recipe)
+		.values({ id: target.recipe, categoryId: recipeCategoryId, name: 'Ragù' });
 }, 180_000);
 
 afterAll(async () => {
@@ -203,7 +234,10 @@ describe('the registry', () => {
 			'loan',
 			'contact',
 			'subject',
-			'organisation'
+			'organisation',
+			'trip',
+			'bottle',
+			'recipe'
 		]);
 		// Transactions and tax statements are linked from their own screens, so
 		// the capture dialog must not offer them.
@@ -220,7 +254,10 @@ describe('the registry', () => {
 			'Subjects',
 			'Transactions',
 			'Tax statements',
-			'Organisations'
+			'Organisations',
+			'Trips',
+			'Bottles',
+			'Recipes'
 		]);
 	});
 });
@@ -327,7 +364,10 @@ describe('naming a row of every kind', () => {
 			'loan',
 			'contact',
 			'subject',
-			'organisation'
+			'organisation',
+			'trip',
+			'bottle',
+			'recipe'
 		]);
 		expect(rows.some((r) => r.id === target.transaction)).toBe(false);
 		expect(rows.some((r) => r.id === target.tax_statement)).toBe(false);

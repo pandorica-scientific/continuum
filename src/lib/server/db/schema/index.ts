@@ -22,3 +22,4 @@ export * from './calendar';
 export * from './salary';
 export * from './tax';
 export * from './jobs';
+export * from './life';

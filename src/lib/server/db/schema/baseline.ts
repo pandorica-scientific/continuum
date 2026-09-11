@@ -30,6 +30,7 @@ import { documentsCheckSql, documentsIndexSql, documentsSeedSql } from './docume
 import { entitySql } from './entity';
 import { organisationsCheckSql } from './organisations';
 import { investmentsSql } from './investments';
+import { lifeCheckSql, lifeIndexSql } from './life';
 import { moneySeedSql } from './money';
 
 /**
@@ -157,8 +158,9 @@ export const BASELINE_SECTIONS: BaselineSection[] = [
 	{ title: 'Enum CHECK constraints', sql: enumChecksSql() },
 	{
 		title: 'Singletons and shapes',
-		sql: join([authSql, investmentsSql, documentsCheckSql, organisationsCheckSql])
+		sql: join([authSql, investmentsSql, documentsCheckSql, organisationsCheckSql, lifeCheckSql])
 	},
+	{ title: 'One visit per trip destination', sql: lifeIndexSql },
 	{ title: 'The entity supertype', sql: entitySql },
 	{ title: 'The net-worth contract', sql: netWorthSql },
 	{ title: 'Seed rows', sql: join([moneySeedSql, accountsSeedSql, documentsSeedSql]) }

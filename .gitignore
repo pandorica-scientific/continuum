@@ -63,3 +63,8 @@ tessdata/
 
 # Transient bundle written while composing the baseline.
 drizzle/.compose/
+
+# Map geometry, fetched at build time by scripts/fetch-geodata.mjs. 22 MB of
+# trimmed outlines do not belong in a git history, for the same reason the OCR
+# language data does not.
+geodata/

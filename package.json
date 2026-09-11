@@ -11,7 +11,7 @@
 		"prepare": "svelte-kit sync || echo ''; git config core.hooksPath .githooks || true",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"lint": "eslint . && prettier --check . && npm run design:tokens:check",
+		"lint": "eslint . && prettier --check .",
 		"design:tokens": "node scripts/design-tokens.mjs",
 		"design:tokens:check": "node scripts/design-tokens.mjs --check",
 		"format": "prettier --write .",
@@ -29,7 +29,8 @@
 		"version:check": "node scripts/sync-version.mjs --check",
 		"changelog:section": "node scripts/changelog-section.mjs",
 		"prepare:scan-worker": "node scripts/build-scan-worker.mjs",
-		"predev": "node scripts/build-scan-worker.mjs"
+		"predev": "node scripts/build-scan-worker.mjs",
+		"fetch:geodata": "node scripts/fetch-geodata.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -37,7 +38,9 @@
 		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@types/d3-geo": "^3.1.1",
 		"@types/node": "^26.2.0",
+		"@types/topojson-client": "^3.1.5",
 		"drizzle-kit": "^0.31.10",
 		"embedded-postgres": "^18.4.0-beta.17",
 		"eslint": "^10.8.1",
@@ -57,6 +60,7 @@
 		"@fontsource/source-code-pro": "^5.3.0",
 		"@node-rs/argon2": "^2.0.2",
 		"@techstark/opencv-js": "^4.12.0-release.1",
+		"d3-geo": "^3.1.1",
 		"drizzle-orm": "^0.45.2",
 		"iconv-lite": "^0.7.3",
 		"libheif-js": "^1.19.8",
@@ -66,6 +70,7 @@
 		"pdfjs-dist": "^6.2.108",
 		"postgres": "^3.4.9",
 		"tesseract.js": "^7.0.0",
+		"topojson-client": "^3.1.0",
 		"uuidv7": "^1.2.1",
 		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
 	},

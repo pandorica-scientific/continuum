@@ -67,7 +67,11 @@
 	<title>{title} · Continuum</title>
 </svelte:head>
 
-<header>
+<!-- `steady` reserves the slots above the tab row on a phone, so the row lands
+     in the same place on every screen of an area. It is only set where a tab
+     row is actually drawn: on a one-screen area there is nothing that can jump,
+     and the reserved space would be air bought for nothing. -->
+<header class:steady={tabs.length > 0}>
 	<div class="titles">
 		<h1>
 			<!-- The area's hue in a tile, in place of the bare glyph — and in place
@@ -212,6 +216,37 @@
 		h1 {
 			font-size: var(--text-4xl);
 			gap: var(--space-5);
+		}
+		/* The sub-tab row lands in the SAME place on every screen.
+
+		   On a phone the header stacks, so two things above the tabs vary in
+		   height: a caption is one line or two, and a screen with a primary
+		   action wraps that button onto a row of its own. Measured across the
+		   twenty screens that draw a tab row, the combination put it at four
+		   different heights — 144, 188, 204 and 224 — so switching tab moved the
+		   row out from under the thumb that had just tapped it, by as much as
+		   80px. On the desktop widths it was already stable at one position,
+		   which is why this is a phone-only rule.
+
+		   Both slots are therefore reserved rather than fitted. It costs up to
+		   56px of quiet space on the sparsest screens, and buys a frame that
+		   does not move — which is what a frame is for. Anything that changes
+		   the header's stack on a phone has to keep this true. */
+		.steady .caption {
+			display: block;
+			min-height: calc(2 * 1.55em);
+		}
+		/* Stacked, not wrapped. Left to `flex-wrap`, an EMPTY actions slot is
+		   zero wide, fits beside the title and adds no height at all, while a
+		   filled one wraps onto its own row and adds 36px — so reserving its
+		   height only works once it is always its own row. */
+		.steady {
+			flex-direction: column;
+			gap: var(--space-5);
+		}
+		.steady .actions {
+			width: 100%;
+			min-height: var(--control-h);
 		}
 	}
 </style>

@@ -19,6 +19,14 @@ COPY . .
 # OCR language data, fetched ONCE here so the running product never reaches the
 # network. ~7.4 MB for English, Czech, Polish, German and Spanish.
 RUN node scripts/fetch-tessdata.mjs
+# Map geometry, on the same terms and for the same reason: the Life area's map
+# draws real country and province outlines, and a product that promises not to
+# call home cannot fetch them while somebody is looking at it. ~5.8 MB gzipped
+# for 253 countries, trimmed from a 40 MB source.
+#
+# This stage is not emulated (see above), so the trim runs natively once rather
+# than per architecture under QEMU.
+RUN node scripts/fetch-geodata.mjs
 # `npm run build` also bundles the scan child into build/scan-worker.cjs. That
 # child is a separate node process — nothing SvelteKit does for the server
 # bundle reaches it — and `src/` is not copied into the runtime stage, so it has
@@ -71,6 +79,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/tessdata ./tessdata
+COPY --from=build /app/geodata ./geodata
 # The install file travels with the image — `docker run --rm <image> compose`
 # prints it — so nothing has to be fetched from anywhere but the registry.
 COPY --from=build /app/compose.yaml ./compose.yaml

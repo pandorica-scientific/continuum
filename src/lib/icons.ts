@@ -97,6 +97,80 @@ export const ICONS = {
 		{ path: 'M15.6 5.7a3.1 3.1 0 0 1 0 5.4' },
 		{ path: 'M17.2 13.6a5.6 5.6 0 0 1 3.2 5.8' }
 	],
+	// Life, and its four screens.
+	//
+	// The area mark is a framed picture — a landscape under a sun — because the
+	// area is the household's own record of itself, and every other candidate
+	// (a heart, a star, a smile) reads as a rating rather than as a subject.
+	life: [
+		{ rect: [3, 4.5, 18, 15, 2.5] },
+		{ path: 'M3.6 16.8 8.6 11.8l3.3 3.3 3.1-2.9 4.4 4.4' },
+		{ circle: [8.4, 9.2, 1.35] }
+	],
+	// One clasp, not two: at 19px a second clasp closes up into the handle.
+	suitcase: [
+		{ rect: [3, 7.5, 18, 12.5, 2.5] },
+		{ path: 'M9 7.5V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6v1.9' },
+		{ line: [12, 11, 12, 16.5] }
+	],
+	// A meridian and a parallel, and only one of each. Three lines make a
+	// wireframe ball; two make a globe.
+	globe: [
+		{ circle: [12, 12, 9] },
+		{ path: 'M12 3a13.5 13.5 0 0 1 0 18a13.5 13.5 0 0 1 0-18' },
+		{ line: [3.2, 10.4, 20.8, 10.4] }
+	],
+	// The crown is three arcs over a band. Drawn as one path so the arcs meet
+	// cleanly instead of showing three round caps along the top.
+	chefhat: [
+		{ path: 'M6.5 13.2a3.6 3.6 0 1 1 1.6-6.8a4.2 4.2 0 0 1 7.8 0a3.6 3.6 0 1 1 1.6 6.8z' },
+		{ path: 'M6.5 13.2V18a1.6 1.6 0 0 0 1.6 1.6h7.8A1.6 1.6 0 0 0 17.5 18v-4.8' },
+		{ line: [6.9, 16.2, 17.1, 16.2] }
+	],
+	// Shoulders, not a cylinder: the taper is the whole reason this reads as a
+	// bottle at 19px rather than as a battery.
+	bottle: [
+		{
+			path: 'M9.9 3h4.2v4.4l2.6 3.4a3.4 3.4 0 0 1 .7 2.1v6.1a2.2 2.2 0 0 1-2.2 2.2H8.8a2.2 2.2 0 0 1-2.2-2.2v-6.1a3.4 3.4 0 0 1 .7-2.1l2.6-3.4z'
+		},
+		{ line: [6.9, 15.2, 17.1, 15.2] }
+	],
+	// What a trip is made of. Four marks rather than borrowing `flow` and
+	// `card`, which already mean cash flow and Loans: a timeline that draws a
+	// flight with the Money area's icon is one glyph meaning two things.
+	plane: [{ path: 'M2.6 13.4 21 5l-3.4 8.6-3.6 1.1-2.2 5.2-1.9-4.2-4.4-1.6z' }],
+	train: [
+		{ rect: [5, 3.5, 14, 13, 3] },
+		{ line: [5, 10.5, 19, 10.5] },
+		{ circle: [9, 13.6, 1] },
+		{ circle: [15, 13.6, 1] },
+		{ path: 'M8.5 16.5 6 20.5' },
+		{ path: 'M15.5 16.5 18 20.5' }
+	],
+	// A hire car: a bonnet line and two wheels, which is what separates it from
+	// a bus at 16px.
+	car: [
+		{ path: 'M3.2 14.5 5 9.4A2 2 0 0 1 6.9 8h10.2a2 2 0 0 1 1.9 1.4l1.8 5.1' },
+		{
+			path: 'M3.2 14.5h17.6v3.1a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.8H6.6v.8a1 1 0 0 1-1 1H4.2a1 1 0 0 1-1-1z'
+		},
+		{ circle: [7.2, 14.5, 1.1] },
+		{ circle: [16.8, 14.5, 1.1] }
+	],
+	// Somewhere to sleep. A bed seen from the side, not a building: `house`
+	// already means the Home area.
+	bed: [
+		{ path: 'M3 19V6' },
+		{ path: 'M3 11h13.5a4.5 4.5 0 0 1 4.5 4.5V19' },
+		{ line: [3, 15.5, 21, 15.5] },
+		{ circle: [7.4, 8.6, 1.9] }
+	],
+	// Review's mark: a four-point star with a small second one, so it reads as
+	// a recap rather than as "new".
+	sparkle: [
+		{ path: 'M10 3.5c0 3.6 1.4 5 5 5c-3.6 0-5 1.4-5 5c0-3.6-1.4-5-5-5c3.6 0 5-1.4 5-5z' },
+		{ path: 'M17 13c0 2 .8 2.8 2.8 2.8c-2 0-2.8.8-2.8 2.8c0-2-.8-2.8-2.8-2.8c2 0 2.8-.8 2.8-2.8z' }
+	],
 	gear: [
 		{ circle: [12, 12, 2.4] },
 		{ circle: [12, 12, 5.6] },

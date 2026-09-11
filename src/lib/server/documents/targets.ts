@@ -27,6 +27,7 @@ import { displayCurrency, formatMinor } from '$lib/money';
 import type { DocumentTypeKey, EnumValue } from '$lib/enums';
 import {
 	account,
+	bottle,
 	contact,
 	document,
 	documentLink,
@@ -36,13 +37,16 @@ import {
 	organisation,
 	person,
 	property,
+	recipe,
+	recipeCategory,
 	shelf,
 	subject,
 	tag,
 	tagLink,
 	taxStatement,
 	tenancy,
-	transaction
+	transaction,
+	trip
 } from '$lib/server/db/schema';
 import { archiveScopePredicate, assertDocumentExists, NO_SUCH_DOCUMENT } from './visibility';
 
@@ -67,7 +71,10 @@ export const DOCUMENT_TARGET_KINDS = [
 	'subject',
 	'transaction',
 	'tax_statement',
-	'organisation'
+	'organisation',
+	'trip',
+	'bottle',
+	'recipe'
 ] as const;
 
 export type DocumentTargetKind = (typeof DOCUMENT_TARGET_KINDS)[number];
@@ -313,6 +320,51 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 			join: sql`
 				join ${taxStatement} on ${taxStatement.id} = t.id
 				join ${person} on ${person.id} = ${taxStatement.personId}`,
+			read: (raw) => ({ meta: raw.meta == null ? undefined : String(raw.meta) })
+		}
+	}),
+	// The three Life records paper is filed against: the booking confirmations
+	// and tickets for a trip, the receipt for a bottle, the page a recipe came
+	// from. All three are pickable — each is a short list a person recognises by
+	// eye, which is the same reason an organisation is.
+	trip: defineKind('trip', {
+		groupLabel: 'Trips',
+		pickable: true,
+		nameSql: sql`select ${trip.id} as id, ${trip.name} as name from ${trip}`,
+		// Two trips to the same place years apart share a name, so the year is
+		// what tells them apart — and it is the first thing anybody remembers.
+		extras: {
+			columns: sql`to_char(${trip.startsOn}, 'YYYY') as meta`,
+			join: sql`join ${trip} on ${trip.id} = t.id`,
+			read: (raw) => ({ meta: raw.meta == null ? undefined : String(raw.meta) })
+		}
+	}),
+	bottle: defineKind('bottle', {
+		groupLabel: 'Bottles',
+		pickable: true,
+		// The producer in front of the name, because that is how a bottle is
+		// spoken about: "the Lagavulin 16", not "the 16".
+		nameSql: sql`
+			select ${bottle.id} as id,
+			       trim(coalesce(${bottle.producer}, '') || ' ' || ${bottle.name}) as name
+			from ${bottle}`,
+		// The vintage, where there is one: two bottlings of the same wine differ
+		// by nothing else a person would say out loud.
+		extras: {
+			columns: sql`${bottle.vintage}::text as meta`,
+			join: sql`join ${bottle} on ${bottle.id} = t.id`,
+			read: (raw) => ({ meta: raw.meta == null ? undefined : String(raw.meta) })
+		}
+	}),
+	recipe: defineKind('recipe', {
+		groupLabel: 'Recipes',
+		pickable: true,
+		nameSql: sql`select ${recipe.id} as id, ${recipe.name} as name from ${recipe}`,
+		extras: {
+			columns: sql`${recipeCategory.name} as meta`,
+			join: sql`
+				join ${recipe} on ${recipe.id} = t.id
+				join ${recipeCategory} on ${recipeCategory.id} = ${recipe.categoryId}`,
 			read: (raw) => ({ meta: raw.meta == null ? undefined : String(raw.meta) })
 		}
 	})

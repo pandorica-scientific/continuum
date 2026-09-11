@@ -36,6 +36,11 @@
 	--teal: #1abc9c;
 	--indigo: #7d8feb;
 	--brand: #5895d8;
+	/* Life's hue, and the last area colour: every other one was taken. Named
+	   for the colour rather than for the area, like its nine neighbours — a
+	   hue named `--life` stops being reusable the moment a second thing wants
+	   it, and the series families already show what that costs. */
+	--rose: #e3819e;
 	--plate: rgba(14, 17, 23, 0.86);
 
 	/* Pill fills: the hue itself at 0.18 over the card. Grey is the one
@@ -59,6 +64,7 @@
 	--orange-tint: rgba(230, 126, 34, 0.18);
 	--indigo-tint: rgba(123, 140, 232, 0.18);
 	--brand-tint: rgba(74, 134, 200, 0.18);
+	--rose-tint: rgba(227, 129, 158, 0.18);
 	--grey-tint: rgba(138, 150, 166, 0.16);
 
 	/* One step below a tint: tile and card grounds that carry a hue without
@@ -76,6 +82,7 @@
 	--orange-wash: rgba(230, 126, 34, 0.07);
 	--indigo-wash: rgba(123, 140, 232, 0.07);
 	--brand-wash: rgba(74, 134, 200, 0.07);
+	--rose-wash: rgba(227, 129, 158, 0.07);
 	--grey-wash: rgba(138, 150, 166, 0.06);
 
 	/* ── Category series colours ──────────────────────────────────────────────
@@ -476,6 +483,7 @@ html[data-ledger-theme='light'] {
 	--teal: #087059;
 	--indigo: #454fb0;
 	--brand: #1b4f8a;
+	--rose: #a03257;
 	--plate: rgba(243, 240, 233, 0.9);
 
 	/* Tints are mixed from BRIGHT hues that exist nowhere else — never from the
@@ -494,6 +502,7 @@ html[data-ledger-theme='light'] {
 	--orange-tint: rgba(224, 123, 30, 0.14);
 	--indigo-tint: rgba(112, 128, 224, 0.14);
 	--brand-tint: rgba(63, 124, 191, 0.13);
+	--rose-tint: rgba(214, 96, 140, 0.14);
 	--grey-tint: rgba(120, 130, 145, 0.13);
 
 	/* The same bright values, one step lighter again. */
@@ -506,6 +515,7 @@ html[data-ledger-theme='light'] {
 	--orange-wash: rgba(224, 123, 30, 0.06);
 	--indigo-wash: rgba(112, 128, 224, 0.06);
 	--brand-wash: rgba(63, 124, 191, 0.05);
+	--rose-wash: rgba(214, 96, 140, 0.06);
 	--grey-wash: rgba(120, 130, 145, 0.05);
 
 	/* Category series, light theme. Its own steps from the same hues — not the
@@ -600,6 +610,7 @@ html[data-ledger-theme='light'] {
 	--yellow-wash: color-mix(in srgb, rgb(232 169 4) 16%, #fff);
 	--red-wash: color-mix(in srgb, rgb(224 80 63) 10%, #fff);
 	--brand-wash: color-mix(in srgb, rgb(63 124 191) 11%, #fff);
+	--rose-wash: color-mix(in srgb, rgb(214 96 140) 11%, #fff);
 	--grey-wash: color-mix(in srgb, rgb(120 130 145) 10%, #fff);
 
 	/* The hero is the one place light theme stays dark: white type on a deep

@@ -349,15 +349,15 @@ describe('the demo seed', () => {
 		expect(days).toBeLessThanOrEqual(60);
 	});
 
-	it('fills in what the two identity cards say on their faces', async () => {
+	it('fills in what the identity cards say on their faces', async () => {
 		// The wallet draws its artwork, its flag and its kind from these, so a
-		// demo seed that filed the paper and left the fields empty would show two
+		// demo seed that filed the paper and left the fields empty would show
 		// generic cards and demonstrate nothing.
 		const rows = await testDb.select().from(documentIdentity);
-		expect(rows).toHaveLength(2);
+		expect(rows).toHaveLength(3);
 
 		const kinds = rows.map((r) => r.kind).sort();
-		expect(kinds).toEqual(['id_card', 'passport']);
+		expect(kinds).toEqual(['id_card', 'passport', 'passport']);
 		for (const row of rows) {
 			expect(row.country).toBe('CZ');
 			expect(row.number).toBeTruthy();
@@ -366,12 +366,37 @@ describe('the demo seed', () => {
 		}
 	});
 
-	it('files two identity documents, so the wallet holds more than one card', async () => {
+	it('gives one passport an expiry too close to travel on', async () => {
+		// The case the Trips readiness block exists to catch: valid on the day,
+		// and refused at the desk anyway, because most borders want six months
+		// beyond the day somebody comes home. Without it the demo shows only
+		// green pills and the block reads as decoration.
+		const rows = await testDb.select().from(documentIdentity);
+		const passports = rows.filter((row) => row.kind === 'passport');
+		const expiries = await Promise.all(
+			passports.map(async (row) => {
+				const [doc] = await testDb
+					.select({ expiresOn: document.expiresOn })
+					.from(document)
+					.where(eq(document.id, row.documentId));
+				return doc.expiresOn!;
+			})
+		);
+		const sixMonths = new Date();
+		sixMonths.setUTCMonth(sixMonths.getUTCMonth() + 6);
+		const horizon = sixMonths.toISOString().slice(0, 10);
+
+		expect(expiries.some((day) => day > today && day < horizon)).toBe(true);
+		// And one that is nowhere near, so the block shows both readings.
+		expect(expiries.some((day) => day > horizon)).toBe(true);
+	});
+
+	it('files three identity documents, so the wallet holds more than one card', async () => {
 		// A wallet worth looking at holds more than one card, and an empty
 		// Identity shelf says nothing about what it is for.
 		const docs = await seededDocuments();
 		const identity = docs.filter((d) => d.type === 'id_document');
-		expect(identity).toHaveLength(2);
+		expect(identity).toHaveLength(3);
 	});
 
 	it('seeds an archived Car holding past-dated paper, and a Dog holding current paper', async () => {

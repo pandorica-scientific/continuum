@@ -23,7 +23,13 @@ export const MODULES = {
 		emoji: '📇',
 		label: 'Contacts',
 		note: 'people and companies, linked to what they touch'
-	}
+	},
+	// The Life area, as three toggles rather than one. A household that keeps a
+	// cellar and never cooks from a screen should be able to say so, and the
+	// granularity here is per-feature everywhere else.
+	trips: { emoji: '🧳', label: 'Trips', note: 'ideas, trips and the map they fill in' },
+	cookbook: { emoji: '🍳', label: 'Cookbook', note: 'recipes this household cooks' },
+	collections: { emoji: '🍷', label: 'Collections', note: 'shelves of things you keep' }
 } as const;
 
 /**
@@ -65,7 +71,7 @@ interface Screen {
 
 /** The hues an area may take. Every one is a token in app.css, so a name that
  *  does not exist fails the build rather than rendering an invisible colour. */
-type AreaHue = 'brand' | 'teal' | 'purple' | 'blue' | 'orange' | 'indigo' | 'fg3';
+type AreaHue = 'brand' | 'teal' | 'purple' | 'blue' | 'orange' | 'indigo' | 'fg3' | 'rose';
 
 export interface Area {
 	key: string;
@@ -168,6 +174,23 @@ export const AREAS: Area[] = [
 		icon: 'folders',
 		hue: 'fg3',
 		screens: [{ path: '/documents', label: 'Documents', icon: 'folders', module: 'documents' }]
+	},
+	// Last, after Documents: the half of a household that is not the ledger.
+	//
+	// Map carries the `trips` module rather than one of its own, because the map
+	// is what trips fill in — a map with trips switched off is an empty world
+	// and a row that promises something it cannot show.
+	{
+		key: 'life',
+		label: 'Life',
+		icon: 'life',
+		hue: 'rose',
+		screens: [
+			{ path: '/trips', label: 'Trips', icon: 'suitcase', module: 'trips' },
+			{ path: '/map', label: 'Map', icon: 'globe', module: 'trips' },
+			{ path: '/cookbook', label: 'Cookbook', icon: 'chefhat', module: 'cookbook' },
+			{ path: '/collections', label: 'Collections', icon: 'bottle', module: 'collections' }
+		]
 	}
 ];
 

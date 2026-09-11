@@ -121,6 +121,12 @@ export default ts.config(
 			'design_system/',
 			'bank_data_examples_do_not_share/',
 			'scratch-workspace/',
+			// Vendored design libraries, copied in from design_system/ unchanged so
+			// that re-vendoring stays a `cp` — see src/lib/life/art/README.md. They
+			// are linted where they are authored, not here.
+			'src/lib/life/art/stamps/',
+			'src/lib/life/art/dishes/',
+			'src/lib/life/art/bottles/',
 			// Generated at build time out of node_modules by
 			'.remember/'
 		]
