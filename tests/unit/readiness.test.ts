@@ -98,7 +98,10 @@ describe('what a state is coloured', () => {
 });
 
 describe('the worst thing on the line', () => {
-	const ready = { passport: 'valid' as const, visas: [{ country: 'PT', position: 'visa-free' as const }] };
+	const ready = {
+		passport: 'valid' as const,
+		visas: [{ country: 'PT', position: 'visa-free' as const }]
+	};
 
 	it('is green when everyone is ready', () => {
 		expect(worstOf([ready, ready])).toBe('green');

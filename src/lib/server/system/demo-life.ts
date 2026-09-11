@@ -227,7 +227,13 @@ interface RecipeSeed {
 	steps: string[];
 }
 
-const RECIPE_CATEGORIES = ['Weeknight', 'For guests', 'Baking', 'Slow things'];
+/** The rail's shelves, each with its own mark so the four are tellable apart. */
+const RECIPE_CATEGORIES: [name: string, emoji: string][] = [
+	['Weeknight', '🍳'],
+	['For guests', '🥘'],
+	['Baking', '🥐'],
+	['Slow things', '🍲']
+];
 
 /**
  * Tag colours come from the reserve series slots.
@@ -757,10 +763,10 @@ export async function seedDemoLife(
 
 	// ---- Cookbook ----
 	const categoryIds = new Map<string, string>();
-	for (const [ordinal, name] of RECIPE_CATEGORIES.entries()) {
+	for (const [ordinal, [name, emoji]] of RECIPE_CATEGORIES.entries()) {
 		const id = uuidv7();
 		categoryIds.set(name, id);
-		await handle.insert(recipeCategory).values({ id, name, sortOrder: ordinal });
+		await handle.insert(recipeCategory).values({ id, name, emoji, sortOrder: ordinal });
 	}
 	const tagIds = new Map<string, string>();
 	for (const [name, series] of RECIPE_TAGS) {
