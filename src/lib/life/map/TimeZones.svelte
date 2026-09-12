@@ -11,88 +11,70 @@
 	 * THE MAP FITS WHOLE. The handoff is explicit: cropping it to fill the card's
 	 * height hid the Pacific while the count still included it, which is a card
 	 * that lies about its own figure.
+	 *
+	 * Everything here is already computed. The bands arrive as paths and the
+	 * containment test — which country is in which zone — ran on the server: the
+	 * zone geometry is a megabyte, and asking a phone to hold it so it can answer
+	 * forty point-in-polygon questions is how a card costs a second of scrolling.
 	 */
-	import { geoEquirectangular, geoContains, geoPath } from 'd3-geo';
-	import type { Feature, Geometry } from 'geojson';
+	import { FOIL } from '$lib/life/map/materials';
 
-	interface Zone {
+	interface Band {
 		zone: number;
-		utc: string;
-		geometry: Geometry[];
+		label: string;
+		path: string;
+		/** Where its offset is printed: the middle of the band. */
+		middle: number;
 	}
 
 	interface Props {
-		/** Where the household has been, as [longitude, latitude]. */
-		places: [number, number][];
-		/** How many zones there are altogether, from the manifest. */
+		bands: Band[];
+		coastline: string;
+		/** ISO code → the zone it sits in. */
+		zoneOf: Record<string, number>;
+		/** The codes counted under the tab currently showing. */
+		visited: string[];
+		/** How many zones there are altogether. */
 		total: number;
 	}
 
-	let { places, total }: Props = $props();
+	let { bands, coastline, zoneOf, visited, total }: Props = $props();
 
-	let zones = $state<Zone[] | null>(null);
+	const WIDTH = 720;
+	const HEIGHT = 360;
 
-	$effect(() => {
-		let live = true;
-		void (async () => {
-			try {
-				const response = await fetch('/map/geo/zones');
-				if (!response.ok) return;
-				const loaded = (await response.json()) as Zone[];
-				if (live) zones = loaded;
-			} catch {
-				// The card simply does not draw. It is a progress card, not a
-				// screen somebody is waiting on.
-			}
-		})();
-		return () => {
-			live = false;
-		};
-	});
-
-	/** A small equirectangular world: the projection zone bands are drawn in. */
-	const projection = geoEquirectangular().fitSize([720, 360], { type: 'Sphere' } as never);
-	const draw = geoPath(projection);
-
-	const bands = $derived(
-		(zones ?? []).map((zone) => {
-			const features: Feature<Geometry>[] = zone.geometry.map((geometry) => ({
-				type: 'Feature',
-				properties: null,
-				geometry
-			}));
-			return {
-				zone: zone.zone,
-				utc: zone.utc,
-				path: features.map((one) => draw(one as never) ?? '').join(' '),
-				features
-			};
-		})
-	);
-
-	/**
-	 * A zone lights when somewhere scratched off falls inside it.
-	 *
-	 * Asked of the real geometry rather than of the longitude: a place at 8°E is
-	 * in Berlin time, and a place at 8°W is not in the zone a bar chart would
-	 * put it in.
-	 */
 	const lit = $derived.by(() => {
-		// A plain record rather than a Set: this is derived and read, never
-		// mutated after it is built, and `svelte/prefer-svelte-reactivity` is
-		// right that a bare Set held in a component is usually a bug waiting.
+		// A plain record rather than a Set: derived and read, never mutated.
 		const found: Record<number, true> = {};
-		for (const place of places) {
-			for (const band of bands) {
-				if (found[band.zone]) continue;
-				if (band.features.some((one) => geoContains(one as never, place))) found[band.zone] = true;
-			}
+		for (const code of visited) {
+			const zone = zoneOf[code];
+			if (zone !== undefined) found[zone] = true;
 		}
 		return found;
 	});
 
 	const litCount = $derived(Object.keys(lit).length);
-	const stood = $derived(bands.filter((band) => lit[band.zone]));
+
+	/**
+	 * The offsets printed on the map, stacked where they would collide.
+	 *
+	 * A row is taken until the next label is clear of the last one on it, so a
+	 * cluster of European zones reads as two rows rather than as one smear.
+	 */
+	const marks = $derived.by(() => {
+		const rows: number[] = [];
+		const HALF = 6.5;
+		return bands
+			.filter((band) => lit[band.zone])
+			.sort((a, b) => a.middle - b.middle)
+			.map((band) => {
+				const percent = (band.middle / WIDTH) * 100;
+				let row = 0;
+				while (rows[row] !== undefined && percent - HALF < rows[row]) row++;
+				rows[row] = percent + HALF;
+				return { zone: band.zone, label: band.label, percent, row };
+			});
+	});
 </script>
 
 <section class="card zones">
@@ -101,20 +83,31 @@
 		<span class="count mono">{litCount} of {total || bands.length}</span>
 	</header>
 
-	<!-- Whole, never cropped. -->
-	<svg viewBox="0 0 720 360" aria-hidden="true">
-		{#each bands as band (band.zone)}
-			<path class="band" class:lit={lit[band.zone]} d={band.path}></path>
-		{/each}
-	</svg>
+	<!-- How far along, before the map. The bar is the figure; the map is where. -->
+	<div class="bar" aria-hidden="true">
+		<span style:width="{((litCount / Math.max(1, total || bands.length)) * 100).toFixed(1)}%"
+		></span>
+	</div>
 
-	{#if stood.length}
-		<div class="chips">
-			{#each stood as band (band.zone)}
-				<span class="chip mono">{band.utc || `UTC${band.zone >= 0 ? '+' : ''}${band.zone}`}</span>
+	<div class="stage">
+		<!-- Whole, never cropped. -->
+		<svg viewBox="0 0 {WIDTH} {HEIGHT}" aria-hidden="true">
+			{#each bands as band (band.zone)}
+				<path class="band" class:lit={lit[band.zone]} d={band.path} style:--foil={FOIL[0]}></path>
 			{/each}
-		</div>
-	{/if}
+			<path class="land" d={coastline}></path>
+		</svg>
+
+		{#each marks as mark (mark.zone)}
+			<span
+				class="mark mono"
+				style:left="clamp(4%, {mark.percent}%, 96%)"
+				style:bottom="{5 + mark.row * 18}px"
+			>
+				{mark.label}
+			</span>
+		{/each}
+	</div>
 
 	<p class="says">A zone lights when a place you scratched off falls inside it. Nothing to tap.</p>
 </section>
@@ -143,6 +136,21 @@
 		color: var(--fg3);
 		white-space: nowrap;
 	}
+	.bar {
+		height: 4px;
+		border-radius: var(--radius-pill);
+		background: var(--surface-2);
+		overflow: hidden;
+	}
+	.bar span {
+		display: block;
+		height: 100%;
+		background: var(--rose);
+		transition: width 600ms var(--ease, ease);
+	}
+	.stage {
+		position: relative;
+	}
 	svg {
 		display: block;
 		width: 100%;
@@ -150,33 +158,45 @@
 		border-radius: var(--radius-ctl);
 		background: var(--bg);
 	}
+	/* Unlit bands are the foil, lit ones the area's own hue — the same two
+	   materials as the map above. */
 	.band {
-		fill: var(--surface-2);
-		stroke: var(--bg);
+		fill: color-mix(in srgb, var(--foil) 46%, transparent);
+		stroke: rgba(46, 37, 8, 0.32);
 		stroke-width: 0.6;
 	}
 	.band.lit {
-		fill: var(--rose-tint);
-		stroke: color-mix(in srgb, var(--rose) 50%, transparent);
+		fill: color-mix(in srgb, var(--rose) 46%, transparent);
+		stroke: color-mix(in srgb, var(--rose) 72%, transparent);
 	}
-	/* Pinned to the foot of the card, as the handoff draws them. */
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		margin-top: auto;
+	.land {
+		fill: none;
+		stroke: rgba(255, 255, 255, 0.22);
+		stroke-width: 0.5;
 	}
-	.chip {
-		padding: var(--space-2) var(--space-4);
-		border-radius: var(--radius-pill);
-		background: var(--rose-tint);
+	.mark {
+		position: absolute;
+		transform: translateX(-50%);
+		font-size: 8px;
+		font-weight: 600;
+		line-height: 1.2;
 		color: var(--rose);
-		font-size: var(--text-xs);
 		white-space: nowrap;
+		pointer-events: none;
+		text-shadow:
+			0 0 4px var(--bg2),
+			0 0 3px var(--bg2),
+			0 0 2px var(--bg2);
 	}
 	.says {
 		margin: 0;
 		font-size: var(--text-sm);
 		color: var(--fg3);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bar span {
+			transition: none;
+		}
 	}
 </style>

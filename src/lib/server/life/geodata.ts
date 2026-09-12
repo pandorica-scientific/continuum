@@ -14,6 +14,17 @@
  * carries: a path built from something a browser sent is a traversal waiting to
  * be found.
  */
+import { gunzipSync } from 'node:zlib';
+import { geoContains, geoEquirectangular, geoPath } from 'd3-geo';
+import type { Geometry } from 'geojson';
+import type { Topology } from 'topojson-specification';
+import {
+	countriesFrom,
+	moveCrimea,
+	shapesFrom,
+	sphereOutline,
+	worldProjection
+} from '$lib/life/map/projection';
 import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -126,4 +137,108 @@ export function slugForCountry(code: string): string | null {
 		if (entry.code === wanted) return entry.slug;
 	}
 	return null;
+}
+
+/**
+ * The world, already projected, so a browser never parses the topology.
+ *
+ * This is the fix for the several-second stall when the Map opens: the outline
+ * is 756 kB of TopoJSON, and turning it into 240 path strings is a parse, a
+ * mesh reconstruction and 240 projections — all on the main thread, all before
+ * anything on the screen responds. Doing it here costs one server render and is
+ * then cached for the life of the process, because the world does not change.
+ */
+let drawn: WorldShapes | null = null;
+
+export interface WorldShapes {
+	sphere: string;
+	countries: { name: string; path: string; centroid: [number, number] }[];
+}
+
+export async function projectedWorld(): Promise<WorldShapes | null> {
+	if (drawn) return drawn;
+	const text = await worldOutline();
+	if (!text) return null;
+
+	const countries = countriesFrom(JSON.parse(text) as Topology);
+	moveCrimea(countries);
+	const projection = worldProjection(countries);
+
+	drawn = {
+		sphere: sphereOutline(projection),
+		countries: shapesFrom(countries, projection).map((shape) => ({
+			name: shape.name,
+			path: shape.path,
+			centroid: shape.centroid
+		}))
+	};
+	return drawn;
+}
+
+/**
+ * The time-zone card's bands, and which zone each country sits in.
+ *
+ * Worked out here, once, and cached: the zones file is a megabyte of geometry
+ * and the browser has no use for it. What the card needs is a path per band —
+ * rounded at fetch time — and the answer to "which zone is this country in",
+ * which is a containment test over 40 bands that has no business running on a
+ * phone.
+ */
+let zonesReady: ZoneCard | null = null;
+
+export interface ZoneCard {
+	coastline: string;
+	bands: { zone: number; label: string; path: string; middle: number }[];
+	/** ISO code → the zone its centre falls in. */
+	zoneOf: Record<string, number>;
+}
+
+export async function zoneCard(): Promise<ZoneCard | null> {
+	if (zonesReady) return zonesReady;
+	const manifest = geoManifest();
+	const packed = await countryOutlines('zones');
+	if (!manifest || !packed) return null;
+
+	const { coastline, zones } = JSON.parse(gunzipSync(packed).toString('utf8')) as {
+		coastline: string;
+		zones: { zone: number; utc: string; geometry: Geometry[] }[];
+	};
+
+	const flat = geoEquirectangular().fitSize([720, 360], { type: 'Sphere' } as never);
+	const draw = geoPath(flat);
+
+	const bands = zones.map((one) => {
+		const features = one.geometry.map((geometry) => ({
+			type: 'Feature' as const,
+			properties: null,
+			geometry
+		}));
+		const [[x0], [x1]] = draw.bounds({ type: 'FeatureCollection', features } as never);
+		return {
+			zone: one.zone,
+			label:
+				one.utc || `UTC${one.zone === 0 ? '±0' : (one.zone < 0 ? '−' : '+') + Math.abs(one.zone)}`,
+			path: features.map((f) => draw(f as never) ?? '').join(' '),
+			middle: (x0 + x1) / 2,
+			features
+		};
+	});
+
+	const zoneOf: Record<string, number> = {};
+	for (const entry of Object.values(manifest.countries)) {
+		if (!entry.centre) continue;
+		for (const band of bands) {
+			if (band.features.some((f) => geoContains(f as never, entry.centre!))) {
+				zoneOf[entry.code] = band.zone;
+				break;
+			}
+		}
+	}
+
+	zonesReady = {
+		coastline,
+		bands: bands.map(({ zone, label, path, middle }) => ({ zone, label, path, middle })),
+		zoneOf
+	};
+	return zonesReady;
 }

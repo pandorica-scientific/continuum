@@ -13,20 +13,12 @@
 	 */
 	import { countryFill, countryColour, type CountryColour } from '$lib/life/geo/country-colour';
 	import { COUNTRY_COLOURS } from '$lib/life/geo/country-colour-table';
-	import {
-		countriesFrom,
-		moveCrimea,
-		shapesFrom,
-		sphereOutline,
-		worldProjection,
-		VIEW
-	} from '$lib/life/map/projection';
+	import { VIEW } from '$lib/life/map/projection';
 	import { FOIL, FOIL_EDGE, foilFor } from '$lib/life/map/materials';
-	import type { Topology } from 'topojson-specification';
 
 	interface Props {
-		/** The world-atlas topology, as JSON text. */
-		world: string;
+		/** The world, already projected by the server. */
+		world: { sphere: string; countries: { name: string; path: string }[] };
 		/** Outline name → ISO code, from the generated manifest. */
 		codeByName: Record<string, string>;
 		/** The ISO codes that count as visited under the current filter. */
@@ -36,23 +28,7 @@
 
 	let { world, codeByName, visited, onopen }: Props = $props();
 
-	/**
-	 * Parsed and projected once.
-	 *
-	 * This is a 756 kB document and about 240 path strings; doing it in a
-	 * `$derived` that reads `visited` would redo all of it every time somebody
-	 * pressed a member pill.
-	 */
-	const projected = $derived.by(() => {
-		const topology = JSON.parse(world) as Topology;
-		const countries = countriesFrom(topology);
-		// Before anything is projected: the outline files Crimea under Russia.
-		moveCrimea(countries);
-		const projection = worldProjection(countries);
-		return { shapes: shapesFrom(countries, projection), sphere: sphereOutline(projection) };
-	});
-
-	const shapes = $derived(projected.shapes);
+	const shapes = $derived(world.countries);
 
 	/** Which countries are lit, by outline name rather than by code. */
 	const lit = $derived(
@@ -212,7 +188,7 @@
 				<!-- The edge of the world under this projection, drawn rather than faked
 			     with a border radius: it is the ocean, and it stays right if the
 			     projection ever changes again. -->
-				<path class="sea" d={projected.sphere}></path>
+				<path class="sea" d={world.sphere}></path>
 
 				{#each shapes as shape (shape.name)}
 					<path

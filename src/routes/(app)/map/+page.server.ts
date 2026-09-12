@@ -6,14 +6,23 @@ import { person } from '$lib/server/db/schema';
 import { asRowId } from '$lib/ids';
 import { localToday } from '$lib/dates';
 import { addManualVisit, mapFigures, visitedByCountry } from '$lib/server/life/visits';
-import { FETCH_COMMAND, geoManifest, hasGeodata, worldOutline } from '$lib/server/life/geodata';
+import {
+	FETCH_COMMAND,
+	geoManifest,
+	hasGeodata,
+	projectedWorld,
+	zoneCard
+} from '$lib/server/life/geodata';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const [visited, people, outline] = await Promise.all([
+	const [visited, people, outline, zones] = await Promise.all([
 		visitedByCountry(),
 		db.select({ id: person.id, name: person.name }).from(person).orderBy(asc(person.name)),
-		worldOutline()
+		// Already projected: the browser gets 240 path strings rather than 756 kB
+		// of topology to parse and project on the main thread.
+		projectedWorld(),
+		zoneCard()
 	]);
 
 	const manifest = geoManifest();
@@ -52,7 +61,8 @@ export const load: PageServerLoad = async () => {
 		geodata: hasGeodata() ? null : { missing: true as const, command: FETCH_COMMAND },
 		// The only honest denominator is how many countries this map can draw.
 		figures: mapFigures(visited, Object.keys(manifest?.countries ?? {}).length),
-		/** How many time zones there are, and how many countries each continent has. */
+		/** The zone bands, already drawn, and which zone each country sits in. */
+		zones,
 		zoneCount: manifest?.zones ?? 0,
 		continentTotals: manifest?.continents ?? {},
 		/**
@@ -78,15 +88,18 @@ export const load: PageServerLoad = async () => {
 function placesFor(
 	visited: Map<string, { country: string }>,
 	manifest: ReturnType<typeof geoManifest>
-): [number, number][] {
-	if (!manifest) return [];
+): Record<string, [number, number]> {
+	if (!manifest) return {};
 	const byCode = new Map<string, [number, number]>();
 	for (const entry of Object.values(manifest.countries)) {
 		if (entry.centre) byCode.set(entry.code, entry.centre);
 	}
-	return [...visited.keys()]
-		.map((code) => byCode.get(code))
-		.filter((at): at is [number, number] => Boolean(at));
+	const out: Record<string, [number, number]> = {};
+	for (const code of visited.keys()) {
+		const at = byCode.get(code);
+		if (at) out[code] = at;
+	}
+	return out;
 }
 
 /**

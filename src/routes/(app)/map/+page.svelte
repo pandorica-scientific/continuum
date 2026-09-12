@@ -24,7 +24,7 @@
 
 	const who = $derived([
 		{ value: '', label: 'Household' },
-		...data.people.map((one) => ({ value: one.id, label: one.name }))
+		...data.people.map((one: { id: string; name: string }) => ({ value: one.id, label: one.name }))
 	]);
 
 	/**
@@ -44,6 +44,17 @@
 		data.countries
 			.filter((one) => !member || one.members.includes(member))
 			.reduce((sum, one) => sum + one.regions.length, 0)
+	);
+
+	/**
+	 * The two cards below follow the tab, not the household.
+	 *
+	 * Household is the aggregate — everywhere anybody went. A person's tab is
+	 * what that person saw. Feeding the cards the unfiltered set made the tabs
+	 * change the map and leave the progress alone, which reads as a bug.
+	 */
+	const creditsHere = $derived(
+		Object.fromEntries(Object.entries(data.credits).filter(([code]) => visited.has(code)))
 	);
 
 	const tiles = $derived<Tile[]>([
@@ -97,7 +108,9 @@
 		world={data.world}
 		codeByName={data.codeByName}
 		{visited}
-		onopen={(code) => code && goto(`/map/${code.toLowerCase()}`)}
+		onopen={(code) =>
+			code &&
+			goto(`/map/${code.toLowerCase()}${member ? `?who=${encodeURIComponent(member)}` : ''}`)}
 	/>
 {/if}
 
@@ -113,8 +126,16 @@
 {#if data.world && !data.geodata?.missing}
 	<!-- Two equal columns below the map. -->
 	<div class="progress">
-		<TimeZones places={data.places} total={data.zoneCount} />
-		<Continents visited={[...visited]} totals={data.continentTotals} />
+		{#if data.zones}
+			<TimeZones
+				bands={data.zones.bands}
+				coastline={data.zones.coastline}
+				zoneOf={data.zones.zoneOf}
+				visited={[...visited]}
+				total={data.zoneCount}
+			/>
+		{/if}
+		<Continents credits={creditsHere} totals={data.continentTotals} places={data.places} />
 	</div>
 {/if}
 

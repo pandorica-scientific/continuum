@@ -43,11 +43,22 @@
 		visited: string[];
 		/** How many provinces there are to load, for the waiting line. */
 		regionCount: number;
+		/** Whose view this is, so the scratch is credited to them. Null is the household. */
+		who?: string | null;
 		/** Somebody scratched a region through. */
 		onscratched?: (name: string) => void;
 	}
 
-	let { code, slug, outlineName, world, visited, regionCount, onscratched }: Props = $props();
+	let {
+		code,
+		slug,
+		outlineName,
+		world,
+		visited,
+		regionCount,
+		who = null,
+		onscratched
+	}: Props = $props();
 
 	const colour = $derived(countryColour(code, COUNTRY_COLOURS));
 
@@ -252,6 +263,7 @@
 		try {
 			const body = new FormData();
 			body.set('region', name);
+			if (who) body.set('who', who);
 			await fetch('?/scratched', { method: 'POST', body });
 			// The world map and the tiles read the same query this page does, so
 			// they are right again the moment the server knows.

@@ -35,7 +35,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
-import { geoCentroid, geoMercator, geoPath } from 'd3-geo';
+import { geoCentroid, geoEquirectangular, geoMercator, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import {
 	COUNTRY_CODE_OVERRIDES,
@@ -64,6 +64,38 @@ const ZONES_URL =
 const CONTINENTS_URL =
 	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_110m_admin_0_countries.geojson';
 
+/**
+ * A `geoPath` context that writes `d` at a tenth of a unit.
+ *
+ * `geoPath` has no precision setting, so the rounding has to happen where the
+ * numbers are produced. This is the whole difference between a 1.3 MB zones
+ * file and a manageable one.
+ */
+function roundedPath() {
+	let out = [];
+	const at = (value) => Math.round(value * 10) / 10;
+	return {
+		begin() {
+			out = [];
+		},
+		end() {
+			return out.join('');
+		},
+		moveTo(x, y) {
+			out.push(`M${at(x)},${at(y)}`);
+		},
+		lineTo(x, y) {
+			out.push(`L${at(x)},${at(y)}`);
+		},
+		arc() {
+			// Never called for polygons; `geoPath` only arcs for point features.
+		},
+		closePath() {
+			out.push('Z');
+		}
+	};
+}
+
 /** Write a document beside the province outlines, gzipped as they are. */
 async function writePacked(name, value) {
 	const packed = gzipSync(Buffer.from(JSON.stringify(value)), { level: 9 });
@@ -77,10 +109,28 @@ async function writePacked(name, value) {
  * One entry per zone offset, its polygons merged, because the card lights a
  * ZONE rather than one of the 120-odd pieces Natural Earth splits them into.
  */
-async function fetchZones() {
+async function fetchZones(countries) {
 	const text = await download(ZONES_URL, 'natural-earth time zones');
 	const source = JSON.parse(text);
 	const byZone = new Map();
+
+	// The coastlines the bands are drawn over, projected HERE in the zone card's
+	// own equirectangular frame — as the prototype does. The card cannot reuse
+	// the world map's paths: that map is Natural Earth and this one is not.
+	const flat = geoEquirectangular().fitSize([720, 360], { type: 'Sphere' });
+	// Rounded to a tenth of a unit as it is drawn. The card is 720 units wide,
+	// so anything finer is detail nobody can see costing a megabyte — the full
+	// precision path is 1.5 million characters.
+	const ink = roundedPath();
+	const land = geoPath(flat, ink);
+	const parts = [];
+	for (const country of countries) {
+		ink.begin();
+		land(country);
+		const d = ink.end();
+		if (d) parts.push(d);
+	}
+	const coastline = parts.join(' ');
 
 	for (const feature of source.features) {
 		const zone = feature.properties?.zone;
@@ -97,7 +147,10 @@ async function fetchZones() {
 		if (trimmed) byZone.get(key).geometry.push(trimmed);
 	}
 
-	return [...byZone.values()].filter((one) => one.geometry.length).sort((a, b) => a.zone - b.zone);
+	return {
+		coastline,
+		zones: [...byZone.values()].filter((one) => one.geometry.length).sort((a, b) => a.zone - b.zone)
+	};
 }
 
 /**
@@ -360,7 +413,7 @@ async function main() {
 
 	// Written as their own gzipped files rather than into the manifest: the two
 	// together are megabytes, and the manifest is read on every map load.
-	const zones = await fetchZones();
+	const zones = await fetchZones(countries);
 	const continents = await fetchContinents();
 	await writePacked('zones.json.gz', zones);
 	await writePacked('continents.json.gz', continents);
@@ -376,7 +429,7 @@ async function main() {
 		files,
 		// Just the counts: the geometry lives in its own file beside the
 		// provinces, and the screen asks for it when it needs it.
-		zones: zones.length,
+		zones: zones.zones.length,
 		continents: continents.totals
 	};
 	await writeFile(manifestPath, JSON.stringify(manifest));

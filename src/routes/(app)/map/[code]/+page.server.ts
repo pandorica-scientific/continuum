@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { error, fail } from '@sveltejs/kit';
+import { asOptionalRowId } from '$lib/ids';
 import { countryName } from '$lib/life/geo/countries';
 import { geoManifest, slugForCountry, worldOutline } from '$lib/server/life/geodata';
-import { addManualVisit, visitedByCountry } from '$lib/server/life/visits';
+import { addManualVisit, regionsByMember, visitedByCountry } from '$lib/server/life/visits';
 import { localToday } from '$lib/dates';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
 	const code = params.code.trim().toUpperCase();
 	if (code.length !== 2) error(404, 'No such country');
 
@@ -21,11 +22,25 @@ export const load: PageServerLoad = async ({ params }) => {
 	const outlineName =
 		Object.entries(manifest.countries).find(([, entry]) => entry.code === code)?.[0] ?? '';
 
-	const [world, visited] = await Promise.all([worldOutline(), visitedByCountry()]);
+	const [world, visited, memberRegions] = await Promise.all([
+		worldOutline(),
+		visitedByCountry(),
+		regionsByMember(code)
+	]);
 	const here = visited.get(code);
+
+	/**
+	 * Whose view this is, carried from the world map's member tabs.
+	 *
+	 * Household is the aggregate; a person's view is what that person saw. The
+	 * same answer has to hold on both screens, or scratching on one tab quietly
+	 * credits the other.
+	 */
+	const who = asOptionalRowId(url.searchParams.get('who'));
 
 	return {
 		code,
+		who: who ?? null,
 		slug,
 		outlineName,
 		name: countryName(code),
@@ -34,7 +49,13 @@ export const load: PageServerLoad = async ({ params }) => {
 		regionCount: manifest.files[slug]?.regions ?? 0,
 		visited: here
 			? {
-					regions: [...here.regions],
+					// Filtered to whose view this is: household sees every row, a
+					// person sees their own.
+					regions: [
+						...new Set(
+							memberRegions.filter((row) => !who || row.personId === who).map((row) => row.region)
+						)
+					],
 					cities: [...here.cities],
 					years: here.years
 				}
@@ -58,15 +79,21 @@ export const actions: Actions = {
 		const code = params.code.trim().toUpperCase();
 		if (code.length !== 2) return fail(400, { on: 'scratch', message: 'No such country.' });
 
-		const region = String((await request.formData()).get('region') ?? '').trim();
+		const form = await request.formData();
+		const region = String(form.get('region') ?? '').trim();
 		if (!region) return fail(400, { on: 'scratch', message: 'Which region?' });
+
+		// Credited to whoever's tab the scratch happened on. A visit with no
+		// member still counts towards the household, which is the aggregate —
+		// so scratching from the household view is "somebody went", not "nobody".
+		const who = asOptionalRowId(form.get('who'));
 
 		await addManualVisit({
 			country: code,
 			region,
 			city: null,
 			year: Number(localToday().slice(0, 4)),
-			members: []
+			members: who ? [who] : []
 		});
 		return { scratched: true };
 	}

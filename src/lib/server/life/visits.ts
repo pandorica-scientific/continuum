@@ -155,6 +155,28 @@ export async function visitedByCountry(handle: Db = db): Promise<Map<string, Vis
 	return byCountry;
 }
 
+/**
+ * Which regions of one country each person has been to.
+ *
+ * The map's member tabs need this: the household view is the union, and a
+ * person's view is their own rows. Asked as one query so the two views cannot
+ * disagree about what counts.
+ */
+export async function regionsByMember(
+	country: string,
+	handle: Db = db
+): Promise<{ region: string; personId: string | null }[]> {
+	const rows = await handle
+		.select({ region: visit.region, personId: visitMember.personId })
+		.from(visit)
+		.leftJoin(visitMember, eq(visitMember.visitId, visit.id))
+		.where(eq(visit.country, country.toUpperCase()));
+
+	return rows
+		.filter((row): row is { region: string; personId: string | null } => Boolean(row.region))
+		.map((row) => ({ region: row.region, personId: row.personId }));
+}
+
 export interface PendingReveal {
 	visitId: string;
 	country: string;
