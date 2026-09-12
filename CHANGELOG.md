@@ -2,6 +2,34 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security · ⬆️ Upgrading
 
+## 0.9.0 — 2026-09-12
+
+> A map that fills itself in, a cellar that knows what wants drinking, and the passports to get you there.
+
+### ✨ Added
+
+- 🧳 **Trips, from an idea somebody hearts to a holiday that has been** — the idea board holds the places anybody in the household fancies and records who fancies them, a trip carries its destinations, the people going, its bookings on a timeline and whatever paperwork belongs to it, and everything derived from those — nights, whether it is still ahead, which year it belongs to — is worked out in one place so the list and the detail page cannot disagree about the same trip
+- 🗺️ **A world map the household never has to tell anything** — a trip that has ended has been where it said it was going, so opening Trips or Map writes those visits and the map fills in behind you; the pass is idempotent by construction, which is what stops opening the map twice from visiting Portugal twice
+- 🪙 **Countries come out from under gold foil** — an opened country is coated and scratched off by hand, and single places worth the detour sit under their own coins with the name printed on the face, so a covered coin still says what it is rather than being a lottery ticket
+- 🕰️ **The map counts the time zones the household has actually stood in** — the real IANA bands, which follow borders rather than longitude, because China is one zone across five stripes' worth of it and drawing them as bars would be a picture of something that does not exist
+- 🛂 **A trip says whether the people going can actually get in** — passports are read out of the archive rather than typed into a trip, since an identity document already carries its kind, its issuing country, its expiry and the person it belongs to, and the visa position for each passport against each destination is stated together with the date the table was last checked
+- 🚫 **A visa position nobody has checked says so rather than guessing** — an unlisted passport or destination comes back as unknown and never as visa-free, because colouring a gap green is the one mistake here that costs somebody a holiday
+- 🍷 **Collections, opening with the cellar** — a row is a bottling rather than a single bottle, so it carries how many are owned and how many are open and reads sealed, open or finished from those two numbers instead of storing a third that could disagree with them
+- 🥂 **The cellar suggests what to open tonight, and says why** — two at most, each carrying the rule that produced it, because "open this" is an opinion nobody asked for while "its window closes this year" is a fact they can argue with
+- 📆 **A drink-by window is held in years, and a bottle without one keeps quiet** — gin and rum have no opinion about when they are drunk, and without that gate every bottle in the cellar gets told to drink soon inside a window that does not exist
+- 📝 **Tastings are recorded against a bottling, with notes and a score out of a hundred** — the same bottling tasted twice is two entries, which is what makes a cellar worth keeping notes in
+- 🍳 **A cookbook that rescales for the number of people actually eating** — every quantity is computed from the stored one rather than from what is on screen, so stepping four to six and back lands exactly where it started, and a quantity nobody measured stays unmeasured because inventing one and a half splashes of milk is a precision the recipe never had
+- 🎨 **Trips, recipes and bottles draw their own artwork** — a stamp, a dish and a label are generated once when the row is created and the decision is stored, so renaming a recipe does not silently repaint it and a later change to the generators does not repaint the household's history
+
+### 🔧 Changed
+
+- 🗂️ **Life is three switches rather than one** — Trips, Cookbook and Collections each have their own toggle, because a household that keeps a cellar and never cooks from a screen should be able to say so, and the granularity is per-feature everywhere else in the product
+
+### ⬆️ Upgrading
+
+- 🔁 **`docker compose up -d` as usual** — the new screens bring their own tables and create them on first boot, and all three modules arrive switched on and can be switched off in Settings
+- 🌍 **The image is a few megabytes larger** — the map draws real country and province outlines, and a product that promises not to call home has to carry them rather than fetch them while somebody is looking at it
+
 ## 0.8.7 — 2026-09-08
 
 > Corners that snap to the page, and a wallet that knows what it is holding.
