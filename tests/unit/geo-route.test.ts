@@ -28,9 +28,14 @@ describe('the outlines module', () => {
 	});
 
 	it('joins the directory itself rather than taking a path', () => {
-		// Every join starts from GEODATA_DIR and a literal, never from an argument
-		// that could carry a separator or a `..`.
-		for (const call of geodata.match(/join\([^)]*\)/g) ?? []) {
+		// Every PATH join starts from GEODATA_DIR and a literal, never from an
+		// argument that could carry a separator or a `..`.
+		//
+		// Not preceded by a dot: `Array.prototype.join` is a different function
+		// that happens to share a name, and `paths.join(' ')` is not a traversal
+		// risk. Matching bare `join(` caught those and failed for the wrong
+		// reason.
+		for (const call of geodata.match(/(?<![.\w])join\([^)]*\)/g) ?? []) {
 			expect(call, call).toMatch(/join\(GEODATA_DIR/);
 		}
 	});
@@ -42,7 +47,14 @@ describe('the outlines module', () => {
 	});
 
 	it('holds the manifest rather than re-reading it per request', () => {
-		expect(geodata).toMatch(/if \(manifest !== undefined\) return manifest;/);
+		expect(geodata).toMatch(/if \(manifest\) return manifest;/);
+	});
+
+	// Otherwise a developer who runs the fetch while the server is up sees
+	// "not fetched" until they restart it.
+	it('does not cache the absence of one', () => {
+		expect(geodata).toMatch(/A MISS IS NOT CACHED/);
+		expect(geodata).not.toMatch(/return \(manifest = null\)/);
 	});
 });
 

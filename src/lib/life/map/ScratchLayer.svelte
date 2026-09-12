@@ -10,6 +10,7 @@
 	 * `prefers-reduced-motion` drops the residue and the frame loop, and the
 	 * scratch still works. It is the interaction, not decoration.
 	 */
+	import { untrack } from 'svelte';
 	import { Foil, type Cell } from '$lib/life/map/foil';
 
 	interface Props {
@@ -28,12 +29,17 @@
 	let foil: Foil | null = null;
 
 	$effect(() => {
-		// Read so the engine is rebuilt when the country changes.
+		// Rebuilt when the COUNTRY changes, and only then.
 		const list = cells;
 		const element = canvas;
 		if (!element || list.length === 0) return;
 
-		const engine = new Foil(element, list, new Set(clear), oncleared);
+		// `clear` is read untracked deliberately. It grows every time a region is
+		// scratched through, and tracking it rebuilt the whole coating on each
+		// one — which threw away half-finished scratching on every other region.
+		// The engine punches a cleared region out itself; it does not need
+		// telling again.
+		const engine = new Foil(element, list, new Set(untrack(() => clear)), oncleared);
 		foil = engine;
 		return () => {
 			engine.destroy();

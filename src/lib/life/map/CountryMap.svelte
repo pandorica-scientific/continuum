@@ -230,6 +230,15 @@
 			: feature;
 	}
 
+	/**
+	 * Held so its identity is stable.
+	 *
+	 * Passed inline it was a new array on every render — a toast appearing was
+	 * enough — and the scratch layer rebuilds its coating whenever the cells
+	 * change, which threw away half-finished scratching.
+	 */
+	const cells = $derived((regions ?? []).map((region) => region.cell));
+
 	const labels = $derived(
 		placeRegionLabels(
 			(regions ?? []).map((region) => ({
@@ -290,11 +299,7 @@
 		</svg>
 
 		{#if regions}
-			<ScratchLayer
-				cells={regions.map((region) => region.cell)}
-				clear={alreadyClear}
-				oncleared={cleared}
-			/>
+			<ScratchLayer {cells} clear={alreadyClear} oncleared={cleared} />
 		{/if}
 
 		<!-- The names sit over the coating, dark on foil and white on a region

@@ -45,7 +45,6 @@ export const load: PageServerLoad = async () => {
 	const countries = [...visited.values()].map((entry) => ({
 		code: entry.country,
 		regions: [...entry.regions],
-		cities: [...entry.cities],
 		members: [...entry.members],
 		years: entry.years
 	}));

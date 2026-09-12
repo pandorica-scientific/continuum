@@ -1,78 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Which country names the map prints, and where.
+ * Which region names the country map prints, and where.
  *
- * Ported from the handoff's prototype rather than re-derived. Its rules, in its
- * order, because they are the ones that have been looked at on a real map:
+ * The prototype's rules, in its order: scratched regions claim their name
+ * first, then the widest; a long name wraps onto two balanced lines; and a name
+ * is dropped where its region is too small to carry it or where it would sit on
+ * one already placed.
  *
- *   1. Only countries somebody has been to, plus a fixed list of big ones that
- *      anchor the world. Labelling all 240 is unreadable at any size.
- *   2. Visited first, then widest, so the ones that matter claim their space
- *      before a neighbour takes it.
- *   3. A long name wraps onto two lines, split as evenly as the words allow.
- *   4. Rejected if the word is wider than the country can carry, if the country
- *      is too short to hold a line, if the box leaves the frame, or if it
- *      overlaps one already placed.
+ * The world map has no names at all — at that scale only a couple of dozen
+ * countries can carry a legible word, so a labelled world map names the big
+ * empty ones and stays silent about most of the places a household has been.
  *
  * Pure: boxes in, boxes out. Nothing measures text — the width is estimated
  * from the character count at the one size labels are drawn in, which is what
  * the prototype does and is close enough to decide whether a word fits.
  */
-
-/**
- * The countries that are always candidates.
- *
- * A world map with nothing but the six places a household has been reads as a
- * puzzle. These are the anchors people navigate by — the prototype's list,
- * unchanged.
- */
-export const ANCHORS = [
-	'Brazil',
-	'Canada',
-	'Russia',
-	'China',
-	'India',
-	'Australia',
-	'Argentina',
-	'Algeria',
-	'Kazakhstan',
-	'Mongolia',
-	'Egypt',
-	'Turkey',
-	'Sudan',
-	'Mexico'
-];
-
-/** Estimated width per character at the size labels are drawn in. */
-const PER_CHARACTER = 4.3;
-
-/** A one-line label's height, and a two-line one's. */
-const ONE_LINE = 10;
-const TWO_LINES = 18;
-
-/** A country shorter than this in projected units cannot carry a label at all. */
-const SHORTEST = 7;
-
-/** How much wider than its country a word may be before it is dropped. */
-const SPILL = 1.25;
-
-export interface Placeable {
-	name: string;
-	centroid: [number, number];
-	bounds: [[number, number], [number, number]];
-	area: number;
-}
-
-export interface PlacedLabel {
-	name: string;
-	/** What to print — two lines are separated by a newline. */
-	text: string;
-	x: number;
-	y: number;
-	width: number;
-	height: number;
-	lines: number;
-}
 
 /**
  * Split a long name onto two lines, as evenly as its words allow.
@@ -100,99 +42,21 @@ export function wrapLabel(name: string): string[] {
 	return best ?? [name];
 }
 
-/** What a country is called on a map, where that is not its formal name. */
-const SHORT_NAMES: Record<string, string> = {
-	'United States of America': 'United States'
-};
-
-export const labelWidth = (name: string): number => {
-	const longest = wrapLabel(SHORT_NAMES[name] ?? name).reduce(
-		(most, line) => Math.max(most, line.length),
-		0
-	);
-	return longest * PER_CHARACTER;
-};
+export interface PlacedLabel {
+	name: string;
+	/** What to print — two lines are separated by a newline. */
+	text: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	lines: number;
+}
 
 type Box = { x0: number; y0: number; x1: number; y1: number };
 
 const overlaps = (a: Box, b: Box): boolean =>
 	a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
-
-/**
- * Place what fits.
- *
- * `zoom` and the pan offsets are the map's current transform: a label is
- * measured against the country AS DRAWN, so zooming in lets more names appear
- * rather than leaving the same dozen.
- */
-export function placeLabels(
-	countries: Placeable[],
-	visited: (name: string) => boolean = () => true,
-	view: { k: number; tx: number; ty: number; width: number; height: number } = {
-		k: 1,
-		tx: 0,
-		ty: 0,
-		width: 960,
-		height: 480
-	}
-): PlacedLabel[] {
-	const candidates = countries
-		.filter((country) => country.name && (visited(country.name) || ANCHORS.includes(country.name)))
-		.sort((a, b) => {
-			const mine = visited(a.name) ? 1 : 0;
-			const theirs = visited(b.name) ? 1 : 0;
-			// Visited first, then the widest — the ones that matter claim their
-			// space before a neighbour takes it.
-			return theirs - mine || b.bounds[1][0] - b.bounds[0][0] - (a.bounds[1][0] - a.bounds[0][0]);
-		});
-
-	const placed: PlacedLabel[] = [];
-	const taken: Box[] = [];
-
-	for (const country of candidates) {
-		const text = wrapLabel(SHORT_NAMES[country.name] ?? country.name);
-		const width = labelWidth(country.name);
-		const height = text.length > 1 ? TWO_LINES : ONE_LINE;
-
-		const drawnWidth = (country.bounds[1][0] - country.bounds[0][0]) * view.k;
-		const drawnHeight = (country.bounds[1][1] - country.bounds[0][1]) * view.k;
-		// Wider than the country can carry, or a country too thin to hold a line.
-		if (width > drawnWidth * SPILL || drawnHeight < SHORTEST) continue;
-
-		const cx = view.tx + view.k * country.centroid[0];
-		const cy = view.ty + view.k * country.centroid[1];
-		// Off the edge of the frame: a half-visible name is worse than none.
-		if (
-			cx - width / 2 < 2 ||
-			cx + width / 2 > view.width - 2 ||
-			cy - height / 2 < 2 ||
-			cy + height / 2 > view.height - 2
-		) {
-			continue;
-		}
-
-		const box: Box = {
-			x0: cx - width / 2 - 1,
-			x1: cx + width / 2 + 1,
-			y0: cy - height / 2 - 1,
-			y1: cy + height / 2 + 1
-		};
-		if (taken.some((other) => overlaps(box, other))) continue;
-
-		taken.push(box);
-		placed.push({
-			name: country.name,
-			text: text.join('\n'),
-			x: cx,
-			y: cy,
-			width,
-			height,
-			lines: text.length
-		});
-	}
-
-	return placed;
-}
 
 /**
  * The same job for the provinces inside one country.

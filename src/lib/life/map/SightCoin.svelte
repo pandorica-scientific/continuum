@@ -11,7 +11,7 @@
 	 *
 	 * Cleared at 78% of the disc, sampled on a grid — the prototype's number.
 	 */
-	import { FOIL, LABEL_PAPER } from '$lib/life/map/materials';
+	import { FOIL } from '$lib/life/map/materials';
 
 	interface Props {
 		name: string;
@@ -203,7 +203,7 @@
 </script>
 
 <div class="sight">
-	<span class="disc" class:gone style:--paper={LABEL_PAPER}>
+	<span class="disc" class:gone>
 		<!-- Underneath: the name again, so a rubbed coin still says what it was. -->
 		<span class="under">{name}</span>
 

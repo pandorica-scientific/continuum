@@ -57,19 +57,22 @@ export interface GeoManifest {
 }
 
 /**
- * Read once and held.
+ * Read once and held, once there is something to hold.
  *
  * The manifest is written at build time and cannot change while the server is
- * up, so re-reading it per request would be a syscall to learn something that
- * is already known. `undefined` means "not looked at yet"; `null` means looked
- * at and genuinely absent.
+ * up, so re-reading it per request would be a syscall to learn something
+ * already known. Its ABSENCE is not cached — see below.
  */
-let manifest: GeoManifest | null | undefined;
+let manifest: GeoManifest | null = null;
 
 export function geoManifest(): GeoManifest | null {
-	if (manifest !== undefined) return manifest;
+	if (manifest) return manifest;
 	const path = join(GEODATA_DIR, 'manifest.json');
-	if (!existsSync(path)) return (manifest = null);
+	// A MISS IS NOT CACHED. Caching it would mean a developer who runs the fetch
+	// while the server is up sees "not fetched" until they restart — and the
+	// only cost of re-checking is one `existsSync` on a page nobody is loading
+	// in a loop.
+	if (!existsSync(path)) return null;
 	try {
 		// Synchronous deliberately: this is one small file, read once, and every
 		// caller below would otherwise have to be async to ask a question whose
@@ -77,8 +80,9 @@ export function geoManifest(): GeoManifest | null {
 		manifest = JSON.parse(readFileSync(path, 'utf8')) as GeoManifest;
 	} catch {
 		// A half-written manifest is the same situation as no manifest: the map
-		// says the geodata is missing and names the command that fixes it.
-		manifest = null;
+		// says the geodata is missing and names the command that fixes it. Not
+		// cached either — a fetch that was still writing will finish.
+		return null;
 	}
 	return manifest;
 }
