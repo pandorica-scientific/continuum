@@ -3,11 +3,7 @@ import { error, fail } from '@sveltejs/kit';
 import { asOptionalRowId } from '$lib/ids';
 import { countryName } from '$lib/life/geo/countries';
 import { geoManifest, slugForCountry, worldOutline } from '$lib/server/life/geodata';
-import {
-	addManualVisit,
-	countryVisits,
-	writeVisitsForEndedTrips
-} from '$lib/server/life/visits';
+import { addManualVisit, countryVisits, writeVisitsForEndedTrips } from '$lib/server/life/visits';
 import { localToday } from '$lib/dates';
 import type { Actions, PageServerLoad } from './$types';
 

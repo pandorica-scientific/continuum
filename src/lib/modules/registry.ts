@@ -54,11 +54,23 @@ export const EVENT_CATEGORY_KEYS = Object.keys(EVENT_CATEGORIES) as EventCategor
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
 
-export type ModuleKey = keyof typeof MODULES;
+/** The modules this product declares itself. Checked by the compiler. */
+export type CoreModuleKey = keyof typeof MODULES;
 
-export type ModuleToggles = Record<ModuleKey, boolean>;
+/**
+ * A module key.
+ *
+ * `keyof typeof MODULES` cannot survive a registry that grows at runtime, and
+ * this is the price: a core key is still checked — a typo in `screen.module`
+ * against one of the fourteen above is still a build failure — but an
+ * arbitrary string no longer fails to compile where a key is expected. There
+ * is no version of this that keeps both.
+ */
+export type ModuleKey = CoreModuleKey | (string & {});
 
-interface Screen {
+export type ModuleToggles = Record<CoreModuleKey, boolean> & Record<string, boolean>;
+
+export interface Screen {
 	path: string;
 	label: string;
 	/** Shown at 26px in the screen title; ScreenHeader reads it from here so no
@@ -207,9 +219,65 @@ export const AREAS: Area[] = [
  */
 export const SETTINGS_PATH = '/settings';
 
-export const DEFAULT_MODULES: ModuleToggles = Object.fromEntries(
-	MODULE_KEYS.map((key) => [key, true])
-) as ModuleToggles;
+/**
+ * The navigation, as something that can be added to.
+ *
+ * MODULES and AREAS above stay literals: they are this product's own modules
+ * and areas, and declaring them inline is what keeps their keys checked by the
+ * compiler. What is added here is a way for a project built on this repository
+ * to append its own — an account screen, a subscription screen — without
+ * editing either literal, which are among the files most likely to change in
+ * any release that adds a feature.
+ *
+ * Everything below reads these functions rather than the literals directly, so
+ * a registered module is gated, routed and rendered exactly like a core one.
+ */
+type ModuleDescriptor = { emoji: string; label: string; note: string };
+
+const extraModules: Record<string, ModuleDescriptor> = {};
+const extraAreas: { area: Area; position?: number }[] = [];
+
+export function registerModule(key: string, module: ModuleDescriptor): void {
+	extraModules[key] = module;
+}
+
+export function registerArea(area: Area, position?: number): void {
+	extraAreas.push({ area, position });
+}
+
+/** Add a screen to an area that already exists, by area key. */
+export function registerScreen(areaKey: string, screen: Screen): void {
+	const area =
+		AREAS.find((a) => a.key === areaKey) ?? extraAreas.find((e) => e.area.key === areaKey)?.area;
+	if (!area) throw new Error(`No area '${areaKey}' to add ${screen.path} to`);
+	area.screens.push(screen);
+}
+
+export function modules(): Record<string, ModuleDescriptor> {
+	return { ...MODULES, ...extraModules };
+}
+
+export function areas(): Area[] {
+	const all = [...AREAS];
+	for (const { area, position } of extraAreas) {
+		if (position === undefined) all.push(area);
+		else all.splice(position, 0, area);
+	}
+	return all;
+}
+
+/**
+ * Every module on.
+ *
+ * A function rather than a constant: a downstream registers its modules from
+ * the extensions front door, which runs before any request but after this file
+ * is first imported. An eagerly-evaluated object would freeze the defaults
+ * before those registrations landed, and a downstream module would then be
+ * absent from settings rather than on.
+ */
+export function defaultModules(): ModuleToggles {
+	return Object.fromEntries(Object.keys(modules()).map((key) => [key, true])) as ModuleToggles;
+}
 
 function matches(pathname: string, screen: Screen): boolean {
 	return pathname === screen.path || pathname.startsWith(screen.path + '/');
@@ -217,15 +285,17 @@ function matches(pathname: string, screen: Screen): boolean {
 
 /** Areas with disabled modules' screens removed; areas left with none go too. */
 export function visibleAreas(modules: ModuleToggles): Area[] {
-	return AREAS.map((area) => ({
-		...area,
-		screens: area.screens.filter((screen) => !screen.module || modules[screen.module])
-	})).filter((area) => area.screens.length > 0);
+	return areas()
+		.map((area) => ({
+			...area,
+			screens: area.screens.filter((screen) => !screen.module || modules[screen.module])
+		}))
+		.filter((area) => area.screens.length > 0);
 }
 
 /** The area a path belongs to, or undefined for a route outside the navigation. */
 export function areaForPath(pathname: string): Area | undefined {
-	return AREAS.find((area) => area.screens.some((screen) => matches(pathname, screen)));
+	return areas().find((area) => area.screens.some((screen) => matches(pathname, screen)));
 }
 
 /**
@@ -237,7 +307,7 @@ export function areaForPath(pathname: string): Area | undefined {
  * is always allowed.
  */
 export function pathDisabled(pathname: string, modules: ModuleToggles): boolean {
-	for (const area of AREAS) {
+	for (const area of areas()) {
 		for (const screen of area.screens) {
 			if (matches(pathname, screen)) {
 				return screen.module ? !modules[screen.module] : false;

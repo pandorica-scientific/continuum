@@ -10,7 +10,7 @@
 // ICS, Google or CalDAV — and never stored: baking it into a title would make it
 // permanent, and would corrupt the content hash the sync merge depends on.
 
-import { EVENT_CATEGORIES, MODULES, type ModuleKey } from '$lib/modules/registry';
+import { EVENT_CATEGORIES, modules, type ModuleKey } from '$lib/modules/registry';
 import type { OriginBinding } from '$lib/calendar/keys';
 
 /** Appended to events the ledger generated. Never to authored ones. */
@@ -50,7 +50,7 @@ const MODULE_FOR_RULE: Record<string, ModuleKey> = {
  */
 export function markerForGenerated(ruleKey: string, binding: OriginBinding | null): string | null {
 	const moduleKey = binding ? MODULE_FOR_TABLE[binding.table] : MODULE_FOR_RULE[ruleKey];
-	return moduleKey ? MODULES[moduleKey].emoji : null;
+	return moduleKey ? (modules()[moduleKey]?.emoji ?? null) : null;
 }
 
 /** The emoji an authored event carries, from its chosen category. */

@@ -2,7 +2,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import { person, settings } from '$lib/server/db/schema';
-import { DEFAULT_MODULES, type ModuleToggles } from '$lib/modules/registry';
+import { defaultModules, type ModuleToggles } from '$lib/modules/registry';
 
 /** `handle` mirrors setSetting: a caller inside a transaction, or a test with
  *  its own database, has to be able to read through the same connection. */
@@ -169,7 +169,10 @@ export async function setRevisionedSetting<T>(
 
 export async function getModules(): Promise<ModuleToggles> {
 	const stored = await getSetting<Partial<ModuleToggles>>('modules', {});
-	return { ...DEFAULT_MODULES, ...stored };
+	// The cast is the spread's doing, not a doubt about the values: ModuleToggles
+	// now carries a string index signature, so spreading a Partial over it widens
+	// every value to `boolean | undefined`. What is stored is always a boolean.
+	return { ...defaultModules(), ...stored } as ModuleToggles;
 }
 
 export async function getBaseCurrency(handle: Queryable = db): Promise<string> {

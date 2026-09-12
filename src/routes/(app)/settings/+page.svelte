@@ -20,7 +20,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import ActionError from '$lib/components/ActionError.svelte';
 	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
-	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
+	import { modules } from '$lib/modules/registry';
 	import { passwordHint } from '$lib/password-policy';
 	import { currencyLabel } from '$lib/currencies';
 
@@ -379,8 +379,7 @@
 					caption="Everything is optional. Switch off what you do not have and it leaves the sidebar entirely."
 				/>
 				<div class="modules">
-					{#each MODULE_KEYS as key (key)}
-						{@const m = MODULES[key]}
+					{#each Object.entries(modules()) as [key, m] (key)}
 						<form method="POST" action="?/toggleModule" use:enhance class="module-row">
 							<input type="hidden" name="key" value={key} />
 							<span class="emoji">{m.emoji}</span>

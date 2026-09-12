@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
 import { building } from '$app/environment';
-import { env } from '$env/dynamic/private';
+// First, and before anything that reads a registry. See the file's own comment.
+import '$lib/server/extensions';
 import { validateSession } from '$lib/server/auth';
 import { csrfRefusal, sameSiteFormPost } from '$lib/server/auth/csrf';
 import { authorizeApiRequest } from '$lib/server/api/respond';
-import { maybeRunScheduledBackup } from '$lib/server/backup';
-import { seedBanks, seedCategories } from '$lib/server/categorize';
-import { db } from '$lib/server/db';
-import { refreshCurrencies } from '$lib/server/db/currency-refresh';
-import { runMigrations } from '$lib/server/db/migrate';
-import { runCpuQueue } from '$lib/server/jobs';
-import { refreshRates } from '$lib/server/fx';
+import { isPublicPath, requestGates } from '$lib/server/auth/gates';
+import { bootSteps, bootTasks } from '$lib/server/boot';
 import { isSetUp } from '$lib/server/settings';
 import { withRequest } from '$lib/server/auth/cookies';
 
@@ -31,108 +27,19 @@ function ensureReady(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-	await runMigrations();
-	// Before anything writes a currency. Fourteen columns now carry a foreign key
-	// into this table, so an empty one refuses every insert — and the migration
-	// seeds only the two codes it needed to attach those keys.
-	await refreshCurrencies(db);
-	await seedCategories();
-	// Before any account is written: account.bank carries a foreign key here.
-	await seedBanks();
+	// Steps first, in order, and a rejection here fails the boot — see
+	// ensureReady() above, which clears its slot so the next request retries.
+	for (const step of bootSteps()) await step.run();
 
-	// DEMO=1 fills a pristine instance with the fictional Novák household so
-	// screenshots and first impressions need no real data. Never touches an
-	// instance that has people.
-	if (env.DEMO && !(await isSetUp())) {
-		const { seedDemo } = await import('$lib/server/system/demo');
-		await seedDemo();
-		console.log('Demo data seeded (DEMO=1).');
+	// Then the recurring work. A task's failure is logged and its schedule
+	// continues: a home server that cannot reach the currency fixing must keep
+	// working on the rates it already has.
+	for (const task of bootTasks()) {
+		const tick = () =>
+			task.run().catch((err) => console.warn(`${task.label} failed:`, err.message ?? err));
+		void tick();
+		setInterval(tick, task.every);
 	}
-
-	// Statements accepted but not yet read.
-	//
-	// The queue survives a restart because the work is in the database rather
-	// than in memory, but nothing would pick it up again on its own: a file
-	// uploaded a second before the process stopped would sit there indefinitely,
-	// having told its owner it was accepted. One sweep at boot, and a slow tick
-	// afterwards so a job whose worker died is retried without waiting for the
-	// next upload.
-	const readQueued = () =>
-		runCpuQueue().catch((err) => console.warn('CPU queue failed:', err.message ?? err));
-	void readQueued();
-	setInterval(readQueued, 5 * 60 * 1000);
-
-	// Abandoned scans, on the same five-minute tick.
-	//
-	// Required, not housekeeping, and the module says so: a scan in progress is
-	// files and nothing else, so a phone that goes flat halfway through a stack —
-	// or a tab closed on a train — leaves 2–4 MB a page behind with nothing in
-	// the product that would ever remove it. The screen asks the server to drop
-	// its own session when it is closed properly; this is for every other way a
-	// scan ends.
-	const scans = async () => {
-		const { sweepScanSessions } = await import('$lib/server/scan/session');
-		return sweepScanSessions();
-	};
-	const scanTick = () =>
-		scans().catch((err) => console.warn('Scan sweep failed:', err.message ?? err));
-	void scanTick();
-	setInterval(scanTick, 5 * 60 * 1000);
-
-	// Daily FX fixing; failures are logged, never fatal — a home server may be
-	// offline and the app keeps working with the last known rates.
-	const refresh = () =>
-		refreshRates().catch((err) => console.warn('FX refresh failed:', err.message ?? err));
-	void refresh();
-	setInterval(refresh, 6 * 60 * 60 * 1000);
-
-	// Scheduled backups: the hourly check is cheap; whether one actually runs
-	// is decided by the configured cadence (weekly / monthly).
-	const backup = () =>
-		maybeRunScheduledBackup().catch((err) =>
-			console.warn('Scheduled backup failed:', err.message ?? err)
-		);
-	void backup();
-	setInterval(backup, 60 * 60 * 1000);
-
-	// The smart-meter reading writes itself onto the lived-in flat's energy
-	// bill. It belongs on a tick, not in the home page's load: that load is a
-	// GET, and app.html preloads on hover, so hovering the sidebar link wrote to
-	// the database. A no-op unless a home platform and a price per kWh are set.
-	const meter = async () => {
-		const { syncMeterBill } = await import('$lib/server/home');
-		return syncMeterBill();
-	};
-	const meterTick = () =>
-		meter().catch((err) => console.warn('Meter bill sync failed:', err.message ?? err));
-	void meterTick();
-	setInterval(meterTick, 60 * 60 * 1000);
-
-	// Connected calendars. The tick is every minute and cheap — whether a pass
-	// actually runs is decided by each account's own last-sync time against the
-	// configured interval, so changing that setting takes effect without a
-	// restart. An account with no calendar chosen is skipped rather than failed.
-	const calendars = async () => {
-		const { syncAllAccounts } = await import('$lib/server/calendar/sync');
-		return syncAllAccounts();
-	};
-	const calendarTick = () =>
-		calendars().catch((err) => console.warn('Calendar sync failed:', err.message ?? err));
-	void calendarTick();
-	setInterval(calendarTick, 60 * 1000);
-
-	// Today's net worth, for the month-on-month delta. One row per day, upserted
-	// — it used to be written by computeNetWorth() itself, which the app layout
-	// calls on every page and GET /api/v1/networth calls on every poll, so the
-	// documented read-only API wrote to the database.
-	const snapshot = async () => {
-		const { recordNetWorthSnapshot } = await import('$lib/server/networth');
-		return recordNetWorthSnapshot();
-	};
-	const snapshotTick = () =>
-		snapshot().catch((err) => console.warn('Net worth snapshot failed:', err.message ?? err));
-	void snapshotTick();
-	setInterval(snapshotTick, 60 * 60 * 1000);
 }
 
 // A warm-up, not a gate: it moves the boot migrations off the first request
@@ -150,20 +57,6 @@ export const init: ServerInit = async () => {
 		console.warn('Boot deferred to first request:', err.message ?? err)
 	);
 };
-
-// /ics/<token> is public by design: calendar apps subscribe without a session,
-// authenticated by the secret token in the URL. /api authenticates itself the
-// same way, with a bearer token instead of a cookie. /enroll/<token> is the
-// same shape again — the visitor has no session yet, and the token in the URL
-// is what authorises them to set a password.
-//
-// This exempts them from the redirect to /login, NOT from authentication — the
-// hook applies bearer authentication to the whole /api boundary before any
-// endpoint runs, covering exactly what '/api' below exempts so a route added
-// beside the versioned ones cannot ship unauthenticated. The E2E journey
-// asserts an unauthenticated request gets a 401.
-//
-const PUBLIC_PATHS = ['/login', '/setup', '/ics', '/api', '/enroll'];
 
 // Every cookie written while this request is handled needs to know whether
 // the browser used https; see $lib/server/auth/cookies.
@@ -190,7 +83,15 @@ const handleRequest = async (
 	const apiRefusal = await authorizeApiRequest(pathname, event.request, event.getClientAddress());
 	if (apiRefusal) return apiRefusal;
 
-	const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
+	// Reasons to refuse that this product does not have; empty here. A gate
+	// throws redirect() to send the visitor somewhere instead, so this loop
+	// deliberately does not catch.
+	for (const gate of requestGates()) {
+		const refusal = await gate.check(event);
+		if (refusal) return refusal;
+	}
+
+	const isPublic = isPublicPath(pathname);
 
 	if (pathname === '/setup') {
 		// The wizard only exists until the first person is created.

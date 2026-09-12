@@ -35,21 +35,49 @@ export async function inTransaction<T>(
 	return operation(handle);
 }
 
+/**
+ * Where the handle comes from.
+ *
+ * The default is one connection for the process, built from DATABASE_URL on
+ * first use. It is a seam because two different things want to replace it: a
+ * deployment holding one database per household resolves a different handle
+ * per request, and one running Postgres compiled to WebAssembly has no
+ * DATABASE_URL at all. Neither can be expressed by editing connect().
+ *
+ * A resolver is called on every property access of `db`, so it MUST cache
+ * whatever it returns. The default does.
+ */
+export type DbResolver = () => Db;
+
 // Lazy so that importing server modules at build time (when DATABASE_URL is
 // not set) does not open a connection or throw.
 let instance: Db | null = null;
 
-function connect(): Db {
-	if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
-	return drizzle(postgres(env.DATABASE_URL), { schema });
+const defaultResolver: DbResolver = () => {
+	if (!instance) {
+		if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+		instance = drizzle(postgres(env.DATABASE_URL), { schema });
+	}
+	return instance;
+};
+
+let resolver: DbResolver = defaultResolver;
+
+export function setDbResolver(next: DbResolver): void {
+	resolver = next;
+}
+
+/** Put the process-wide default back. Exported for tests that install a fake. */
+export function resetDbResolver(): void {
+	resolver = defaultResolver;
 }
 
 export const db: Db = new Proxy({} as Db, {
 	get(_target, prop) {
-		instance ??= connect();
-		const value = Reflect.get(instance, prop) as unknown;
+		const handle = resolver();
+		const value = Reflect.get(handle, prop) as unknown;
 		return typeof value === 'function'
-			? (value as (...a: unknown[]) => unknown).bind(instance)
+			? (value as (...a: unknown[]) => unknown).bind(handle)
 			: value;
 	}
 });
