@@ -53,7 +53,10 @@
 				</select>
 			</Field>
 			<Field label="Score">
-				<input type="number" name="score" min="0" max="100" placeholder="91" />
+				<!-- From 1, not 0: the scale the database holds is 1–100, and a
+				     field that offers a number the row refuses is a form that
+				     fails on submit. -->
+				<input type="number" name="score" min="1" max="100" placeholder="91" />
 				<span class="hint">Out of a hundred. Optional.</span>
 			</Field>
 		</div>

@@ -15,7 +15,7 @@ import {
 	deleteTasting,
 	loadBottle,
 	logTasting,
-	setCounts,
+	moveCounts,
 	updateBottle
 } from '$lib/server/life/cellar';
 import type { Actions, PageServerLoad } from './$types';
@@ -88,26 +88,22 @@ export const actions: Actions = {
 	 * a new pair lives in `ownership.ts` and runs here. Posting the new numbers
 	 * instead would put a second implementation of `opened <= owned` in a place
 	 * nothing tests.
+	 *
+	 * The rule is handed to `moveCounts`, which reads the row and writes it back
+	 * under one lock — two people pressing a control at once otherwise lose one
+	 * of the two presses.
 	 */
 	count: async ({ request, params }) => {
 		const id = asRowId(params.id);
 		const form = await request.formData();
 		const move = String(form.get('move') ?? '');
 
-		const counts = await currentCounts(id);
-		if (!counts) return fail(404, { on: 'count', message: 'No such bottle.' });
+		const rule =
+			move === 'add' ? add : move === 'remove' ? remove : move === 'open' ? openOne : null;
+		if (!rule) return fail(400, { on: 'count', message: 'Nothing to do.' });
 
-		const next =
-			move === 'add'
-				? add(counts)
-				: move === 'remove'
-					? remove(counts)
-					: move === 'open'
-						? openOne(counts)
-						: null;
-		if (!next) return fail(400, { on: 'count', message: 'Nothing to do.' });
-
-		await setCounts(id, next);
+		const next = await moveCounts(id, rule);
+		if (!next) return fail(404, { on: 'count', message: 'No such bottle.' });
 		return { counted: true };
 	},
 
@@ -117,23 +113,22 @@ export const actions: Actions = {
 		const tastedOn = String(form.get('tastedOn') ?? '').trim();
 		if (!tastedOn) return fail(400, { on: 'tasting', message: 'When was it opened?' });
 
-		const counts = await currentCounts(id);
-		if (!counts) return fail(404, { on: 'tasting', message: 'No such bottle.' });
-
 		const score = optionalInt(form.get('score'));
-		await logTasting(
-			{
-				bottleId: id,
-				tastedOn,
-				personId: asOptionalRowId(form.get('personId')) ?? null,
-				// A score outside the scale is a typo, not an opinion.
-				score: score === null ? null : Math.min(100, Math.max(0, score)),
-				note: String(form.get('note') ?? '').trim(),
-				flavours: flavoursFrom(form)
-			},
-			// Tasting a bottle opens it — up to what is owned, which is the rule.
-			openOne(counts)
-		);
+		// Opening the bottle happens inside `logTasting`, under the same lock as
+		// the tasting row — the count it opens from is read there, not here.
+		const logged = await logTasting({
+			bottleId: id,
+			tastedOn,
+			personId: asOptionalRowId(form.get('personId')) ?? null,
+			// A score outside the scale is a typo, not an opinion. The scale
+			// starts at 1, which is what the CHECK on `tasting` says — clamping
+			// to 0 handed the database a number it refuses and the form came
+			// back a 500 rather than a saved tasting.
+			score: score === null ? null : Math.min(100, Math.max(1, score)),
+			note: String(form.get('note') ?? '').trim(),
+			flavours: flavoursFrom(form)
+		});
+		if (!logged) return fail(404, { on: 'tasting', message: 'No such bottle.' });
 		return { logged: true };
 	},
 

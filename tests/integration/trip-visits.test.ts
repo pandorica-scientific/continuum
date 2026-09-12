@@ -176,6 +176,80 @@ describe('writing visits for trips that have ended', () => {
 		expect(rows).toEqual([{ source: 'manual', year: 2015 }]);
 	});
 
+	// A trip edited after it ended is a correction, and the pass is a SYNC. The
+	// three things a household can change are the dates, the people and the
+	// places; the places already have a test above, and these are the other two.
+	it('moves the visit to the new year when the dates are corrected', async () => {
+		const id = uuidv7();
+		await harness.sql`insert into trip (id, name, starts_on, ends_on)
+			values (${id}, 'Mistyped', '2023-06-01', '2023-06-08')`;
+		await harness.sql`insert into trip_destination (id, trip_id, ordinal, country)
+			values (${uuidv7()}, ${id}, 0, 'GR')`;
+		await writeVisitsForEndedTrips(harness.db);
+
+		// The unique index is keyed by the PLACE, so the re-insert is skipped and
+		// the year has to be corrected in its own right.
+		await harness.sql`update trip set starts_on = '2024-06-01', ends_on = '2024-06-08'
+			where id = ${id}`;
+		await writeVisitsForEndedTrips(harness.db);
+
+		const rows = await harness.sql<{ year: number }[]>`select year from visit`;
+		expect(rows).toEqual([{ year: 2024 }]);
+	});
+
+	it('credits somebody added to the trip after it ended', async () => {
+		const tripId = await makeTrip({
+			startsIn: -30,
+			nights: 4,
+			destinations: [{ country: 'NO' }],
+			members: [jana]
+		});
+		await writeVisitsForEndedTrips(harness.db);
+
+		await harness.sql`insert into trip_member (trip_id, person_id) values (${tripId}, ${petr})`;
+		await writeVisitsForEndedTrips(harness.db);
+
+		const rows = await harness.sql<{ person_id: string }[]>`
+			select person_id from visit_member order by person_id`;
+		expect(rows.map((row) => row.person_id).sort()).toEqual([jana, petr].sort());
+	});
+
+	it('stops crediting somebody taken off the trip', async () => {
+		const tripId = await makeTrip({
+			startsIn: -30,
+			nights: 4,
+			destinations: [{ country: 'SE' }],
+			members: [jana, petr]
+		});
+		await writeVisitsForEndedTrips(harness.db);
+
+		await harness.sql`delete from trip_member where trip_id = ${tripId} and person_id = ${petr}`;
+		await writeVisitsForEndedTrips(harness.db);
+
+		const rows = await harness.sql<{ person_id: string }[]>`select person_id from visit_member`;
+		expect(rows.map((row) => row.person_id)).toEqual([jana]);
+	});
+
+	// A trip speaks for its own visits and nobody else's.
+	it('leaves a hand-typed visit its own members', async () => {
+		await addManualVisit(
+			{ country: 'DK', region: null, city: null, year: 2019, members: [petr] },
+			harness.db
+		);
+		await makeTrip({
+			startsIn: -30,
+			nights: 4,
+			destinations: [{ country: 'DK' }],
+			members: [jana]
+		});
+		await writeVisitsForEndedTrips(harness.db);
+
+		const rows = await harness.sql<{ source: string; person_id: string }[]>`
+			select v.source, m.person_id from visit v join visit_member m on m.visit_id = v.id`;
+		expect(rows.find((row) => row.source === 'manual')?.person_id).toBe(petr);
+		expect(rows.find((row) => row.source === 'trip')?.person_id).toBe(jana);
+	});
+
 	it('files a trip under the year it started, not the year it ended', async () => {
 		const id = uuidv7();
 		await harness.sql`insert into trip (id, name, starts_on, ends_on)

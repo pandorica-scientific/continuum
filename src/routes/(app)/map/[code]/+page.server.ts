@@ -3,7 +3,7 @@ import { error, fail } from '@sveltejs/kit';
 import { asOptionalRowId } from '$lib/ids';
 import { countryName } from '$lib/life/geo/countries';
 import { geoManifest, slugForCountry, worldOutline } from '$lib/server/life/geodata';
-import { addManualVisit, regionsByMember, visitedByCountry } from '$lib/server/life/visits';
+import { addManualVisit, countryVisits } from '$lib/server/life/visits';
 import { localToday } from '$lib/dates';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -22,12 +22,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	const outlineName =
 		Object.entries(manifest.countries).find(([, entry]) => entry.code === code)?.[0] ?? '';
 
-	const [world, visited, memberRegions] = await Promise.all([
-		worldOutline(),
-		visitedByCountry(),
-		regionsByMember(code)
-	]);
-	const here = visited.get(code);
+	const [world, rows] = await Promise.all([worldOutline(), countryVisits(code)]);
 
 	/**
 	 * Whose view this is, carried from the world map's member tabs.
@@ -38,6 +33,10 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	 */
 	const who = asOptionalRowId(url.searchParams.get('who'));
 
+	// One filter over one set of rows. Regions, cities and years are all this
+	// person's, or all the household's — never a mix of the two.
+	const mine = rows.filter((row) => !who || row.personId === who);
+
 	return {
 		code,
 		who: who ?? null,
@@ -47,19 +46,12 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		world,
 		/** How many provinces the fetch found, so the screen can say what is coming. */
 		regionCount: manifest.files[slug]?.regions ?? 0,
-		visited: here
-			? {
-					// Filtered to whose view this is: household sees every row, a
-					// person sees their own.
-					regions: [
-						...new Set(
-							memberRegions.filter((row) => !who || row.personId === who).map((row) => row.region)
-						)
-					],
-					cities: [...here.cities],
-					years: here.years
-				}
-			: { regions: [], cities: [], years: [] }
+		// Whose view this is: the household sees every row, a person sees theirs.
+		visited: {
+			regions: [...new Set(mine.map((row) => row.region).filter((one) => one !== null))],
+			cities: [...new Set(mine.map((row) => row.city).filter((one) => one !== null))],
+			years: [...new Set(mine.map((row) => row.year))].sort((a, b) => a - b)
+		}
 	};
 };
 

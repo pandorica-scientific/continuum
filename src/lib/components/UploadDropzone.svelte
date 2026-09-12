@@ -170,10 +170,21 @@
 	const wantsEditor = (picked: File[]): boolean =>
 		offersCrop && picked.length === 1 && isImageFile(picked[0]);
 
+	/**
+	 * Set while a file the editor just produced is being put on the field.
+	 *
+	 * The editor hands back a cropped IMAGE, and `wantsEditor` says a single
+	 * image belongs in the editor — so without this the crop was fed straight
+	 * back into the thing that made it and the flow never ended. Cleared as soon
+	 * as the change event has been dispatched, so the next file a person picks
+	 * goes through the editor as it should.
+	 */
+	let fromEditor = false;
+
 	async function receive(files: FileList | File[]) {
 		const picked = list(files);
 
-		if (wantsEditor(picked)) {
+		if (!fromEditor && wantsEditor(picked)) {
 			incoming = picked;
 			await openScanner();
 			return;
@@ -223,13 +234,24 @@
 		originalInput.files = transfer.files;
 	}
 
-	function adopt(files: FileList | File[]) {
+	/**
+	 * `edited` marks a file the editor has already finished with. Everything
+	 * else — the camera button, a plain drop — is still a candidate for it.
+	 */
+	function adopt(files: FileList | File[], edited = false) {
 		if (!input) return;
-		if (!name) return void receive(files); // callback mode: no field to fill
-		const transfer = new DataTransfer();
-		for (const file of list(files)) transfer.items.add(file);
-		input.files = transfer.files;
-		input.dispatchEvent(new Event('change', { bubbles: true }));
+		fromEditor = edited;
+		try {
+			if (!name) return void receive(files); // callback mode: no field to fill
+			const transfer = new DataTransfer();
+			for (const file of list(files)) transfer.items.add(file);
+			input.files = transfer.files;
+			// The listener on the field runs `receive` synchronously from here, so
+			// the guard is still standing when it reads it.
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+		} finally {
+			fromEditor = false;
+		}
 	}
 </script>
 
@@ -393,7 +415,7 @@
 			// gets both from one capture. Nothing reads it unless it asked for
 			// `crop`, and a form that ignores the field simply posts nothing extra.
 			if (original) keepOriginal(original);
-			adopt([page]);
+			adopt([page], true);
 		}}
 	/>
 {/if}

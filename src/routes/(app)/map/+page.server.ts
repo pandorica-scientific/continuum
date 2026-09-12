@@ -5,7 +5,12 @@ import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { asRowId } from '$lib/ids';
 import { localToday } from '$lib/dates';
-import { addManualVisit, mapFigures, visitedByCountry } from '$lib/server/life/visits';
+import {
+	addManualVisit,
+	mapFigures,
+	visitedByCountry,
+	writeVisitsForEndedTrips
+} from '$lib/server/life/visits';
 import {
 	FETCH_COMMAND,
 	geoManifest,
@@ -16,6 +21,14 @@ import {
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
+	// A trip that has ended has been where it said it was going, and this is the
+	// screen that shows it. Running the pass here as well as on Trips is what
+	// makes that true for somebody who opens the Map straight from the sidebar:
+	// leaving it to Trips alone meant a holiday only reached the map once its
+	// owner happened to look at the list they had already stopped reading.
+	// Idempotent, so the two screens cannot record a holiday twice.
+	await writeVisitsForEndedTrips();
+
 	const [visited, people, outline, zones] = await Promise.all([
 		visitedByCountry(),
 		db.select({ id: person.id, name: person.name }).from(person).orderBy(asc(person.name)),

@@ -12,6 +12,7 @@ import { uuidv7 } from 'uuidv7';
 import { db, type Db } from '$lib/server/db';
 import { bottle, collection, person, tasting, tastingNote } from '$lib/server/db/schema';
 import type { EnumValue } from '$lib/enums';
+import { openOne, type Counts } from '$lib/life/collections/ownership';
 import { bottleSvg, labelInitials } from '$lib/life/art';
 
 /** The one shelf v0.9.0 ships. Books and records are the next two. */
@@ -333,24 +334,49 @@ export async function updateBottle(
 }
 
 /**
- * Store what the ownership module decided.
+ * Read the counts, decide the new pair, write it — with the row held.
  *
- * The arithmetic lives in `$lib/life/collections/ownership`; this only writes
- * the pair it returns. Splitting it the other way — an `openOne` here that did
- * its own arithmetic — is how the counts and the CHECK drift apart.
+ * The arithmetic still lives in `$lib/life/collections/ownership` and is passed
+ * in: splitting it the other way — an `openOne` here that did its own
+ * arithmetic — is how the counts and the CHECK drift apart.
+ *
+ * What this adds is the LOCK. Read-then-write across two round trips loses one
+ * of two updates that overlap, and the two that overlap in a household are the
+ * ones most likely to: somebody presses `+` on their phone while the same
+ * bottle is being logged as tasted on the laptop, and one of the two simply
+ * does not happen. `for update` makes the second wait for the first, so it
+ * decides from what the first left rather than from what it found.
+ *
+ * `move` returning null means "nothing to do", and nothing is written.
  */
-export async function setCounts(
+export async function moveCounts(
 	id: string,
-	counts: { owned: number; opened: number },
+	move: (counts: Counts) => Counts | null,
 	handle: Db = db
-): Promise<void> {
-	await handle.update(bottle).set(counts).where(eq(bottle.id, id));
+): Promise<Counts | null> {
+	return handle.transaction(async (tx) => {
+		const held = await lockedCounts(id, tx);
+		if (!held) return null;
+
+		const next = move(held);
+		if (!next) return null;
+
+		await tx.update(bottle).set(next).where(eq(bottle.id, id));
+		return next;
+	});
 }
 
-export async function currentCounts(
-	id: string,
-	handle: Db = db
-): Promise<{ owned: number; opened: number } | null> {
+/** The counts, with the row held for the rest of the transaction. */
+async function lockedCounts(id: string, tx: Db): Promise<Counts | null> {
+	const [row] = await tx
+		.select({ owned: bottle.owned, opened: bottle.opened })
+		.from(bottle)
+		.where(eq(bottle.id, id))
+		.for('update');
+	return row ?? null;
+}
+
+export async function currentCounts(id: string, handle: Db = db): Promise<Counts | null> {
 	const [row] = await handle
 		.select({ owned: bottle.owned, opened: bottle.opened })
 		.from(bottle)
@@ -379,14 +405,21 @@ export interface NewTasting {
  * they did not open, and asking them to press two buttons is how the counts end
  * up wrong. So the open count rises here too — up to what is owned, which is
  * the rule in `openOne`.
+ *
+ * The count is read inside the transaction with the row held, for the reason
+ * `moveCounts` gives: a tasting logged while somebody else is pressing `+` used
+ * to write back a pair decided before their press and undo it.
  */
-export async function logTasting(
-	input: NewTasting,
-	counts: { owned: number; opened: number },
-	handle: Db = db
-): Promise<string> {
+export async function logTasting(input: NewTasting, handle: Db = db): Promise<string | null> {
 	const id = uuidv7();
+	let missing = false;
 	await handle.transaction(async (tx) => {
+		const held = await lockedCounts(input.bottleId, tx);
+		if (!held) {
+			missing = true;
+			return;
+		}
+
 		await tx.insert(tasting).values({
 			id,
 			bottleId: input.bottleId,
@@ -411,9 +444,10 @@ export async function logTasting(
 			);
 		}
 
-		await tx.update(bottle).set(counts).where(eq(bottle.id, input.bottleId));
+		// Tasting a bottle opens it — up to what is owned, which is the rule.
+		await tx.update(bottle).set(openOne(held)).where(eq(bottle.id, input.bottleId));
 	});
-	return id;
+	return missing ? null : id;
 }
 
 export async function deleteTasting(id: string, handle: Db = db): Promise<void> {

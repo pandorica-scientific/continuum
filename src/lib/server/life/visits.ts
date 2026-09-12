@@ -31,6 +31,11 @@ const todayIso = (): string => new Date().toISOString().slice(0, 10);
  * 3. It never touches a `manual` visit, so the decade somebody typed in by hand
  *    for the years before Continuum is not rewritten by a trip that happens to
  *    name the same region.
+ *
+ * It is a SYNC, not an append. A trip edited after it ended — a date corrected,
+ * a person added, a destination dropped — moves its visits with it, because
+ * "Not right? Edit the trip." is the only correction the Map offers and it has
+ * to be one that works.
  */
 export async function writeVisitsForEndedTrips(handle: Db = db): Promise<number> {
 	const today = todayIso();
@@ -60,28 +65,46 @@ export async function writeVisitsForEndedTrips(handle: Db = db): Promise<number>
 	}));
 
 	const written = rows.length
-		? await handle
-				.insert(visit)
-				.values(rows)
-				.onConflictDoNothing()
-				.returning({ id: visit.id, tripId: visit.tripId })
+		? await handle.insert(visit).values(rows).onConflictDoNothing().returning({ id: visit.id })
 		: [];
 
-	// Who went is who was on the trip. Only for the visits actually written, so
-	// a second run inserts nothing here either.
-	if (written.length) {
-		const members = await handle
-			.select({ tripId: tripMember.tripId, personId: tripMember.personId })
-			.from(tripMember)
-			.where(inArray(tripMember.tripId, written.map((row) => row.tripId!).filter(Boolean)));
+	// A trip moved to another year after it ended — a date typed wrong, then
+	// fixed — has to carry its visits with it. The unique index is keyed by the
+	// PLACE, not the year, so `DO NOTHING` above silently kept the old one and
+	// the map counted a holiday in a year nobody travelled.
+	await handle.execute(sql`
+		update ${visit}
+		set year = extract(year from t.starts_on)::int
+		from ${trip} t
+		where t.id = ${visit}.trip_id
+		  and ${visit}.source = 'trip'
+		  and ${visit}.year <> extract(year from t.starts_on)::int`);
 
-		const pairs = written.flatMap((row) =>
-			members
-				.filter((member) => member.tripId === row.tripId)
-				.map((member) => ({ visitId: row.id, personId: member.personId }))
-		);
-		if (pairs.length) await handle.insert(visitMember).values(pairs).onConflictDoNothing();
-	}
+	// Who went is who is on the trip NOW. Reconciled rather than written once:
+	// a person added to a trip after it ended was never credited, and a person
+	// taken off it stayed credited forever. Both are corrections somebody made
+	// on the Trips screen, and both have to reach the map.
+	//
+	// Only trip-derived visits. A manual visit's members are whoever the
+	// household said, and no trip speaks for them.
+	await handle.execute(sql`
+		delete from ${visitMember} m
+		using ${visit} v
+		where v.id = m.visit_id
+		  and v.source = 'trip'
+		  and v.trip_id is not null
+		  and not exists (
+			select 1 from ${tripMember} tm
+			where tm.trip_id = v.trip_id and tm.person_id = m.person_id
+		  )`);
+
+	await handle.execute(sql`
+		insert into ${visitMember} (visit_id, person_id)
+		select v.id, tm.person_id
+		from ${visit} v
+		join ${tripMember} tm on tm.trip_id = v.trip_id
+		where v.source = 'trip' and v.trip_id is not null
+		on conflict do nothing`);
 
 	// A destination removed from a trip after it ended is a correction, and the
 	// visit it wrote has to go with it — otherwise "Not right? Edit the trip."
@@ -155,26 +178,34 @@ export async function visitedByCountry(handle: Db = db): Promise<Map<string, Vis
 	return byCountry;
 }
 
+export interface CountryRow {
+	region: string | null;
+	city: string | null;
+	year: number;
+	personId: string | null;
+}
+
 /**
- * Which regions of one country each person has been to.
+ * Every visit to one country, with who it belonged to.
  *
  * The map's member tabs need this: the household view is the union, and a
  * person's view is their own rows. Asked as one query so the two views cannot
- * disagree about what counts.
+ * disagree about what counts — and it carries the CITY and the YEAR as well as
+ * the region, because a member tab that filtered the regions and then printed
+ * the household's cities and years underneath was three figures about three
+ * different people on one screen.
  */
-export async function regionsByMember(
-	country: string,
-	handle: Db = db
-): Promise<{ region: string; personId: string | null }[]> {
-	const rows = await handle
-		.select({ region: visit.region, personId: visitMember.personId })
+export async function countryVisits(country: string, handle: Db = db): Promise<CountryRow[]> {
+	return handle
+		.select({
+			region: visit.region,
+			city: visit.city,
+			year: visit.year,
+			personId: visitMember.personId
+		})
 		.from(visit)
 		.leftJoin(visitMember, eq(visitMember.visitId, visit.id))
 		.where(eq(visit.country, country.toUpperCase()));
-
-	return rows
-		.filter((row): row is { region: string; personId: string | null } => Boolean(row.region))
-		.map((row) => ({ region: row.region, personId: row.personId }));
 }
 
 export interface PendingReveal {

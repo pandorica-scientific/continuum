@@ -7,7 +7,7 @@
  * expiry, and it is already linked to the person it belongs to — so a trip can
  * simply look, and the one place a passport is recorded stays the one place.
  */
-import { desc, eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, documentIdentity, documentLink } from '$lib/server/db/schema';
 import { passportStatus, type PassportState, type Readiness } from '$lib/life/readiness';
@@ -34,9 +34,10 @@ interface PassportRow {
  * is not the answer to "can they travel in June". Ordering by expiry and taking
  * the first is what makes the renewal invisible, which is what it should be.
  *
- * A document with no expiry sorts last (`NULLS LAST` by default on DESC in
- * Postgres is NULLS FIRST, so it is stated), because a dated passport is a
- * better answer than an undated one.
+ * A document with no expiry sorts LAST, and that has to be said: a descending
+ * sort in Postgres puts nulls FIRST, so an undated passport was winning over
+ * the dated one beside it and the trip read "no expiry on file" for a household
+ * that had just renewed. A dated passport is the better answer either way.
  */
 async function passportsByPerson(
 	personIds: string[],
@@ -54,7 +55,7 @@ async function passportsByPerson(
 		.innerJoin(document, eq(document.id, documentIdentity.documentId))
 		.innerJoin(documentLink, eq(documentLink.documentId, document.id))
 		.where(eq(documentIdentity.kind, 'passport'))
-		.orderBy(desc(document.expiresOn));
+		.orderBy(sql`${document.expiresOn} desc nulls last`);
 
 	const byPerson = new Map<string, PassportRow>();
 	for (const row of rows) {
