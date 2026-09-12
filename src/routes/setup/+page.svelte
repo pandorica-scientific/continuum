@@ -1,7 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import BrandMark from '$lib/components/BrandMark.svelte';
-	import { MODULE_KEYS, MODULES } from '$lib/modules/registry';
+	import { modules } from '$lib/modules/registry';
 	import { untrack } from 'svelte';
 	import { passwordHint } from '$lib/password-policy';
 
@@ -131,8 +131,7 @@
 
 		<fieldset>
 			<legend class="eyebrow">Modules — switch off what you do not have</legend>
-			{#each MODULE_KEYS as key (key)}
-				{@const m = MODULES[key]}
+			{#each Object.entries(modules()) as [key, m] (key)}
 				<label class="toggle">
 					<input type="checkbox" name={`module_${key}`} checked={entered?.modules[key] ?? true} />
 					<span>{m.emoji} {m.label} <span class="note">— {m.note}</span></span>

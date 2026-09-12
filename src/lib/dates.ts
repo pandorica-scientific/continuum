@@ -23,6 +23,21 @@ export function daysBetween(from: string, to: string): number {
 }
 
 /**
+ * Whole months from one ISO date to another. Negative when `to` is earlier.
+ *
+ * Calendar months, not days divided by thirty: "fourteen months since we opened
+ * one" is a thing a person counts on a calendar, and 14 × 30 days lands in the
+ * wrong month often enough to be noticed. A month only counts once the day of
+ * the month has come round, so the 31st to the 30th of the next month is nought.
+ */
+export function monthsBetween(from: string, to: string): number {
+	const [fy, fm, fd] = from.split('-').map(Number);
+	const [ty, tm, td] = to.split('-').map(Number);
+	const months = (ty - fy) * 12 + (tm - fm);
+	return td < fd ? months - 1 : months;
+}
+
+/**
  * Today as the wall clock reads it, `YYYY-MM-DD`.
  *
  * `toISOString()` is the UTC day, which is yesterday every evening east of

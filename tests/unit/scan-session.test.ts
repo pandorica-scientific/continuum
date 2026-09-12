@@ -223,7 +223,11 @@ describe('the reclaim of a scan nobody finished', () => {
 		// "Required, not housekeeping", and called from nowhere but the test above
 		// — so every abandoned scan kept its 2–4 MB a page for ever, on the
 		// smallest disk the product runs on.
-		expect(readFileSync('src/hooks.server.ts', 'utf8')).toContain('sweepScanSessions');
+		//
+		// The registration is read from source rather than from the boot registry
+		// because importing that here would pull the database into a test whose
+		// whole subject is a temporary directory.
+		expect(readFileSync('src/lib/server/boot/defaults.ts', 'utf8')).toContain('sweepScanSessions');
 	});
 
 	it('is not the only thing that reclaims one, because two hours is a long time', () => {

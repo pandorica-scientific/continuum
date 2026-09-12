@@ -16,7 +16,8 @@
 		heroNote,
 		formats = [],
 		name,
-		onfiles
+		onfiles,
+		crop = false
 	}: {
 		accept?: string;
 		multiple?: boolean;
@@ -55,6 +56,16 @@
 		name?: string;
 		/** Callback mode. Fires on arrival and owns the submission itself. */
 		onfiles?: (files: FileList | File[]) => Promise<ActionOutcome>;
+		/**
+		 * Offer the corner editor for a PICTURE rather than a document.
+		 *
+		 * The same camera and the same crop, stopping before the thresholding and
+		 * the PDF: a wine label, a meter dial, the back of a card. Without it an
+		 * image-only dropzone has no crop at all, because the scan button is drawn
+		 * from `accept` admitting PDFs — which these sites never do, since what
+		 * comes back has to be an image.
+		 */
+		crop?: boolean;
 	} = $props();
 
 	let input: HTMLInputElement | undefined = $state();
@@ -63,6 +74,8 @@
 	let error = $state<string | null>(null);
 	let chosen = $state<string[]>([]);
 	let cameraInput: HTMLInputElement | undefined = $state();
+	/** Holds the uncropped photograph, where the call site asked for it. */
+	let originalInput: HTMLInputElement | undefined = $state();
 	let scanning = $state(false);
 	/**
 	 * The scan flow, resolved ONCE and held.
@@ -118,8 +131,18 @@
 	 * photograph is destructive, and handing over a curled, shadowed snapshot
 	 * when someone asked for a scan is useless. One button cannot be both.
 	 */
-	const offersPhoto = $derived(admitsImages(accept));
 	const offersScan = $derived(admitsPdf(accept));
+	/** The crop button: a document scan, or a picture that wants the same editor. */
+	const offersCrop = $derived(offersScan || (crop && admitsImages(accept)));
+	/**
+	 * …except where the picture wants the crop, and then there is only one job.
+	 *
+	 * `crop` says this site's photographs go through the editor, so a second
+	 * button offering the same camera without it would be a worse version of the
+	 * one beside it. The choices the editor already carries — the four modes and
+	 * Whole photo — are exactly what the plain button was for.
+	 */
+	const offersPhoto = $derived(admitsImages(accept) && !crop);
 
 	/**
 	 * The one place the two shapes meet. `onfiles` was typed FileList because a
@@ -130,20 +153,38 @@
 		return Array.from(files as ArrayLike<File>);
 	}
 
+	/**
+	 * Whether these files belong in the editor rather than on the field.
+	 *
+	 * A dropped photograph goes through the same pipeline as a captured one, so
+	 * both produce the same artifact — a cropped, flattened page rather than a
+	 * crooked snapshot of a desk. This is the path for photos someone already
+	 * has: a picture of a bill sent to them, something shot earlier and still in
+	 * the camera roll.
+	 *
+	 * PDFs pass through untouched; only images enter the pipeline. And only ONE
+	 * at a time: the spec has several dropped images becoming a single PDF, but
+	 * that needs the review screen to be meaningful, so until then a multiple
+	 * drop keeps the plain behaviour rather than half-doing it.
+	 */
+	const wantsEditor = (picked: File[]): boolean =>
+		offersCrop && picked.length === 1 && isImageFile(picked[0]);
+
+	/**
+	 * Set while a file the editor just produced is being put on the field.
+	 *
+	 * The editor hands back a cropped IMAGE, and `wantsEditor` says a single
+	 * image belongs in the editor — so without this the crop was fed straight
+	 * back into the thing that made it and the flow never ended. Cleared as soon
+	 * as the change event has been dispatched, so the next file a person picks
+	 * goes through the editor as it should.
+	 */
+	let fromEditor = false;
+
 	async function receive(files: FileList | File[]) {
 		const picked = list(files);
 
-		// A dropped photograph goes through the same pipeline as a captured one,
-		// so both produce the same artifact — a cropped, flattened PDF rather
-		// than a crooked snapshot of a desk. This is the path for photos someone
-		// already has: a picture of a bill sent to them, something shot earlier
-		// and still in the camera roll.
-		//
-		// PDFs pass through untouched; only images enter the pipeline. And only
-		// ONE at a time: the spec has several dropped images becoming a single
-		// PDF, but that needs the review screen to be meaningful, so until then a
-		// multiple drop keeps the plain behaviour rather than half-doing it.
-		if (offersScan && picked.length === 1 && isImageFile(picked[0])) {
+		if (!fromEditor && wantsEditor(picked)) {
 			incoming = picked;
 			await openScanner();
 			return;
@@ -178,13 +219,39 @@
 	 * "what these are" select. Firing the event here is what makes a drop and a
 	 * browse the same event to everything downstream.
 	 */
-	function adopt(files: FileList | File[]) {
-		if (!input) return;
-		if (!name) return void receive(files); // callback mode: no field to fill
+	/**
+	 * Put the uncropped photograph on the companion field.
+	 *
+	 * `<name>Original`, beside the field the crop lands on. One capture, two
+	 * files, one submit — which is the only way a site can show the whole frame
+	 * AND a crop of it without asking somebody to photograph the same bottle
+	 * twice.
+	 */
+	function keepOriginal(file: File) {
+		if (!originalInput) return;
 		const transfer = new DataTransfer();
-		for (const file of list(files)) transfer.items.add(file);
-		input.files = transfer.files;
-		input.dispatchEvent(new Event('change', { bubbles: true }));
+		transfer.items.add(file);
+		originalInput.files = transfer.files;
+	}
+
+	/**
+	 * `edited` marks a file the editor has already finished with. Everything
+	 * else — the camera button, a plain drop — is still a candidate for it.
+	 */
+	function adopt(files: FileList | File[], edited = false) {
+		if (!input) return;
+		fromEditor = edited;
+		try {
+			if (!name) return void receive(files); // callback mode: no field to fill
+			const transfer = new DataTransfer();
+			for (const file of list(files)) transfer.items.add(file);
+			input.files = transfer.files;
+			// The listener on the field runs `receive` synchronously from here, so
+			// the guard is still standing when it reads it.
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+		} finally {
+			fromEditor = false;
+		}
 	}
 </script>
 
@@ -256,12 +323,14 @@
 				<Icon name="camera" size={18} />
 			</button>
 		{/if}
-		{#if offersScan}
+		{#if offersCrop}
 			<button
 				type="button"
 				class="capture-btn"
-				aria-label="Scan a document"
-				title="Scan a document — cropped, flattened and saved as a PDF"
+				aria-label={crop ? 'Photograph it' : 'Scan a document'}
+				title={crop
+					? 'Photograph it — crop to the edges or keep the whole frame, in colour or not'
+					: 'Scan a document — cropped, flattened and saved as a PDF'}
 				onclick={(event) => {
 					event.stopPropagation();
 					// getUserMedia needs a secure context. Without one — a
@@ -275,9 +344,22 @@
 					else cameraInput?.click();
 				}}
 			>
-				<Icon name="scan" size={18} />
+				<Icon name={crop ? 'camera' : 'scan'} size={18} />
 			</button>
 		{/if}
+	{/if}
+
+	{#if crop && name}
+		<!-- The whole frame the crop came out of, posted beside it. A site that
+		     wants only the crop ignores this field and nothing changes. -->
+		<input
+			bind:this={originalInput}
+			class="field"
+			type="file"
+			name="{name}Original"
+			tabindex="-1"
+			aria-hidden="true"
+		/>
 	{/if}
 
 	<!--
@@ -316,6 +398,7 @@
 {#if scanning && ScanFlow}
 	<ScanFlow
 		{incoming}
+		finish={crop ? 'picture' : 'document'}
 		onclose={() => {
 			scanning = false;
 			incoming = [];
@@ -325,10 +408,14 @@
 			incoming = [];
 			input?.click();
 		}}
-		ondone={(page) => {
+		ondone={(page, original) => {
 			scanning = false;
 			incoming = [];
-			adopt([page]);
+			// The whole frame goes on a companion field, so a site that wants both
+			// gets both from one capture. Nothing reads it unless it asked for
+			// `crop`, and a form that ignores the field simply posts nothing extra.
+			if (original) keepOriginal(original);
+			adopt([page], true);
 		}}
 	/>
 {/if}

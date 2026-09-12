@@ -1,0 +1,23 @@
+// Horizontal bottle artwork. Label coordinates are in the 400 × 160 viewBox.
+export const bottles={
+ bordeaux:{label:'Bordeaux / straight shoulders',glass:'#263e30',cap:'#462c35',body:'M43 32H214Q227 32 233 46L246 64H346V96H246L233 114Q227 128 214 128H43Q31 128 31 116V44Q31 32 43 32Z',labelBox:{x:77,y:38,width:95,height:84}},
+ burgundy:{label:'Burgundy / sloped shoulders',glass:'#3d4430',cap:'#433031',body:'M43 30H187C221 30 239 56 256 64H346V96H256C239 104 221 130 187 130H43Q31 130 31 118V42Q31 30 43 30Z',labelBox:{x:73,y:38,width:91,height:84}},
+ champagne:{label:'Champagne / heavy glass',glass:'#353d22',cap:'#ac8d45',body:'M44 24H183C223 24 245 55 264 62H349V98H264C245 105 223 136 183 136H44Q29 136 29 121V39Q29 24 44 24Z',labelBox:{x:74,y:34,width:91,height:92}},
+ riesling:{label:'Riesling / slender bottle',glass:'#58704a',cap:'#a7a08c',body:'M40 42H175C204 42 247 64 277 68H349V92H277C247 96 204 118 175 118H40Q30 118 30 108V52Q30 42 40 42Z',labelBox:{x:68,y:47,width:90,height:66}},
+ whisky:{label:'Whisky / broad shoulders',glass:'#785024',cap:'#443121',body:'M45 25H202Q228 25 235 47L244 64H345V96H244L235 113Q228 135 202 135H45Q31 135 31 121V39Q31 25 45 25Z',labelBox:{x:76,y:33,width:107,height:94}},
+ gin:{label:'Gin / square bottle',glass:'#345d63',cap:'#a6aaa2',body:'M46 30H203Q220 30 228 46L239 64H346V96H239L228 114Q220 130 203 130H46Q32 130 32 116V44Q32 30 46 30Z',labelBox:{x:75,y:37,width:107,height:86}},
+ beer:{label:'Beer / long neck',glass:'#624017',cap:'#ad9456',body:'M46 39H190C216 39 229 62 246 65H349V95H246C229 98 216 121 190 121H46Q33 121 33 108V52Q33 39 46 39Z',labelBox:{x:75,y:44,width:83,height:72}},
+ cognac:{label:'Cognac / rounded decanter',glass:'#724422',cap:'#59422c',body:'M57 20H166C225 20 243 51 252 64H342V96H252C243 109 225 140 166 140H57Q30 140 30 113V47Q30 20 57 20Z',labelBox:{x:79,y:37,width:89,height:86}}
+};
+const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+let sequence=0;
+export function renderBottle({type='bordeaux',labelImage,labelFit='contain',glass,cap,title,width=400,idPrefix}={}){
+ const b=bottles[type];if(!b)throw Error('Unknown bottle type');
+ for(const color of [glass,cap])if(color!==undefined&&!/^#[\da-f]{6}$/i.test(color))throw Error('Use six-digit hex colors');
+ if(!['contain','cover'].includes(labelFit))throw Error('Invalid label fit');
+ if(!Number.isFinite(width)||width<40||width>4096)throw Error('Invalid width');
+ if(labelImage&&!/^(https?:\/\/|data:image\/(png|jpeg|webp);base64,|blob:|\.?\.?\/)/i.test(labelImage))throw Error('Use an image URL, relative path, or raster data URL');
+ const id=idPrefix??`bottle-${++sequence}`;if(!/^[a-zA-Z][\w-]*$/.test(id))throw Error('Invalid idPrefix');
+ const {x,y,width:w,height:h}=b.labelBox;
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" width="${width}" height="${width*.4}" role="img" aria-label="${escape(title??b.label)}"><title>${escape(title??b.label)}</title><defs><linearGradient id="${id}-glass" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffffff" stop-opacity=".18"/><stop offset=".22" stop-color="#ffffff" stop-opacity=".03"/><stop offset=".65" stop-color="#000000" stop-opacity=".08"/><stop offset="1" stop-color="#000000" stop-opacity=".5"/></linearGradient><clipPath id="${id}-body"><path d="${b.body}"/></clipPath><clipPath id="${id}-label"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2"/></clipPath></defs><ellipse cx="194" cy="146" rx="158" ry="5" fill="#000" opacity=".18"/><path d="${b.body}" fill="${glass??b.glass}" stroke="#0a1013" stroke-opacity=".7" stroke-width="2"/><path d="${b.body}" fill="url(#${id}-glass)"/><g clip-path="url(#${id}-body)"><path d="M44 39H187Q218 39 235 62" fill="none" stroke="#fff" opacity=".15" stroke-width="5" stroke-linecap="round"/><path d="M41 44V116" stroke="#fff" opacity=".13" stroke-width="3"/><path d="M48 121H191" stroke="#000" opacity=".25" stroke-width="4"/><path d="M265 70H334" stroke="#fff" opacity=".14" stroke-width="3"/></g><rect x="337" y="62" width="31" height="36" rx="4" fill="${cap??b.cap}" stroke="#000" stroke-opacity=".25"/><path d="M342 65V95M348 65V95M354 65V95M360 65V95" stroke="#fff" opacity=".1"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="#eee9db"/>${labelImage?`<image href="${escape(labelImage)}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid ${labelFit==='cover'?'slice':'meet'}" clip-path="url(#${id}-label)"/>`:''}<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="none" stroke="#000" stroke-opacity=".18"/></svg>`;
+}

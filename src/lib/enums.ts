@@ -67,7 +67,22 @@ export const ENTITY_KINDS = [
 	'tax_statement',
 	// An employer, the tax office, an insurer. A kind rather than a table of its
 	// own so a document files against one through `document_link` unchanged.
-	'organisation'
+	'organisation',
+	// The three Life records a household files paper against or attaches a
+	// contact to: the booking confirmations and tickets for a trip, the receipt
+	// for a bottle, the page a recipe was torn out of. They are here rather than
+	// reached through a column of their own for exactly the reason this table
+	// exists — a direct `document_id` on one table answers "this flight's
+	// confirmation" and nothing else, so the Documents screen could not say what
+	// a PDF was filed against, and tagging or naming a contact would each have
+	// wanted another table.
+	//
+	// `trip_idea` is deliberately absent. An idea is removed with an undo bar and
+	// is not something anybody files a receipt against; a trigger on a table that
+	// never needed one is a write on every insert forever.
+	'trip',
+	'bottle',
+	'recipe'
 ] as const;
 
 export type EntityKind = (typeof ENTITY_KINDS)[number];
@@ -225,6 +240,48 @@ export const ENUMS = {
 	// engine can conclude, not what any one reader happens to support.
 	proof_class: ['P4', 'P3', 'P2', 'P1', 'P0'],
 
+	/**
+	 * What a booking on a trip IS, which is what its icon says.
+	 *
+	 * The list is the shapes of travel, not a taxonomy of vendors: what
+	 * separates them is whether the thing moves you, houses you, or waits for
+	 * you. `other` catches the tour, the ticket and the thing nobody expected.
+	 */
+	'booking.kind': ['flight', 'train', 'bus', 'ferry', 'car', 'hotel', 'other'],
+
+	/**
+	 * Where a visit came from, and it decides who may edit it.
+	 *
+	 * A `trip` visit is derived: it is rewritten whenever its trip's
+	 * destinations change, and removing the destination removes it. A `manual`
+	 * one was typed in for a year before Continuum and is never touched again.
+	 * Without the distinction, correcting a trip would quietly delete the
+	 * decade somebody entered by hand.
+	 */
+	'visit.source': ['trip', 'manual'],
+
+	/**
+	 * What is in the bottle.
+	 *
+	 * The type picks the silhouette on the card, so this list is as long as the
+	 * artwork is — a gin and a whisky are different drawings, a rum and a
+	 * bourbon are not. `other` exists because a household will buy something
+	 * nobody listed; the filter chips are derived from the bottles that exist,
+	 * so no "Other" chip appears unless something is actually filed under it.
+	 */
+	'bottle.type': [
+		'wine',
+		'champagne',
+		'whisky',
+		'bourbon',
+		'gin',
+		'rum',
+		'beer',
+		'liqueur',
+		'cognac',
+		'other'
+	],
+
 	'entity.kind': ENTITY_KINDS
 } as const satisfies Record<string, readonly string[]>;
 
@@ -278,6 +335,9 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'document_identity', column: 'kind', enum: 'document_identity.kind' },
 	{ table: 'calendar_account', column: 'provider', enum: 'calendar_account.provider' },
 	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' },
+	{ table: 'trip_booking', column: 'kind', enum: 'booking.kind' },
+	{ table: 'visit', column: 'source', enum: 'visit.source' },
+	{ table: 'bottle', column: 'type', enum: 'bottle.type' },
 	{ table: 'entity', column: 'kind', enum: 'entity.kind' }
 ];
 

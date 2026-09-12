@@ -14,7 +14,13 @@
 	// covers everything the grid does not, without shipping an emoji database.
 	//
 	// 24 cells at 6 × 36px is 236px wide, so the grid never scrolls.
-	const CHOICES = [
+	//
+	// The default set is what a household files PAPER under. A caller whose
+	// subject is something else — a trip, a recipe, a bottle — passes its own
+	// twenty-four through `choices`, because a picker offering 🧾 and ⚖️ for a
+	// holiday is a picker nobody uses, and a second component would be a second
+	// popover to keep in step with this one.
+	const FILING = [
 		'🗂️',
 		'🏠',
 		'🚗',
@@ -44,11 +50,14 @@
 	let {
 		value = $bindable('🗂️'),
 		name,
+		choices = FILING,
 		dashed = false,
 		inline = false
 	}: {
 		value?: string;
 		name?: string;
+		/** Twenty-four of them, or the grid stops being one tidy block. */
+		choices?: readonly string[];
 		/** The add row's empty state: a dashed square that reads as "pick one". */
 		dashed?: boolean;
 		/**
@@ -81,7 +90,7 @@
 	{#if showGrid}
 		<div class="pop" class:inline>
 			<div class="grid">
-				{#each CHOICES as choice (choice)}
+				{#each choices as choice (choice)}
 					<button
 						type="button"
 						class="cell"

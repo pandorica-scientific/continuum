@@ -337,6 +337,31 @@ function quoted(css) {
 
 const css = readFileSync(CSS, 'utf8');
 const check = process.argv.includes('--check');
+
+/**
+ * The design workspace is not in the repository.
+ *
+ * `design_system/` holds the canvases, the handoff bundles and the generated
+ * TOKENS.md, and it is gitignored — it is where the design work happens, not
+ * something the build ships. So on a fresh checkout, which is every CI run and
+ * every new clone, there is nothing here to check: no reference to compare, no
+ * canvases to resolve tokens against, no handoff quoting a value.
+ *
+ * Before this guard the check crashed with ENOENT out of `readdirSync`, which
+ * took `npm run lint` down with it. Saying so and passing is right: this check
+ * guards the designer's copy against the stylesheet, and an absent copy cannot
+ * have drifted from anything.
+ */
+if (!existsSync(CANVAS_DIR)) {
+	const where = relative(root, CANVAS_DIR);
+	if (check) {
+		console.log(`design:tokens — no ${where}/ in this checkout, nothing to check.`);
+		process.exit(0);
+	}
+	console.error(`design:tokens — no ${where}/ to write into.`);
+	process.exit(1);
+}
+
 const doc = render(css);
 
 if (!check) {

@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
-import { Readable } from 'node:stream';
-import { env } from '$env/dynamic/private';
+import { extname } from 'node:path';
 import { UPLOAD_EXTENSIONS } from '$lib/uploads';
+import { setStorageDriver, storageDriver } from './storage';
+import { localDisk } from './local-disk';
 
 // User uploads (floor plans, photos, later documents) live on the data volume
 // (`/data` in Docker, `./data` in development) and are served through an
@@ -16,9 +14,10 @@ import { UPLOAD_EXTENSIONS } from '$lib/uploads';
 // of the list would drift into refusing something a picker had just offered.
 const ALLOWED_EXT = new Set<string>(UPLOAD_EXTENSIONS);
 
-function uploadDir(): string {
-	return env.UPLOAD_DIR || 'data';
-}
+// The default, and the only one this repository ships. Registered here rather
+// than in the extensions front door, which a downstream overwrites — a default
+// registered there would vanish with it.
+setStorageDriver(localDisk);
 
 function isUploadName(name: string): boolean {
 	return /^[0-9a-f-]{36}\.[a-z0-9]+$/.test(name);
@@ -57,9 +56,8 @@ export async function saveUploadAndHash(
 export async function saveUploadBytes(bytes: Uint8Array, fileName: string): Promise<string> {
 	const ext = extname(fileName).toLowerCase();
 	if (!ALLOWED_EXT.has(ext)) throw new Error(`File type ${ext || 'unknown'} is not allowed.`);
-	await mkdir(uploadDir(), { recursive: true });
 	const name = `${randomUUID()}${ext}`;
-	await writeFile(join(uploadDir(), name), bytes);
+	await storageDriver().put(name, bytes);
 	return name;
 }
 
@@ -88,11 +86,8 @@ export function hashBytes(bytes: Uint8Array): string {
  */
 export async function hashStoredUpload(name: string): Promise<string | null> {
 	if (!isUploadName(name)) return null;
-	try {
-		return hashBytes(new Uint8Array(await readFile(join(uploadDir(), name))));
-	} catch {
-		return null;
-	}
+	const bytes = await storageDriver().get(name);
+	return bytes ? hashBytes(bytes) : null;
 }
 
 /**
@@ -104,11 +99,7 @@ export async function hashStoredUpload(name: string): Promise<string | null> {
  */
 export async function readUpload(name: string): Promise<Uint8Array | null> {
 	if (!isUploadName(name)) return null;
-	try {
-		return new Uint8Array(await readFile(join(uploadDir(), name)));
-	} catch {
-		return null;
-	}
+	return storageDriver().get(name);
 }
 
 /**
@@ -120,22 +111,13 @@ export async function readUpload(name: string): Promise<Uint8Array | null> {
  */
 export async function uploadSize(name: string): Promise<number | null> {
 	if (!isUploadName(name)) return null;
-	try {
-		return (await stat(join(uploadDir(), name))).size;
-	} catch {
-		return null;
-	}
+	return storageDriver().size(name);
 }
 
 /** Remove a just-saved orphan after a later database mutation fails. */
 export async function removeUpload(name: string): Promise<boolean> {
 	if (!isUploadName(name)) return false;
-	try {
-		await unlink(join(uploadDir(), name));
-		return true;
-	} catch {
-		return false;
-	}
+	return storageDriver().remove(name);
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -187,19 +169,15 @@ const DOWNLOAD_ONLY = new Set(['.csv', '.xml', '.ofx', '.abo', '.xlsx']);
 export async function openUpload(name: string): Promise<Response | null> {
 	// The name is always a uuid + extension we generated; reject anything else.
 	if (!isUploadName(name)) return null;
-	const path = join(uploadDir(), name);
+	const opened = await storageDriver().open(name);
+	if (!opened) return null;
 	const ext = extname(name);
-	try {
-		const info = await stat(path);
-		const headers: Record<string, string> = {
-			...SECURITY_HEADERS,
-			'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
-			'content-length': String(info.size),
-			'cache-control': 'private, max-age=31536000, immutable'
-		};
-		if (DOWNLOAD_ONLY.has(ext)) headers['content-disposition'] = `attachment; filename="${name}"`;
-		return new Response(Readable.toWeb(createReadStream(path)) as ReadableStream, { headers });
-	} catch {
-		return null;
-	}
+	const headers: Record<string, string> = {
+		...SECURITY_HEADERS,
+		'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+		'content-length': String(opened.size),
+		'cache-control': 'private, max-age=31536000, immutable'
+	};
+	if (DOWNLOAD_ONLY.has(ext)) headers['content-disposition'] = `attachment; filename="${name}"`;
+	return new Response(opened.stream, { headers });
 }

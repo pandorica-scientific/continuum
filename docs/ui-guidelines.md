@@ -394,9 +394,13 @@ Four ESLint rules run on `src/**/*.svelte`: `design/no-raw-geometry`,
 They live in `eslint-rules/`, read the `<style>` block as text (ESLint does not parse CSS
 inside a Svelte component), and are themselves tested by `tests/unit/design-rules.test.ts`
 and `tests/unit/no-raw-geometry.test.ts`. `tests/unit/screen-frame.test.ts` holds the
-frame, `tests/unit/palette-contrast.test.ts` the tint contrast, and
-`npm run design:tokens:check` — part of `npm run lint` — that `design_system/` is current
-with the stylesheet.
+frame and `tests/unit/palette-contrast.test.ts` the tint contrast.
+
+`npm run design:tokens:check` verifies that `design_system/` is current with the
+stylesheet, and is **run by hand, not by `npm run lint`**. `design_system/` is the design
+workspace and is not in the repository, so on a fresh checkout — which is every CI run —
+there is nothing for it to compare. Run it after changing a token, alongside
+`npm run design:tokens`.
 
 ## Before you call it done
 

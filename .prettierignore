@@ -15,3 +15,10 @@ package-lock.json
 # would be noise in every diff and a silent edit to the thing under test.
 tests/fixtures/synthetic/
 
+# Vendored design libraries, copied in from design_system/ unchanged. Keeping
+# them byte-identical to their source is what makes re-vendoring a `cp` and a
+# diff rather than a merge — see src/lib/life/art/README.md.
+src/lib/life/art/stamps/
+src/lib/life/art/dishes/
+src/lib/life/art/bottles/
+
