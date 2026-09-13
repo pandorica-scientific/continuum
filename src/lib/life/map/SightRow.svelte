@@ -12,6 +12,7 @@
 	 * the country. That is the whole point of the separation and it is stated
 	 * under the row, because it is the one thing here that looks like a bug.
 	 */
+	import { submitAction } from '$lib/actions/result';
 	import SightCoin from '$lib/life/map/SightCoin.svelte';
 
 	interface Sight {
@@ -38,7 +39,16 @@
 
 	/** Rubbed in this session, on top of what the server already knew. */
 	let justSeen = $state<string[]>([]);
-	const gone = $derived(new Set([...seen, ...justSeen]));
+	/**
+	 * Taken back in this session, which has to outrank `seen`.
+	 *
+	 * Dropping the id from `justSeen` alone is not enough: a region scratched in
+	 * the same five seconds invalidates the visit query, the page's `seen` comes
+	 * back carrying this place, and the coin would stay rubbed over a row the
+	 * server has already deleted. The next load agrees with this list.
+	 */
+	let takenBack = $state<string[]>([]);
+	const gone = $derived(new Set([...seen, ...justSeen].filter((id) => !takenBack.includes(id))));
 
 	let toast = $state<string | null>(null);
 	let undoable = $state<{ id: string; name: string } | null>(null);
@@ -58,6 +68,7 @@
 	}
 
 	async function rubbed(sight: Sight) {
+		takenBack = takenBack.filter((one) => one !== sight.id);
 		justSeen = [...justSeen, sight.id];
 		say(`${sight.name} — seen.`, { id: sight.id, name: sight.name });
 		if (!(await onseen(sight.id))) {
@@ -77,18 +88,28 @@
 		if (!taking) return;
 		undoable = null;
 
-		// Dropping it from the list is the whole of it: each coin watches its own
-		// `seen` prop and puts its gold back when this stops being true.
+		// Each coin watches its own `seen` prop and puts its gold back when this
+		// stops being true — which means overriding what the server last said as
+		// well as forgetting the rub.
 		justSeen = justSeen.filter((one) => one !== taking.id);
+		takenBack = [...takenBack, taking.id];
 
-		try {
-			const body = new FormData();
-			body.set('place', taking.id);
-			await fetch('?/unseen', { method: 'POST', body });
-			say(`${taking.name} — put back.`);
-		} catch {
-			say(`${taking.name} — put back here, but the change could not be saved.`);
+		const body = new FormData();
+		body.set('place', taking.id);
+		// `submitAction` deserializes the action's own result. The bare fetch this
+		// replaces only caught a network error — `fetch` does not throw on 400 or
+		// 500 — so a refused delete still said "put back".
+		const outcome = await submitAction('?/unseen', body, { updatePage: false });
+		if (outcome.type !== 'success') {
+			// The override comes off again: the row is still there, so the coin
+			// should go back to agreeing with the server rather than holding a
+			// state nothing else believes in.
+			takenBack = takenBack.filter((one) => one !== taking.id);
+			justSeen = [...justSeen, taking.id];
+			say(`${taking.name} — it could not be put back.`);
+			return;
 		}
+		say(`${taking.name} — put back.`);
 	}
 </script>
 

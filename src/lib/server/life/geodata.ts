@@ -15,7 +15,7 @@
  * be found.
  */
 import { gunzipSync } from 'node:zlib';
-import { geoContains, geoEquirectangular, geoPath } from 'd3-geo';
+import { geoBounds, geoContains, geoEquirectangular, geoPath } from 'd3-geo';
 import type { Geometry } from 'geojson';
 import type { Topology } from 'topojson-specification';
 import {
@@ -235,21 +235,64 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 	const COLUMNS = 360;
 	const LABEL_ROWS = [286, 310, 334, 352];
 
+	/*
+	 * The probe points, inverted ONCE.
+	 *
+	 * Inside the per-zone loop this was the same 1,440 inversions redone for
+	 * every band, and the `geoContains` behind them was the real cost: forty
+	 * zones × 360 columns × four rows is 57,600 point-in-multipolygon tests
+	 * against geometry with tens of thousands of vertices, which measured
+	 * sixteen seconds on the shipped `zones.json.gz` — paid by whoever opened
+	 * the Map first after a restart, since this answer is cached but never
+	 * warmed.
+	 */
+	const probes: [number, number][][] = [];
+	for (let at = 0; at < COLUMNS; at++) {
+		const x = ((at + 0.5) / COLUMNS) * 720;
+		probes[at] = LABEL_ROWS.map((y) => flat.invert?.([x, y])).filter(
+			(point): point is [number, number] => Boolean(point)
+		);
+	}
+
+	/**
+	 * Whether a point is inside a feature's bounding box — west may wrap east.
+	 *
+	 * The width is folded rather than taken modulo 360, which would turn a box
+	 * that spans the whole circle into a box of width zero and reject every
+	 * point in it. `geoBounds` reports exactly that — `[[-180, …], [180, …]]` —
+	 * for anything containing a pole or reaching more than half way round, and
+	 * this pass is only ever allowed to be a cheap NO: a box test that rejects
+	 * what `geoContains` would accept is a hole in the band, not a saving.
+	 */
+	const inBox = (box: [[number, number], [number, number]], point: [number, number]): boolean => {
+		if (point[1] < box[0][1] || point[1] > box[1][1]) return false;
+		const span = box[1][0] - box[0][0];
+		const width = span < 0 ? span + 360 : span;
+		if (width >= 360) return true;
+		return (point[0] - box[0][0] + 360) % 360 <= width;
+	};
+
 	const bands = zones.map((one) => {
 		const features = one.geometry.map((geometry) => ({
 			type: 'Feature' as const,
 			properties: null,
 			geometry
 		}));
+		// A box test first, because it rejects almost every pair for the price of
+		// four comparisons and leaves `geoContains` only the handful that could
+		// actually be inside.
+		const boxes = features.map(
+			(feature) => geoBounds(feature as never) as [[number, number], [number, number]]
+		);
 		// Which columns this zone reaches, across the rows the label crosses.
 		// Ownership is settled after every zone has been measured — see below.
 		const reach: boolean[] = [];
 		for (let at = 0; at < COLUMNS; at++) {
-			const x = ((at + 0.5) / COLUMNS) * 720;
-			reach[at] = LABEL_ROWS.some((y) => {
-				const point = flat.invert?.([x, y]);
-				return point ? features.some((one) => geoContains(one as never, point)) : false;
-			});
+			reach[at] = probes[at].some((point) =>
+				features.some(
+					(feature, index) => inBox(boxes[index], point) && geoContains(feature as never, point)
+				)
+			);
 		}
 
 		return {

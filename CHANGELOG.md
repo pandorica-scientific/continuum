@@ -2,18 +2,39 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
-## 0.9.1 — 2026-09-12
+## 0.9.1 — 2026-09-13
 
-> Countries you can actually name, and a scratch you can take back.
+> Regions you can actually name and reach, places worth the detour, and a scratch you can take back.
 
 ### ✨ Added
 
+- 🪙 **Places worth seeing** — a curated set of places for each country sits under its map as gold coins, each rubbing off to reveal an engraving of the place itself.
+- 👁️ **Seeing a place is recorded on its own** — rubbing a coin records that place and never colours the country, which keeps visits the only answer to where the household has been.
+- 🧭 **A trip suggests what is worth seeing there** — the curated places for a trip's destinations are offered beneath its list and become rows only when one is tapped.
 - ↩️ **A scratch can be taken back for five seconds** — Undo restores the selected region and removes the manual visit without affecting trip-derived visits.
+- 🗿 **Attribution for the artwork and data the map ships** — NOTICE.md records the engravings, typefaces and geographic sources with their licences.
+- 🏠 **The demo household arrives with its smart home already connected** — rooms, devices that switch and a month of energy, held in memory rather than reached over the network.
+
+### 🔧 Changed
+
+- 🌏 **A continent coin is scratched away in the shape of each country visited** — Australia clears the share of the Oceania coin it actually covers instead of a fixed dot.
+- 📐 **Continent progress is weighted by land area** — and the bar is held back from a hundred per cent until every country on that continent has been visited.
+- 🧩 **Far-flung regions are drawn in panels of their own** — Svalbard, the Azores, Madeira and the French overseas régions keep a legible scale instead of shrinking their country into a sliver.
+- 🕐 **Time-zone offsets are labelled along the band they mark** — the labels read up the map edge rather than stacking into rows above it.
 
 ### 🐛 Fixed
 
 - 🗺️ **Country regions now use the correct administrative level** — regional boundaries are dissolved consistently, including for France, Italy, Spain and the United Kingdom.
 - ✨ **Scratching a region no longer reloads the whole map** — the country outline and foil state remain stable while the visit is recorded.
+- 🔍 **A region smaller than a fingertip can now be scratched** — Jervis Bay, the District of Columbia, Moscow, Luxor and every atoll of the Maldives are drawn as a disc large enough to reach.
+- 🏝️ **Pacific countries are on the right continent** — Kiribati, Palau, Guam, French Polynesia and the Northern Marianas were filed under North America or Asia, so scratching one moved the wrong coin.
+- 📊 **A continent counts every country the map can draw** — Oceania read a hundred per cent at seven countries because the rest were in no denominator at all.
+- 🇫🇷 **Hyphenated region names wrap on their hyphens** — Provence-Alpes-Côte d'Azur and its neighbours no longer overflow their outline.
+- 🕛 **UTC+12:00 no longer sits on top of UTC+11:00** — a band cut in half by the edge of the map keeps its own label.
+- 🧹 **A browser that had opened the map before no longer serves stale geodata** — outlines, continents and time zones are all stamped with the build they came from.
+- ⚡ **The first Map after a restart opens straight away** — working out which time zone owns each column took seventeen seconds and now takes half of one.
+- 🇷🇺 **A region that crosses the antimeridian stays with its country** — Chukotka was measured as 324 degrees from its neighbours and drawn in a panel of its own.
+- ✅ **A scratch the server refused is no longer reported as saved** — a rejected scratch, undo or coin says what happened instead of showing a change that the next load undoes.
 
 ## 0.9.0 — 2026-09-12
 

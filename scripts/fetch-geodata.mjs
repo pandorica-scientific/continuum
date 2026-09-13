@@ -586,7 +586,13 @@ function buildPlaces(byAdmin, codes) {
 	// coordinate sits in its own bay — plus Melilla, which the map drops on
 	// purpose. Those get no region and their coin says the country instead.
 	console.log(`  ${out.length} places, ${unplaced} outside every region outline`);
-	return { places: out, version: source.metadata?.version ?? null };
+	// `generatedOn` is the field the dataset actually carries — there is no
+	// `metadata.version`, so asking for one wrote `"placesVersion": null` into
+	// every manifest and the vintage was never recorded at all. `schemaVersion`
+	// is the shape of the file rather than its contents, so it is only the
+	// fallback.
+	const metadata = source.metadata ?? {};
+	return { places: out, version: metadata.generatedOn ?? metadata.schemaVersion ?? null };
 }
 
 async function main() {

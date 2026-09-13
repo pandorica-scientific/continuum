@@ -229,7 +229,7 @@
 		border: 1px solid color-mix(in srgb, var(--ink) 40%, transparent);
 		border-radius: var(--radius-pill);
 		background: none;
-		color: color-mix(in srgb, var(--ink) 68%, var(--fg1));
+		color: color-mix(in srgb, var(--ink) 55%, var(--fg1));
 		font-size: var(--text-sm);
 		white-space: nowrap;
 	}

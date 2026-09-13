@@ -15,6 +15,7 @@
 	 */
 	import { untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
 	import { countryColour, regionFill } from '$lib/life/geo/country-colour';
 	import { COUNTRY_COLOURS } from '$lib/life/geo/country-colour-table';
 	import {
@@ -154,6 +155,10 @@
 
 		let live = true;
 		regions = null;
+		// Cleared with them: the panels belong to the country being left, and
+		// leaving them up drew Portugal's Azores and Madeira boxes over the grey
+		// fallback outline of whatever was opened next until the fetch returned.
+		insets = [];
 		failed = null;
 
 		void (async () => {
@@ -448,18 +453,23 @@
 		);
 
 		if (!name) return;
-		try {
-			const body = new FormData();
-			body.set('region', name);
-			if (who) body.set('who', who);
-			await fetch('?/scratched', { method: 'POST', body });
-			// Only the visit query, not every load on the route: reloading the
-			// layout as well is what made the page blink after each scratch.
-			await invalidate(VISITS);
-		} catch {
+		const body = new FormData();
+		body.set('region', name);
+		if (who) body.set('who', who);
+		// `submitAction` rather than a bare fetch, which is the repo's own helper
+		// for exactly this. The bare version only ever noticed a network error:
+		// `fetch` does not throw on 400 or 500, so an action that REFUSED the
+		// scratch — a missing region, a rejected `who` — went on to invalidate and
+		// left "scratched off" on screen for something the server had not kept.
+		const outcome = await submitAction('?/scratched', body, { updatePage: false });
+		if (outcome.type !== 'success') {
 			// The foil is off on screen either way; the next scratch tries again.
 			say(`${name} — scratched off, but it could not be saved.`);
+			return;
 		}
+		// Only the visit query, not every load on the route: reloading the layout
+		// as well is what made the page blink after each scratch.
+		await invalidate(VISITS);
 	}
 
 	/**
@@ -478,15 +488,21 @@
 		layer?.recoat(taking.index);
 		scratched = scratched.filter((one) => one !== taking.name);
 
-		try {
-			const body = new FormData();
-			body.set('region', taking.name);
-			await fetch('?/unscratched', { method: 'POST', body });
-			await invalidate(VISITS);
-			say(`${taking.name} — put back.`);
-		} catch {
-			say(`${taking.name} — put back here, but the change could not be saved.`);
+		const body = new FormData();
+		body.set('region', taking.name);
+		const outcome = await submitAction('?/unscratched', body, { updatePage: false });
+		if (outcome.type !== 'success') {
+			// Put the screen back where the server says it is rather than leaving a
+			// recoated region over a visit that is still recorded. The server
+			// refuses an undo it cannot carry out — a visit a trip wrote — and says
+			// why, so that reason is what the pill shows.
+			layer?.uncoat(taking.index);
+			scratched = [...scratched, taking.name];
+			say(`${taking.name} — ${outcome.message}`);
+			return;
 		}
+		await invalidate(VISITS);
+		say(`${taking.name} — put back.`);
 	}
 </script>
 

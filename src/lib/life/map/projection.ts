@@ -203,52 +203,6 @@ function mainland(shape: Feature<Geometry>): Feature<Geometry> {
 }
 
 /**
- * Re-fit a country once its provinces have arrived.
- *
- * The country outline and the province outlines are different datasets and do
- * not agree about where a country ends — so a frame built from one and filled
- * with the other leaves provinces hanging off the edge. Fitting to the
- * provinces that are actually in frame is what makes them fill the box.
- *
- * Mutates the projection it is given, and hands back the provinces worth
- * drawing: far-flung ones are dropped rather than dragging the frame out to a
- * scale where nothing is legible.
- */
-export function refitToProvinces(
-	projection: GeoProjection,
-	country: Feature<Geometry>,
-	provinces: Feature<Geometry>[],
-	view: { width: number; height: number; inset: number } = VIEW
-): Feature<Geometry>[] {
-	if (provinces.length <= 1) return provinces;
-
-	const [[west, south], [east, north]] = geoBounds(mainland(country) as never);
-	// A box that crosses the antimeridian reads west > east. Russia and Fiji.
-	const wrapped = west > east;
-	const padLon = (wrapped ? 360 - (west - east) : east - west) * 0.15 + 0.6;
-	const padLat = (north - south) * 0.15 + 0.6;
-
-	const inFrame = (province: Feature<Geometry>) => {
-		const at = geoCentroid(province as never);
-		if (at[1] < south - padLat || at[1] > north + padLat) return false;
-		if (wrapped) return at[0] >= west - padLon || at[0] <= east + padLon;
-		return at[0] >= west - padLon && at[0] <= east + padLon;
-	};
-
-	const kept = provinces.filter(inFrame);
-	const parts = kept.length > 1 ? kept : provinces;
-
-	projection.fitExtent(
-		[
-			[view.inset, view.inset],
-			[view.width - view.inset, view.height - view.inset]
-		],
-		{ type: 'FeatureCollection', features: parts } as unknown as GeoPermissibleObjects
-	);
-	return parts;
-}
-
-/**
  * Split a country's regions into the main body and its far-flung groups.
  *
  * Portugal is the mainland, the Azores and Madeira; Norway is the mainland and
@@ -266,9 +220,27 @@ export function refitToProvinces(
  * frame around and the rest are insets.
  */
 export function clusterRegions(regions: Feature<Geometry>[]): Feature<Geometry>[][] {
-	/** Degrees between two boxes, zero when they touch or overlap. */
+	/**
+	 * Degrees between two boxes, zero when they touch or overlap.
+	 *
+	 * Longitude measured ON THE CIRCLE, which is not the same as subtracting and
+	 * is wrong exactly where it matters. `geoBounds` reports a shape that crosses
+	 * the antimeridian with its west GREATER than its east — Russia's Chukchi
+	 * Autonomous Okrug comes back as 157.7°E to −169.0°E — and plain arithmetic
+	 * then reads that as 324 degrees from the Kamchatka it actually overlaps. The
+	 * okrug borders the Russian mainland and was being drawn in an inset panel of
+	 * its own. `fetch-geodata.mjs` already measures its continent boxes this way.
+	 */
 	const gap = (a: [[number, number], [number, number]], b: typeof a): number => {
-		const x = Math.max(0, Math.max(a[0][0] - b[1][0], b[0][0] - a[1][0]));
+		// Each box as a start plus a width going east, so a wrapped box is the
+		// part that wraps rather than a negative span.
+		const wide = (box: typeof a) => (box[1][0] - box[0][0] + 360) % 360;
+		const [wa, wb] = [wide(a), wide(b)];
+		// How far east b's west edge is from a's, and the other way round. Either
+		// landing inside the other interval means the two overlap in longitude.
+		const east = (b[0][0] - a[0][0] + 360) % 360;
+		const west = (a[0][0] - b[0][0] + 360) % 360;
+		const x = east <= wa || west <= wb ? 0 : Math.min(east - wa, west - wb);
 		const y = Math.max(0, Math.max(a[0][1] - b[1][1], b[0][1] - a[1][1]));
 		return Math.hypot(x, y);
 	};

@@ -47,7 +47,7 @@ import { mkdirSync } from 'node:fs';
  */
 const AXE = process.env.SHOT_AXE !== 'off';
 const AxeBuilder = AXE ? (await import('@axe-core/playwright')).default : null;
-/** @type {{ screen: string, theme: string, id: string, nodes: number, help: string }[]} */
+/** @type {{ screen: string, theme: string, id: string, nodes: number, help: string, where: string[] }[]} */
 const violations = [];
 
 async function audit(page, screen, theme) {
@@ -59,7 +59,17 @@ async function audit(page, screen, theme) {
 		.exclude('img')
 		.analyze();
 	for (const v of results.violations) {
-		violations.push({ screen, theme, id: v.id, nodes: v.nodes.length, help: v.help });
+		violations.push({
+			screen,
+			theme,
+			id: v.id,
+			nodes: v.nodes.length,
+			help: v.help,
+			// The selectors, because a count is not something anyone can fix: a run
+			// that says "3 contrast violations on Collections" and nothing else
+			// sends whoever reads it hunting through a screen by eye.
+			where: v.nodes.slice(0, 4).map((node) => node.target.join(' '))
+		});
 	}
 }
 import { dirname, resolve } from 'node:path';
@@ -124,6 +134,9 @@ const SCREENS = [
 	// charts are the point of the screen — scroll to them rather than trimming
 	// the demo data to fit the frame.
 	{ name: 'tax', path: '/tax', settle: 600, scrollTo: 'text=one line per person and country' },
+	// The one screen that switches something in the house rather than recording
+	// it, so it is worth a phone frame: that is where a light gets turned off.
+	{ name: 'home', path: '/home', settle: 900, phone: true },
 	{ name: 'calendar', path: '/calendar', phone: true },
 	{ name: 'contacts', path: '/contacts' },
 	// One per shelf: each draws a different engine, and a single screenshot of
@@ -137,7 +150,23 @@ const SCREENS = [
 	{ name: 'documents-inventory', path: '/documents?shelf=inventory' },
 	{ name: 'documents-property', path: '/documents?shelf=property' },
 	{ name: 'documents-vehicles', path: '/documents?shelf=vehicles' },
-	{ name: 'documents-list', path: '/documents?shelf=vehicles&view=list' }
+	{ name: 'documents-list', path: '/documents?shelf=vehicles&view=list' },
+	// The Life area. The map draws itself from geodata fetched after the page
+	// loads and then paints a foil canvas per region, so it settles longer than
+	// any chart does.
+	{ name: 'map', path: '/map', settle: 1800, phone: true },
+	// A country rather than the world: regions to scratch and the coins under
+	// them are the half of the map the world view cannot show. Australia because
+	// the demo household has been to all eleven of its regions, and because its
+	// outline survives being rendered an inch wide.
+	{ name: 'map-country', path: '/map/AU', settle: 1800 },
+	{ name: 'trips', path: '/trips', settle: 600, phone: true },
+	// Opened by name: which trip is first moves with the demo seed's dates, and
+	// this one is the only destination whose suggestions, bookings and readiness
+	// are all populated.
+	{ name: 'trip', path: '/trips', settle: 400, open: 'a:has-text("A weekend in Vienna")' },
+	{ name: 'cookbook', path: '/cookbook', settle: 600 },
+	{ name: 'collections', path: '/collections', settle: 600 }
 ];
 
 const only = process.env.SHOT_ONLY?.split(',').map((s) => s.trim());
@@ -282,6 +311,7 @@ if (AXE) {
 		console.log(`\naxe: ${violations.length} violation(s)`);
 		for (const v of violations) {
 			console.log(`  ${v.screen} · ${v.theme} · ${v.id} × ${v.nodes} — ${v.help}`);
+			for (const where of v.where) console.log(`      ${where}`);
 		}
 	}
 	// Contrast is the rule the guidelines name; the rest are reported and

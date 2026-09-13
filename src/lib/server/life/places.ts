@@ -23,6 +23,15 @@ const GEODATA_DIR = process.env.GEODATA_DIR ?? 'geodata';
 /** Where the committed engravings live, on the same terms. */
 const ICONS_DIR = process.env.PLACE_ICONS_DIR ?? 'place-icons';
 
+/**
+ * How many places go into one insert.
+ *
+ * Bounded rather than the whole set in one statement: nine bind parameters
+ * times three and a half thousand rows is close enough to a server's limit that
+ * a chunk is cheaper than finding out where that limit is.
+ */
+const SEED_CHUNK = 500;
+
 export interface PlaceSeed {
 	id: string;
 	name: string;
@@ -47,26 +56,35 @@ export interface PlaceSeed {
  * because deleting it would cascade to `sight_visit` and take somebody's record
  * of having stood in front of it — the only thing in this feature a person made
  * rather than received.
+ *
+ * Written in batches. A row at a time was 3,422 statements on every boot, for a
+ * file that changes only when the image does.
  */
 export async function applyPlaces(places: PlaceSeed[], handle: Db = db): Promise<number> {
 	const ids = places.map((one) => one.id);
 
 	await handle.transaction(async (tx) => {
-		for (const one of places) {
+		for (let at = 0; at < places.length; at += SEED_CHUNK) {
 			await tx
 				.insert(place)
-				.values({ ...one, country: one.country.toUpperCase(), retired: false })
+				.values(
+					places
+						.slice(at, at + SEED_CHUNK)
+						.map((one) => ({ ...one, country: one.country.toUpperCase(), retired: false }))
+				)
 				.onConflictDoUpdate({
 					target: place.id,
+					// From the row that was being inserted, which is what makes one
+					// statement able to carry many different rows' corrections.
 					set: {
-						name: one.name,
-						country: one.country.toUpperCase(),
-						region: one.region,
-						kind: one.kind,
-						importance: one.importance,
-						latitude: one.latitude,
-						longitude: one.longitude,
-						sortOrder: one.sortOrder,
+						name: sql`excluded.name`,
+						country: sql`excluded.country`,
+						region: sql`excluded.region`,
+						kind: sql`excluded.kind`,
+						importance: sql`excluded.importance`,
+						latitude: sql`excluded.latitude`,
+						longitude: sql`excluded.longitude`,
+						sortOrder: sql`excluded.sort_order`,
 						retired: false
 					}
 				});
@@ -136,12 +154,24 @@ export async function placesFor(country: string, handle: Db = db): Promise<Place
  *
  * Doing nothing on conflict because a place is seen or it is not — a second
  * scratch is the same fact, not a second visit.
+ *
+ * False when there is no such place. The id arrives from a form, and letting an
+ * unknown one reach the insert turns a request that should be refused with a
+ * reason into a foreign-key violation and a 500.
  */
-export async function markSeen(placeId: string, year: number, handle: Db = db): Promise<void> {
+export async function markSeen(placeId: string, year: number, handle: Db = db): Promise<boolean> {
+	const [known] = await handle
+		.select({ id: place.id })
+		.from(place)
+		.where(eq(place.id, placeId))
+		.limit(1);
+	if (!known) return false;
+
 	await handle
 		.insert(sightVisit)
 		.values({ id: uuidv7(), placeId, year, seenAt: new Date() })
 		.onConflictDoNothing();
+	return true;
 }
 
 /** Take it back, for the few seconds the pill offers to. */

@@ -66,6 +66,14 @@ describe('marking a sight seen', () => {
 		expect(await harness.db.select().from(sightVisit)).toHaveLength(1);
 	});
 
+	it('refuses a place that does not exist rather than raising', async () => {
+		// The id comes off a form. Letting an unknown one reach the insert turns a
+		// request that should be refused with a reason into a foreign-key
+		// violation and a 500.
+		expect(await markSeen('fr-q000000', 2026, harness.db)).toBe(false);
+		expect(await harness.db.select().from(sightVisit)).toHaveLength(1);
+	});
+
 	it('reports which places in a country have been seen', async () => {
 		expect(await seenIn('FR', harness.db)).toEqual(['fr-q243']);
 		expect(await seenIn('IT', harness.db)).toEqual([]);

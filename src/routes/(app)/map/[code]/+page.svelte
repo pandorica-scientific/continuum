@@ -3,6 +3,7 @@
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import CountryMap from '$lib/life/map/CountryMap.svelte';
 	import SightRow from '$lib/life/map/SightRow.svelte';
+	import { submitAction } from '$lib/actions/result';
 	import { countryFlag } from '$lib/life/geo/countries';
 	import { countryColour } from '$lib/life/geo/country-colour';
 	import { COUNTRY_COLOURS } from '$lib/life/geo/country-colour-table';
@@ -41,7 +42,7 @@
 
 <!--
 	No band at all when nothing here has been engraved yet, rather than an empty
-	heading. 129 of 3,422 places have artwork today, so most countries show
+	heading. 203 of 3,422 places have artwork today, so most countries show
 	nothing and fill in as batches land.
 -->
 {#if data.sights.length}
@@ -50,14 +51,13 @@
 		seen={data.seen}
 		{colour}
 		onseen={async (id) => {
-			try {
-				const body = new FormData();
-				body.set('place', id);
-				const response = await fetch('?/seen', { method: 'POST', body });
-				return response.ok;
-			} catch {
-				return false;
-			}
+			const body = new FormData();
+			body.set('place', id);
+			// The repo's own helper rather than a bare fetch: it deserializes the
+			// action result, so a `fail(...)` is told apart from a transport error
+			// instead of both arriving as a bare status code.
+			const outcome = await submitAction('?/seen', body, { updatePage: false });
+			return outcome.type === 'success';
 		}}
 	/>
 {/if}

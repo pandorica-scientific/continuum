@@ -114,11 +114,6 @@
 				const shapes = found.shapes[continent] ?? [];
 				const projection = projectionFor(continent, shapes);
 				const draw = geoPath(projection);
-				const path = shapes
-					.map(
-						({ geometry }) => draw({ type: 'Feature', properties: null, geometry } as never) ?? ''
-					)
-					.join(' ');
 
 				let sum = 0;
 				let whole = 0;
@@ -137,11 +132,17 @@
 				// inside one derivation, and a SvelteMap would add reactivity to
 				// something nothing reacts to.
 				const drawnFor: Record<string, string> = {};
+				// ONE pass: the coin's outline and the per-country lookup are the same
+				// path data, and projecting every shape of every continent twice to
+				// get both was the whole of the second loop this replaces.
+				const drawn: string[] = [];
 				for (const { code, geometry } of shapes) {
-					if (!code) continue;
 					const d = draw({ type: 'Feature', properties: null, geometry } as never);
-					if (d) drawnFor[code] = (drawnFor[code] ?? '') + ' ' + d;
+					if (!d) continue;
+					drawn.push(d);
+					if (code) drawnFor[code] = (drawnFor[code] ?? '') + ' ' + d;
 				}
+				const path = drawn.join(' ');
 				for (const [code, credit] of Object.entries(credits)) {
 					if (found.of[code] !== continent) continue;
 					// Weighted by how big the country is: Australia is seven and a

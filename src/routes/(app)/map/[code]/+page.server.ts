@@ -131,8 +131,18 @@ export const actions: Actions = {
 		const region = String(form.get('region') ?? '').trim();
 		if (!region) return fail(400, { on: 'scratch', message: 'Which region?' });
 
+		// Refused rather than reported as done, which is what the paragraph above
+		// promises and what the code did not do: `{ unscratched: false }` is a
+		// SUCCESS to every caller, so an undo that removed nothing recoated the
+		// region, said "put back", and was contradicted by the next load.
 		const removed = await removeManualVisit(code, region);
-		return { unscratched: removed > 0 };
+		if (removed === 0) {
+			return fail(409, {
+				on: 'scratch',
+				message: 'A trip records that one, so it stays until the trip does not.'
+			});
+		}
+		return { unscratched: true };
 	},
 
 	/**
@@ -147,7 +157,8 @@ export const actions: Actions = {
 		const placeId = String(form.get('place') ?? '').trim();
 		if (!placeId) return fail(400, { on: 'sight', message: 'Which place?' });
 
-		await markSeen(placeId, Number(localToday().slice(0, 4)));
+		const known = await markSeen(placeId, Number(localToday().slice(0, 4)));
+		if (!known) return fail(400, { on: 'sight', message: 'No such place.' });
 		return { seen: true };
 	},
 

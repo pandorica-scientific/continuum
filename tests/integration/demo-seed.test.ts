@@ -50,6 +50,7 @@ import { listOrganisations } from '$lib/server/organisations/mutations';
 import { engagementSpan, engagementsFor } from '$lib/server/organisations/engagements';
 import { hashBytes, readUpload } from '$lib/server/system/files';
 import { seedDemo } from '$lib/server/system/demo';
+import { getHomeConfig } from '$lib/server/home';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
 // Recorded, not just proxied: the ruling for D10 is that the seed reads no
@@ -481,6 +482,22 @@ describe('the demo seed', () => {
 			expect(who.layout).toHaveLength(4);
 			expect(who.layout).toEqual(SUGGESTED_LAYOUT);
 		}
+	});
+
+	// Same reasoning as the board above, for the one screen that switches
+	// something in the house rather than recording it: a demo that opens on a
+	// credentials form shows none of what that screen is for.
+	it('connects the demo smart home to the lived-in flat', async () => {
+		const config = await getHomeConfig(testDb);
+		expect(config?.kind).toBe('demo');
+
+		const [lived] = await testDb
+			.select({ id: property.id })
+			.from(property)
+			.where(eq(property.kind, 'lived'));
+		// The screen only accepts a lived-in property, and reads no meter from a
+		// flat somebody else lives in.
+		expect(config?.meterPropertyId).toBe(lived.id);
 	});
 
 	it('does nothing at all on an instance that already has people', async () => {

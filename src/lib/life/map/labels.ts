@@ -39,7 +39,25 @@ export function wrapLabel(name: string): string[] {
 
 	// Kept WITH the fragment it ends, so a broken line reads "Nouvelle-" and the
 	// hyphen does not float at the start of the next one.
-	const pieces = name.split(/(?<=-)|(?= )/).filter(Boolean);
+	//
+	// Walked rather than split on `/(?<=-)|(?= )/`. A lookbehind is a parse
+	// error before Safari 16.4, and a regex literal is parsed when the module
+	// loads — so on an older iPad that expression would not have cost the map
+	// its labels, it would have cost the map.
+	const pieces: string[] = [];
+	let piece = '';
+	for (const character of name) {
+		if (character === ' ' && piece) {
+			pieces.push(piece);
+			piece = '';
+		}
+		piece += character;
+		if (character === '-') {
+			pieces.push(piece);
+			piece = '';
+		}
+	}
+	if (piece) pieces.push(piece);
 	if (pieces.length < 2) return [name];
 
 	let best: [string, string] | null = null;
