@@ -87,6 +87,18 @@ COPY --from=build --chmod=755 /app/docker/entrypoint.sh ./entrypoint.sh
 # The mDNS announcer, run from this same image as the `mdns` service.
 COPY --from=build /app/docker/mdns.mjs ./mdns.mjs
 
+# The place engravings, one per sight, revealed when its coin is rubbed off.
+#
+# Committed to the repository rather than fetched, unlike the OCR models and the
+# map geometry: they have no upstream to fetch FROM, and the 1254px masters they
+# are made from are 9.8 GB, which is why only the 24 kB WebP comes in. See
+# scripts/convert-place-icons.mjs.
+#
+# Deliberately the LAST copy, and so its own layer. Engravings arrive in batches
+# over many releases and will reach about 85 MB; a release that adds none must
+# not re-push or re-pull the lot, and layer order is the whole of that fix.
+COPY --from=build /app/place-icons ./place-icons
+
 # Uploaded files (property photos, documents, statements) live on this volume.
 # /run/continuum is where the announcer leaves the machine's name and
 # addresses for the app; owned by node here so a fresh volume inherits it.

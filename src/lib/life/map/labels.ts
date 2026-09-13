@@ -17,22 +17,38 @@
  */
 
 /**
- * Split a long name onto two lines, as evenly as its words allow.
+ * Split a long name onto two lines, as evenly as its breaks allow.
  *
  * "United States of America" on one line is wider than the United States; on
- * two balanced lines it fits. A name with no space stays whole whatever its
- * length — hyphenating a country is worse than dropping its label.
+ * two balanced lines it fits.
+ *
+ * Breaks at a space OR at a hyphen the name already contains. The hyphen case
+ * is what France needs: since v0.9.1 the map draws régions, and half of them
+ * are hyphenated with no space at all — "Nouvelle-Aquitaine" stayed one
+ * eighteen-character line about 133 units wide, which collided with its
+ * neighbours and was dropped, and so were Normandie, Centre-Val de Loire and
+ * Provence-Alpes-Côte d'Azur. Four of France's thirteen went unnamed.
+ *
+ * A hyphen is NOT invented. Breaking after one that is already written is how
+ * the name is punctuated; hyphenating a word that has none would be the app
+ * inventing spelling, which is worse than dropping the label — so a name with
+ * no break of either kind still stays whole whatever its length.
  */
 export function wrapLabel(name: string): string[] {
-	if (name.length <= 11 || !name.includes(' ')) return [name];
+	if (name.length <= 11) return [name];
 
-	const words = name.split(' ');
+	// Kept WITH the fragment it ends, so a broken line reads "Nouvelle-" and the
+	// hyphen does not float at the start of the next one.
+	const pieces = name.split(/(?<=-)|(?= )/).filter(Boolean);
+	if (pieces.length < 2) return [name];
+
 	let best: [string, string] | null = null;
 	let closest = Number.POSITIVE_INFINITY;
 
-	for (let at = 1; at < words.length; at++) {
-		const head = words.slice(0, at).join(' ');
-		const tail = words.slice(at).join(' ');
+	for (let at = 1; at < pieces.length; at++) {
+		const head = pieces.slice(0, at).join('').trimEnd();
+		const tail = pieces.slice(at).join('').trimStart();
+		if (!head || !tail) continue;
 		const difference = Math.abs(head.length - tail.length);
 		if (difference < closest) {
 			closest = difference;

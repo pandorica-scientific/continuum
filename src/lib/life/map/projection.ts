@@ -248,6 +248,108 @@ export function refitToProvinces(
 	return parts;
 }
 
+/**
+ * Split a country's regions into the main body and its far-flung groups.
+ *
+ * Portugal is the mainland, the Azores and Madeira; Norway is the mainland and
+ * Svalbard; France is the hexagon and four overseas departments. Fitting one
+ * frame around all of it makes the part somebody actually opened the page for
+ * tiny in a corner — Norway ended up a sliver at the bottom of an ocean of
+ * empty sea, because Svalbard is 1,500 km north of it.
+ *
+ * Grouped by the GAP BETWEEN BOUNDING BOXES rather than by distance between
+ * centroids. Centroids split Finnmark off the Norwegian mainland it is joined
+ * to, because Norway is long and thin and Finnmark's middle is a long way from
+ * Troms'. Two boxes that touch are one landmass whatever their centroids say.
+ *
+ * Sorted by area on the globe, so the first cluster is the one to build the
+ * frame around and the rest are insets.
+ */
+export function clusterRegions(regions: Feature<Geometry>[]): Feature<Geometry>[][] {
+	/** Degrees between two boxes, zero when they touch or overlap. */
+	const gap = (a: [[number, number], [number, number]], b: typeof a): number => {
+		const x = Math.max(0, Math.max(a[0][0] - b[1][0], b[0][0] - a[1][0]));
+		const y = Math.max(0, Math.max(a[0][1] - b[1][1], b[0][1] - a[1][1]));
+		return Math.hypot(x, y);
+	};
+
+	// Two degrees of slack: neighbouring provinces do not quite touch once the
+	// outlines have been generalised, and a hard zero would split a coastline
+	// into one cluster per province.
+	const TOUCHING = 2;
+
+	const boxed = regions.map((region) => ({ region, box: geoBounds(region as never) }));
+	const clusters: { members: typeof boxed; area: number }[] = [];
+
+	for (const one of boxed) {
+		const near = clusters.filter((cluster) =>
+			cluster.members.some((member) => gap(member.box, one.box) < TOUCHING)
+		);
+		if (!near.length) {
+			clusters.push({ members: [one], area: geoArea(one.region as never) });
+			continue;
+		}
+		// Joining two clusters at once is the point of single linkage: a province
+		// can be the bridge between groups that were separate until it arrived.
+		const first = near[0];
+		first.members.push(one);
+		first.area += geoArea(one.region as never);
+		for (const other of near.slice(1)) {
+			first.members.push(...other.members);
+			first.area += other.area;
+			clusters.splice(clusters.indexOf(other), 1);
+		}
+	}
+
+	return clusters
+		.sort((a, b) => b.area - a.area)
+		.map((cluster) => cluster.members.map((member) => member.region));
+}
+
+/** A panel on the side of the frame holding one far-flung group. */
+export interface InsetBox {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** How wide the column of inset panels is, and the air around them. */
+const INSET_WIDTH = 132;
+const INSET_PAD = 8;
+
+/** The frame the main body gets, once the insets have taken their column. */
+export const mainExtent = (
+	insets: number,
+	view: { width: number; height: number; inset: number } = VIEW
+): [[number, number], [number, number]] => [
+	[view.inset + (insets ? INSET_WIDTH + INSET_PAD : 0), view.inset],
+	[view.width - view.inset, view.height - view.inset]
+];
+
+/**
+ * Where each far-flung group is drawn, stacked down the left.
+ *
+ * Down the side rather than in place, which is the whole point: an inset says
+ * "this belongs to the country and is not where the box is". Real atlases have
+ * done it this way for Alaska and the Azores for a century, and the alternative
+ * — one frame around everything — is what made Norway a sliver.
+ */
+export function insetBoxes(
+	count: number,
+	view: { width: number; height: number; inset: number } = VIEW
+): InsetBox[] {
+	if (count < 1) return [];
+	const usable = view.height - view.inset * 2;
+	const height = Math.min(140, (usable - INSET_PAD * (count - 1)) / count);
+	return Array.from({ length: count }, (_, at) => ({
+		x: view.inset,
+		y: view.inset + at * (height + INSET_PAD),
+		width: INSET_WIDTH,
+		height
+	}));
+}
+
 /** Turn a world-atlas topology into the features the map draws. */
 export function countriesFrom(topology: Topology, key = 'countries'): FeatureCollection<Geometry> {
 	return feature(topology, topology.objects[key]) as FeatureCollection<Geometry>;

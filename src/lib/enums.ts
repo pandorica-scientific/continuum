@@ -261,6 +261,35 @@ export const ENUMS = {
 	'visit.source': ['trip', 'manual'],
 
 	/**
+	 * What kind of place a sight is.
+	 *
+	 * The place dataset's own controlled vocabulary, kept as a CHECK because it
+	 * genuinely IS closed — the data is curated and these fourteen are all it
+	 * emits.
+	 *
+	 * Nothing renders it today: a coin shows an engraving of the actual place
+	 * rather than a symbol for its kind. It is stored because it is real data
+	 * from a controlled list, and holding it as unvalidated text would throw
+	 * that away for no saving.
+	 */
+	'place.kind': [
+		'city',
+		'town',
+		'village',
+		'landmark',
+		'natural_landmark',
+		'national_park',
+		'island',
+		'beach',
+		'mountain',
+		'lake',
+		'archaeological_site',
+		'religious_site',
+		'museum',
+		'historic_site'
+	],
+
+	/**
 	 * What is in the bottle.
 	 *
 	 * The type picks the silhouette on the card, so this list is as long as the
@@ -337,6 +366,7 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'calendar_conflict', column: 'resolution', enum: 'calendar_conflict.resolution' },
 	{ table: 'trip_booking', column: 'kind', enum: 'booking.kind' },
 	{ table: 'visit', column: 'source', enum: 'visit.source' },
+	{ table: 'place', column: 'kind', enum: 'place.kind' },
 	{ table: 'bottle', column: 'type', enum: 'bottle.type' },
 	{ table: 'entity', column: 'kind', enum: 'entity.kind' }
 ];

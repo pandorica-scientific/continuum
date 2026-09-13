@@ -170,7 +170,9 @@ describe('the boot seam', () => {
 	it('registers the core steps in dependency order', () => {
 		const ids = bootSteps().map((s) => s.id);
 		// Currencies before anything that writes one; banks before any account.
-		expect(ids).toEqual(['migrate', 'currencies', 'categories', 'banks', 'demo']);
+		// Places are reference data like the two seeds above them and depend on
+		// nothing, so they sit with them rather than after the demo seed.
+		expect(ids).toEqual(['migrate', 'currencies', 'categories', 'banks', 'places', 'demo']);
 	});
 
 	it('registers the core recurring work', () => {

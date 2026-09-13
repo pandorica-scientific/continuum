@@ -125,9 +125,21 @@ function makeStamps(): HTMLCanvasElement[] {
 	});
 }
 
+/** The line around a coated region, dark enough to read as a crease in it. */
+const EDGE = 'rgba(46,37,8,0.5)';
+
 export class Foil {
 	private readonly display: CanvasRenderingContext2D;
 	private readonly foil: [HTMLCanvasElement, CanvasRenderingContext2D];
+	/**
+	 * The gold itself, unclipped, kept so a region can be coated again.
+	 *
+	 * `punch` erases from the foil canvas, so the material that was there is
+	 * gone and undoing a scratch has nothing to paint back. Rebuilding instead
+	 * would work, but `build` re-randomises the brushed grain and the noise, so
+	 * undoing one region would faintly re-texture the entire map.
+	 */
+	private readonly material: [HTMLCanvasElement, CanvasRenderingContext2D];
 	private readonly mask: [HTMLCanvasElement, CanvasRenderingContext2D];
 	private readonly relief: [HTMLCanvasElement, CanvasRenderingContext2D];
 	private readonly stamps: HTMLCanvasElement[];
@@ -169,6 +181,7 @@ export class Foil {
 		this.display.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 
 		this.foil = make({ willReadFrequently: false });
+		this.material = make({ willReadFrequently: false });
 		// Read back a pixel at a time to ask how much coating is left, which is
 		// exactly the access pattern this hint exists for.
 		this.mask = make({ willReadFrequently: true });
@@ -192,7 +205,7 @@ export class Foil {
 
 	/** Paint the material once, then clip it to the regions that are covered. */
 	private build() {
-		const [, f] = this.foil;
+		const [, f] = this.material;
 		const [, m] = this.mask;
 
 		f.setTransform(this.scale, 0, 0, this.scale, 0, 0);
@@ -240,15 +253,21 @@ export class Foil {
 		f.fillStyle = sheen;
 		f.fillRect(0, 0, W, H);
 
+		// The material is finished; the foil is that material clipped to whatever
+		// is still coated, which is what `recoat` paints back a region from.
 		const coated = this.coated();
-		f.globalCompositeOperation = 'destination-in';
-		f.fillStyle = '#fff';
-		f.fill(coated);
-		f.globalCompositeOperation = 'source-over';
-		f.strokeStyle = 'rgba(46,37,8,0.5)';
-		f.lineWidth = 0.9;
+		const [, foil] = this.foil;
+		foil.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+		foil.globalCompositeOperation = 'source-over';
+		foil.clearRect(0, 0, W, H);
+		foil.save();
+		foil.clip(coated);
+		foil.drawImage(this.material[0], 0, 0, W, H);
+		foil.restore();
+		foil.strokeStyle = EDGE;
+		foil.lineWidth = 0.9;
 		this.paths.forEach((one, index) => {
-			if (!this.alreadyClear.has(index)) f.stroke(one);
+			if (!this.alreadyClear.has(index)) foil.stroke(one);
 		});
 
 		m.setTransform(this.scale, 0, 0, this.scale, 0, 0);
@@ -559,6 +578,39 @@ export class Foil {
 		if (this.alreadyClear.has(index)) return;
 		this.alreadyClear.add(index);
 		this.punch(index);
+		this.render();
+	}
+
+	/**
+	 * Put a region's coating back — the exact inverse of `clear`, for undo.
+	 *
+	 * Only the one region is repainted, from the material kept at build time, so
+	 * the rest of the map is untouched down to its grain. Rebuilding the whole
+	 * sheet instead would re-randomise that grain everywhere.
+	 */
+	recoat(index: number) {
+		const path = this.paths[index];
+		if (!path || !this.alreadyClear.has(index)) return;
+		this.alreadyClear.delete(index);
+
+		const [, f] = this.foil;
+		f.save();
+		f.globalCompositeOperation = 'source-over';
+		f.clip(path);
+		f.drawImage(this.material[0], 0, 0, W, H);
+		f.restore();
+		// The edge line, which `build` draws for every coated region.
+		f.strokeStyle = EDGE;
+		f.lineWidth = 0.9;
+		f.stroke(path);
+
+		const [, m] = this.mask;
+		m.save();
+		m.globalCompositeOperation = 'source-over';
+		m.fillStyle = '#fff';
+		m.fill(path);
+		m.restore();
+
 		this.render();
 	}
 

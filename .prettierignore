@@ -22,3 +22,8 @@ src/lib/life/art/stamps/
 src/lib/life/art/dishes/
 src/lib/life/art/bottles/
 
+
+# Curated source data, committed as it was published. Reformatting a 4.7 MB
+# document would be noise in every diff and would make comparing it against a
+# later rebuild a reformat rather than a diff.
+datasets/

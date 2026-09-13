@@ -17,12 +17,25 @@
 		name: string;
 		/** Where it is, printed under the name. */
 		where: string;
+		/**
+		 * The engraving the gold hides.
+		 *
+		 * Never null: a place without one is not offered as a coin at all, because
+		 * a gold disc hiding nothing promises a reveal it cannot deliver.
+		 */
+		art: string;
+		/**
+		 * The country's own palette token, so a rubbed coin wears the same colour
+		 * its country wears on the map. Passed in rather than worked out here: the
+		 * assignment is spatial and lives in `country-colour.ts`.
+		 */
+		colour: string;
 		/** Already marked off: the coin starts gone. */
 		seen: boolean;
 		onseen: () => void;
 	}
 
-	let { name, where, seen, onseen }: Props = $props();
+	let { name, where, art, colour, seen, onseen }: Props = $props();
 
 	/** The coin's drawn size. The element scales; the canvas is fixed. */
 	const SIZE = 84;
@@ -66,7 +79,7 @@
 		});
 	}
 
-	/** Paint the coin: the foil gradient, its grain, and the name in black. */
+	/** Paint the coin: the foil gradient and its grain. Nothing else. */
 	function paint(element: HTMLCanvasElement) {
 		const dpr = Math.min(window.devicePixelRatio || 1, 2);
 		element.width = SIZE * dpr;
@@ -99,43 +112,22 @@
 			context.stroke();
 		}
 		context.restore();
-
-		printName(context);
 	}
 
 	/**
-	 * The name, in black, wrapped to the coin.
+	 * Undo, without the parent reaching in.
 	 *
-	 * Measured rather than guessed: a coin is 84 units across and the names are
-	 * anything from "Serralves" to "Mosteiro dos Jerónimos".
+	 * A coin is gone because the server said so (`seen`) or because it was just
+	 * rubbed (`rubbed`). When the parent takes this place back out of its seen
+	 * list, the local flag has to go with it or the gold never returns — so the
+	 * coin watches the prop rather than exposing a method for the row to call.
+	 *
+	 * That is also what keeps the row free of component handles: an undo is a
+	 * change of state, and state flows down.
 	 */
-	function printName(context: CanvasRenderingContext2D) {
-		context.save();
-		context.fillStyle = '#1c1608';
-		context.textAlign = 'center';
-		context.textBaseline = 'middle';
-
-		const size = name.length > 18 ? 8 : name.length > 12 ? 9 : 10;
-		context.font = `600 ${size}px system-ui, -apple-system, sans-serif`;
-
-		const lines: string[] = [];
-		let line = '';
-		for (const word of name.split(' ')) {
-			const next = line ? `${line} ${word}` : word;
-			if (context.measureText(next).width > SIZE - 18 && line) {
-				lines.push(line);
-				line = word;
-			} else {
-				line = next;
-			}
-		}
-		if (line) lines.push(line);
-
-		const step = size * 1.2;
-		const top = SIZE / 2 - ((lines.length - 1) * step) / 2;
-		lines.forEach((one, at) => context.fillText(one, SIZE / 2, top + at * step));
-		context.restore();
-	}
+	$effect(() => {
+		if (!seen) rubbed = false;
+	});
 
 	$effect(() => {
 		const element = canvas;
@@ -203,9 +195,13 @@
 </script>
 
 <div class="sight">
-	<span class="disc" class:gone>
-		<!-- Underneath: the name again, so a rubbed coin still says what it was. -->
-		<span class="under">{name}</span>
+	<span class="disc" class:gone style:--coin="var(--{colour})">
+		<!--
+			Underneath: the engraving of this place. The name is NOT here — it sits
+			below the ring, where it is legible whatever the coin's state. What the
+			gold hides should be worth uncovering, and a name is not.
+		-->
+		<img class="art" src={art} alt="" width={SIZE} height={SIZE} loading="lazy" />
 
 		{#if !gone}
 			<canvas
@@ -253,22 +249,30 @@
 		place-items: center;
 		border: 1px solid rgba(46, 37, 8, 0.5);
 	}
-	/* Once it is rubbed the disc wears the area's colour, which is how the map
-	   says "seen" everywhere else. */
+	/* Once it is rubbed the disc wears its COUNTRY's colour — the same token the
+	   map fills that country with, so a coin from France and France itself agree.
+	   It used to be `--rose` for every country, which made the Life area's accent
+	   look like a property of coins rather than of places. */
 	.disc.gone {
-		border-color: color-mix(in srgb, var(--rose) 55%, transparent);
-		background: color-mix(in srgb, var(--rose) 16%, transparent);
+		border-color: color-mix(in srgb, var(--coin) 55%, transparent);
+		background: color-mix(in srgb, var(--coin) 16%, transparent);
 	}
-	.under {
-		padding: 0 var(--space-4);
-		font-size: var(--text-2xs);
-		font-weight: 600;
-		line-height: 1.2;
-		text-align: center;
-		color: var(--fg3);
+	/*
+	 * The engraving is dark ink on transparency — no white behind it — so on this
+	 * app's dark ground it would be ink on ink. Inverted by default and left alone
+	 * in the light theme, which is the way round this codebase states every other
+	 * theme rule: dark is the default and `data-ledger-theme='light'` is the
+	 * override, because the app picks its theme rather than following
+	 * prefers-color-scheme.
+	 */
+	.art {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		filter: invert(1);
 	}
-	.disc.gone .under {
-		color: var(--rose);
+	:global(html[data-ledger-theme='light']) .art {
+		filter: none;
 	}
 	canvas {
 		position: absolute;

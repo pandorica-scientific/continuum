@@ -33,15 +33,27 @@
  */
 import { createHash } from 'node:crypto';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
-import { geoCentroid, geoEquirectangular, geoMercator, geoPath } from 'd3-geo';
-import { feature } from 'topojson-client';
+import {
+	geoArea,
+	geoBounds,
+	geoCentroid,
+	geoContains,
+	geoEquirectangular,
+	geoMercator,
+	geoPath
+} from 'd3-geo';
+import { feature, merge } from 'topojson-client';
+import { topology } from 'topojson-server';
 import {
 	COUNTRY_CODE_OVERRIDES,
 	REGION_ADMIN_OVERRIDES,
-	adminNameFor
+	adminNameFor,
+	regionGroupFor
 } from '../src/lib/life/geo/aliases.ts';
+import { resolveRegion } from '../src/lib/life/geo/place-region.ts';
 import { assignColours } from '../src/lib/life/geo/country-colour.ts';
 
 const DIRECTORY = 'geodata';
@@ -63,6 +75,23 @@ const ZONES_URL =
 	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_time_zones.geojson';
 const CONTINENTS_URL =
 	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_110m_admin_0_countries.geojson';
+/**
+ * Which continent each country is on, from the 50m file rather than the 110m
+ * one the SHAPES come from.
+ *
+ * 110m carries 177 countries; 50m carries 242, and the 65 it adds are exactly
+ * the ones that were going wrong — every Pacific nation among them. Kiribati,
+ * Guam, Palau, French Polynesia and the Northern Marianas were absent from the
+ * coarse file, so they fell to a nearest-continent guess against continent
+ * BOUNDING BOXES, which span the Pacific and overlap: Kiribati at 167.9°W sits
+ * inside North America's longitude range, so it was filed there and scratching
+ * it moved the wrong coin.
+ *
+ * The shapes stay at 110m — they are drawn an inch across on a coin, where more
+ * detail is a megabyte nobody sees.
+ */
+const CONTINENT_NAMES_URL =
+	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_50m_admin_0_countries.geojson';
 
 /**
  * A `geoPath` context that writes `d` at a tenth of a unit.
@@ -159,13 +188,18 @@ async function fetchZones(countries) {
  * Antarctica is dropped throughout: nobody scratches it off, and a coin that
  * can never be opened is a permanent reproach rather than progress.
  */
-async function fetchContinents() {
+async function fetchContinents(codes) {
 	const text = await download(CONTINENTS_URL, 'natural-earth continents');
 	const source = JSON.parse(text);
+	const named = JSON.parse(await download(CONTINENT_NAMES_URL, 'natural-earth continent names'));
 
 	const of = {};
 	const totals = {};
 	const shapes = {};
+	/** ISO code → the continent the source itself names, where it names one. */
+	const stated = {};
+	/** The continent outlines, kept whole so a country can be tested against them. */
+	const outlines = {};
 
 	for (const feature of source.features) {
 		const properties = feature.properties ?? {};
@@ -177,12 +211,114 @@ async function fetchContinents() {
 		if (!continent || continent === 'Antarctica' || continent.startsWith('Seven seas')) continue;
 		if (!name) continue;
 
-		const code = properties.ISO_A2 && properties.ISO_A2 !== '-99' ? properties.ISO_A2 : null;
-		if (code) of[code] = continent;
-		totals[continent] = (totals[continent] ?? 0) + 1;
+		(outlines[continent] = outlines[continent] ?? []).push(feature);
 
 		const trimmed = trimGeometry(feature.geometry);
-		if (trimmed) (shapes[continent] = shapes[continent] ?? []).push(trimmed);
+		// Kept WITH its country code, so a coin can punch the shape of a country
+		// somebody has been to rather than a dot at its middle. Australia fills
+		// half the Oceania coin; a fixed circle at its centroid read as unvisited.
+		const shapeCode = properties.ISO_A2 && properties.ISO_A2 !== '-99' ? properties.ISO_A2 : null;
+		if (trimmed)
+			(shapes[continent] = shapes[continent] ?? []).push({ code: shapeCode, geometry: trimmed });
+	}
+
+	/*
+	 * Which continent each country is on, decided by WHERE IT IS rather than by
+	 * whether the 110m file happens to carry it.
+	 *
+	 * Reading `ISO_A2` off the 110m features was the bug behind an Oceania coin
+	 * that read "100%, 7 of 7" while almost nothing in the Pacific had been
+	 * visited: at 110m most island nations are not in the file at all, so they
+	 * were on no continent, counted in no denominator, and seven countries were
+	 * the whole of Oceania. Every country the MAP can draw is tested here, which
+	 * is the same universe the numerator counts from — and the same trick
+	 * `zoneOf` already plays with the time-zone bands.
+	 */
+	// Natural Earth's own answer, from the file that actually has one for every
+	// country. It is editorial rather than geometric, which is what is wanted:
+	// the Caribbean belongs to North America by convention, and no distance test
+	// will say so — Barbados is nearer Venezuela than to anything in the north.
+	for (const feature of named.features) {
+		const properties = feature.properties ?? {};
+		const continent = properties.CONTINENT;
+		if (!continent || continent === 'Antarctica' || continent.startsWith('Seven seas')) continue;
+		const code = properties.ISO_A2 && properties.ISO_A2 !== '-99' ? properties.ISO_A2 : null;
+		if (code) stated[code] = continent;
+	}
+
+	/** Degrees between two longitudes, the short way round the globe. */
+	const apart = (a, b) => {
+		const d = Math.abs(a - b) % 360;
+		return d > 180 ? 360 - d : d;
+	};
+
+	/**
+	 * Degrees from a point to a box, zero when the point is inside it.
+	 *
+	 * Longitude measured ON THE CIRCLE, which is the whole of the Pacific. An
+	 * earlier version subtracted first and folded the result, which is not the
+	 * same thing and is wrong exactly where it matters: French Polynesia at
+	 * −149° came out 101 degrees from Oceania's box instead of 31, so it was
+	 * filed under North America — along with Kiribati, while Palau, Guam and the
+	 * Northern Marianas went to Asia. Scratching any of them then moved the
+	 * wrong continent's coin, which is a counter that looks broken.
+	 */
+	const reach = (point, box) => {
+		const [west, east] = [box[0][0], box[1][0]];
+		// Inside the interval, going east from west — which may cross the
+		// antimeridian, in which case the interval is the part that wraps.
+		const width = (east - west + 360) % 360;
+		const offset = (point[0] - west + 360) % 360;
+		const x = offset <= width ? 0 : Math.min(apart(point[0], west), apart(point[0], east));
+		const y = Math.max(0, Math.max(box[0][1] - point[1], point[1] - box[1][1]));
+		return Math.hypot(x, y);
+	};
+	const boxed = Object.entries(outlines).map(([continent, features]) => ({
+		continent,
+		features,
+		boxes: features.map((one) => geoBounds(one))
+	}));
+
+	for (const entry of Object.values(codes)) {
+		if (!entry.code || !entry.centre) continue;
+		// Antarctica is dropped throughout — nobody scratches it off — and the
+		// nearest-continent pass would otherwise file it under Oceania and count
+		// it against a coin somebody can never finish.
+		if (entry.code === 'AQ') continue;
+
+		if (stated[entry.code]) {
+			of[entry.code] = stated[entry.code];
+			continue;
+		}
+
+		const inside = boxed.find((one) =>
+			one.features.some((feature) => geoContains(feature, entry.centre))
+		);
+		if (inside) {
+			of[entry.code] = inside.continent;
+			continue;
+		}
+
+		// NEAREST, only for what the source neither names nor contains. At 110m an
+		// island is a dot or is missing entirely, so the source's own list left 67
+		// of the 237 countries this map draws on no continent at all — which is
+		// how Oceania came to be seven countries, and how scratching seven of them
+		// read as the whole continent at 100%.
+		let best = null;
+		let closest = Infinity;
+		for (const one of boxed) {
+			for (const box of one.boxes) {
+				const away = reach(entry.centre, box);
+				if (away < closest) {
+					closest = away;
+					best = one.continent;
+				}
+			}
+		}
+		if (best) of[entry.code] = best;
+	}
+	for (const continent of Object.values(of)) {
+		totals[continent] = (totals[continent] ?? 0) + 1;
 	}
 
 	return { of, totals, shapes };
@@ -278,6 +414,181 @@ function overrideAdmin(properties) {
 	return properties.admin;
 }
 
+/**
+ * How many pieces a country may have before its own divisions stop mattering.
+ *
+ * Above this the map is not a map, it is a mosaic: Slovenia's 193 municipalities
+ * and Latvia's 119 are genuinely first-order divisions — GeoNames says so and it
+ * is right — but nobody scratches off a hundred and ninety-three shapes, and
+ * nobody could name one. So the statistical grouping wins for those two, and the
+ * threshold is written here rather than as a list of countries because the thing
+ * that disqualifies them is the count and nothing else.
+ */
+const TOO_MANY_PIECES = 100;
+
+/**
+ * Should this province be dissolved into the region it belongs to?
+ *
+ * `gn_level` is GeoNames' administrative tier: 1 is a first-order division —
+ * Germany's Länder, Thailand's provinces, Russia's federal subjects — and 2 is a
+ * local subdivision below it, which is what France's départements, Italy's
+ * province and Spain's provincias are. That distinction is exactly the question
+ * "is this an administrative region or a local one", already answered in the
+ * data, so it is read rather than guessed at per country.
+ */
+const isLocalDivision = (properties, pieces) =>
+	Boolean(properties.region) && (properties.gn_level === 2 || pieces > TOO_MANY_PIECES);
+
+/**
+ * Collapse a country's provinces onto their administrative regions.
+ *
+ * TOPOLOGICALLY, not by collecting polygons into a MultiPolygon. Every region is
+ * drawn as a stroked path, so a Bourgogne assembled from eight départements
+ * without dissolving their shared borders draws all eight of them and looks
+ * exactly like what this exists to remove. `topology()` finds the shared arcs
+ * and `merge()` drops them, which is the whole reason those two libraries exist.
+ *
+ * Runs on the raw coordinates, before rounding: arcs are matched by identity, so
+ * rounding first would round two copies of one border apart and leave a seam.
+ *
+ * Returns null when nothing about this country changes, so the untouched
+ * majority keep their original geometry rather than a round-trip through
+ * quantisation.
+ */
+function dissolveToRegions(admin, sources) {
+	const grouped = new Map();
+	const kept = [];
+	let changes = false;
+
+	for (const source of sources) {
+		if (!isLocalDivision(source.properties, sources.length)) {
+			kept.push(source);
+			continue;
+		}
+		const group = regionGroupFor(admin, source.properties.region);
+		// null means the region is not drawn at all — see REGION_GROUPS.
+		if (group === null) {
+			changes = true;
+			continue;
+		}
+		if (!grouped.has(group)) grouped.set(group, []);
+		grouped.get(group).push(source);
+		changes = true;
+	}
+
+	if (!changes) return null;
+
+	// Quantised so that two provinces sharing a border share an arc. Without it
+	// the merge is a no-op on any pair whose vertices differ in the last decimal.
+	const collection = { type: 'FeatureCollection', features: [...grouped.values()].flat() };
+	const topo = topology({ provinces: collection }, 1e6);
+	const geometries = topo.objects.provinces.geometries;
+
+	const dissolved = [];
+	let at = 0;
+	for (const [group, members] of grouped) {
+		const slice = geometries.slice(at, at + members.length);
+		at += members.length;
+		dissolved.push({
+			type: 'Feature',
+			properties: { admin, name: group, name_en: group },
+			geometry: merge(topo, slice)
+		});
+	}
+
+	return [...dissolved, ...kept];
+}
+
+/** Where the curated place dataset lives. Committed; see datasets/README.md. */
+const PLACES_SOURCE = join('datasets', 'travel-places.json');
+
+/**
+ * The curated places, trimmed and filed under the regions the MAP draws.
+ *
+ * Runs inside the geodata build because that is the only place both halves
+ * exist at once: the dissolved outlines are in memory here, and they are what
+ * the answer has to agree with. Split across two scripts they would drift the
+ * first time the dissolve rule changed.
+ */
+function buildPlaces(byAdmin, codes) {
+	const source = JSON.parse(readFileSync(PLACES_SOURCE, 'utf8'));
+
+	// Keyed by the alpha-2 the dataset uses, resolved through the SAME join the
+	// manifest uses rather than through each admin entry's own `iso_a2` — which
+	// is set only where a province happens to carry a valid one, so Australia and
+	// the Netherlands had no code at all and every place in them went unplaced.
+	//
+	// COLLECTED rather than assigned, and that is the second half of the same
+	// bug. `codes` is keyed by world-atlas NAME, and several names share a code:
+	// Australia and Ashmore and Cartier Islands are both AU. Assigning let the
+	// last one win, so AU resolved to a single uninhabited reef and all fifteen
+	// Australian places fell outside it. A code owns every outline filed under
+	// every name that resolves to it.
+	const regionsByCode = new Map();
+	for (const entry of Object.values(codes)) {
+		if (!entry.code) continue;
+		const found = byAdmin.get(entry.admin);
+		if (!found) continue;
+		const already = regionsByCode.get(entry.code);
+		if (already) already.push(...found.features);
+		else regionsByCode.set(entry.code, [...found.features]);
+	}
+
+	const out = [];
+	const seen = new Set();
+	let unplaced = 0;
+
+	for (const country of source.countries) {
+		const code = country.countryCode;
+		// Kosovo has no assigned ISO code; the map cannot draw it either.
+		if (!code) continue;
+		const regions = regionsByCode.get(code) ?? [];
+
+		for (const region of country.regions) {
+			for (const place of region.places) {
+				// A duplicate id would seed twice and give one place two coins.
+				if (seen.has(place.id)) continue;
+				seen.add(place.id);
+
+				const where = resolveRegion([place.longitude, place.latitude], regions);
+				if (!where) unplaced += 1;
+
+				out.push({
+					id: place.id,
+					name: place.name,
+					country: code,
+					region: where,
+					kind: place.type,
+					importance: place.importance,
+					latitude: place.latitude,
+					longitude: place.longitude,
+					sortOrder: 0
+				});
+			}
+		}
+	}
+
+	// Most notable first WITHIN a country, so a coin row reads best-first and a
+	// row that has to be cut loses the right end rather than the middle.
+	out.sort((a, b) =>
+		a.country === b.country
+			? b.importance - a.importance || a.name.localeCompare(b.name)
+			: a.country.localeCompare(b.country)
+	);
+	out.forEach((place, index) => {
+		place.sortOrder = index;
+	});
+
+	// Worth reporting rather than swallowing: a jump here means the code join
+	// above has broken again, which is how Australia once lost all fifteen of its
+	// places to an uninhabited reef. The standing residue is archipelagos and
+	// coastal points that generalised 10m outlines do not quite cover — Napoli's
+	// coordinate sits in its own bay — plus Melilla, which the map drops on
+	// purpose. Those get no region and their coin says the country instead.
+	console.log(`  ${out.length} places, ${unplaced} outside every region outline`);
+	return { places: out, version: source.metadata?.version ?? null };
+}
+
 async function main() {
 	await mkdir(ADMIN1_DIRECTORY, { recursive: true });
 
@@ -298,31 +609,50 @@ async function main() {
 	const adminText = await download(ADMIN1_URL, 'natural-earth admin-1 10m');
 	const admin1 = JSON.parse(adminText);
 
-	/** admin name → its features, and the alpha-2 code its provinces carry. */
+	/** admin name → its raw features, and the alpha-2 code its provinces carry. */
 	const byAdmin = new Map();
 	for (const source of admin1.features) {
 		const properties = source.properties;
 		const admin = overrideAdmin(properties);
-		if (!byAdmin.has(admin)) byAdmin.set(admin, { code: null, features: [] });
+		if (!byAdmin.has(admin)) byAdmin.set(admin, { code: null, sources: [] });
 		const entry = byAdmin.get(admin);
 		// The overridden regions still carry Russia's code; the country they were
 		// moved TO supplies its own from its own provinces.
 		if (admin === properties.admin && /^[A-Z]{2}$/.test(properties.iso_a2 ?? '')) {
 			entry.code ??= properties.iso_a2;
 		}
-		entry.features.push({
+		// Raw, unrounded: the dissolve below matches shared borders by identity.
+		entry.sources.push(source);
+	}
+
+	// ---- Provinces onto administrative regions, where they are not one ----
+	let dissolvedCountries = 0;
+	let dissolvedFrom = 0;
+	let dissolvedTo = 0;
+	for (const [admin, entry] of byAdmin) {
+		const dissolved = dissolveToRegions(admin, entry.sources);
+		const chosen = dissolved ?? entry.sources;
+		if (dissolved) {
+			dissolvedCountries += 1;
+			dissolvedFrom += entry.sources.length;
+			dissolvedTo += dissolved.length;
+		}
+		entry.features = chosen.map((source) => ({
 			type: 'Feature',
 			properties: {
 				admin,
-				name: properties.name ?? null,
-				name_en: properties.name_en ?? null
+				name: source.properties.name ?? null,
+				name_en: source.properties.name_en ?? null
 			},
 			geometry: {
 				type: source.geometry.type,
 				coordinates: roundCoordinates(source.geometry.coordinates)
 			}
-		});
+		}));
 	}
+	console.log(
+		`  dissolved ${dissolvedCountries} countries to their administrative regions: ${dissolvedFrom} pieces -> ${dissolvedTo}`
+	);
 
 	let written = 0;
 	let bytes = 0;
@@ -366,6 +696,14 @@ async function main() {
 			code,
 			admin,
 			slug: countrySlug(admin),
+			/**
+			 * How much of the globe it covers, in square kilometres.
+			 *
+			 * The continent coins weight their share by it: having been to
+			 * Australia is not the same amount of Oceania as having been to
+			 * Nauru, and counting both as one country said it was.
+			 */
+			area: Math.round((geoArea(country) / (4 * Math.PI)) * 510072000),
 			centre: Number.isFinite(centre[0]) ? [round(centre[0]), round(centre[1])] : null
 		};
 	}
@@ -414,9 +752,13 @@ async function main() {
 	// Written as their own gzipped files rather than into the manifest: the two
 	// together are megabytes, and the manifest is read on every map load.
 	const zones = await fetchZones(countries);
-	const continents = await fetchContinents();
+	const continents = await fetchContinents(codes);
 	await writePacked('zones.json.gz', zones);
 	await writePacked('continents.json.gz', continents);
+
+	// ---- The curated places, filed under the regions just dissolved ----
+	const { places, version: placesVersion } = buildPlaces(byAdmin, codes);
+	await writePacked('places.json.gz', places);
 
 	const manifest = {
 		version: 1,
@@ -430,7 +772,11 @@ async function main() {
 		// Just the counts: the geometry lives in its own file beside the
 		// provinces, and the screen asks for it when it needs it.
 		zones: zones.zones.length,
-		continents: continents.totals
+		continents: continents.totals,
+		// How many curated places this build carries, and which vintage of the
+		// dataset they came from — so an instance can say what it holds.
+		places: places.length,
+		placesVersion
 	};
 	await writeFile(manifestPath, JSON.stringify(manifest));
 

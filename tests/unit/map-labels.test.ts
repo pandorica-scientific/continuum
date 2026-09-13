@@ -25,9 +25,33 @@ describe('wrapping a long name', () => {
 		expect(wrapLabel('Bragança')).toEqual(['Bragança']);
 	});
 
-	// Hyphenating a place is worse than dropping its label.
-	it('leaves a long one alone when it has no space to break at', () => {
+	// Inventing a hyphen would be the app inventing spelling.
+	it('leaves a long one alone when it has no break of either kind', () => {
 		expect(wrapLabel('Liechtensteinish')).toEqual(['Liechtensteinish']);
+	});
+
+	/**
+	 * The case France needs. Since v0.9.1 the map draws régions, and half of them
+	 * are hyphenated with no space at all — these stayed on one very wide line,
+	 * collided with their neighbours and were dropped, so four of France's
+	 * thirteen went unnamed.
+	 */
+	it('breaks at a hyphen the name already has', () => {
+		expect(wrapLabel('Nouvelle-Aquitaine')).toEqual(['Nouvelle-', 'Aquitaine']);
+		expect(wrapLabel('Bourgogne-Franche-Comté')).toEqual(['Bourgogne-', 'Franche-Comté']);
+	});
+
+	// The hyphen stays with the fragment it ends, rather than floating at the
+	// start of the next line.
+	it('keeps the hyphen on the first line', () => {
+		expect(wrapLabel('Centre-Val de Loire')[0].endsWith('-')).toBe(false);
+		expect(wrapLabel('Nouvelle-Aquitaine')[0]).toBe('Nouvelle-');
+	});
+
+	it('prefers whichever break balances best', () => {
+		// A space here beats the hyphen: "Centre-Val" / "de Loire" is closer to
+		// even than "Centre-" / "Val de Loire".
+		expect(wrapLabel('Centre-Val de Loire')).toEqual(['Centre-Val', 'de Loire']);
 	});
 
 	it('splits as evenly as the words allow', () => {

@@ -56,25 +56,26 @@
 	const litCount = $derived(Object.keys(lit).length);
 
 	/**
-	 * The offsets printed on the map, stacked where they would collide.
+	 * The offsets printed on the map, one down the middle of each lit band.
 	 *
-	 * A row is taken until the next label is clear of the last one on it, so a
-	 * cluster of European zones reads as two rows rather than as one smear.
+	 * Written DOWNWARD, which is what makes this simple. A zone is a tall thin
+	 * strip, so a horizontal label is wider than the thing it names and a run of
+	 * European zones collided into a smear — the previous version packed them
+	 * onto stacked rows to cope, which scattered them at four different heights
+	 * and still overflowed. Turned ninety degrees a label needs the band's WIDTH,
+	 * which every band has, so each one sits in its own strip at the same height
+	 * and nothing needs stacking.
 	 */
-	const marks = $derived.by(() => {
-		const rows: number[] = [];
-		const HALF = 6.5;
-		return bands
+	const marks = $derived.by(() =>
+		bands
 			.filter((band) => lit[band.zone])
 			.sort((a, b) => a.middle - b.middle)
-			.map((band) => {
-				const percent = (band.middle / WIDTH) * 100;
-				let row = 0;
-				while (rows[row] !== undefined && percent - HALF < rows[row]) row++;
-				rows[row] = percent + HALF;
-				return { zone: band.zone, label: band.label, percent, row };
-			});
-	});
+			.map((band) => ({
+				zone: band.zone,
+				label: band.label,
+				percent: (band.middle / WIDTH) * 100
+			}))
+	);
 </script>
 
 <section class="card zones">
@@ -98,12 +99,14 @@
 			<path class="land" d={coastline}></path>
 		</svg>
 
+		<!--
+			Barely clamped: the label is turned on its side, so it is about a dozen
+			pixels wide and needs almost no margin. At the old 98% ceiling UTC+12:00
+			— whose band is cut in half by the right edge of the map, so it anchors
+			at 99% — was pulled back on top of UTC+11:00.
+		-->
 		{#each marks as mark (mark.zone)}
-			<span
-				class="mark mono"
-				style:left="clamp(4%, {mark.percent}%, 96%)"
-				style:bottom="{5 + mark.row * 18}px"
-			>
+			<span class="mark mono" style:left="clamp(1%, {mark.percent}%, 99%)">
 				{mark.label}
 			</span>
 		{/each}
@@ -174,19 +177,37 @@
 		stroke: rgba(255, 255, 255, 0.22);
 		stroke-width: 0.5;
 	}
+	/*
+	 * Down the band rather than across it, and legible on the band's own colour.
+	 *
+	 * It used to be 8px of `--rose` on bands filled with `--rose`, which is the
+	 * same hue reading against itself — the halo was doing all the work and
+	 * losing. `--fg1` over a dark halo separates from lit and unlit bands alike,
+	 * so one rule covers both instead of two that have to be kept in step.
+	 */
 	.mark {
 		position: absolute;
-		transform: translateX(-50%);
-		font-size: 8px;
+		/*
+		 * Reading UPWARD, anchored at the foot of the band. `vertical-rl` alone
+		 * reads top-down, which puts the offset on its head relative to how a
+		 * vertical axis label is normally read; the half-turn is what makes it
+		 * start at the bottom. `sideways-lr` would say this in one property and
+		 * is too new to rely on.
+		 */
+		bottom: 8px;
+		transform: translateX(-50%) rotate(180deg);
+		writing-mode: vertical-rl;
+		font-size: 10px;
 		font-weight: 600;
-		line-height: 1.2;
-		color: var(--rose);
+		letter-spacing: 0.04em;
+		line-height: 1;
+		color: var(--fg1);
 		white-space: nowrap;
 		pointer-events: none;
 		text-shadow:
-			0 0 4px var(--bg2),
-			0 0 3px var(--bg2),
-			0 0 2px var(--bg2);
+			0 0 3px var(--bg1),
+			0 0 2px var(--bg1),
+			0 1px 2px var(--bg1);
 	}
 	.says {
 		margin: 0;

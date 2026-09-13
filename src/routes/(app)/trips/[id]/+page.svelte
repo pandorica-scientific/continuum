@@ -163,6 +163,30 @@
 			</ul>
 		{/if}
 
+		<!--
+			Offered, not added. The list above is what somebody chose to put in it;
+			these sit underneath and become real rows only when tapped, so a trip to
+			Paris for a funeral is not told to see the Eiffel Tower.
+		-->
+		{#if data.suggestions.length}
+			<div class="suggested">
+				<span class="eyebrow">Worth seeing there</span>
+				<div class="chips">
+					{#each data.suggestions as suggestion (suggestion.id)}
+						<form method="POST" action="?/addPlace" use:enhance>
+							<input type="hidden" name="label" value={suggestion.name} />
+							<input type="hidden" name="placeId" value={suggestion.id} />
+							<button class="chip" type="submit">
+								<Icon name="plus" size={12} />
+								<span>{suggestion.name}</span>
+								{#if suggestion.region}<span class="where">{suggestion.region}</span>{/if}
+							</button>
+						</form>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		<form
 			class="add"
 			method="POST"
@@ -298,6 +322,39 @@
 	}
 	.link:hover {
 		text-decoration: underline;
+	}
+	.suggested {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-top: var(--space-5);
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3);
+	}
+	.chip {
+		display: inline-flex;
+		align-items: baseline;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-5);
+		border: 1px dashed var(--bd2);
+		border-radius: var(--radius-pill);
+		background: none;
+		color: var(--fg2);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+	.chip:hover {
+		border-style: solid;
+		border-color: var(--rose);
+		color: var(--fg1);
+	}
+	.chip .where {
+		font-size: var(--text-xs);
+		color: var(--fg3);
 	}
 	.places {
 		list-style: none;

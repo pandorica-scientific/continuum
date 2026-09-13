@@ -11,6 +11,7 @@ import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db } from '$lib/server/db';
 import {
+	place,
 	person,
 	trip,
 	tripBooking,
@@ -22,6 +23,7 @@ import {
 } from '$lib/server/db/schema';
 import { document } from '$lib/server/db/schema';
 import type { EnumValue } from '$lib/enums';
+import type { PlaceRow } from '$lib/server/life/places';
 import {
 	parseStoredStamp,
 	resolveStamp,
@@ -676,8 +678,20 @@ export async function detachBookingFile(id: string, handle: Db = db): Promise<vo
 	await handle.update(tripBooking).set({ documentId: null }).where(eq(tripBooking.id, id));
 }
 
-/** Something to see, added to the end of the list. */
-export async function addPlace(tripId: string, label: string, handle: Db = db): Promise<string> {
+/**
+ * Something to see, added to the end of the list.
+ *
+ * `placeId` is set when this came from a suggestion and null when somebody
+ * typed it. Either way the LABEL is stored on the row rather than joined from
+ * the dataset: a trip's list is a record of what somebody planned, and it must
+ * still read correctly if the place is later retired.
+ */
+export async function addPlace(
+	tripId: string,
+	label: string,
+	placeId: string | null = null,
+	handle: Db = db
+): Promise<string> {
 	const id = uuidv7();
 	const [last] = await handle
 		.select({ ordinal: tripPlace.ordinal })
@@ -691,9 +705,59 @@ export async function addPlace(tripId: string, label: string, handle: Db = db): 
 		tripId,
 		ordinal: (last?.ordinal ?? -1) + 1,
 		label,
-		done: false
+		done: false,
+		placeId
 	});
 	return id;
+}
+
+/**
+ * Places worth seeing where this trip is going.
+ *
+ * By COUNTRY, not by the trip's named regions or cities. A trip that says only
+ * "France" is the common case when one is first created, which is exactly when
+ * suggestions are worth having — narrowing to named destinations would offer
+ * nothing at the only moment it matters.
+ *
+ * Anything already on the list is dropped, matched on `placeId`, so an accepted
+ * suggestion does not come back. A hand-typed place matches nothing and
+ * therefore suppresses nothing, even when its label happens to read the same:
+ * guessing that two strings are one place is how a suggestion silently vanishes.
+ */
+export async function suggestedPlaces(tripId: string, handle: Db = db): Promise<PlaceRow[]> {
+	const countries = await handle
+		.selectDistinct({ country: tripDestination.country })
+		.from(tripDestination)
+		.where(eq(tripDestination.tripId, tripId));
+	if (!countries.length) return [];
+
+	const taken = await handle
+		.select({ placeId: tripPlace.placeId })
+		.from(tripPlace)
+		.where(eq(tripPlace.tripId, tripId));
+	const already = new Set(taken.map((one) => one.placeId).filter((one) => one !== null));
+
+	const rows = await handle
+		.select({
+			id: place.id,
+			name: place.name,
+			region: place.region,
+			kind: place.kind,
+			importance: place.importance
+		})
+		.from(place)
+		.where(
+			and(
+				inArray(
+					place.country,
+					countries.map((one) => one.country.toUpperCase())
+				),
+				eq(place.retired, false)
+			)
+		)
+		.orderBy(desc(place.importance), asc(place.sortOrder));
+
+	return rows.filter((one) => !already.has(one.id));
 }
 
 export async function deletePlace(id: string, handle: Db = db): Promise<void> {

@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fail } from '@sveltejs/kit';
 import { asc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
-import { asRowId } from '$lib/ids';
 import { localToday } from '$lib/dates';
-import {
-	addManualVisit,
-	mapFigures,
-	visitedByCountry,
-	writeVisitsForEndedTrips
-} from '$lib/server/life/visits';
+import { mapFigures, visitedByCountry, writeVisitsForEndedTrips } from '$lib/server/life/visits';
 import {
 	FETCH_COMMAND,
 	geoManifest,
@@ -18,7 +11,7 @@ import {
 	projectedWorld,
 	zoneCard
 } from '$lib/server/life/geodata';
-import type { Actions, PageServerLoad } from './$types';
+import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	// A trip that has ended has been where it said it was going, and this is the
@@ -77,6 +70,24 @@ export const load: PageServerLoad = async () => {
 		zones,
 		zoneCount: manifest?.zones ?? 0,
 		continentTotals: manifest?.continents ?? {},
+		/** The build stamp the coin's fetch carries; see Continents.svelte. */
+		geoVersion: manifest?.generated ?? 'dev',
+		/**
+		 * How big each country is, for weighting a continent's share.
+		 *
+		 * Counting countries made Nauru worth as much of Oceania as Australia,
+		 * which is 28 square kilometres against seven and a half million.
+		 *
+		 * SUMMED per code, not assigned. The manifest is keyed by outline name and
+		 * several names share a country: Australia and Ashmore and Cartier Islands
+		 * are both AU. Assigning let the last one win, so Australia's area became
+		 * a five-square-kilometre reef and Oceania's total came out smaller than
+		 * Australia is.
+		 */
+		areas: Object.values(manifest?.countries ?? {}).reduce<Record<string, number>>((all, entry) => {
+			if (entry.code) all[entry.code] = (all[entry.code] ?? 0) + (entry.area ?? 0);
+			return all;
+		}, {}),
 		/**
 		 * A point inside each visited country, for lighting a time zone.
 		 *
@@ -152,40 +163,3 @@ function creditsFor(
 	}
 	return out;
 }
-
-export const actions: Actions = {
-	/**
-	 * A place the household went before Continuum existed.
-	 *
-	 * Written with `source = 'manual'`, which the trip sweep then leaves alone
-	 * forever: a country somebody scratched by hand must not be un-scratched
-	 * because no trip in the ledger explains it.
-	 */
-	markVisited: async ({ request }) => {
-		const form = await request.formData();
-		const country = String(form.get('country') ?? '')
-			.trim()
-			.toUpperCase();
-		const year = Number(form.get('year'));
-
-		if (country.length !== 2) {
-			return fail(400, { on: 'visit', message: 'Pick a country.' });
-		}
-		if (!Number.isFinite(year) || year < 1900 || year > 2200) {
-			return fail(400, { on: 'visit', message: 'Which year was that?' });
-		}
-
-		await addManualVisit({
-			country,
-			region: String(form.get('region') ?? '').trim() || null,
-			city: String(form.get('city') ?? '').trim() || null,
-			year: Math.round(year),
-			members: form
-				.getAll('member')
-				.map(String)
-				.map(asRowId)
-				.filter((id): id is string => Boolean(id))
-		});
-		return { marked: true };
-	}
-};
