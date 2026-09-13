@@ -364,6 +364,16 @@ export const recipeCategory = pgTable('recipe_category', {
 	id: uuid('id').primaryKey(),
 	name: text('name').notNull(),
 	emoji: text('emoji').notNull().default(''),
+	/**
+	 * A `--series-*` token, chosen when the shelf is made and kept.
+	 *
+	 * Stored rather than derived from the shelf's position, because the rail can
+	 * be reordered and a shelf that changed colour when its neighbour moved would
+	 * be decoration rather than an identifier — the same reasoning as `recipeTag`
+	 * beside it, and as `personHues` for a face. Every recipe on the shelf is
+	 * drawn in it.
+	 */
+	series: text('series').notNull().default('--series-r1'),
 	sortOrder: integer('sort_order').notNull().default(0)
 });
 

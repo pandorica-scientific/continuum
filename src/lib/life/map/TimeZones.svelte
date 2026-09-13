@@ -111,8 +111,6 @@
 			</span>
 		{/each}
 	</div>
-
-	<p class="says">A zone lights when a place you scratched off falls inside it. Nothing to tap.</p>
 </section>
 
 <style>
@@ -208,11 +206,6 @@
 			0 0 3px var(--bg1),
 			0 0 2px var(--bg1),
 			0 1px 2px var(--bg1);
-	}
-	.says {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

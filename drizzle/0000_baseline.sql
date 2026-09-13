@@ -751,6 +751,7 @@ CREATE TABLE "recipe_category" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"emoji" text DEFAULT '' NOT NULL,
+	"series" text DEFAULT '--series-r1' NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint

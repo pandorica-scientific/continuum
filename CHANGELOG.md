@@ -8,7 +8,7 @@
 
 ### ✨ Added
 
-- 🪙 **Places worth seeing** — a curated set of places for each country sits under its map as gold coins, each rubbing off to reveal an engraving of the place itself.
+- 🪙 **Places worth seeing** — a curated set of places for each country sits under its map as gold coins, each rubbing off to reveal an engraving of the place itself. 386 engravings across 40 countries have been drawn so far; a place without one is not offered as a coin, and the row fills in as batches land.
 - 👁️ **Seeing a place is recorded on its own** — rubbing a coin records that place and never colours the country, which keeps visits the only answer to where the household has been.
 - 🧭 **A trip suggests what is worth seeing there** — the curated places for a trip's destinations are offered beneath its list and become rows only when one is tapped.
 - ↩️ **A scratch can be taken back for five seconds** — Undo restores the selected region and removes the manual visit without affecting trip-derived visits.
@@ -21,11 +21,15 @@
 - 📐 **Continent progress is weighted by land area** — and the bar is held back from a hundred per cent until every country on that continent has been visited.
 - 🧩 **Far-flung regions are drawn in panels of their own** — Svalbard, the Azores, Madeira and the French overseas régions keep a legible scale instead of shrinking their country into a sliver.
 - 🕐 **Time-zone offsets are labelled along the band they mark** — the labels read up the map edge rather than stacking into rows above it.
+- 💡 **An idea on the trip board reads as a card somebody could pick up** — a raised ground washed in its stamp's own colour, one surface rather than a panel behind the stamp, no emoji or flag repeating what the stamp already prints, the people who want to go as initials in their own colour, and "Make a trip" as a button rather than a line of text.
+- 🍳 **A recipe wears the colour of the shelf it stands on** — each cookbook shelf is given a colour of its own when it is made, and keeps it however the rail is reordered.
+- 🧹 **The map's trackers and the idea board say less** — the three captions explaining what a scratch, a zone and a continent count were removed; the figures already say it.
 
 ### 🐛 Fixed
 
 - 🗺️ **Country regions now use the correct administrative level** — regional boundaries are dissolved consistently, including for France, Italy, Spain and the United Kingdom.
 - ✨ **Scratching a region no longer reloads the whole map** — the country outline and foil state remain stable while the visit is recorded.
+- 🔤 **A coin is labelled in a script its reader can place** — 315 places the dataset names only in the local script, Thimphu and Kyiv and Bangkok among them, now show the Latin name the dataset itself carries beside it.
 - 🔍 **A region smaller than a fingertip can now be scratched** — Jervis Bay, the District of Columbia, Moscow, Luxor and every atoll of the Maldives are drawn as a disc large enough to reach.
 - 🏝️ **Pacific countries are on the right continent** — Kiribati, Palau, Guam, French Polynesia and the Northern Marianas were filed under North America or Asia, so scratching one moved the wrong coin.
 - 📊 **A continent counts every country the map can draw** — Oceania read a hundred per cent at seven countries because the rest were in no denominator at all.

@@ -24,7 +24,8 @@
 		servings,
 		photo,
 		art,
-		tags
+		tags,
+		ink
 	}: {
 		href: string;
 		name: string;
@@ -36,10 +37,22 @@
 		/** The line drawing, already `currentColor`. */
 		art: string | null;
 		tags: Tag[];
+		/** The `--series-*` token of the shelf this recipe stands on. */
+		ink: string;
 	} = $props();
 </script>
 
-<a class="recipe" {href}>
+<!--
+	The shelf's ink, carried by the whole card — the same treatment the idea board
+	uses for a stamp's colour. A cookbook is read by shelf, so a grid showing
+	everything at once is a grid where the shelf a recipe belongs to is the first
+	thing worth seeing, and colour says it without a label on every card.
+
+	Carried as `--shelf` rather than `--ink`, which the tag chips inside set for
+	themselves per tag: one name meaning two things on the same element is a trap
+	even where it happens to work.
+-->
+<a class="recipe" {href} style:--shelf={`var(${ink})`}>
 	<div class="art">
 		{#if photo}
 			<img src="/files/{photo}" alt="" loading="lazy" />
@@ -71,27 +84,33 @@
 </a>
 
 <style>
+	/* The same raised, inked box as an idea on the trip board, and kept to 6% for
+	   the same reason: the description under the title is ordinary body text and
+	   has to clear AA on it, so the border carries the colour instead. */
 	.recipe {
 		display: flex;
 		flex-direction: column;
 		width: 268px;
 		height: 100%;
-		border: 1px solid var(--bd);
+		border: 1px solid color-mix(in srgb, var(--shelf) 45%, var(--bd2));
 		border-radius: var(--radius-card);
-		background: var(--card);
+		background: color-mix(in srgb, var(--shelf) 6%, var(--surface-2));
+		box-shadow: var(--shadow-card);
 		overflow: hidden;
 		color: inherit;
 	}
 	.recipe:hover {
 		text-decoration: none;
-		background: var(--surface-2);
+		background: color-mix(in srgb, var(--shelf) 12%, var(--surface-2));
 	}
+	/* No ground of its own: the card is already wearing this ink, and a panel
+	   behind the drawing cut the card into two halves. A photograph still fills
+	   the whole of it, which is why the height stays. */
 	.art {
 		height: 148px;
 		display: grid;
 		place-items: center;
-		background: var(--card2);
-		color: var(--rose);
+		color: var(--shelf);
 	}
 	.art :global(svg) {
 		width: 96px;

@@ -10,6 +10,11 @@
 
 	let { data, form } = $props();
 
+	/** Shelf id to the `--series-*` token it was given, for the cards on it. */
+	const inkOf = $derived(
+		Object.fromEntries(data.categories.map((shelf) => [shelf.id, shelf.series]))
+	);
+
 	let query = $state('');
 	/** null is "everything", which is where the screen opens. */
 	let category = $state<string | null>(null);
@@ -148,6 +153,7 @@
 				photo={recipe.photo}
 				art={recipe.art}
 				tags={recipe.tags}
+				ink={inkOf[recipe.categoryId] ?? '--fg3'}
 			/>
 		{:else}
 			<p class="empty">

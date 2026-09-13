@@ -258,11 +258,6 @@
 			</div>
 		{/each}
 	</div>
-
-	<p class="says">
-		Counted by land: a continent fills as you cover it, so a big country moves it further than a
-		small one. Big countries count by the regions you have been to.
-	</p>
 </section>
 
 <style>
@@ -345,11 +340,6 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
-	}
-	.says {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

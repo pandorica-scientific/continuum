@@ -36,6 +36,7 @@ import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
 	geoArea,
 	geoBounds,
@@ -54,6 +55,7 @@ import {
 	regionGroupFor
 } from '../src/lib/life/geo/aliases.ts';
 import { resolveRegion } from '../src/lib/life/geo/place-region.ts';
+import { readableName } from '../src/lib/life/geo/place-name.ts';
 import { assignColours } from '../src/lib/life/geo/country-colour.ts';
 
 const DIRECTORY = 'geodata';
@@ -555,7 +557,7 @@ function buildPlaces(byAdmin, codes) {
 
 				out.push({
 					id: place.id,
-					name: place.name,
+					name: readableName(place),
 					country: code,
 					region: where,
 					kind: place.type,
@@ -833,8 +835,13 @@ ${entries}
 	await writeFile(target, body);
 }
 
+// A build tool, not a module: running on import is what a `node scripts/…`
+// entry point does, and nothing should be able to start a 40 MB download by
+// importing it.
+const RUN_DIRECTLY = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
 try {
-	await main();
+	if (RUN_DIRECTLY) await main();
 } catch (error) {
 	// A half-written geodata/ would be treated as complete by the `exists` check
 	// on the next run, and the failure would look like a rendering bug days later.

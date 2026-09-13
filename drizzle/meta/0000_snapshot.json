@@ -1,5 +1,5 @@
 {
-  "id": "b526c4b2-68b3-457b-9bbd-b19873813931",
+  "id": "abe96556-d180-4f81-b67d-e701e4e095e2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -7003,6 +7003,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "series": {
+          "name": "series",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'--series-r1'"
         },
         "sort_order": {
           "name": "sort_order",
