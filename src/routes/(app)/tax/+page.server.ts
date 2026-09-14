@@ -4,7 +4,8 @@ import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { document, person, salaryEntry, taxStatement } from '$lib/server/db/schema';
+import { mayActFor } from '$lib/server/auth/policy';
+import { document, documentLink, person, salaryEntry, taxStatement } from '$lib/server/db/schema';
 import {
 	attachDocumentsToStatement,
 	deleteStatement,
@@ -239,9 +240,48 @@ async function discardUploads(attachments: StatementAttachment[]): Promise<void>
 	await Promise.all(attachments.map((a) => removeUpload(a.storedName)));
 }
 
+const NOT_YOUR_STATEMENT = 'You can only file your own tax statements.';
+
+/**
+ * The statement an action names, if the signed-in person may act on it.
+ *
+ * A statement is about one person, and that person is read from the row rather
+ * than trusted from the form — the form carries an id, and an id is not a
+ * claim about whose paper it is. Same rule as payslips: a member touches their
+ * own, an administrator anybody's.
+ */
+async function statementFor(
+	statementId: string,
+	actor: App.Locals['person']
+): Promise<
+	| { ok: true; statement: { id: string; personId: string; year: number; country: string } }
+	| { ok: false; status: 403 | 404; message: string }
+> {
+	const [statement] = await db
+		.select({
+			id: taxStatement.id,
+			personId: taxStatement.personId,
+			year: taxStatement.year,
+			country: taxStatement.country
+		})
+		.from(taxStatement)
+		.where(eq(taxStatement.id, statementId));
+	if (!statement) return { ok: false, status: 404, message: 'That statement is no longer there.' };
+	if (!mayActFor(actor, statement.personId)) {
+		return { ok: false, status: 403, message: NOT_YOUR_STATEMENT };
+	}
+	return { ok: true, statement };
+}
+
 export const actions: Actions = {
-	save: async ({ request }) => {
+	save: async ({ request, locals }) => {
 		const form = await request.formData();
+		// Whose statement this is comes from the form for a new one, so the check
+		// is on the form value — before any parsing, and before any upload lands.
+		const personId = asRowId(form.get('personId'));
+		if (!mayActFor(locals.person, personId)) {
+			return fail(403, { message: NOT_YOUR_STATEMENT });
+		}
 		// No fixed fallback: an empty field means "the household's own currency",
 		// which is configured, not a constant this file gets to decide.
 		const currency = (String(form.get('currency') ?? '').trim() || (await getBaseCurrency()))
@@ -286,7 +326,7 @@ export const actions: Actions = {
 		let result;
 		try {
 			result = await saveStatement({
-				personId: asRowId(form.get('personId')),
+				personId,
 				year: Number(form.get('year')),
 				country: String(form.get('country') ?? ''),
 				currency,
@@ -317,19 +357,13 @@ export const actions: Actions = {
 	 * Same filing rules as the dialog's own upload, because both go through the
 	 * domain — the two cannot drift into naming or tagging things differently.
 	 */
-	attach: async ({ request }) => {
+	attach: async ({ request, locals }) => {
 		const form = await request.formData();
 		const statementId = asRowId(form.get('id'));
 
-		const [statement] = await db
-			.select({
-				personId: taxStatement.personId,
-				year: taxStatement.year,
-				country: taxStatement.country
-			})
-			.from(taxStatement)
-			.where(eq(taxStatement.id, statementId));
-		if (!statement) return fail(404, { message: 'That statement is no longer there.' });
+		const found = await statementFor(statementId, locals.person);
+		if (!found.ok) return fail(found.status, { message: found.message });
+		const { statement } = found;
 
 		const uploaded = await takeUploads(form);
 		if ('message' in uploaded) return fail(400, { message: uploaded.message });
@@ -365,15 +399,15 @@ export const actions: Actions = {
 	 * `DocumentsCard`'s own detach form posts `targetId`, not `id` — the field
 	 * name every other screen's card already uses.
 	 */
-	detach: async ({ request }) => {
+	detach: async ({ request, locals }) => {
 		const form = await request.formData();
+		const statementId = asRowId(form.get('targetId'));
+		const found = await statementFor(statementId, locals.person);
+		if (!found.ok) return fail(found.status, { message: found.message });
 		// The registry's own detach, the one every other card uses. Tax kept a
 		// local copy that checked neither the document nor the target, so two
 		// functions of one name enforced two different things.
-		const outcome = await detachDocument(
-			asRowId(form.get('targetId')),
-			asRowId(form.get('documentId'))
-		);
+		const outcome = await detachDocument(statementId, asRowId(form.get('documentId')));
 		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},
@@ -388,16 +422,31 @@ export const actions: Actions = {
 	 * an orphaned row still counted in a year's total. `removeDocument` forgets
 	 * the payslip's contribution first, keeping only what the bank proved.
 	 */
-	deleteAttachment: async ({ request }) => {
+	deleteAttachment: async ({ request, locals }) => {
 		const form = await request.formData();
-		const outcome = await removeDocument(asRowId(form.get('documentId')));
+		const documentId = asRowId(form.get('documentId'));
+		// The document names no person of its own; the statements it is linked
+		// to do. Every one of them has to be the actor's to touch — paper shared
+		// between two people's returns is not one person's to destroy.
+		const linked = await db
+			.select({ personId: taxStatement.personId })
+			.from(documentLink)
+			.innerJoin(taxStatement, eq(taxStatement.id, documentLink.targetId))
+			.where(eq(documentLink.documentId, documentId));
+		if (linked.length === 0) return fail(404, { message: 'That document is no longer there.' });
+		if (!linked.every((row) => mayActFor(locals.person, row.personId))) {
+			return fail(403, { message: NOT_YOUR_STATEMENT });
+		}
+		const outcome = await removeDocument(documentId);
 		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},
 
-	remove: async ({ request }) => {
+	remove: async ({ request, locals }) => {
 		const form = await request.formData();
-		await deleteStatement(asRowId(form.get('id')));
+		const found = await statementFor(asRowId(form.get('id')), locals.person);
+		if (!found.ok) return fail(found.status, { message: found.message });
+		await deleteStatement(found.statement.id);
 		return { ok: true };
 	}
 };

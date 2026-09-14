@@ -93,3 +93,17 @@ export function requireAdmin(person: PolicyPerson | null): void {
 		error(403, 'That action needs an administrator account.');
 	}
 }
+
+/**
+ * May this person act on records that are about `personId` — file a payslip
+ * or a tax statement for them, attach paper to it, remove it?
+ *
+ * A member acts for themself; an administrator acts for anybody; a request
+ * with nobody signed in acts for no one. Every screen that takes "whose" from
+ * a form or reads it from a row asks this one question, so the answer cannot
+ * differ between the salary and tax screens the way it once did.
+ */
+export function mayActFor(actor: PolicyPerson | null | undefined, personId: string): boolean {
+	if (!actor) return false;
+	return actor.role === 'admin' || actor.id === personId;
+}

@@ -6,6 +6,41 @@
 
 > Regions you can actually name and reach, places worth the detour, and a scratch you can take back.
 
+### ⬆️ Upgrading
+
+Two new tables and two new columns. Pulling the image alone leaves a 0.9.0
+database refused at boot; run this against it first (backup first, see
+[Install](docs/install.md#updating)), then `docker compose up -d`. The places
+themselves are seeded on the next boot.
+
+```sql
+CREATE TABLE IF NOT EXISTS "place" (
+	"id" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"country" char(2) NOT NULL,
+	"region" text,
+	"kind" text NOT NULL,
+	"importance" integer NOT NULL,
+	"latitude" double precision NOT NULL,
+	"longitude" double precision NOT NULL,
+	"sort_order" integer NOT NULL,
+	"retired" boolean DEFAULT false NOT NULL,
+	CONSTRAINT place_kind_check CHECK (kind in ('city', 'town', 'village', 'landmark', 'natural_landmark', 'national_park', 'island', 'beach', 'mountain', 'lake', 'archaeological_site', 'religious_site', 'museum', 'historic_site'))
+);
+CREATE INDEX IF NOT EXISTS "place_country_idx" ON "place" ("country", "sort_order");
+CREATE INDEX IF NOT EXISTS "place_country_region_idx" ON "place" ("country", "region");
+CREATE TABLE IF NOT EXISTS "sight_visit" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"place_id" text NOT NULL REFERENCES "place"("id") ON DELETE CASCADE,
+	"year" integer NOT NULL,
+	"seen_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "sight_visit_place_id_unique" UNIQUE ("place_id")
+);
+ALTER TABLE "trip_place" ADD COLUMN IF NOT EXISTS "place_id" text REFERENCES "place"("id") ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS "trip_place_place_idx" ON "trip_place" ("place_id");
+ALTER TABLE "recipe_category" ADD COLUMN IF NOT EXISTS "series" text DEFAULT '--series-r1' NOT NULL;
+```
+
 ### ✨ Added
 
 - 🪙 **Places worth seeing** — a curated set of places for each country sits under its map as gold coins, each rubbing off to reveal an engraving of the place itself. 386 engravings across 40 countries have been drawn so far; a place without one is not offered as a coin, and the row fills in as batches land.

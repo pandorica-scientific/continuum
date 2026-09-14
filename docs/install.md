@@ -60,10 +60,25 @@ docker compose up -d
 
 That is the install command run again: it pulls the newest release, keeps the
 database on its current major version, and replaces only what changed. The
-named volumes carry the data, and the schema is brought up to date before the
-app accepts requests. The Compose file itself rarely changes; when a release
-says it does, run the `docker run … compose` line from the quick start again
-to refresh it.
+named volumes carry the data. The Compose file itself rarely changes; when a
+release says it does, run the `docker run … compose` line from the quick start
+again to refresh it.
+
+**A release that changes the database schema does not upgrade an existing
+database by itself.** Continuum ships one schema description rather than a
+chain of migrations, so a database made by an older release is refused at
+boot — the log says which columns are missing — rather than served half-way.
+When a release changes the schema, its section in `CHANGELOG.md` carries an
+**Upgrading** block with the SQL to run first:
+
+```sh
+docker compose exec -T db psql -U continuum -d continuum -v ON_ERROR_STOP=1 < upgrade.sql
+```
+
+Run it against the backed-up database, then `docker compose up -d`. A release
+whose changelog has no Upgrading block needs nothing beyond the pull. Restoring
+a backup into a newer release is not an upgrade path: the dump carries the old
+release's columns and is refused by the new schema — see [Backups](backups.md).
 
 ## Settings
 
