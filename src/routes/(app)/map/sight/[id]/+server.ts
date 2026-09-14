@@ -6,7 +6,7 @@
  * reaches a path unchecked — `sightArt` validates its shape against what the
  * dataset mints and opens its own answer, the same lesson as `/files/[name]`.
  *
- * A 404 here is ordinary rather than exceptional: 386 of 3,422 places have an
+ * A 404 here is ordinary rather than exceptional: 792 of 3,422 places have an
  * engraving today, and a place without one is not offered as a coin at all, so
  * nothing in the product should ever ask for a missing one.
  */

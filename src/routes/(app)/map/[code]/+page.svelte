@@ -42,7 +42,7 @@
 
 <!--
 	No band at all when nothing here has been engraved yet, rather than an empty
-	heading. 386 of 3,422 places have artwork today, so most countries show
+	heading. 792 of 3,422 places have artwork today, so most countries show
 	nothing and fill in as batches land.
 -->
 {#if data.sights.length}
