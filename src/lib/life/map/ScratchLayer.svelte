@@ -25,6 +25,28 @@
 
 	let { cells, clear, oncleared, onexit }: Props = $props();
 
+	/**
+	 * Put a region's coating back, for undo.
+	 *
+	 * Exported rather than driven by a prop: the coating is canvas state that
+	 * the engine owns, and a `recoat` prop would have to be a value that changes
+	 * — which means inventing a token, and re-coating twice if it ever repeated.
+	 */
+	export function recoat(index: number) {
+		foil?.recoat(index);
+	}
+
+	/**
+	 * Take a region's coating off again, for an undo the server refused.
+	 *
+	 * The inverse of the line above and the same reasoning: undo recoats before
+	 * it asks, so a refusal has to be able to put the screen back where the
+	 * server says it is.
+	 */
+	export function uncoat(index: number) {
+		foil?.clear(index);
+	}
+
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let foil: Foil | null = null;
 

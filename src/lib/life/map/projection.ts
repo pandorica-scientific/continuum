@@ -203,49 +203,123 @@ function mainland(shape: Feature<Geometry>): Feature<Geometry> {
 }
 
 /**
- * Re-fit a country once its provinces have arrived.
+ * Split a country's regions into the main body and its far-flung groups.
  *
- * The country outline and the province outlines are different datasets and do
- * not agree about where a country ends — so a frame built from one and filled
- * with the other leaves provinces hanging off the edge. Fitting to the
- * provinces that are actually in frame is what makes them fill the box.
+ * Portugal is the mainland, the Azores and Madeira; Norway is the mainland and
+ * Svalbard; France is the hexagon and four overseas departments. Fitting one
+ * frame around all of it makes the part somebody actually opened the page for
+ * tiny in a corner — Norway ended up a sliver at the bottom of an ocean of
+ * empty sea, because Svalbard is 1,500 km north of it.
  *
- * Mutates the projection it is given, and hands back the provinces worth
- * drawing: far-flung ones are dropped rather than dragging the frame out to a
- * scale where nothing is legible.
+ * Grouped by the GAP BETWEEN BOUNDING BOXES rather than by distance between
+ * centroids. Centroids split Finnmark off the Norwegian mainland it is joined
+ * to, because Norway is long and thin and Finnmark's middle is a long way from
+ * Troms'. Two boxes that touch are one landmass whatever their centroids say.
+ *
+ * Sorted by area on the globe, so the first cluster is the one to build the
+ * frame around and the rest are insets.
  */
-export function refitToProvinces(
-	projection: GeoProjection,
-	country: Feature<Geometry>,
-	provinces: Feature<Geometry>[],
-	view: { width: number; height: number; inset: number } = VIEW
-): Feature<Geometry>[] {
-	if (provinces.length <= 1) return provinces;
-
-	const [[west, south], [east, north]] = geoBounds(mainland(country) as never);
-	// A box that crosses the antimeridian reads west > east. Russia and Fiji.
-	const wrapped = west > east;
-	const padLon = (wrapped ? 360 - (west - east) : east - west) * 0.15 + 0.6;
-	const padLat = (north - south) * 0.15 + 0.6;
-
-	const inFrame = (province: Feature<Geometry>) => {
-		const at = geoCentroid(province as never);
-		if (at[1] < south - padLat || at[1] > north + padLat) return false;
-		if (wrapped) return at[0] >= west - padLon || at[0] <= east + padLon;
-		return at[0] >= west - padLon && at[0] <= east + padLon;
+export function clusterRegions(regions: Feature<Geometry>[]): Feature<Geometry>[][] {
+	/**
+	 * Degrees between two boxes, zero when they touch or overlap.
+	 *
+	 * Longitude measured ON THE CIRCLE, which is not the same as subtracting and
+	 * is wrong exactly where it matters. `geoBounds` reports a shape that crosses
+	 * the antimeridian with its west GREATER than its east — Russia's Chukchi
+	 * Autonomous Okrug comes back as 157.7°E to −169.0°E — and plain arithmetic
+	 * then reads that as 324 degrees from the Kamchatka it actually overlaps. The
+	 * okrug borders the Russian mainland and was being drawn in an inset panel of
+	 * its own. `fetch-geodata.mjs` already measures its continent boxes this way.
+	 */
+	const gap = (a: [[number, number], [number, number]], b: typeof a): number => {
+		// Each box as a start plus a width going east, so a wrapped box is the
+		// part that wraps rather than a negative span.
+		const wide = (box: typeof a) => (box[1][0] - box[0][0] + 360) % 360;
+		const [wa, wb] = [wide(a), wide(b)];
+		// How far east b's west edge is from a's, and the other way round. Either
+		// landing inside the other interval means the two overlap in longitude.
+		const east = (b[0][0] - a[0][0] + 360) % 360;
+		const west = (a[0][0] - b[0][0] + 360) % 360;
+		const x = east <= wa || west <= wb ? 0 : Math.min(east - wa, west - wb);
+		const y = Math.max(0, Math.max(a[0][1] - b[1][1], b[0][1] - a[1][1]));
+		return Math.hypot(x, y);
 	};
 
-	const kept = provinces.filter(inFrame);
-	const parts = kept.length > 1 ? kept : provinces;
+	// Two degrees of slack: neighbouring provinces do not quite touch once the
+	// outlines have been generalised, and a hard zero would split a coastline
+	// into one cluster per province.
+	const TOUCHING = 2;
 
-	projection.fitExtent(
-		[
-			[view.inset, view.inset],
-			[view.width - view.inset, view.height - view.inset]
-		],
-		{ type: 'FeatureCollection', features: parts } as unknown as GeoPermissibleObjects
-	);
-	return parts;
+	const boxed = regions.map((region) => ({ region, box: geoBounds(region as never) }));
+	const clusters: { members: typeof boxed; area: number }[] = [];
+
+	for (const one of boxed) {
+		const near = clusters.filter((cluster) =>
+			cluster.members.some((member) => gap(member.box, one.box) < TOUCHING)
+		);
+		if (!near.length) {
+			clusters.push({ members: [one], area: geoArea(one.region as never) });
+			continue;
+		}
+		// Joining two clusters at once is the point of single linkage: a province
+		// can be the bridge between groups that were separate until it arrived.
+		const first = near[0];
+		first.members.push(one);
+		first.area += geoArea(one.region as never);
+		for (const other of near.slice(1)) {
+			first.members.push(...other.members);
+			first.area += other.area;
+			clusters.splice(clusters.indexOf(other), 1);
+		}
+	}
+
+	return clusters
+		.sort((a, b) => b.area - a.area)
+		.map((cluster) => cluster.members.map((member) => member.region));
+}
+
+/** A panel on the side of the frame holding one far-flung group. */
+export interface InsetBox {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** How wide the column of inset panels is, and the air around them. */
+const INSET_WIDTH = 132;
+const INSET_PAD = 8;
+
+/** The frame the main body gets, once the insets have taken their column. */
+export const mainExtent = (
+	insets: number,
+	view: { width: number; height: number; inset: number } = VIEW
+): [[number, number], [number, number]] => [
+	[view.inset + (insets ? INSET_WIDTH + INSET_PAD : 0), view.inset],
+	[view.width - view.inset, view.height - view.inset]
+];
+
+/**
+ * Where each far-flung group is drawn, stacked down the left.
+ *
+ * Down the side rather than in place, which is the whole point: an inset says
+ * "this belongs to the country and is not where the box is". Real atlases have
+ * done it this way for Alaska and the Azores for a century, and the alternative
+ * — one frame around everything — is what made Norway a sliver.
+ */
+export function insetBoxes(
+	count: number,
+	view: { width: number; height: number; inset: number } = VIEW
+): InsetBox[] {
+	if (count < 1) return [];
+	const usable = view.height - view.inset * 2;
+	const height = Math.min(140, (usable - INSET_PAD * (count - 1)) / count);
+	return Array.from({ length: count }, (_, at) => ({
+		x: view.inset,
+		y: view.inset + at * (height + INSET_PAD),
+		width: INSET_WIDTH,
+		height
+	}));
 }
 
 /** Turn a world-atlas topology into the features the map draws. */

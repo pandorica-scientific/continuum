@@ -1,7 +1,7 @@
 {
 	"name": "continuum",
 	"private": true,
-	"version": "0.9.0",
+	"version": "0.9.1",
 	"license": "AGPL-3.0-or-later",
 	"type": "module",
 	"scripts": {
@@ -30,7 +30,8 @@
 		"changelog:section": "node scripts/changelog-section.mjs",
 		"prepare:scan-worker": "node scripts/build-scan-worker.mjs",
 		"predev": "node scripts/build-scan-worker.mjs",
-		"fetch:geodata": "node scripts/fetch-geodata.mjs"
+		"fetch:geodata": "node scripts/fetch-geodata.mjs",
+		"convert:place-icons": "node scripts/convert-place-icons.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -51,6 +52,7 @@
 		"prettier-plugin-svelte": "^4.1.1",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
+		"topojson-server": "^3.0.1",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.67.0",
 		"vite": "^8.0.16",

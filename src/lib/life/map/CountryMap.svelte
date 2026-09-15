@@ -13,21 +13,27 @@
 	 * page: Russia's outlines are 2.2 MB and nobody opening the world map wants
 	 * to pay for them.
 	 */
-	import { invalidateAll } from '$app/navigation';
+	import { untrack } from 'svelte';
+	import { invalidate } from '$app/navigation';
+	import { submitAction } from '$lib/actions/result';
 	import { countryColour, regionFill } from '$lib/life/geo/country-colour';
 	import { COUNTRY_COLOURS } from '$lib/life/geo/country-colour-table';
 	import {
 		VIEW,
+		clusterRegions,
 		countriesFrom,
 		countryProjection,
+		insetBoxes,
+		mainExtent,
 		moveCrimea,
-		refitToProvinces
+		type InsetBox
 	} from '$lib/life/map/projection';
 	import { placeRegionLabels } from '$lib/life/map/labels';
 	import { FOIL_HALO, FOIL_INK, SCRATCHED_HALO, SCRATCHED_INK } from '$lib/life/map/materials';
 	import ScratchLayer from '$lib/life/map/ScratchLayer.svelte';
 	import type { Cell } from '$lib/life/map/foil';
-	import { geoArea, geoContains, geoPath, type GeoProjection } from 'd3-geo';
+	import { VISITS } from '$lib/life/map/depends';
+	import { geoArea, geoContains, geoMercator, geoPath, type GeoProjection } from 'd3-geo';
 	import type { Feature, FeatureCollection, Geometry } from 'geojson';
 	import type { Topology } from 'topojson-specification';
 
@@ -43,6 +49,8 @@
 		visited: string[];
 		/** How many provinces there are to load, for the waiting line. */
 		regionCount: number;
+		/** Which build of the outlines to ask for; see the page's own comment. */
+		geoVersion: string;
 		/** Whose view this is, so the scratch is credited to them. Null is the household. */
 		who?: string | null;
 		/** Somebody scratched a region through. */
@@ -56,6 +64,7 @@
 		world,
 		visited,
 		regionCount,
+		geoVersion,
 		who = null,
 		onscratched
 	}: Props = $props();
@@ -79,6 +88,8 @@
 		name: string;
 		path: string;
 		cell: Cell;
+		/** Drawn as a disc because its real outline is too small to hit. */
+		speck: boolean;
 		/** Where its name goes, and how much room the biggest piece has for it. */
 		at: [number, number];
 		mainWidth: number;
@@ -86,10 +97,15 @@
 	}
 
 	let regions = $state<Region[] | null>(null);
+	/** The panels down the left, each holding one far-flung group. */
+	let insets = $state<(InsetBox & { label: string })[]>([]);
 	let failed = $state<string | null>(null);
 	/** Names scratched off in this session, on top of what was already visited. */
 	let scratched = $state<string[]>([]);
 	let toast = $state<string | null>(null);
+	/** The scratch the pill is currently offering to take back, if any. */
+	let undoable = $state<{ index: number; name: string } | null>(null);
+	let layer = $state<ReturnType<typeof ScratchLayer> | null>(null);
 
 	/**
 	 * The names the household has been to, matched case-insensitively.
@@ -107,17 +123,47 @@
 			.filter((index) => index >= 0)
 	);
 
+	/**
+	 * What the provinces are fetched from, held so an unchanged value is not a
+	 * change.
+	 *
+	 * Reading `slug` straight inside the effect below is not enough, and this is
+	 * the subtle half of the blink. A prop is a getter onto the parent's `data`,
+	 * so it reports a change whenever `data` is replaced — which `invalidate`
+	 * does after every scratch — even though the string is the same string. A
+	 * `$derived` compares, and a value equal to the last one stops here.
+	 */
+	const which = $derived(slug);
+	const build = $derived(geoVersion);
+
+	/**
+	 * Fetch and build the province cells — once per COUNTRY, not once per load.
+	 *
+	 * The outlines cannot have changed, because the country did not, and
+	 * refetching them threw the map back to the grey whole-country fallback and
+	 * rebuilt every foil canvas — once per region scratched. Two things keep
+	 * this effect still: the deriveds above, and `untrack` around `country`,
+	 * which the page's load does rebuild.
+	 */
 	$effect(() => {
-		const projection = country?.projection;
-		if (!projection) return;
+		// Read first, so the effect depends on these and on nothing else.
+		const slugNow = which;
+		const buildNow = build;
+		const projection = untrack(() => country?.projection);
+		const outline = untrack(() => country?.feature);
+		if (!projection || !outline) return;
 
 		let live = true;
 		regions = null;
+		// Cleared with them: the panels belong to the country being left, and
+		// leaving them up drew Portugal's Azores and Madeira boxes over the grey
+		// fallback outline of whatever was opened next until the fetch returned.
+		insets = [];
 		failed = null;
 
 		void (async () => {
 			try {
-				const response = await fetch(`/map/geo/${slug}`);
+				const response = await fetch(`/map/geo/${slugNow}?v=${encodeURIComponent(buildNow)}`);
 				if (!response.ok) throw new Error('Those outlines could not be read.');
 				const collection = (await response.json()) as FeatureCollection<Geometry>;
 				if (!live) return;
@@ -125,8 +171,60 @@
 				// province outlines are different datasets and disagree about
 				// where a country ends, so a frame built from one leaves the
 				// other hanging off the edge.
-				const parts = refitToProvinces(projection, country.feature, collection.features);
-				regions = cellsFrom(parts, projection);
+				/*
+				 * The far-flung groups get panels of their own rather than dragging
+				 * the frame out to hold them. Norway with Svalbard in the same box
+				 * is a sliver of coast at the bottom of an empty ocean; Portugal
+				 * with the Azores is the same picture. Each group is drawn at its
+				 * own scale in a labelled panel, which is what an atlas does and
+				 * what keeps every region reachable — there is no other way to
+				 * scratch one off.
+				 */
+				/*
+				 * Clustered from the RAW features, not from a pre-filtered set.
+				 * `refitToProvinces` used to drop far-flung provinces before the
+				 * frame was built, which is what this replaces: dropping them
+				 * makes them unreachable, and there is no other way to scratch a
+				 * region off. Portugal showed no Azores and no Madeira at all
+				 * until the filter came out.
+				 */
+				const [main = [], ...far] = clusterRegions(collection.features);
+				const boxes = insetBoxes(far.length);
+
+				projection.fitExtent(mainExtent(far.length), {
+					type: 'FeatureCollection',
+					features: main
+				} as never);
+
+				const built = cellsFrom(main, projection);
+				const panels: (InsetBox & { label: string })[] = [];
+
+				far.forEach((group, at) => {
+					const box = boxes[at];
+					if (!box) return;
+					// Its own projection, fitted to its own panel: the group is drawn
+					// at whatever scale makes it legible there, which is the point.
+					const inner = geoMercator().fitExtent(
+						[
+							[box.x + 6, box.y + 16],
+							[box.x + box.width - 6, box.y + box.height - 6]
+						],
+						{ type: 'FeatureCollection', features: group } as never
+					);
+					built.push(...cellsFrom(group, inner));
+					panels.push({ ...box, label: group.map(tidyRegionName).join(' · ') });
+				});
+
+				insets = panels;
+				/*
+				 * Specks first, because a point is resolved to the FIRST cell that
+				 * contains it and every one of them sits inside a bigger region:
+				 * Jervis Bay is a hole in New South Wales, the District of Columbia
+				 * a hole in Maryland. Behind their neighbour in the list they could
+				 * never be reached, which is the whole point of drawing them.
+				 */
+				built.sort((a, b) => Number(b.speck) - Number(a.speck));
+				regions = built;
 			} catch (error) {
 				if (live) failed = error instanceof Error ? error.message : 'Something went wrong.';
 			}
@@ -138,33 +236,83 @@
 	});
 
 	/**
+	 * The smallest a region is allowed to be drawn, in frame units.
+	 *
+	 * The frame is 960 by 480 and renders at roughly that in CSS pixels, so this
+	 * is an eight-pixel disc: about the smallest thing a finger can be dragged
+	 * across on purpose.
+	 */
+	const TOUCH_RADIUS = 4;
+	const TOUCH_AREA = Math.PI * TOUCH_RADIUS * TOUCH_RADIUS;
+
+	/** A circle, as path data, because that is what a cell's coating is drawn from. */
+	const disc = (x: number, y: number, r: number) =>
+		`M ${x - r} ${y} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0`;
+
+	/**
 	 * Turn the province outlines into drawable, scratchable cells.
 	 *
 	 * `contains` inverts the projection and asks the real geometry, which is how
 	 * the coverage sampler knows which of its grid points are actually inside a
 	 * region rather than merely inside its bounding box.
+	 *
+	 * ## Specks
+	 *
+	 * A region whose true outline covers less than a touch is drawn as a disc at
+	 * its middle instead, and answers `contains` as that disc. Jervis Bay
+	 * Territory is 1.1 square units inside an Australia of four hundred thousand
+	 * — a shape a pixel across, which could be seen and could not be scratched,
+	 * and the same was true of every atoll in the Maldives, every district of
+	 * Seychelles, the District of Columbia, Moscow, Luxor and Chandigarh.
+	 *
+	 * Drawn rather than dropped. Dropping them was the other way out and it is
+	 * worse twice over: Maldives and Seychelles are made of nothing else, so they
+	 * would have emptied, and the ones big countries hide are capital cities —
+	 * the regions somebody is most likely to have actually been to. An atlas puts
+	 * a disc where a shape will not fit, and has done for two centuries.
 	 */
 	function cellsFrom(features: Feature<Geometry>[], projection: GeoProjection): Region[] {
 		const draw = geoPath(projection);
 
 		return features
 			.map((one): Region | null => {
-				const path = draw(one as never);
-				if (!path) return null;
-				const [[x0, y0], [x1, y1]] = draw.bounds(one as never);
-				if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+				const drawn = draw(one as never);
+				if (!drawn) return null;
+				const bounds = draw.bounds(one as never);
+				if (!bounds.flat().every(Number.isFinite)) return null;
 
 				// The label sits on the region's BIGGEST piece, not on the centroid
 				// of all of it: the centroid of a province with an island falls in
 				// the sea between them.
 				const main = biggestPiece(one);
 				const at = draw.centroid(main as never);
-				const [[mx0, my0], [mx1, my1]] = draw.bounds(main as never);
+				const mainBounds = draw.bounds(main as never);
+
+				// `draw.area` is the projected area, which is the one that decides
+				// whether a shape can be hit — the area on the globe cannot, because
+				// every country is fitted to the frame at its own scale.
+				const speck =
+					draw.area(one as never) < TOUCH_AREA && at.every((one) => Number.isFinite(one));
+
+				const [[x0, y0], [x1, y1]] = speck
+					? [
+							[at[0] - TOUCH_RADIUS, at[1] - TOUCH_RADIUS],
+							[at[0] + TOUCH_RADIUS, at[1] + TOUCH_RADIUS]
+						]
+					: bounds;
+				const [[mx0, my0], [mx1, my1]] = speck
+					? [
+							[at[0] - TOUCH_RADIUS, at[1] - TOUCH_RADIUS],
+							[at[0] + TOUCH_RADIUS, at[1] + TOUCH_RADIUS]
+						]
+					: mainBounds;
+				const path = speck ? disc(at[0], at[1], TOUCH_RADIUS) : drawn;
 
 				const name = tidyRegionName(one);
 				return {
 					name,
 					path,
+					speck,
 					at: [at[0], at[1]],
 					mainWidth: mx1 - mx0,
 					mainHeight: my1 - my0,
@@ -175,10 +323,15 @@
 							[x0, y0],
 							[x1, y1]
 						],
-						contains: (x, y) => {
-							const at = projection.invert?.([x, y]);
-							return at ? geoContains(one as never, at) : false;
-						}
+						// A disc is asked about in frame units. Inverting the
+						// projection and asking the real geometry would put the answer
+						// back inside the shape nobody can hit.
+						contains: speck
+							? (x, y) => Math.hypot(x - at[0], y - at[1]) <= TOUCH_RADIUS
+							: (x, y) => {
+									const point = projection.invert?.([x, y]);
+									return point ? geoContains(one as never, point) : false;
+								}
 					}
 				};
 			})
@@ -239,6 +392,21 @@
 	 */
 	const cells = $derived((regions ?? []).map((region) => region.cell));
 
+	/**
+	 * The same regions, in the order they are PAINTED.
+	 *
+	 * The reverse of the order they are hit in: SVG paints later on top, so a
+	 * speck has to come last to be seen, and it has to come first to be reached.
+	 * The index travels with it because the fill is picked by position, and
+	 * because everything else — the coating, the labels, what a scratch clears —
+	 * counts from `regions`.
+	 */
+	const painted = $derived(
+		(regions ?? [])
+			.map((region, index) => ({ region, index }))
+			.sort((a, b) => Number(a.region.speck) - Number(b.region.speck))
+	);
+
 	const labels = $derived(
 		placeRegionLabels(
 			(regions ?? []).map((region) => ({
@@ -254,6 +422,19 @@
 
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
+	/** How long the pill stays up, and so how long undo is offered for. */
+	const UNDO_WINDOW_MS = 5000;
+
+	function say(message: string, offer: { index: number; name: string } | null = null) {
+		toast = message;
+		undoable = offer;
+		if (toastTimer) clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => {
+			toast = null;
+			undoable = null;
+		}, UNDO_WINDOW_MS);
+	}
+
 	/**
 	 * Record the scratch, then say so.
 	 *
@@ -264,31 +445,88 @@
 	async function cleared(index: number, name: string) {
 		scratched = [...scratched, name];
 		onscratched?.(name);
-		toast = name ? `${name} — scratched off.` : 'A region — scratched off. Name it?';
-		if (toastTimer) clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toast = null), 4000);
+		// A region nobody could name cannot be taken back either: undo asks the
+		// server to remove a visit BY name, and there is no name to send.
+		say(
+			name ? `${name} — scratched off.` : 'A region — scratched off. Name it?',
+			name ? { index, name } : null
+		);
 
 		if (!name) return;
-		try {
-			const body = new FormData();
-			body.set('region', name);
-			if (who) body.set('who', who);
-			await fetch('?/scratched', { method: 'POST', body });
-			// The world map and the tiles read the same query this page does, so
-			// they are right again the moment the server knows.
-			await invalidateAll();
-		} catch {
+		const body = new FormData();
+		body.set('region', name);
+		if (who) body.set('who', who);
+		// `submitAction` rather than a bare fetch, which is the repo's own helper
+		// for exactly this. The bare version only ever noticed a network error:
+		// `fetch` does not throw on 400 or 500, so an action that REFUSED the
+		// scratch — a missing region, a rejected `who` — went on to invalidate and
+		// left "scratched off" on screen for something the server had not kept.
+		const outcome = await submitAction('?/scratched', body, { updatePage: false });
+		if (outcome.type !== 'success') {
 			// The foil is off on screen either way; the next scratch tries again.
-			toast = `${name} — scratched off, but it could not be saved.`;
+			say(`${name} — scratched off, but it could not be saved.`);
+			return;
 		}
+		// Only the visit query, not every load on the route: reloading the layout
+		// as well is what made the page blink after each scratch.
+		await invalidate(VISITS);
+	}
+
+	/**
+	 * Take the last scratch back: coating on, visit gone.
+	 *
+	 * The coating goes back first and unconditionally. A scratch is a gesture
+	 * somebody just made and undid on purpose, so the screen must obey
+	 * immediately rather than wait to hear whether a delete succeeded — and if it
+	 * did not, the pill says so and the next reload has the truth.
+	 */
+	async function undo() {
+		const taking = undoable;
+		if (!taking) return;
+		undoable = null;
+
+		layer?.recoat(taking.index);
+		scratched = scratched.filter((one) => one !== taking.name);
+
+		const body = new FormData();
+		body.set('region', taking.name);
+		const outcome = await submitAction('?/unscratched', body, { updatePage: false });
+		if (outcome.type !== 'success') {
+			// Put the screen back where the server says it is rather than leaving a
+			// recoated region over a visit that is still recorded. The server
+			// refuses an undo it cannot carry out — a visit a trip wrote — and says
+			// why, so that reason is what the pill shows.
+			layer?.uncoat(taking.index);
+			scratched = [...scratched, taking.name];
+			say(`${taking.name} — ${outcome.message}`);
+			return;
+		}
+		await invalidate(VISITS);
+		say(`${taking.name} — put back.`);
 	}
 </script>
 
 <div class="country">
 	<div class="stage">
 		<svg viewBox="0 0 {VIEW.width} {VIEW.height}" aria-hidden="true">
+			<!--
+				The panels first, under everything, so a group drawn inside one sits
+				on its own ground rather than on the sea.
+			-->
+			<!--
+				Keyed by position, not by label: two far-flung groups can carry the
+				same name — Madagascar has more than one offshore island filed under
+				the same province — and a duplicate key throws rather than renders,
+				which is why that country hung on "reading the province outlines".
+			-->
+			{#each insets as panel, at (at)}
+				<rect class="panel" x={panel.x} y={panel.y} width={panel.width} height={panel.height} rx="6"
+				></rect>
+				<text class="panel-name" x={panel.x + 7} y={panel.y + 12}>{panel.label}</text>
+			{/each}
+
 			{#if regions}
-				{#each regions as region, index (region.name + index)}
+				{#each painted as { region, index } (region.name + index)}
 					<path class="region" d={region.path} style:--fill={regionFill(colour, index)}></path>
 				{/each}
 			{:else if country}
@@ -299,13 +537,20 @@
 		</svg>
 
 		{#if regions}
-			<ScratchLayer {cells} clear={alreadyClear} oncleared={cleared} />
+			<ScratchLayer bind:this={layer} {cells} clear={alreadyClear} oncleared={cleared} />
 		{/if}
 
 		<!-- The names sit over the coating, dark on foil and white on a region
 		     that has been scratched — the same two treatments as the world map,
 		     because they are the same two materials. -->
-		{#each labels as label (label.name)}
+		<!--
+			Keyed by position, not by name. Natural Earth files four separate
+			Madagascan regions as "Antananarivo" and three as "Toamasina", so a
+			name is not unique — and a duplicate key throws before anything
+			renders, which is why that country sat for ever on "reading the
+			province outlines".
+		-->
+		{#each labels as label, at (at)}
 			<span
 				class="label"
 				class:scratched={been.has(label.name.toLowerCase())}
@@ -321,7 +566,12 @@
 		{/each}
 
 		{#if toast}
-			<p class="toast" role="status">{toast}</p>
+			<p class="toast" role="status">
+				<span>{toast}</span>
+				{#if undoable}
+					<button type="button" class="undo" onclick={undo}>Undo</button>
+				{/if}
+			</p>
 		{/if}
 	</div>
 
@@ -333,7 +583,7 @@
 		{:else}
 			<span class="mono">{alreadyClear.length}</span>
 			of <span class="mono">{regions.length}</span>
-			{regions.length === 1 ? 'region' : 'regions'} scratched off — drag across one to take the foil off.
+			{regions.length === 1 ? 'region' : 'regions'} scratched off.
 		{/if}
 	</p>
 </div>
@@ -359,6 +609,18 @@
 		height: auto;
 	}
 	/* The colour underneath. It is always there; the foil is what hides it. */
+	/* An inset's ground: enough to read as a panel, not enough to compete with
+	   the country in it. */
+	.panel {
+		fill: color-mix(in srgb, var(--fg1) 4%, transparent);
+		stroke: var(--bd2);
+		stroke-width: 0.8;
+	}
+	.panel-name {
+		fill: var(--fg3);
+		font-size: 9px;
+		font-weight: 600;
+	}
 	.region {
 		fill: var(--fill);
 		stroke: var(--bg);
@@ -400,6 +662,25 @@
 		color: var(--fg1);
 		font-size: var(--text-sm);
 		white-space: nowrap;
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	/* A link rather than a button shape: the pill is already a small floating
+	   object, and a second bordered box inside it reads as a dialog. */
+	.undo {
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--brand);
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.undo:hover {
+		color: var(--fg1);
 	}
 	.status {
 		margin: 0;

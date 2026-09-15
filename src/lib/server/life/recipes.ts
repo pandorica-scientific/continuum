@@ -19,11 +19,14 @@ import {
 	recipeTagLink
 } from '$lib/server/db/schema';
 import { dishSvg, resolveDish, type ArtDefinition } from '$lib/life/art';
+import { RESERVE_COLOR_TOKENS } from '$lib/categories';
 
 export interface CategoryView {
 	id: string;
 	name: string;
 	emoji: string;
+	/** The `--series-*` token this shelf was given when it was made. */
+	series: string;
 	/** How many recipes are on it, for the rail's count. */
 	count: number;
 }
@@ -69,6 +72,7 @@ export async function listCategories(handle: Db = db): Promise<CategoryView[]> {
 			id: recipeCategory.id,
 			name: recipeCategory.name,
 			emoji: recipeCategory.emoji,
+			series: recipeCategory.series,
 			count: sql<number>`count(${recipe.id})::int`
 		})
 		.from(recipeCategory)
@@ -314,6 +318,36 @@ export async function deleteRecipe(id: string, handle: Db = db): Promise<void> {
 	await handle.delete(recipe).where(eq(recipe.id, id));
 }
 
+/**
+ * The order shelf colours are handed out in: every other reserve token, then
+ * the ones that were skipped.
+ *
+ * Derived from `RESERVE_COLOR_TOKENS` rather than written out again, so the
+ * ranked list stays the one place the palette is decided. Taken in its own
+ * order the first four shelves came out r1, r2, r3, r4 — and r1 and r4 are both
+ * greens, so a household with four shelves had two it could not tell apart.
+ * Striding puts the greens at the first and fifth shelf instead.
+ */
+const SHELF_INKS = [
+	...RESERVE_COLOR_TOKENS.filter((_, at) => at % 2 === 0),
+	...RESERVE_COLOR_TOKENS.filter((_, at) => at % 2 === 1)
+];
+
+/**
+ * The ink a new shelf is given: the first of those no shelf is wearing.
+ *
+ * The reserve rather than the named series, for the reason `demo-life` states
+ * about tags — `--series-income` means income on a cash-flow chart, and a shelf
+ * borrowing it would be the one place in the product where a series colour says
+ * two things. Past the tenth shelf the list starts again: `RESERVE_COLOR_TOKENS`
+ * ends at ten because past nineteen series two colours are always closer than
+ * the eye can separate, and the shelf's name is doing the work by then.
+ */
+export function inkForShelf(taken: readonly string[]): string {
+	const free = SHELF_INKS.find((token) => !taken.includes(token));
+	return free ?? SHELF_INKS[taken.length % SHELF_INKS.length];
+}
+
 export async function addCategory(name: string, emoji: string, handle: Db = db): Promise<string> {
 	const id = uuidv7();
 	const [last] = await handle
@@ -321,10 +355,15 @@ export async function addCategory(name: string, emoji: string, handle: Db = db):
 		.from(recipeCategory)
 		.orderBy(desc(recipeCategory.sortOrder))
 		.limit(1);
+	const taken = await handle.select({ series: recipeCategory.series }).from(recipeCategory);
 
-	await handle
-		.insert(recipeCategory)
-		.values({ id, name, emoji, sortOrder: (last?.sortOrder ?? -1) + 1 });
+	await handle.insert(recipeCategory).values({
+		id,
+		name,
+		emoji,
+		series: inkForShelf(taken.map((one) => one.series)),
+		sortOrder: (last?.sortOrder ?? -1) + 1
+	});
 	return id;
 }
 

@@ -57,7 +57,11 @@
 		gap: var(--space-2);
 	}
 	/* 15% fill, 40% border, ink darkened towards the foreground — the treatment
-	   the handoff sets for tags, and the same one the tasting notes use. */
+	   the handoff sets for tags, and the same one the tasting notes use.
+	   Carried to 48% rather than the handoff's 68%: over a 15% wash of the same
+	   hue, on a card that is itself washed in its shelf's colour, the greens and
+	   teals sat at 3.7:1 on the light theme, and the guidelines ask AA of every
+	   pill. */
 	.chip {
 		display: inline-flex;
 		align-items: center;
@@ -65,7 +69,7 @@
 		border: 1px solid color-mix(in srgb, var(--ink) 40%, transparent);
 		border-radius: var(--radius-pill);
 		background: color-mix(in srgb, var(--ink) 15%, transparent);
-		color: color-mix(in srgb, var(--ink) 68%, var(--fg1));
+		color: color-mix(in srgb, var(--ink) 48%, var(--fg1));
 		font-size: var(--text-xs);
 		white-space: nowrap;
 	}

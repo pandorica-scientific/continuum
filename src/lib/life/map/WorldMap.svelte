@@ -169,9 +169,19 @@
 	}}
 >
 	<div class="stage">
+		<!-- Not aria-hidden, unlike every other map surface here: each country
+		     inside is a labelled button and reachable by tab, and hiding the
+		     branch that holds them takes them out of the accessibility tree while
+		     leaving them in the focus order — something to land on that announces
+		     nothing. The country page's map can be hidden because nothing in it
+		     is focusable.
+
+		     The gestures stay on the <svg> and the wrapper above already carries
+		     the `application` role and the label for both, so this element wants
+		     no role of its own — the same waiver the wrapper takes. -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<svg
 			viewBox="0 0 {VIEW.width} {VIEW.height}"
-			aria-hidden="true"
 			class:panning={k > 1}
 			ondblclick={toggleZoom}
 			onpointerdown={onPointerDown}

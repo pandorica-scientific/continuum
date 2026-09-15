@@ -47,6 +47,18 @@ export function registerCoreBoot(): void {
 	// Before any account is written: account.bank carries a foreign key here.
 	registerBootStep({ id: 'banks', run: seedBanks });
 
+	// The curated sights. Dynamic because the module pulls in the geodata reader
+	// and a boot that has no places to seed should not pay for it; a no-op when
+	// the geodata has not been fetched, which is the same condition the map
+	// screens check before they offer anything.
+	registerBootStep({
+		id: 'places',
+		run: async () => {
+			const { seedPlaces } = await import('$lib/server/life/places');
+			await seedPlaces();
+		}
+	});
+
 	// DEMO=1 fills a pristine instance with the fictional Novák household so
 	// screenshots and first impressions need no real data. Never touches an
 	// instance that has people.

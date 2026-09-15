@@ -20,7 +20,7 @@
 	interface Loaded {
 		of: Record<string, string>;
 		totals: Record<string, number>;
-		shapes: Record<string, Geometry[]>;
+		shapes: Record<string, { code: string | null; geometry: Geometry }[]>;
 	}
 
 	interface Props {
@@ -28,11 +28,15 @@
 		credits: Record<string, number>;
 		/** Continent → how many countries it has, from the manifest. */
 		totals: Record<string, number>;
+		/** Which build of the geodata this is; see the fetch below. */
+		geoVersion: string;
+		/** ISO code → square kilometres, for weighting the share. */
+		areas: Record<string, number>;
 		/** A point inside each visited country, for punching a hole in the foil. */
 		places: Record<string, [number, number]>;
 	}
 
-	let { credits, totals, places }: Props = $props();
+	let { credits, totals, areas, places, geoVersion }: Props = $props();
 
 	/** The order and the colours are the handoff's. */
 	const ORDER = ['Europe', 'Asia', 'North America', 'South America', 'Africa', 'Oceania'];
@@ -53,7 +57,14 @@
 		let live = true;
 		void (async () => {
 			try {
-				const response = await fetch('/map/geo/continents');
+				/*
+				 * Stamped with the build, because this file is served `immutable`
+				 * for a year. v0.9.1 learned that on the country outlines and this
+				 * fetch was missed: when the shape list gained a country code per
+				 * entry, every browser that had opened the map before kept the old
+				 * format and the coins came up empty.
+				 */
+				const response = await fetch(`/map/geo/continents?v=${encodeURIComponent(geoVersion)}`);
 				if (!response.ok) return;
 				const found = (await response.json()) as Loaded;
 				if (live) loaded = found;
@@ -74,10 +85,13 @@
 	 * reason Europe is legible at an inch across. Fitted to ALL of it, so nothing
 	 * hangs outside the disc.
 	 */
-	function projectionFor(continent: string, shapes: Geometry[]): GeoProjection {
+	function projectionFor(
+		continent: string,
+		shapes: { code: string | null; geometry: Geometry }[]
+	): GeoProjection {
 		const collection = {
 			type: 'FeatureCollection',
-			features: shapes.map((geometry) => ({ type: 'Feature', properties: null, geometry }))
+			features: shapes.map(({ geometry }) => ({ type: 'Feature', properties: null, geometry }))
 		};
 		const projection =
 			continent === 'Europe' || continent === 'Africa' ? geoMercator() : geoNaturalEarth1();
@@ -100,25 +114,78 @@
 				const shapes = found.shapes[continent] ?? [];
 				const projection = projectionFor(continent, shapes);
 				const draw = geoPath(projection);
-				const path = shapes
-					.map((geometry) => draw({ type: 'Feature', properties: null, geometry } as never) ?? '')
-					.join(' ');
 
 				let sum = 0;
+				let whole = 0;
 				let count = 0;
-				const holes: { x: number; y: number }[] = [];
+				/*
+				 * The SHAPE of each country somebody has been to, punched out of the
+				 * coating — not a dot at its middle.
+				 *
+				 * A fixed circle made every country the same size on the coin, which
+				 * is only defensible when they are all specks. Australia is half of
+				 * the Oceania coin, so having been everywhere in it still looked like
+				 * a pinprick on an untouched continent.
+				 */
+				const holes: string[] = [];
+				// A plain record, not a Map: this is a lookup built and thrown away
+				// inside one derivation, and a SvelteMap would add reactivity to
+				// something nothing reacts to.
+				const drawnFor: Record<string, string> = {};
+				// ONE pass: the coin's outline and the per-country lookup are the same
+				// path data, and projecting every shape of every continent twice to
+				// get both was the whole of the second loop this replaces.
+				const drawn: string[] = [];
+				for (const { code, geometry } of shapes) {
+					const d = draw({ type: 'Feature', properties: null, geometry } as never);
+					if (!d) continue;
+					drawn.push(d);
+					if (code) drawnFor[code] = (drawnFor[code] ?? '') + ' ' + d;
+				}
+				const path = drawn.join(' ');
 				for (const [code, credit] of Object.entries(credits)) {
 					if (found.of[code] !== continent) continue;
-					sum += credit;
+					// Weighted by how big the country is: Australia is seven and a
+					// half million square kilometres of Oceania and Nauru is
+					// twenty-eight, and counting them equally said otherwise.
+					sum += credit * (areas[code] ?? 0);
 					count++;
+					const outline = drawnFor[code];
+					if (outline) {
+						holes.push(outline);
+						continue;
+					}
+					// No outline at 110m — an island the coarse file omits. A dot at
+					// its centre is the honest fallback: something rather than nothing.
 					const at = places[code];
 					if (!at) continue;
 					const point = projection(at);
-					if (point && Number.isFinite(point[0])) holes.push({ x: point[0], y: point[1] });
+					if (point && Number.isFinite(point[0])) {
+						holes.push(`M ${point[0] - 2} ${point[1]} a 2 2 0 1 0 4 0 a 2 2 0 1 0 -4 0`);
+					}
+				}
+
+				// The denominator is the LAND, not the country list: every country on
+				// this continent, whether it has been visited or not.
+				for (const [code, where] of Object.entries(found.of)) {
+					if (where === continent) whole += areas[code] ?? 0;
 				}
 
 				const total = totals[continent] ?? found.totals[continent] ?? 0;
-				const share = total > 0 ? Math.min(1, sum / total) : 0;
+				const covered = whole > 0 ? Math.min(1, sum / whole) : 0;
+
+				/*
+				 * A hundred per cent means FINISHED, so it is withheld until every
+				 * country has been visited.
+				 *
+				 * Weighting by land is what the figure should measure, and it has
+				 * one edge nobody would accept: Oceania's sixteen smallest
+				 * countries are nine thousand square kilometres out of eight and a
+				 * half million, so scratching Australia, New Zealand and Papua New
+				 * Guinea rounds to a hundred while sixteen countries remain. The
+				 * bar filling completely is a promise; this keeps it.
+				 */
+				const share = count < total ? Math.min(covered, 0.99) : covered;
 
 				return {
 					continent,
@@ -152,7 +219,7 @@
 						<mask id="coin-{coin.continent.replaceAll(' ', '')}">
 							<rect x="0" y="0" width="84" height="84" fill="white" />
 							{#each coin.holes as hole, at (at)}
-								<circle cx={hole.x} cy={hole.y} r="4.6" fill="black" />
+								<path d={hole} fill="black" />
 							{/each}
 						</mask>
 					</defs>
@@ -191,8 +258,6 @@
 			</div>
 		{/each}
 	</div>
-
-	<p class="says">Small countries count whole. Big ones count by the regions you have been to.</p>
 </section>
 
 <style>
@@ -275,11 +340,6 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		white-space: nowrap;
-	}
-	.says {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--fg3);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

@@ -372,6 +372,22 @@ only the session.
   and where its type list starts
 - `src/routes/(app)/files/` — the one route that serves a filed document's
   bytes, behind the same read rule as everything else in the archive
+- `src/lib/life/` — the part of the household that is not money: trips, the
+  map, the cookbook and the shelves. `map/` is the only place in the repository
+  that draws geometry, and it keeps the arithmetic out of the components —
+  `projection.ts`, `labels.ts` and `foil.ts` are pure and unit-tested, so the
+  Svelte files are markup over them
+- `geodata/` and `place-icons/` — what the map is drawn from, neither of them
+  source. `scripts/fetch-geodata.mjs` builds the first at image-build time from
+  Natural Earth and GeoNames: country and province outlines, time-zone bands,
+  continent membership, and `places.json.gz`, in which every curated place has
+  already been resolved to the region the map actually draws. The second is
+  committed rather than fetched, because the engravings have no upstream; it is
+  the Dockerfile's last layer so a release that adds none re-pushes nothing
+- `src/lib/server/life/` — the same domains server-side. Two tables answer two
+  different questions and never each other's: `visit` is the only answer to
+  where the household has been, and `sight_visit` the only answer to what it
+  has seen. A rubbed coin over an uncoloured country is correct
 - `tests/unit` — pure logic; `tests/acceptance` — the committed synthetic
   statement corpus; `tests/integration` — isolated embedded-PostgreSQL rollback
   and concurrency cases. A handful of unit tests live beside the module they

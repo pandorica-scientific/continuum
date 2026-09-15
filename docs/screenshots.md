@@ -151,6 +151,17 @@ Yearly statements per person and country, pre-filled from payslips.
   <img src="screenshots/tax-dark-web.png" alt="Tax — Yearly statements per person and country, pre-filled from payslips">
 </picture>
 
+## Home
+
+Rooms and devices, switched from here. The month's kWh lands on the lived-in
+flat's electricity bill rather than in a second app nobody reconciles.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/home-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/home-light-web.png">
+  <img src="screenshots/home-dark-web.png" alt="Home — rooms, devices, energy into the budget and this week at home">
+</picture>
+
 ## Calendar
 
 Ledger dates and your own events, two-way sync with Google and iCloud.
@@ -181,6 +192,65 @@ Filed against something real, so renames follow and expiries surface.
   <img src="screenshots/documents-dark-web.png" alt="Documents — Filed against something real, so renames follow and expiries surface">
 </picture>
 
+## Trips
+
+Ideas, destinations, bookings and what the wallet says about being allowed in.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/trips-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/trips-light-web.png">
+  <img src="screenshots/trips-dark-web.png" alt="Trips — ideas, destinations, bookings and travel readiness">
+</picture>
+
+One trip, opened: the bookings in the order they happen, the places to see, and
+the curated ones for that country offered underneath.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/trip-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/trip-light-web.png">
+  <img src="screenshots/trip-dark-web.png" alt="A trip — bookings, readiness, places to see and suggestions for that country">
+</picture>
+
+## Map
+
+Everywhere the household has been, under a coating you scratch off. An ended
+trip fills its countries in by itself.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/map-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/map-light-web.png">
+  <img src="screenshots/map-dark-web.png" alt="Map — the world with visited countries in colour, over time-zone and continent trackers">
+</picture>
+
+One country, opened: its regions to scratch off, and the places worth the
+detour as coins that rub away to an engraving.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/map-country-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/map-country-light-web.png">
+  <img src="screenshots/map-country-dark-web.png" alt="A country on the map — regions scratched off, and coins for the places worth the detour">
+</picture>
+
+## Cookbook
+
+Recipes that scale to the number of people eating.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/cookbook-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/cookbook-light-web.png">
+  <img src="screenshots/cookbook-dark-web.png" alt="Cookbook — recipes by category, scaled to the number eating">
+</picture>
+
+## Collections
+
+What is owned, what is open, and what wants drinking.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/collections-dark-web.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/collections-light-web.png">
+  <img src="screenshots/collections-dark-web.png" alt="Collections — bottles owned and open, with drink-by windows">
+</picture>
+
 ## On a phone
 
 Every screen reflows to one column.
@@ -208,6 +278,24 @@ Every screen reflows to one column.
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/property-dark-mobile.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/property-light-mobile.png">
   <img src="screenshots/property-dark-mobile.png" alt="Property on a phone" height="420">
+</picture>
+&nbsp;
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/home-dark-mobile.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/home-light-mobile.png">
+  <img src="screenshots/home-dark-mobile.png" alt="The house on a phone" height="420">
+</picture>
+&nbsp;
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/map-dark-mobile.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/map-light-mobile.png">
+  <img src="screenshots/map-dark-mobile.png" alt="The map on a phone" height="420">
+</picture>
+&nbsp;
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/trips-dark-mobile.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/trips-light-mobile.png">
+  <img src="screenshots/trips-dark-mobile.png" alt="Trips on a phone" height="420">
 </picture>
 &nbsp;
 </p>

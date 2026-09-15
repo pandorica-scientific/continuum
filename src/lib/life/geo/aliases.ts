@@ -114,3 +114,55 @@ export const REGION_ADMIN_OVERRIDES: readonly {
 /** The Natural Earth `admin` name for a world-atlas country name. */
 export const adminNameFor = (worldAtlasName: string): string =>
 	COUNTRY_NAME_ALIASES[worldAtlasName] ?? worldAtlasName;
+
+/**
+ * Where Natural Earth's `region` is still not the administrative region.
+ *
+ * The build dissolves a country's provinces onto their `region` when GeoNames
+ * calls the province a local subdivision, and that is right for France's
+ * départements, Italy's province and Spain's provincias. Two countries need a
+ * second pass on top of it, because Natural Earth's `region` there is a
+ * statistical grouping rather than the division anybody names:
+ *
+ * - **The United Kingdom** has twelve. Natural Earth gives sixteen, splitting
+ *   Scotland into its four NUTS-2 regions and Wales into two — divisions that
+ *   exist for European statistics and are not what anybody means by "Scotland".
+ * - **Spain** has seventeen autonomous communities. Ceuta and Melilla are
+ *   autonomous CITIES rather than communities, constitutionally distinct, and
+ *   at 12 and 19 square kilometres they are smaller than the brush that would
+ *   scratch them. `null` drops a region from the map entirely, which is the
+ *   only thing here that removes territory and so the only entry that has to
+ *   be justified one at a time.
+ *
+ * Keyed by Natural Earth `admin` name, then by its `region` value. A region not
+ * named here keeps the name it has.
+ */
+export const REGION_GROUPS: Readonly<Record<string, Readonly<Record<string, string | null>>>> = {
+	'United Kingdom': {
+		// The four Scottish NUTS-2 regions, back into the country they are.
+		Eastern: 'Scotland',
+		'Highlands and Islands': 'Scotland',
+		'North Eastern': 'Scotland',
+		'South Western': 'Scotland',
+		// Both Welsh ones, likewise.
+		'East Wales': 'Wales',
+		'West Wales and the Valleys': 'Wales',
+		// Named as the statistics office writes them rather than as a person does.
+		East: 'East of England',
+		'Greater London': 'London'
+	},
+	Spain: {
+		Ceuta: null,
+		Melilla: null
+	}
+};
+
+/**
+ * The administrative region a Natural Earth `region` belongs to, or null when
+ * it is not drawn at all.
+ */
+export function regionGroupFor(admin: string, region: string): string | null {
+	const groups = REGION_GROUPS[admin];
+	if (!groups || !(region in groups)) return region;
+	return groups[region];
+}

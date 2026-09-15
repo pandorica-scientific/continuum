@@ -400,7 +400,7 @@ describe('the boot guard', () => {
 		await expect(assertSchemaIsCurrent(harness.db)).resolves.toBeUndefined();
 	});
 
-	it('refuses to serve one the release notes were never run against', async () => {
+	it('refuses to serve one an older release left behind', async () => {
 		// Exactly what an in-place upgrade leaves behind: the schema this release
 		// needs, minus the tables the migrator never created. Both by name —
 		// `cascade` on the parent drops the child's foreign key and leaves the
@@ -408,12 +408,12 @@ describe('the boot guard', () => {
 		await harness.sql`drop table document_identity_number`;
 		await harness.sql`drop table document_identity`;
 		try {
-			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/release notes/i);
+			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/empty one/i);
 			// And it says WHICH object is missing, so the operator is not left
 			// diffing two schemas to find out what the release notes are for.
 			await expect(assertSchemaIsCurrent(harness.db)).rejects.toThrow(/document_identity/);
 		} finally {
-			// The release notes' own SQL, which is what an operator would run.
+			// Put the harness back as the rest of this file expects to find it.
 			await harness.sql`
 				create table if not exists document_identity (
 					document_id uuid primary key references document(id) on delete cascade,

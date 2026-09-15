@@ -8,6 +8,7 @@ import { asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { mayActFor } from '$lib/server/auth/policy';
 import { person, salaryEntry } from '$lib/server/db/schema';
 import {
 	learnBonusLabel,
@@ -156,7 +157,7 @@ const NOT_YOUR_PAYSLIP = 'You can only file your own payslips.';
  * the exact failure content matching was added to prevent.
  */
 function mayFilePayslipsFor(actor: App.Locals['person'], personId: string): boolean {
-	return actor?.role === 'admin' || (!!actor && actor.id === personId);
+	return mayActFor(actor, personId);
 }
 
 export const actions: Actions = {

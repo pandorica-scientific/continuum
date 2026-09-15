@@ -173,12 +173,7 @@
 </ControlRow>
 
 <section class="section">
-	<Eyebrow
-		icon="sparkle"
-		label="Someday"
-		hue="--rose"
-		caption="No dates, no bookings. Just the ones you keep coming back to."
-	>
+	<Eyebrow icon="sparkle" label="Someday" hue="--rose">
 		{#snippet right()}
 			<button class="btn" type="button" onclick={() => (addingIdea = true)}>
 				<Icon name="plus" size={15} /> Add an idea
@@ -202,7 +197,6 @@
 						name={idea.name}
 						emoji={idea.emoji}
 						note={idea.note}
-						country={idea.country}
 						hearts={idea.hearts}
 						{hues}
 						art={idea.art}

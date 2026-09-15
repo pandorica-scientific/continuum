@@ -25,6 +25,7 @@ import {
 	boolean,
 	char,
 	date,
+	doublePrecision,
 	index,
 	integer,
 	jsonb,
@@ -207,9 +208,24 @@ export const tripPlace = pgTable(
 			.references(() => trip.id, { onDelete: 'cascade' }),
 		ordinal: integer('ordinal').notNull().default(0),
 		label: text('label').notNull(),
-		done: boolean('done').notNull().default(false)
+		done: boolean('done').notNull().default(false),
+		/**
+		 * The dataset place this came from, when it came from a suggestion.
+		 *
+		 * Null for a hand-typed one, and `set null` rather than cascade because
+		 * the label is copied onto the row: a trip's list is a record of what
+		 * somebody planned, and must still read correctly if the dataset later
+		 * stops carrying the place. Also what stops an accepted suggestion being
+		 * offered again.
+		 */
+		placeId: text('place_id').references(() => place.id, { onDelete: 'set null' })
 	},
-	(table) => [index('trip_place_trip_idx').on(table.tripId, table.ordinal)]
+	(table) => [
+		index('trip_place_trip_idx').on(table.tripId, table.ordinal),
+		// Covers the foreign key, which `schema-invariants` requires of every one:
+		// without it, retiring a place scans this table per row.
+		index('trip_place_place_idx').on(table.placeId)
+	]
 );
 
 // ---- Visits: what the map reads ----
@@ -267,6 +283,80 @@ export const visitMember = pgTable(
 	]
 );
 
+// ---- Sights: places worth the detour ----
+
+/**
+ * The curated places, as rows. Seeded from `geodata/places.json.gz`, never
+ * edited by a household.
+ *
+ * The primary key is the DATASET's id (`fr-q6602`), not a uuid. It is stable
+ * across rebuilds of the data, it is what an engraving file is named after, and
+ * it is what a `sight_visit` points at — minting a uuid here would mean keeping
+ * a second key just to find the row again next release.
+ *
+ * `region` is the region the MAP draws, worked out at build time from the
+ * place's coordinates. It is deliberately not the dataset's own region field,
+ * which names départements where the map names régions. Null where no outline
+ * contains the point — an archipelago, a coastal coordinate that falls just
+ * offshore of a generalised border — and the coin then says the country under
+ * its name instead.
+ */
+export const place = pgTable(
+	'place',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		country: char('country', { length: 2 }).notNull(),
+		region: text('region'),
+		kind: text('kind').$type<EnumValue<'place.kind'>>().notNull(),
+		importance: integer('importance').notNull(),
+		latitude: doublePrecision('latitude').notNull(),
+		longitude: doublePrecision('longitude').notNull(),
+		sortOrder: integer('sort_order').notNull(),
+		/**
+		 * True once the dataset stops carrying it.
+		 *
+		 * Nothing deletes a place. The curated set is fifteen a country and will
+		 * churn between versions, and deleting a departed one would cascade away
+		 * the `sight_visit` of somebody who had rubbed that coin — the only thing
+		 * in this feature a person made rather than received.
+		 */
+		retired: boolean('retired').notNull().default(false)
+	},
+	(table) => [
+		index('place_country_idx').on(table.country, table.sortOrder),
+		index('place_country_region_idx').on(table.country, table.region)
+	]
+);
+
+/**
+ * A place somebody has seen.
+ *
+ * Deliberately NOT a visit, and it never writes one. `visit` is the only answer
+ * to "have we been to this country or region" — the world map's colouring, the
+ * country foil and every tile read it and learn nothing from here. This table
+ * is the only answer to "have we seen this place", and the coins read nothing
+ * else. The two never answer the same question, so they cannot disagree.
+ *
+ * A rubbed Eiffel Tower over an uncoloured France is therefore correct, not a
+ * bug: somebody can see a sight on a layover without counting the country. The
+ * country page says so out loud so nobody reports it as one.
+ *
+ * Unique on the place: a place is seen or it is not, and a second scratch is
+ * the same fact. No member column — who saw what is a finer grain than the rest
+ * of the Life area keeps, and adding it later is additive.
+ */
+export const sightVisit = pgTable('sight_visit', {
+	id: uuid('id').primaryKey(),
+	/** Cascades safely only because nothing ever deletes a place. */
+	placeId: text('place_id')
+		.notNull()
+		.unique()
+		.references(() => place.id, { onDelete: 'cascade' }),
+	year: integer('year').notNull(),
+	seenAt: timestamp('seen_at', { withTimezone: true }).notNull()
+});
+
 // ---- Cookbook ----
 
 /** The rail down the left of the Cookbook. */
@@ -274,6 +364,16 @@ export const recipeCategory = pgTable('recipe_category', {
 	id: uuid('id').primaryKey(),
 	name: text('name').notNull(),
 	emoji: text('emoji').notNull().default(''),
+	/**
+	 * A `--series-*` token, chosen when the shelf is made and kept.
+	 *
+	 * Stored rather than derived from the shelf's position, because the rail can
+	 * be reordered and a shelf that changed colour when its neighbour moved would
+	 * be decoration rather than an identifier — the same reasoning as `recipeTag`
+	 * beside it, and as `personHues` for a face. Every recipe on the shelf is
+	 * drawn in it.
+	 */
+	series: text('series').notNull().default('--series-r1'),
 	sortOrder: integer('sort_order').notNull().default(0)
 });
 

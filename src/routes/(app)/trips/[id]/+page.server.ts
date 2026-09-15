@@ -20,6 +20,7 @@ import {
 	destinationLabel,
 	loadTrip,
 	saveNotes,
+	suggestedPlaces,
 	togglePlace,
 	updateTrip
 } from '$lib/server/life/trips';
@@ -53,7 +54,14 @@ export const load: PageServerLoad = async ({ params }) => {
 			}))
 		},
 		people: people.map((p) => ({ ...p, hue: hues.get(p.id) ?? '--fg3' })),
-		bookingKinds: ENUMS['booking.kind']
+		bookingKinds: ENUMS['booking.kind'],
+		/**
+		 * Places worth seeing where this trip is going.
+		 *
+		 * Offered, never added: the list stays what somebody chose to put in it,
+		 * and a trip to Paris for a funeral is not told to see the Eiffel Tower.
+		 */
+		suggestions: await suggestedPlaces(tripId(params))
 	};
 };
 
@@ -203,7 +211,9 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const label = String(form.get('label') ?? '').trim();
 		if (!label) return fail(400, { on: 'place', message: 'What is it?' });
-		await addPlace(tripId(params), label);
+		// Set when this came from a suggestion, so it stops being suggested.
+		const placeId = String(form.get('placeId') ?? '').trim() || null;
+		await addPlace(tripId(params), label, placeId);
 		return { added: true };
 	},
 

@@ -52,8 +52,10 @@ function expectedColumns(): { table: string; column: string }[] {
  *
  * `information_schema` is the cheapest true probe there is: one round trip, no
  * data read, and it asks about the schema itself rather than about a symptom.
- * It does not migrate anything and must not — repairing a live database is the
- * operator's decision, taken with a backup in hand.
+ * It does not migrate anything and must not: there is nothing to migrate TO.
+ * Continuum ships one baseline rather than a chain, so a release's answer to an
+ * older database is an empty one, and this check is what makes that answer
+ * arrive at boot rather than as a 500 on somebody's passport weeks later.
  */
 export async function assertSchemaIsCurrent(handle: Queryable = db): Promise<void> {
 	const found = await handle.execute(sql`
@@ -77,7 +79,7 @@ export async function assertSchemaIsCurrent(handle: Queryable = db): Promise<voi
 	const examples = missing.slice(0, 3).join(', ');
 	const rest = missing.length > 3 ? ` and ${missing.length - 3} more` : '';
 	throw new Error(
-		`This database is older than Continuum ${version} and pulling the image does not migrate it — ${examples}${rest} missing, so refusing to serve; run the SQL from the ${version} release notes (the Upgrading block in CHANGELOG.md) against a backed-up copy, or start this release on an empty database.`
+		`This database was made by an older Continuum than ${version}, and pulling the image does not migrate it — ${examples}${rest} missing, so refusing to serve. Continuum ships one baseline rather than a chain of migrations, so there is nothing to run against this database: start ${version} on an empty one.`
 	);
 }
 

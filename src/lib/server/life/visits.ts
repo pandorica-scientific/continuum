@@ -287,6 +287,36 @@ export async function addManualVisit(input: NewVisit, handle: Db = db): Promise<
 	return id;
 }
 
+/**
+ * Take back a scratch, and only a scratch.
+ *
+ * Scoped to `source = 'manual'` on purpose. A visit written by the trips pass
+ * is derived from a trip that has ended, so deleting it here would achieve
+ * nothing — the next time the Trips or Map screen loaded, the pass would write
+ * it straight back, and undo would have silently failed. Only what a person put
+ * there by hand is theirs to remove.
+ *
+ * Returns how many rows went, so the caller can tell "undone" from "there was
+ * nothing of yours to undo".
+ */
+export async function removeManualVisit(
+	country: string,
+	region: string,
+	handle: Db = db
+): Promise<number> {
+	const rows = await handle
+		.delete(visit)
+		.where(
+			and(
+				eq(visit.country, country.toUpperCase()),
+				eq(visit.region, region),
+				eq(visit.source, 'manual')
+			)
+		)
+		.returning({ id: visit.id });
+	return rows.length;
+}
+
 export interface MapFigures {
 	countries: number;
 	regions: number;

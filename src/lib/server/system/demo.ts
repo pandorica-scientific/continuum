@@ -659,6 +659,16 @@ export async function seedDemo(): Promise<void> {
 		{ id: uuidv7(), propertyId: flatB, label: 'SVJ fee', amountMinor: 310000n }
 	]);
 
+	// The smart home, already connected — to the demo platform, which is rooms
+	// and readings held in memory rather than anything on the network.
+	//
+	// Connected rather than left for the visitor to set up, because the Home
+	// screen is the one place the app switches something in the house rather
+	// than recording it, and a demo that opens on a credentials form shows none
+	// of that. Bound to the lived-in flat, which is where the meter is and the
+	// only kind of property the screen accepts.
+	await setSetting('home', { kind: 'demo', meterPropertyId: flatA });
+
 	// Three years of monthly reports rather than a single point: a 10 000 Kč
 	// standing order against a market that dips as well as climbs, so the value
 	// chart has a shape and the gain is measured against money actually paid in

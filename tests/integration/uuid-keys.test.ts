@@ -42,7 +42,12 @@ const STAYS_TEXT = new Set([
 	'setup_claim',
 	'currency',
 	'import_profile',
-	'job'
+	'job',
+	// The place dataset's own id ('fr-q6602'). Not ours to choose: it is stable
+	// across rebuilds of the data, it is what an engraving file is named after,
+	// and a `sight_visit` points at it. Minting a uuid would mean keeping a
+	// second key just to find the row again next release.
+	'place'
 ]);
 
 describe('column types', () => {

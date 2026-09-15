@@ -38,6 +38,7 @@ import {
 	visitMember
 } from '$lib/server/db/schema';
 import { resolveDish, resolveStamp } from '$lib/life/art';
+import { inkForShelf } from '$lib/server/life/recipes';
 
 /** Today, and a day a given number of days from it, as ISO days. */
 const DAY = 86_400_000;
@@ -764,10 +765,16 @@ export async function seedDemoLife(
 
 	// ---- Cookbook ----
 	const categoryIds = new Map<string, string>();
+	const shelfInks: string[] = [];
 	for (const [ordinal, [name, emoji]] of RECIPE_CATEGORIES.entries()) {
 		const id = uuidv7();
 		categoryIds.set(name, id);
-		await handle.insert(recipeCategory).values({ id, name, emoji, sortOrder: ordinal });
+		// Handed out by the same rule a household's own new shelf gets, rather
+		// than written into the fixture: a demo whose colours came from a list
+		// would stop matching the product the first time that rule changed.
+		const series = inkForShelf(shelfInks);
+		shelfInks.push(series);
+		await handle.insert(recipeCategory).values({ id, name, emoji, series, sortOrder: ordinal });
 	}
 	const tagIds = new Map<string, string>();
 	for (const [name, series] of RECIPE_TAGS) {

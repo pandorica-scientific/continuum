@@ -147,6 +147,9 @@
 	}
 	.vintage {
 		font-size: var(--text-2xs);
-		opacity: 0.75;
+		/* Quieter than the initials above it, but only just: at 0.75 the year sat
+		   at 4.44:1 on the label stock — a tenth of a point under AA, at 10px,
+		   which is the size that can least afford it. */
+		opacity: 0.85;
 	}
 </style>

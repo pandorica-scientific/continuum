@@ -721,6 +721,19 @@ CREATE TABLE "collection" (
 	CONSTRAINT "collection_key_unique" UNIQUE("key")
 );
 --> statement-breakpoint
+CREATE TABLE "place" (
+	"id" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"country" char(2) NOT NULL,
+	"region" text,
+	"kind" text NOT NULL,
+	"importance" integer NOT NULL,
+	"latitude" double precision NOT NULL,
+	"longitude" double precision NOT NULL,
+	"sort_order" integer NOT NULL,
+	"retired" boolean DEFAULT false NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "recipe" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"category_id" uuid NOT NULL,
@@ -738,6 +751,7 @@ CREATE TABLE "recipe_category" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"emoji" text DEFAULT '' NOT NULL,
+	"series" text DEFAULT '--series-r1' NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint
@@ -768,6 +782,14 @@ CREATE TABLE "recipe_tag_link" (
 	"recipe_id" uuid NOT NULL,
 	"tag_id" uuid NOT NULL,
 	CONSTRAINT "recipe_tag_link_recipe_id_tag_id_pk" PRIMARY KEY("recipe_id","tag_id")
+);
+--> statement-breakpoint
+CREATE TABLE "sight_visit" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"place_id" text NOT NULL,
+	"year" integer NOT NULL,
+	"seen_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "sight_visit_place_id_unique" UNIQUE("place_id")
 );
 --> statement-breakpoint
 CREATE TABLE "tasting" (
@@ -847,7 +869,8 @@ CREATE TABLE "trip_place" (
 	"trip_id" uuid NOT NULL,
 	"ordinal" integer DEFAULT 0 NOT NULL,
 	"label" text NOT NULL,
-	"done" boolean DEFAULT false NOT NULL
+	"done" boolean DEFAULT false NOT NULL,
+	"place_id" text
 );
 --> statement-breakpoint
 CREATE TABLE "visit" (
@@ -959,6 +982,7 @@ ALTER TABLE "recipe_ingredient" ADD CONSTRAINT "recipe_ingredient_recipe_id_reci
 ALTER TABLE "recipe_step" ADD CONSTRAINT "recipe_step_recipe_id_recipe_id_fk" FOREIGN KEY ("recipe_id") REFERENCES "public"."recipe"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipe_tag_link" ADD CONSTRAINT "recipe_tag_link_recipe_id_recipe_id_fk" FOREIGN KEY ("recipe_id") REFERENCES "public"."recipe"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recipe_tag_link" ADD CONSTRAINT "recipe_tag_link_tag_id_recipe_tag_id_fk" FOREIGN KEY ("tag_id") REFERENCES "public"."recipe_tag"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sight_visit" ADD CONSTRAINT "sight_visit_place_id_place_id_fk" FOREIGN KEY ("place_id") REFERENCES "public"."place"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasting" ADD CONSTRAINT "tasting_bottle_id_bottle_id_fk" FOREIGN KEY ("bottle_id") REFERENCES "public"."bottle"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasting" ADD CONSTRAINT "tasting_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasting_note" ADD CONSTRAINT "tasting_note_tasting_id_tasting_id_fk" FOREIGN KEY ("tasting_id") REFERENCES "public"."tasting"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -971,6 +995,7 @@ ALTER TABLE "trip_idea_heart" ADD CONSTRAINT "trip_idea_heart_person_id_person_i
 ALTER TABLE "trip_member" ADD CONSTRAINT "trip_member_trip_id_trip_id_fk" FOREIGN KEY ("trip_id") REFERENCES "public"."trip"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "trip_member" ADD CONSTRAINT "trip_member_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "trip_place" ADD CONSTRAINT "trip_place_trip_id_trip_id_fk" FOREIGN KEY ("trip_id") REFERENCES "public"."trip"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "trip_place" ADD CONSTRAINT "trip_place_place_id_place_id_fk" FOREIGN KEY ("place_id") REFERENCES "public"."place"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "visit" ADD CONSTRAINT "visit_trip_id_trip_id_fk" FOREIGN KEY ("trip_id") REFERENCES "public"."trip"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "visit_member" ADD CONSTRAINT "visit_member_visit_id_visit_id_fk" FOREIGN KEY ("visit_id") REFERENCES "public"."visit"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "visit_member" ADD CONSTRAINT "visit_member_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1064,6 +1089,8 @@ CREATE INDEX "bottle_collection_type_idx" ON "bottle" USING btree ("collection_i
 CREATE INDEX "bottle_barcode_idx" ON "bottle" USING btree ("barcode");--> statement-breakpoint
 CREATE INDEX "bottle_bought_currency_idx" ON "bottle" USING btree ("bought_currency");--> statement-breakpoint
 CREATE INDEX "bottle_transaction_idx" ON "bottle" USING btree ("transaction_id");--> statement-breakpoint
+CREATE INDEX "place_country_idx" ON "place" USING btree ("country","sort_order");--> statement-breakpoint
+CREATE INDEX "place_country_region_idx" ON "place" USING btree ("country","region");--> statement-breakpoint
 CREATE INDEX "recipe_category_idx" ON "recipe" USING btree ("category_id");--> statement-breakpoint
 CREATE INDEX "recipe_ingredient_recipe_idx" ON "recipe_ingredient" USING btree ("recipe_id","ordinal");--> statement-breakpoint
 CREATE INDEX "recipe_step_recipe_idx" ON "recipe_step" USING btree ("recipe_id","ordinal");--> statement-breakpoint
@@ -1079,6 +1106,7 @@ CREATE INDEX "trip_destination_trip_idx" ON "trip_destination" USING btree ("tri
 CREATE INDEX "trip_idea_heart_person_idx" ON "trip_idea_heart" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "trip_member_person_idx" ON "trip_member" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "trip_place_trip_idx" ON "trip_place" USING btree ("trip_id","ordinal");--> statement-breakpoint
+CREATE INDEX "trip_place_place_idx" ON "trip_place" USING btree ("place_id");--> statement-breakpoint
 CREATE INDEX "visit_country_idx" ON "visit" USING btree ("country");--> statement-breakpoint
 CREATE INDEX "visit_country_region_idx" ON "visit" USING btree ("country","region");--> statement-breakpoint
 CREATE INDEX "visit_trip_idx" ON "visit" USING btree ("trip_id");--> statement-breakpoint
@@ -1259,6 +1287,9 @@ ALTER TABLE trip_booking ADD CONSTRAINT trip_booking_kind_check
 --> statement-breakpoint
 ALTER TABLE visit ADD CONSTRAINT visit_source_check
 	CHECK (source in ('trip', 'manual'));
+--> statement-breakpoint
+ALTER TABLE place ADD CONSTRAINT place_kind_check
+	CHECK (kind in ('city', 'town', 'village', 'landmark', 'natural_landmark', 'national_park', 'island', 'beach', 'mountain', 'lake', 'archaeological_site', 'religious_site', 'museum', 'historic_site'));
 --> statement-breakpoint
 ALTER TABLE bottle ADD CONSTRAINT bottle_type_check
 	CHECK (type in ('wine', 'champagne', 'whisky', 'bourbon', 'gin', 'rum', 'beer', 'liqueur', 'cognac', 'other'));

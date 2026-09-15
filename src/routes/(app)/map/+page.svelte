@@ -5,22 +5,15 @@
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import ControlRow from '$lib/components/ControlRow.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
-	import Icon from '$lib/components/Icon.svelte';
 	import WorldMap from '$lib/life/map/WorldMap.svelte';
-	import MarkVisited from '$lib/life/map/MarkVisited.svelte';
 	import TimeZones from '$lib/life/map/TimeZones.svelte';
 	import Continents from '$lib/life/map/Continents.svelte';
 	import type { Tile } from '$lib/components/tiles';
 
-	let { data, form } = $props();
+	let { data } = $props();
 
 	/** null is the household: the union of everybody, which is where it opens. */
 	let member = $state<string | null>(null);
-	let marking = $state(false);
-
-	$effect(() => {
-		if (form?.on === 'visit') marking = true;
-	});
 
 	const who = $derived([
 		{ value: '', label: 'Household' },
@@ -72,13 +65,7 @@
 <ScreenHeader
 	title="Map"
 	caption="Everywhere the household has been, under a coating you scratch off."
->
-	{#snippet actions()}
-		<button class="btn btn-primary" type="button" onclick={() => (marking = true)}>
-			<Icon name="plus" size={16} /> Mark visited
-		</button>
-	{/snippet}
-</ScreenHeader>
+></ScreenHeader>
 
 <SummaryBand {tiles} />
 
@@ -114,15 +101,6 @@
 	/>
 {/if}
 
-{#if marking}
-	<MarkVisited
-		people={data.people}
-		today={data.today}
-		message={form?.on === 'visit' ? form.message : null}
-		onclose={() => (marking = false)}
-	/>
-{/if}
-
 {#if data.world && !data.geodata?.missing}
 	<!-- Two equal columns below the map. -->
 	<div class="progress">
@@ -135,7 +113,13 @@
 				total={data.zoneCount}
 			/>
 		{/if}
-		<Continents credits={creditsHere} totals={data.continentTotals} places={data.places} />
+		<Continents
+			credits={creditsHere}
+			totals={data.continentTotals}
+			areas={data.areas}
+			geoVersion={data.geoVersion}
+			places={data.places}
+		/>
 	</div>
 {/if}
 

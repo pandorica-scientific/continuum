@@ -3,6 +3,7 @@ import {
 	canChangeRole,
 	canDeactivate,
 	canSignIn,
+	mayActFor,
 	requireAdmin,
 	type PolicyTarget
 } from '$lib/server/auth/policy';
@@ -122,5 +123,24 @@ describe('requireAdmin', () => {
 		} catch (err) {
 			expect((err as { status: number }).status).toBe(403);
 		}
+	});
+});
+
+describe('mayActFor', () => {
+	it('lets a member act for themself', () => {
+		expect(mayActFor(member, member.id)).toBe(true);
+	});
+
+	it('refuses a member acting for somebody else', () => {
+		expect(mayActFor(member, admin.id)).toBe(false);
+	});
+
+	it('lets an admin act for anybody', () => {
+		expect(mayActFor(admin, member.id)).toBe(true);
+	});
+
+	it('refuses when nobody is signed in', () => {
+		expect(mayActFor(null, member.id)).toBe(false);
+		expect(mayActFor(undefined, member.id)).toBe(false);
 	});
 });

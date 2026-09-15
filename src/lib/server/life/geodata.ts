@@ -15,7 +15,7 @@
  * be found.
  */
 import { gunzipSync } from 'node:zlib';
-import { geoContains, geoEquirectangular, geoPath } from 'd3-geo';
+import { geoBounds, geoContains, geoEquirectangular, geoPath } from 'd3-geo';
 import type { Geometry } from 'geojson';
 import type { Topology } from 'topojson-specification';
 import {
@@ -41,6 +41,13 @@ export interface CountryEntry {
 	slug: string;
 	/** Its centre on the globe, [longitude, latitude]. Null where it has none. */
 	centre: [number, number] | null;
+	/**
+	 * How much of the globe it covers, in square kilometres.
+	 *
+	 * The continent coins weight their share by it, so that having been to
+	 * Australia is not the same amount of Oceania as having been to Nauru.
+	 */
+	area: number;
 }
 
 export interface GeoManifest {
@@ -211,22 +218,144 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 	const flat = geoEquirectangular().fitSize([720, 360], { type: 'Sphere' } as never);
 	const draw = geoPath(flat);
 
+	/*
+	 * Where each offset is printed.
+	 *
+	 * The label is drawn vertically at the FOOT of the card, so it is measured
+	 * there — three earlier anchors all failed by measuring the band somewhere
+	 * the text does not sit. But the foot of an equirectangular map is
+	 * Antarctica, where the zones fan out from the pole and OVERLAP: UTC+11
+	 * reaches 676-706 and UTC+12 reaches 690-720, so both labels centred within
+	 * fourteen units of each other and sat on top of one another.
+	 *
+	 * So each column is given a single owner. Where two zones both reach a
+	 * column it goes to the one whose own meridian is nearer, and each label is
+	 * then centred in the widest run of columns that are unambiguously its own.
+	 */
+	const COLUMNS = 360;
+	const LABEL_ROWS = [286, 310, 334, 352];
+
+	/*
+	 * The probe points, inverted ONCE.
+	 *
+	 * Inside the per-zone loop this was the same 1,440 inversions redone for
+	 * every band, and the `geoContains` behind them was the real cost: forty
+	 * zones × 360 columns × four rows is 57,600 point-in-multipolygon tests
+	 * against geometry with tens of thousands of vertices, which measured
+	 * sixteen seconds on the shipped `zones.json.gz` — paid by whoever opened
+	 * the Map first after a restart, since this answer is cached but never
+	 * warmed.
+	 */
+	const probes: [number, number][][] = [];
+	for (let at = 0; at < COLUMNS; at++) {
+		const x = ((at + 0.5) / COLUMNS) * 720;
+		probes[at] = LABEL_ROWS.map((y) => flat.invert?.([x, y])).filter(
+			(point): point is [number, number] => Boolean(point)
+		);
+	}
+
+	/**
+	 * Whether a point is inside a feature's bounding box — west may wrap east.
+	 *
+	 * The width is folded rather than taken modulo 360, which would turn a box
+	 * that spans the whole circle into a box of width zero and reject every
+	 * point in it. `geoBounds` reports exactly that — `[[-180, …], [180, …]]` —
+	 * for anything containing a pole or reaching more than half way round, and
+	 * this pass is only ever allowed to be a cheap NO: a box test that rejects
+	 * what `geoContains` would accept is a hole in the band, not a saving.
+	 */
+	const inBox = (box: [[number, number], [number, number]], point: [number, number]): boolean => {
+		if (point[1] < box[0][1] || point[1] > box[1][1]) return false;
+		const span = box[1][0] - box[0][0];
+		const width = span < 0 ? span + 360 : span;
+		if (width >= 360) return true;
+		return (point[0] - box[0][0] + 360) % 360 <= width;
+	};
+
 	const bands = zones.map((one) => {
 		const features = one.geometry.map((geometry) => ({
 			type: 'Feature' as const,
 			properties: null,
 			geometry
 		}));
-		const [[x0], [x1]] = draw.bounds({ type: 'FeatureCollection', features } as never);
+		// A box test first, because it rejects almost every pair for the price of
+		// four comparisons and leaves `geoContains` only the handful that could
+		// actually be inside.
+		const boxes = features.map(
+			(feature) => geoBounds(feature as never) as [[number, number], [number, number]]
+		);
+		// Which columns this zone reaches, across the rows the label crosses.
+		// Ownership is settled after every zone has been measured — see below.
+		const reach: boolean[] = [];
+		for (let at = 0; at < COLUMNS; at++) {
+			reach[at] = probes[at].some((point) =>
+				features.some(
+					(feature, index) => inBox(boxes[index], point) && geoContains(feature as never, point)
+				)
+			);
+		}
+
 		return {
 			zone: one.zone,
 			label:
 				one.utc || `UTC${one.zone === 0 ? '±0' : (one.zone < 0 ? '−' : '+') + Math.abs(one.zone)}`,
 			path: features.map((f) => draw(f as never) ?? '').join(' '),
-			middle: (x0 + x1) / 2,
+			reach,
 			features
 		};
 	});
+
+	/** Each column to one zone: the nearest meridian wins a contested one. */
+	const owner: (number | null)[] = new Array(COLUMNS).fill(null);
+	for (let at = 0; at < COLUMNS; at++) {
+		const x = ((at + 0.5) / COLUMNS) * 720;
+		let best: number | null = null;
+		let nearest = Infinity;
+		for (const band of bands) {
+			if (!band.reach[at]) continue;
+			const meridian = ((band.zone * 15 + 180) / 360) * 720;
+			const away = Math.abs(x - meridian);
+			if (away < nearest) {
+				nearest = away;
+				best = band.zone;
+			}
+		}
+		owner[at] = best;
+	}
+
+	/** The middle of the widest run of columns matching a test. */
+	const widestRun = (holds: (at: number) => boolean): number => {
+		let middle = -1;
+		let longest = 0;
+		let from = -1;
+		for (let at = 0; at <= COLUMNS; at++) {
+			if (at < COLUMNS && holds(at)) {
+				if (from < 0) from = at;
+				continue;
+			}
+			if (from >= 0) {
+				if (at - from > longest) {
+					longest = at - from;
+					middle = ((from + at) / 2 / COLUMNS) * 720;
+				}
+				from = -1;
+			}
+		}
+		return middle;
+	};
+
+	/**
+	 * Where a zone's label goes.
+	 *
+	 * Its own columns where it has any, and its widest reach where it has none.
+	 * The fallback is for the half-hour offsets: India is UTC+05:30, so its
+	 * meridian sits between +05:00's and +06:00's and it loses every contested
+	 * column to whichever is nearer — it would own nothing and go unlabelled.
+	 */
+	const anchor = (band: { zone: number; reach: boolean[] }): number => {
+		const owned = widestRun((at) => owner[at] === band.zone);
+		return owned >= 0 ? owned : widestRun((at) => band.reach[at]);
+	};
 
 	const zoneOf: Record<string, number> = {};
 	for (const entry of Object.values(manifest.countries)) {
@@ -241,7 +370,16 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 
 	zonesReady = {
 		coastline,
-		bands: bands.map(({ zone, label, path, middle }) => ({ zone, label, path, middle })),
+		// Every band, always. Filtering this list once dropped the half-hour
+		// offsets — India, Iran, Nepal, Venezuela — out of the PAINTING as well
+		// as out of the labelling, and they came out as black holes in the map.
+		// A band with nowhere to put its label still has somewhere to be drawn.
+		bands: bands.map((band) => ({
+			zone: band.zone,
+			label: band.label,
+			path: band.path,
+			middle: anchor(band)
+		})),
 		zoneOf
 	};
 	return zonesReady;

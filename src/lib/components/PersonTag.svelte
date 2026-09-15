@@ -47,7 +47,13 @@
 		/* Tinted from the person's own colour rather than from a fixed token, so
 		   one rule covers every hue and both themes. */
 		background: color-mix(in srgb, var(--tag) 12%, transparent);
-		color: var(--tag);
+		/* Carried towards the theme's own ink rather than printed in the raw hue.
+		   The `--series-…` tokens were measured as chart FILLS, where 3:1 is the
+		   bar; at 11px on a 12% wash of themselves the greens fell to 2.8:1 on
+		   the light theme. The dot below stays the exact colour, so the identity
+		   is still shown at full strength — it is only the lettering that has to
+		   clear AA. */
+		color: color-mix(in srgb, var(--tag) 70%, var(--fg1));
 		border-radius: var(--radius-xl);
 		padding: 1px 8px;
 		font-size: var(--text-xs);

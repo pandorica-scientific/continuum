@@ -9,8 +9,6 @@
 	 * it stretches a lone card across the whole screen.
 	 */
 	import Icon from '$lib/components/Icon.svelte';
-	import PersonTag from '$lib/components/PersonTag.svelte';
-	import { countryFlag } from '$lib/life/geo/countries';
 
 	interface Heart {
 		id: string;
@@ -22,7 +20,6 @@
 		name,
 		emoji,
 		note,
-		country,
 		hearts,
 		hues,
 		art,
@@ -32,7 +29,6 @@
 		name: string;
 		emoji: string;
 		note: string;
-		country: string | null;
 		hearts: Heart[];
 		/** Person id to their `--series-…` token, so a face is the same colour everywhere. */
 		hues: Record<string, string>;
@@ -48,7 +44,16 @@
 	} = $props();
 </script>
 
-<article class="idea">
+<!--
+	The stamp's ink, carried by the whole card.
+
+	Every stamp is inked in its country's colour — the same colour that country
+	wears on the map — and the card is washed and edged in it rather than sitting
+	in a neutral box. Four ideas then read as four different places at a glance,
+	which is what the board is for; in one grey it was the drawing alone doing
+	that work.
+-->
+<article class="idea" style:--ink={art?.hue ? `var(--${art.hue})` : 'var(--fg3)'}>
 	<!-- A real submit inside the form that wraps this card, so removing an idea
 	     works with script switched off. Above the art layer, or the art swallows
 	     the pointer — a plain `z-index` in a style string was not enough. -->
@@ -56,7 +61,7 @@
 		<Icon name="plus" size={14} />
 	</button>
 
-	<div class="art" style:color={art?.hue ? `var(--${art.hue})` : 'var(--fg3)'}>
+	<div class="art">
 		{#if art}
 			<!-- The one `{@html}` in this product, and it is checked rather than
 			     trusted: `assertInertSvg` in $lib/life/art refuses any drawing
@@ -70,26 +75,34 @@
 	</div>
 
 	<div class="body">
-		<h3>
-			{#if emoji}<span class="emoji" aria-hidden="true">{emoji}</span>{/if}
-			<span class="name">{name}</span>
-			{#if country}<span class="flag" aria-hidden="true">{countryFlag(country)}</span>{/if}
-		</h3>
+		<!-- The name alone. The stamp above prints the country's own code on its
+		     rule, so a flag beside the title said the same thing twice, and the
+		     emoji was a third copy of the picture already filling half the card. -->
+		<h3>{name}</h3>
 		{#if note}<p class="note">{note}</p>{/if}
 
 		<div class="foot">
 			<div class="hearts">
 				{#each hearts as heart (heart.id)}
-					<PersonTag name={heart.name} hue={hues[heart.id] ?? '--fg3'} compact />
+					<!-- Initials in a disc rather than a named pill: two or three of
+					     these sit beside the button on a 268px card, and the full names
+					     wrapped the row onto a second line. The name is still on the
+					     element for anything that reads it aloud or hovers it. -->
+					<span
+						class="heart"
+						style:--tag={`var(${hues[heart.id] ?? '--fg3'})`}
+						title={heart.name}
+						aria-label={heart.name}>{heart.initials}</span
+					>
 				{/each}
 			</div>
 			<a
-				class="make"
+				class="btn btn-primary make"
 				href={makeHref}
 				onclick={(event) => {
 					event.preventDefault();
 					onmake();
-				}}>Make this a trip</a
+				}}>Make a trip</a
 			>
 		</div>
 	</div>
@@ -105,9 +118,20 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
-		border: 1px solid var(--bd);
+		/* A raised box in the stamp's own ink, rather than the flat `--card` the
+		   rest of the app uses. An idea is the one thing on this screen that is
+		   not a record yet — it sits on the board waiting to be picked up — and
+		   at `--card`'s 3% lift the box was invisible against the page.
+		   The wash is mixed INTO `--surface-2` rather than laid over it, so the
+		   card keeps the same lift off the page in both themes and only its hue
+		   changes; and it is kept to 6%, because the thing that has to stay
+		   readable on it is ordinary body text — at 9% the note under the title
+		   fell below AA on the light theme against the red and purple inks. The
+		   border carries the colour instead, where nothing has to be read. */
+		border: 1px solid color-mix(in srgb, var(--ink) 45%, var(--bd2));
 		border-radius: var(--radius-card);
-		background: var(--card);
+		background: color-mix(in srgb, var(--ink) 6%, var(--surface-2));
+		box-shadow: var(--shadow-card);
 		overflow: hidden;
 	}
 	/* The ✕ rotated into a cross, so the set needs no second glyph for it. */
@@ -116,15 +140,20 @@
 		top: var(--space-4);
 		right: var(--space-4);
 		z-index: 4;
-		width: 26px;
-		height: 26px;
+		width: 28px;
+		height: 28px;
 		min-height: auto;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid var(--bd2);
-		border-radius: var(--radius-pill);
-		background: var(--bg2);
+		/* A rounded square rather than a circle: it is chrome on the card, not a
+		   face on it, and the discs down in the foot are the round things here. */
+		border-radius: var(--radius-ctl);
+		/* A step above the card it sits on, not the page colour: on the raised
+		   card `--bg2` read as a hole punched through it. Carries a little of the
+		   same ink, or it reads as a grey sticker left on a coloured card. */
+		background: color-mix(in srgb, var(--ink) 9%, var(--surface-3));
 		color: var(--fg3);
 		transform: rotate(45deg);
 		transition:
@@ -135,18 +164,17 @@
 	.remove:hover {
 		color: var(--red);
 		border-color: color-mix(in srgb, var(--red) 55%, transparent);
-		background: color-mix(in srgb, var(--red) 16%, var(--bg2));
+		background: color-mix(in srgb, var(--red) 16%, var(--surface-3));
 	}
-	/* A neutral ground, not the area wash.
-	   Every stamp is inked in its own colour — its country's, so it matches that
-	   country on the map. Behind a rose wash, a green stamp and an amber one
-	   both read as a mistake; behind a plain card ground they read as what they
-	   are. The wash was the problem, not the ink. */
+	/* No ground of its own — the card is already wearing this ink.
+	   A panel behind the stamp cut the card into two halves and made the drawing
+	   look like a photograph in a slot; on the card's own ground it reads as what
+	   it is, which is a stamp pressed onto the card. */
 	.art {
 		height: 148px;
 		display: grid;
 		place-items: center;
-		background: var(--card2);
+		color: var(--ink);
 	}
 	.art :global(svg) {
 		width: 140px;
@@ -165,19 +193,10 @@
 	}
 	h3 {
 		margin: 0;
-		display: flex;
-		align-items: baseline;
-		gap: var(--space-3);
+		min-width: 0;
 		font-size: var(--text-lg);
 		font-weight: 600;
 		color: var(--fg1);
-	}
-	.name {
-		min-width: 0;
-	}
-	.emoji,
-	.flag {
-		flex: none;
 	}
 	.note {
 		margin: 0;
@@ -195,14 +214,33 @@
 	}
 	.hearts {
 		display: flex;
-		gap: var(--space-2);
+		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
-	.make {
-		font-size: var(--text-sm);
-		color: var(--blue);
+	/* The person's own colour, from `personHues`, so a face is the same colour
+	   here as on Salary and Tax. The ring and the wash carry it at full strength;
+	   the initials are darkened towards the theme's ink, because the raw
+	   `--series-…` tokens were measured as chart fills and do not clear AA as
+	   lettering this small. Carried further than `PersonTag`'s 70% because this
+	   wash is denser: at 70% the greens measured 4.3:1 on the light theme. */
+	.heart {
+		width: 34px;
+		height: 34px;
+		display: grid;
+		place-items: center;
+		border: 1px solid color-mix(in srgb, var(--tag) 55%, transparent);
+		border-radius: var(--radius-pill);
+		background: color-mix(in srgb, var(--tag) 16%, transparent);
+		color: color-mix(in srgb, var(--tag) 58%, var(--fg1));
+		font-size: var(--text-xs);
+		font-weight: 600;
 	}
-	.make:hover {
-		text-decoration: underline;
+	.make {
+		/* Not the control height: this button sits on a card rather than in a row
+		   of fields, and the 36px floor left it overpowering a 268px card. */
+		min-height: auto;
+		padding: var(--space-3) 12px;
+		font-size: var(--text-sm);
+		white-space: normal;
 	}
 </style>
