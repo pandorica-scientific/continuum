@@ -7,25 +7,53 @@ import { displayCurrency, formatMinor, fromMajor } from '$lib/money';
 import { getBaseCurrency } from '$lib/server/settings';
 import { expenseSpendingByMonth, type GroupMonthSpend } from '$lib/server/cashflow/spending';
 import {
+	account,
 	calendarAccount,
 	calendarConflict,
+	currencyRate,
 	document,
 	documentLink,
+	engagement,
 	entity,
+	equityGrant,
+	holding,
 	job,
+	lane,
 	loan,
 	loanFixationPeriod,
+	person,
 	property,
+	propertyValuation,
 	shelf,
+	taxStatement,
 	tenancy,
 	transaction
 } from '$lib/server/db/schema';
 import { archiveScopePredicate } from '$lib/server/documents/visibility';
 import { loadRecordDates, ownedByLinkedRecord } from '$lib/server/documents/deadlines';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
-import { systemShelfId } from '$lib/server/documents/shelves';
+import { listShelves, systemShelfId } from '$lib/server/documents/shelves';
 import { isDocumentTargetKind, loadTargetNames } from '$lib/server/documents/targets';
-import { aboutLine, briefingCaption, countTitle, latestJobPerDocument } from './pure';
+import { loadDossier } from '$lib/server/documents/dossier-load';
+import { grantsWithTranches } from '$lib/server/equity';
+import { trancheState } from '$lib/equity';
+import { isStale } from '$lib/prices';
+import { latestPrices } from '$lib/server/prices';
+import { getPriceSettings } from '$lib/server/prices/settings';
+import { attributeSalary } from '$lib/server/salary';
+import { getBriefingSettings } from './settings';
+import {
+	aboutLine,
+	briefingCaption,
+	countTitle,
+	daysBetween,
+	laneJudgeable,
+	laneShortfall,
+	latestJobPerDocument,
+	monthsBetween,
+	settlementOverdue,
+	taxYearToChase
+} from './pure';
 
 /**
  * One card on the Overview's briefing strip.
@@ -513,6 +541,413 @@ export const calendarSyncFailures: Source = async (handle: Queryable = db) => {
 	];
 };
 
+// ---- Equity, paper and prices ----
+
+/**
+ * How far ahead a vest is worth saying anything about.
+ *
+ * A month: long enough that a sell-to-cover instruction or a broker login can
+ * still be dealt with unhurried, short enough that a four-year schedule does
+ * not put sixteen cards on the strip.
+ */
+const VEST_HORIZON_DAYS = 30;
+/**
+ * How long after a vest the shares are allowed to be unaccounted for.
+ *
+ * Settlement is not instant: the employer withholds units for tax and the rest
+ * reach the broker days later, so a tranche unrecorded on the morning of its
+ * vest is not a finding. A fortnight is past every plan's delivery window.
+ */
+const SETTLEMENT_GRACE_DAYS = 14;
+/** A close older than this is no longer a price anybody should be shown. */
+const RATE_STALE_DAYS = 7; // the CNB fixes every working day
+/** A valuation older than this no longer says what a flat is worth. */
+const VALUATION_STALE_MONTHS = 12;
+
+const equityVesting: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const grants = await grantsWithTranches(handle);
+	const items: BriefingItem[] = [];
+	for (const { grant, tranches } of grants) {
+		for (const tranche of tranches) {
+			// `pending` is the state that means exactly this: not forfeited, not
+			// settled, and not yet reached. Asked through the same function the
+			// salary screen asks with, so the strip and the screen cannot disagree
+			// about what has vested.
+			if (trancheState(tranche, today) !== 'pending') continue;
+			const days = daysBetween(today, tranche.vestsOn);
+			if (days > VEST_HORIZON_DAYS) continue;
+			items.push({
+				icon: 'coins',
+				kind: 'Equity',
+				pill: `${days} days`,
+				// A week is when a sell-to-cover election stops being a thing that
+				// can wait for the weekend.
+				hue: days <= 7 ? 'yellow' : 'grey',
+				title: `${tranche.units} ${grant.ticker} units vest on ${tranche.vestsOn}`,
+				detail: grant.label
+					? `From the ${grant.label} grant. Record what is delivered once it settles.`
+					: `From the grant of ${grant.grantedOn}. Record what is delivered once it settles.`,
+				href: '/salary',
+				rank: days
+			});
+		}
+	}
+	return items;
+};
+
+/**
+ * Shares that became the person's and were never written down.
+ *
+ * The units are theirs whatever this app knows, so the cost of not recording it
+ * is not the shares — it is that net worth is short by them and the tax year
+ * has no record of what was withheld, which is the figure nobody can
+ * reconstruct later.
+ */
+const equityUnsettled: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const grants = await grantsWithTranches(handle);
+	const waiting = grants.flatMap(({ tranches }) =>
+		tranches.filter((tranche) => settlementOverdue(tranche, today, SETTLEMENT_GRACE_DAYS))
+	);
+	if (waiting.length === 0) return [];
+	return [
+		{
+			icon: 'coins',
+			kind: 'Equity',
+			pill: `${waiting.length} waiting`,
+			hue: 'yellow',
+			title: countTitle(
+				waiting.length,
+				'vested tranche was never settled',
+				'vested tranches were never settled'
+			),
+			detail: 'Record the units delivered and the units withheld for tax.',
+			href: '/investments',
+			rank: 20
+		}
+	];
+};
+
+/**
+ * A grant nothing can value.
+ *
+ * Unlike a holding, a grant carries no value of its own — the broker report
+ * that replaces the holdings table never mentions it — so a ticker with no
+ * close is a grant worth zero everywhere it appears, quietly.
+ */
+const equityWithoutPrice: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const grants = await grantsWithTranches(handle);
+	const tickers = [...new Set(grants.map(({ grant }) => grant.ticker))];
+	if (tickers.length === 0) return [];
+	const [prices, { staleAfterDays }] = await Promise.all([
+		latestPrices(tickers, handle),
+		getPriceSettings(handle)
+	]);
+	// One rule for "no close at all" and "a close from last spring": `isStale`
+	// answers both, and it is the rule the investments screen labels prices with.
+	const stale = tickers.filter((ticker) =>
+		isStale(prices.get(ticker)?.day ?? null, today, staleAfterDays)
+	);
+	if (stale.length === 0) return [];
+	return [
+		{
+			icon: 'chart',
+			kind: 'Equity',
+			pill: stale.length === 1 ? '1 ticker' : `${stale.length} tickers`,
+			hue: 'yellow',
+			title:
+				stale.length === 1
+					? `${stale[0]} has no recent close`
+					: `${stale.length} grant tickers have no recent close`,
+			detail: `${stale.join(', ')}. Until a close is recorded the grant is valued at nothing.`,
+			href: '/investments',
+			rank: 25
+		}
+	];
+};
+
+// ---- Paperwork, tax and pay ----
+
+/**
+ * A rhythm of paper that has stopped.
+ *
+ * The shelves already draw every gap a lane has ever had; what belongs here is
+ * narrower — the most recent period that could hold something, holding nothing.
+ * The gap rule itself is not restated: `loadDossier` computes the same cells
+ * the ribbon draws, and this reads their states.
+ */
+const laneGaps: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	// Cheap first question, so a household with no lanes pays one small query.
+	const laned = await handle
+		.selectDistinct({ kind: entity.kind })
+		.from(lane)
+		.innerJoin(entity, eq(entity.id, lane.entityId))
+		.where(sql`${lane.cadence} in ('monthly', 'yearly')`);
+	// Employers and banks only. A car's road tax and a boiler inspection are the
+	// same shape and are drawn on their own shelves, but they are not a
+	// correspondent who has stopped writing, which is what this source is about.
+	const kinds = new Set<string>(
+		laned.map((row) => row.kind).filter((kind) => kind === 'organisation' || kind === 'account')
+	);
+	if (kinds.size === 0) return [];
+
+	const shelves = (await listShelves(handle)).filter((shelfRow) => kinds.has(shelfRow.unit));
+	const thisYear = Number(today.slice(0, 4));
+	const items: BriefingItem[] = [];
+	for (const shelfRow of shelves) {
+		let payload = await loadDossier(shelfRow, thisYear, handle, today);
+		// In January a monthly lane's whole year is "not arrived yet", which says
+		// nothing about whether the paper stopped coming. The year before does.
+		if (!payload.cards.some((card) => card.lanes.some((l) => laneJudgeable(l.cells)))) {
+			payload = await loadDossier(shelfRow, thisYear - 1, handle, today);
+		}
+		for (const card of payload.cards) {
+			if (card.id === null) continue;
+			const missing = card.lanes.reduce((n, l) => n + laneShortfall(l.cells), 0);
+			if (missing === 0) continue;
+			items.push({
+				icon: 'folders',
+				kind: 'Paper',
+				pill: `${missing} missing`,
+				hue: 'yellow',
+				title: `${card.name} is behind on ${missing === 1 ? 'a period' : `${missing} periods`}`,
+				detail: `The ${shelfRow.label} shelf expects paper from ${card.name} and the latest one is not there.`,
+				// The shelf that draws the card: no screen takes a card of its own.
+				href: `/documents?shelf=${encodeURIComponent(shelfRow.key)}`,
+				rank: 35
+			});
+		}
+	}
+	return items;
+};
+
+/**
+ * Last year's tax, unrecorded.
+ *
+ * Only for people with a job on record: a household member with no engagement
+ * has nothing this app can say is missing, and saying it anyway would put a
+ * permanent card on a child's behalf.
+ */
+const taxUnfiled: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const { taxReminderMonth } = await getBriefingSettings(handle);
+	const year = taxYearToChase(today, taxReminderMonth);
+	if (year === null) return [];
+	const [employed, filed] = await Promise.all([
+		handle
+			.selectDistinct({ id: person.id, name: person.name })
+			.from(person)
+			.innerJoin(engagement, eq(engagement.personId, person.id)),
+		handle
+			.select({ personId: taxStatement.personId })
+			.from(taxStatement)
+			.where(eq(taxStatement.year, year))
+	]);
+	const done = new Set(filed.map((row) => row.personId));
+	return employed
+		.filter((who) => !done.has(who.id))
+		.map((who) => ({
+			icon: 'receipt' as const,
+			kind: 'Tax',
+			pill: String(year),
+			hue: 'yellow' as const,
+			title: `${who.name} has no ${year} tax statement`,
+			detail: 'What was earned and what was paid for that year are not recorded here.',
+			href: '/tax',
+			rank: 30
+		}));
+};
+
+/**
+ * Pay that arrived in a joint account and belongs to nobody.
+ *
+ * An account with an owner answers the question itself; a joint one has to be
+ * asked, and until it is, the credit is filed as salary in the ledger and
+ * missing from the salary history — two screens disagreeing with no sign of it
+ * on either.
+ */
+const salaryUnattributed: Source = async (handle: Queryable = db) => {
+	const credits = await handle
+		.select({
+			accountId: transaction.accountId,
+			accountName: account.name,
+			counterparty: transaction.counterparty
+		})
+		.from(transaction)
+		.innerJoin(account, eq(account.id, transaction.accountId))
+		// `salary` is a category id, not a label: `fileTransaction` tests the same
+		// id before it records a credit as pay.
+		.where(and(eq(transaction.categoryId, 'salary'), isNull(account.ownerPersonId)));
+	if (credits.length === 0) return [];
+
+	// Asked once per employer per account rather than once per payday: the
+	// question is about the counterparty, and a year of monthly pay is one
+	// answer, not twelve.
+	const perAccount = new Map<string, { name: string; count: number }>();
+	const asked = new Map<string, boolean>();
+	for (const credit of credits) {
+		const key = `${credit.accountId}|${credit.counterparty ?? ''}`;
+		if (!asked.has(key)) {
+			const { personId } = await attributeSalary(
+				{
+					accountOwnerPersonId: null,
+					counterparty: credit.counterparty,
+					accountId: credit.accountId
+				},
+				handle
+			);
+			asked.set(key, personId === null);
+		}
+		if (!asked.get(key)) continue;
+		const held = perAccount.get(credit.accountId) ?? { name: credit.accountName, count: 0 };
+		perAccount.set(credit.accountId, { ...held, count: held.count + 1 });
+	}
+
+	return [...perAccount.values()].map((row) => ({
+		icon: 'people' as const,
+		kind: 'Salary',
+		pill: `${row.count} credit${row.count === 1 ? '' : 's'}`,
+		hue: 'yellow' as const,
+		title: `${countTitle(row.count, 'salary credit', 'salary credits')} in ${row.name} ${row.count === 1 ? 'belongs' : 'belong'} to nobody`,
+		detail: 'Say whose pay it is and the salary history fills in from the ledger.',
+		href: '/salary',
+		rank: 28
+	}));
+};
+
+// ---- Figures going quietly out of date ----
+
+/**
+ * A currency the rate table has stopped following.
+ *
+ * Every foreign figure in the app — an account, a holding, a grant — is
+ * converted through this table, and a stale rate does not look stale: the
+ * numbers still add up, in last month's money.
+ */
+const staleRates: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const [base, accounts, holdings, grants, rates] = await Promise.all([
+		getBaseCurrency(),
+		handle.selectDistinct({ code: account.currency }).from(account),
+		handle.selectDistinct({ code: holding.currency }).from(holding),
+		handle.selectDistinct({ code: equityGrant.currency }).from(equityGrant),
+		handle
+			.select({ code: currencyRate.code, day: sql<string>`max(${currencyRate.day})` })
+			.from(currencyRate)
+			.groupBy(currencyRate.code)
+	]);
+	const latest = new Map(rates.map((row) => [row.code, row.day]));
+	const inUse = new Set([...accounts, ...holdings, ...grants].map((row) => row.code));
+	// The rate table quotes CZK per unit, so CZK has no rate of its own and never
+	// will; the household's base is the currency everything is shown in.
+	inUse.delete('CZK');
+	inUse.delete(base);
+
+	const stale = [...inUse].filter((code) =>
+		isStale(latest.get(code) ?? null, today, RATE_STALE_DAYS)
+	);
+	if (stale.length === 0) return [];
+	return [
+		{
+			icon: 'globe',
+			kind: 'Rates',
+			pill: stale.length === 1 ? '1 currency' : `${stale.length} currencies`,
+			hue: 'grey',
+			title: `${stale.join(', ')} ${stale.length === 1 ? 'has' : 'have'} no recent exchange rate`,
+			detail: 'Every figure in that currency is being converted at an old fixing.',
+			href: '/settings',
+			rank: 45
+		}
+	];
+};
+
+/**
+ * An account nothing has been imported into for a long time.
+ *
+ * The balance on screen is the last statement's closing balance, so an account
+ * that stopped being imported does not go blank — it goes wrong slowly, and
+ * keeps being counted in net worth the whole time.
+ */
+const quietAccounts: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const { statementStaleDays } = await getBriefingSettings(handle);
+	const [accounts, movements] = await Promise.all([
+		handle
+			.select({ id: account.id, name: account.name, balanceOn: account.balanceOn })
+			.from(account),
+		handle
+			.select({
+				accountId: transaction.accountId,
+				last: sql<string | null>`max(${transaction.bookedOn})`
+			})
+			.from(transaction)
+			.groupBy(transaction.accountId)
+	]);
+	const lastMovement = new Map(movements.map((row) => [row.accountId, row.last]));
+	const items: BriefingItem[] = [];
+	for (const acct of accounts) {
+		const days = [acct.balanceOn, lastMovement.get(acct.id) ?? null].filter(
+			(day): day is string => day !== null
+		);
+		// An account with no statement and no movement has never been used. That is
+		// not an account falling behind, and a card about it would never clear.
+		if (days.length === 0) continue;
+		const newest = days.sort()[days.length - 1];
+		if (!isStale(newest, today, statementStaleDays)) continue;
+		items.push({
+			icon: 'bank',
+			kind: 'Account',
+			pill: `${daysBetween(newest, today)} days`,
+			hue: 'grey',
+			title: `${acct.name} has had nothing new since ${newest}`,
+			detail: 'Its balance is the last statement’s, and net worth still counts it.',
+			// Its own ledger: `/accounts` takes no account of its own.
+			href: `/transactions?account=${acct.id}`,
+			rank: 40
+		});
+	}
+	return items;
+};
+
+/** A flat whose worth is last year's figure, in net worth as if it were today's. */
+const oldValuations: Source = async (handle: Queryable = db) => {
+	const today = new Date().toISOString().slice(0, 10);
+	const [properties, valuations] = await Promise.all([
+		handle.select({ id: property.id, name: property.name }).from(property),
+		handle
+			.select({
+				propertyId: propertyValuation.propertyId,
+				last: sql<string | null>`max(${propertyValuation.valuedOn})`
+			})
+			.from(propertyValuation)
+			.groupBy(propertyValuation.propertyId)
+	]);
+	const latest = new Map(valuations.map((row) => [row.propertyId, row.last]));
+	const items: BriefingItem[] = [];
+	for (const flat of properties) {
+		const valuedOn = latest.get(flat.id) ?? null;
+		// A flat never valued is a different card — net worth simply has no figure
+		// for it — and one this source cannot date.
+		if (valuedOn === null) continue;
+		const months = monthsBetween(valuedOn, today);
+		if (months < VALUATION_STALE_MONTHS) continue;
+		items.push({
+			icon: 'house',
+			kind: 'Property',
+			pill: `${months} months`,
+			hue: 'grey',
+			title: `${flat.name} was last valued ${valuedOn}`,
+			detail: 'Net worth is carrying that figure as if it were current.',
+			href: `/property?p=${flat.id}`,
+			rank: 50
+		});
+	}
+	return items;
+};
+
 // Declaration order, not display order: `rank` decides what a person sees
 // first, and a source moved up this list must not be able to change that.
 const SOURCES: Source[] = [
@@ -524,7 +959,16 @@ const SOURCES: Source[] = [
 	extractionFailures,
 	overspend,
 	calendarConflicts,
-	calendarSyncFailures
+	calendarSyncFailures,
+	equityVesting,
+	equityUnsettled,
+	equityWithoutPrice,
+	laneGaps,
+	taxUnfiled,
+	salaryUnattributed,
+	staleRates,
+	quietAccounts,
+	oldValuations
 ];
 
 /** Everything the strip could show, ranked, and how it describes itself. */

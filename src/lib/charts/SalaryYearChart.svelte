@@ -34,6 +34,7 @@
 	} = $props();
 
 	const anyBonus = $derived(years.some((y) => BigInt(y.bonusTotalMinor) > 0n));
+	const anyEquity = $derived(years.some((y) => BigInt(y.equityTotalMinor) > 0n));
 
 	/**
 	 * Bars in minor units, which is what the ledger stores and what the readout
@@ -154,6 +155,10 @@
 					<stop offset="0" style="stop-color: var(--series-health-soft); stop-opacity: 0.62" />
 					<stop offset="1" style="stop-color: var(--series-health-soft); stop-opacity: 0.42" />
 				</linearGradient>
+				<linearGradient id="salary-equity" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0" style="stop-color: var(--purple); stop-opacity: 0.5" />
+					<stop offset="1" style="stop-color: var(--purple); stop-opacity: 0.15" />
+				</linearGradient>
 				<pattern
 					id="salary-bonus"
 					width="7"
@@ -225,6 +230,9 @@
 					<span class="key"><span class="swatch base"></span> base salary</span>
 					{#if anyBonus}
 						<span class="key"><span class="swatch bonus"></span> bonus</span>
+					{/if}
+					{#if anyEquity}
+						<span class="key"><span class="swatch equity"></span> equity vested</span>
 					{/if}
 					<span class="key"><span class="swatch net"></span> net</span>
 				{/if}
@@ -299,6 +307,9 @@
 	}
 	.chart :global(.swatch.bonus) {
 		background: color-mix(in srgb, var(--orange) 45%, transparent);
+	}
+	.chart :global(.swatch.equity) {
+		background: color-mix(in srgb, var(--purple) 45%, transparent);
 	}
 	.chart :global(.swatch.gross) {
 		background: var(--bd2);

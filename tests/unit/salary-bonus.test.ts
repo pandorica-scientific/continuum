@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { bonusLabelSubset, detectBonus, extractCandidates, salaryStats } from '$lib/salary';
+import {
+	bonusLabelSubset,
+	detectBonus,
+	extractCandidates,
+	mergeSalaryYears,
+	salaryStats
+} from '$lib/salary';
 
 const czech = [
 	'Hrubá mzda 62 000,00',
@@ -193,5 +199,38 @@ describe('detectBonus on tabular slips', () => {
 	it('still sums a genuine two-line bonus, where each label ends at its keyword', () => {
 		const lines = ['Prémie 8 000,00', 'Mimořádná odměna 12 000,00'];
 		expect(detectBonus(extractCandidates(lines, 'CZK'))).toBe(2000000n);
+	});
+});
+
+describe('salaryStats with equity', () => {
+	it('adds vested equity to its year without touching base or gross', () => {
+		const years = salaryStats(
+			[
+				{ periodMonth: '2026-01', grossMinor: 100_000n },
+				{ periodMonth: '2026-02', grossMinor: 100_000n }
+			],
+			null,
+			[
+				{ year: 2026, valueMinor: 300_000n, onPayslip: false },
+				{ year: 2026, valueMinor: 50_000n, onPayslip: true }
+			]
+		);
+		expect(years[0].grossTotalMinor).toBe(200_000n);
+		expect(years[0].baseTotalMinor).toBe(200_000n);
+		expect(years[0].equityTotalMinor).toBe(350_000n);
+		expect(years[0].equityOnPayslipMinor).toBe(50_000n);
+	});
+	it('lists a year that has only equity, with no monthly figure', () => {
+		const years = salaryStats([], null, [{ year: 2027, valueMinor: 1n, onPayslip: false }]);
+		expect(years.map((y) => y.year)).toEqual([2027]);
+		expect(years[0].grossMonths).toBe(0);
+		expect(years[0].avgMonthlyMinor).toBe(0n);
+	});
+	it('sums equity across people in the household view', () => {
+		const a = salaryStats([], null, [{ year: 2026, valueMinor: 10n, onPayslip: false }]);
+		const b = salaryStats([], null, [{ year: 2026, valueMinor: 5n, onPayslip: true }]);
+		const merged = mergeSalaryYears([a, b]);
+		expect(merged[0].equityTotalMinor).toBe(15n);
+		expect(merged[0].equityOnPayslipMinor).toBe(5n);
 	});
 });

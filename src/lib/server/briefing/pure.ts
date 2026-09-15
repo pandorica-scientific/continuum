@@ -81,3 +81,73 @@ export function briefingCaption(items: readonly { hue: string }[], total: number
 	if (items.length === 1) return 'one thing, none of them urgent today';
 	return `${WORDS[items.length] ?? items.length} things, none of them urgent today`;
 }
+
+/** Whole days from `from` to `to`, both ISO days. Negative when `to` is the earlier one. */
+export function daysBetween(from: string, to: string): number {
+	return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+}
+
+/** Whole months from `from` to `to`, counting a part month only once it completes. */
+export function monthsBetween(from: string, to: string): number {
+	const [fy, fm, fd] = from.split('-').map(Number);
+	const [ty, tm, td] = to.split('-').map(Number);
+	const months = (ty - fy) * 12 + (tm - fm);
+	return td < fd ? months - 1 : months;
+}
+
+/** One tranche, as the two equity sources read it. */
+export interface TrancheTiming {
+	vestsOn: string;
+	settledOn: string | null;
+	forfeitedOn: string | null;
+}
+
+/**
+ * A tranche that vested and was never written down.
+ *
+ * The grace period is why this is not simply "vested and unsettled": a vest is
+ * a date in a schedule, and the shares behind it reach the broker days later.
+ * Asking on the morning of the vest would be asking about something that has
+ * not happened yet.
+ */
+export function settlementOverdue(
+	tranche: TrancheTiming,
+	today: string,
+	graceDays: number
+): boolean {
+	if (tranche.forfeitedOn || tranche.settledOn) return false;
+	return daysBetween(tranche.vestsOn, today) > graceDays;
+}
+
+/**
+ * The tax year worth asking about today, or null while it is too early to ask.
+ *
+ * Nobody files on the second of January, and a briefing that says so every day
+ * of that month is a briefing people learn to read past. The month it starts
+ * from is the household's to set.
+ */
+export function taxYearToChase(today: string, reminderMonth: number): number | null {
+	const month = Number(today.slice(5, 7));
+	if (month < reminderMonth) return null;
+	return Number(today.slice(0, 4)) - 1;
+}
+
+/**
+ * How far behind a lane is, judged by its LAST expected period.
+ *
+ * A lane with an old hole in it and this month's paper filed is not something
+ * anybody has to act on today — the ribbon on the shelf already draws it. What
+ * belongs on the briefing is a rhythm that has stopped, which is what a gap in
+ * the most recent period that could hold something means. Zero otherwise.
+ */
+export function laneShortfall(cells: readonly { state: string }[]): number {
+	const expected = cells.filter((cell) => cell.state === 'filed' || cell.state === 'gap');
+	if (expected.length === 0) return 0;
+	if (expected[expected.length - 1].state !== 'gap') return 0;
+	return expected.filter((cell) => cell.state === 'gap').length;
+}
+
+/** Whether a drawn year says anything at all about a lane: a year of "not arrived yet" does not. */
+export function laneJudgeable(cells: readonly { state: string }[]): boolean {
+	return cells.some((cell) => cell.state === 'filed' || cell.state === 'gap');
+}

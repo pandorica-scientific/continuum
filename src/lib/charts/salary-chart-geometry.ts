@@ -19,6 +19,8 @@ export interface SerialisedSalaryYear {
 	baseTotalMinor: string;
 	bonusTotalMinor: string;
 	netTotalMinor: string;
+	equityTotalMinor: string;
+	equityOnPayslipMinor: string;
 	grossMonths: number;
 	netMonths: number;
 	netComplete: boolean;
@@ -36,17 +38,21 @@ export interface SerialisedSalaryYear {
 export function barValues(
 	row: SerialisedSalaryYear,
 	mode: SalaryMode
-): { base: bigint; bonus: bigint; net: bigint | null } {
+): { base: bigint; bonus: bigint; equity: bigint; net: bigint | null } {
 	const base = BigInt(row.baseTotalMinor);
 	const bonus = BigInt(row.bonusTotalMinor);
 	const net = BigInt(row.netTotalMinor);
+	// Only the vests the payslips did not already carry: the rest is inside
+	// gross, and drawing it twice would grow the bar by money earned once.
+	const equity = BigInt(row.equityTotalMinor) - BigInt(row.equityOnPayslipMinor);
 
-	if (mode === 'total') return { base, bonus, net: row.netMonths > 0 ? net : null };
+	if (mode === 'total') return { base, bonus, equity, net: row.netMonths > 0 ? net : null };
 
 	const months = BigInt(Math.max(row.grossMonths, 1));
 	return {
 		base: base / months,
 		bonus: bonus / months,
+		equity: equity / months,
 		net: row.netAvgMinor === null ? null : BigInt(row.netAvgMinor)
 	};
 }
@@ -54,8 +60,8 @@ export function barValues(
 /** The tallest bar in the set, for scaling every year against one ceiling. */
 export function ceilingFor(rows: SerialisedSalaryYear[], mode: SalaryMode): bigint {
 	return rows.reduce((most, row) => {
-		const { base, bonus } = barValues(row, mode);
-		const total = base + bonus;
+		const { base, bonus, equity } = barValues(row, mode);
+		const total = base + bonus + equity;
 		return total > most ? total : most;
 	}, 0n);
 }
@@ -74,9 +80,15 @@ export function ceilingFor(rows: SerialisedSalaryYear[], mode: SalaryMode): bigi
 export function salaryBarSegments(
 	row: SerialisedSalaryYear,
 	mode: SalaryMode
-): { value: number; fill: string; stroke: string; kind: 'base' | 'bonus' }[] {
+): { value: number; fill: string; stroke: string; kind: 'base' | 'bonus' | 'equity' }[] {
 	const v = barValues(row, mode);
 	return [
+		{
+			kind: 'equity' as const,
+			value: Number(v.equity),
+			fill: 'url(#salary-equity)',
+			stroke: 'var(--purple)'
+		},
 		{
 			kind: 'bonus' as const,
 			value: Number(v.bonus),

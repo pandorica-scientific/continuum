@@ -15,6 +15,7 @@
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import { salarySummaryTiles } from '$lib/salary-tiles';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
+	import GrantDialog from '$lib/components/GrantDialog.svelte';
 	import BulkPayslipDialog from '$lib/components/BulkPayslipDialog.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
@@ -39,6 +40,10 @@
 	// quick-add menu is the only thing that opens it from outside.
 	let adding = $state(untrack(() => data.openAdd));
 	let addingMany = $state(false);
+	// Grants are entered here, on the salary they are part of, and only the
+	// asset side of them lives on Investments.
+	let addingGrant = $state(untrack(() => data.openGrant));
+	let editingGrant = $state<string | null>(null);
 
 	const peopleOptions = $derived([
 		{ value: 'both', label: 'Both' },
@@ -58,6 +63,10 @@
 	);
 	const slipsFor = (year: number) =>
 		payslips.filter((s) => Number(s.periodMonth.slice(0, 4)) === year);
+	const grantsFor = (year: number) =>
+		data.grants.filter(
+			(g) => (selected ? g.personId === selected.id : true) && g.vestYears.includes(year)
+		);
 
 	/**
 	 * How many payslips a month holds, so a month holding two can say so.
@@ -101,6 +110,9 @@
 	caption="What was earned each month — read from payslips and from the ledger."
 >
 	{#snippet actions()}
+		<button type="button" class="btn" onclick={() => (addingGrant = !addingGrant)}>
+			Add grant
+		</button>
 		<button type="button" class="btn" onclick={() => (addingMany = !addingMany)}>
 			Add several
 		</button>
@@ -116,6 +128,31 @@
 		currencies={data.currencies}
 		onclose={() => (addingMany = false)}
 	/>
+{/if}
+
+{#if addingGrant}
+	<GrantDialog
+		people={data.people}
+		engagements={data.engagements}
+		currencies={data.currencies}
+		defaultPersonId={selected?.id ?? data.people[0]?.id ?? ''}
+		editing={null}
+		onclose={() => (addingGrant = false)}
+	/>
+{/if}
+
+{#if editingGrant}
+	{@const g = data.grants.find((x) => x.id === editingGrant)}
+	{#if g}
+		<GrantDialog
+			people={data.people}
+			engagements={data.engagements}
+			currencies={data.currencies}
+			defaultPersonId={g.personId}
+			editing={{ id: g.id, ticker: g.ticker, totalUnits: g.totalUnits, currency: g.currency }}
+			onclose={() => (editingGrant = null)}
+		/>
+	{/if}
 {/if}
 
 {#if adding}
@@ -152,6 +189,20 @@
 >
 	{#snippet detail(year)}
 		{@const slips = slipsFor(year)}
+		{@const grants = grantsFor(year)}
+		{#if grants.length > 0}
+			<ul class="grants">
+				{#each grants as g (g.id)}
+					<li>
+						<span class="mono">{g.ticker}</span>
+						<span class="quiet">{g.label ?? 'grant'} · {g.totalUnits} units</span>
+						<button type="button" class="btn" onclick={() => (editingGrant = g.id)}>
+							Edit schedule
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{/if}
 		<div class="slips">
 			{#if slips.length > 0}
 				{#each slips as s (s.id)}
@@ -444,6 +495,21 @@
 	.filter {
 		display: flex;
 		justify-content: center;
+	}
+	.grants {
+		list-style: none;
+		margin: 0;
+		padding: var(--space-4) var(--space-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+	}
+	.grants li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		flex-wrap: wrap;
 	}
 	.hint {
 		font-size: var(--text-xs);

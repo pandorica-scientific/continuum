@@ -180,7 +180,7 @@ describe('the boot seam', () => {
 			.map((t) => t.id)
 			.sort();
 		expect(ids).toEqual(
-			['backup', 'calendar', 'cpu-queue', 'fx', 'meter', 'networth', 'scan-sweep'].sort()
+			['backup', 'calendar', 'cpu-queue', 'fx', 'meter', 'networth', 'prices', 'scan-sweep'].sort()
 		);
 	});
 

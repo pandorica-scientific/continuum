@@ -88,7 +88,7 @@
 			netWorthDeltaShare={data.netWorthDeltaShare}
 			baseCurrency={data.baseCurrency}
 			importBadge={data.importBadge}
-			approximateRates={data.missingRates.none.length + data.missingRates.carried.length > 0}
+			approximateRates={data.missingRates.none.length > 0}
 			version={data.version}
 			runtime={data.runtime}
 			onNavigate={() => (drawerOpen = false)}

@@ -9,7 +9,19 @@ import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { mayActFor } from '$lib/server/auth/policy';
-import { person, salaryEntry } from '$lib/server/db/schema';
+import {
+	createGrant,
+	engagementOwner,
+	forfeitPending,
+	grantOwner,
+	grantsWithTranches,
+	parseSchedule,
+	recordSale,
+	recordSettlement,
+	replaceSchedule,
+	trancheOwner
+} from '$lib/server/equity';
+import { engagement, organisation, person, salaryEntry } from '$lib/server/db/schema';
 import {
 	learnBonusLabel,
 	learnGrossLabel,
@@ -18,6 +30,7 @@ import {
 	entryWithOwner,
 	filePayslipDocument,
 	loadSalaryHistory,
+	vestValues,
 	payslipMatchingContent,
 	payslipStatementsFor,
 	readPayslip,
@@ -46,6 +59,8 @@ function serialiseYear(y: SalaryYear) {
 		baseTotalMinor: y.baseTotalMinor.toString(),
 		bonusTotalMinor: y.bonusTotalMinor.toString(),
 		netTotalMinor: y.netTotalMinor.toString(),
+		equityTotalMinor: y.equityTotalMinor.toString(),
+		equityOnPayslipMinor: y.equityOnPayslipMinor.toString(),
 		grossMonths: y.grossMonths,
 		netMonths: y.netMonths,
 		netComplete: y.netComplete,
@@ -65,7 +80,35 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	// Who is asking travels into the query. A member gets every month and every
 	// figure; the slips they may not see arrive with no file behind them.
-	const history = await loadSalaryHistory(baseCurrency, convert);
+	// Vested shares at the close on each vest day, per person. Read beside the
+	// payslips rather than written among them: a vest is not a slip.
+	const vests = await vestValues(baseCurrency, convert);
+	const history = await loadSalaryHistory(baseCurrency, convert, db, vests);
+
+	// For the grant dialog: which jobs a grant can hang off, and the grants
+	// already recorded so a schedule can be edited from the year it vests in.
+	const [engagements, grantRows] = await Promise.all([
+		db
+			.select({
+				id: engagement.id,
+				personId: engagement.personId,
+				employer: organisation.name,
+				role: engagement.role,
+				endsOn: engagement.endsOn
+			})
+			.from(engagement)
+			.innerJoin(organisation, eq(organisation.id, engagement.organisationId)),
+		grantsWithTranches()
+	]);
+	const grants = grantRows.map(({ grant, tranches }) => ({
+		id: grant.id,
+		personId: grant.personId,
+		ticker: grant.ticker,
+		label: grant.label,
+		totalUnits: grant.totalUnits,
+		currency: grant.currency,
+		vestYears: [...new Set(tranches.map((t) => Number((t.settledOn ?? t.vestsOn).slice(0, 4))))]
+	}));
 
 	// The household series, computed here rather than in the screen: merging
 	// TOTALS is the only honest way to it, and doing that in markup invites the
@@ -77,6 +120,9 @@ export const load: PageServerLoad = async ({ url }) => {
 		// menu already uses for /documents. A shortcut that lands you on a screen
 		// you then have to find a button on is half a shortcut.
 		openAdd: url.searchParams.get('add') === '1',
+		openGrant: url.searchParams.get('add') === 'grant',
+		engagements,
+		grants,
 		baseCurrency,
 		// Every currency the app can convert. A payslip states its own currency —
 		// the household's base is where it is REPORTED, not what it was paid in —
@@ -140,6 +186,23 @@ function optionalAmount(
 
 /** The one sentence a refused payslip upload answers with. */
 const NOT_YOUR_PAYSLIP = 'You can only file your own payslips.';
+const NOT_YOUR_EQUITY = 'You can only record your own equity.';
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A units figure off the form, or a refusal sentence. */
+function unitsField(form: FormData, field: string, allowZero = false): number {
+	const n = Number(String(form.get(field) ?? '').replace(',', '.'));
+	if (!Number.isFinite(n) || n < 0 || (!allowZero && n === 0)) {
+		throw new Error(
+			`${field} must be a ${allowZero ? 'non-negative' : 'positive'} number of units.`
+		);
+	}
+	return n;
+}
+
+function userSentence(err: unknown, fallback: string): string {
+	return err instanceof Error ? err.message : fallback;
+}
 
 /**
  * Whose payslips this person may file: their own, or anybody's if an admin.
@@ -702,5 +765,102 @@ export const actions: Actions = {
 		}
 		await db.delete(salaryEntry).where(eq(salaryEntry.id, entry.id));
 		return { ok: true };
+	},
+
+	// ---- Equity grants. Same ownership rule as payslips: the person the grant
+	// is for is stated in the form for a new one and read from the row after.
+
+	addGrant: async ({ request, locals }) => {
+		const form = await request.formData();
+		const personId = asRowId(form.get('personId')).trim();
+		if (!mayActFor(locals.person, personId)) return fail(403, { message: NOT_YOUR_EQUITY });
+		const currency = String(form.get('currency') ?? '').toUpperCase();
+		if (!(await availableCurrencies()).includes(currency)) {
+			return fail(400, { message: `${currency} is not a currency this instance can convert.` });
+		}
+		const grantedOn = String(form.get('grantedOn') ?? '');
+		if (!ISO_DATE.test(grantedOn)) return fail(400, { message: 'Pick the grant date.' });
+		try {
+			const engagementId = form.get('engagementId') ? asRowId(form.get('engagementId')) : null;
+			if (engagementId && (await engagementOwner(engagementId)) !== personId) {
+				return fail(400, { message: 'That job belongs to somebody else.' });
+			}
+			await createGrant({
+				personId,
+				engagementId,
+				ticker: String(form.get('ticker') ?? ''),
+				currency,
+				grantedOn,
+				totalUnits: unitsField(form, 'totalUnits'),
+				label: String(form.get('label') ?? '').trim() || null,
+				documentId: null,
+				note: String(form.get('note') ?? '').trim() || null,
+				schedule: parseSchedule(form)
+			});
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That grant did not save.') });
+		}
+		return { ok: true };
+	},
+
+	editSchedule: async ({ request, locals }) => {
+		const form = await request.formData();
+		const grantId = asRowId(form.get('grantId'));
+		const owner = await grantOwner(grantId);
+		if (!owner) return fail(404, { message: 'That grant is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		try {
+			await replaceSchedule(grantId, unitsField(form, 'totalUnits'), parseSchedule(form));
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That schedule did not save.') });
+		}
+		return { ok: true };
+	},
+
+	recordSettlement: async ({ request, locals }) => {
+		const form = await request.formData();
+		const trancheId = asRowId(form.get('trancheId'));
+		const owner = await trancheOwner(trancheId);
+		if (!owner) return fail(404, { message: 'That tranche is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		const settledOn = String(form.get('settledOn') ?? '');
+		if (!ISO_DATE.test(settledOn)) return fail(400, { message: 'Pick the settlement date.' });
+		try {
+			await recordSettlement(trancheId, {
+				settledOn,
+				deliveredUnits: unitsField(form, 'deliveredUnits', true),
+				withheldUnits: unitsField(form, 'withheldUnits', true),
+				onPayslip: form.get('onPayslip') === 'on'
+			});
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That settlement did not save.') });
+		}
+		return { ok: true };
+	},
+
+	recordSale: async ({ request, locals }) => {
+		const form = await request.formData();
+		const trancheId = asRowId(form.get('trancheId'));
+		const owner = await trancheOwner(trancheId);
+		if (!owner) return fail(404, { message: 'That tranche is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		try {
+			await recordSale(trancheId, unitsField(form, 'soldUnits'));
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That sale did not save.') });
+		}
+		return { ok: true };
+	},
+
+	forfeitGrant: async ({ request, locals }) => {
+		const form = await request.formData();
+		const grantId = asRowId(form.get('grantId'));
+		const owner = await grantOwner(grantId);
+		if (!owner) return fail(404, { message: 'That grant is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		const forfeitedOn = String(form.get('forfeitedOn') ?? '');
+		if (!ISO_DATE.test(forfeitedOn)) return fail(400, { message: 'Pick the leaving date.' });
+		const count = await forfeitPending(grantId, forfeitedOn);
+		return { ok: true, forfeited: count };
 	}
 };

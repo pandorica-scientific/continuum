@@ -2,6 +2,104 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
+## 0.9.2 — Unreleased
+
+> Shares an employer grants, vesting on their own calendar, priced every day.
+
+### ⬆️ Upgrading
+
+Three new tables and one changed view. Pulling the image alone leaves a 0.9.1
+database refused at boot; run this against it first (backup first, see
+[Install](docs/install.md#updating)), then `docker compose up -d`.
+
+```sql
+CREATE TABLE IF NOT EXISTS "security_price" (
+	"ticker" text NOT NULL,
+	"day" date NOT NULL,
+	"close_minor" bigint NOT NULL,
+	"currency" text NOT NULL REFERENCES "currency"("code"),
+	"source" text NOT NULL,
+	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "security_price_ticker_day_pk" PRIMARY KEY ("ticker", "day"),
+	CONSTRAINT security_price_source_check CHECK (source in ('yahoo', 'stooq', 'manual'))
+);
+CREATE INDEX IF NOT EXISTS "security_price_currency_idx" ON "security_price" ("currency");
+CREATE TABLE IF NOT EXISTS "equity_grant" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"person_id" uuid NOT NULL REFERENCES "person"("id") ON DELETE CASCADE,
+	"engagement_id" uuid REFERENCES "engagement"("id") ON DELETE SET NULL,
+	"ticker" text NOT NULL,
+	"currency" text NOT NULL REFERENCES "currency"("code"),
+	"granted_on" date NOT NULL,
+	"total_units" numeric(18, 6) NOT NULL,
+	"label" text,
+	"document_id" uuid REFERENCES "document"("id") ON DELETE SET NULL,
+	"note" text
+);
+CREATE INDEX IF NOT EXISTS "equity_grant_person_idx" ON "equity_grant" ("person_id");
+CREATE INDEX IF NOT EXISTS "equity_grant_engagement_idx" ON "equity_grant" ("engagement_id");
+CREATE INDEX IF NOT EXISTS "equity_grant_document_idx" ON "equity_grant" ("document_id");
+CREATE INDEX IF NOT EXISTS "equity_grant_currency_idx" ON "equity_grant" ("currency");
+CREATE INDEX IF NOT EXISTS "equity_grant_ticker_idx" ON "equity_grant" ("ticker");
+CREATE TABLE IF NOT EXISTS "equity_tranche" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"grant_id" uuid NOT NULL REFERENCES "equity_grant"("id") ON DELETE CASCADE,
+	"vests_on" date NOT NULL,
+	"units" numeric(18, 6) NOT NULL,
+	"settled_on" date,
+	"delivered_units" numeric(18, 6),
+	"withheld_units" numeric(18, 6),
+	"sold_units" numeric(18, 6) DEFAULT '0' NOT NULL,
+	"forfeited_on" date,
+	"on_payslip" boolean DEFAULT false NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "equity_tranche_grant_idx" ON "equity_tranche" ("grant_id");
+CREATE INDEX IF NOT EXISTS "equity_tranche_vests_idx" ON "equity_tranche" ("grant_id", "vests_on");
+DROP VIEW IF EXISTS net_worth_component;
+CREATE VIEW net_worth_component AS
+	SELECT id, 'property'::text AS kind, kind::text AS subkind, owner_person_id,
+	       currency, value_minor, valued_on
+	  FROM property
+	UNION ALL
+	SELECT id, 'account', kind::text, owner_person_id,
+	       currency, balance_minor, balance_on
+	  FROM account
+	UNION ALL
+	SELECT id, 'loan', kind::text, owner_person_id,
+	       currency, -owed_minor, owed_on
+	  FROM loan
+	UNION ALL
+	SELECT id, 'holding', category, NULL,
+	       currency, value_minor, valued_at::date
+	  FROM holding
+	UNION ALL
+	SELECT t.id, 'equity', 'rsu', g.person_id,
+	       p.currency,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
+	       p.day
+	  FROM equity_tranche t
+	  JOIN equity_grant g ON g.id = t.grant_id
+	  JOIN LATERAL (
+	    SELECT close_minor, currency, day FROM security_price sp
+	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
+	  ) p ON true
+	 WHERE t.forfeited_on IS NULL
+	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
+```
+
+### ✨ Added
+
+- 📜 **Restricted stock units, from grant to vest** — a grant is entered once on Salary with its vesting schedule, and each tranche is counted as it vests.
+- 📈 **A daily close for every ticker the household owns** — prices come from a public quote feed with no login, and a ticker no feed can price takes a close typed by hand.
+- 💼 **Vested shares count in net worth** — at the latest close, in the market's currency, converted like everything else; unvested shares are shown as pending and not counted.
+- 💵 **Equity vested beside bonus** — the salary year shows what vested at the close on each vest day, kept out of base pay so a grant never reads as a raise.
+- 📉 **The portfolio chart is marked to market after the last report** — a dashed tail values the reported units at each day's close until the next upload.
+
+### 🔧 Changed
+
+- 🎛️ **Price refresh cadence and staleness are settings** — daily and seven days by default, under the `prices` key.
+
 ## 0.9.1 — 2026-09-13
 
 > Regions you can actually name and reach, places worth the detour, and a scratch you can take back.

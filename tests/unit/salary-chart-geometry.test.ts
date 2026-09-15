@@ -21,6 +21,8 @@ const year = (over: Partial<Record<string, unknown>> = {}) =>
 		grossTotalMinor: '84000000',
 		baseTotalMinor: '78000000',
 		bonusTotalMinor: '6000000',
+		equityTotalMinor: '0',
+		equityOnPayslipMinor: '0',
 		netTotalMinor: '60000000',
 		grossMonths: 12,
 		netMonths: 12,
@@ -92,5 +94,17 @@ describe('the blocks a salary bar is made of', () => {
 	it('measures against the mode, so an average year is a monthly bar', () => {
 		const out = salaryBarSegments(year(), 'avg');
 		expect(out.reduce((sum, s) => sum + s.value, 0)).toBe(7_000_000);
+	});
+});
+
+describe('equity on the bar', () => {
+	it('draws only the vests a payslip did not already carry, and counts them in the ceiling', () => {
+		const row = year({ equityTotalMinor: '9000000', equityOnPayslipMinor: '3000000' });
+		const segments = salaryBarSegments(row, 'total');
+		expect(segments[0]).toMatchObject({ kind: 'equity', value: 6_000_000 });
+		expect(ceilingFor([row], 'total')).toBe(
+			BigInt(row.baseTotalMinor) + BigInt(row.bonusTotalMinor) + 6_000_000n
+		);
+		expect(salaryBarSegments(year(), 'total').some((s) => s.kind === 'equity')).toBe(false);
 	});
 });

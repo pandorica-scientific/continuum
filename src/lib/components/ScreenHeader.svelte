@@ -38,6 +38,13 @@
 	// this header, and threading the module toggles through sixteen call sites
 	// to draw one row of pills would be a poor trade.
 	const modules = $derived(page.data.modules as ModuleToggles | undefined);
+	// The rail's dot says something in this area needs somebody; the tab row
+	// is where it says which screen. Import owns the review queue.
+	const importBadge = $derived((page.data.importBadge as number | undefined) ?? 0);
+	const tabBadge = (path: string): string | null =>
+		path === '/import' && importBadge > 0
+			? `${importBadge} transaction${importBadge === 1 ? '' : 's'} waiting to be reviewed`
+			: null;
 	const area = $derived(modules ? areaForPath(page.url.pathname) : undefined);
 	const screens = $derived(
 		area && modules
@@ -109,6 +116,14 @@
 			>
 				<Icon name={screen.icon} size={15} />
 				{screen.label}
+				{#if tabBadge(screen.path)}
+					<span
+						class="tab-badge"
+						role="status"
+						aria-label={tabBadge(screen.path)}
+						title={tabBadge(screen.path)}
+					></span>
+				{/if}
 			</a>
 		{/each}
 	</nav>
@@ -182,6 +197,13 @@
 	/* The rule under the row is gone: with a filled pill marking the current
 	   screen, the line was a second answer to a question already answered, and
 	   it cut the header off from the band of figures below it. */
+	.tab-badge {
+		width: 7px;
+		height: 7px;
+		border-radius: var(--radius-pill);
+		background: var(--yellow);
+		flex: none;
+	}
 	.tab {
 		display: inline-flex;
 		align-items: center;

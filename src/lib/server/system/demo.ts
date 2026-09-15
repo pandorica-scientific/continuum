@@ -53,6 +53,8 @@ import { createDocument } from '$lib/server/documents/mutations';
 import { addSubject, archiveSubject } from '$lib/server/documents/subjects';
 import { attachDocument } from '$lib/server/documents/targets';
 import { addEngagement, addOrganisation } from '$lib/server/organisations/mutations';
+import { createGrant, recordSettlement } from '$lib/server/equity';
+import { equityTranche, securityPrice } from '$lib/server/db/schema';
 import { filePayslipDocument, recordSalary } from '$lib/server/salary';
 import { hashBytes, saveUploadBytes } from '$lib/server/system/files';
 import { saveSplits } from '$lib/server/splits';
@@ -902,10 +904,62 @@ export async function seedDemo(): Promise<void> {
 		},
 		db
 	);
-	await addEngagement(
+	const seniorRole = await addEngagement(
 		{ organisationId: employer.id, personId: jana, role: 'Senior analytik', startsOn: promotedOn },
 		db
 	);
+
+	// One grant of restricted stock units, vesting a quarter a year: the first
+	// tranche landed two months ago and has been priced, the rest are pending,
+	// so Salary shows equity beside bonus for this year, Investments shows the
+	// card, and net worth counts the vested units.
+	const grantedOn = `${monthShift(thisMonth, -14)}-01`;
+	const firstVestOn = `${monthShift(thisMonth, -2)}-01`;
+	const grantId = await createGrant(
+		{
+			personId: jana,
+			engagementId: seniorRole.id,
+			ticker: 'MSFT.US',
+			currency: 'USD',
+			grantedOn,
+			totalUnits: 400,
+			label: 'Retention grant',
+			documentId: null,
+			note: null,
+			schedule: { mode: 'even', firstVestOn, count: 4, interval: 'yearly' }
+		},
+		db
+	);
+	const [firstTranche] = await db
+		.select()
+		.from(equityTranche)
+		.where(eq(equityTranche.grantId, grantId))
+		.orderBy(equityTranche.vestsOn)
+		.limit(1);
+	await recordSettlement(
+		firstTranche.id,
+		{ settledOn: firstVestOn, deliveredUnits: 62, withheldUnits: 38, onPayslip: false },
+		db
+	);
+	await db
+		.insert(securityPrice)
+		.values([
+			{
+				ticker: 'MSFT.US',
+				day: firstVestOn,
+				closeMinor: 41520n,
+				currency: 'USD',
+				source: 'manual'
+			},
+			{
+				ticker: 'MSFT.US',
+				day: new Date().toISOString().slice(0, 10),
+				closeMinor: 43875n,
+				currency: 'USD',
+				source: 'manual'
+			}
+		])
+		.onConflictDoNothing();
 	const employerLanes = await lanesFor(employer.id, db);
 	const laneNamed = (label: string) => employerLanes.find((l) => l.label === label)?.id ?? null;
 	for (const documentId of payslipIds) {

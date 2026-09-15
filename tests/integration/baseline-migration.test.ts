@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ENTITY_KINDS, ENUM_COLUMNS } from '$lib/enums';
 import { SHELF_SEED_ROWS } from '$lib/server/db/schema/documents';
 import { assertSchemaIsCurrent } from '$lib/server/db/migrate';
+import { rowId } from '../row-id';
 import { ALL_MIGRATIONS, migrationFiles, startPostgres, type Harness } from './harness';
 
 /**
@@ -53,6 +54,34 @@ describe('the baseline migration', () => {
 		expect(names).not.toContain('import_job');
 		expect(names).not.toContain('document_person');
 		expect(names).not.toContain('contact_tenancy');
+	});
+
+	it('creates the equity tables and prices', async () => {
+		const tables = await harness.sql<{ tablename: string }[]>`
+			select tablename from pg_tables where schemaname = 'public' order by tablename`;
+		const names = tables.map((t) => t.tablename);
+		expect(names).toContain('security_price');
+		expect(names).toContain('equity_grant');
+		expect(names).toContain('equity_tranche');
+	});
+
+	it('counts a vested, held tranche in net worth at the latest price', async () => {
+		const personId = rowId('person-equity');
+		const grantId = rowId('grant-equity');
+		await harness.sql`insert into person (id, name, initials, role) values (${personId}, 'Eq', 'E', 'member')`;
+		await harness.sql`insert into equity_grant (id, person_id, ticker, currency, granted_on, total_units)
+			values (${grantId}, ${personId}, 'ACME.US', 'USD', '2025-03-01', 400)`;
+		await harness.sql`insert into equity_tranche (id, grant_id, vests_on, units, settled_on, delivered_units, withheld_units)
+			values (${rowId('tranche-1')}, ${grantId}, '2026-03-01', 100, '2026-03-01', 62, 38)`;
+		await harness.sql`insert into equity_tranche (id, grant_id, vests_on, units)
+			values (${rowId('tranche-2')}, ${grantId}, '2099-03-01', 100)`;
+		await harness.sql`insert into security_price (ticker, day, close_minor, currency, source)
+			values ('ACME.US', '2026-09-10', 14000, 'USD', 'yahoo'), ('ACME.US', '2026-09-12', 14230, 'USD', 'yahoo')`;
+		const rows = await harness.sql<{ kind: string; value_minor: string; valued_on: string }[]>`
+			select kind, value_minor::text, valued_on::text from net_worth_component where kind = 'equity'`;
+		expect(rows).toHaveLength(1);
+		expect(rows[0].value_minor).toBe(String(62 * 14230));
+		expect(rows[0].valued_on).toBe('2026-09-12');
 	});
 
 	it('registers a record in the supertype without the caller doing anything', async () => {

@@ -1,6 +1,7 @@
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { computeNetWorth } from '$lib/server/networth';
+import { makePerson } from './fixtures';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
 /**
@@ -64,6 +65,31 @@ describe('computeNetWorth over the view', () => {
 		expect(nw.groups.find((g) => g.key === 'cash')?.assetMinor).toBe(50000n);
 		expect(nw.groups.find((g) => g.key === 'investments')?.assetMinor).toBe(90000n);
 		expect(nw.totalMinor).toBe(500000n + 50000n + 90000n - 200000n);
+	});
+
+	it('groups vested shares as Equity at the latest close, and never as Other', async () => {
+		const person = await makePerson(harness.db, { id: rowId('nw-person') });
+		await harness.sql`insert into equity_grant (id, person_id, ticker, currency, granted_on, total_units)
+			values (${rowId('nw-grant')}, ${person.id}, 'ACME.US', 'CZK', '2025-03-01', 200)`;
+		await harness.sql`insert into equity_tranche (id, grant_id, vests_on, units, settled_on, delivered_units, withheld_units)
+			values (${rowId('nw-t1')}, ${rowId('nw-grant')}, '2026-03-01', 100, '2026-03-01', 62, 38),
+			       (${rowId('nw-t2')}, ${rowId('nw-grant')}, '2099-03-01', 100, null, null, null)`;
+		await harness.sql`insert into security_price (ticker, day, close_minor, currency, source)
+			values ('ACME.US', '2026-08-01', 1000, 'CZK', 'manual')`;
+
+		const nw = await computeNetWorth(harness.db);
+		const group = nw.groups.find((g) => g.key === 'equity');
+		expect(group).toMatchObject({
+			label: 'Equity',
+			colorVar: '--purple',
+			assetMinor: 62_000n,
+			liabilityMinor: 0n,
+			detail: '1 vested tranche at the latest close'
+		});
+		expect(nw.groups.some((g) => g.key === 'other')).toBe(false);
+
+		await harness.sql`delete from equity_grant where id = ${rowId('nw-grant')}`;
+		await harness.sql`delete from security_price where ticker = 'ACME.US'`;
 	});
 
 	it('picks up an asset type that did not exist when the code was written', async () => {

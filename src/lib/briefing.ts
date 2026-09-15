@@ -29,6 +29,26 @@ export function stripItems<T>(
 	return { shown, hidden: items.length - shown.length };
 }
 
+/**
+ * A grey card is a note — a fixation two years out, a valuation getting old —
+ * and the row is for decisions. Notes wait behind the "more" tile whatever
+ * their rank, so the first thing read is always something to do; the tile
+ * still counts them, and opening it lists them after the decisions.
+ */
+export function stripBriefing<T extends { hue: string }>(
+	items: readonly T[],
+	size: number,
+	expanded: boolean
+): { shown: T[]; hidden: number } {
+	const decisions = items.filter((i) => i.hue !== 'grey');
+	const notes = items.filter((i) => i.hue === 'grey');
+	if (expanded) return { shown: [...decisions, ...notes], hidden: 0 };
+	if (notes.length === 0) return stripItems(decisions, size, expanded);
+	// Notes are hidden, so the tile is always drawn and takes the last cell.
+	const shown = decisions.slice(0, size - 1);
+	return { shown, hidden: items.length - shown.length };
+}
+
 interface EffectiveSpendingLine {
 	day: string;
 	currency: string;

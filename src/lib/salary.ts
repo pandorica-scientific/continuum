@@ -1052,6 +1052,15 @@ export interface SalaryYear {
 	/** The year's net months added up — what actually landed in the account. */
 	netTotalMinor: bigint;
 	/**
+	 * Shares that vested this year, valued at the close on their vest day.
+	 *
+	 * Beside bonus and outside base on purpose: a grant is compensation, and it
+	 * is not a raise. `baseDeltaPct` never sees it.
+	 */
+	equityTotalMinor: bigint;
+	/** The part of that the employer already put through a payslip, so gross carries it once. */
+	equityOnPayslipMinor: bigint;
+	/**
 	 * Whether the net total covers a whole year.
 	 *
 	 * An annual total over three months is not a small year, it is a partial
@@ -1100,13 +1109,31 @@ export interface SalaryMonth {
  * against net would report a pay cut where somebody simply started uploading
  * payslips.
  */
-export function salaryStats(months: SalaryMonth[], birthYear: number | null): SalaryYear[] {
-	const byYear = new Map<number, { gross: bigint[]; net: bigint[]; bonus: bigint }>();
+export interface VestSummary {
+	year: number;
+	valueMinor: bigint;
+	onPayslip: boolean;
+}
+
+export function salaryStats(
+	months: SalaryMonth[],
+	birthYear: number | null,
+	vests: VestSummary[] = []
+): SalaryYear[] {
+	const byYear = new Map<
+		number,
+		{ gross: bigint[]; net: bigint[]; bonus: bigint; equity: bigint; equityOnPayslip: bigint }
+	>();
+	const bucketFor = (year: number) => {
+		if (!byYear.has(year)) {
+			byYear.set(year, { gross: [], net: [], bonus: 0n, equity: 0n, equityOnPayslip: 0n });
+		}
+		return byYear.get(year)!;
+	};
 	for (const month of months) {
 		const year = Number(month.periodMonth.slice(0, 4));
 		if (!Number.isInteger(year)) continue;
-		if (!byYear.has(year)) byYear.set(year, { gross: [], net: [], bonus: 0n });
-		const bucket = byYear.get(year)!;
+		const bucket = bucketFor(year);
 		if (month.grossMinor !== null && month.grossMinor !== undefined) {
 			bucket.gross.push(month.grossMinor);
 		}
@@ -1118,14 +1145,21 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		// but means something different to the reader looking at the month.
 		if (month.bonusMinor) bucket.bonus += month.bonusMinor;
 	}
+	// A vest is compensation in the year it lands, whether or not a payslip
+	// for that month exists yet.
+	for (const vest of vests) {
+		const bucket = bucketFor(vest.year);
+		bucket.equity += vest.valueMinor;
+		if (vest.onPayslip) bucket.equityOnPayslip += vest.valueMinor;
+	}
 
 	const mean = (values: bigint[]): bigint | null =>
 		values.length ? values.reduce((sum, v) => sum + v, 0n) / BigInt(values.length) : null;
 
 	const rows: SalaryYear[] = [];
 	for (const year of [...byYear.keys()].sort()) {
-		const { gross, net, bonus } = byYear.get(year)!;
-		if (gross.length === 0 && net.length === 0) continue;
+		const { gross, net, bonus, equity, equityOnPayslip } = byYear.get(year)!;
+		if (gross.length === 0 && net.length === 0 && equity === 0n) continue;
 
 		const grossTotal = gross.reduce((sum, v) => sum + v, 0n);
 		const netTotal = net.reduce((sum, v) => sum + v, 0n);
@@ -1138,7 +1172,9 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		// Gross when the year has any, because it is the figure a salary is
 		// normally quoted as — and the one comparable across employers.
 		const avgIsGross = grossAvg !== null;
-		const avg = (avgIsGross ? grossAvg : netAvg) as bigint;
+		// An equity-only year has no monthly figure at all; zero keeps the chart
+		// honest rather than pretending the vest was a salary.
+		const avg = (avgIsGross ? grossAvg : netAvg) ?? 0n;
 		const monthCount = avgIsGross ? gross.length : net.length;
 
 		// Like against like. The previous LISTED year may be of the other kind,
@@ -1162,6 +1198,8 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 			bonusTotalMinor: bonus,
 			baseTotalMinor: baseTotal,
 			netTotalMinor: netTotal,
+			equityTotalMinor: equity,
+			equityOnPayslipMinor: equityOnPayslip,
 			netComplete: net.length >= 12,
 			baseDeltaPct:
 				baseAvg !== null && prevBaseAvg !== null && prevBaseAvg > 0n
@@ -1208,6 +1246,8 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 		const netTotal = total((r) => r.netTotalMinor);
 		const bonusTotal = total((r) => r.bonusTotalMinor);
 		const baseTotal = total((r) => r.baseTotalMinor);
+		const equityTotal = total((r) => r.equityTotalMinor);
+		const equityOnPayslip = total((r) => r.equityOnPayslipMinor);
 		const grossMonths = parts.reduce((n, r) => n + r.grossMonths, 0);
 		const netMonths = parts.reduce((n, r) => n + r.netMonths, 0);
 
@@ -1237,6 +1277,8 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 			bonusTotalMinor: bonusTotal,
 			baseTotalMinor: baseTotal,
 			netTotalMinor: netTotal,
+			equityTotalMinor: equityTotal,
+			equityOnPayslipMinor: equityOnPayslip,
 			// Complete only when EVERY contributor's year was: one person's partial
 			// year makes the household total partial too, however many months the
 			// other one covered.

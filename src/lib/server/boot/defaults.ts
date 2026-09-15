@@ -115,6 +115,28 @@ export function registerCoreBoot(): void {
 		every: 6 * HOUR,
 		run: async () => {
 			await refreshRates();
+			// Then the years the household's history reaches back into, once
+			// each; after the first boot this finds nothing to do.
+			const { backfillRates } = await import('$lib/server/fx');
+			await backfillRates();
+		}
+	});
+
+	// Daily closes for every ticker the household owns. The cadence is a
+	// setting read at each run, so changing it needs no restart: the task ticks
+	// hourly and does the work only when the configured interval has elapsed.
+	let lastPriceRun = 0;
+	registerBootTask({
+		id: 'prices',
+		label: 'Price refresh',
+		every: HOUR,
+		run: async () => {
+			const { getPriceSettings } = await import('$lib/server/prices/settings');
+			const { refreshEveryHours } = await getPriceSettings();
+			if (Date.now() - lastPriceRun < refreshEveryHours * HOUR) return;
+			const { refreshPrices } = await import('$lib/server/prices');
+			await refreshPrices();
+			lastPriceRun = Date.now();
 		}
 	});
 

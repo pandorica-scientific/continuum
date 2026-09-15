@@ -6,6 +6,7 @@
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
+	import EquityCard from '$lib/components/EquityCard.svelte';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import type { Column } from '$lib/components/data-table';
 
@@ -69,10 +70,26 @@
 		// Where the actual line starts and stops, so the fill under it closes
 		// at its own ends rather than at the plot's: a series with no value for
 		// its first months drew a wedge from the corner up to the first point.
-		const actualIndexes = data.series.map((p, i) => (p.actual === null ? null : i));
+		const actualIndexes = data.series.map((p, i) => (p.actual === null || p.isMarked ? null : i));
 		const firstActual = actualIndexes.find((i) => i !== null) ?? 0;
 		const lastActual = [...actualIndexes].reverse().find((i) => i !== null) ?? 0;
 		const actualSpan = { x0: x(firstActual).toFixed(1), x1: x(lastActual).toFixed(1) };
+		// After the last report the line continues dashed: units the report
+		// listed at closes fetched since. It hangs off the last reported point so
+		// the eye reads one line changing character, not two lines.
+		const lastSnapshotFromEnd = [...data.series].reverse().findIndex((p) => p.isSnapshot);
+		const anchor = lastSnapshotFromEnd === -1 ? -1 : data.series.length - 1 - lastSnapshotFromEnd;
+		const marked =
+			anchor === -1
+				? ''
+				: data.series
+						.map((p, i) =>
+							(i === anchor || (i > anchor && p.isMarked)) && p.actual !== null
+								? `${x(i).toFixed(1)},${y(p.actual).toFixed(1)}`
+								: null
+						)
+						.filter((s): s is string => s !== null)
+						.join(' ');
 		// A rule where each year begins, so the labels beneath the plot have
 		// something to point at. Drawn at the FIRST month of each year rather than
 		// spaced evenly: the series can start mid-year, and an evenly spaced rule
@@ -100,7 +117,8 @@
 			moneyIn: line((p) => p.moneyIn),
 			bench5: line((p) => p.bench5),
 			bench10: line((p) => p.bench10),
-			actual: line((p) => p.actual),
+			actual: line((p) => (p.isMarked ? null : p.actual)),
+			marked,
 			actualPoints,
 			actualSpan,
 			years,
@@ -151,6 +169,19 @@
 					: undefined,
 				wash: 'purple'
 			},
+			...(data.metrics.withEquity || data.metrics.equityUnpriced
+				? [
+						{
+							label: 'With equity',
+							value: data.metrics.withEquity?.value ?? '—',
+							unit: data.metrics.withEquity ? data.accountUnit : undefined,
+							note: data.metrics.withEquity
+								? `portfolio + ${data.metrics.withEquity.equity} vested shares`
+								: 'no price for the grant yet',
+							wash: 'purple'
+						}
+					]
+				: []),
 			{
 				label: 'Money in',
 				value: data.metrics.moneyIn,
@@ -278,6 +309,19 @@
 						vector-effect="non-scaling-stroke"
 					/>
 				{/if}
+				{#if chart.marked}
+					<polyline
+						points={chart.marked}
+						fill="none"
+						stroke="var(--teal)"
+						stroke-width="2.5"
+						stroke-dasharray="6 4"
+						stroke-linejoin="round"
+						vector-effect="non-scaling-stroke"
+					>
+						<title>marked to market</title>
+					</polyline>
+				{/if}
 			</svg>
 		</div>
 		<div class="years mono">
@@ -288,6 +332,12 @@
 			<span class="l"
 				><span class="swatch" style="border-top: 2.5px solid var(--teal);"></span>actual</span
 			>
+			{#if data.markedAsOf}
+				<span class="l"
+					><span class="swatch" style="border-top: 2.5px dashed var(--teal);"></span>marked to
+					market · to {data.markedAsOf}</span
+				>
+			{/if}
 			<span class="l"
 				><span class="swatch" style="border-top: 2px dashed var(--fg3);"></span>money in</span
 			>
@@ -380,6 +430,8 @@
 	</section>
 </div>
 
+<EquityCard rows={data.equity} unit={data.unit} />
+
 <!-- Read-only: no attach, no addHref. The Accounts screen already carries the
      full attach/detach card for the brokerage account these reports are filed
      against; this is a second, convenient place to see the same paper without
@@ -470,9 +522,14 @@
 		align-items: center;
 		gap: 7px;
 	}
-	.swatch {
+	/* A line sample, not the holdings' colour bar below: the two shared one
+	   class name and the bar's 8×22 rule won, which drew every legend line as
+	   a curled speck. */
+	.legend .swatch {
 		width: 16px;
+		height: 0;
 		display: inline-block;
+		border-radius: 0;
 	}
 	.l-note {
 		margin-left: auto;
@@ -566,7 +623,7 @@
 	}
 	/* The same colour as the wedge in the pie beside it. A bar and not a dot:
 	   8×22 reads down the list as a stripe of colour. */
-	.swatch {
+	.h-name .swatch {
 		width: 8px;
 		height: 22px;
 		border-radius: var(--radius-xs);

@@ -92,8 +92,10 @@
 
 	// The Money area, or wherever Import lives if the registry moves it. Not
 	// undefined when Import is switched off: the same dot says a rate is
-	// approximate, and that is true of the totals whether or not anything is
-	// being imported.
+	// missing outright, and that is true of the totals whether or not anything
+	// is being imported. A rate merely carried back from its first fixing is
+	// noted in Settings › Money and lights nothing: every household's history
+	// predates its install, so that dot would never have gone out.
 	const badgeArea = $derived(
 		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key ??
 			areas.find((area) => area.key === 'money')?.key
@@ -188,16 +190,19 @@
 					     The same dot says an exchange rate is approximate: the banner
 					     that used to say so sat above every screen's title and was
 					     dismissed without being read; the note is in Settings › Money. -->
-					<span
-						class="badge"
-						role="status"
-						aria-label={[
-							importBadge > 0 ? `${importBadge} transactions waiting to be reviewed` : null,
-							approximateRates ? 'an exchange rate is approximate — see Settings' : null
-						]
-							.filter(Boolean)
-							.join('; ')}
-					></span>
+					{@const why = [
+						importBadge > 0
+							? `${importBadge} transaction${importBadge === 1 ? '' : 's'} waiting to be reviewed on Import`
+							: null,
+						approximateRates
+							? 'a currency has no exchange rate at all — see Settings › Money'
+							: null
+					]
+						.filter(Boolean)
+						.join('; ')}
+					<!-- The reason is on hover as well as for the screen reader: a dot
+					     with no way to ask "why" sent people hunting through every tab. -->
+					<span class="badge" role="status" aria-label={why} title={why}></span>
 				{/if}
 			</a>
 		{/each}
@@ -361,14 +366,20 @@
 		font-size: var(--text-xs);
 		padding: 2px var(--space-4);
 		border-radius: var(--radius-pill);
-		background: rgba(255, 255, 255, 0.16);
+		/* Dark glass rather than white: the pill sits on the tide, and a pale
+		   wash over a strong green left the figure hard to read. */
+		background: rgba(8, 12, 24, 0.42);
+		border: 1px solid rgba(255, 255, 255, 0.14);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
 	}
 	.hero-note {
 		position: relative;
 		z-index: 1;
 		font-size: var(--text-xs);
-		opacity: 0.7;
+		opacity: 0.85;
 		margin-left: var(--space-2);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 	}
 
 	/* The band the swells turn inside. Fixed height, so a quiet month is a low
@@ -385,7 +396,7 @@
 		/* Faint for a month that barely moved, strong for a record one — but
 		   never so faint it reads as a rendering fault; the floor is where a
 		   quiet month is still visibly a tide. */
-		opacity: calc(0.6 + 0.4 * var(--share));
+		opacity: calc(0.42 + 0.3 * var(--share));
 	}
 	.hero.down .tide {
 		--tide-ink: var(--tide-down);
@@ -406,10 +417,13 @@
 		   with the circle it fills is the one kind that does not turn with it.
 		   `closest-side` puts 100% on the rim; without it the stops are measured
 		   to the corner and the edge never reaches transparent. */
+		/* A long fade, not a hard rim: the crest is deepest at the foot of the
+		   panel and thins out over most of the band it crosses. */
 		background: radial-gradient(
 			circle closest-side,
-			color-mix(in srgb, var(--tide-ink) 92%, transparent) 0 94%,
-			color-mix(in srgb, var(--tide-ink) 55%, transparent) 97.5%,
+			color-mix(in srgb, var(--tide-ink) 78%, transparent) 0 86%,
+			color-mix(in srgb, var(--tide-ink) 48%, transparent) 93%,
+			color-mix(in srgb, var(--tide-ink) 18%, transparent) 98%,
 			transparent 100%
 		);
 		/* Sunk so that between 10px and 40px of it shows, by the size of the
@@ -429,8 +443,9 @@
 		border-radius: 47%;
 		background: radial-gradient(
 			circle closest-side,
-			color-mix(in srgb, var(--tide-ink) 62%, transparent) 0 94%,
-			color-mix(in srgb, var(--tide-ink) 34%, transparent) 97.5%,
+			color-mix(in srgb, var(--tide-ink) 50%, transparent) 0 86%,
+			color-mix(in srgb, var(--tide-ink) 28%, transparent) 93%,
+			color-mix(in srgb, var(--tide-ink) 10%, transparent) 98%,
 			transparent 100%
 		);
 		bottom: calc(-480px + 6px + 26px * var(--share));

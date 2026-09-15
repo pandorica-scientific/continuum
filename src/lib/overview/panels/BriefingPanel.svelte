@@ -2,7 +2,7 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import IconTile from '$lib/components/IconTile.svelte';
 	import Pill from '$lib/components/Pill.svelte';
-	import { BRIEFING_STRIP_SIZE, stripItems } from '$lib/briefing';
+	import { BRIEFING_STRIP_SIZE, stripBriefing } from '$lib/briefing';
 	// The shape the builder produces, not a second copy of it: a source that
 	// gains a field should not need this component edited to keep up.
 	import type { Briefing } from '$lib/server/briefing';
@@ -13,7 +13,7 @@
 	// on one row. The rest used to be dropped on the server, which meant a ninth
 	// thing that needed somebody was a thing nobody could reach.
 	let expanded = $state(false);
-	const strip = $derived(stripItems(data.items, BRIEFING_STRIP_SIZE, expanded));
+	const strip = $derived(stripBriefing(data.items, BRIEFING_STRIP_SIZE, expanded));
 </script>
 
 {#if data.items.length}

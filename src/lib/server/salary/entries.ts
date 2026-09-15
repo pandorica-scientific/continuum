@@ -563,7 +563,10 @@ export function attributionKey(counterparty: string): string {
  */
 export async function attributeSalary(
 	input: { accountOwnerPersonId: string | null; counterparty: string | null; accountId: string },
-	handle: Db = db
+	// Reads only, so any handle will do. Widened from `Db` for the briefing,
+	// which asks the same question over a read-only handle and must get the same
+	// answer rather than a second spelling of this rule.
+	handle: Queryable = db
 ): Promise<{ personId: string } | { personId: null; askFor: string | null }> {
 	if (input.accountOwnerPersonId) return { personId: input.accountOwnerPersonId };
 

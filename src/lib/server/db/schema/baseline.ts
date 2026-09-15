@@ -120,7 +120,21 @@ CREATE VIEW net_worth_component AS
 	UNION ALL
 	SELECT id, 'holding', category, NULL,
 	       currency, value_minor, valued_at::date
-	  FROM holding;
+	  FROM holding
+	UNION ALL
+	SELECT t.id, 'equity', 'rsu', g.person_id,
+	       p.currency,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
+	       p.day
+	  FROM equity_tranche t
+	  JOIN equity_grant g ON g.id = t.grant_id
+	  JOIN LATERAL (
+	    SELECT close_minor, currency, day FROM security_price sp
+	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
+	  ) p ON true
+	 WHERE t.forfeited_on IS NULL
+	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
 `;
 
 /**

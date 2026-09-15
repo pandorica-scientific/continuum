@@ -118,7 +118,7 @@ Portfolio fed by broker report uploads.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/investments-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/investments-light-web.png">
-  <img src="screenshots/investments-dark-web.png" alt="Investments — Portfolio fed by broker report uploads">
+  <img src="screenshots/investments-dark-web.png" alt="Investments — Portfolio fed by broker report uploads, marked to market daily, with equity grants beside it">
 </picture>
 
 ## Salary
@@ -128,7 +128,7 @@ What was earned each month, read from payslips and from the ledger.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/salary-dark-web.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshots/salary-light-web.png">
-  <img src="screenshots/salary-dark-web.png" alt="Salary — what was earned each month, read from payslips and from the ledger">
+  <img src="screenshots/salary-dark-web.png" alt="Salary — what was earned each month, read from payslips and from the ledger, with vested equity beside bonus">
 </picture>
 
 ## Retirement

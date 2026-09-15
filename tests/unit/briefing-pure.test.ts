@@ -4,7 +4,13 @@ import {
 	aboutLine,
 	briefingCaption,
 	countTitle,
-	latestJobPerDocument
+	daysBetween,
+	laneJudgeable,
+	laneShortfall,
+	latestJobPerDocument,
+	monthsBetween,
+	settlementOverdue,
+	taxYearToChase
 } from '$lib/server/briefing/pure';
 
 /**
@@ -129,5 +135,116 @@ describe('countTitle', () => {
 
 	it('uses the plural for none', () => {
 		expect(countTitle(0, 'document', 'documents')).toBe('0 documents');
+	});
+});
+
+describe('daysBetween', () => {
+	it('counts forward', () => {
+		expect(daysBetween('2026-09-15', '2026-09-25')).toBe(10);
+	});
+
+	it('counts backward as a negative', () => {
+		expect(daysBetween('2026-09-25', '2026-09-15')).toBe(-10);
+	});
+
+	// A day either side of a daylight-saving change is still one day, and a
+	// horizon counted in hours would call it 0 or 2.
+	it('is not confused by a clock change', () => {
+		expect(daysBetween('2026-10-24', '2026-10-25')).toBe(1);
+	});
+
+	it('is zero for the same day', () => {
+		expect(daysBetween('2026-09-15', '2026-09-15')).toBe(0);
+	});
+});
+
+describe('monthsBetween', () => {
+	it('counts whole months', () => {
+		expect(monthsBetween('2025-09-15', '2026-09-15')).toBe(12);
+	});
+
+	// The day before the anniversary is eleven months, not twelve: a valuation
+	// horizon that rounded up would raise a card a month early every year.
+	it('does not count a month that has not completed', () => {
+		expect(monthsBetween('2025-09-15', '2026-09-14')).toBe(11);
+	});
+
+	it('counts across a year end', () => {
+		expect(monthsBetween('2025-11-30', '2026-02-28')).toBe(2);
+	});
+});
+
+describe('settlementOverdue', () => {
+	const vested = { vestsOn: '2026-08-01', settledOn: null, forfeitedOn: null };
+
+	it('waits out the grace period after a vest', () => {
+		expect(settlementOverdue(vested, '2026-08-14', 14)).toBe(false);
+		expect(settlementOverdue(vested, '2026-08-15', 14)).toBe(false);
+		expect(settlementOverdue(vested, '2026-08-16', 14)).toBe(true);
+	});
+
+	it('says nothing about a tranche that has not vested yet', () => {
+		expect(settlementOverdue({ ...vested, vestsOn: '2026-12-01' }, '2026-09-15', 14)).toBe(false);
+	});
+
+	it('says nothing once the settlement is recorded', () => {
+		expect(settlementOverdue({ ...vested, settledOn: '2026-08-03' }, '2026-09-15', 14)).toBe(false);
+	});
+
+	// Forfeited units never arrived, so there is nothing to write down.
+	it('says nothing about a forfeited tranche', () => {
+		expect(settlementOverdue({ ...vested, forfeitedOn: '2026-07-01' }, '2026-09-15', 14)).toBe(
+			false
+		);
+	});
+});
+
+describe('taxYearToChase', () => {
+	it('stays quiet before the month the household set', () => {
+		expect(taxYearToChase('2026-01-20', 3)).toBeNull();
+		expect(taxYearToChase('2026-02-28', 3)).toBeNull();
+	});
+
+	it('asks about last year from that month on', () => {
+		expect(taxYearToChase('2026-03-01', 3)).toBe(2025);
+		expect(taxYearToChase('2026-12-31', 3)).toBe(2025);
+	});
+
+	it('honours a household that wants asking earlier', () => {
+		expect(taxYearToChase('2026-01-20', 1)).toBe(2025);
+	});
+});
+
+describe('laneShortfall', () => {
+	const cells = (...states: string[]) => states.map((state) => ({ state }));
+
+	it('counts the gaps when the latest expected period is empty', () => {
+		expect(laneShortfall(cells('filed', 'gap', 'gap', 'not-arrived'))).toBe(2);
+	});
+
+	// An old hole with this month's paper filed is the shelf's business, not the
+	// briefing's: the rhythm has not stopped.
+	it('says nothing when the latest expected period was filed', () => {
+		expect(laneShortfall(cells('gap', 'filed', 'not-arrived'))).toBe(0);
+	});
+
+	it('says nothing about a year that has not arrived', () => {
+		expect(laneShortfall(cells('before', 'not-arrived', 'not-arrived'))).toBe(0);
+	});
+
+	it('says nothing about no cells at all', () => {
+		expect(laneShortfall([])).toBe(0);
+	});
+});
+
+describe('laneJudgeable', () => {
+	const cells = (...states: string[]) => states.map((state) => ({ state }));
+
+	it('is true once a period could have held something', () => {
+		expect(laneJudgeable(cells('before', 'gap'))).toBe(true);
+	});
+
+	it('is false for a year that is entirely ahead of the household', () => {
+		expect(laneJudgeable(cells('before', 'not-arrived'))).toBe(false);
 	});
 });

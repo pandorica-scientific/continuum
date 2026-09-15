@@ -170,6 +170,9 @@ export const ENUMS = {
 	'transaction.review_state': ['auto', 'needs_review', 'confirmed', 'filed'],
 	'transfer_pair.state': ['auto', 'proposed', 'confirmed', 'rejected'],
 
+	/** Where a stored close came from. Manual rows outrank fetched ones for the same day. */
+	'security_price.source': ['yahoo', 'stooq', 'manual'],
+
 	'job.kind': ['import', 'calendar_sync', 'extract_text'],
 	job_state: ['queued', 'running', 'done', 'failed'],
 	'import_profile.source': ['delimited', 'xlsx'],
@@ -353,6 +356,7 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'transaction', column: 'review_state', enum: 'transaction.review_state' },
 	{ table: 'transaction', column: 'proof_class', enum: 'proof_class' },
 	{ table: 'transfer_pair', column: 'state', enum: 'transfer_pair.state' },
+	{ table: 'security_price', column: 'source', enum: 'security_price.source' },
 	{ table: 'job', column: 'kind', enum: 'job.kind' },
 	{ table: 'job', column: 'state', enum: 'job_state' },
 	{ table: 'import_profile', column: 'source', enum: 'import_profile.source' },

@@ -8,7 +8,7 @@
 import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
 import { document, documentLink, person, salaryEntry } from '$lib/server/db/schema';
-import { salaryStats, type SalaryYear } from '$lib/salary';
+import { salaryStats, type SalaryYear, type VestSummary } from '$lib/salary';
 
 /**
  * How an amount crosses currencies. Spelled once: three callers here take the
@@ -140,7 +140,9 @@ export interface SalaryPersonHistory {
 export async function loadSalaryHistory(
 	baseCurrency: string,
 	convert: ConvertMinor,
-	handle: Db = db
+	handle: Db = db,
+	/** Vested equity per person, already in the base currency; see `vestValues`. */
+	vests: (VestSummary & { personId: string })[] = []
 ): Promise<SalaryPersonHistory[]> {
 	const [people, slipDocs, slipOwners, entries] = await Promise.all([
 		handle
@@ -185,7 +187,11 @@ export async function loadSalaryHistory(
 		return {
 			id: p.id,
 			name: p.name,
-			years: salaryStats(months, p.birthYear),
+			years: salaryStats(
+				months,
+				p.birthYear,
+				vests.filter((v) => v.personId === p.id)
+			),
 			// Slip rows are the entries as STORED, so they are built from `recorded`
 			// rather than from `converted`: every figure below is the raw one, and
 			// walking the converted list only to look each row back up meant

@@ -69,6 +69,8 @@
 		baseTotalMinor: string;
 		bonusTotalMinor: string;
 		netTotalMinor: string;
+		equityTotalMinor: string;
+		equityOnPayslipMinor: string;
 		grossMonths: number;
 		netMonths: number;
 		netComplete: boolean;
@@ -241,6 +243,8 @@
 			{@const row = byYear.get(group.key)!}
 			{@const gross = BigInt(row.grossTotalMinor)}
 			{@const bonus = BigInt(row.bonusTotalMinor)}
+			{@const equity = BigInt(row.equityTotalMinor)}
+			{@const equityOnPayslip = BigInt(row.equityOnPayslipMinor)}
 			<span class="year mono">
 				<span class="chevron" class:open={group.open}>{group.open ? '▼' : '▶'}</span>
 				{row.year}
@@ -271,6 +275,16 @@
 						     which is a different statement from stating there was none. -->
 						<span class="absent">·</span>
 						<span class="c-sub quiet">not itemised</span>
+					{/if}
+					{#if equity > 0n}
+						<!-- Beside bonus, outside gross: shares that vested this year at the
+						     close on the day. Listed with the award because that is what
+						     it is, and kept out of the bar's gross for the same reason. -->
+						<span class="c-sub equity"
+							>+ {compactMinor(equity, currency)} equity{equityOnPayslip > 0n
+								? ` · ${compactMinor(equityOnPayslip, currency)} on slips`
+								: ''}</span
+						>
 					{/if}
 				</span>
 			{/if}
@@ -396,6 +410,9 @@
 	.c-sub {
 		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	.c-sub.equity {
+		color: var(--purple);
 	}
 	.c-sub.up {
 		color: var(--green);

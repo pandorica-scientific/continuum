@@ -54,7 +54,7 @@ import { accountBalanceInBase } from '$lib/accounts/balance';
 import { annualisedReturn } from '$lib/server/invest/series';
 import { getRevisionedSetting } from '$lib/server/settings';
 import { RETIRE_DEFAULTS, retModel, type RetireConfig } from '$lib/retire';
-import { displayCurrency, formatMinor, toMajor } from '$lib/money';
+import { compactAxis, displayCurrency, formatMinor, fromMajor, toMajor } from '$lib/money';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 /** Deterministic series colours, in the order V2 assigns them. */
@@ -177,21 +177,48 @@ const builders: Record<string, Builder> = {
 				)
 			}));
 
-		if (points.length < 2) return { points: [], caption: 'Not enough history yet.', unit: '' };
+		if (points.length < 2) {
+			return { points: [], caption: 'Not enough history yet.', unit: '', yTicks: [], xTicks: [] };
+		}
 
 		const low = Math.min(...points.map((p) => p.value));
 		const high = Math.max(...points.map((p) => p.value));
 		const span = high - low || 1;
+		const y = (value: number) => 100 - ((value - low) / span) * 100;
+
+		// Three gridlines — the floor, the middle and the ceiling of what the
+		// line spans — labelled on one shared step so "2.4M" and "2.6M" are read
+		// off the same scale. A sparkline with no scale said only "up" or "down".
+		const gridValues = [low, (low + high) / 2, high];
+		const gridLabels = compactAxis(
+			gridValues.map((v) => fromMajor(v, ctx.baseCurrency)),
+			ctx.baseCurrency
+		);
+		const yTicks = gridValues.map((value, i) => ({ y: y(value), label: gridLabels[i] }));
+
+		// One label where each year begins, plus the first month when the span
+		// starts mid-year, so the reader knows which stretch of time this is.
+		const xTicks: { x: number; label: string }[] = [];
+		points.forEach((p, i) => {
+			const month = p.day.slice(0, 7);
+			const previous = i > 0 ? points[i - 1].day.slice(0, 7) : null;
+			if (previous === month) return;
+			const x = (i / (points.length - 1)) * 100;
+			if (i === 0) xTicks.push({ x, label: month });
+			else if (month.endsWith('-01') && x < 92) xTicks.push({ x, label: month.slice(0, 4) });
+		});
 
 		return {
 			unit: displayCurrency(ctx.baseCurrency),
 			caption: `${points[0].day.slice(0, 7)} → ${points[points.length - 1].day.slice(0, 7)}`,
 			first: points[0].value,
 			last: points[points.length - 1].value,
+			yTicks,
+			xTicks,
 			// Normalised to 0–100 so the component draws without knowing the scale.
 			points: points.map((p, i) => ({
 				x: (i / (points.length - 1)) * 100,
-				y: 100 - ((p.value - low) / span) * 100
+				y: y(p.value)
 			}))
 		};
 	},

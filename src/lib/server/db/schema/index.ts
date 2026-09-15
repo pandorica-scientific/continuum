@@ -20,6 +20,7 @@ export * from './loans';
 export * from './investments';
 export * from './calendar';
 export * from './salary';
+export * from './equity';
 export * from './tax';
 export * from './jobs';
 export * from './life';

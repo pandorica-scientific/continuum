@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { stripItems } from '$lib/briefing';
+import { stripBriefing, stripItems } from '$lib/briefing';
 
 describe('the briefing strip', () => {
 	const items = ['a', 'b', 'c', 'd', 'e', 'f'];
@@ -22,5 +22,26 @@ describe('the briefing strip', () => {
 
 	it('shows a short list as it is', () => {
 		expect(stripItems(['a'], 4, false)).toEqual({ shown: ['a'], hidden: 0 });
+	});
+});
+
+describe('notes wait behind the tile', () => {
+	const d = (k: string) => ({ k, hue: 'yellow' });
+	const n = (k: string) => ({ k, hue: 'grey' });
+	it('never shows a grey card on the row, and counts it behind the tile', () => {
+		const out = stripBriefing([n('note'), d('a'), d('b')], 4, false);
+		expect(out.shown.map((i) => i.k)).toEqual(['a', 'b']);
+		expect(out.hidden).toBe(1);
+	});
+	it('lists notes after decisions once expanded', () => {
+		const out = stripBriefing([n('note'), d('a')], 4, true);
+		expect(out.shown.map((i) => i.k)).toEqual(['a', 'note']);
+		expect(out.hidden).toBe(0);
+	});
+	it('is the plain strip when there are no notes', () => {
+		expect(stripBriefing([d('a'), d('b')], 4, false)).toEqual({
+			shown: [d('a'), d('b')],
+			hidden: 0
+		});
 	});
 });

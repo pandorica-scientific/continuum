@@ -72,6 +72,8 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 	let properties = 0;
 	let mortgagesOwed = 0n;
 	let otherLoans = 0n;
+	let equity = 0n;
+	let equityTranches = 0;
 	let unnamedAssets = 0n;
 	let unnamedLiabilities = 0n;
 	const unnamedKinds = new Set<string>();
@@ -104,6 +106,12 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 				// The portfolio snapshot is the investments figure: it is the broker's
 				// own total for the day, including cash and fees the holdings do not
 				// show. Summing positions as well would count the portfolio twice.
+				break;
+			case 'equity':
+				// Vested shares still held, at the latest close: the view has already
+				// left out what is pending or forfeited, so every row here is owned.
+				equity += value;
+				equityTranches += 1;
 				break;
 			default:
 				// An asset type added to the view but not yet named here. It counts —
@@ -139,6 +147,16 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 			liabilityMinor: 0n,
 			colorVar: '--teal',
 			detail: `broker report of ${snapshots[0].day}`
+		});
+	}
+	if (equity > 0n) {
+		groups.push({
+			key: 'equity',
+			label: 'Equity',
+			assetMinor: equity,
+			liabilityMinor: 0n,
+			colorVar: '--purple',
+			detail: `${equityTranches} vested ${equityTranches === 1 ? 'tranche' : 'tranches'} at the latest close`
 		});
 	}
 	groups.push({

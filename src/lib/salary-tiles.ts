@@ -25,6 +25,8 @@ export interface SerialisedSalaryYear {
 	baseTotalMinor: string;
 	bonusTotalMinor: string;
 	netTotalMinor: string;
+	equityTotalMinor: string;
+	equityOnPayslipMinor: string;
 	grossMonths: number;
 	netMonths: number;
 	netComplete: boolean;
@@ -81,6 +83,24 @@ export function salarySummaryTiles(
 	/** `⚠` where a year's net is short of its gross months. */
 	const incomplete = latest && !latest.netComplete ? '⚠ ' : '';
 
+	// Shares that vested in the latest year, at the close on each vest day.
+	// Its own tile rather than a line under gross: a grant is compensation,
+	// and it is not salary — folding it into either average would misstate both.
+	const latestEquity = latest ? BigInt(latest.equityTotalMinor) : 0n;
+	const latestOnPayslip = latest ? BigInt(latest.equityOnPayslipMinor) : 0n;
+	const equity: Tile = {
+		wash: 'purple',
+		label: latest ? `Equity vested · ${latest.year}` : 'Equity vested',
+		value: latestEquity > 0n ? money(latestEquity) : '—',
+		unit: latestEquity > 0n ? symbol : undefined,
+		note:
+			latestEquity > 0n
+				? latestOnPayslip > 0n
+					? `${money(latestOnPayslip)} of it on payslips`
+					: 'at the close on each vest day'
+				: 'no grant vested'
+	};
+
 	const earned: Tile = {
 		wash: 'teal',
 		label: empty ? 'Earned' : `Earned since ${rows[0].year}`,
@@ -107,7 +127,8 @@ export function salarySummaryTiles(
 				value: money(latest?.gross ?? null),
 				unit: latest ? symbol : undefined,
 				note: latest ? `${incomplete}gross · ${money(latest.net)} net` : 'no year on record'
-			}
+			},
+			equity
 		];
 	}
 
@@ -140,6 +161,7 @@ export function salarySummaryTiles(
 			value: money(latestAvgGross),
 			unit: latestAvgGross === null ? undefined : symbol,
 			note: latest ? `${incomplete}gross · ${money(latestAvgNet)} net` : 'no month on record'
-		}
+		},
+		equity
 	];
 }

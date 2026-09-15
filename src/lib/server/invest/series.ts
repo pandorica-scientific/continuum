@@ -24,6 +24,8 @@ export interface SeriesPoint {
 	actual: number | null;
 	/** true where `actual` is a hard market value from a report */
 	isSnapshot: boolean;
+	/** true where `actual` is units × a fetched close after the last report, not a reported value */
+	isMarked?: boolean;
 }
 
 interface CashOp {
@@ -167,4 +169,64 @@ export function annualisedReturn(
 	const ratio = toMajor(currentValueMinor, currency) / moneyIn;
 	if (ratio <= 0) return null;
 	return (Math.pow(ratio, 1 / years) - 1) * 100;
+}
+
+export interface MarkedInput {
+	holdings: { ticker: string; units: number }[];
+	/** closes per ticker, oldest first, each in the currency the feed quoted */
+	prices: Map<string, { day: string; closeMinor: bigint; currency: string }[]>;
+	lastSnapshotDay: string;
+	today: string;
+	/** a holding's amount into the chart currency on that day, or null when no rate */
+	convert: (amountMinor: bigint, from: string, day: string) => bigint | null;
+}
+
+function nextDay(day: string): string {
+	const d = new Date(`${day}T00:00:00Z`);
+	d.setUTCDate(d.getUTCDate() + 1);
+	return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Portfolio value day by day after the last report, from units the report
+ * listed and closes fetched since. It is a projection of the holdings, not the
+ * broker's figure: cash at the broker and fees are not in it, which is why the
+ * chart draws it dashed.
+ *
+ * A day is included only when every holding has a close on or before it and a
+ * rate into the chart currency; a partial total would read as a fall.
+ */
+export function markedTail(
+	input: MarkedInput,
+	currency: string
+): { day: string; valueMinor: bigint }[] {
+	const out: { day: string; valueMinor: bigint }[] = [];
+	if (input.holdings.length === 0 || input.lastSnapshotDay >= input.today) return out;
+	const cursors = input.holdings.map((h) => ({
+		holding: h,
+		list: input.prices.get(h.ticker) ?? [],
+		at: -1
+	}));
+	for (let day = nextDay(input.lastSnapshotDay); day <= input.today; day = nextDay(day)) {
+		let total = 0n;
+		let complete = true;
+		for (const c of cursors) {
+			while (c.at + 1 < c.list.length && c.list[c.at + 1].day <= day) c.at += 1;
+			if (c.at < 0) {
+				complete = false;
+				break;
+			}
+			const close = c.list[c.at];
+			const value = BigInt(Math.round(Number(close.closeMinor) * c.holding.units));
+			const converted =
+				close.currency === currency ? value : input.convert(value, close.currency, day);
+			if (converted === null) {
+				complete = false;
+				break;
+			}
+			total += converted;
+		}
+		if (complete) out.push({ day, valueMinor: total });
+	}
+	return out;
 }

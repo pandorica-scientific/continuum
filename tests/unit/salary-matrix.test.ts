@@ -9,6 +9,8 @@ const year = (over: Record<string, unknown> = {}) => ({
 	grossTotalMinor: '120000000',
 	baseTotalMinor: '100000000',
 	bonusTotalMinor: '20000000',
+	equityTotalMinor: '0',
+	equityOnPayslipMinor: '0',
 	netTotalMinor: '85680000',
 	grossMonths: 12,
 	netMonths: 12,

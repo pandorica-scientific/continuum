@@ -333,6 +333,8 @@ describe('mergeSalaryYears', () => {
 		netAvgMinor: 7000000n,
 		grossTotalMinor: 120000000n,
 		bonusTotalMinor: 20000000n,
+		equityTotalMinor: 0n,
+		equityOnPayslipMinor: 0n,
 		baseTotalMinor: 100000000n,
 		netTotalMinor: 84000000n,
 		grossMonths: 12,
@@ -354,6 +356,8 @@ describe('mergeSalaryYears', () => {
 					grossTotalMinor: 60000000n,
 					baseTotalMinor: 50000000n,
 					bonusTotalMinor: 10000000n,
+					equityTotalMinor: 0n,
+					equityOnPayslipMinor: 0n,
 					netTotalMinor: 42000000n
 				})
 			]
@@ -407,6 +411,8 @@ describe('lastBaseIncrease', () => {
 		netAvgMinor: 7000000n,
 		grossTotalMinor: 120000000n,
 		bonusTotalMinor: 0n,
+		equityTotalMinor: 0n,
+		equityOnPayslipMinor: 0n,
 		baseTotalMinor: 120000000n,
 		netTotalMinor: 84000000n,
 		grossMonths: 12,
