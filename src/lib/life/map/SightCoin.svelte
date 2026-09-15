@@ -249,30 +249,33 @@
 		place-items: center;
 		border: 1px solid rgba(46, 37, 8, 0.5);
 	}
-	/* Once it is rubbed the disc wears its COUNTRY's colour — the same token the
-	   map fills that country with, so a coin from France and France itself agree.
-	   It used to be `--rose` for every country, which made the Life area's accent
-	   look like a property of coins rather than of places. */
+	/*
+	 * Once it is rubbed the disc IS the country's colour — 82%, the same strength
+	 * `countryFill` paints that country with on the map, so a coin from Czechia
+	 * and Czechia itself are the same blue.
+	 *
+	 * The remaining 18% is paper rather than the page, and that difference is the
+	 * whole of this rule. The engraving is dark ink on transparency with no white
+	 * behind it: on the page's own dark ground it was ink on ink, and the answer
+	 * taken then was to invert the image in the dark theme. That works while the
+	 * artwork is sparse line art and fails the moment it is not — these are dense
+	 * tonal engravings, and inverted the sky goes black and the trees glow, which
+	 * is a photographic negative rather than a print. Mixing toward paper keeps
+	 * the disc bright enough to read ink on in both themes, so the drawing is the
+	 * drawing whichever theme is on.
+	 *
+	 * `--label-paper` for the same reason the bottle plates use it: a print is the
+	 * same colour in a dark room as a lit one, and it is the one pair of tokens
+	 * here that deliberately does not follow the theme.
+	 */
 	.disc.gone {
 		border-color: color-mix(in srgb, var(--coin) 55%, transparent);
-		background: color-mix(in srgb, var(--coin) 16%, transparent);
+		background: color-mix(in srgb, var(--coin) 82%, var(--label-paper));
 	}
-	/*
-	 * The engraving is dark ink on transparency — no white behind it — so on this
-	 * app's dark ground it would be ink on ink. Inverted by default and left alone
-	 * in the light theme, which is the way round this codebase states every other
-	 * theme rule: dark is the default and `data-ledger-theme='light'` is the
-	 * override, because the app picks its theme rather than following
-	 * prefers-color-scheme.
-	 */
 	.art {
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
-		filter: invert(1);
-	}
-	:global(html[data-ledger-theme='light']) .art {
-		filter: none;
 	}
 	canvas {
 		position: absolute;

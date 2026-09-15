@@ -43,7 +43,7 @@ ALTER TABLE "recipe_category" ADD COLUMN IF NOT EXISTS "series" text DEFAULT '--
 
 ### ✨ Added
 
-- 🪙 **Places worth seeing** — a curated set of places for each country sits under its map as gold coins, each rubbing off to reveal an engraving of the place itself. 792 engravings across 68 countries have been drawn so far; a place without one is not offered as a coin, and the row fills in as batches land.
+- 🪙 **Places worth seeing** — a curated set of places for each country sits under its map as gold coins, each rubbing off to reveal an engraving of the place, printed on that country's own colour. 792 engravings across 68 countries have been drawn so far; a place without one is not offered as a coin, and the row fills in as batches land.
 - 👁️ **Seeing a place is recorded on its own** — rubbing a coin records that place and never colours the country, which keeps visits the only answer to where the household has been.
 - 🧭 **A trip suggests what is worth seeing there** — the curated places for a trip's destinations are offered beneath its list and become rows only when one is tapped.
 - ↩️ **A scratch can be taken back for five seconds** — Undo restores the selected region and removes the manual visit without affecting trip-derived visits.
